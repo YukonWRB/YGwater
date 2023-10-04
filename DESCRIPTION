@@ -1,0 +1,85 @@
+Package: YGwater
+Title: Utility functions for the Yukon Water Science and Stewardship
+    Branch
+Version: 0.0.0
+Date: 2023-10-03
+Authors@R: c(
+    person("Ghislain", "de Laplante", , "ghislaindel@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0002-5093-9185")),
+    person("Cole", "Fischer", , "cole.fischer@hotmail.com", role = "aut",
+           comment = c(ORCID = "0000-0002-7266-5760")),
+    person("Emilie", "Stwart-Jones", , "emilie.stewart-jones@yukon.ca", role = "aut")
+  )
+Description: Stores various functions for use across the Water Science and
+    Stweardship Branch disciplines, including for generating reports,
+    gathering and processing data, and creating plots.
+License: AGPL (>= 3) + file LICENSE
+URL: https://github.com/YukonWRB/YGwater
+BugReports: https://github.com/YukonWRB/YGWater/issues
+Depends: 
+    R (>= 4.1)
+Imports:
+    cli,
+    config,
+    cowplot,
+    crayon,
+    DBI,
+    dplyr,
+    DT,
+    fasstr,
+    fuzzyjoin,
+    ggnewscale,
+    ggplot2,
+    golem,
+    graphics,
+    grDevices,
+    grid,
+    gridExtra,
+    hablar,
+    httr,
+    imager,
+    lifecycle,
+    lubridate,
+    magrittr,
+    methods,
+    odbc,
+    openxlsx,
+    plyr,
+    purrr,
+    remotes,
+    rlang,
+    rmarkdown,
+    RSQLite,
+    rvest,
+    R.utils,
+    scales,
+    sf,
+    shiny,
+    shinyalert,
+    shinyjs,
+    shinyWidgets,
+    stats,
+    stringr,
+    terra,
+    tidyr,
+    tidyselect,
+    trend,
+    utils,
+    XML,
+    xml2,
+    zoo,
+    knitr
+Suggests: 
+    testthat (>= 3.0.0),
+    vdiffr,
+    whitebox,
+    gmailr,
+    weathercan,
+    tidyhydat,
+    RPostgres
+VignetteBuilder: 
+    knitr
+Config/testthat/edition: 3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3

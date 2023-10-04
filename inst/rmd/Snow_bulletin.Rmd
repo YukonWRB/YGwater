@@ -1,0 +1,988 @@
+---
+title: "Snow_bulletin"
+#output: html_document
+output: 
+  word_document:
+      reference_docx: style_template.docx
+date: "2023-09-18"
+params:
+  year: 2023
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Functions, echo=FALSE}
+# Just for now before I commit the WRBtools one
+combineWeather <- function(stations, start, end, variable, months=NULL) {
+
+  if (is.null(months)) {
+    months <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+  }
+
+#---------------------------------- Get data ----------------------------------#
+ if (is.data.frame(stations[[1]])) {
+   station1 <- stations[[1]]
+ } else if (is.character(stations[[1]])) {
+     station1 <- getWeather(
+       station = stations[[1]],
+       start = start,
+       end = end,
+       interval = "day",
+       save_path = NULL
+     )
+ } else {warning("The objects in the stations parameter must be either a station id (character string) or a dataframe")}
+
+if (is.data.frame(stations[[2]])) {
+    station2 <- stations[[2]]
+  } else if (is.character(stations[[2]])) {
+    station2 <- getWeather(
+      station = stations[[2]],
+      start = start,
+      end = end,
+      interval = "day",
+      save_path = NULL
+    )
+  } else {warning("The objects in the stations parameter must be either a station id (character string) or a dataframe")}
+
+  # Subset to variables of interest and months of interest
+    station1 <- station1 %>% dplyr::select(all_of(c("date", variable))) %>%
+      dplyr::filter(lubridate::month(date) %in% months)
+
+    station2 <- station2 %>% dplyr::select(all_of(c("date", variable))) %>%
+      dplyr::filter(lubridate::month(date) %in% months)
+  # Set generic name of variable column in both dataframes
+    colnames(station1) <- c("date", "variable")
+    colnames(station2) <- c("date", "variable")
+
+#-------------------------------- Find overlap --------------------------------#
+    # Find overlap
+    overlap <- dplyr::inner_join(station1, station2, by='date')
+    # find earliest date that has the month and day +1 of max_d
+    overlap <- overlap %>%
+      dplyr::filter(date >
+               min(
+                 date[grepl(
+                   paste0(
+                     substr(
+                       as.character(max(overlap$date) + 1),
+                       nchar(as.character(max(overlap$date) + 1)) - 5,
+                       nchar(as.character(max(overlap$date) + 1))
+                       ), "$"
+                     ), format(date, "-%m-%d"))])
+             )
+
+#---------------------------- Calculate stats ----------------------------#
+    print(paste0("Mean at station 1:", mean(overlap$variable.x, na.rm=TRUE)))
+    print(paste0("Mean at station 2:", mean(overlap$variable.y, na.rm=TRUE)))
+    bias <- mean(overlap$variable.x, na.rm=TRUE) - mean(overlap$variable.y, na.rm=TRUE)
+    print(paste0("Bias: ", bias))
+    print(paste0("RMSE: ", sqrt(mean((overlap$variable.x-overlap$variable.y)^2, na.rm=TRUE))))
+
+#------------------------------ Apply correction ------------------------------#
+  # Apply correction to all values of station 2
+  station2$variable <- station2$variable + bias
+
+#--------------------------- Fill gaps in station 1 ---------------------------#
+  # Where station 1 is missing data in range, fill in with corrected station 2
+    # Fill in all missing days in range for station 1 with NAs
+    all_dates <- seq(as.Date(start), as.Date(end), by = "days")
+    missing_dates <- as.Date(setdiff(all_dates, station1$date))
+
+    if (length(missing_dates)>=1) {
+      missing_data <- data.frame(date = missing_dates, variable = NA)
+      station1 <- dplyr::bind_rows(station1[, c("date", "variable")], missing_data)
+    }
+
+    # Replace NAs with corrected station 2
+    combined_data <- station1 %>%
+      dplyr::left_join(station2, by = "date", suffix = c("_station1", "_station2")) %>%
+      dplyr::mutate(variable = dplyr::coalesce(variable_station1, variable_station2)) %>%
+      dplyr::select(date, variable) %>%
+      dplyr::arrange(date)
+
+    # Rename variable column with original name
+    colnames(combined_data) <- c("date", variable)
+
+  return(combined_data)
+  }
+
+# Just for now before I update the WRBplots one
+hydrometDiscrete <- function(location=NULL,
+                             parameter,
+                             startDay = 1,
+                             endDay = 365,
+                             tzone = "MST",
+                             years = NULL,
+                             title = TRUE,
+                             plot_type = "violin",
+                             plot_scale = 1,
+                             save_path = NULL,
+                             dbPath = "default",
+                             discrete_data = NULL)
+{
+  # Commented code below is for testing...
+  # location = "08AA-SC01"
+  # parameter = "SWE"
+  # startDay = 1
+  # endDay = 365
+  # tzone = "MST"
+  # years = c(2022)
+  # title = TRUE
+  # plot_scale = 1
+  # plot_type = "boxplot"
+  # save_path = NULL
+  # dbPath ="default"
+  # discrete_data = NULL
+  
+  #TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
+  
+  if (startDay != 1){
+    startDay <- 1
+    message("Parameter startDay is not currently in use and has been reset to the default of 1.")
+  }
+  if (endDay != 365){
+    endDay <- 365
+    message("Parameter endDay is not currently in use and has been reset to the default of 365.")
+  }
+  
+  # Checks on input parameters  and other start-up bits------------------
+  if (parameter != "SWE"){
+    parameter <- tolower(parameter)
+  }
+  
+  plot_type <- tolower(plot_type)
+  if (!(plot_type %in% c("violin", "boxplot", "linedbox"))){
+    stop("Parameter 'plot_type' must be one of 'violin' or 'boxplot'")
+  }
+  
+  if (is.null(years)){
+    years <- as.numeric(substr(Sys.Date(), 1, 4))
+  } else {
+    years <- as.numeric(years)
+    years <- sort(years, decreasing = TRUE)
+    if (length(years) > 10){
+      years <- years[1:10]
+      print("The parameter 'years' can only have up to 10 years. It's been truncated to the first 10 years in the vector.")
+    }
+  }
+  # Select save path
+  if (!is.null(save_path)){
+    if (save_path %in% c("Choose", "choose")) {
+      print("Select the folder where you want this graph saved.")
+      save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+    }
+  }
+  
+  
+  if (is.null(discrete_data)) {
+    #Connect
+    con <- hydroConnect(path = dbPath, silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+    
+    # Dealing with start/end dates ----------------------
+    # Sort out startDay and endDay into actual dates if needed
+    last_year <- max(years)
+    leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
+    tryCatch({
+      startDay <- as.character(startDay)
+      startDay <- as.POSIXct(startDay, tz = tzone)
+      lubridate::year(startDay) <- last_year
+    }, error = function(e) {
+      if (last_year %in% leap_list){
+        if (startDay > 59){
+          startDay <<- startDay + 1
+        }
+      }
+      startDay <<- as.POSIXct(as.numeric(startDay)*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
+      startDay <<- lubridate::force_tz(startDay, tzone)
+    })
+    tryCatch({
+      endDay <- as.character(endDay)
+      endDay <- as.POSIXct(endDay, tz = tzone)
+      lubridate::year(endDay) <- last_year
+    }, error = function(e) {
+      tempStartDay <- lubridate::yday(startDay) #using yday because start is now in proper Date format and needs to be back-converted to yday
+      if (last_year %in% leap_list){
+        if (endDay > 59){
+          endDay <<- endDay + 1
+        }
+      }
+      endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
+      endDay <<- lubridate::force_tz(endDay, tzone)
+    })
+    if (startDay > endDay){ #if the user is wanting a range overlapping the new year
+      lubridate::year(endDay) <- lubridate::year(endDay)+1
+      overlaps <- TRUE
+    } else {
+      overlaps <- FALSE
+    }
+    
+    day_seq <- seq.POSIXt(startDay, endDay, by = "day")
+    
+    #Check for existence of timeseries, then for presence of data within the time range requested.
+    exists <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND type = 'discrete'"))
+    if (nrow(exists) == 0){
+      stop("There is no entry for the location and parameter combination that you specified of discrete data type. If you are trying to graph continuous data use hydrometContinuous.")
+    } else if (nrow(exists) > 1){
+      stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager ASAP.")
+    }
+    
+    
+    
+    #Find the ts units
+    units <- DBI::dbGetQuery(con, paste0("SELECT units FROM timeseries WHERE parameter = '", parameter, "' AND location = '", location, "'"))
+    
+    # Get the data ---------------------
+    all_discrete <- DBI::dbGetQuery(con, paste0("SELECT * FROM discrete WHERE location = '", location, "' AND parameter = '", parameter, "' AND sample_date < '", paste0(max(years), substr(endDay, 5, 10)), "'"))
+    if (nrow(all_discrete) == 0){
+      stop(paste0("There doesn't appear to be any data for the year and days you specified: this timeseries starts ",  exists$start_datetime_UTC))
+    }
+    all_discrete$target_date <- as.Date(all_discrete$target_date)
+    all_discrete$sample_date <- as.Date(all_discrete$sample_date)
+    all_discrete$year <- lubridate::year(all_discrete$target_date)
+    all_discrete$month <- lubridate::month(all_discrete$target_date)
+    all_discrete$day <- lubridate::day(all_discrete$target_date)
+    #Separate, modify, and re-bind feb29 days, if any
+    feb29 <- all_discrete[all_discrete$month == 2 & all_discrete$day == 29, ]
+    if (nrow(feb29) > 0){
+      all_discrete <- all_discrete[!(all_discrete$month == 2 & all_discrete$day == 29), ]
+      feb29$target_date <- feb29$target_date + 1
+      feb29$month <- 3
+      feb29$day <- 1
+      all_discrete <- rbind(all_discrete, feb29)
+    }
+    
+    #Make a fake date
+    all_discrete$fake_date <- as.Date(gsub("[0-9]{4}", last_year, all_discrete$target_date))
+    discrete <- data.frame()
+    for (i in years){
+      start <- as.Date(paste0(i, substr(startDay, 5, 10)))
+      end <- as.Date(paste0(i, substr(endDay, 5, 10)))
+      if (overlaps){
+        lubridate::year(end) <- lubridate::year(end) +1
+      }
+      new_discrete <- all_discrete[all_discrete$target_date >= start & all_discrete$target_date <= end , ]
+      discrete <- rbind(discrete, new_discrete)
+    }
+    if (nrow(discrete) == 0){
+      stop("There is no data to graph after filtering for your specified year(s) and day range. Try again with different days.")
+    }
+    
+  }
+  
+  if (!is.null(discrete_data)) {
+    ## Create all_discrete
+    all_discrete <- discrete_data
+    # add fake_date
+    all_discrete$fake_date <- as.Date(paste0(max(years), "-0", all_discrete$month, "-01" ))
+    ## Create discrete
+    #discrete <- all_discrete %>% dplyr::filter(year %in% years)
+    discrete <- all_discrete[all_discrete$year %in% years, ]
+    ## Give units
+    units <- unique(discrete$units)
+    
+  }
+  
+  if (plot_type == 'linedbox') {
+    stats_discrete <- all_discrete %>% 
+      group_by(month) %>%
+      summarise(value = min(value), type = "min") %>%
+      bind_rows(all_discrete %>% 
+                  group_by(month) %>%
+                  summarise(value = max(value), type = "max")) %>%
+      bind_rows(all_discrete %>% 
+                  group_by(month) %>%
+                  summarise(value = median(value), type = "median"))
+    
+    stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
+    test4 <<- stats_discrete
+  }
+  
+  #Make the plot --------------------
+  colours = c("black", "#DC4405", "#512A44", "#F2A900", "#244C5A", "#687C04", "#C60D58", "#0097A9", "#7A9A01", "#834333")
+  legend_length <- length(years)
+  plot <- ggplot2::ggplot(all_discrete, ggplot2::aes(x = fake_date, y = value, group = fake_date)) +
+    ggplot2::labs(x = "", y = if (parameter == "SWE") paste0("SWE (", units, ")") else paste0(stringr::str_to_title(parameter), " (", units, ")")) +
+    ggplot2::theme_classic() +
+    ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 10*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
+  
+  if (plot_type == "linedbox") {
+      for (m in unique(stats_discrete$month)) {
+        plot <- plot + 
+          ggplot2::geom_rect(data = stats_discrete[stats_discrete$month == m,],   fill = 'grey89', ggplot2::aes(xmin=fake_date - 12, xmax=fake_date + 12, ymin=min(value), ymax=max(value)))
+      }
+    plot <- plot + 
+      ggplot2::geom_segment(data = stats_discrete, linewidth = plot_scale*1.5, 
+                            ggplot2::aes(color=type, yend=value,
+                                         x=fake_date - 12, xend=fake_date + 12)) +
+      scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
+      ggnewscale::new_scale_color()
+
+  } else if (plot_type == "violin") {
+    plot <- plot +
+      ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "grey89", scale = "width") #Using a scale other than "width" may result in issues for locations where there are many "0" values.
+  } else if (plot_type == "boxplot"){
+    plot <- plot +
+      ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "grey89", varwidth = TRUE)
+  }
+  
+    plot <- plot +
+    ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = fake_date, y = value, colour = as.factor(year), fill = as.factor(year)), size = plot_scale*3.5, shape = 21) +
+    ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = colours[1:legend_length], aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
+
+  
+  # Wrap things up and return() -----------------------
+  if (title == TRUE){
+    if (is.null(discrete_data)){
+      stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
+      titl <- paste0("Location ", location, ": ", stn_name)
+    } else {
+      if (!is.null(location)) {
+        titl <- paste0("Location: ", location)}
+      else {
+        titl <- paste0("Location: ", unique(all_discrete$location))
+      }
+      
+    }
+    
+    plot <- plot +
+      ggplot2::labs(title=titl) +
+      ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
+  }
+  
+  #Save it if requested
+  if (!is.null(save_path)){
+    ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz=tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz=tzone)), ".png"), plot=plot, height=8, width=12, units="in", device="png", dpi=500)
+  }
+  
+  return(plot)
+}
+
+# Function to create lake level snow bulletin plots
+snowbullWater <- function(location, parameter, years) {
+  flood <- :data$flow_level_flood
+  plot <-
+    hydrometContinuous(
+      location = location,
+      parameter = parameter,
+      startDay = paste0(years, "-10-01"),
+      endDay = paste0(as.character(as.numeric(years) + 1), '-09-30'),
+      years = years,
+      returns = "none"
+    )
+  
+  if (exists('flood') &
+      !is.null(flood) & parameter %in% c("level", "flow")) {
+    if (parameter == "level") {
+      plot <- plot +
+        ggplot2::geom_hline(
+          yintercept = dplyr::filter(flood, ID == station_id)$Flood_level_asl,
+          linetype = "dashed",
+          color = "red",
+          size = 1
+        ) +
+        ggplot2::annotate(
+          "text",
+          x = as.POSIXct(paste0(year, "-10-25")),
+          y = dplyr::filter(flood, ID == station_id)$Flood_level_asl + (max(plot$data$max)-min(plot$data$min))/20,
+          label = "Flood level",
+          colour = "red"
+        )
+    } else {
+      plot <- plot +
+        ggplot2::geom_hline(
+          yintercept = dplyr::filter(flood, ID == station_id)$Flood_flow,
+          linetype = "dashed",
+          color = "red",
+          size = 1
+        ) +
+        ggplot2::annotate(
+          "text",
+          x = as.POSIXct(paste0(year, "-10-25")),
+          y = dplyr::filter(flood, ID == station_id)$Flood_flow + (max(plot$data$max)-min(plot$data$min))/20,
+          label = "Flood level",
+          colour = "red")
+    }
+    
+  } else {
+    plot <- plot
+  }
+  return(plot)
+}
+
+# Function to create basin SWE boxplots (Not currently being used)
+snowbullSWE <- function(loc, basin, year, swe_basins) {
+  # Subset data
+  swe_basin <- swe_basins[swe_basins$location==basin,]
+  # Plot
+  hydrometDiscrete(location = loc, parameter = "SWE", startDay = 1, tzone = "MST", years = c(year), title = FALSE, plot_type = "linedbox", plot_scale = 1, save_path = NULL, discrete_data = swe_basin)
+}
+
+```
+```{r SWEbasins, include=FALSE}
+# Get SWE data for basins 
+swe_basins <- SWE_basin(year <- 2023,
+                                   month <- c(3, 4, 5), # c(3)
+                                   threshold <- 6,
+                                   csv = FALSE,
+                                   summarise = FALSE)
+```
+
+  
+## All basins
+```{r All_basins, echo=FALSE, fig.width=10}
+# # Box plot of SWE of all basins
+# hydrometDiscrete2 <- function(location=NULL,
+#                              parameter,
+#                              startDay = 1,
+#                              endDay = 365,
+#                              tzone = "MST",
+#                              years = NULL,
+#                              title = TRUE,
+#                              plot_type = "violin",
+#                              plot_scale = 1,
+#                              save_path = NULL,
+#                              dbPath = "default",
+#                              discrete_data = NULL)
+# {
+#   # Commented code below is for testing...
+#   # location = "08AA-SC01"
+#   # parameter = "SWE"
+#   # startDay = 1
+#   # endDay = 365
+#   # tzone = "MST"
+#   # years = c(2022)
+#   # title = TRUE
+#   # plot_scale = 1
+#   # plot_type = "boxplot"
+#   # save_path = NULL
+#   # dbPath ="default"
+#   # discrete_data = NULL
+# 
+#   #TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
+# 
+#   if (startDay != 1){
+#     startDay <- 1
+#     message("Parameter startDay is not currently in use and has been reset to the default of 1.")
+#   }
+#   if (endDay != 365){
+#     endDay <- 365
+#     message("Parameter endDay is not currently in use and has been reset to the default of 365.")
+#   }
+# 
+#   # Checks on input parameters  and other start-up bits------------------
+#   if (parameter != "SWE"){
+#     parameter <- tolower(parameter)
+#   }
+# 
+#   plot_type <- tolower(plot_type)
+#   if (!(plot_type %in% c("violin", "boxplot"))){
+#     stop("Parameter 'plot_type' must be one of 'violin' or 'boxplot'")
+#   }
+# 
+#   if (is.null(years)){
+#     years <- as.numeric(substr(Sys.Date(), 1, 4))
+#   } else {
+#     years <- as.numeric(years)
+#     years <- sort(years, decreasing = TRUE)
+#     if (length(years) > 10){
+#       years <- years[1:10]
+#       print("The parameter 'years' can only have up to 10 years. It's been truncated to the first 10 years in the vector.")
+#     }
+#   }
+#   # Select save path
+#   if (!is.null(save_path)){
+#     if (save_path %in% c("Choose", "choose")) {
+#       print("Select the folder where you want this graph saved.")
+#       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+#     }
+#   }
+# 
+# 
+#   if (is.null(discrete_data)) {
+#     #Connect
+#     con <- hydroConnect(path = dbPath, silent = TRUE)
+#     on.exit(DBI::dbDisconnect(con))
+# 
+#     # Dealing with start/end dates ----------------------
+#     # Sort out startDay and endDay into actual dates if needed
+#     last_year <- max(years)
+#     leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
+#     tryCatch({
+#       startDay <- as.character(startDay)
+#       startDay <- as.POSIXct(startDay, tz = tzone)
+#       lubridate::year(startDay) <- last_year
+#     }, error = function(e) {
+#       if (last_year %in% leap_list){
+#         if (startDay > 59){
+#           startDay <<- startDay + 1
+#         }
+#       }
+#       startDay <<- as.POSIXct(as.numeric(startDay)*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
+#       startDay <<- lubridate::force_tz(startDay, tzone)
+#     })
+#     tryCatch({
+#       endDay <- as.character(endDay)
+#       endDay <- as.POSIXct(endDay, tz = tzone)
+#       lubridate::year(endDay) <- last_year
+#     }, error = function(e) {
+#       tempStartDay <- lubridate::yday(startDay) #using yday because start is now in proper Date format and needs to be back-converted to yday
+#       if (last_year %in% leap_list){
+#         if (endDay > 59){
+#           endDay <<- endDay + 1
+#         }
+#       }
+#       endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
+#       endDay <<- lubridate::force_tz(endDay, tzone)
+#     })
+#     if (startDay > endDay){ #if the user is wanting a range overlapping the new year
+#       lubridate::year(endDay) <- lubridate::year(endDay)+1
+#       overlaps <- TRUE
+#     } else {
+#       overlaps <- FALSE
+#     }
+# 
+#     day_seq <- seq.POSIXt(startDay, endDay, by = "day")
+# 
+#     #Check for existence of timeseries, then for presence of data within the time range requested.
+#     exists <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND type = 'discrete'"))
+#     if (nrow(exists) == 0){
+#       stop("There is no entry for the location and parameter combination that you specified of discrete data type. If you are trying to graph continuous data use hydrometContinuous.")
+#     } else if (nrow(exists) > 1){
+#       stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager ASAP.")
+#     }
+# 
+# 
+# 
+#     #Find the ts units
+#     units <- DBI::dbGetQuery(con, paste0("SELECT units FROM timeseries WHERE parameter = '", parameter, "' AND location = '", location, "'"))
+# 
+#     # Get the data ---------------------
+#     all_discrete <- DBI::dbGetQuery(con, paste0("SELECT * FROM discrete WHERE location = '", location, "' AND parameter = '", parameter, "' AND sample_date < '", paste0(max(years), substr(endDay, 5, 10)), "'"))
+#     if (nrow(all_discrete) == 0){
+#       stop(paste0("There doesn't appear to be any data for the year and days you specified: this timeseries starts ",  exists$start_datetime_UTC))
+#     }
+#     all_discrete$target_date <- as.Date(all_discrete$target_date)
+#     all_discrete$sample_date <- as.Date(all_discrete$sample_date)
+#     all_discrete$year <- lubridate::year(all_discrete$target_date)
+#     all_discrete$month <- lubridate::month(all_discrete$target_date)
+#     all_discrete$day <- lubridate::day(all_discrete$target_date)
+#     #Separate, modify, and re-bind feb29 days, if any
+#     feb29 <- all_discrete[all_discrete$month == 2 & all_discrete$day == 29, ]
+#     if (nrow(feb29) > 0){
+#       all_discrete <- all_discrete[!(all_discrete$month == 2 & all_discrete$day == 29), ]
+#       feb29$target_date <- feb29$target_date + 1
+#       feb29$month <- 3
+#       feb29$day <- 1
+#       all_discrete <- rbind(all_discrete, feb29)
+#     }
+# 
+#     #Make a fake date
+#     all_discrete$fake_date <- as.Date(gsub("[0-9]{4}", last_year, all_discrete$target_date))
+#     discrete <- data.frame()
+#     for (i in years){
+#       start <- as.Date(paste0(i, substr(startDay, 5, 10)))
+#       end <- as.Date(paste0(i, substr(endDay, 5, 10)))
+#       if (overlaps){
+#         lubridate::year(end) <- lubridate::year(end) +1
+#       }
+#       new_discrete <- all_discrete[all_discrete$target_date >= start & all_discrete$target_date <= end , ]
+#       discrete <- rbind(discrete, new_discrete)
+#     }
+#     if (nrow(discrete) == 0){
+#       stop("There is no data to graph after filtering for your specified year(s) and day range. Try again with different days.")
+#     }
+# 
+#   }
+# 
+#   if (!is.null(discrete_data)) {
+#     ## Create all_discrete
+#     all_discrete <- discrete_data
+#     # add fake_date
+#     all_discrete$fake_date <- as.Date(paste0(max(years), "-0", all_discrete$month, "-01" ))
+#     ## Create discrete
+#     discrete <- all_discrete %>% dplyr::filter(year %in% years)
+#     ## Give units
+#     units <- unique(discrete$units)
+# 
+#   }
+# 
+#   #Make the plot --------------------
+#    colours = c("blue", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
+#   legend_length <- length(years)
+#   plot <- ggplot2::ggplot(all_discrete, ggplot2::aes(x = location, y = value, group = location)) +
+#     ggplot2::labs(x = "", y = if (parameter == "SWE") paste0("SWE (", units, ")") else paste0(stringr::str_to_title(parameter), " (", units, ")")) +
+#     ggplot2::theme_classic() +
+#     ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 10*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
+#   if (plot_type == "violin") {
+#     plot <- plot +
+#       ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width") #Using a scale other than "width" may result in issues for locations where there are many "0" values.
+#   } else if (plot_type == "boxplot"){
+#     plot <- plot +
+#       ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE)
+#   }
+#   plot <- plot +
+#     ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = location, y = value, colour = as.factor(year), fill = as.factor(year)), size = plot_scale*3.5, shape = 21) +
+#     ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = colours[1:legend_length], aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
+# 
+#   # Wrap things up and return() -----------------------
+#   if (title == TRUE){
+#     if (is.null(discrete_data)){
+#       stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
+#       titl <- paste0("Location ", location, ": ", stn_name)
+#     } else {
+#       if (!is.null(location)) {
+#         titl <- paste0("Location: ", location)}
+#       else {
+#         titl <- paste0("Location: ", unique(all_discrete$location))
+#         }
+# 
+#     }
+# 
+#     plot <- plot +
+#       ggplot2::labs(title=titl) +
+#       ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
+#   }
+# 
+#   #Save it if requested
+#   if (!is.null(save_path)){
+#     ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz=tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz=tzone)), ".png"), plot=plot, height=8, width=12, units="in", device="png", dpi=500)
+#   }
+# 
+#   return(plot)
+# }
+# all_basins <- swe_basins[swe_basins$month == 5,]
+# plot <- hydrometDiscrete2(location = "all basins", parameter = "SWE", startDay = 1, tzone = "MST", years = 2022, title = FALSE, plot_type = "boxplot", plot_scale = 1, save_path = NULL, discrete_data = all_basins)
+
+``` 
+
+## Upper Yukon river basin (Southern lakes / Whitehorse)
+```{r UpperYukonRiver_Snow, echo=FALSE, out.width='.49\\linewidth', fig.width=5, fig.height=3,fig.show='hold',fig.align='center'}
+## A1 Wolf Creek
+# Set station ID
+station_id <- "29AB-M3"
+# Plot SWE
+hydrometContinuous(
+  location = station_id,
+  parameter = "SWE",
+  startDay = "2022-09-01",
+  endDay = '2023-07-01',
+  years = 2022,
+  returns = "none"
+)
+## A2 Tagish
+# Set station ID
+station_id <- "09AA-M1"
+# Plot SWE
+hydrometContinuous(
+  location = station_id,
+  parameter = "SWE",
+  startDay = "2022-09-01",
+  endDay = '2023-07-01',
+  years = 2022,
+  returns = "none"
+)
+
+``` 
+
+```{r UpperYukon_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r MonthlyPrecip, echo=FALSE}
+# C
+``` 
+
+```{r Whitehorse_CDDF, echo=FALSE}
+# D
+# Get climate data
+combined_data <- combineWeather(stations=list("2100LRP", "2100402"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2100407"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2100400"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2101062"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+# Calculate CDDF
+
+
+``` 
+
+```{r MarshLake, echo=FALSE, fig.width=10}
+# E1
+# Set station ID
+station_id <- "09AB004"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "level",
+              years = 2022)
+``` 
+
+```{r LakeLaberge, echo=FALSE, fig.width=10}
+# E2
+# Set station ID
+station_id <- "09AB010"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "level",
+              years = 2022)
+``` 
+
+## Teslin river basin
+```{r TeslinBigSalmon_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting
+snowbullSWE(loc= "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r TeslinLake, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "09AE002"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "level",
+              years = 2022)
+``` 
+
+## Central Yukon river basin (Carmacks area)
+```{r CentralYukon_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting
+snowbullSWE(loc= "Central Yukon", basin = "Central_Yukon",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r Nordenskiold, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "09AH004"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
+## Pelly river basin
+```{r PellyRiver_Snow, echo=FALSE, out.width='.49\\linewidth', fig.width=5, fig.height=3,fig.show='hold',fig.align='center'}
+## A Twin Creeks
+# Set station ID
+station_id <- "09BA-M7"
+# Plot SWE
+hydrometContinuous(
+  location = station_id,
+  parameter = "SWE",
+  startDay = "2022-09-01",
+  endDay = '2023-07-01',
+  years = 2022,
+  returns = "none"
+)
+
+```
+
+```{r Pelly_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "Pelly", basin = "Pelly",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r PellyRiver, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "09BC001"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
+## Stewart river basin
+```{r StewartRiver_Snow, echo=FALSE, out.width='.49\\linewidth', fig.width=5, fig.height=3,fig.show='hold',fig.align='center'}
+## A Withers Lake
+# Set station ID
+station_id <- "09DB-M1"
+# Plot SWE
+hydrometContinuous(
+  location = station_id,
+  parameter = "SWE",
+  startDay = "2022-09-01",
+  endDay = '2023-07-01',
+  years = 2022,
+  returns = "none"
+)
+
+``` 
+
+```{r Stewart_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "Stewart", basin = "Stewart",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r StewartRiver, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "09DD003"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
+## White river basin
+
+```{r White_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "White", basin = "White",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r WhiteRiver, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "09CB001"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
+## Lower Yukon River basin (Dawson area)
+```{r LowerYukonRiver_Snow, echo=FALSE, out.width='.49\\linewidth', fig.width=5, fig.height=3,fig.show='hold',fig.align='center'}
+## A King Solomon Dome
+# Set station ID
+station_id <- "09AE-SC01"
+# Plot SWE
+hydrometDiscrete(
+  location = station_id,
+  parameter = "SWE",
+  years = 2022
+)
+
+```
+
+```{r LowerYukon_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "Lower Yukon", basin = "Lower_Yukon",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r Whitehorse_CDDF, echo=FALSE}
+# D
+# Get climate data
+combined_data <- combineWeather(stations=list("2100LRP", "2100402"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2100407"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2100400"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2101062"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+# Calculate CDDF
+
+
+``` 
+
+```{r YukonRiver, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "09CD001"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
+## Porcupine River basin
+```{r Porcupine_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "Porcupine", basin = "Porcupine",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r PorcupineRiver, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "09FD002"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
+## Peel River basin
+```{r Peel_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "Peel", basin = "Peel",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r PeelRiver, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "10MA001"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
+## Liard River basin
+```{r LiardRiver_Snow, echo=FALSE, out.width='.49\\linewidth', fig.width=5, fig.height=3,fig.show='hold',fig.align='center'}
+## A Hyland River
+# Set station ID
+station_id <- "10AD-M2"
+# Plot SWE
+hydrometContinuous(
+  location = station_id,
+  parameter = "SWE",
+  startDay = "2022-09-01",
+  endDay = '2023-07-01',
+  years = 2022,
+  returns = "none"
+)
+
+```
+
+```{r Liard_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "Liard", basin = "Liard",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r LiardRiver, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "10AA001"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
+## Alsek River basin
+```{r Alsek_basin, echo=FALSE, fig.width=10}
+# B
+# Plotting 
+snowbullSWE(loc= "Alsek", basin = "Alsek",
+            year = 2023, swe_basins = swe_basins)
+``` 
+
+```{r AlsekRiver, echo=FALSE, fig.width=10}
+# E
+# Set station ID
+station_id <- "08AB001"
+# Plotting
+snowbullWater(location = station_id,
+              parameter = "flow",
+              years = 2022)
+``` 
+
