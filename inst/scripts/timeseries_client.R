@@ -1,6 +1,3 @@
-library(jsonlite)
-library(httr)
-
 # Create a simple AQUARIUS Time-Series API client.
 timeseriesClient <- setRefClass("timeseriesClient",
                                 fields = list(
@@ -36,10 +33,10 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     }
 
                                     # Grab the version of the AQTS server
-                                    r <- GET(paste0(prefix, hostname, "/AQUARIUS/apps/v1/version"))
-                                    stop_for_status(r, "detecting AQTS version")
+                                    r <- httr::GET(paste0(prefix, hostname, "/AQUARIUS/apps/v1/version"))
+                                    httr::stop_for_status(r, "detecting AQTS version")
 
-                                    j <- fromJSON(content(r, "text"))
+                                    j <- jsonlite::fromJSON(httr::content(r, "text"))
                                     version <<- j$ApiVersion
 
                                     # Anything earlier than 14.3 is considered legacy code
@@ -60,12 +57,12 @@ timeseriesClient <- setRefClass("timeseriesClient",
 
                                     if (isLegacy) {
                                       # Authenticate via the older operation, so that a session cookie is set
-                                      r <- GET(paste0(publishUri, "/GetAuthToken"), query = credentials)
+                                      r <- httr::GET(paste0(publishUri, "/GetAuthToken"), query = credentials)
                                     } else {
                                       # Authenticate via the preferred endpoint
-                                      r <- POST(paste0(publishUri, "/session"), body = credentials, encode = "json")
+                                      r <- httr::POST(paste0(publishUri, "/session"), body = credentials, encode = "json")
                                     }
-                                    stop_for_status(r, "authenticate with AQTS")
+                                    httr::stop_for_status(r, "authenticate with AQTS")
                                   },
 
                                   #' Disconnects immediately from an AQTS server
@@ -75,12 +72,12 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       # 3.X doesn't support proper disconnection, so just abandon the session below
                                     } else {
                                       # Delete the session immediately, like we should
-                                      r <- DELETE(paste0(publishUri, "/session"))
-                                      stop_for_status(r, "disconnect from AQTS")
+                                      r <- httr::DELETE(paste0(publishUri, "/session"))
+                                      httr::stop_for_status(r, "disconnect from AQTS")
                                     }
 
                                     # Abandon all session cookies associated with the connection
-                                    handle_reset(publishUri)
+                                    httr::handle_reset(publishUri)
                                   },
 
                                   #' Auto-configures the proxy to route all requests through Fiddler
@@ -182,11 +179,11 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       location <- .self$getLocationIdentifier(timeSeriesIdentifier)
 
                                       # Ask for all the time-series at that location
-                                      r <- GET(paste0(publishUri, "/GetTimeSeriesDescriptionList"), query = list(LocationIdentifier = location))
-                                      stop_for_status(r, paste("retrieve time-series at location", location))
+                                      r <- httr::GET(paste0(publishUri, "/GetTimeSeriesDescriptionList"), query = list(LocationIdentifier = location))
+                                      httr::stop_for_status(r, paste("retrieve time-series at location", location))
 
                                       # Find the unique ID by matching the full identifier
-                                      j <- fromJSON(content(r, "text"))
+                                      j <- jsonlite::fromJSON(httr::content(r, "text"))
                                       uniqueId <- j$TimeSeries$UniqueId[which(j$TimeSeries$Identifier == timeSeriesIdentifier)]
 
                                       if (length(uniqueId) <= 0) {
@@ -300,8 +297,8 @@ timeseriesClient <- setRefClass("timeseriesClient",
 
                                   #' Gets the location data for a location
                                   getLocationData = function(locationIdentifier) {
-                                    locationData <- fromJSON(content(stop_for_status(
-                                      GET(paste0(publishUri, "/GetLocationData"), query = list(LocationIdentifier = locationIdentifier))
+                                    locationData <- jsonlite::fromJSON(httr::content(httr::stop_for_status(
+                                      httr::GET(paste0(publishUri, "/GetLocationData"), query = list(LocationIdentifier = locationIdentifier))
                                       , paste("get location data for", locationIdentifier)), "text"))
                                   },
 
@@ -342,8 +339,8 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     q <- q[!sapply(q, is.null)]
 
                                     # Get the rating models for the time period
-                                    ratingModels <- fromJSON(content(stop_for_status(
-                                      GET(paste0(.self$publishUri, "/GetRatingModelDescriptionList"), query = q)
+                                    ratingModels <- jsonlite::fromJSON(httr::content(httr::stop_for_status(
+                                      httr::GET(paste0(.self$publishUri, "/GetRatingModelDescriptionList"), query = q)
                                       , paste("get rating models for", locationIdentifier)), "text"))$RatingModelDescriptions
 
                                     # Get the rating curves active in those models
@@ -386,8 +383,8 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     q <- q[!sapply(q, is.null)]
 
                                     # Get the output values of the rating curve
-                                    outputValues <- fromJSON(content(stop_for_status(
-                                      GET(paste0(.self$publishUri, "/GetRatingModelOutputValues"), query = q)
+                                    outputValues <- jsonlite::fromJSON(httr::content(httr::stop_for_status(
+                                      httr::GET(paste0(.self$publishUri, "/GetRatingModelOutputValues"), query = q)
                                       , paste("get rating model output values for", ratingModelIdentifier)), "text"))$OutputValues
 
                                   },
@@ -421,8 +418,8 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     q <- q[!sapply(q, is.null)]
 
                                     # Get the filed visits descriptions for the time period
-                                    visits <- fromJSON(content(stop_for_status(
-                                      GET(paste0(.self$publishUri, "/GetFieldVisitDescriptionList"), query = q)
+                                    visits <- jsonlite::fromJSON(httr::content(httr::stop_for_status(
+                                      httr::GET(paste0(.self$publishUri, "/GetFieldVisitDescriptionList"), query = q)
                                       , paste("get field visits for", locationIdentifier)), "text"))$FieldVisitDescriptions
 
                                     # Get the activities performed during those visits
@@ -464,8 +461,8 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     q <- q[!sapply(q, is.null)]
 
                                     # Get metadata transaction list
-                                    metadataChangeList <- fromJSON(content(stop_for_status(
-                                      GET(paste0(.self$publishUri, "/GetMetadataChangeTransactionList"), query = q)
+                                    metadataChangeList <- jsonlite::fromJSON(httr::content(httr::stop_for_status(
+                                      httr::GET(paste0(.self$publishUri, "/GetMetadataChangeTransactionList"), query = q)
                                       , paste("get metadata change list for", timeSeriesIdentifier)), "text"))
 
                                     metadataChangeList
@@ -529,8 +526,8 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     q <- q[!sapply(q, is.null)]
 
                                     # Get all the time series at the location
-                                    timeSeries <- fromJSON(content(stop_for_status(
-                                      GET(paste0(timeseries$publishUri, "/GetTimeSeriesDescriptionList"), query = q)
+                                    timeSeries <- jsonlite::fromJSON(httr::content(httr::stop_for_status(
+                                      httr::GET(paste0(timeseries$publishUri, "/GetTimeSeriesDescriptionList"), query = q)
                                       , paste("get time-series descriptions for", locationIdentifier)), "text"))$TimeSeriesDescriptions
                                   },
 
@@ -588,10 +585,10 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       IncludeGapMarkers = includeGapMarkers)
                                     q <- q[!sapply(q, is.null)]
 
-                                    r <- GET(paste0(publishUri, "/GetTimeSeriesData"), query = q)
-                                    stop_for_status(r, paste("get time-aligned data for", length(uniqueIds), "time-series"))
+                                    r <- httr::GET(paste0(publishUri, "/GetTimeSeriesData"), query = q)
+                                    httr::stop_for_status(r, paste("get time-aligned data for", length(uniqueIds), "time-series"))
 
-                                    j <- fromJSON(content(r, "text"))
+                                    j <- jsonlite::fromJSON(httr::content(r, "text"))
                                   },
 
                                   #' Get corrected data for a time-series
@@ -630,8 +627,8 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     }
                                     q <- q[!sapply(q, is.null)]
 
-                                    data <- fromJSON(content(stop_for_status(
-                                      GET(paste0(.self$publishUri, "/GetTimeSeriesCorrectedData"), query = q)
+                                    data <- jsonlite::fromJSON(httr::content(httr::stop_for_status(
+                                      httr::GET(paste0(.self$publishUri, "/GetTimeSeriesCorrectedData"), query = q)
                                       , paste("get corrected data for", timeSeriesIdentifier)), "text"))
 
                                   },
@@ -694,27 +691,27 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     }
 
                                     # Upload the file to the location
-                                    r <- POST(paste0(acquisitionUri, "/locations/", locationData$UniqueId, "/attachments/reports"),
+                                    r <- httr::POST(paste0(acquisitionUri, "/locations/", locationData$UniqueId, "/attachments/reports"),
                                               body = list(uploadedFile = upload_file(path), Title = title))
-                                    stop_for_status(r, paste("upload external report to location", locationData$Identifier))
+                                    httr::stop_for_status(r, paste("upload external report to location", locationData$Identifier))
 
-                                    j <- fromJSON(content(r, "text"))
+                                    j <- jsonlite::fromJSON(httr::content(r, "text"))
 
                                   },
 
                                   #' Gets a list of reports
                                   getReportList = function() {
 
-                                    r <- GET(paste0(publishUri, "/GetReportList"))
-                                    stop_for_status(r, "get report list")
+                                    r <- httr::GET(paste0(publishUri, "/GetReportList"))
+                                    httr::stop_for_status(r, "get report list")
 
-                                    j <- fromJSON(content(r, "text"))
+                                    j <- jsonlite::fromJSON(httr::content(r, "text"))
                                   },
 
                                   #' Deletes a report
                                   deleteReport = function(reportUniqueId) {
-                                    r <- DELETE(paste0(acquisitionUri, "/attachments/reports/", reportUniqueId))
-                                    stop_for_status(r, paste("delete report", reportUniqueId))
+                                    r <- httr::DELETE(paste0(acquisitionUri, "/attachments/reports/", reportUniqueId))
+                                    httr::stop_for_status(r, paste("delete report", reportUniqueId))
                                   },
 
                                   #' Performs a batch of identical operations
@@ -751,8 +748,8 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       # No batch support in 3.X, so just perform each request sequentially
                                       lapply(requests, function(request) {
                                         # TODO: Support more that GET requests
-                                        fromJSON(content(stop_for_status(
-                                          GET(paste0(.self$publishUri, operationRoute), query = request)
+                                        jsonlite::fromJSON(httr::content(httr::stop_for_status(
+                                          httr::GET(paste0(.self$publishUri, operationRoute), query = request)
                                           , paste(operationRoute)), "text"))
                                       })
 
@@ -767,11 +764,11 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       # Create a local function to request each batch of requests, using the verb as an override to the POST
                                       batchPost <- function(batchOfRequests, index) {
                                         offset <- batchSize * index
-                                        r <- POST(url, body = batchOfRequests, encode = "json", add_headers("X-Http-Method-Override" = verb))
-                                        stop_for_status(r, paste("receive", length(batchOfRequests), "batch", operationRoute, "responses at offset", offset))
+                                        r <- httr::POST(url, body = batchOfRequests, encode = "json", add_headers("X-Http-Method-Override" = verb))
+                                        httr::stop_for_status(r, paste("receive", length(batchOfRequests), "batch", operationRoute, "responses at offset", offset))
 
                                         # Return the batch of responses
-                                        responses <- fromJSON(content(r, "text"))
+                                        responses <- jsonlite::fromJSON(httr::content(r, "text"))
                                       }
 
                                       # Call the operation in batches
@@ -805,10 +802,10 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       UtcOffset = utcOffset)
                                     request <- request[!sapply(request, is.null)]
 
-                                    r <- POST(paste0(provisioningUri, "/locations/", locationUniqueId, "/timeseries/calculated"), body = request, encode = "json")
-                                    stop_for_status(r, paste("post calc-derived time-series for", length(uniqueIds), "input time-series"))
+                                    r <- httr::POST(paste0(provisioningUri, "/locations/", locationUniqueId, "/timeseries/calculated"), body = request, encode = "json")
+                                    httr::stop_for_status(r, paste("post calc-derived time-series for", length(uniqueIds), "input time-series"))
 
-                                    j <- fromJSON(content(r, "text"))
+                                    j <- jsonlite::fromJSON(httr::content(r, "text"))
                                   },
 
                                   #' Append points to a basic time-series
@@ -835,10 +832,10 @@ timeseriesClient <- setRefClass("timeseriesClient",
 
                                       postUrl <- paste0(acquisitionUri, "/timeseries/", seriesUniqueId, "/overwriteappend")
                                     }
-                                    r <- POST(postUrl, body = seriesData, encode = "json")
-                                    stop_for_status(r, postUrl)
+                                    r <- httr::POST(postUrl, body = seriesData, encode = "json")
+                                    httr::stop_for_status(r, postUrl)
 
-                                    j <- fromJSON(content(r, "text"))
+                                    j <- jsonlite::fromJSON(httr::content(r, "text"))
                                     j$AppendRequestIdentifier
                                   },
 
@@ -876,10 +873,10 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       ))
 
                                     postUrl <- paste0(acquisitionUri, "/timeseries/", seriesUniqueId, "/reflected")
-                                    r <- POST(postUrl, body = seriesData, encode = "json")
-                                    stop_for_status(r, postUrl)
+                                    r <- httr::POST(postUrl, body = seriesData, encode = "json")
+                                    httr::stop_for_status(r, postUrl)
 
-                                    j <- fromJSON(content(r, "text"))
+                                    j <- jsonlite::fromJSON(httr::content(r, "text"))
                                     j$AppendRequestIdentifier
                                   },
 
@@ -921,10 +918,10 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                   #' @param appendRequestIdentifier The identifier returned by a basic or reflected append request
                                   #' @returns The JSON response from a successful upload
                                   getAppendStatus = function(appendRequestIdentifier) {
-                                    r <- GET(paste0(acquisitionUri, "/timeseries/appendstatus/", appendRequestIdentifier))
-                                    stop_for_status(r, paste("get append status for", appendRequestIdentifier))
+                                    r <- httr::GET(paste0(acquisitionUri, "/timeseries/appendstatus/", appendRequestIdentifier))
+                                    httr::stop_for_status(r, paste("get append status for", appendRequestIdentifier))
 
-                                    j <- fromJSON(content(r, "text"))
+                                    j <- jsonlite::fromJSON(httr::content(r, "text"))
                                   }
 
                                 )
