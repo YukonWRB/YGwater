@@ -21,7 +21,7 @@ SWE_station <-
            return_missing = FALSE) {
     
     # Retrieve data from db
-    con <- hydroConnect()
+    con <- hydrometConnect()
     Meas <-
       DBI::dbGetQuery(con,
                       "SELECT locations.name, discrete.location, discrete.value, discrete.target_date, discrete.sample_date, discrete.parameter 

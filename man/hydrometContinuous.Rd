@@ -54,7 +54,7 @@ hydrometContinuous(
 
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
-\item{dbPath}{The path to the local hydromet database, passed to \code{\link[=hydroConnect]{hydroConnect()}}.}
+\item{dbPath}{The path to the local hydromet database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
@@ -69,7 +69,7 @@ Notice: in many cases, you're better off using the Shiny app at \code{\link[=hyd
 This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for continuous data. This function can only plot what's in the database, use the function \code{\link[=DB_browse_ts]{DB_browse_ts()}} to see what's in there first. Plots will include bands representing the historic min, max, and 25th-75th percentiles based on the last year of data requested. If necessary for performance, data may be down-sampled to daily means: see details.
 }
 \details{
-Superseded functions \code{\link[WRBflood:levelPlot]{WRBflood::levelPlot()}} and \code{\link[WRBfloods:flowPlot]{WRBfloods::flowPlot()}} can be used in the event that this function does not yield your desired graph, or if you cannot use the local database and must use data directly from the Water Survey of Canada.
+Superseded functions \code{\link[WRBfloods:levelPlot]{WRBfloods::levelPlot()}} and \code{\link[WRBfloods:flowPlot]{WRBfloods::flowPlot()}} can be used in the event that this function does not yield your desired graph, or if you cannot use the local database and must use data directly from the Water Survey of Canada.
 \subsection{Down sampling of data}{
 
 When requesting time periods where high-frequency (realtime) data is available, some of the data may be displayed as daily means instead to improve performance. Specifically, only day ranges of less than 60 days will have high-frequency data (61 days or more will be plotted with daily means). Additionally, daily means will be fetched once the number of high-frequency rows exceeds 20 000 after year specified under parameter \code{years} (this will plot up to two 60-day lines at 5 minute recording intervals). In all cases, high-frequency data will be fetched nearest to the specified \code{endDate}.

@@ -13,7 +13,7 @@ DB_get_spatial(
 )
 }
 \arguments{
-\item{path}{The path to the database, passed to \code{\link[=hydroConnect]{hydroConnect()}}. Default uses hydroConnect default path.}
+\item{path}{The path to the database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}. Default uses hydrometConnect default path.}
 
 \item{type}{'polygon' or 'raster'?}
 

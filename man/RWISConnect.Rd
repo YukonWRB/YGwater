@@ -32,5 +32,5 @@ A connection to the database
 Establishes a connection to the RWIS (Road Weather Information System) database. Only works from within YG networks.
 }
 \seealso{
-\code{\link[=hydroConnect]{hydroConnect()}} for establishing a connection to the WRB's hydrometric database.
+\code{\link[=hydrometConnect]{hydrometConnect()}} for establishing a connection to the WRB's hydrometric database.
 }

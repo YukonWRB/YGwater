@@ -10,7 +10,7 @@
 #' This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for continuous data. This function can only plot what's in the database, use the function [DB_browse_ts()] to see what's in there first. Plots will include bands representing the historic min, max, and 25th-75th percentiles based on the last year of data requested. If necessary for performance, data may be down-sampled to daily means: see details.
 #'
 #' @details
-#' Superseded functions [WRBflood::levelPlot()] and [WRBfloods::flowPlot()] can be used in the event that this function does not yield your desired graph, or if you cannot use the local database and must use data directly from the Water Survey of Canada.
+#' Superseded functions [WRBfloods::levelPlot()] and [WRBfloods::flowPlot()] can be used in the event that this function does not yield your desired graph, or if you cannot use the local database and must use data directly from the Water Survey of Canada.
 #'
 #' ## Down sampling of data
 #' When requesting time periods where high-frequency (realtime) data is available, some of the data may be displayed as daily means instead to improve performance. Specifically, only day ranges of less than 60 days will have high-frequency data (61 days or more will be plotted with daily means). Additionally, daily means will be fetched once the number of high-frequency rows exceeds 20 000 after year specified under parameter `years` (this will plot up to two 60-day lines at 5 minute recording intervals). In all cases, high-frequency data will be fetched nearest to the specified `endDate`.
@@ -37,7 +37,7 @@
 #' @param allowed_missing Allowable % of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of [fasstr::calc_annual_extremes()].
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
-#' @param dbPath The path to the local hydromet database, passed to [hydroConnect()].
+#' @param dbPath The path to the local hydromet database, passed to [hydrometConnect()].
 #'
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
 #' @export
@@ -113,7 +113,7 @@ hydrometContinuous <- function(location,
   }
 
   #Connect
-  con <- hydroConnect(path = dbPath, silent = TRUE)
+  con <- hydrometConnect(path = dbPath, silent = TRUE)
   on.exit(DBI::dbDisconnect(con))
 
   #Confirm parameter and location exist in the database and that there is only one entry
@@ -350,7 +350,7 @@ hydrometContinuous <- function(location,
 
   legend_length <- length(unique(realtime$plot_year))
 
-  plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = fake_datetime, y = value)) +
+  plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = .data$fake_datetime, y = .data$value)) +
     ggplot2::ylim(min, max) +
     ggplot2::scale_x_datetime(date_breaks = date_breaks, labels = labs) +
     ggplot2::labs(x = "", y =  paste0((if (parameter != "SWE") stringr::str_to_title(parameter) else parameter), " (", units, ")")) +
@@ -359,8 +359,8 @@ hydrometContinuous <- function(location,
 
   if (!is.infinite(minHist)){
     plot <- plot +
-      ggplot2::geom_ribbon(ggplot2::aes(ymin = min, ymax = max, fill = "Min - Max"), na.rm = T) +
-      ggplot2::geom_ribbon(ggplot2::aes(ymin = QP25, ymax = QP75, fill = "25th-75th Percentile"), na.rm = T) +
+      ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"), na.rm = T) +
+      ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$QP25, ymax = .data$QP75, fill = "25th-75th Percentile"), na.rm = T) +
       ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray85", "25th-75th Percentile" = "gray65"))
   }
 

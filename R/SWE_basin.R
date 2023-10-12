@@ -28,7 +28,7 @@ SWE_basin <-
            csv = FALSE,
            summarise = FALSE) {
     ### Retrieve data from db
-    con <- hydroConnect()
+    con <- hydrometConnect()
     Meas <-
       DBI::dbGetQuery(con,
                       "SELECT location, value, target_date FROM discrete WHERE parameter = 'SWE'")

@@ -9,7 +9,7 @@
 #'@details
 #' Sites that routinely see 0 values for flow or level in mid-winter may report a negative annual percent change *even if* the sens's slope is positive. This is due to the intercept of a linear model calculated using minimum flows and years being below 0 at the first year of record. Unfortunately there is no fix, but the Sen's value is still valid.
 #'
-#' @param db_path The path to the local hydro database including extension. Default will use [hydroConnect()] default path.
+#' @param db_path The path to the local hydro database including extension. Default will use [hydrometConnect()] default path.
 #' @param locations The list of locations requested, as either a vector of location IDs or one of "WRB" (only WRB stations selected), "WSC" (only), or "all". Default "all" fetches all stations.
 #' @param level_flow Default 'both' will get and calculate level and flow information wherever possible. 'one' will pick flow where it exists, otherwise level. Exception to this is if there is no flow on the end_date requested AND most recent flow is > 1 month older than level ; in this case flow is assumed to be discontinued and level is used.
 #' @param end_date The most recent day to include in calculations. Defaults to today.
@@ -47,7 +47,7 @@ waterInfo <- function(db_path ="default", locations = "all", level_flow = "both"
   end_date <- as.POSIXct(end_date)
   attr(end_date, "tzone") <- "UTC"
 
-  hydro <- hydroConnect(path = db_path, silent=TRUE)
+  hydro <- hydrometConnect(path = db_path, silent=TRUE)
   on.exit(DBI::dbDisconnect(hydro))
 
   #select the locations
