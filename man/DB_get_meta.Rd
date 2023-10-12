@@ -7,7 +7,7 @@
 DB_get_meta(path = "default", location = "all", save_path = NULL)
 }
 \arguments{
-\item{path}{The path to the database, passed to \code{\link[=hydroConnect]{hydroConnect()}}. Default uses hydroConnect default path.}
+\item{path}{The path to the database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}. Default uses hydrometConnect default path.}
 
 \item{location}{A character vector of 1 or more location IDs, or default "all" to retrieval all locations.}
 

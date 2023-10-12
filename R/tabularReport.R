@@ -1,9 +1,9 @@
 #' Tabular output of hydrometric data
 #'
-#' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydroConnect, so ensure that WRBtools is up to date if the database type has changed.
+#' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect, so ensure that WRBtools is up to date if the database type has changed.
 #' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::hydro_update_hourly first.
 #'
-#' @param database  Specify the path to the local hydromet database here, which must be created and maintained by the HydroMetDB package. Passed to [hydroConnect()] to establish connection.
+#' @param database  Specify the path to the local hydromet database here, which must be created and maintained by the HydroMetDB package. Passed to [hydrometConnect()] to establish connection.
 #' @param level_locations List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.
 #' @param flow_locations List of flow locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory. "all" fetches all flow reporting locations in the DB. NULL will not create the table.
 #' @param snow_locations List of snow pillow locations to include in the report, as a character vector. "default" includes all of the WRB snow pillows as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
@@ -24,7 +24,7 @@ tabularReport <- function(database = "default", level_locations = "all", flow_lo
 
   #check the database exists and establish connection
   if (file.exists(database) | database == "default"){
-    database <- hydroConnect(path = database, silent = TRUE)
+    database <- hydrometConnect(path = database, silent = TRUE)
     on.exit(DBI::dbDisconnect(database))
   } else {
     stop("You pointed to a database file that does not exist. Check your file path.")

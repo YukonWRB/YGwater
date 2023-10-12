@@ -17,7 +17,7 @@ tabularReport(
 )
 }
 \arguments{
-\item{database}{Specify the path to the local hydromet database here, which must be created and maintained by the HydroMetDB package. Passed to \code{\link[=hydroConnect]{hydroConnect()}} to establish connection.}
+\item{database}{Specify the path to the local hydromet database here, which must be created and maintained by the HydroMetDB package. Passed to \code{\link[=hydrometConnect]{hydrometConnect()}} to establish connection.}
 
 \item{level_locations}{List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.}
 
@@ -39,6 +39,6 @@ tabularReport(
 An Excel workbook containing the report with one tab per timeseries type.
 }
 \description{
-Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydroConnect, so ensure that WRBtools is up to date if the database type has changed.
+Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect, so ensure that WRBtools is up to date if the database type has changed.
 Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::hydro_update_hourly first.
 }

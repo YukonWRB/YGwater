@@ -5,7 +5,7 @@
 #'
 #' Extracts timeseries information from the WRB's hydrometric database. Refer to [DB_browse_ts()] if unsure of how to formulate your query.
 #'
-#' @param path The path to the database, passed to [hydroConnect()]. Default uses hydroConnect default path.
+#' @param path The path to the database, passed to [hydrometConnect()]. Default uses hydrometConnect default path.
 #' @param locations The location code/id(s) for the requested timeseries as a character vector of 1 or more. Refer to [DB_get_ts()] if unsure of location code.
 #' @param parameter The parameter requested for the timeseries.  Refer to [DB_browse_ts()] if unsure of parameter spelling.
 #' @param frequency One of "daily", "realtime", or "discrete".
@@ -50,7 +50,7 @@ DB_get_ts <- function(path = "default", locations, parameter, frequency, start =
     end <- as.character(end)
   }
 
-  DB <- hydroConnect(path = path, silent = TRUE)
+  DB <- hydrometConnect(path = path, silent = TRUE)
   on.exit(DBI::dbDisconnect(DB), add=TRUE)
 
   ls <- list()

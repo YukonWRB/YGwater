@@ -5,7 +5,7 @@
 #'
 #' Retrieves metadata for any valid location ID in the database. Returns the name of the location, the lat/long and (if possible) vertical datum information.
 #'
-#' @param path The path to the database, passed to [hydroConnect()]. Default uses hydroConnect default path.
+#' @param path The path to the database, passed to [hydrometConnect()]. Default uses hydrometConnect default path.
 #' @param location A character vector of 1 or more location IDs, or default "all" to retrieval all locations.
 #' @param save_path Specify a path here if you want an Excel workbook saved to disk. "choose" lets you interactively choose your folder.
 #'
@@ -28,7 +28,7 @@ DB_get_meta <- function(path = "default", location = "all", save_path = NULL) {
   }
 
 
-  DB <- hydroConnect(path = path, silent = TRUE)
+  DB <- hydrometConnect(path = path, silent = TRUE)
   on.exit(DBI::dbDisconnect(DB), add=TRUE)
 
   if (location == "all"){

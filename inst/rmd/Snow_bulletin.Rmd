@@ -180,7 +180,7 @@ hydrometDiscrete <- function(location=NULL,
   
   if (is.null(discrete_data)) {
     #Connect
-    con <- hydroConnect(path = dbPath, silent = TRUE)
+    con <- hydrometConnect(path = dbPath, silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
     
     # Dealing with start/end dates ----------------------
@@ -505,7 +505,7 @@ swe_basins <- SWE_basin(year <- 2023,
 # 
 #   if (is.null(discrete_data)) {
 #     #Connect
-#     con <- hydroConnect(path = dbPath, silent = TRUE)
+#     con <- hydrometConnect(path = dbPath, silent = TRUE)
 #     on.exit(DBI::dbDisconnect(con))
 # 
 #     # Dealing with start/end dates ----------------------

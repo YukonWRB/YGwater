@@ -40,7 +40,7 @@ hydrometDiscrete(
 
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
-\item{dbPath}{The path to the local hydromet database, passed to \code{\link[=hydroConnect]{hydroConnect()}}.}
+\item{dbPath}{The path to the local hydromet database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}.}
 
 \item{discrete_data}{A dataframe with the data to be plotted. Must contain the following columns: year, month, value and units.}
 }

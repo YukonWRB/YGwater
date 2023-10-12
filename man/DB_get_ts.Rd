@@ -15,7 +15,7 @@ DB_get_ts(
 )
 }
 \arguments{
-\item{path}{The path to the database, passed to \code{\link[=hydroConnect]{hydroConnect()}}. Default uses hydroConnect default path.}
+\item{path}{The path to the database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}. Default uses hydrometConnect default path.}
 
 \item{locations}{The location code/id(s) for the requested timeseries as a character vector of 1 or more. Refer to \code{\link[=DB_get_ts]{DB_get_ts()}} if unsure of location code.}
 

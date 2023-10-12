@@ -19,7 +19,7 @@ waterInfo(
 )
 }
 \arguments{
-\item{db_path}{The path to the local hydro database including extension. Default will use \code{\link[=hydroConnect]{hydroConnect()}} default path.}
+\item{db_path}{The path to the local hydro database including extension. Default will use \code{\link[=hydrometConnect]{hydrometConnect()}} default path.}
 
 \item{locations}{The list of locations requested, as either a vector of location IDs or one of "WRB" (only WRB stations selected), "WSC" (only), or "all". Default "all" fetches all stations.}
 

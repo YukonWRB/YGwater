@@ -6,3 +6,5 @@ $cran-comments\.md$
 ^doc$
 ^Meta$
 ^dev$
+^data-raw$
+$project_TODOS.md$

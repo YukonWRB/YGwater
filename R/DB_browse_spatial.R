@@ -8,7 +8,7 @@
 #'@details
 #' Spatial files are not stored directly in the database but rather in folders situated alongside the database. The database stores the file description and other identifiers, as well as the path to the file.
 #'
-#' @param path The path to the database, passed to [hydroConnect()]. Default uses hydroConnect default path.
+#' @param path The path to the database, passed to [hydrometConnect()]. Default uses hydrometConnect default path.
 #' @param type 'polygon' or 'raster'?
 #' @param location If specifying type 'polygon', narrow by associated location(s). Specify multiple locations as a single character vector. Note that location can be NULL in the database for spatial entries and that NULL entries will not be returned when specifying locations.
 #' @param description Narrow by polygon description(s) if you wish. Specify multiple descriptions as a single character vector. These should be standardized to only a few names. To view description options, run this function with all default parameters perform a unique() operation on the description column.
@@ -21,7 +21,7 @@
 
 DB_browse_spatial <- function(path = "default", type, location = NULL, description = NULL, parameter = NULL) {
 
-  DB <- hydroConnect(path = path, silent = TRUE)
+  DB <- hydrometConnect(path = path, silent = TRUE)
   on.exit(DBI::dbDisconnect(DB), add=TRUE)
 
   if (type == "polygon"){

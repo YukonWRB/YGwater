@@ -13,7 +13,7 @@ bridgeReport(
 )
 }
 \arguments{
-\item{database}{If using a local database created using HydroMetDB package, specify its path here or use 'default' to use the hydroConnect default path. Leave NULL to download from Aquarius instead.}
+\item{database}{If using a local database created using HydroMetDB package, specify its path here or use 'default' to use the hydrometConnect default path. Leave NULL to download from Aquarius instead.}
 
 \item{locations}{The list of locations for which you want a distance measurement. These must either be reporting radar distance in Aquarius as Distance.Corrected or in the WRB database as type distance.}
 

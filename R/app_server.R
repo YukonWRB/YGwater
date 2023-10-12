@@ -49,7 +49,7 @@ app_server <- function(input, output, session) {
         result <- DB_browse_ts()
         result <- merge(result$timeseries, result$locations)
         plotContainer$all_ts <- result
-        con <- hydroConnect(silent = TRUE)
+        con <- hydrometConnect(silent = TRUE)
         datum_conversions <- DBI::dbGetQuery(con, "SELECT location, datum_id_to, conversion_m, current FROM datum_conversions")
         datum_list <- DBI::dbGetQuery(con, "SELECT datum_id, datum_name_en FROM datum_list")
         datums <- merge(datum_conversions, datum_list, by.x = "datum_id_to", by.y = "datum_id")
