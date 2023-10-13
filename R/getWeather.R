@@ -84,7 +84,7 @@ getWeather <- function(station,
   } else if (grepl("^[A-Za-z]{3}$", station)) { #TC ID
     station <- stations[stations$TC_id==station & !is.na(stations$TC_id) & stations$interval == interval,]
   } else if (grepl("^[A-Za-z]{4,}", station)){ #station name or part of
-    possibilities <- dplyr::filter(stations, grepl(station, station_name))
+    possibilities <- dplyr::filter(stations, grepl(station, .data$station_name))
     possible_names <- possibilities$station_name
     possible_yrs <- paste0(possibilities$start, " to ", possibilities$end)
     possible_coords <- paste0(substr(possibilities$lat, 1, 7), ", ", substr(possibilities$lon, 1, 9))
