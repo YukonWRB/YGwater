@@ -181,7 +181,7 @@ chooseWeather <-
     sdata$date <- as.Date(sdata$date)
 
     plot <- ggplot2::ggplot(sdata, ggplot2::aes(x = date,
-                                                y = as.factor(station))) +
+                                                y = as.factor(.data$station))) +
       ggplot2::geom_point(ggplot2::aes(colour = missing))  +
       ggplot2::scale_color_manual(values = c("TRUE" = "#DC4405", "FALSE" = "#7A9A01")) +
       ggplot2::facet_grid(rows=ggplot2::vars(variable)) +

@@ -204,14 +204,14 @@ hydrometDiscrete <- function(location=NULL,
 
   if (plot_type == 'linedbox') {
     stats_discrete <- all_discrete %>%
-      dplyr::group_by(month) %>%
-      dplyr::summarise(value = min(value), type = "min") %>%
+      dplyr::group_by(.data$month) %>%
+      dplyr::summarise(value = min(value), .data$type == "min") %>%
       dplyr::bind_rows(all_discrete %>%
-                  dplyr::group_by(month) %>%
-                  dplyr::summarise(value = max(value), type = "max")) %>%
+                  dplyr::group_by(.data$month) %>%
+                  dplyr::summarise(value = max(value), .data$type == "max")) %>%
       dplyr::bind_rows(all_discrete %>%
-                  dplyr::group_by(month) %>%
-                  dplyr::summarise(value = stats::median(value), type = "median"))
+                  dplyr::group_by(.data$month) %>%
+                  dplyr::summarise(value = stats::median(value), .data$type == "median"))
 
     stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
 

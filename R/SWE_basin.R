@@ -13,11 +13,11 @@
 #' @return A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
 #' @export
 
-#TODO: 
+#TODO:
 
 # For testing
 # year <- 2022
-# month <- c(3, 4, 5) # c(3) 
+# month <- c(3, 4, 5) # c(3)
 # threshold <- 6
 
 
@@ -40,15 +40,15 @@ SWE_basin <-
     # Factors <-
     #   openxlsx::read.xlsx(paste0(file_loc, "/Course_Factors.xlsx"))
     Factors <- data$snowcourse_factors
-    
+
     # 2. Add Day, Month and Year columns to the Meas dataframe:
     Meas$mon <- lubridate::month(Meas$target_date)
     Meas$yr <- lubridate::year(Meas$target_date)
     Meas$day <- lubridate::day(Meas$target_date)
-    
+
     # 3. Subset to month or months of interest
-    Meas <- Meas %>% dplyr::filter(mon %in% month & day == 1)
-    
+    Meas <- Meas %>% dplyr::filter(.data$mon %in% month & .data$day == 1)
+
     # Create vector of basins
     basins <- c(
       "Pelly",
@@ -69,14 +69,14 @@ SWE_basin <-
                c("basin", "yr", "mon", "swe", "perc"))
     # Create year, month dataframe to run through
     yr_mon <- expand.grid(years = 1980:year, months = month)
-    
+
     for (ym in 1:nrow(yr_mon)) {
-      tab <- Meas %>% dplyr::filter(yr == yr_mon[ym,1] & mon == yr_mon[ym,2])
+      tab <- Meas %>% dplyr::filter(.data$yr == yr_mon[ym,1] & .data$mon == yr_mon[ym,2])
       # Go through each basin one by one
       for (b in basins) {
         # subset factors to only what we need
         fact <- Factors %>% dplyr::select(tidyselect::all_of(c(b, "location_id"))) %>%
-          dplyr::rename(val = b) %>% dplyr::filter(val != 0)
+          dplyr::rename(.data$val == b) %>% dplyr::filter(.data$val != 0)
         # Go through each location one by one
         sweb <- stats::setNames(data.frame(matrix(ncol = 3, nrow = 0)),
                          c("location_id", "swe", "perc"))
@@ -128,36 +128,36 @@ SWE_basin <-
       }
       swe_basin_year[nrow(swe_basin_year) + 1, ] = swe_basin_year
     }
-    
+
     # Set column classes
     swe_basin_year$yr <- as.numeric(swe_basin_year$yr)
     swe_basin_year$swe <- as.numeric(swe_basin_year$swe)
     swe_basin_year$perc <- as.numeric(swe_basin_year$perc)
-    
+
     # Remove years based on percentage of basin stations with measurements
     swe_basin_year <- swe_basin_year %>% dplyr::filter(perc >= threshold)
     swe_basin <- swe_basin_year
-    
+
     # Add units and parameter
     swe_basin$parameter <- rep("SWE", length(swe_basin$basin))
     swe_basin$units <- rep("mm", length(swe_basin$basin))
     # rename columns
     colnames(swe_basin) <- c("location", "year", "month", "value", "perc", "parameter", "units")
-    
+
     ## Calculate max, min and median historical SWE for each basin if summarise = TRUE
     if (summarise == TRUE) {
       # Get current year values
       swe_basin_current <- swe_basin_year %>%
-        dplyr::filter(yr == year)
+        dplyr::filter(.data$yr == year)
       # calculate stats excluding current year
       swe_basin_summary <- swe_basin_year %>%
-        dplyr::filter(yr != year) %>%
-        dplyr::group_by(basin, mon) %>%
+        dplyr::filter(.data$yr != year) %>%
+        dplyr::group_by(.data$basin, .data$mon) %>%
         dplyr::summarize(
           swe_max = max(swe),
-          year_max = yr[which.max(swe)],
+          year_max = .data$yr[which.max(swe)],
           swe_min = min(swe),
-          year_min = yr[which.min(swe)],
+          year_min = .data$yr[which.min(swe)],
           swe_median = stats::median(swe)
         )
       # combine tables
@@ -174,7 +174,7 @@ SWE_basin <-
         ))
       swe_basin <- swe_basin_summary
     }
-    
+
     # Write csv if csv = TRUE
     if (csv == TRUE) {
       utils::write.csv(swe_basin, file = paste0("SweBasin_", year, "-0", month, ".csv"), row.names = FALSE)
