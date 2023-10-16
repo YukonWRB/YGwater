@@ -5,7 +5,7 @@
 #'
 #' Wondering what's in the database? This function helps you see what's under the hood, with an eye to helping you create a query for function [DB_get_ts()]. Leaving all NULL defaults will show you every timeseries in the database and additional data specific to each location.
 #'
-#' @param path The path to the database, passed to [hydrometConnect()]. Default uses hydrometConnect default path.
+#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param operator Narrow by location operator if you wish (one or more). Exact spelling only!
 #' @param location Narrow by location if you wish (one or more). Exact spelling only!
 #' @param type Narrow by type if you wish (one or more), such as "discrete" or "continuous". Exact spelling only!
@@ -17,14 +17,12 @@
 #' @export
 #'
 
-DB_browse_ts <- function(path = "default", operator = NULL, location = NULL, type = NULL, parameter = NULL) {
+DB_browse_ts <- function(con = hydrometConnect(), operator = NULL, location = NULL, type = NULL, parameter = NULL) {
 
   #TODO: Make this function work with multiple selection criteria, so 2+ locations.
-  DB <- hydrometConnect(path = path, silent = TRUE)
-  on.exit(DBI::dbDisconnect(DB), add=TRUE)
 
-  timeseries <- DBI::dbGetQuery(DB, "SELECT * FROM timeseries")
-  locations <- DBI::dbGetQuery(DB, "SELECT * FROM locations")
+  timeseries <- DBI::dbGetQuery(con, "SELECT * FROM timeseries")
+  locations <- DBI::dbGetQuery(con, "SELECT * FROM locations")
 
   if (!is.null(operator)){
     timeseries <- timeseries[timeseries$operator %in% operator , ]

@@ -9,6 +9,21 @@ params:
   year: 2023
 ---
 
+!!!Important note for Emilie: you'll need to include the following code in whatever R function you use to call this markdown report.
+
+    rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
+    if (!rlang::is_installed("knitr")) { #This is here because knitr is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
+      message("Installing dependency 'knitr'...")
+      utils::install.packages("knitr")
+      if (rlang::is_installed("knitr")){
+        message("Package knitr successfully installed.")
+      } else {
+        stop("Failed to install package knitr You could troubleshoot by running utils::install.packages('knitr') by itself.")
+      }
+    }
+    
+The reason for this is that knitr is called for within the .rmd and not the R script; since check() doesn't look at the .rmd, having knitr as a a "depends" in the DESCRIPTION file results in an error, but it's still needed for the function. Instead it's in the "suggests" section.
+
 ```{r setup, include=FALSE}
 
 knitr::opts_chunk$set(echo = TRUE)

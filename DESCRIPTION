@@ -37,7 +37,6 @@ Imports:
     gridExtra,
     hablar,
     httr,
-    imager,
     lifecycle,
     lubridate,
     magrittr,
@@ -45,13 +44,12 @@ Imports:
     odbc,
     openxlsx,
     plyr,
-    purrr,
     remotes,
     rlang,
     rmarkdown,
     RSQLite,
+    RPostgres,
     rvest,
-    R.utils,
     scales,
     sf,
     shiny,
@@ -67,8 +65,7 @@ Imports:
     utils,
     XML,
     xml2,
-    zoo,
-    knitr
+    zoo
 Suggests: 
     testthat (>= 3.0.0),
     vdiffr,
@@ -76,7 +73,10 @@ Suggests:
     gmailr,
     weathercan,
     tidyhydat,
-    RPostgres
+    R.utils,
+    imager,
+    knitr,
+    purrr
 VignetteBuilder: 
     knitr
 Config/testthat/edition: 3

@@ -5,7 +5,7 @@
 \title{Get timeseries data from the hydromet database}
 \usage{
 DB_get_ts(
-  path = "default",
+  con = hydrometConnect(),
   locations,
   parameter,
   frequency,
@@ -15,7 +15,7 @@ DB_get_ts(
 )
 }
 \arguments{
-\item{path}{The path to the database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}. Default uses hydrometConnect default path.}
+\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
 \item{locations}{The location code/id(s) for the requested timeseries as a character vector of 1 or more. Refer to \code{\link[=DB_get_ts]{DB_get_ts()}} if unsure of location code.}
 

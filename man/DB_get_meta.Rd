@@ -4,10 +4,10 @@
 \alias{DB_get_meta}
 \title{Get location metadata from the hydromet database}
 \usage{
-DB_get_meta(path = "default", location = "all", save_path = NULL)
+DB_get_meta(con = hydrometConnect(), location = "all", save_path = NULL)
 }
 \arguments{
-\item{path}{The path to the database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}. Default uses hydrometConnect default path.}
+\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
 \item{location}{A character vector of 1 or more location IDs, or default "all" to retrieval all locations.}
 

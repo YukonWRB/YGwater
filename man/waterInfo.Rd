@@ -5,7 +5,7 @@
 \title{Plots and tabular data for hydrometric locations}
 \usage{
 waterInfo(
-  db_path = "default",
+  con = hydrometConnect,
   locations = "all",
   level_flow = "both",
   end_date = Sys.Date(),
@@ -19,7 +19,7 @@ waterInfo(
 )
 }
 \arguments{
-\item{db_path}{The path to the local hydro database including extension. Default will use \code{\link[=hydrometConnect]{hydrometConnect()}} default path.}
+\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
 \item{locations}{The list of locations requested, as either a vector of location IDs or one of "WRB" (only WRB stations selected), "WSC" (only), or "all". Default "all" fetches all stations.}
 

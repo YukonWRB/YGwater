@@ -8,8 +8,7 @@ xle_convert(
   xle_file = "choose",
   location,
   save_path = "choose",
-  YOWN_master =
-    "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/MASTER for R - remember to update.xlsx"
+  YOWN_master = "default"
 )
 }
 \arguments{
@@ -19,7 +18,7 @@ xle_convert(
 
 \item{save_path}{The location where the csv file should be saved.}
 
-\item{YOWN_master}{The location of the YOWN master spreadsheet.}
+\item{YOWN_master}{The location of the YOWN master spreadsheet. Default is in the YOWN_MASTER_TABLE folder.}
 }
 \value{
 A csv of the logger data, ready for export to Aquarius or for general use.

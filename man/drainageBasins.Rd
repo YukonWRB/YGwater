@@ -2,7 +2,7 @@
 % Please edit documentation in R/drainageBasins.R
 \name{drainageBasins}
 \alias{drainageBasins}
-\title{Watershed/basin delineation (from WRBtools)}
+\title{Watershed/basin delineation}
 \usage{
 drainageBasins(
   DEM,

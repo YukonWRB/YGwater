@@ -20,7 +20,7 @@ hydrometContinuous(
   allowed_missing = 10,
   plot_scale = 1,
   save_path = NULL,
-  dbPath = "default"
+  con = hydrometConnect()
 )
 }
 \arguments{
@@ -54,7 +54,7 @@ hydrometContinuous(
 
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
-\item{dbPath}{The path to the local hydromet database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}.}
+\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified

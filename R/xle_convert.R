@@ -10,7 +10,7 @@
 #' @param xle_file The file you wish to convert. Default "choose" allows you to point to the file.
 #' @param location The ID of the well in the form "YOWN-1500". You can also simply name the well, and if there is ambiguity regarding which well is the right one you will get a prompt to select from a list.
 #' @param save_path The location where the csv file should be saved.
-#' @param YOWN_master The location of the YOWN master spreadsheet.
+#' @param YOWN_master The location of the YOWN master spreadsheet. Default is in the YOWN_MASTER_TABLE folder.
 #'
 #' @return A csv of the logger data, ready for export to Aquarius or for general use.
 #' @export
@@ -18,9 +18,13 @@
 xle_convert <- function(xle_file = "choose",
                         location,
                         save_path = "choose",
-                        YOWN_master = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/MASTER for R - remember to update.xlsx"
+                        YOWN_master = "default"
 )
 {
+
+  if (YOWN_master == "default") {
+    YOWN_master <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/MASTER for R - remember to update.xlsx"
+  }
 
   if (xle_file == "choose"){
     print("Select the path to the logger file.")
@@ -118,24 +122,24 @@ xle_convert <- function(xle_file = "choose",
   # Here "check" looks like (approximately)
   # header_name  | section_name    | unit_current
   # LEVEL        | Ch1_data_header | m
-  # TEMPERATURE  | Ch2_data_header | °C
+  # TEMPERATURE  | Ch2_data_header | \u00B0CC
   # CONDUCTIVITY | Ch3_data_header | mS/cm
 
   # Storing proper parameter names and units
   proper_LTC <- data.frame("parameter" = c("LEVEL", "TEMPERATURE","CONDUCTIVITY"),
-                           "unit_proper" = c("m", "°C", "µS/cm"))
+                           "unit_proper" = c("m", "\u00B0CC", "\u00B5S/cm"))
   proper_LT <- data.frame("parameter" = c("LEVEL", "TEMPERATURE"),
-                          "unit_proper" = c("m", "°C"))
+                          "unit_proper" = c("m", "\u00B0CC"))
   proper_BL  <- data.frame("parameter" = c("LEVEL", "TEMPERATURE"),
-                           "unit_proper" = c("kPa", "°C"))
+                           "unit_proper" = c("kPa", "\u00B0CC"))
 
   # Storing proper parameter units and their conversions
   conversions_LTC <- data.frame("parameter" = c("CONDUCTIVITY", "LEVEL", "LEVEL", "LEVEL"),
-                                "unit_proper" = c("µS/cm", "m", "m", "m"),
+                                "unit_proper" = c("\u00B5S/cm", "m", "m", "m"),
                                 "unit_current" = c("mS/cm", "kPa", "psi", "mbar"),
                                 "multiplier" = c(1000, 0.101972, 	0.70307, 0.0101971621297))
   conversions_LT  <- data.frame("parameter" = c("CONDUCTIVITY", "LEVEL", "LEVEL", "LEVEL"),
-                                "unit_proper" = c("µS/cm", "m", "m", "m"),
+                                "unit_proper" = c("\u00B5S/cm", "m", "m", "m"),
                                 "unit_current" = c("mS/cm", "kPa", "psi", "mbar"),
                                 "multiplier" = c(1000, 0.101972, 	0.70307, 0.0101971621297))
   conversions_BL  <- data.frame("parameter" = c("LEVEL", "LEVEL", "LEVEL"),
@@ -318,7 +322,7 @@ xle_convert <- function(xle_file = "choose",
   # LEVEL
   # UNIT: kPa
   # TEMPERATURE
-  # UNIT: °C
+  # UNIT: \u00B0CC
   # etc
   if (identical("LTC", Instrument_type)) {  # We use "check" to determine the units
     params_units <- paste(c("LEVEL", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "LEVEL"), unit_proper)), paste("Offset: ", Level_offset), "TEMPERATURE", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "TEMPERATURE"), unit_proper)), "CONDUCTIVITY", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "CONDUCTIVITY"), unit_proper))))
