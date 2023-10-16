@@ -5,7 +5,7 @@
 #'
 #' Extracts timeseries information from the WRB's hydrometric database. Refer to [DB_browse_ts()] if unsure of how to formulate your query.
 #'
-#' @param path The path to the database, passed to [hydrometConnect()]. Default uses hydrometConnect default path.
+#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param locations The location code/id(s) for the requested timeseries as a character vector of 1 or more. Refer to [DB_get_ts()] if unsure of location code.
 #' @param parameter The parameter requested for the timeseries.  Refer to [DB_browse_ts()] if unsure of parameter spelling.
 #' @param frequency One of "daily", "realtime", or "discrete".
@@ -19,7 +19,9 @@
 #' @export
 #'
 
-DB_get_ts <- function(path = "default", locations, parameter, frequency, start = "1900-01-01", end = Sys.time(), save_path = NULL) {
+DB_get_ts <- function(con = hydrometConnect(), locations, parameter, frequency, start = "1900-01-01", end = Sys.time(), save_path = NULL) {
+
+  #TODO: this function is not yet adapted to run with the new DB.
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
@@ -50,12 +52,9 @@ DB_get_ts <- function(path = "default", locations, parameter, frequency, start =
     end <- as.character(end)
   }
 
-  DB <- hydrometConnect(path = path, silent = TRUE)
-  on.exit(DBI::dbDisconnect(DB), add=TRUE)
-
   ls <- list()
   for (i in locations){
-    data <- DBI::dbGetQuery(DB, paste0("SELECT * FROM '", frequency, "' WHERE location = '", i, "' AND parameter = '", parameter, "' AND ", if(frequency == "daily") "date" else if (frequency == "realtime") "datetime_UTC" else if (frequency == "discrete") "sample_date", " BETWEEN '", start, "' AND '", end, "'"))
+    data <- DBI::dbGetQuery(con, paste0("SELECT * FROM '", frequency, "' WHERE location = '", i, "' AND parameter = '", parameter, "' AND ", if(frequency == "daily") "date" else if (frequency == "realtime") "datetime_UTC" else if (frequency == "discrete") "sample_date", " BETWEEN '", start, "' AND '", end, "'"))
     if (nrow(data) > 0){
       ls[[i]] <- data
     }

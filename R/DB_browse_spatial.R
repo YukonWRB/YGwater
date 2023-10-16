@@ -8,7 +8,7 @@
 #'@details
 #' Spatial files are not stored directly in the database but rather in folders situated alongside the database. The database stores the file description and other identifiers, as well as the path to the file.
 #'
-#' @param path The path to the database, passed to [hydrometConnect()]. Default uses hydrometConnect default path.
+#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param type 'polygon' or 'raster'?
 #' @param location If specifying type 'polygon', narrow by associated location(s). Specify multiple locations as a single character vector. Note that location can be NULL in the database for spatial entries and that NULL entries will not be returned when specifying locations.
 #' @param description Narrow by polygon description(s) if you wish. Specify multiple descriptions as a single character vector. These should be standardized to only a few names. To view description options, run this function with all default parameters perform a unique() operation on the description column.
@@ -19,13 +19,10 @@
 #' @export
 #'
 
-DB_browse_spatial <- function(path = "default", type, location = NULL, description = NULL, parameter = NULL) {
-
-  DB <- hydrometConnect(path = path, silent = TRUE)
-  on.exit(DBI::dbDisconnect(DB), add=TRUE)
+DB_browse_spatial <- function(con = hydrometConnect(), type, location = NULL, description = NULL, parameter = NULL) {
 
   if (type == "polygon"){
-    polys <- DBI::dbGetQuery(DB, "SELECT rowid, * FROM polygons")
+    polys <- DBI::dbGetQuery(con, "SELECT rowid, * FROM polygons")
     if (!is.null(location)){
       polys <- polys[polys$location %in% location ,]
     }
@@ -36,7 +33,7 @@ DB_browse_spatial <- function(path = "default", type, location = NULL, descripti
       polys <- polys[polys$parameter %in% parameter ,]
     }
   } else if (type == "raster"){
-    rasters <- DBI::dbGetQuery(DB, "SELECT rowid, * FROM rasters")
+    rasters <- DBI::dbGetQuery(con, "SELECT rowid, * FROM rasters")
     if (!is.null(location)){
       rasters <- rasters[rasters$location %in% location ,]
     }

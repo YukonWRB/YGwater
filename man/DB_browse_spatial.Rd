@@ -5,7 +5,7 @@
 \title{Get information on spatial files in the database}
 \usage{
 DB_browse_spatial(
-  path = "default",
+  con = hydrometConnect(),
   type,
   location = NULL,
   description = NULL,
@@ -13,7 +13,7 @@ DB_browse_spatial(
 )
 }
 \arguments{
-\item{path}{The path to the database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}. Default uses hydrometConnect default path.}
+\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
 \item{type}{'polygon' or 'raster'?}
 

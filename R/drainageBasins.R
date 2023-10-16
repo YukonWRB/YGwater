@@ -1,4 +1,4 @@
-#' Watershed/basin delineation (from WRBtools)
+#' Watershed/basin delineation
 #'
 #' @description
 #' `r lifecycle::badge("experimental")`
@@ -294,7 +294,7 @@ drainageBasins <- function(DEM, streams = NULL, breach_dist = 10000, threshold =
     result <- list(delineated_basins = output_basins, input_points = input_points, snapped_points = snapped_points, streams_derived = streams_derived)
     cat(crayon::blue$bold("Function complete: watersheds, points, and derived streams are returned and are saved to disk."))
   } else {
-    result <- list(streams_derived = streams_derived, d8_flow_accumulation = d8fac, d8_flow_direction = d8fdr)
+    result <- list(streams_derived = streams_derived, d8_flow_accumulation = d8fac, d8_flow_direction = d8pntr)
     cat(crayon::blue$bold("Function complete: derived flow accumulation, direction, and streams rasters are returned and saved to disk."))
   }
 

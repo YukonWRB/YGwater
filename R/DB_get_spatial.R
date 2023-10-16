@@ -8,7 +8,7 @@
 #'@details
 #' Spatial files are not stored directly in the database but rather in folders situated alongside the database. The database stores the file description and other identifiers, as well as the path to the file.
 #'
-#' @param path The path to the database, passed to [hydrometConnect()]. Default uses hydrometConnect default path.
+#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param type 'polygon' or 'raster'?
 #' @param rowid The rowid of the file you wish to download. If unsure, use function [DB_browse_spatial()] to narrow your search down to a single file.
 #' @param save_path Optional; the path where the raster (as tif) or polygon (as shapefile) should be saved. You can enter 'choose' to select the path interactively.
@@ -20,7 +20,7 @@
 #' @export
 #'
 
-DB_get_spatial <- function(path = "default", type, rowid, save_path = NULL, save_name = NULL) {
+DB_get_spatial <- function(con = hydrometConnect(), type, rowid, save_path = NULL, save_name = NULL) {
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
@@ -32,11 +32,8 @@ DB_get_spatial <- function(path = "default", type, rowid, save_path = NULL, save
     }
   }
 
-  DB <- hydrometConnect(path = path, silent = TRUE)
-  on.exit(DBI::dbDisconnect(DB), add=TRUE)
-
   if (type == "polygon"){
-    poly <- DBI::dbGetQuery(DB, paste0("SELECT * FROM polygons WHERE ROWID = '", rowid, "'"))
+    poly <- DBI::dbGetQuery(con, paste0("SELECT * FROM polygons WHERE ROWID = '", rowid, "'"))
     if (nrow(poly != 1)){
       stop("There is no polygon associated with that rowid. Refer to DB_browse_spatial() to find the right rowid.")
     }
@@ -50,7 +47,7 @@ DB_get_spatial <- function(path = "default", type, rowid, save_path = NULL, save
     }
     return(poly)
   } else if (type == "raster"){
-    raster <- DBI::dbGetQuery(DB, paste0("SELECT * FROM rasters WHERE ROWID = '", rowid, "'"))
+    raster <- DBI::dbGetQuery(con, paste0("SELECT * FROM rasters WHERE ROWID = '", rowid, "'"))
     if (nrow(raster != 1)){
       stop("There is no raster associated with that rowid. Refer to DB_browse_spatial() to find the right rowid.")
     }

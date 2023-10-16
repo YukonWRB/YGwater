@@ -5,7 +5,7 @@
 \title{Get information on timeseries contained in the database}
 \usage{
 DB_browse_ts(
-  path = "default",
+  con = hydrometConnect(),
   operator = NULL,
   location = NULL,
   type = NULL,
@@ -13,7 +13,7 @@ DB_browse_ts(
 )
 }
 \arguments{
-\item{path}{The path to the database, passed to \code{\link[=hydrometConnect]{hydrometConnect()}}. Default uses hydrometConnect default path.}
+\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
 \item{operator}{Narrow by location operator if you wish (one or more). Exact spelling only!}
 

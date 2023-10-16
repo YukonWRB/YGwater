@@ -9,7 +9,7 @@
 #'@details
 #' Sites that routinely see 0 values for flow or level in mid-winter may report a negative annual percent change *even if* the sens's slope is positive. This is due to the intercept of a linear model calculated using minimum flows and years being below 0 at the first year of record. Unfortunately there is no fix, but the Sen's value is still valid.
 #'
-#' @param db_path The path to the local hydro database including extension. Default will use [hydrometConnect()] default path.
+#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param locations The list of locations requested, as either a vector of location IDs or one of "WRB" (only WRB stations selected), "WSC" (only), or "all". Default "all" fetches all stations.
 #' @param level_flow Default 'both' will get and calculate level and flow information wherever possible. 'one' will pick flow where it exists, otherwise level. Exception to this is if there is no flow on the end_date requested AND most recent flow is > 1 month older than level ; in this case flow is assumed to be discontinued and level is used.
 #' @param end_date The most recent day to include in calculations. Defaults to today.
@@ -26,8 +26,10 @@
 #' @seealso [snowInfo()] for a similar function dealing with snowpack data.
 #' @export
 
-waterInfo <- function(db_path ="default", locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
+waterInfo <- function(con = hydrometConnect, locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
   {
+
+  #TODO: this function is not yet adapted to run with the new DB.
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
@@ -47,18 +49,15 @@ waterInfo <- function(db_path ="default", locations = "all", level_flow = "both"
   end_date <- as.POSIXct(end_date)
   attr(end_date, "tzone") <- "UTC"
 
-  hydro <- hydrometConnect(path = db_path, silent=TRUE)
-  on.exit(DBI::dbDisconnect(hydro))
-
   #select the locations
   if (length(locations) == 1){
     if (locations %in% c("WRB", "WSC")){
-      locs <- DBI::dbGetQuery(hydro, paste0("SELECT * FROM timeseries WHERE parameter IN ('level', 'flow') AND operator = '", locations, "'"))
+      locs <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE parameter IN ('level', 'flow') AND operator = '", locations, "'"))
     } else if (locations == "all"){
-      locs <- DBI::dbGetQuery(hydro, "SELECT * FROM timeseries WHERE parameter IN ('level', 'flow')")
+      locs <- DBI::dbGetQuery(con, "SELECT * FROM timeseries WHERE parameter IN ('level', 'flow')")
     }
   } else {
-    locs <- DBI::dbGetQuery(hydro, paste0("SELECT * FROM timeseries WHERE parameter IN ('level', 'flow') AND location IN ('", paste(locations, collapse = "', '"), "')"))
+    locs <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE parameter IN ('level', 'flow') AND location IN ('", paste(locations, collapse = "', '"), "')"))
   }
 
   #now retain only level or flow if level_flow == 'one'.
@@ -88,7 +87,7 @@ waterInfo <- function(db_path ="default", locations = "all", level_flow = "both"
   data <- list()
   extremes <- list()
   for (i in 1:nrow(locs)){
-    daily <- DBI::dbGetQuery(hydro, paste0("SELECT date, value FROM daily WHERE location = '", locs$location[i], "' AND parameter = '", locs$parameter[i], "' AND date < '", as.character(end_date), "'"))
+    daily <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM daily WHERE location = '", locs$location[i], "' AND parameter = '", locs$parameter[i], "' AND date < '", as.character(end_date), "'"))
     daily$date <- lubridate::year(daily$date)
     daily$month <- lubridate::month(daily$date)
     tryCatch({
@@ -108,14 +107,14 @@ waterInfo <- function(db_path ="default", locations = "all", level_flow = "both"
   }
   for (i in names(extremes)){
     tbl <- extremes[[i]]
-    name <- DBI::dbGetQuery(hydro, paste0("SELECT name FROM locations where location = '", sub("_.*", "", i), "'"))[1,1]
+    name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", sub("_.*", "", i), "'"))[1,1]
     #metadata
     metadata <- rbind(metadata,
                       data.frame("location" = sub("_.*", "", i),
                                  "name" = name,
                                  "parameter" = sub(".*_", "", i),
-                                 "latitude" = DBI::dbGetQuery(hydro, paste0("SELECT latitude FROM locations where location = '", sub("_.*", "", i), "'"))[1,1],
-                                 "longitude" = DBI::dbGetQuery(hydro, paste0("SELECT longitude FROM locations where location = '", sub("_.*", "", i), "'"))[1,1],
+                                 "latitude" = DBI::dbGetQuery(con, paste0("SELECT latitude FROM locations where location = '", sub("_.*", "", i), "'"))[1,1],
+                                 "longitude" = DBI::dbGetQuery(con, paste0("SELECT longitude FROM locations where location = '", sub("_.*", "", i), "'"))[1,1],
                                  "active" = max(data[[i]]$date) > as.Date(end_date)-365,
                                  "note" = paste0("Last data available on ", max(data[[i]]$date), "."))
     )

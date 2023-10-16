@@ -1,9 +1,9 @@
 #' Tabular output of hydrometric data
 #'
-#' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect, so ensure that WRBtools is up to date if the database type has changed.
-#' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::hydro_update_hourly first.
+#' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect by default and MUST connect to a database created and maintained by the package HydroMetDB.
+#' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::getNewContinuous first.
 #'
-#' @param database  Specify the path to the local hydromet database here, which must be created and maintained by the HydroMetDB package. Passed to [hydrometConnect()] to establish connection.
+#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param level_locations List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.
 #' @param flow_locations List of flow locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory. "all" fetches all flow reporting locations in the DB. NULL will not create the table.
 #' @param snow_locations List of snow pillow locations to include in the report, as a character vector. "default" includes all of the WRB snow pillows as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
@@ -17,42 +17,34 @@
 #' @export
 
 
-#TODO: Sites with no data should still show up\
-#TODO: Add precipitation using basinPrecip function. First, that function has to be made to work with the database and scheduled to pull data to the db. Then, basinPrecip should default to looking for precip rasters in the DB.
+# TODO: Adapt to use new DB
 
-tabularReport <- function(database = "default", level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose") {
+tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose") {
 
-  #check the database exists and establish connection
-  if (file.exists(database) | database == "default"){
-    database <- hydrometConnect(path = database, silent = TRUE)
-    on.exit(DBI::dbDisconnect(database))
-  } else {
-    stop("You pointed to a database file that does not exist. Check your file path.")
-  }
   if (level_locations[1] == "default"){
     level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
   } else if (level_locations[1] == "all"){
-    level_locations <- DBI::dbGetQuery(database, "SELECT location FROM timeseries WHERE parameter = 'level' AND type = 'continuous'")[,1]
+    level_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter = 'level' AND type = 'continuous'")[,1]
   }
   if (flow_locations[1] == "default"){
     flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
   } else if (flow_locations[1] == "all"){
-    flow_locations <- DBI::dbGetQuery(database, "SELECT location FROM timeseries WHERE parameter = 'flow' AND type = 'continuous'")[,1]
+    flow_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter = 'flow' AND type = 'continuous'")[,1]
   }
   if (snow_locations[1] == "default"){
     snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
   } else if (snow_locations[1] == "all"){
-    snow_locations <- DBI::dbGetQuery(database, "SELECT location FROM timeseries WHERE parameter = 'SWE' AND type = 'continuous'")[,1]
+    snow_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter = 'SWE' AND type = 'continuous'")[,1]
   }
   if (bridge_locations[1] == "default"){
     bridge_locations <- c("09AH005", "29AB010", "29AB011", "29AE007", "29AH001")
   } else if (bridge_locations[1] == "all"){
-    bridge_locations <- DBI::dbGetQuery(database, "SELECT location FROM timeseries WHERE parameter = 'distance' AND type = 'continuous'")[,1]
+    bridge_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter = 'distance' AND type = 'continuous'")[,1]
   }
   if (precip_locations[1] == "default"){
     precip_locations <- c("08AA003", "08AA010", "08AB001", "09AA001", "09AA004", "09AA013", "09AB001", "09AB010", "09AC001", "09AE002", "09AH001", "09AH004", "09BC001", "09BC002", "09CA002", "09DC005", "09DC006", "09EA003", "09EB001", "09FC001", "09FD002", "10AA001", "10AD002", "10MA002", "10BE001")
   } else if (precip_locations[1] == "all"){
-    precip_locations <- DBI::dbGetQuery(database, "SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND type = 'continuous'")[,1]
+    precip_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND type = 'continuous'")[,1]
     precip_locations <- unique(precip_locations)
   }
 
@@ -105,7 +97,7 @@ tabularReport <- function(database = "default", level_locations = "all", flow_lo
   if (!is.null(precip_locations)){ #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
     precip <- data.frame()
     for (i in precip_locations){
-      name <- stringr::str_to_title(unique(DBI::dbGetQuery(database, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+      name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       tryCatch({
         poly <- DB_browse_spatial(type = "polygon", location = "all_locations", description = "all_drainage_basins")
         lastWeek <- basinPrecip(location = i, drainage_loc = poly$file_path, start = Sys.time()-60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
@@ -153,21 +145,21 @@ tabularReport <- function(database = "default", level_locations = "all", flow_lo
     level_rt <- list()
     names_level <- NULL
     for (i in level_locations){
-      daily <- DBI::dbGetQuery(database, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'level' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'level' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
       if (nrow(daily) == 0){
-        daily <- DBI::dbGetQuery(database, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'level' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'level' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
       }
       if (nrow(daily) > 0){
         daily$date <- as.Date(daily$date, tz = "UTC")
         level_daily[[i]] <- daily
       }
-      rt <-  DBI::dbGetQuery(database, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'level' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'level' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0){
         rt$datetime_UTC <- lubridate::as_datetime(rt$datetime_UTC, tz = "UTC")
         level_rt[[i]] <- rt
       }
       if (nrow(rt) > 0 | nrow(daily) >0){
-        names_level[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(database, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+        names_level[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       }
     }
   }
@@ -176,21 +168,21 @@ tabularReport <- function(database = "default", level_locations = "all", flow_lo
     flow_rt <- list()
     names_flow <- NULL
     for (i in flow_locations){
-      daily <- DBI::dbGetQuery(database, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'flow' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'flow' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
       if (nrow(daily) == 0){
-        daily <- DBI::dbGetQuery(database, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'flow' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'flow' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
       }
       if (nrow(daily) > 0){
         daily$date <- as.Date(daily$date, tz = "UTC")
         flow_daily[[i]] <- daily
       }
-      rt <-  DBI::dbGetQuery(database, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'flow' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'flow' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0){
         rt$datetime_UTC <- lubridate::as_datetime(rt$datetime_UTC, tz = "UTC")
         flow_rt[[i]] <- rt
       }
       if (nrow(rt) > 0 | nrow(daily) >0){
-        names_flow[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(database, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+        names_flow[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       }
     }
   }
@@ -199,21 +191,21 @@ tabularReport <- function(database = "default", level_locations = "all", flow_lo
     snow_rt <- list()
     names_snow <- NULL
     for (i in snow_locations){
-      daily <- DBI::dbGetQuery(database, paste0("SELECT value, date, percent_historic_range, min, max, QP50 FROM daily WHERE parameter = 'SWE' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, min, max, QP50 FROM daily WHERE parameter = 'SWE' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
       if (nrow(daily) == 0){
-        daily <- DBI::dbGetQuery(database, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'SWE' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'SWE' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
       }
       if (nrow(daily) > 0){
         daily$date <- as.Date(daily$date, tz = "UTC")
         snow_daily[[i]] <- daily
       }
-      rt <-  DBI::dbGetQuery(database, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'SWE' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'SWE' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0){
         rt$datetime_UTC <- lubridate::as_datetime(rt$datetime_UTC, tz = "UTC")
         snow_rt[[i]] <- rt
       }
       if (nrow(rt) > 0 | nrow(daily) >0){
-        names_snow[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(database, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+        names_snow[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       }
     }
   }
@@ -222,21 +214,21 @@ tabularReport <- function(database = "default", level_locations = "all", flow_lo
     bridges_rt <- list()
     names_bridges <- NULL
     for (i in bridge_locations){
-      daily <- DBI::dbGetQuery(database, paste0("SELECT value, date, percent_historic_range, min, max, QP50 FROM daily WHERE parameter = 'distance' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, min, max, QP50 FROM daily WHERE parameter = 'distance' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
       if (nrow(daily) == 0){
-        daily <- DBI::dbGetQuery(database, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'distance' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'distance' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
       }
       if (nrow(daily) > 0){
         daily$date <- as.Date(daily$date, tz = "UTC")
         bridges_daily[[i]] <- daily
       }
-      rt <-  DBI::dbGetQuery(database, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'distance' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'distance' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0){
         rt$datetime_UTC <- lubridate::as_datetime(rt$datetime_UTC, tz = "UTC")
         bridges_rt[[i]] <- rt
       }
       if (nrow(rt) > 0 | nrow(daily) >0){
-        names_bridges[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(database, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+        names_bridges[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       }
     }
   }  #End of data acquisition
