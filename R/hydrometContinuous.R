@@ -362,7 +362,7 @@ hydrometContinuous <- function(location,
   }
 
   plot <- plot +
-    ggplot2::geom_line(ggplot2::aes(colour = as.factor(plot_year), group = as.factor(plot_year)), linewidth = line_size, na.rm = T) +
+    ggplot2::geom_line(ggplot2::aes(colour = as.factor(.data$plot_year), group = as.factor(.data$plot_year)), linewidth = line_size, na.rm = T) +
     ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = colours[1:legend_length], na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
 
 
@@ -398,10 +398,10 @@ hydrometContinuous <- function(location,
         extremes <- suppressWarnings(fasstr::calc_annual_extremes(daily[daily$year <= return_max_year , ], dates = datetime_UTC, values = value, water_year_start = return_months[1], months = return_months, allowed_missing = allowed_missing))
         extremes$Measure <- "1-Day"
         if (return_type == "max"){
-          analysis <- fasstr::compute_frequency_analysis(data = extremes, events = Year, values = "Max_1_Day", use_max = TRUE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))
+          analysis <- fasstr::compute_frequency_analysis(data = extremes, events = "Year", values = "Max_1_Day", use_max = TRUE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))
           return_yrs <- c(min(lubridate::year(analysis$Freq_Analysis_Data$Max_1_Day_Date)), max(lubridate::year(analysis$Freq_Analysis_Data$Max_1_Day_Date)))
         } else if (return_type == "min"){
-          analysis <- fasstr::compute_frequency_analysis(data = extremes, events = Year, values = "Min_1_Day", use_max = FALSE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))
+          analysis <- fasstr::compute_frequency_analysis(data = extremes, events = "Year", values = "Min_1_Day", use_max = FALSE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))
           return_yrs <- c(min(lubridate::year(analysis$Freq_Analysis_Data$Min_1_Day_Date)), max(lubridate::year(analysis$Freq_Analysis_Data$Min_1_Day_Date)))
         }
         freq <- analysis$Freq_Fitted_Quantiles
