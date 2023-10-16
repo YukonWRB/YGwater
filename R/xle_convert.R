@@ -57,7 +57,7 @@ xle_convert <- function(xle_file = "choose",
   }
   # Read in master sheet
   yown_stn_names <- dplyr::filter(openxlsx::read.xlsx(YOWN_master, sheet = 1),
-                           !is.na(`YOWN.Code`), !is.na(`Name`))
+                           !is.na(.data$`YOWN.Code`), !is.na(.data$`Name`))
   possible_names <- c() #create an empty vector
   for (i in 1:nrow(yown_stn_names)) { # If the YOWN-xxxx provided by user matches a row in the master xlsx OR if the station name provided matches loosely with a row, save that station's code and name in possible_names
     if (grepl(user_code, yown_stn_names$`YOWN.Code`[i]) |
@@ -164,7 +164,7 @@ xle_convert <- function(xle_file = "choose",
       # Do left join on approximate match bw parameter & parameter name from .xle. Necessary because of occasional typos in logger file
       fuzzyjoin::stringdist_left_join(check, by = c("parameter" = "header_name"),
                            max_dist = 2, ignore_case = TRUE) %>%
-      dplyr::select(parameter, section_name, unit_proper, unit_current) %>%
+      dplyr::select("parameter", "section_name", "unit_proper", "unit_current") %>%
       dplyr::left_join(conversions_LTC,
                 by = c("parameter", "unit_proper", "unit_current"))
 
@@ -177,7 +177,7 @@ xle_convert <- function(xle_file = "choose",
       # Necessary because of occasional typos in logger file
       fuzzyjoin::stringdist_left_join(check, by = c("parameter" = "header_name"),
                            max_dist = 2, ignore_case = TRUE) %>%
-      dplyr::select(parameter, section_name, unit_proper, unit_current) %>%
+      dplyr::select("parameter", "section_name", "unit_proper", "unit_current") %>%
       dplyr::left_join(conversions_LT,
                 by = c("parameter", "unit_proper", "unit_current"))
 
@@ -187,7 +187,7 @@ xle_convert <- function(xle_file = "choose",
       # Necessary because of occasional typos in logger file
       fuzzyjoin::stringdist_left_join(check, by = c("parameter" = "header_name"),
                                       max_dist = 2, ignore_case = TRUE) %>%
-      dplyr::select(parameter, section_name, unit_proper, unit_current) %>%
+      dplyr::select("parameter", "section_name", "unit_proper", "unit_current") %>%
       dplyr::left_join(conversions_BL,
                        by = c("parameter", "unit_proper", "unit_current"))
     } else {
@@ -202,7 +202,7 @@ xle_convert <- function(xle_file = "choose",
   for (i in 1:length(df)) {
     curr_name <- names(df)[i]
     if (stringr::str_detect(curr_name, "ch.")) { # If column name has ch we are looking at LTC/LT/BL vals
-      check_row <- dplyr::filter(check, grepl(curr_name, section_name, ignore.case = TRUE))# Row containing info we need, including parameter name, multiplier, proper unit
+      check_row <- dplyr::filter(check, grepl(curr_name, "section_name", ignore.case = TRUE))# Row containing info we need, including parameter name, multiplier, proper unit
       colnames(df)[i] <- c(check_row$parameter) # Give column in df proper name
       # Unit conversion if needed
       if (!is.na(check_row$multiplier)) {
@@ -225,11 +225,11 @@ xle_convert <- function(xle_file = "choose",
 
   # Just in case. Makes sure columns are in the order shown below
   if (identical("LTC", Instrument_type)) {
-    df <- dplyr::select(df, Date, Time, ms, LEVEL, TEMPERATURE, CONDUCTIVITY)
+    df <- dplyr::select(df, "Date", "Time", "ms", "LEVEL", "TEMPERATURE", "CONDUCTIVITY")
   } else if (identical("LT", Instrument_type)){
-    df <- dplyr::select(df, Date, Time, ms, LEVEL, TEMPERATURE)
+    df <- dplyr::select(df, "Date", "Time", "ms", "LEVEL", "TEMPERATURE")
   } else if (identical("BL", Instrument_type)) {
-    df <- dplyr::select(df, Date, Time, ms, LEVEL, TEMPERATURE)
+    df <- dplyr::select(df, "Date", "Time", "ms", "LEVEL", "TEMPERATURE")
   } else {
     stop("This script is not designed to handle this logger file structure.")
   }
@@ -325,11 +325,11 @@ xle_convert <- function(xle_file = "choose",
   # UNIT: \u00B0CC
   # etc
   if (identical("LTC", Instrument_type)) {  # We use "check" to determine the units
-    params_units <- paste(c("LEVEL", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "LEVEL"), unit_proper)), paste("Offset: ", Level_offset), "TEMPERATURE", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "TEMPERATURE"), unit_proper)), "CONDUCTIVITY", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "CONDUCTIVITY"), unit_proper))))
+    params_units <- paste(c("LEVEL", paste("UNIT: ", dplyr::select(dplyr::filter(check, .data$parameter == "LEVEL"), "unit_proper")), paste("Offset: ", Level_offset), "TEMPERATURE", paste("UNIT: ", dplyr::select(dplyr::filter(check, .data$parameter == "TEMPERATURE"), "unit_proper")), "CONDUCTIVITY", paste("UNIT: ", dplyr::select(dplyr::filter(check, .data$parameter == "CONDUCTIVITY"), "unit_proper"))))
   } else if (identical("LT", Instrument_type)) {
-    params_units <- paste(c("LEVEL", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "LEVEL"), unit_proper)), paste("Offset: ", Level_offset), "TEMPERATURE", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "TEMPERATURE"), unit_proper)), "CONDUCTIVITY", "NOT REPORTED"))
+    params_units <- paste(c("LEVEL", paste("UNIT: ", dplyr::select(dplyr::filter(check, .data$parameter == "LEVEL"), "unit_proper")), paste("Offset: ", Level_offset), "TEMPERATURE", paste("UNIT: ", dplyr::select(dplyr::filter(check, .data$parameter == "TEMPERATURE"), "unit_proper")), "CONDUCTIVITY", "NOT REPORTED"))
   } else if (identical("BL", Instrument_type)){
-    params_units <- paste(c("LEVEL", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "LEVEL"), unit_proper)), paste("Offset: ", Level_offset), "TEMPERATURE", paste("UNIT: ", dplyr::select(dplyr::filter(check, parameter == "TEMPERATURE"), unit_proper)), "CONDUCTIVITY", "NOT REPORTED"))
+    params_units <- paste(c("LEVEL", paste("UNIT: ", dplyr::select(dplyr::filter(check, .data$parameter == "LEVEL"), "unit_proper")), paste("Offset: ", Level_offset), "TEMPERATURE", paste("UNIT: ", dplyr::select(dplyr::filter(check, .data$parameter == "TEMPERATURE"), "unit_proper")), "CONDUCTIVITY", "NOT REPORTED"))
   } else {
     stop("This script is not designed to handle this logger file structure.")
   }

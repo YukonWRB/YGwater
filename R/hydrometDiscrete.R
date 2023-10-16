@@ -205,13 +205,13 @@ hydrometDiscrete <- function(location=NULL,
   if (plot_type == 'linedbox') {
     stats_discrete <- all_discrete %>%
       dplyr::group_by(.data$month) %>%
-      dplyr::summarise(value = min(value), .data$type == "min") %>%
+      dplyr::summarise(value = min(.data$value), .data$type == "min") %>%
       dplyr::bind_rows(all_discrete %>%
                   dplyr::group_by(.data$month) %>%
-                  dplyr::summarise(value = max(value), .data$type == "max")) %>%
+                  dplyr::summarise(value = max(.data$value), .data$type == "max")) %>%
       dplyr::bind_rows(all_discrete %>%
                   dplyr::group_by(.data$month) %>%
-                  dplyr::summarise(value = stats::median(value), .data$type == "median"))
+                  dplyr::summarise(value = stats::median(.data$value), .data$type == "median"))
 
     stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
 
@@ -221,7 +221,7 @@ hydrometDiscrete <- function(location=NULL,
   colours = c("blue", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
   # c("black", "#DC4405", "#512A44", "#F2A900", "#244C5A", "#687C04", "#C60D58", "#0097A9", "#7A9A01", "#834333")
   legend_length <- length(years)
-  plot <- ggplot2::ggplot(all_discrete, ggplot2::aes(x = fake_date, y = value, group = fake_date)) +
+  plot <- ggplot2::ggplot(all_discrete, ggplot2::aes(x = .data$fake_date, y = .data$value, group = .data$fake_date)) +
     ggplot2::labs(x = "", y = if (parameter == "SWE") paste0("SWE (", units, ")") else paste0(stringr::str_to_title(parameter), " (", units, ")")) +
     ggplot2::theme_classic() +
     ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 10*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
@@ -229,12 +229,12 @@ hydrometDiscrete <- function(location=NULL,
   if (plot_type == "linedbox") {
     for (m in unique(stats_discrete$month)) {
       plot <- plot +
-        ggplot2::geom_rect(data = stats_discrete[stats_discrete$month == m,],   fill = 'grey87', ggplot2::aes(xmin=fake_date - 12, xmax=fake_date + 12, ymin=min(value), ymax=max(value)))
+        ggplot2::geom_rect(data = stats_discrete[stats_discrete$month == m,],   fill = 'grey87', ggplot2::aes(xmin = .data$fake_date - 12, xmax = .data$fake_date + 12, ymin=min(.data$value), ymax=max(.data$value)))
     }
     plot <- plot +
       ggplot2::geom_segment(data = stats_discrete, linewidth = plot_scale*1.5,
-                            ggplot2::aes(color=type, yend=value,
-                                         x=fake_date - 12, xend=fake_date + 12)) +
+                            ggplot2::aes(color=.data$type, yend=value,
+                                         x = .data$fake_date - 12, xend = .data$fake_date + 12)) +
       ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
       ggnewscale::new_scale_color()
 
@@ -246,7 +246,7 @@ hydrometDiscrete <- function(location=NULL,
       ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE)
   }
   plot <- plot +
-    ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = fake_date, y = value, colour = as.factor(year), fill = as.factor(year)), size = plot_scale*3.5, shape = 21) +
+    ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = .data$fake_date, y = .data$value, colour = as.factor(.data$year), fill = as.factor(.data$year)), size = plot_scale*3.5, shape = 21) +
     ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = colours[1:legend_length], aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
 
   # Wrap things up and return() -----------------------
