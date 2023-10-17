@@ -40,7 +40,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     stop("The parameter 'plot_type' must be set to either 'separate' or 'combined'.")
   }
 
-  snowCon <- snowConnect(path = db_path, silent=TRUE)
+  snowCon <- snowConnect_access(path = db_path, silent=TRUE)
   on.exit(DBI::dbDisconnect(snowCon))
 
   location_table <- DBI::dbReadTable(snowCon, "SNOW_COURSE")

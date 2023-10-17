@@ -2,12 +2,27 @@
 % Please edit documentation in R/snowConnect.R
 \name{snowConnect}
 \alias{snowConnect}
-\title{Connect to snow survey database}
+\title{Connect to the snow postgres database}
 \usage{
-snowConnect(path = "default", silent = FALSE)
+snowConnect(
+  name = "snowDB",
+  host = Sys.getenv("snowHost"),
+  port = Sys.getenv("snowPort"),
+  username = Sys.getenv("snowUser"),
+  password = Sys.getenv("snowPass"),
+  silent = FALSE
+)
 }
 \arguments{
-\item{path}{The path to the database. Currently supports either a Microsoft Access database or an .sqlite database. 'default' points to //carver/infosys/Snow/DB/SnowDB.mdb.}
+\item{name}{Database name.}
+
+\item{host}{Database host address.}
+
+\item{port}{Connection port.}
+
+\item{username}{Username. Refrain from using username with write privileges unless you absolutely know what you're doing.}
+
+\item{password}{Password.}
 
 \item{silent}{TRUE suppresses messages except for errors.}
 }
@@ -15,7 +30,7 @@ snowConnect(path = "default", silent = FALSE)
 A connection to the database.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
 
-Connects to the Snow Survey Access database, or, if this DB is supersceded by a .sqlite database, to an equivalent .sqlite DB. If the Snow Survey database is migrated to an SQLite database, beware that the tables and table columns might no longer be what you're expecting!
+This function exists to facilitate connecting to the snow database, especially if the database type and connection method changes in the future.
 }
