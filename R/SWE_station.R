@@ -14,6 +14,12 @@
 
 #TODO: (1) Add units and parameter to table (2) Create tests
 
+# For testing
+# test <- SWE_station(year=2023,
+#            month=3,
+#            csv = FALSE,
+#            return_missing = TRUE)
+
 SWE_station <-
   function(year,
            month,
@@ -22,13 +28,16 @@ SWE_station <-
 
     # Retrieve data from db
     con <- hydrometConnect()
-    Meas <-
-      DBI::dbGetQuery(con,
-                      "SELECT locations.name, discrete.location, discrete.value, discrete.target_date, discrete.sample_date, discrete.parameter
-                      FROM discrete
-                      INNER JOIN locations ON discrete.location=locations.location
-                      WHERE discrete.parameter = 'SWE' OR discrete.parameter = 'snow depth'"
-                      )
+
+    # Get measurements
+    Meas <- DBI::dbGetQuery(con,
+                            "SELECT locations.name, timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, timeseries.parameter
+                      FROM measurements_discrete
+                      INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
+                      INNER JOIN locations ON timeseries.location=locations.location
+                      WHERE timeseries.parameter = 'SWE' OR timeseries.parameter = 'snow depth'"
+    )
+
     DBI::dbDisconnect(con)
     # Rename columns:
     colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter")
@@ -70,6 +79,7 @@ SWE_station <-
 
       # get sample date
        sample_date <- tab[tab$yr==year & tab$parameter=="SWE",]$sample_date
+       sample_date <- as.Date(sample_date)
        if (length(sample_date)==0) {sample_date <- NA}
       # Get current years depth
        depth <- tab[tab$yr==year & tab$parameter=="snow depth",]$value
@@ -112,6 +122,7 @@ SWE_station <-
     swe_station_summary$swe_med <- as.numeric(swe_station_summary$swe_med)
     swe_station_summary$swe_rat <- as.numeric(swe_station_summary$swe_rat)
     swe_station_summary$years <- as.numeric(swe_station_summary$years)
+    swe_station_summary$sample_date <- as.Date(as.numeric(swe_station_summary$sample_date), origin = "1970-01-01")
 
     # Round swe median and ratio
     swe_station_summary$swe_med <- round(swe_station_summary$swe_med, 0)
