@@ -6,18 +6,21 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-  
+
   #Initial tasks ----------------
+  con <- hydrometConnect(silent = TRUE)
+  onStop(function(){DBI::dbDisconnect(con)}
+    )
   #Render some text
   output$plot_years_note <- renderText("For ranges covering December-January, select the December year(s)")
   output$standby <- renderText("<b>Standby...<b>")
-  
+
   #Show/hide some things right off the bat
   shinyjs::hide("standby")
   shinyjs::hide("export_fod_comments")
   shinyjs::hide("export_hydro_plot")
   shinyjs::hide("export_precip_map")
-  
+
   #Create containers
   FOD_comments <- reactiveValues(comments = list(),
                                  dates = vector(),
@@ -28,28 +31,25 @@ app_server <- function(input, output, session) {
   runCheck <- reactiveValues(precip = FALSE,
                              plots = FALSE)
   output$time_adj_note <- renderText("Note: times in the past will be adjusted to the nearest 6 hours, times in future to the nearest hour.")
-  
+
   #Tasks related to first selection/selection of which page to view ------------------
   #Load some necessary information if the user is trying the get precipitation maps/data
   observeEvent(input$first_selection, {
     if (input$first_selection == "View precipitation maps + data"){
       if (!runCheck$precip){
-        path <- DB_browse_spatial(type = "polygon", description = "all_drainage_basins")$file_path
-        polys <- terra::vect(path)
-        polys <- data.frame(codes = polys$StationNum,
-                                              names = stringr::str_to_title(polys$NameNom),
-                                              areas = polys$Area_km2)
-        precip$poly_names_codes <- polys
-        updateSelectizeInput(session, "precip_loc_code", choices = c("", precip$poly_names_codes$codes))
-        updateSelectizeInput(session, "precip_loc_name", choices = c("", precip$poly_names_codes$names))
+        temp <- DBI::dbGetQuery(con, "SELECT name, description FROM polygons WHERE polygon_type = 'drainage_basin';")
+        names(temp) <- c("code", "name")
+        precip$poly_names_codes <- temp
+        updateSelectizeInput(session, "precip_loc_code", choices = c("", precip$poly_names_codes$code))
+        updateSelectizeInput(session, "precip_loc_name", choices = c("", precip$poly_names_codes$name))
         runCheck$precip <- TRUE
       }
     } else if (input$first_selection == "View hydromet plots + data"){
       if (!runCheck$plots){
-        result <- DB_browse_ts()
-        result <- merge(result$timeseries, result$locations)
+        timeseries <- DBI::dbGetQuery(con, "SELECT timeseries_id, location, parameter, param_type, unit, category, start_datetime, end_datetime FROM timeseries")
+        locations <- DBI::dbGetQuery(con, "SELECT location, name FROM locations")
+        result <- merge(timeseries, locations)
         plotContainer$all_ts <- result
-        con <- hydrometConnect(silent = TRUE)
         datum_conversions <- DBI::dbGetQuery(con, "SELECT location, datum_id_to, conversion_m, current FROM datum_conversions")
         datum_list <- DBI::dbGetQuery(con, "SELECT datum_id, datum_name_en FROM datum_list")
         datums <- merge(datum_conversions, datum_list, by.x = "datum_id_to", by.y = "datum_id")
@@ -57,13 +57,12 @@ app_server <- function(input, output, session) {
         datums$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", datums$datum_name_en)
         datums$datum_name_en <- gsub("APPROXIMATE", "approx.", datums$datum_name_en)
         plotContainer$datums <- datums
-        DBI::dbDisconnect(con)
         runCheck$plots <- TRUE
       }
     }
   })
-  
-  
+
+
   #observeEvents related to precipitation data/maps -----------------------
   #Change the actionButton for rendering a map/data depending on which option the user chooses
   observeEvent(input$show_map, {
@@ -73,19 +72,19 @@ app_server <- function(input, output, session) {
       updateActionButton(session, "precip_go", "Calculate precip")
     }
   }, ignoreInit = TRUE)
-  
+
   #Cross-updating of precipitation location name or code
   observeEvent(input$precip_loc_code, {
-    updateSelectizeInput(session, "precip_loc_name", selected = precip$poly_names_codes[precip$poly_names_codes$codes == input$precip_loc_code, "names"])
+    updateSelectizeInput(session, "precip_loc_name", selected = precip$poly_names_codes[precip$poly_names_codes$code == input$precip_loc_code, "name"])
   }, ignoreInit = TRUE)
   observeEvent(input$precip_loc_name, {
-    updateSelectizeInput(session, "precip_loc_code", selected = precip$poly_names_codes[precip$poly_names_codes$names == input$precip_loc_name, "codes"])
+    updateSelectizeInput(session, "precip_loc_code", selected = precip$poly_names_codes[precip$poly_names_codes$name == input$precip_loc_name, "code"])
   }, ignoreInit = TRUE)
-  
+
   # Render the precipitation map and/or precip data. Make a file available for download via the download button.
   observeEvent(input$precip_go, {
     #Check if inputs are filled in
-    if (input$precip_loc_code %in% precip$poly_names_codes$codes){
+    if (input$precip_loc_code %in% precip$poly_names_codes$code){
       precip$location_code <- input$precip_loc_code
       updateActionButton(session, "precip_go", label = "Standby...")
       shinyjs::show("standby")
@@ -112,19 +111,19 @@ app_server <- function(input, output, session) {
       output$mean <- renderText(paste0("Basin mean: ", round(precip_res$mean_precip, 3), " mm"))
       output$min <- renderText(paste0("Basin min: ", round(precip_res$min, 3), " mm"))
       output$max <- renderText(paste0("Basin max: ", round(precip_res$max, 3), " mm"))
-      output$watershed_area <- renderText(paste0("Basin area: ", precip$poly_names_codes[precip$poly_names_codes$codes == input$precip_loc_code, "areas"], " km2"))
-      
+      output$watershed_area <- renderText(paste0("Basin area: ", precip$poly_names_codes[precip$poly_names_codes$description == input$precip_loc_code, "areas"], " km2"))
+
       output$export_precip_map <- downloadHandler(
-        filename = function() {paste0("precip abv ", precip$location_code, " from ", precip_res$total_time_range_UTC[1], " to ", precip_res$total_time_range_UTC[2] , ".png")}, 
+        filename = function() {paste0("precip abv ", precip$location_code, " from ", precip_res$total_time_range_UTC[1], " to ", precip_res$total_time_range_UTC[2] , ".png")},
         content = function(file) {
-          grDevices::png(file, width = 1000, height = 700, units = "px") 
+          grDevices::png(file, width = 1000, height = 700, units = "px")
           print(precip_res$plot)  #WARNING do not remove this print call, it is not here for debugging purposes
           grDevices::dev.off()})
     } else {
       shinyalert::shinyalert("Location code is not valid", type = "error", timer = 4000)
     }
   }, ignoreInit = TRUE)
-  
+
   # observeEvents related to displaying FOD comments -------------------------
   # Display FOD comments and make .csv available for download
   observeEvent(input$FOD_go, {
@@ -148,7 +147,7 @@ app_server <- function(input, output, session) {
               FOD_comments$comments[["FOD"]][[sheet_name]][[j]] <- as.character(openxlsx::read.xlsx(workbook, sheet = k, rows = 1, cols = 5, colNames = FALSE))
               FOD_comments$comments[["general"]][[sheet_name]][[j]] <- as.character(openxlsx::read.xlsx(workbook, sheet = k, rows = 3, cols = 2, colNames = FALSE))
               FOD_comments$comments[["specific"]][[sheet_name]][[j]] <- openxlsx::read.xlsx(workbook, sheet = k, startRow = 6)
-              
+
             } else {
               FOD_comments$comments[["FOD"]][[sheet_name]][[j]] <- as.character(openxlsx::read.xlsx(workbook, sheet = k, rows = 1, cols = 5, colNames = FALSE))
               FOD_comments$comments[["general"]][[sheet_name]][[j]] <- as.character(openxlsx::read.xlsx(workbook, sheet = k, rows = 3, cols = 2, colNames = FALSE))
@@ -159,10 +158,10 @@ app_server <- function(input, output, session) {
         }
       }, error = function(e) {})
     }
-    
+
     #Make and render the appropriate table
-    types <- if(input$comment_data_type == "All") c("levels", "flows", "snow", "bridges", "precipitation") else if (input$comment_data_type == "Water levels") "levels" else if (input$comment_data_type == "Water flows") "flows" else if (input$comment_data_type == "Snow pillows") "snow" else if (input$comment_data_type == "Bridge freeboard") "bridges" else if (input$comment_data_type == "Precipitation") "precipitation" 
-    
+    types <- if(input$comment_data_type == "All") c("levels", "flows", "snow", "bridges", "precipitation") else if (input$comment_data_type == "Water levels") "levels" else if (input$comment_data_type == "Water flows") "flows" else if (input$comment_data_type == "Snow pillows") "snow" else if (input$comment_data_type == "Bridge freeboard") "bridges" else if (input$comment_data_type == "Precipitation") "precipitation"
+
     if (input$comment_type == "General comments"){
       FOD_comments$tables[["general"]] <- data.frame()
       for (i in as.character(FOD_seq)) {
@@ -188,7 +187,7 @@ app_server <- function(input, output, session) {
       }
       output$FOD_table <- DT::renderDataTable(FOD_comments$tables[["general"]], rownames = FALSE)
       output$export_fod_comments <- downloadHandler(
-        filename = function() {paste0("general comments ", input$comment_start_date, " to ", input$comment_end_date , ".csv")}, 
+        filename = function() {paste0("general comments ", input$comment_start_date, " to ", input$comment_end_date , ".csv")},
         content = function(file) {utils::write.csv(FOD_comments$tables[["general"]], file, row.names = FALSE)})
     } else { #location-specific comments are requested
       FOD_comments$tables[["specific"]] <- data.frame()
@@ -209,18 +208,18 @@ app_server <- function(input, output, session) {
               }
             }
           }, error = function(e) {})
-          
+
         }
       }
       output$FOD_table <- DT::renderDataTable(FOD_comments$tables[["specific"]], rownames = FALSE)
       output$export_fod_comments <- downloadHandler(
-        filename = function() {paste0("station specific comments ", input$comment_start_date, " to ", input$comment_end_date , ".csv")}, 
+        filename = function() {paste0("station specific comments ", input$comment_start_date, " to ", input$comment_end_date , ".csv")},
         content = function(file) {utils::write.csv(FOD_comments$tables[["specific"]], file, row.names = FALSE)})
     }
     shinyjs::show("export_fod_comments")
   }, ignoreInit = TRUE)
-  
-  
+
+
   # observe and observeEvents related to plotting level/flow/snow --------------------
   observeEvent(input$plot_data_type, {
     if (input$plot_data_type == "Discrete"){
@@ -243,7 +242,7 @@ app_server <- function(input, output, session) {
       shinyjs::hide("discrete_plot_type")
     }
   })
-  
+
   observeEvent(input$plot_param, {
     if (input$plot_param %in% c("SWE", "Snow depth")){
       if (input$plot_data_type == "Discrete"){  #NOTE: This is only set to -12-31 and -01-01 because of limitations in how the plotting function handles start/end dates for discrete data. Can be modified once the plotting utility is adapted, if desired.
@@ -257,74 +256,74 @@ app_server <- function(input, output, session) {
     } else {
       updateTextInput(session, "return_months", value = "5,6,7,8,9")
     }
-    
+
   })
-  
+
   #Update user's choices for plots based on selected plot type
   observe(
     if (input$plot_param == "Level"){
       if (input$plot_data_type == "Continuous"){
         plotContainer$plot_data_type <- "continuous"
         plotContainer$plot_param <- "level"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$type == "continuous", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$type == "continuous", "location"]))
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$category == "continuous", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$category == "continuous", "location"]))
       } else if (input$plot_data_type == "Discrete"){
         plotContainer$plot_data_type <- "discrete"
         plotContainer$plot_param <- "level"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$type == "discrete", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$type == "discrete", "location"])) 
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$category == "discrete", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$category == "discrete", "location"]))
       }
     } else if (input$plot_param == "Flow"){
       if (input$plot_data_type == "Continuous"){
         plotContainer$plot_data_type <- "continuous"
         plotContainer$plot_param <- "flow"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "flow" & plotContainer$all_ts$type == "continuous", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "flow" & plotContainer$all_ts$type == "continuous", "location"]))
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "flow" & plotContainer$all_ts$category == "continuous", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "flow" & plotContainer$all_ts$category == "continuous", "location"]))
       } else if (input$plot_data_type == "Discrete"){
         plotContainer$plot_data_type <- "discrete"
         plotContainer$plot_param <- "flow"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "flow" & plotContainer$all_ts$type == "discrete", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "flow" & plotContainer$all_ts$type == "discrete", "location"])) 
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "flow" & plotContainer$all_ts$category == "discrete", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "flow" & plotContainer$all_ts$category == "discrete", "location"]))
       }
     } else if (input$plot_param == "Bridge freeboard"){
       if (input$plot_data_type == "Continuous"){
         plotContainer$plot_data_type <- "continuous"
         plotContainer$plot_param <- "distance"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "distance" & plotContainer$all_ts$type == "continuous", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "distance" & plotContainer$all_ts$type == "continuous", "location"]))
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "distance" & plotContainer$all_ts$category == "continuous", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "distance" & plotContainer$all_ts$category == "continuous", "location"]))
       } else if (input$plot_data_type == "Discrete"){
         plotContainer$plot_data_type <- "discrete"
         plotContainer$plot_param <- "distance"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "distance" & plotContainer$all_ts$type == "discrete", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "distance" & plotContainer$all_ts$type == "discrete", "location"])) 
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "distance" & plotContainer$all_ts$category == "discrete", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "distance" & plotContainer$all_ts$category == "discrete", "location"]))
       }
     } else if (input$plot_param == "SWE"){
       if (input$plot_data_type == "Continuous"){
         plotContainer$plot_data_type <- "continuous"
         plotContainer$plot_param <- "SWE"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "SWE" & plotContainer$all_ts$type == "continuous", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "SWE" & plotContainer$all_ts$type == "continuous", "location"]))
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "SWE" & plotContainer$all_ts$category == "continuous", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "SWE" & plotContainer$all_ts$category == "continuous", "location"]))
       } else if (input$plot_data_type == "Discrete"){
         plotContainer$plot_data_type <- "discrete"
         plotContainer$plot_param <- "SWE"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "SWE" & plotContainer$all_ts$type == "discrete", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "SWE" & plotContainer$all_ts$type == "discrete", "location"])) 
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "SWE" & plotContainer$all_ts$category == "discrete", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "SWE" & plotContainer$all_ts$category == "discrete", "location"]))
       }
     } else if (input$plot_param == "Snow depth"){
       if (input$plot_data_type == "Continuous"){
         plotContainer$plot_data_type <- "continuous"
         plotContainer$plot_param <- "snow depth"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "snow depth" & plotContainer$all_ts$type == "continuous", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "snow depth" & plotContainer$all_ts$type == "continuous", "location"]))
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "snow depth" & plotContainer$all_ts$category == "continuous", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "snow depth" & plotContainer$all_ts$category == "continuous", "location"]))
       } else if (input$plot_data_type == "Discrete"){
         plotContainer$plot_data_type <- "discrete"
         plotContainer$plot_param <- "snow depth"
-        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "snow depth" & plotContainer$all_ts$type == "discrete", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "snow depth" & plotContainer$all_ts$type == "discrete", "location"])) 
+        updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "snow depth" & plotContainer$all_ts$category == "discrete", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "snow depth" & plotContainer$all_ts$category == "discrete", "location"]))
       }
     }
   )
-  
+
   observeEvent(input$plot_param, {
     if (input$plot_param == "Level"){
       shinyjs::show("apply_datum")
@@ -333,12 +332,12 @@ app_server <- function(input, output, session) {
       updateCheckboxInput(session, "apply_datum", value = FALSE)
     }
   }, ignoreInit = TRUE)
-  
+
   #Cross-updating of plot selection location name or code
   observeEvent(input$plot_loc_code, {
     if (input$plot_loc_code %in% plotContainer$all_ts$location){ #otherwise it runs without actually getting any information, which results in an error
       updateSelectizeInput(session, "plot_loc_name", selected = plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code, "name"])
-      possible_years <- seq(as.numeric(substr(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code & plotContainer$all_ts$parameter == plotContainer$plot_param &  plotContainer$all_ts$type == plotContainer$plot_data_type, "start_datetime_UTC"], 1, 4)), as.numeric(substr(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code & plotContainer$all_ts$parameter == plotContainer$plot_param &  plotContainer$all_ts$type == plotContainer$plot_data_type, "end_datetime_UTC"], 1, 4)))
+      possible_years <- seq(as.numeric(substr(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code & plotContainer$all_ts$parameter == plotContainer$plot_param &  plotContainer$all_ts$category == plotContainer$plot_data_type, "start_datetime"], 1, 4)), as.numeric(substr(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code & plotContainer$all_ts$parameter == plotContainer$plot_param &  plotContainer$all_ts$category == plotContainer$plot_data_type, "end_datetime"], 1, 4)))
       shinyWidgets::updatePickerInput(session, "plot_years", choices = possible_years)
       plotContainer$possible_datums <- plotContainer$datums[plotContainer$datums$location == input$plot_loc_code & plotContainer$datums$conversion_m != 0, ]
       if (nrow(plotContainer$possible_datums) < 1){
@@ -347,11 +346,11 @@ app_server <- function(input, output, session) {
       }
     }
   }, ignoreInit = TRUE)
-  
+
   observeEvent(input$plot_loc_name, {
     updateSelectizeInput(session, "plot_loc_code", selected = plotContainer$all_ts[plotContainer$all_ts$name == input$plot_loc_name, "location"])
   }, ignoreInit = TRUE)
-  
+
   observeEvent(input$return_periods, {
     if (input$return_periods == "none"){
       plotContainer$returns <- "none"
@@ -362,8 +361,8 @@ app_server <- function(input, output, session) {
     } else if (input$return_periods == "from table"){
       plotContainer$returns <- "table"
     }
-  }) #Do not ignoInit = TRUE otherwise will not be populated
-  
+  }) #Do not ignoreInit = TRUE otherwise will not be populated
+
   observeEvent(input$return_periods, {
     if (input$return_periods == "none"){
       shinyjs::hide("return_type")
@@ -371,18 +370,18 @@ app_server <- function(input, output, session) {
       shinyjs::show("return_type")
     }
   }, ignoreInit = TRUE)
-  
+
   observeEvent(input$return_months, {
     plotContainer$return_months <- as.numeric(unlist(strsplit(input$return_months,",")))
-  }) #Do not ignoInit = TRUE otherwise will not be populated
-  
+  }) #Do not ignoreInit = TRUE otherwise will not be populated
+
   observeEvent(input$discrete_plot_type, {
     if (input$discrete_plot_type == "Box plot"){
       plotContainer$discrete_plot_type <- "boxplot"
     } else if (input$discrete_plot_type == "Violin plot")
       plotContainer$discrete_plot_type <- "violin"
-  }) #Do not ignoInit = TRUE otherwise will not be populated
-  
+  }) #Do not ignoreInit = TRUE otherwise will not be populated
+
   observeEvent(input$plot_go, {
     tryCatch({
       if (plotContainer$plot_data_type == "continuous"){
@@ -393,14 +392,14 @@ app_server <- function(input, output, session) {
     output$hydro_plot <- renderPlot(plotContainer$plot)
     shinyjs::show("export_hydro_plot")
     output$export_hydro_plot <- downloadHandler(
-      filename = function() {paste0(input$plot_loc_code, "_", plotContainer$plot_param, "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz="MST")), lubridate::minute(as.POSIXct(format(Sys.time()), tz="MST")), ".png")}, 
+      filename = function() {paste0(input$plot_loc_code, "_", plotContainer$plot_param, "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz="MST")), lubridate::minute(as.POSIXct(format(Sys.time()), tz="MST")), ".png")},
       content = function(file) {
-        grDevices::png(file, width = 900, height = 700, units = "px") 
+        grDevices::png(file, width = 900, height = 700, units = "px")
         print(plotContainer$plot)  #WARNING do not remove this print call, it is not here for debugging purposes
         grDevices::dev.off()})
     }, error = function(e){
       shinyalert::shinyalert("Error in rendering plot", "Try again with a different set of input parameters", type = "error")
     })
-    
+
   }, ignoreInit = TRUE)
 }

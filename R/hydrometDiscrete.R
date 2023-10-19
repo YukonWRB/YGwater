@@ -24,8 +24,6 @@
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
 #' @export
 
-# hydrometDiscrete(location=NULL, parameter='SWE', years=c(2021, 2022), title=TRUE, plot_type = "boxplot", discrete_data = swe_basin, save_path = "")
-
 hydrometDiscrete <- function(location=NULL,
                              parameter,
                              startDay = 1,
@@ -40,23 +38,26 @@ hydrometDiscrete <- function(location=NULL,
                              discrete_data = NULL)
 {
 
-  #TODO: Adapt to use new DB
+#
+# Commented code below is for testing...
+# location = "08AA-SC01"
+# parameter = "SWE"
+# startDay = 1
+# endDay = 365
+# tzone = "MST"
+# years = c(2022)
+# title = TRUE
+# plot_scale = 1
+# plot_type = "boxplot"
+# save_path = NULL
+# discrete_data = NULL
 
+  # TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
 
-  # Commented code below is for testing...
-  # location = "08AA-SC01"
-  # parameter = "SWE"
-  # startDay = 1
-  # endDay = 365
-  # tzone = "MST"
-  # years = c(2022)
-  # title = TRUE
-  # plot_scale = 1
-  # plot_type = "boxplot"
-  # save_path = NULL
-  # discrete_data = NULL
-
-  #TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
+  # Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
+  options(warn = -1)
+  old_warn <- getOption("warn")
+  on.exit(options(warn = old_warn))
 
   if (startDay != 1){
     startDay <- 1
@@ -74,7 +75,7 @@ hydrometDiscrete <- function(location=NULL,
 
   plot_type <- tolower(plot_type)
   if (!(plot_type %in% c("violin", "boxplot", "linedbox"))){
-    stop("Parameter 'plot_type' must be one of 'violin' or 'boxplot'")
+    stop("Parameter 'plot_type' must be one of 'violin', 'boxplot', or 'linedbox'")
   }
 
   if (is.null(years)){
@@ -139,40 +140,40 @@ hydrometDiscrete <- function(location=NULL,
     day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
     #Check for existence of timeseries, then for presence of data within the time range requested.
-    exists <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND type = 'discrete'"))
+    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, unit, parameter FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'discrete'"))
     if (nrow(exists) == 0){
       stop("There is no entry for the location and parameter combination that you specified of discrete data type. If you are trying to graph continuous data use hydrometContinuous.")
     } else if (nrow(exists) > 1){
       stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager ASAP.")
+    } else {
+      tsid <- exists$timeseries_id
+      units <- exists$unit
+      parameter <- exists$parameter
     }
-
-
-
-    #Find the ts units
-    units <- DBI::dbGetQuery(con, paste0("SELECT units FROM timeseries WHERE parameter = '", parameter, "' AND location = '", location, "'"))
 
     # Get the data ---------------------
-    all_discrete <- DBI::dbGetQuery(con, paste0("SELECT * FROM discrete WHERE location = '", location, "' AND parameter = '", parameter, "' AND sample_date < '", paste0(max(years), substr(endDay, 5, 10)), "'"))
+    all_discrete <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, datetime, value FROM measurements_discrete WHERE timeseries_id = ", tsid, " AND datetime < '", paste0(max(years), substr(endDay, 5, 19)), "'"))
     if (nrow(all_discrete) == 0){
-      stop(paste0("There doesn't appear to be any data for the year and days you specified: this timeseries starts ",  exists$start_datetime_UTC))
+      stop(paste0("There doesn't appear to be any data for the year and days you specified: this timeseries starts ",  exists$start_datetime))
     }
-    all_discrete$target_date <- as.Date(all_discrete$target_date)
-    all_discrete$sample_date <- as.Date(all_discrete$sample_date)
-    all_discrete$year <- lubridate::year(all_discrete$target_date)
-    all_discrete$month <- lubridate::month(all_discrete$target_date)
-    all_discrete$day <- lubridate::day(all_discrete$target_date)
+    all_discrete$target_datetime <- as.Date(all_discrete$target_datetime)
+    # Now since target_datetime might be missing, replace it with the (mandatory not missing) datetime
+    all_discrete$target_datetime[is.na( all_discrete$target_datetime)] <-  as.Date(all_discrete$datetime[is.na(all_discrete$target_datetime)])
+    all_discrete$year <- lubridate::year(all_discrete$target_datetime)
+    all_discrete$month <- lubridate::month(all_discrete$target_datetime)
+    all_discrete$day <- lubridate::day(all_discrete$target_datetime)
     #Separate, modify, and re-bind feb29 days, if any
     feb29 <- all_discrete[all_discrete$month == 2 & all_discrete$day == 29, ]
     if (nrow(feb29) > 0){
       all_discrete <- all_discrete[!(all_discrete$month == 2 & all_discrete$day == 29), ]
-      feb29$target_date <- feb29$target_date + 1
+      feb29$target_datetime <- feb29$target_datetime + 1
       feb29$month <- 3
       feb29$day <- 1
       all_discrete <- rbind(all_discrete, feb29)
     }
 
     #Make a fake date
-    all_discrete$fake_date <- as.Date(gsub("[0-9]{4}", last_year, all_discrete$target_date))
+    all_discrete$fake_date <- as.Date(gsub("[0-9]{4}", last_year, all_discrete$target_datetime))
     discrete <- data.frame()
     for (i in years){
       start <- as.Date(paste0(i, substr(startDay, 5, 10)))
@@ -180,7 +181,7 @@ hydrometDiscrete <- function(location=NULL,
       if (overlaps){
         lubridate::year(end) <- lubridate::year(end) +1
       }
-      new_discrete <- all_discrete[all_discrete$target_date >= start & all_discrete$target_date <= end , ]
+      new_discrete <- all_discrete[all_discrete$target_datetime >= start & all_discrete$target_datetime <= end , ]
       discrete <- rbind(discrete, new_discrete)
     }
     if (nrow(discrete) == 0){
@@ -199,7 +200,6 @@ hydrometDiscrete <- function(location=NULL,
     discrete <- all_discrete[all_discrete$year %in% years, ]
     ## Give units
     units <- unique(discrete$units)
-
   }
 
   if (plot_type == 'linedbox') {
@@ -212,9 +212,7 @@ hydrometDiscrete <- function(location=NULL,
       dplyr::bind_rows(all_discrete %>%
                   dplyr::group_by(.data$month) %>%
                   dplyr::summarise(value = stats::median(.data$value), .data$type == "median"))
-
     stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
-
   }
 
   #Make the plot --------------------
