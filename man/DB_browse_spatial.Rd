@@ -7,7 +7,7 @@
 DB_browse_spatial(
   con = hydrometConnect(),
   type,
-  location = NULL,
+  name = NULL,
   description = NULL,
   parameter = NULL
 )
@@ -15,9 +15,9 @@ DB_browse_spatial(
 \arguments{
 \item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
-\item{type}{'polygon' or 'raster'?}
+\item{type}{'polygon', 'point', 'line' or 'raster'? Currently only works with polygons.}
 
-\item{location}{If specifying type 'polygon', narrow by associated location(s). Specify multiple locations as a single character vector. Note that location can be NULL in the database for spatial entries and that NULL entries will not be returned when specifying locations.}
+\item{name}{Narrow by associated polygon name.}
 
 \item{description}{Narrow by polygon description(s) if you wish. Specify multiple descriptions as a single character vector. These should be standardized to only a few names. To view description options, run this function with all default parameters perform a unique() operation on the description column.}
 

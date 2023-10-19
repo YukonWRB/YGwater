@@ -32,7 +32,7 @@ basinPrecip(
 
 \item{hrdps_loc}{The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.}
 
-\item{drainage_loc}{The shapefile drainage polygons.See Notes for more info.}
+\item{drainage_loc}{The shapefile drainage polygons. See Notes for more info.}
 
 \item{spatial_loc}{The directory in which spatial data (as shapefiles) is kept for making maps nicer. Will recognize the following shapefile names (case sensitive): waterbodies, watercourses, roads, communities, borders (provincial/territorial/international), coastlines. See additional notes.}
 
