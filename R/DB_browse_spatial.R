@@ -9,8 +9,8 @@
 #' Spatial files are not stored directly in the database but rather in folders situated alongside the database. The database stores the file description and other identifiers, as well as the path to the file.
 #'
 #' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
-#' @param type 'polygon' or 'raster'?
-#' @param location If specifying type 'polygon', narrow by associated location(s). Specify multiple locations as a single character vector. Note that location can be NULL in the database for spatial entries and that NULL entries will not be returned when specifying locations.
+#' @param type 'polygon', 'point', 'line' or 'raster'? Currently only works with polygons.
+#' @param name Narrow by associated polygon name.
 #' @param description Narrow by polygon description(s) if you wish. Specify multiple descriptions as a single character vector. These should be standardized to only a few names. To view description options, run this function with all default parameters perform a unique() operation on the description column.
 #' @param parameter Narrow by parameter(s) if you wish. Specify multiple parameters as a single character vector. Note that this can be NULL for polygons, and that NULLs will not be returned.
 #'
@@ -19,10 +19,13 @@
 #' @export
 #'
 
-DB_browse_spatial <- function(con = hydrometConnect(), type, location = NULL, description = NULL, parameter = NULL) {
+DB_browse_spatial <- function(con = hydrometConnect(), type, name = NULL, description = NULL, parameter = NULL) {
 
+  if (type != "polygon") {
+    stop("Not set up to pull types other than polygons for now.")
+  }
   if (type == "polygon"){
-    polys <- DBI::dbGetQuery(con, "SELECT rowid, * FROM polygons")
+    polys <- DBI::dbGetQuery(con, "SELECT * FROM polygons")
     if (!is.null(location)){
       polys <- polys[polys$location %in% location ,]
     }
@@ -43,8 +46,12 @@ DB_browse_spatial <- function(con = hydrometConnect(), type, location = NULL, de
     if (!is.null(parameter)){
       rasters <- rasters[rasters$description %in% description ,]
     }
+  } else if (type == "point"){
+
+  } else if (type == "line") {
+
   } else {
-    stop("You must specify a type of either 'polygon' or 'raster'. Try again.")
+    stop("You must specify a type of either 'polygon', 'point', 'line' or 'raster'. Try again.")
   }
 
   if (type == "polygon"){
