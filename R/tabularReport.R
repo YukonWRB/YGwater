@@ -23,34 +23,34 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
 
   if (level_locations[1] == "default"){
     level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
-    level_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'level' AND category = 'continuous' AND location IN ('", paste(level_locations, collapse = "', '"), "');"))
+    level_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'level' AND category = 'continuous' AND location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
   } else if (level_locations[1] == "all"){
-    level_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'level' AND category = 'continuous'")
+    level_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'level' AND category = 'continuous' ORDER BY location;")
   }
   if (flow_locations[1] == "default"){
     flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
-    flow_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'flow' AND category = 'continuous' AND location IN ('", paste(flow_locations, collapse = "', '"), "');"))
+    flow_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'flow' AND category = 'continuous' AND location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
   } else if (flow_locations[1] == "all"){
-    flow_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'flow' AND category = 'continuous'")
+    flow_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'flow' AND category = 'continuous' ORDER BY location;")
   }
   if (snow_locations[1] == "default"){
     snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
-    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'SWE' AND category = 'continuous' AND location IN ('", paste(snow_locations, collapse = "', '"), "');"))
+    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'SWE' AND category = 'continuous' AND location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
   } else if (snow_locations[1] == "all"){
-    snow_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'SWE' AND category = 'continuous'")
+    snow_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'SWE' AND category = 'continuous' ORDER BY location")
   }
   if (bridge_locations[1] == "default"){
     bridge_locations <- c("09AH005", "29AB010", "29AB011", "29AE007", "29AH001")
-    bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND category = 'continuous' AND location IN ('", paste(bridge_locations, collapse = "', '"), "');"))
+    bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND category = 'continuous' AND location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
   } else if (bridge_locations[1] == "all"){
-    bridge_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND category = 'continuous'")
+    bridge_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND category = 'continuous' ORDER BY location;")
   }
   if (precip_locations[1] == "default"){
     precip_locations <- c("08AA003", "08AA010", "08AB001", "09AA001", "09AA004", "09AA013", "09AB001", "09AB010", "09AC001", "09AE002", "09AH001", "09AH004", "09BC001", "09BC002", "09CA002", "09DC005", "09DC006", "09EA003", "09EB001", "09FC001", "09FD002", "10AA001", "10AD002", "10MA002", "10BE001")
-    precip_locations <- DBI::dbGetQuery(con, paste0("SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND category = 'continuous' AND location IN ('", paste(precip_locations, collapse = "', '"), "');"))[,1]
+    precip_locations <- DBI::dbGetQuery(con, paste0("SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND category = 'continuous' AND location IN ('", paste(precip_locations, collapse = "', '"), "') ORDER BY location;"))[,1]
     precip_locations <- unique(precip_locations)
   } else if (precip_locations[1] == "all"){
-    precip_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND category = 'continuous'")[,1]
+    precip_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND category = 'continuous' ORDER BY location;")[,1]
     precip_locations <- unique(precip_locations)
   }
 
