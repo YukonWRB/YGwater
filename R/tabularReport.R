@@ -23,37 +23,43 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
 
   if (level_locations[1] == "default"){
     level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
+    level_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'level' AND category = 'continuous' AND location IN ('", paste(level_locations, collapse = "', '"), "');"))
   } else if (level_locations[1] == "all"){
-    level_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter = 'level' AND type = 'continuous'")[,1]
+    level_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'level' AND category = 'continuous'")
   }
   if (flow_locations[1] == "default"){
     flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
+    flow_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'flow' AND category = 'continuous' AND location IN ('", paste(flow_locations, collapse = "', '"), "');"))
   } else if (flow_locations[1] == "all"){
-    flow_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter = 'flow' AND type = 'continuous'")[,1]
+    flow_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'flow' AND category = 'continuous'")
   }
   if (snow_locations[1] == "default"){
     snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
+    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'SWE' AND category = 'continuous' AND location IN ('", paste(snow_locations, collapse = "', '"), "');"))
   } else if (snow_locations[1] == "all"){
-    snow_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter = 'SWE' AND type = 'continuous'")[,1]
+    snow_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'SWE' AND category = 'continuous'")
   }
   if (bridge_locations[1] == "default"){
     bridge_locations <- c("09AH005", "29AB010", "29AB011", "29AE007", "29AH001")
+    bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND category = 'continuous' AND location IN ('", paste(bridge_locations, collapse = "', '"), "');"))
   } else if (bridge_locations[1] == "all"){
-    bridge_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter = 'distance' AND type = 'continuous'")[,1]
+    bridge_locations <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND category = 'continuous'")
   }
   if (precip_locations[1] == "default"){
     precip_locations <- c("08AA003", "08AA010", "08AB001", "09AA001", "09AA004", "09AA013", "09AB001", "09AB010", "09AC001", "09AE002", "09AH001", "09AH004", "09BC001", "09BC002", "09CA002", "09DC005", "09DC006", "09EA003", "09EB001", "09FC001", "09FD002", "10AA001", "10AD002", "10MA002", "10BE001")
+    precip_locations <- DBI::dbGetQuery(con, paste0("SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND category = 'continuous' AND location IN ('", paste(precip_locations, collapse = "', '"), "');"))[,1]
+    precip_locations <- unique(precip_locations)
   } else if (precip_locations[1] == "all"){
-    precip_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND type = 'continuous'")[,1]
+    precip_locations <- DBI::dbGetQuery(con, "SELECT location FROM timeseries WHERE parameter IN ('level', 'flow') AND category = 'continuous'")[,1]
     precip_locations <- unique(precip_locations)
   }
 
   if (save_path == "choose") {
-    print("Select the path to the folder where you want this report saved.")
+    message("Select the path to the folder where you want this report saved.")
     save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
   }
   if (archive_path == "choose"){
-    print("Select the path to yesterday's file (refer to function help).")
+    message("Select the path to yesterday's file (refer to function help).")
     archive_path <- as.character(utils::choose.files(caption="Select Yesterday's File"), multi = FALSE)
   }
 
@@ -87,7 +93,7 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     }
     yesterday_comments <- TRUE
   }, error = function(e) {
-    print("Could not fetch information from yesterday's workbooks. Perhaps the file path you specified is incorrect; check the function help again.")
+    warning("Could not fetch information from yesterday's workbooks. Perhaps the file path you specified is incorrect; check the function help again.")
     yesterday_comments <- FALSE
   })
 
@@ -99,13 +105,13 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     for (i in precip_locations){
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       tryCatch({
-        poly <- DB_browse_spatial(type = "polygon", location = "all_locations", description = "all_drainage_basins")
-        lastWeek <- basinPrecip(location = i, drainage_loc = poly$file_path, start = Sys.time()-60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastThree <- basinPrecip(location = i, drainage_loc = poly$file_path, start = Sys.time()-60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastTwo <- basinPrecip(location = i, drainage_loc = poly$file_path, start = Sys.time()-60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastOne <- basinPrecip(location = i, drainage_loc = poly$file_path, start = Sys.time()-60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE)
-        next24 <- basinPrecip(location = i, drainage_loc = poly$file_path, start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE)
-        next48 <- basinPrecip(location = i, drainage_loc = poly$file_path, start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE)
+        #TODO: Update code directly below to get polygons direct from the DB once basinPrecip is updated.
+        lastWeek <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastThree <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastTwo <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastOne <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE)
+        next24 <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE)
+        next48 <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE)
         yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
 
         precip <- rbind(precip,
@@ -144,45 +150,42 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     level_daily <- list()
     level_rt <- list()
     names_level <- NULL
-    for (i in level_locations){
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'level' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
+    for (i in 1:nrow(level_locations)){
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0){
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'level' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0){
-        daily$date <- as.Date(daily$date, tz = "UTC")
-        level_daily[[i]] <- daily
+        level_daily[[level_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'level' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", level_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0){
-        rt$datetime_UTC <- lubridate::as_datetime(rt$datetime_UTC, tz = "UTC")
-        level_rt[[i]] <- rt
+        level_rt[[level_locations[i, "location"]]] <- rt
       }
       if (nrow(rt) > 0 | nrow(daily) >0){
-        names_level[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+        names_level[level_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", level_locations[i, "location"], "'"))))
       }
     }
   }
+
   if (!is.null(flow_locations)){
     flow_daily <- list()
     flow_rt <- list()
     names_flow <- NULL
-    for (i in flow_locations){
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'flow' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
+    for (i in 1:nrow(flow_locations)){
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0){
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'flow' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0){
-        daily$date <- as.Date(daily$date, tz = "UTC")
-        flow_daily[[i]] <- daily
+        flow_daily[[flow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'flow' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0){
-        rt$datetime_UTC <- lubridate::as_datetime(rt$datetime_UTC, tz = "UTC")
-        flow_rt[[i]] <- rt
+        flow_rt[[flow_locations[i, "location"]]] <- rt
       }
       if (nrow(rt) > 0 | nrow(daily) >0){
-        names_flow[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+        names_flow[flow_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", flow_locations[i, "location"], "'"))))
       }
     }
   }
@@ -190,22 +193,20 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     snow_daily <- list()
     snow_rt <- list()
     names_snow <- NULL
-    for (i in snow_locations){
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, min, max, QP50 FROM daily WHERE parameter = 'SWE' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
+    for (i in 1:nrow(snow_locations)){
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0){
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'SWE' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0){
-        daily$date <- as.Date(daily$date, tz = "UTC")
-        snow_daily[[i]] <- daily
+        snow_daily[[snow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'SWE' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0){
-        rt$datetime_UTC <- lubridate::as_datetime(rt$datetime_UTC, tz = "UTC")
-        snow_rt[[i]] <- rt
+        snow_rt[[snow_locations[i, "location"]]] <- rt
       }
       if (nrow(rt) > 0 | nrow(daily) >0){
-        names_snow[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+        names_snow[snow_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", snow_locations[i, "location"], "'"))))
       }
     }
   }
@@ -213,22 +214,20 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     bridges_daily <- list()
     bridges_rt <- list()
     names_bridges <- NULL
-    for (i in bridge_locations){
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, min, max, QP50 FROM daily WHERE parameter = 'distance' AND location = '", i, "' AND date = '", Sys.Date(), "'" ))
+    for (i in 1:nrow(bridge_locations)){
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0){
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, QP50 FROM daily WHERE parameter = 'distance' AND location = '", i, "' AND date = '", Sys.Date()-1, "'" ))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0){
-        daily$date <- as.Date(daily$date, tz = "UTC")
-        bridges_daily[[i]] <- daily
+        bridges_daily[[bridge_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime_UTC FROM realtime WHERE parameter = 'distance' AND location = '", i, "' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0){
-        rt$datetime_UTC <- lubridate::as_datetime(rt$datetime_UTC, tz = "UTC")
-        bridges_rt[[i]] <- rt
+        bridges_rt[[bridge_locations[i, "location"]]] <- rt
       }
       if (nrow(rt) > 0 | nrow(daily) >0){
-        names_bridges[i] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+        names_bridges[bridge_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", bridge_locations[i, "location"], "'"))))
       }
     }
   }  #End of data acquisition
@@ -240,17 +239,17 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     levels <- data.frame()
     for (i in names(level_rt)){
       rt <- level_rt[[i]]
-      last_time <- rt[rt$datetime_UTC == max(rt$datetime_UTC) ,]$datetime_UTC
+      last_time <- rt[rt$datetime == max(rt$datetime) ,]$datetime
       age <- difftime(Sys.time(), last_time, units = "hours")
-      latest <- stats::median(rt[rt$datetime_UTC <= last_time & rt$datetime_UTC >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
+      latest <- stats::median(rt[rt$datetime <= last_time & rt$datetime >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
       percent_historic <- round(((latest - level_daily[[i]]$min) / (level_daily[[i]]$max - level_daily[[i]]$min)) * 100, 0)
-      percent_mean <- round(((latest - level_daily[[i]]$min) / (level_daily[[i]]$QP50 - level_daily[[i]]$min)) * 100, 0)
-      day <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*24 & rt$datetime_UTC >= last_time - 60*60*24.5 , ]$value) #median of 30 minutes
-      twoday <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*47.5 & rt$datetime_UTC >= last_time - 60*60*48.5 , ]$value) #median of 1 hour
-      threeday <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*71.5 & rt$datetime_UTC >= last_time - 60*60*72.5 , ]$value) #median of 1 hour
-      week <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*167 & rt$datetime_UTC >= last_time - 60*60*169 , ]$value) #median of 2 hours
+      percent_mean <- round(((latest - level_daily[[i]]$min) / (level_daily[[i]]$q50 - level_daily[[i]]$min)) * 100, 0)
+      day <- stats::median(rt[rt$datetime <= last_time - 60*60*24 & rt$datetime >= last_time - 60*60*24.5 , ]$value) #median of 30 minutes
+      twoday <- stats::median(rt[rt$datetime <= last_time - 60*60*47.5 & rt$datetime >= last_time - 60*60*48.5 , ]$value) #median of 1 hour
+      threeday <- stats::median(rt[rt$datetime <= last_time - 60*60*71.5 & rt$datetime >= last_time - 60*60*72.5 , ]$value) #median of 1 hour
+      week <- stats::median(rt[rt$datetime <= last_time - 60*60*167 & rt$datetime >= last_time - 60*60*169 , ]$value) #median of 2 hours
       if (is.na(week)){ #expand the range if no data within the 2 hour timespan
-        week <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*165 & rt$datetime_UTC >= last_time - 60*60*171 , ]$value)
+        week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
       yesterday_comment_levels <- if(yesterday_comments) yesterday$yesterday_locs$levels[yesterday$yesterday_locs$levels$Location == i, "Location.specific.comments"] else NA
 
@@ -272,9 +271,9 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                         ))
       }
       if (past > 7 & past <= 14){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
         levels <- rbind(levels,
                         data.frame("loc" = i,
@@ -294,13 +293,13 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                         ))
       }
       if (past > 14 & past <= 21){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
-        threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*503 & rt$datetime_UTC >= last_time - 60*60*505 , ]$value)
+        threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*503 & rt$datetime >= last_time - 60*60*505 , ]$value)
         if (is.na(threeweek)){
-          threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*497 & rt$datetime_UTC >= last_time - 60*60*511 , ]$value)
+          threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
         levels <- rbind(levels,
                         data.frame("loc" = i,
@@ -321,17 +320,17 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                         ))
       }
       if (past > 21){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
-        threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*503 & rt$datetime_UTC >= last_time - 60*60*505 , ]$value)
+        threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*503 & rt$datetime >= last_time - 60*60*505 , ]$value)
         if (is.na(threeweek)){
-          threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*497 & rt$datetime_UTC >= last_time - 60*60*511 , ]$value)
+          threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
-        fourweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*671 & rt$datetime_UTC >= last_time - 60*60*673 , ]$value)
+        fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*671 & rt$datetime >= last_time - 60*60*673 , ]$value)
         if (is.na(fourweek)){
-          fourweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*667 & rt$datetime_UTC >= last_time - 60*60*677 , ]$value)
+          fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*667 & rt$datetime >= last_time - 60*60*677 , ]$value)
         }
         levels <- rbind(levels,
                         data.frame("loc" = i,
@@ -374,17 +373,17 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     flows <- data.frame()
     for (i in names(flow_rt)){
       rt <- flow_rt[[i]]
-      last_time <- rt[rt$datetime_UTC == max(rt$datetime_UTC) ,]$datetime_UTC
+      last_time <- rt[rt$datetime == max(rt$datetime) ,]$datetime
       age <- difftime(Sys.time(), last_time, units = "hours")
-      latest <- stats::median(rt[rt$datetime_UTC <= last_time & rt$datetime_UTC >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
+      latest <- stats::median(rt[rt$datetime <= last_time & rt$datetime >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
       percent_historic <- round(((latest - flow_daily[[i]]$min) / (flow_daily[[i]]$max - flow_daily[[i]]$min)) * 100, 0)
-      percent_mean <- round(latest/flow_daily[[i]]$QP50 * 100, 0)
-      day <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*24 & rt$datetime_UTC >= last_time - 60*60*24.5 , ]$value) #median of 30 minutes
-      twoday <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*47.5 & rt$datetime_UTC >= last_time - 60*60*48.5 , ]$value) #median of 1 hour
-      threeday <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*71.5 & rt$datetime_UTC >= last_time - 60*60*72.5 , ]$value) #median of 1 hour
-      week <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*167 & rt$datetime_UTC >= last_time - 60*60*169 , ]$value) #median of 2 hours
+      percent_mean <- round(latest/flow_daily[[i]]$q50 * 100, 0)
+      day <- stats::median(rt[rt$datetime <= last_time - 60*60*24 & rt$datetime >= last_time - 60*60*24.5 , ]$value) #median of 30 minutes
+      twoday <- stats::median(rt[rt$datetime <= last_time - 60*60*47.5 & rt$datetime >= last_time - 60*60*48.5 , ]$value) #median of 1 hour
+      threeday <- stats::median(rt[rt$datetime <= last_time - 60*60*71.5 & rt$datetime >= last_time - 60*60*72.5 , ]$value) #median of 1 hour
+      week <- stats::median(rt[rt$datetime <= last_time - 60*60*167 & rt$datetime >= last_time - 60*60*169 , ]$value) #median of 2 hours
       if (is.na(week)){ #expand the range if no data within the 2 hour timespan
-        week <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*165 & rt$datetime_UTC >= last_time - 60*60*171 , ]$value)
+        week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
       yesterday_comment_flows <- if(yesterday_comments) yesterday$yesterday_locs$flows[yesterday$yesterday_locs$flows$Location == i, "Location.specific.comments"] else NA
 
@@ -406,9 +405,9 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                         ))
       }
       if (past > 7 & past <= 14){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
         flows <- rbind(flows,
                         data.frame("loc" = i,
@@ -428,13 +427,13 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                         ))
       }
       if (past > 14 & past <= 21){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
-        threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*503 & rt$datetime_UTC >= last_time - 60*60*505 , ]$value)
+        threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*503 & rt$datetime >= last_time - 60*60*505 , ]$value)
         if (is.na(threeweek)){
-          threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*497 & rt$datetime_UTC >= last_time - 60*60*511 , ]$value)
+          threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
         flows <- rbind(flows,
                         data.frame("loc" = i,
@@ -455,17 +454,17 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                         ))
       }
       if (past > 21){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
-        threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*503 & rt$datetime_UTC >= last_time - 60*60*505 , ]$value)
+        threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*503 & rt$datetime >= last_time - 60*60*505 , ]$value)
         if (is.na(threeweek)){
-          threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*497 & rt$datetime_UTC >= last_time - 60*60*511 , ]$value)
+          threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
-        fourweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*671 & rt$datetime_UTC >= last_time - 60*60*673 , ]$value)
+        fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*671 & rt$datetime >= last_time - 60*60*673 , ]$value)
         if (is.na(fourweek)){
-          fourweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*667 & rt$datetime_UTC >= last_time - 60*60*677 , ]$value)
+          fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*667 & rt$datetime >= last_time - 60*60*677 , ]$value)
         }
         flows <- rbind(flows,
                         data.frame("loc" = i,
@@ -507,17 +506,17 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     snow <- data.frame()
     for (i in names(snow_rt)){
       rt <- snow_rt[[i]]
-      last_time <- rt[rt$datetime_UTC == max(rt$datetime_UTC) ,]$datetime_UTC
+      last_time <- rt[rt$datetime == max(rt$datetime) ,]$datetime
       age <- difftime(Sys.time(), last_time, units = "hours")
-      latest <- stats::median(rt[rt$datetime_UTC <= last_time & rt$datetime_UTC >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
+      latest <- stats::median(rt[rt$datetime <= last_time & rt$datetime >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
       percent_historic <- round(((latest - snow_daily[[i]]$min) / (snow_daily[[i]]$max - snow_daily[[i]]$min)) * 100, 0)
-      percent_mean <- round(latest/snow_daily[[i]]$QP50 * 100, 0)
-      day <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*24 & rt$datetime_UTC >= last_time - 60*60*24.5 , ]$value) #median of 30 minutes
-      twoday <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*47.5 & rt$datetime_UTC >= last_time - 60*60*48.5 , ]$value) #median of 1 hour
-      threeday <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*71.5 & rt$datetime_UTC >= last_time - 60*60*72.5 , ]$value) #median of 1 hour
-      week <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*167 & rt$datetime_UTC >= last_time - 60*60*169 , ]$value) #median of 2 hours
+      percent_mean <- round(latest/snow_daily[[i]]$q50 * 100, 0)
+      day <- stats::median(rt[rt$datetime <= last_time - 60*60*24 & rt$datetime >= last_time - 60*60*24.5 , ]$value) #median of 30 minutes
+      twoday <- stats::median(rt[rt$datetime <= last_time - 60*60*47.5 & rt$datetime >= last_time - 60*60*48.5 , ]$value) #median of 1 hour
+      threeday <- stats::median(rt[rt$datetime <= last_time - 60*60*71.5 & rt$datetime >= last_time - 60*60*72.5 , ]$value) #median of 1 hour
+      week <- stats::median(rt[rt$datetime <= last_time - 60*60*167 & rt$datetime >= last_time - 60*60*169 , ]$value) #median of 2 hours
       if (is.na(week)){ #expand the range if no data within the 2 hour timespan
-        week <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*165 & rt$datetime_UTC >= last_time - 60*60*171 , ]$value)
+        week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
       yesterday_comment_snow <- if(yesterday_comments) yesterday$yesterday_locs$snow[yesterday$yesterday_locs$snow$Location == i, "Location.specific.comments"] else NA
 
@@ -539,9 +538,9 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                        ))
       }
       if (past > 7 & past <= 14){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
         snow <- rbind(snow,
                        data.frame("loc" = i,
@@ -561,13 +560,13 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                        ))
       }
       if (past > 14 & past <= 21){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
-        threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*503 & rt$datetime_UTC >= last_time - 60*60*505 , ]$value)
+        threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*503 & rt$datetime >= last_time - 60*60*505 , ]$value)
         if (is.na(threeweek)){
-          threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*497 & rt$datetime_UTC >= last_time - 60*60*511 , ]$value)
+          threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
         snow <- rbind(snow,
                        data.frame("loc" = i,
@@ -588,17 +587,17 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                        ))
       }
       if (past > 21){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
-        threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*503 & rt$datetime_UTC >= last_time - 60*60*505 , ]$value)
+        threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*503 & rt$datetime >= last_time - 60*60*505 , ]$value)
         if (is.na(threeweek)){
-          threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*497 & rt$datetime_UTC >= last_time - 60*60*511 , ]$value)
+          threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
-        fourweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*671 & rt$datetime_UTC >= last_time - 60*60*673 , ]$value)
+        fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*671 & rt$datetime >= last_time - 60*60*673 , ]$value)
         if (is.na(fourweek)){
-          fourweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*667 & rt$datetime_UTC >= last_time - 60*60*677 , ]$value)
+          fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*667 & rt$datetime >= last_time - 60*60*677 , ]$value)
         }
         snow <- rbind(snow,
                        data.frame("loc" = i,
@@ -640,17 +639,17 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     bridges <- data.frame()
     for (i in names(bridges_rt)){
       rt <- bridges_rt[[i]]
-      last_time <- rt[rt$datetime_UTC == max(rt$datetime_UTC) ,]$datetime_UTC
+      last_time <- rt[rt$datetime == max(rt$datetime) ,]$datetime
       age <- difftime(Sys.time(), last_time, units = "hours")
-      latest <- stats::median(rt[rt$datetime_UTC <= last_time & rt$datetime_UTC >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
+      latest <- stats::median(rt[rt$datetime <= last_time & rt$datetime >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
       percent_historic <- round(((latest - bridges_daily[[i]]$min) / (bridges_daily[[i]]$max - bridges_daily[[i]]$min)) * 100, 0)
-      percent_mean <- round(((latest - bridges_daily[[i]]$min) / (bridges_daily[[i]]$QP50 - bridges_daily[[i]]$min)) * 100, 0)
-      day <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*24 & rt$datetime_UTC >= last_time - 60*60*24.5 , ]$value) #median of 30 minutes
-      twoday <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*47.5 & rt$datetime_UTC >= last_time - 60*60*48.5 , ]$value) #median of 1 hour
-      threeday <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*71.5 & rt$datetime_UTC >= last_time - 60*60*72.5 , ]$value) #median of 1 hour
-      week <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*167 & rt$datetime_UTC >= last_time - 60*60*169 , ]$value) #median of 2 hours
+      percent_mean <- round(((latest - bridges_daily[[i]]$min) / (bridges_daily[[i]]$q50 - bridges_daily[[i]]$min)) * 100, 0)
+      day <- stats::median(rt[rt$datetime <= last_time - 60*60*24 & rt$datetime >= last_time - 60*60*24.5 , ]$value) #median of 30 minutes
+      twoday <- stats::median(rt[rt$datetime <= last_time - 60*60*47.5 & rt$datetime >= last_time - 60*60*48.5 , ]$value) #median of 1 hour
+      threeday <- stats::median(rt[rt$datetime <= last_time - 60*60*71.5 & rt$datetime >= last_time - 60*60*72.5 , ]$value) #median of 1 hour
+      week <- stats::median(rt[rt$datetime <= last_time - 60*60*167 & rt$datetime >= last_time - 60*60*169 , ]$value) #median of 2 hours
       if (is.na(week)){ #expand the range if no data within the 2 hour timespan
-        week <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*165 & rt$datetime_UTC >= last_time - 60*60*171 , ]$value)
+        week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
       yesterday_comment_bridges <- if(yesterday_comments) yesterday$yesterday_locs$bridges[yesterday$yesterday_locs$bridges$Location == i, "Location.specific.comments"] else NA
 
@@ -673,9 +672,9 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                       ))
       }
       if (past > 7 & past <= 14){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
         bridges <- rbind(bridges,
                       data.frame("loc" = i,
@@ -695,13 +694,13 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                       ))
       }
       if (past > 14 & past <= 21){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
-        threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*503 & rt$datetime_UTC >= last_time - 60*60*505 , ]$value)
+        threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*503 & rt$datetime >= last_time - 60*60*505 , ]$value)
         if (is.na(threeweek)){
-          threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*497 & rt$datetime_UTC >= last_time - 60*60*511 , ]$value)
+          threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
         bridges <- rbind(bridges,
                       data.frame("loc" = i,
@@ -722,17 +721,17 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
                       ))
       }
       if (past > 21){
-        twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*335 & rt$datetime_UTC >= last_time - 60*60*337 , ]$value)
+        twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
         if (is.na(twoweek)){
-          twoweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*331 & rt$datetime_UTC >= last_time - 60*60*341 , ]$value)
+          twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
-        threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*503 & rt$datetime_UTC >= last_time - 60*60*505 , ]$value)
+        threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*503 & rt$datetime >= last_time - 60*60*505 , ]$value)
         if (is.na(threeweek)){
-          threeweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*497 & rt$datetime_UTC >= last_time - 60*60*511 , ]$value)
+          threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
-        fourweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*671 & rt$datetime_UTC >= last_time - 60*60*673 , ]$value)
+        fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*671 & rt$datetime >= last_time - 60*60*673 , ]$value)
         if (is.na(fourweek)){
-          fourweek <- stats::median(rt[rt$datetime_UTC <= last_time - 60*60*667 & rt$datetime_UTC >= last_time - 60*60*677 , ]$value)
+          fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*667 & rt$datetime >= last_time - 60*60*677 , ]$value)
         }
         bridges <- rbind(bridges,
                       data.frame("loc" = i,
