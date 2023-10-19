@@ -16,10 +16,11 @@
 #TODO:
 
 # For testing
-# year <- 2022
-# month <- c(3, 4, 5) # c(3)
-# threshold <- 6
-
+# test <- SWE_basin(year=2023,
+#            month=3,
+#            threshold = 7,
+#            csv = FALSE,
+#            summarise = TRUE)
 
 SWE_basin <-
   function(year,
@@ -31,7 +32,10 @@ SWE_basin <-
     con <- hydrometConnect()
     Meas <-
       DBI::dbGetQuery(con,
-                      "SELECT location, value, target_date FROM discrete WHERE parameter = 'SWE'")
+                      "SELECT timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime
+                      FROM measurements_discrete
+                      INNER JOIN timeseries ON measurements_discrete.timeseries_id = timeseries.timeseries_id
+                      WHERE parameter = 'SWE'")
     DBI::dbDisconnect(con)
     # Rename columns:
     colnames(Meas) <- c("location_id", "SWE", "target_date")
@@ -76,7 +80,8 @@ SWE_basin <-
       for (b in basins) {
         # subset factors to only what we need
         fact <- Factors %>% dplyr::select(tidyselect::all_of(c(b, "location_id"))) %>%
-          dplyr::rename(.data$val == b) %>% dplyr::filter(.data$val != 0)
+          dplyr::rename(val = b) %>%
+          dplyr::filter(.data$val != 0)
         # Go through each location one by one
         sweb <- stats::setNames(data.frame(matrix(ncol = 3, nrow = 0)),
                          c("location_id", "swe", "perc"))
