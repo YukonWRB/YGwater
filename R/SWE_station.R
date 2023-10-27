@@ -18,7 +18,7 @@
 # test <- SWE_station(year=2023,
 #            month=3,
 #            csv = FALSE,
-#            return_missing = TRUE)
+#            return_missing = FALSE)
 
 SWE_station <-
   function(year,
