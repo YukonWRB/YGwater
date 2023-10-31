@@ -14,10 +14,6 @@
 #' @export
 #'
 
-# TODO: (2) Check that all sites exist in snow db.
-#       Mayo Airport C, AK Border, Herschel Island, Komakuk, NWT/YK Border, Stakes, Shingle Point, Twin Creeks B Snow Scale, Withers Pillow, Withers Scale, Tagish Snow Scale, Tagish Snow Pillow, Hyland Snow Scale, Buckbrush Snow Scales, Whitehorse Airport A, Whitehorse Airport B (only Whitehorse Airport)
-#              - Do we want the snow scale data in the db?
-#              -
 # TODO: (3) add conditional formatting to summary sheet to colour when QAQC is complete
 # TODO: (4) Link in summary to sheet
 
@@ -129,15 +125,19 @@ openxlsx::removeWorksheet(template, "Sheet1")
   # Create hyperlink
   for (s in 1:length(courses)) {
     openxlsx::writeFormula(template, sheet="Summary",
-                            #x = '=HYPERLINK("#Casino_Creek!D4", "Casino Creek")',
-                          # x = cat(paste0("'=HYPERLINK(\"#", courses2[s], "!D4\", \"", courses[s], "\")'")),
-                          # x=openxlsx::makeHyperlinkString(sheet="Casino Creek", row = 4, col = 4, text = courses[s], file=NULL),
                           x = paste0("=HYPERLINK(", '"#', "'", courses2[s], "'", '!D4", "', courses[s], '")'),
                            startCol=10, startRow=2+s)
   }
-  # for (s in 1:length(courses)) {
-  #   hyper <- openxlsx::makeHyperlinkString(sheet="Summary", row = 2+s, col = 10, text = course[s])
-  # }
+
+  # Add hyperlink to each page
+  for (s in 1:length(courses2)) {
+    # openxlsx::writeFormula(template, sheet=courses2[s],
+    #                        x = paste0("=HYPERLINK(", '"#', "'Summary'", '!A', 2+s, '", "', courses[s], '")'),
+    #                        startCol=2, startRow=1)
+    openxlsx::writeFormula(template, sheet=courses2[s],
+                           x = paste0("=HYPERLINK(", '"#', "'Summary'", '!A', 2+s, '", "Link to summary sheet")'),
+                           startCol=2, startRow=1)
+  }
 
 # Write new template (template_test)
 openxlsx::saveWorkbook(template, file=paste0(path, "template_test.xlsx"), overwrite = TRUE)
