@@ -30,6 +30,7 @@
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
+#' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
 #' @param return_months Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within `startDay` and `endDay`, but will only consider data up to the last year specified in `years`. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of [fasstr::calc_annual_extremes()] and also used to set the 'water_year_start' parameter of this function.
@@ -51,6 +52,7 @@ hydrometContinuous <- function(location,
                                years = NULL,
                                datum = TRUE,
                                title = TRUE,
+                               custom_title = NULL,
                                returns = "auto",
                                return_type = "max",
                                return_months = c(5:9),
@@ -468,10 +470,16 @@ hydrometContinuous <- function(location,
 
   # Wrap things up and return() -----------------------
   if (title == TRUE){
-    stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
-    plot <- plot +
-      ggplot2::labs(title=paste0("Location ", location, ": ", stn_name)) +
-      ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
+    if (is.null(custom_title) == TRUE) {
+      stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
+      plot <- plot +
+        ggplot2::labs(title=paste0("Location ", location, ": ", stn_name)) +
+        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
+    } else if (is.null(custom_title) == FALSE) {
+      plot <- plot +
+        ggplot2::labs(title=custom_title) +
+        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
+    }
   }
 
   #Save it if requested
