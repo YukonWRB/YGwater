@@ -12,6 +12,7 @@ hydrometDiscrete(
   tzone = "MST",
   years = NULL,
   title = TRUE,
+  custom_title = NULL,
   plot_type = "violin",
   plot_scale = 1,
   save_path = NULL,
@@ -33,6 +34,8 @@ hydrometDiscrete(
 \item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.}
 
 \item{title}{Should a title be included?}
+
+\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
 
 \item{plot_type}{Choose from "violin" , "boxplot" or "linedbox".}
 

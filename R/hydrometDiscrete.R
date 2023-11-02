@@ -16,6 +16,7 @@
 #' @param tzone The timezone to use for fetching data. Datetimes are stored in the database in UTC offset, so this parameter could make a difference to what day a particular sample is considered to be on. In most cases you can ignore this parameter.
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
 #' @param title Should a title be included?
+#' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
 #' @param plot_type Choose from "violin" , "boxplot" or "linedbox".
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
@@ -31,6 +32,7 @@ hydrometDiscrete <- function(location=NULL,
                              tzone = "MST",
                              years = NULL,
                              title = TRUE,
+                             custom_title = NULL,
                              plot_type = "violin",
                              plot_scale = 1,
                              save_path = NULL,
@@ -205,13 +207,13 @@ hydrometDiscrete <- function(location=NULL,
   if (plot_type == 'linedbox') {
     stats_discrete <- all_discrete %>%
       dplyr::group_by(.data$month) %>%
-      dplyr::summarise(value = min(.data$value), .data$type == "min") %>%
+      dplyr::summarise(value = min(.data$value), type = "min") %>%
       dplyr::bind_rows(all_discrete %>%
                   dplyr::group_by(.data$month) %>%
-                  dplyr::summarise(value = max(.data$value), .data$type == "max")) %>%
+                  dplyr::summarise(value = max(.data$value), type = "max")) %>%
       dplyr::bind_rows(all_discrete %>%
                   dplyr::group_by(.data$month) %>%
-                  dplyr::summarise(value = stats::median(.data$value), .data$type == "median"))
+                  dplyr::summarise(value = stats::median(.data$value), type = "median"))
     stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
   }
 
@@ -249,17 +251,19 @@ hydrometDiscrete <- function(location=NULL,
 
   # Wrap things up and return() -----------------------
   if (title == TRUE){
-    if (is.null(discrete_data)){
-      stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
-      titl <- paste0("Location ", location, ": ", stn_name)
-    } else {
-      if (!is.null(location)) {
-        titl <- paste0("Location: ", location)}
-      else {
-        titl <- paste0("Location: ", unique(all_discrete$location))
+    if (is.null(custom_title) == TRUE) {
+      if (is.null(discrete_data)){
+        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
+        titl <- paste0("Location ", location, ": ", stn_name)
+      } else {
+        if (!is.null(location)) {
+          titl <- paste0("Location: ", location)}
+        else {
+          titl <- paste0("Location: ", unique(all_discrete$location))
+        }
       }
+    } else (titl <- custom_title)
 
-    }
 
     plot <- plot +
       ggplot2::labs(title=titl) +
