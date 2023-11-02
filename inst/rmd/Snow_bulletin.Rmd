@@ -167,11 +167,11 @@ snowbullWater <- function(location, parameter, years, custom_title) {
 }
 
 # Function to create basin SWE boxplots
-snowbullSWE <- function(loc, basin, year, swe_basins) {
+snowbullSWE <- function(loc, basin, year, swe_basins, custom_title) {
   # Subset data
   swe_basin <- swe_basins[swe_basins$location==basin,]
   # Plot
-  hydrometDiscrete(location = loc, parameter = "SWE", startDay = 1, tzone = "MST", years = c(year), title = FALSE, plot_type = "linedbox", plot_scale = 1, save_path = NULL, discrete_data = swe_basin, con = hydrometConnect(silent=TRUE))
+  hydrometDiscrete(location = loc, parameter = "SWE", startDay = 1, tzone = "MST", years = c(year), title = TRUE, custom_title = custom_title, plot_type = "linedbox", plot_scale = 1, save_path = NULL, discrete_data = swe_basin, con = hydrometConnect(silent=TRUE))
 }
 
 ```
@@ -414,6 +414,7 @@ plot <- hydrometDiscrete2(location = "all basins", parameter = "SWE", startDay =
 
 ## Upper Yukon river basin (Southern lakes / Whitehorse)
 ```{r Upper Yukon, echo=FALSE}
+# Run or don't run following chunks
 if ("Upper Yukon" %in% params$basins) {
   include <- TRUE
 } else {
@@ -458,7 +459,7 @@ hydrometContinuous(
 # B
 # Plotting 
 snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Upper Yukon Basin Monthly Snow Course Data")
 ``` 
 
 ```{r MonthlyPrecip, echo=FALSE}
@@ -512,7 +513,7 @@ if ("Teslin" %in% params$basins) {
 # B
 # Plotting
 snowbullSWE(loc= "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Teslin - Big Salmon Basin Monthly Snow Course Data")
 ``` 
 
 ```{r TeslinLake, echo=FALSE, eval=include, fig.width=10}
@@ -539,7 +540,7 @@ if ("Central Yukon" %in% params$basins) {
 # B
 # Plotting
 snowbullSWE(loc= "Central Yukon", basin = "Central_Yukon",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Central Yukon Basin Monthly Snow Course Data")
 ``` 
 
 ```{r Nordenskiold, echo=FALSE, eval=include, fig.width=10}
@@ -583,7 +584,7 @@ hydrometContinuous(
 # B
 # Plotting 
 snowbullSWE(loc= "Pelly", basin = "Pelly",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Pelly Basin Monthly Snow Course Data")
 ``` 
 
 ```{r PellyRiver, echo=FALSE, eval=include, fig.width=10}
@@ -627,7 +628,7 @@ hydrometContinuous(
 # B
 # Plotting 
 snowbullSWE(loc= "Stewart", basin = "Stewart",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Stewart Basin Monthly Snow Course Data")
 ``` 
 
 ```{r StewartRiver, echo=FALSE, eval=include, fig.width=10}
@@ -654,7 +655,7 @@ if ("White" %in% params$basins) {
 # B
 # Plotting 
 snowbullSWE(loc= "White", basin = "White",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "White Basin Monthly Snow Course Data")
 ``` 
 
 ```{r WhiteRiver, echo=FALSE, eval=include, fig.width=10}
@@ -695,7 +696,7 @@ hydrometDiscrete(
 # B
 # Plotting 
 snowbullSWE(loc= "Lower Yukon", basin = "Lower_Yukon",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Lower Yukon Basin Monthly Snow Course Data")
 ``` 
 
 ```{r Dawson_CDDF, echo=FALSE, eval=include}
@@ -734,7 +735,7 @@ if ("Porcupine" %in% params$basins) {
 # B
 # Plotting 
 snowbullSWE(loc= "Porcupine", basin = "Porcupine",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Porcupine Basin Monthly Snow Course Data")
 ``` 
 
 ```{r PorcupineRiver, echo=FALSE, eval=include, fig.width=10}
@@ -761,7 +762,7 @@ if ("Peel" %in% params$basins) {
 # B
 # Plotting 
 snowbullSWE(loc= "Peel", basin = "Peel",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Peel Basin Monthly Snow Course Data")
 ``` 
 
 ```{r PeelRiver, echo=FALSE, eval=include, fig.width=10}
@@ -805,7 +806,7 @@ hydrometContinuous(
 # B
 # Plotting 
 snowbullSWE(loc= "Liard", basin = "Liard",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Liard Basin Monthly Snow Course Data")
 ``` 
 
 ```{r LiardRiver, echo=FALSE, eval=include, fig.width=10}
@@ -832,7 +833,7 @@ if ("Alsek" %in% params$basins) {
 # B
 # Plotting 
 snowbullSWE(loc= "Alsek", basin = "Alsek",
-            year = 2023, swe_basins = swe_basins)
+            year = 2023, swe_basins = swe_basins, custom_title = "Alsek Basin Monthly Snow Course Data")
 ``` 
 
 ```{r AlsekRiver, echo=FALSE, eval=include, fig.width=10}

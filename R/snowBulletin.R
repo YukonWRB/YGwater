@@ -22,6 +22,7 @@
 
 #TODO:
 
+# base::file.choose()
 # snowBulletin(sub_basin_name = "Upper Yukon", year = 2023, save_path = "choose")
 
 snowBulletin <-
