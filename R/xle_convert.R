@@ -23,7 +23,7 @@ xle_convert <- function(xle_file = "choose",
 {
 
   if (YOWN_master == "default") {
-    YOWN_master <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/MASTER for R - remember to update.xlsx"
+    YOWN_master <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
   }
 
   if (xle_file == "choose"){
@@ -202,7 +202,7 @@ xle_convert <- function(xle_file = "choose",
   for (i in 1:length(df)) {
     curr_name <- names(df)[i]
     if (stringr::str_detect(curr_name, "ch.")) { # If column name has ch we are looking at LTC/LT/BL vals
-      check_row <- dplyr::filter(check, grepl(curr_name, "section_name", ignore.case = TRUE))# Row containing info we need, including parameter name, multiplier, proper unit
+      check_row <- dplyr::filter(check, grepl(curr_name, section_name, ignore.case = TRUE))# Row containing info we need, including parameter name, multiplier, proper unit
       colnames(df)[i] <- c(check_row$parameter) # Give column in df proper name
       # Unit conversion if needed
       if (!is.na(check_row$multiplier)) {
