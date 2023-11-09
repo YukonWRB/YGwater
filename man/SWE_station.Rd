@@ -4,7 +4,13 @@
 \alias{SWE_station}
 \title{Calculates snow survey stats for stations}
 \usage{
-SWE_station(year, month, csv = FALSE, return_missing = FALSE)
+SWE_station(
+  year,
+  month,
+  csv = FALSE,
+  return_missing = FALSE,
+  source = "hyromet"
+)
 }
 \arguments{
 \item{year}{The year of interest. The stats will be calculated based on all years prior to 'year'.}
@@ -14,6 +20,8 @@ SWE_station(year, month, csv = FALSE, return_missing = FALSE)
 \item{csv}{TRUE or FALSE. If TRUE, a csv will be created.}
 
 \item{return_missing}{TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.}
+
+\item{source}{Database from which to fetch this data. Options are: hydromet or snow.}
 }
 \value{
 A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.

@@ -1,9 +1,9 @@
 ---
-title: "Snow_bulletin"
+title: "Yukon Snow Survey \n Bulletin & Water \n Supply Forecast"
 #output: html_document
 output: 
   word_document:
-      reference_docx: style_template.docx
+      reference_docx: style_template2.docx
 date: "2023-09-18"
 params:
   year: year
@@ -175,6 +175,7 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title) {
 }
 
 ```
+
 ```{r SWEbasins, include=FALSE}
 # Get SWE data for basins 
 swe_basins <- YGwater::SWE_basin(year <- 2023,
@@ -183,8 +184,19 @@ swe_basins <- YGwater::SWE_basin(year <- 2023,
                                    csv = FALSE,
                                    summarise = FALSE)
 ```
-
+\newpage
   
+# PREFACE
+The Department of Environment’s Water Resources Branch issues the Yukon Snow Survey Bulletin and Water Supply Forecast three times annually – early March, April and May. The bulletin provides a summary of winter meteorological and streamflow conditions for the Yukon, as well as current snow depth and snow water equivalent observations for 57 locations. This information is used to evaluate the potential for spring flooding caused by both breakup ice jams and large spring snowmelt (freshet) flows. It is important to note that other processes such as summer rain and glacier melt can significantly influence maximum annual water levels in specific Yukon basins. March weather conditions for the Yukon are presented in two maps, one showing temperature anomalies (deviation from climate normals), and another showing precipitation anomalies. Territory-wide snowpack data are presented in a third map showing snow water equivalent (SWE) as a percent of historical median for each station, as well as the basinaveraged estimated SWE for 11 watersheds (or river basins). Complementary meteorological and hydrological data are presented for each basin through a series of five graphs, depending on data availability:
+
+* __Figure A:__ Daily Snow Water Equivalent (SWE) data starting in September at one specific location in the watershed, showing an overview of winter snowpack evolution.
+* __Figure B:__ Current, basin-averaged, estimated Snow Water Equivalent (SWE) from snow survey data, compared with historical data, serving as an indicator of potential runoff volumes in the spring (acknowledging that snow sublimation, evapotranspiration, rain and glacier melt also significantly affect runoff).
+* __Figure C:__ Monthly winter precipitation (rain and/or snow) compared with historical data (1980-2022 period of record), complementing the information presented in Figure B.
+* __Figure D:__ Cumulated degree-days of freezing (CDDF, sum of negative daily temperatures) compared with historical data, functioning as an indicator of winter coldness and overall river ice thickness; variables that influence river ice breakup scenarios in the spring.
+* __Figure E:__ Current, estimated daily discharge or measured water level, compared with historical data, representing an overview of the watershed hydrological conditions.
+
+
+
 ## All basins
 ```{r All_basins, echo=FALSE, fig.width=10}
 # Box plot of SWE of all basins
@@ -468,12 +480,12 @@ snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
 
 ```{r Whitehorse_CDDF, echo=FALSE}
 # D
-# Get climate data
-# combined_data <- combineWeather(stations=list("2100LRP", "2100402"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
-# combined_data <- combineWeather(stations=list(combined_data, "2100407"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
-# combined_data <- combineWeather(stations=list(combined_data, "2100400"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
-# combined_data <- combineWeather(stations=list(combined_data, "2101062"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
-# # Calculate CDDF
+#Get climate data
+combined_data <- combineWeather(stations=list("2100LRP", "2100402"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2100407"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2100400"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+combined_data <- combineWeather(stations=list(combined_data, "2101062"), start='1978-01-01', end='2023-05-01', variable="mean_temp", months=NULL)
+# Calculate CDDF
 
 
 ``` 
