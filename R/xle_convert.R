@@ -19,6 +19,8 @@ xle_convert <- function(xle_file = "choose",
                         location,
                         save_path = "choose"){
 
+
+
   if (xle_file == "choose"){
     print("Select the path to the logger file.")
     xle_file <- as.character(utils::choose.files(caption="Select logger file"))
