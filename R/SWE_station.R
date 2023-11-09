@@ -8,7 +8,7 @@
 #' @param month The month of interest. Options are 3, 4 and 5 for March, April and May, respectively. Historical stats are given for the first day of this month.
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
 #' @param return_missing TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.
-#'
+#' @param source Database from which to fetch this data. Options are: hydromet or snow.
 #' @return A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.
 #' @export
 
@@ -18,29 +18,58 @@
 # test <- SWE_station(year=2023,
 #            month=3,
 #            csv = FALSE,
-#            return_missing = FALSE)
+#            return_missing = TRUE, source = "snow")
 
 SWE_station <-
   function(year,
            month,
            csv = FALSE,
-           return_missing = FALSE) {
+           return_missing = FALSE,
+           source = "hyromet") {
 
-    # Retrieve data from db
-    con <- hydrometConnect()
+    ## From hydromet ##
+    if (source == "hydromet") {
+      # Retrieve data from db
+      con <- hydrometConnect()
 
-    # Get measurements
-    Meas <- DBI::dbGetQuery(con,
-                            "SELECT locations.name, timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, timeseries.parameter
+      # Get measurements
+      Meas <- DBI::dbGetQuery(con,
+                              "SELECT locations.name, timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, timeseries.parameter
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
                       INNER JOIN locations ON timeseries.location=locations.location
                       WHERE timeseries.parameter = 'SWE' OR timeseries.parameter = 'snow depth'"
-    )
+      )
 
-    DBI::dbDisconnect(con)
-    # Rename columns:
-    colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter")
+      DBI::dbDisconnect(con)
+      # Rename columns:
+      colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter")
+    } else if (source == "snow") {
+      # Retrieve data from db
+      con <- snowConnect()
+
+      # Get measurements
+      Meas <- DBI::dbGetQuery(con, "SELECT locations.name, means.location, means.swe, means.depth, surveys.target_date, means.sample_datetime
+                         FROM means
+                         INNER JOIN locations ON means.location=locations.location
+                         INNER JOIN surveys on means.survey_id=surveys.survey_id")
+      DBI::dbDisconnect(con)
+
+      # Reformat table
+      Meas <- reshape2::melt(Meas, id.vars=c("name", "location", "target_date", "sample_datetime"), variable.name = "parameter", value.name="value")
+
+      # Set swe upper case
+      Meas$parameter <- as.character(Meas$parameter)
+      Meas$parameter[Meas$parameter == "swe"] <- "SWE"
+
+      # Change column names
+      colnames(Meas) <- c("location_name", "location_id", "target_date", "sample_date", "parameter", "value")
+
+      # Extract date from sample_datetime
+      Meas$sample_date <- as.Date(Meas$sample_date)
+
+    } else {stop("Parameter 'source' must be either 'hydromet' or 'snow'")}
+
 
     # Add Day, Month and Year columns to the Meas dataframe:
     Meas$mon <- lubridate::month(Meas$target_date)
