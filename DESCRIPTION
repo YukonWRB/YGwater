@@ -77,6 +77,8 @@ Suggests:
     imager,
     knitr,
     purrr
+Remotes:
+    github::ropensci/weathercan
 VignetteBuilder: 
     knitr
 Config/testthat/edition: 3
