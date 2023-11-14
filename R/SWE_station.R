@@ -12,12 +12,12 @@
 #' @return A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.
 #' @export
 
-#TODO: (1) Add units and parameter to table (2) Create tests
+#TODO: (1) Add units and parameter to table (2) Create tests (2) query more than 1 month
 
-# For testing
+# # For testing
 # test <- SWE_station(year=2023,
-#            month=3,
-#            csv = FALSE,
+#            month=c(3),
+#            csv = TRUE,
 #            return_missing = TRUE, source = "snow")
 
 SWE_station <-
@@ -61,6 +61,7 @@ SWE_station <-
       # Set swe upper case
       Meas$parameter <- as.character(Meas$parameter)
       Meas$parameter[Meas$parameter == "swe"] <- "SWE"
+      Meas$parameter[Meas$parameter == "depth"] <- "snow depth"
 
       # Change column names
       colnames(Meas) <- c("location_name", "location_id", "target_date", "sample_date", "parameter", "value")
