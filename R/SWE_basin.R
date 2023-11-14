@@ -9,7 +9,7 @@
 #' @param threshold A number between 1 and 10 giving the threshold below which the SWE for that basin and year are ignored. These numbers represent the sum of the factors of the stations for a basin which are not missing data for that year. 10 means that the swe values calculated from less than all the stations of that basin are ignored. 1 means that only the swe calculated from less than 1 out of 10 are ignored.
 #' @param summarise Summarises the data into a dataframe with the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
-#'
+#' @param source Database from which to fetch this data. Options are: hydromet or snow.
 #' @return A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
 #' @export
 
@@ -20,25 +20,39 @@
 #            month=3,
 #            threshold = 7,
 #            csv = FALSE,
-#            summarise = TRUE)
+#            summarise = TRUE,
+#            source = 'snow')
 
 SWE_basin <-
   function(year,
            month,
            threshold = 7,
            csv = FALSE,
-           summarise = FALSE) {
-    ### Retrieve data from db
-    con <- hydrometConnect()
-    Meas <-
-      DBI::dbGetQuery(con,
-                      "SELECT timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime
+           summarise = FALSE,
+           source = "hydromet") {
+    ### Retrieve data from hydromet db
+    if (source == "hydromet") {
+      con <- hydrometConnect()
+      Meas <-
+        DBI::dbGetQuery(con,
+                        "SELECT timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id = timeseries.timeseries_id
                       WHERE parameter = 'SWE'")
-    DBI::dbDisconnect(con)
-    # Rename columns:
-    colnames(Meas) <- c("location_id", "SWE", "target_date")
+      DBI::dbDisconnect(con)
+      # Rename columns:
+      colnames(Meas) <- c("location_id", "SWE", "target_date")
+    } else if (source == "snow") {
+      ### Retrieve data from snow db
+      con <- snowConnect()
+      test <- DBI::dbGetQuery(con, "SELECT means.location, means.swe, surveys.target_date
+                            FROM means
+                            INNER JOIN surveys on means.survey_id = surveys.survey_id")
+      DBI::dbDisconnect(con)
+      # Rename columns:
+      colnames(Meas) <- c("location_id", "SWE", "target_date")
+    } else {stop("Parameter 'source' must be either 'hydromet' or 'snow'")}
+
     ###### PART 1. Aggregate SWE by basin and year ######
     # 1. Import the Factors table: To use location_numS and Weights for basin-scale SWE estimates:
     # Factors <-

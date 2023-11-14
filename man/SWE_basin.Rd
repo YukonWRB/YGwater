@@ -4,7 +4,14 @@
 \alias{SWE_basin}
 \title{Calculates snow survey stats for basins}
 \usage{
-SWE_basin(year, month, threshold = 7, csv = FALSE, summarise = FALSE)
+SWE_basin(
+  year,
+  month,
+  threshold = 7,
+  csv = FALSE,
+  summarise = FALSE,
+  source = "hydromet"
+)
 }
 \arguments{
 \item{year}{The year of interest. If summarise = TRUE, the stats will be calculated based on all years prior to 'year'. If summarise = FALSE, only data from the current year and before are taken.}
@@ -16,6 +23,8 @@ SWE_basin(year, month, threshold = 7, csv = FALSE, summarise = FALSE)
 \item{csv}{TRUE or FALSE. If TRUE, a csv will be created.}
 
 \item{summarise}{Summarises the data into a dataframe with the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.}
+
+\item{source}{Database from which to fetch this data. Options are: hydromet or snow.}
 }
 \value{
 A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
