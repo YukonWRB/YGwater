@@ -43,6 +43,8 @@
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
 #' @export
 #'
+#'
+# hydrometContinuous(location='09EA004', parameter = "flow", startDay = "2023-10-01", endDay = "2023-12-20", tzone = "MST", years = 2023, datum = TRUE, title = TRUE, custom_title = NULL, returns = "auto", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
 hydrometContinuous <- function(location,
                                parameter,
@@ -66,16 +68,16 @@ hydrometContinuous <- function(location,
   # Commented code below is for testing...
   # location = "09EA004"
   # parameter = "flow"
-  # startDay = "2022-01-01"
-  # endDay = "2022-12-31"
+  # startDay = "2023-10-01"
+  # endDay = "2023-12-20"
   # tzone = "MST"
-  # years = c(2022)
+  # years = c(2023)
   # datum = TRUE
   # title = TRUE
   # returns = "calculate"
   # return_type = "max"
   # return_months = c(9,10)
-  # return_max_year = max(years)-1
+  # return_max_year = 2022
   # allowed_missing = 10
   # plot_scale = 1
   # save_path = NULL
@@ -191,6 +193,8 @@ hydrometContinuous <- function(location,
   daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", as.character(daily_end), "';"))
   daily$date <- as.POSIXct(daily$date, tz = tzone) #to posixct and not date so that it plays well with realtime df
   names(daily)[names(daily) == "date"] <- "datetime"
+
+##-----------------------------------------------------------------------------
   for (i in rev(years)){ #Using rev so that the most recent year gets realtime, if possible
     start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
     start_UTC <- start
@@ -227,6 +231,7 @@ hydrometContinuous <- function(location,
       realtime <- rbind(realtime, new_realtime)
     }
   }
+##-----------------------------------------------------------------------------
   #Find out where values need to be filled in with daily means
   if (length(dates) > 0){
     for (i in 1:length(dates)){

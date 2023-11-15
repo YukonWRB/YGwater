@@ -55,7 +55,7 @@ if (circuit == "PellyFarm") {
 }
 # Snow scale/pillow locations not in db. Twin Creeks not in hydromet, but in snow db
 if (circuit == "Ross") {
-  courses <- c("Bonnet Plume Lake", "Burns Lake", "Edwards Lake", "Finlayson Airstrip", "Ford Lake", "Fuller Lake", "Hoole River", "Jordan Lake", "Plata Airstrip", "Rackla Lake", "Rose Creek", "Russell Lake", "Tintina Airstrip", "Twin Creeks B", "Withers Lake", "Twin Creeks A", "Twin Creeks B Snow Scale", "Withers Pillow", "Withers Scale") #
+  courses <- c("Bonnet Plume Lake", "Burns Lake", "Edwards Lake", "Finlayson Airstrip", "Ford Lake", "Fuller Lake", "Hoole River", "Jordan Lake", "Plata Airstrip", "Rackla Lake", "Rose Creek", "Russell Lake", "Tintina Airstrip", "Twin Creeks A", "Twin Creeks B", "Withers Lake", "Twin Creeks B Snow Scale", "Withers Pillow", "Withers Scale") #
 }
 # Snow scale/pillow locations not in db.
 if (circuit == "SLakes") {
@@ -77,6 +77,8 @@ if (circuit == "YEC") {
 }
 
 #### ------------ Add sheet for each snow course of the circuit ----------- ####
+# Put courses in alphabetical order
+  courses <- sort(courses)
 # Add _ to worksheet names and remove '
   courses2 <- gsub(" ", "_", courses)
   courses2 <- gsub("'", "", courses2)
@@ -97,7 +99,7 @@ openxlsx::removeWorksheet(template, "Sheet1")
   # Pull data from hydro database
   summary <- SWE_station(year = as.numeric(substr(target_date, start = 1, stop = 4)),
                          month = as.numeric(substr(target_date, start = 7, stop = 7)),
-                         return_missing = TRUE)
+                         return_missing = TRUE, source = "snow")
   # Subset to locations of interest and columns of interest
   summary <- summary[summary$location_name %in% courses, c("location_name", "location_id", "swe_prevyear", "swe_med")]
   # Add locations to summary that are not in database
@@ -114,7 +116,7 @@ openxlsx::removeWorksheet(template, "Sheet1")
   # Add formula to get values from other sheets
   # Sample date
   for (s in 1:length(courses)) {
-    openxlsx::writeFormula(template, sheet="Summary", x=paste0("='", courses2[s], "'!D7"), startCol=3, startRow=2+s)
+    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IF(ISBLANK('", courses2[s], "'!D7), ", '"", ', "'", courses2[s], "'!D7)"), startCol=3, startRow=2+s)
   }
   # Depth
   for (s in 1:length(courses)) {
@@ -126,11 +128,11 @@ openxlsx::removeWorksheet(template, "Sheet1")
   }
   # SWE
   for (s in 1:length(courses)) {
-    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IF('", courses2[s], "'!D9=", '"bulk", ', "'", courses2[s], "'!G23*10, '", courses2[s], "'!G25*10)"), startCol=6, startRow=2+s)
+    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IFERROR(IF('", courses2[s], "'!D9=", '"bulk", ', "'", courses2[s], "'!G23*10, '", courses2[s], "'!G25*10), ", '"")'), startCol=6, startRow=2+s)
   }
   # SWE ratio
   for (s in 1:length(courses)) {
-    openxlsx::writeFormula(template, sheet="Summary", x=paste0("= F", 2+s, "/H", 2+s, "*100"), startCol=9, startRow=2+s)
+    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IFERROR(F", 2+s, "/H", 2+s, "*100, ", '"")'), startCol=9, startRow=2+s)
   }
   # Create hyperlink
   for (s in 1:length(courses)) {
@@ -146,7 +148,7 @@ openxlsx::removeWorksheet(template, "Sheet1")
   }
   # Add QAQC yes/no
   for (s in 1:length(courses)) {
-    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IF(ISBLANK('", courses2[s], "'!L23), ",'"no", "yes")'), startCol=11, startRow=2+s)
+    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IF(ISBLANK('", courses2[s], "'!L25), ",'"no", "yes")'), startCol=11, startRow=2+s)
   }
 
 # Write new template (template_test)
