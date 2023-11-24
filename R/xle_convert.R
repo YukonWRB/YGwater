@@ -17,14 +17,9 @@
 #'
 xle_convert <- function(xle_file = "choose",
                         location,
-                        save_path = "choose",
-                        YOWN_master = "default"
-)
-{
+                        save_path = "choose"){
 
-  if (YOWN_master == "default") {
-    YOWN_master <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
-  }
+
 
   if (xle_file == "choose"){
     print("Select the path to the logger file.")
@@ -56,7 +51,7 @@ xle_convert <- function(xle_file = "choose",
     user_name <- "no match"
   }
   # Read in master sheet
-  yown_stn_names <- dplyr::filter(openxlsx::read.xlsx(YOWN_master, sheet = 1),
+  yown_stn_names <- dplyr::filter(openxlsx::read.xlsx("//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx", sheet = 1),
                            !is.na(.data$`YOWN.Code`), !is.na(.data$`Name`))
   possible_names <- c() #create an empty vector
   for (i in 1:nrow(yown_stn_names)) { # If the YOWN-xxxx provided by user matches a row in the master xlsx OR if the station name provided matches loosely with a row, save that station's code and name in possible_names
