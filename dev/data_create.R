@@ -20,7 +20,10 @@ spatial_stns <- read.csv("data-raw/spatial_stns.csv")
 peaks <- read.csv("data-raw/peaks.csv")
 flow_level_flood <- read.csv("data-raw/flow_level_flood.csv")
 snowcourse_factors <- read.csv("data-raw/snowcourse_factors.csv")
+eq_std_calc_CCME_Mn <- read.csv("data-raw/eq_std_calc_CCME_Mn.csv")
+eq_std_calc_CCME_NH4 <- read.csv("data-raw/eq_std_calc_CCME_NH4.csv")
 
-data <- list(level_returns = level_returns, level_returns_max = level_returns_max, flow_returns = flow_returns, spatial_stns = spatial_stns, peaks = peaks, flow_level_flood = flow_level_flood, snowcourse_factors = snowcourse_factors)
+
+data <- list(level_returns = level_returns, level_returns_max = level_returns_max, flow_returns = flow_returns, spatial_stns = spatial_stns, peaks = peaks, flow_level_flood = flow_level_flood, snowcourse_factors = snowcourse_factors, eq_std_calc_CCME_Mn = eq_std_calc_CCME_Mn, eq_std_calc_CCME_NH4 = eq_std_calc_CCME_NH4)
 
 usethis::use_data(data, internal=TRUE, overwrite=TRUE)

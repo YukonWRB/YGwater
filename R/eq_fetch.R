@@ -21,9 +21,10 @@ eq_fetch <- function(EQcode,
                      BD = 2,
                      apply_standards = TRUE){
 
-  # EQcode <- "(EG)"
-  # stationIDs <- "all"# Specify a vector of station IDs without the EQWin code (eg. c("GW-4", "GW-5") OR "all")
-  # paramIDs <- "all" # Specify a vector of parameter IDs exactly as they appear in EQWin (eg. c("Zn-T, Zn-D") OR "all")
+  # EQcode <- "WLV"
+  # stationIDs <- c("MW05-3A","MW05-3B","MW05-4A","MW05-4B","MW05-5A","MW05-5B","MW06-8S","MW06-8M","MW06-8D","MW06-9S","MW06-9M","MW06-10S","MW06-10M","MW06-10D","W-9","W-82")
+  # # Specify a vector of station IDs (eg. c("(LOB)GW-4", "(LOB)GW-5")) OR "all"
+  # paramIDs <- c("Al-D","As-D","Cd-D","Cu-D","Fe-D","Hg-D","Pb-D","Se-D","U-D","Zn-D","Fluord","SO4","N-NH4") # Specify a vector of parameter IDs exactly as they appear in EQWin (eg. c("Zn-T, Zn-D") OR "all")
   # dates <- "all"
   # BD <- 2
   # apply_standards = TRUE
@@ -43,39 +44,61 @@ eq_fetch <- function(EQcode,
   #### Begin EQWin fetch ####
   EQWin <- DBI::dbConnect(drv = odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", dbpath))
   on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
-  #NOTE I've realized that if the connection is only closed upon exit that it might lock the DB until function exit, regardless of if DB interaction is happening or not. If the code takes a while to execute between DB calls, consider disconnecting/reconnecting after each DB pull.
 
   # Download stations and filter to user input
   eqstns<- DBI::dbGetQuery(EQWin, "SELECT StnId, StnCode, StnName, StnType, udf_Stn_Status FROM eqstns WHERE StnCode")
 
-  SiteCode <- substring(EQcode, first = 2, last = nchar(EQcode)-1)
-  if(tolower(paste(stationIDs, collapse = "")) == "all"){
-    stns <- eqstns %>%
-      dplyr::filter(stringr::str_detect(StnCode, paste0("^", "\\(", SiteCode, "\\)"))) %>%
-      dplyr::mutate(StnCode = gsub(EQcode, "", StnCode, fixed = TRUE))
-  } else {stns <- dplyr::filter(eqstns, StnCode %in% paste0(EQcode, stationIDs)) %>%
-    dplyr::mutate(StnCode = gsub(EQcode, "", StnCode, fixed = TRUE))}
+  tryCatch({
+    if(tolower(paste(stationIDs, collapse = "")) == "all"){
+      stns <- eqstns %>%
+        dplyr::filter(stringr::str_detect(StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
+        dplyr::mutate(StnCode = gsub(paste0("(", EQcode, ")"), "", StnCode, fixed = TRUE))
+    } else if(all(paste0("(", EQcode, ")", stationIDs) %in% eqstns$StnCode)){
+      stns <- eqstns %>%
+        dplyr::filter(stringr::str_detect(StnCode, paste0("^", "\\(", EQcode, "\\)")))%>%
+        dplyr::mutate(StnCode = gsub(paste0("(", EQcode, ")"), "", StnCode, fixed = TRUE)) %>%
+        dplyr::filter(StnCode %in% stationIDs)
+    } else {
+      stop()
+    }
+  },
+  error = function(e) {
+    message("Please check your Station IDs")
+    print(e)
+  }
+  )
 
   # Download all samples for specified stations, filter by user choice
   eqsampls <- DBI::dbGetQuery(EQWin, "SELECT SampleId, StnId, CollectDateTime FROM eqsampls") %>%
     dplyr::filter(StnId %in% stns$StnId)
 
-  if(tolower(paste(dates, collapse = "") != "all")){
-    samps <- eqsampls %>%
-      dplyr::filter(dplyr::between(as.Date(CollectDateTime), as.Date(dates[1]), as.Date(dates[2])))
-  } else {
-    samps <- eqsampls
-  }
+  tryCatch({
+    if(tolower(paste(dates, collapse = "") != "all")){
+      samps <- eqsampls %>%
+        dplyr::filter(dplyr::between(as.Date(CollectDateTime), as.Date(dates[1]), as.Date(dates[2])))
+    } else {
+      samps <- eqsampls
+    }},
+    error = function(e) {
+      message("Please check your date format")
+    }
+  )
 
   # Download list of all parameters, filter to user choice
-  # REVIEW See comment at line 49
-  eqparams <- as.data.frame(DBI::dbReadTable(EQWin, "eqparams") %>%
-                              subset(select=c("ParamId", "ParamCode", "Units")))
-  if(tolower(paste(paramIDs, collapse = "") != "all")){
-    params <- subset(eqparams,ParamCode %in% paramIDs)
-  } else {
-    params <- eqparams
+  eqparams <- as.data.frame(DBI::dbGetQuery(EQWin, "SELECT ParamId, ParamCode, Units FROM eqparams"))
+  tryCatch({
+    if(tolower(paste(paramIDs, collapse = "") == "all")){
+      params <- eqparams
+    } else if(all(paramIDs %in% eqparams$ParamCode)){
+      params <- subset(eqparams,ParamCode %in% paramIDs)
+    } else {
+      stop()}
+  },
+  error = function(e){
+    message("Please check your parameter list")
+    print(e)
   }
+  )
 
   # Download all results
   print("Fetching sample results")
@@ -149,10 +172,6 @@ eq_fetch <- function(EQcode,
     std_calc_tmp$MaxVal <- stringr::str_remove_all(std_calc_tmp$MaxVal, "=*") # Remove equal sign, leaving MaxVal with values matching values in eqcalcs access table
 
     # Process calculated standards
-    # Reframe eq_std_calc function in the environment of the eq_fetch function, necessary to access variables created within eq_fetch function
-    # REVIEW Since eq_std_calc is in this same package, you can call the function directly like eq_std_calc. Assigning to the global environment is also never a good idea, possible unintended consequences.
-    # eq_std_calcx <- eq_std_calc
-    # environment(eq_std_calcx) <- environment()
     std_calcs <- eq_std_calc(data = sampledata,
                              calcs = std_calc_tmp)
 
