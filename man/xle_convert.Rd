@@ -4,12 +4,7 @@
 \alias{xle_convert}
 \title{Convert Solinst logger files to csv format}
 \usage{
-xle_convert(
-  xle_file = "choose",
-  location,
-  save_path = "choose",
-  YOWN_master = "default"
-)
+xle_convert(xle_file = "choose", location, save_path = "choose")
 }
 \arguments{
 \item{xle_file}{The file you wish to convert. Default "choose" allows you to point to the file.}
