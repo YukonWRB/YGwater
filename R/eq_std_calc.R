@@ -8,7 +8,6 @@
 #' @param calcs Assigned to "std_calc_tmp" data frame of calculated standards, populated by this function
 #'
 #' @return Populated std_calc_tmp table in EQfetch function
-# REVIEW clarify if this means filled empty spaces, new cols, etc.
 #'
 #' @noRd
 #' @keywords internal
@@ -55,7 +54,12 @@ eq_std_calc <- function(data = sampledata,
     temp <- NA
   }
 
-  #### CCME Long Term (T/D) ####
+  # Calculate Cl with calculation order preference
+  if(!all(is.na(data$`Chlord (mg/L)`))) {
+    Cl <- mean(stats::na.omit(data$`Chlord (mg/L)`))
+  } else {Cl <- NA}
+
+  #### CCME_LT (T/D) ####
 
   # CCME_Al_lt
   if(!is.na(pH)){
@@ -179,7 +183,7 @@ eq_std_calc <- function(data = sampledata,
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Zn_lt")] <- CCME_Zn_lt
   }
 
-  #### CCME_st ####
+  #### CCME_ST ####
 
   # CCME_Cd_st
   if(is.na(hard)){
@@ -217,5 +221,327 @@ eq_std_calc <- function(data = sampledata,
   if(is.element("CCME_Zn_st", calcs$MaxVal)){
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Zn_st")] <- CCME_Zn_st
   }
+
+  #### CSR_S3_PAL ####
+
+  # C3_AW_Ag
+  if(is.na(hard)){
+    C3_AW_Ag <- NA
+  } else if(hard <= 100){
+    C3_AW_Ag <- 0.5/1000
+  } else if(hard > 100){
+    C3_AW_Ag <- 15/1000
+  }
+  if(is.element("C3_AW_Ag", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_Ag")] <- C3_AW_Ag
+  }
+
+  # C3_AW_Cd
+  if(is.na(hard)){
+    C3_AW_Cd <- NA
+  } else if(hard < 30){
+    C3_AW_Cd <- 0.1/1000
+  } else if(hard >= 30 & hard <90){
+    C3_AW_Cd <- 0.3/1000
+  } else if(hard >= 90 & hard <150){
+    C3_AW_Cd <- 0.5/1000
+  } else if(hard >= 150 & hard <210){
+    C3_AW_Cd <- 0.6/1000
+  } else if(hard >= 210){
+    C3_AW_Cd <- NA
+  }
+  if(is.element("C3_AW_Cd", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_Cd")] <- C3_AW_Cd
+  }
+
+  # C3_AW_Cu
+  if(is.na(hard)){
+    C3_AW_Cu <- NA
+  } else if(hard < 50){
+    C3_AW_Cu <- 20/1000
+  } else if(hard >= 50 & hard <75){
+    C3_AW_Cu <- 30/1000
+  } else if(hard >= 75 & hard <100){
+    C3_AW_Cu <- 40/1000
+  } else if(hard >= 100 & hard <125){
+    C3_AW_Cu <- 50/1000
+  } else if(hard >= 125 & hard <150){
+    C3_AW_Cu <- 60/1000
+  } else if(hard >= 150 & hard <175){
+    C3_AW_Cu <- 70/1000
+  } else if(hard >= 175 & hard <200){
+    C3_AW_Cu <- 80/1000
+  } else if(hard >= 200){
+    C3_AW_Cu <- 90/1000
+  }
+  if(is.element("C3_AW_Cu", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_Cu")] <- C3_AW_Cu
+  }
+
+  # C3_AW_Flu
+  if(is.na(hard)){
+    C3_AW_Flu <- NA
+  } else if(hard < 50){
+    C3_AW_Flu <- 2000/1000
+  } else if(hard >= 50){
+    C3_AW_Flu <- 3000/1000
+  }
+  if(is.element("C3_AW_Flu", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_Flu")] <- C3_AW_Flu
+  }
+
+  # C3_AW_NH4
+  if(is.na(pH)){
+    C3_AW_NH4 <- NA
+  } else if(pH < 7){
+    C3_AW_NH4 <- 18400/1000
+  } else if(pH <= 7.5 & pH >7){
+    C3_AW_NH4 <- 18500/1000
+  } else if(pH <= 8 & pH >7.5){
+    C3_AW_NH4 <- 11300/1000
+  } else if(pH <= 8 & pH >8.5){
+    C3_AW_NH4 <- 3700/1000
+  } else if(pH <= 8.5){
+    C3_AW_NH4 <- 1310/1000
+  }
+  if(is.element("C3_AW_NH4", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_NH4")] <- C3_AW_NH4
+  }
+
+  # C3_AW_Ni
+  if(is.na(hard)){
+    C3_AW_Ni <- NA
+  } else if(hard < 60){
+    C3_AW_Ni <- 250/1000
+  } else if(hard >= 60 & hard <120){
+    C3_AW_Ni <- 650/1000
+  } else if(hard >= 120 & hard <180){
+    C3_AW_Ni <- 1100/1000
+  } else if(hard >= 180){
+    C3_AW_Ni <- 1500/1000
+  }
+  if(is.element("C3_AW_Ni", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_Ni")] <- C3_AW_Ni
+  }
+
+  # C3_AW_NO2
+  if(is.na(Cl)){
+    C3_AW_NO2 <- NA
+  } else if(Cl < 2){
+    C3_AW_NO2 <- 200/1000
+  } else if(Cl >= 2 & Cl < 4){
+    C3_AW_NO2 <- 400/1000
+  } else if(Cl >= 4 & Cl < 6){
+    C3_AW_NO2 <- 600/1000
+  } else if(Cl >= 6 & Cl < 8){
+    C3_AW_NO2 <- 800/1000
+  } else if(Cl >= 8 & Cl < 10){
+    C3_AW_NO2 <- 1000/1000
+  } else if(Cl >= 10){
+    C3_AW_NO2 <- 2000/1000
+  }
+  if(is.element("C3_AW_NO2", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_NO2")] <- C3_AW_NO2
+  }
+
+  # C3_AW_Pb
+  if(is.na(hard)){
+    C3_AW_Pb <- NA
+  } else if(hard < 50){
+    C3_AW_Pb <- 40/1000
+  } else if(hard >= 50 & hard <100){
+    C3_AW_Pb <- 50/1000
+  } else if(hard >= 100 & hard <200){
+    C3_AW_Pb <- 60/1000
+  } else if(hard >= 200 & hard <300){
+    C3_AW_Pb <- 110/1000
+  } else if(hard >= 300){
+    C3_AW_Pb <- 160/1000
+  }
+  if(is.element("C3_AW_Pb", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_Pb")] <- C3_AW_Pb
+  }
+
+  # C3_AW_Zn
+  if(is.na(hard)){
+    C3_AW_Zn <- NA
+  } else if(hard < 90){
+    C3_AW_Zn <- 75/1000
+  } else if(hard >= 90 & hard <100){
+    C3_AW_Zn <- 150/1000
+  } else if(hard >= 100 & hard <200){
+    C3_AW_Zn <- 900/1000
+  } else if(hard >= 200 & hard <300){
+    C3_AW_Zn <- 1650/1000
+  } else if(hard >= 300 & hard <400){
+    C3_AW_Zn <- 2400/1000
+  } else if(hard > 400){
+    C3_AW_Zn <- NA
+  }
+  if(is.element("C3_AW_Zn", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_Zn")] <- C3_AW_Zn
+  }
+
+  #### CSR_S3_PAL_SW ####
+  # Take CSR_s3_PAL standards, divide by 10
+
+  # C3AWAgSW
+  if(is.na(hard)){
+    C3AWAgSW <- NA
+  } else if(hard <= 100){
+    C3AWAgSW <- 0.5/1000
+  } else if(hard > 100){
+    C3AWAgSW <- 15/1000
+  }
+  if(is.element("C3AWAgSW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWAgSW")] <- C3AWAgSW/10
+  }
+
+  # C3AWCdSW
+  if(is.na(hard)){
+    C3AWCdSW <- NA
+  } else if(hard < 30){
+    C3AWCdSW <- 0.1/1000
+  } else if(hard >= 30 & hard <90){
+    C3AWCdSW <- 0.3/1000
+  } else if(hard >= 90 & hard <150){
+    C3AWCdSW <- 0.5/1000
+  } else if(hard >= 150 & hard <210){
+    C3AWCdSW <- 0.6/1000
+  } else if(hard >= 210){
+    C3AWCdSW <- NA
+  }
+  if(is.element("C3AWCdSW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWCdSW")] <- C3AWCdSW/10
+  }
+
+  # C3AWCuSW
+  if(is.na(hard)){
+    C3AWCuSW <- NA
+  } else if(hard < 50){
+    C3AWCuSW <- 20/1000
+  } else if(hard >= 50 & hard <75){
+    C3AWCuSW <- 30/1000
+  } else if(hard >= 75 & hard <100){
+    C3AWCuSW <- 40/1000
+  } else if(hard >= 100 & hard <125){
+    C3AWCuSW <- 50/1000
+  } else if(hard >= 125 & hard <150){
+    C3AWCuSW <- 60/1000
+  } else if(hard >= 150 & hard <175){
+    C3AWCuSW <- 70/1000
+  } else if(hard >= 175 & hard <200){
+    C3AWCuSW <- 80/1000
+  } else if(hard >= 200){
+    C3AWCuSW <- 90/1000
+  }
+  if(is.element("C3AWCuSW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWCuSW")] <- C3AWCuSW/10
+  }
+
+  # C3AWFluSW
+  if(is.na(hard)){
+    C3AWFluSW <- NA
+  } else if(hard < 50){
+    C3AWFluSW <- 2000/1000
+  } else if(hard >= 50){
+    C3AWFluSW <- 3000/1000
+  }
+  if(is.element("C3AWFluSW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWFluSW")] <- C3AWFluSW/10
+  }
+
+  # C3AWNH4SW
+  if(is.na(pH)){
+    C3AWNH4SW <- NA
+  } else if(pH < 7){
+    C3AWNH4SW <- 18400/1000
+  } else if(pH <= 7.5 & pH >7){
+    C3AWNH4SW <- 18500/1000
+  } else if(pH <= 8 & pH >7.5){
+    C3AWNH4SW <- 11300/1000
+  } else if(pH <= 8 & pH >8.5){
+    C3AWNH4SW <- 3700/1000
+  } else if(pH <= 8.5){
+    C3AWNH4SW <- 1310/1000
+  }
+  if(is.element("C3AWNH4SW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWNH4SW")] <- C3AWNH4SW/10
+  }
+
+  # C3AWNiSW
+  if(is.na(hard)){
+    C3AWNiSW <- NA
+  } else if(hard < 60){
+    C3AWNiSW <- 250/1000
+  } else if(hard >= 60 & hard <120){
+    C3AWNiSW <- 650/1000
+  } else if(hard >= 120 & hard <180){
+    C3AWNiSW <- 1100/1000
+  } else if(hard >= 180){
+    C3AWNiSW <- 1500/1000
+  }
+  if(is.element("C3AWNiSW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWNiSW")] <- C3AWNiSW/10
+  }
+
+  # C3_AW_NO2
+  if(is.na(Cl)){
+    C3_AW_NO2 <- NA
+  } else if(Cl < 2){
+    C3_AW_NO2 <- 200/1000
+  } else if(Cl >= 2 & Cl < 4){
+    C3_AW_NO2 <- 400/1000
+  } else if(Cl >= 4 & Cl < 6){
+    C3_AW_NO2 <- 600/1000
+  } else if(Cl >= 6 & Cl < 8){
+    C3_AW_NO2 <- 800/1000
+  } else if(Cl >= 8 & Cl < 10){
+    C3_AW_NO2 <- 1000/1000
+  } else if(Cl >= 10){
+    C3_AW_NO2 <- 2000/1000
+  }
+  if(is.element("C3_AW_NO2", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_NO2")] <- C3_AW_NO2/10
+  }
+
+  # C3AWPbSW
+  if(is.na(hard)){
+    C3AWPbSW <- NA
+  } else if(hard < 50){
+    C3AWPbSW <- 40/1000
+  } else if(hard >= 50 & hard <100){
+    C3AWPbSW <- 50/1000
+  } else if(hard >= 100 & hard <200){
+    C3AWPbSW <- 60/1000
+  } else if(hard >= 200 & hard <300){
+    C3AWPbSW <- 110/1000
+  } else if(hard >= 300){
+    C3AWPbSW <- 160/1000
+  }
+  if(is.element("C3AWPbSW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWPbSW")] <- C3AWPbSW/10
+  }
+
+  # C3AWZnSW
+  if(is.na(hard)){
+    C3AWZnSW <- NA
+  } else if(hard < 90){
+    C3AWZnSW <- 75/1000
+  } else if(hard >= 90 & hard <100){
+    C3AWZnSW <- 150/1000
+  } else if(hard >= 100 & hard <200){
+    C3AWZnSW <- 900/1000
+  } else if(hard >= 200 & hard <300){
+    C3AWZnSW <- 1650/1000
+  } else if(hard >= 300 & hard <400){
+    C3AWZnSW <- 2400/1000
+  } else if(hard > 400){
+    C3AWZnSW <- NA
+  }
+  if(is.element("C3AWZnSW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWZnSW")] <- C3AWZnSW/10
+  }
+
   return(calcs)
 }
