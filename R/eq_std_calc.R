@@ -485,24 +485,24 @@ eq_std_calc <- function(data = sampledata,
     calcs$MaxVal[which(calcs$MaxVal == "C3AWNiSW")] <- C3AWNiSW/10
   }
 
-  # C3_AW_NO2
+  # C3AWNO2SW
   if(is.na(Cl)){
-    C3_AW_NO2 <- NA
+    C3AWNO2SW <- NA
   } else if(Cl < 2){
-    C3_AW_NO2 <- 200/1000
+    C3AWNO2SW <- 200/1000
   } else if(Cl >= 2 & Cl < 4){
-    C3_AW_NO2 <- 400/1000
+    C3AWNO2SW <- 400/1000
   } else if(Cl >= 4 & Cl < 6){
-    C3_AW_NO2 <- 600/1000
+    C3AWNO2SW <- 600/1000
   } else if(Cl >= 6 & Cl < 8){
-    C3_AW_NO2 <- 800/1000
+    C3AWNO2SW <- 800/1000
   } else if(Cl >= 8 & Cl < 10){
-    C3_AW_NO2 <- 1000/1000
+    C3AWNO2SW <- 1000/1000
   } else if(Cl >= 10){
-    C3_AW_NO2 <- 2000/1000
+    C3AWNO2SW <- 2000/1000
   }
-  if(is.element("C3_AW_NO2", calcs$MaxVal)){
-    calcs$MaxVal[which(calcs$MaxVal == "C3_AW_NO2")] <- C3_AW_NO2/10
+  if(is.element("C3AWNO2SW", calcs$MaxVal)){
+    calcs$MaxVal[which(calcs$MaxVal == "C3AWNO2SW")] <- C3AWNO2SW/10
   }
 
   # C3AWPbSW
