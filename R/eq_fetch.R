@@ -21,12 +21,12 @@ eq_fetch <- function(EQcode,
                      BD = 2,
                      apply_standards = TRUE){
 
-  # EQcode <- "WLV"
-  # stationIDs <- "all"
-  # paramIDs = "all"
-  # dates <- "all"
-  # BD <- 2
-  # apply_standards = TRUE
+  EQcode <- "WLV"
+  stationIDs <- c("MW05-3A","MW05-3B","MW05-4A","MW05-4B","MW05-5A","MW05-5B","MW06-8S","MW06-8M","MW06-8D","MW06-9S","MW06-9M","MW06-10S","MW06-10M","MW06-10D","W-9","W-82")
+  paramIDs = c("Al-D","As-D","Cd-D","Cu-D","Fe-D","Hg-D","Pb-D","Se-D","U-D","Zn-D","Fluord","SO4","N-NH4")
+  dates <- "all"
+  BD <- 2
+  apply_standards = TRUE
 
   # Set a few options (I'll probs remove these)
 
@@ -83,13 +83,13 @@ eq_fetch <- function(EQcode,
     }
   )
 
-  # Download list of all parameters, filter to user choice
+  # Check to make sure all parameters are valid, keep all params for now until after std calculations
   eqparams <- as.data.frame(DBI::dbGetQuery(EQWin, "SELECT ParamId, ParamCode, Units FROM eqparams"))
   tryCatch({
     if(tolower(paste(paramIDs, collapse = "") == "all")){
       params <- eqparams
     } else if(all(paramIDs %in% eqparams$ParamCode)){
-      params <- subset(eqparams,ParamCode %in% paramIDs)
+      params <- eqparams
     } else {
       stop()}
   },
@@ -202,15 +202,17 @@ eq_fetch <- function(EQcode,
 
   }
 
-  # Extract by-station data and station standards, put into by-location list then add list to master EQ_fetch output
+  # Extract by-station data and station standards filtered to desired output parameters, put into by-location list then add list to master EQ_fetch output
   EQ_fetch_list <- list()
   for(i in unique(stns$StnCode)){
     list <- list()
     stndata <- sampledata %>%
-      dplyr::filter(StnCode == i)
+      dplyr::filter(StnCode == i) %>%
+      dplyr::select(c("StnCode", "CollectDateTime", "StnType", which(as.vector(sapply(names(sampledata), function(x) sub(" \\(.*", "", x))) %in% paramIDs)))
     list[["stndata"]] <- stndata
     if(apply_standards == TRUE){
-      list[["stnstd"]] <- stnstd
+      list[["stnstd"]] <- stnstd %>%
+        dplyr::select(c("StdName", "StdCode", which(as.vector(sapply(names(stnstd), function(x) sub(" \\(.*", "", x))) %in% paramIDs)))
     }
     EQ_fetch_list[[i]] <- list
   }
