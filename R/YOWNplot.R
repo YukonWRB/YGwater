@@ -34,12 +34,12 @@ YOWNplot <- function(AQID,
                      server ="https://yukon.aquaticinformatics.net/AQUARIUS"){
 
   # Debug and development params. Leave as comments.
-  # AQID = "YOWN-2201S"
+  # AQID = "YOWN-1901"
   # timeSeriesID = "Wlevel_bgs.Calculated"
   # chartXinterval = "auto"
   # dateRange = "all"
-  # stats = "line"
-  # smooth = 7
+  # stats = FALSE
+  # smooth = FALSE
   # saveTo = "desktop"
   # login = Sys.getenv(c("AQUSER", "AQPASS"))
   # server ="https://yukon.aquaticinformatics.net/AQUARIUS"
@@ -47,10 +47,7 @@ YOWNplot <- function(AQID,
   #### Setup ####
   # Sort out save location
   saveTo <- tolower(saveTo)
-  if (save_path %in% c("Choose", "choose")) {
-    print("Select the folder where you want this graph saved.")
-    save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
-  } else if(saveTo == "desktop") {
+  if(saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
   } else if (dir.exists(saveTo) == FALSE) {
     stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
@@ -60,9 +57,9 @@ YOWNplot <- function(AQID,
   # Download data from Aquarius
   print("Downloading data from Aquarius")
   datalist <- suppressMessages(aq_download(loc_id = AQID,
-                                                     ts_name = timeSeriesID,
-                                                     login = login,
-                                                     server = server))
+                                           ts_name = timeSeriesID,
+                                           login = login,
+                                           server = server))
 
   # Unlist time series data
   timeseries <- datalist$timeseries
@@ -74,8 +71,8 @@ YOWNplot <- function(AQID,
   timeseries$value[timeseries$grade_description != "A" & timeseries$grade_description != "B" & timeseries$grade_description != "C"] <- NA
 
   # Change timestamps from UTC to MST
-  attr(timeseries$timestamp_UTC , "tzone") <- "MST"
-  names(timeseries)[names(timeseries) == "timestamp_UTC"] <- "timestamp_MST"
+  attr(timeseries$datetime , "tzone") <- "MST"
+  names(timeseries)[names(timeseries) == "datetime"] <- "timestamp_MST"
 
   #### Data gap processing ####
   fulldf <- timeseries
@@ -255,11 +252,11 @@ YOWNplot <- function(AQID,
                      legend.margin = ggplot2::margin(0,0,0,0),
                      legend.box.margin = ggplot2::margin(-18, 0, 0, -10),
                      legend.text = ggplot2::element_text(size = 9)) +
-    ggplot2::scale_x_datetime(name = "",
-                              limits = as.POSIXct(dateRange),
-                              date_breaks = chartXinterval,
-                              date_labels = "%b. %d, %Y",
-                              expand = c(0, 0))
+      ggplot2::scale_x_datetime(name = "",
+                                limits = as.POSIXct(dateRange),
+                                date_breaks = chartXinterval,
+                                date_labels = "%b. %d, %Y",
+                                expand = c(0, 0))
     # Customize title block
     title <- title + ggplot2::labs(title = paste0("Groundwater Level Statistics Chart: ",
                                                   datalist[["metadata"]][1, 2], " ",
