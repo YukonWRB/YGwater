@@ -5,14 +5,14 @@
 \title{Help user choose ECCC climate station data to use}
 \usage{
 chooseWeather(
-  location,
-  coords,
+  location = NULL,
+  coords = NULL,
   dist,
   interval,
   start,
   end,
   variable,
-  months,
+  months = NULL,
   return_data = FALSE
 )
 }
