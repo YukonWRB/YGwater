@@ -27,7 +27,7 @@
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
 #' @param tzone The timezone to use for graphing. Only really evident for a small number of days.
-#' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
+#' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year. Currently, only 1 year can be provided for when CDDF data is provided to function.
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
@@ -39,15 +39,17 @@
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
-#'
+#' @param cddf_data A dataframe with the data to be plotted. Must contain the following columns: datetime, value. This will be removed when climate data is finished being added to the hydromet database.
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
 #' @export
 #'
 #'
-# hydrometContinuous(location='09EA004', parameter = "flow", startDay = "2023-10-01", endDay = "2023-12-20", tzone = "MST", years = 2023, datum = TRUE, title = TRUE, custom_title = NULL, returns = "auto", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
+# hydrometContinuous(location='09EA004', parameter = "flow", startDay = "2022-09-01", endDay = "2023-06-30", tzone = "MST", years = c(2021, 2022), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
-hydrometContinuous <- function(location,
-                               parameter,
+# hydrometContinuous(location="Dawson", parameter = "CDDF", startDay = "2022-09-01", endDay = "2023-06-14", tzone = "MST", years = c(2022), datum = TRUE, title = TRUE, custom_title = "Dawson CDDF", returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect(), continuous_data = test)
+
+hydrometContinuous <- function(location=NULL,
+                               parameter="variable",
                                startDay = 1,
                                endDay = 365,
                                tzone = "MST",
@@ -62,9 +64,11 @@ hydrometContinuous <- function(location,
                                allowed_missing = 10,
                                plot_scale = 1,
                                save_path = NULL,
-                               con = hydrometConnect())
+                               con = hydrometConnect(),
+                               cddf_data = NULL)
 {
 
+  print("start of function")
   # Commented code below is for testing...
   # location = "09EA004"
   # parameter = "flow"
@@ -88,7 +92,7 @@ hydrometContinuous <- function(location,
   old_warn <- getOption("warn")
   on.exit(options(warn = old_warn))
 
-  # Checks on input parameters  and other start-up bits------------------
+  # Checks on input parameters and other start-up bits------------------
   if (parameter != "SWE"){
     parameter <- tolower(parameter)
   }
@@ -121,214 +125,277 @@ hydrometContinuous <- function(location,
     message("Your parameter entry for 'return_max_year' is invalid (greater than the last year plotted). It has been adjusted to the last year plotted, or to the last year with enough data.")
   }
 
-  #Confirm parameter and location exist in the database and that there is only one entry
-  exist_check <- DBI::dbGetQuery(con, paste0("SELECT location, parameter, timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
-  if (nrow(exist_check) == 0){
-    stop(paste0("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous data type."))
-  } else if (nrow(exist_check) > 1){
-    stop(paste0("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Please alert the person responsible for database maintenance."))
-  } else {
-    tsid <- exist_check$timeseries_id
-  }
+  print("end of parameter checks")
 
-  # Dealing with start/end dates ----------------------
-  # Sort out startDay and endDay into actual dates if needed
-  last_year <- max(years)
-  leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
-  tryCatch({
-    startDay <- as.character(startDay)
-    startDay <- as.POSIXct(startDay, tz = tzone)
-    lubridate::year(startDay) <- last_year
-  }, error = function(e) {
-    if (last_year %in% leap_list){
-      if (startDay > 59){
-        startDay <<- startDay + 1
-      }
+#### ----------------------- CDDF data is not provided -------------------- ####
+  print("Getting data sorted out")
+  if(is.null(cddf_data)) {
+    #Confirm parameter and location exist in the database and that there is only one entry
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT location, parameter, timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
+    if (nrow(exist_check) == 0){
+      stop(paste0("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous data type."))
+    } else if (nrow(exist_check) > 1){
+      stop(paste0("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Please alert the person responsible for database maintenance."))
+    } else {
+      tsid <- exist_check$timeseries_id
     }
-    startDay <<- as.POSIXct(as.numeric(startDay)*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
-    startDay <<- lubridate::force_tz(startDay, tzone)
-  })
-  tryCatch({
-    endDay <- as.character(endDay)
-    endDay <- as.POSIXct(endDay, tz = tzone)
-    lubridate::year(endDay) <- last_year
-  }, error = function(e) {
-    tempStartDay <- lubridate::yday(startDay) #using yday because start is now in proper Date format and needs to be back-converted to yday
-    if (last_year %in% leap_list){
-      if (endDay > 59){
-        endDay <<- endDay + 1
-      }
-    }
-    endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
-    endDay <<- lubridate::force_tz(endDay, tzone)
-  })
-  if (startDay > endDay){ #if the user is wanting a range overlapping the new year
-    lubridate::year(endDay) <- lubridate::year(endDay)+1
-    overlaps <- TRUE
-  } else {
-    overlaps <- FALSE
-  }
-  day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
-  # Find the necessary datum (latest datum)
-  if (datum & parameter == "level"){
-    datum <- DBI::dbGetQuery(con, paste0("SELECT * FROM datum_conversions WHERE location = '", location, "' AND current = TRUE"))
-  } else {
-    datum <- data.frame(conversion_m = 0)
-  }
-
-  #Find the ts units
-  units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM timeseries WHERE timeseries_id = ", tsid, ";"))
-
-  # Get the necessary data -------------------
-  realtime <- data.frame()
-  dates <- lubridate::POSIXct(tz = tzone) #creates empty posixct vector
-  daily_end <- endDay
-  if (overlaps){
-    lubridate::year(daily_end) <- last_year + 1
-  } else {
-    lubridate::year(daily_end) <- last_year
-  }
-  daily_end <- daily_end + 60*60*24
-  daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", as.character(daily_end), "';"))
-  daily$date <- as.POSIXct(daily$date, tz = tzone) #to posixct and not date so that it plays well with realtime df
-  names(daily)[names(daily) == "date"] <- "datetime"
-
-##-----------------------------------------------------------------------------
-  for (i in rev(years)){ #Using rev so that the most recent year gets realtime, if possible
-    start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
-    start_UTC <- start
-    attr(start_UTC, "tzone") <- "UTC"
-    end <- as.POSIXct(paste0(i, substr(endDay, 5, 10), " 23:59:59"), tz = tzone)
-    if (overlaps){
-      lubridate::year(end) <- lubridate::year(end) + 1
-    }
-    end_UTC <- end
-    attr(end_UTC, "tzone") <- "UTC"
-    if (length(day_seq) < 90){
-      if (nrow(realtime) < 30000){
-        new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-        if (nrow(new_realtime) > 30000){
-          new_realtime <- new_realtime[order(new_realtime$datetime) , ]
-          new_realtime <- utils::tail(new_realtime, 30000) #Retain only max 30000 data points for plotting performance
+    # Dealing with start/end dates ----------------------
+    # Sort out startDay and endDay into actual dates if needed
+    last_year <- max(years)
+    leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
+    tryCatch({
+      startDay <- as.character(startDay)
+      startDay <- as.POSIXct(startDay, tz = tzone)
+      lubridate::year(startDay) <- last_year
+    }, error = function(e) {
+      if (last_year %in% leap_list){
+        if (startDay > 59){
+          startDay <<- startDay + 1
         }
-        realtime <- rbind(realtime, new_realtime)
-        if (nrow(new_realtime) > 0){
-          new_dates <- seq.POSIXt(start, end, by = "days")
-          dates <- c(dates, new_dates)
-          get_daily <- FALSE
+      }
+      startDay <<- as.POSIXct(as.numeric(startDay)*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
+      startDay <<- lubridate::force_tz(startDay, tzone)
+    })
+    tryCatch({
+      endDay <- as.character(endDay)
+      endDay <- as.POSIXct(endDay, tz = tzone)
+      lubridate::year(endDay) <- last_year
+    }, error = function(e) {
+      tempStartDay <- lubridate::yday(startDay) #using yday because start is now in proper Date format and needs to be back-converted to yday
+      if (last_year %in% leap_list){
+        if (endDay > 59){
+          endDay <<- endDay + 1
+        }
+      }
+      endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
+      endDay <<- lubridate::force_tz(endDay, tzone)
+    })
+    if (startDay > endDay){ #if the user is wanting a range overlapping the new year
+      lubridate::year(endDay) <- lubridate::year(endDay)+1
+      overlaps <- TRUE
+    } else {
+      overlaps <- FALSE
+    }
+    day_seq <- seq.POSIXt(startDay, endDay, by = "day")
+
+    # Find the necessary datum (latest datum)
+    if (datum & parameter == "level"){
+      datum <- DBI::dbGetQuery(con, paste0("SELECT * FROM datum_conversions WHERE location = '", location, "' AND current = TRUE"))
+    } else {
+      datum <- data.frame(conversion_m = 0)
+    }
+
+    #Find the ts units
+    units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM timeseries WHERE timeseries_id = ", tsid, ";"))
+
+    # Get the necessary data -------------------
+    realtime <- data.frame()
+    dates <- lubridate::POSIXct(tz = tzone) #creates empty posixct vector
+    daily_end <- endDay
+    if (overlaps){
+      lubridate::year(daily_end) <- last_year + 1
+    } else {
+      lubridate::year(daily_end) <- last_year
+    }
+    daily_end <- daily_end + 60*60*24
+    daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", as.character(daily_end), "';"))
+    daily$date <- as.POSIXct(daily$date, tz = tzone) #to posixct and not date so that it plays well with realtime df
+    names(daily)[names(daily) == "date"] <- "datetime"
+
+    ##-----------------------------------------------------------------------------
+    for (i in rev(years)){ #Using rev so that the most recent year gets realtime, if possible
+      start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
+      start_UTC <- start
+      attr(start_UTC, "tzone") <- "UTC"
+      end <- as.POSIXct(paste0(i, substr(endDay, 5, 10), " 23:59:59"), tz = tzone)
+      if (overlaps){
+        lubridate::year(end) <- lubridate::year(end) + 1
+      }
+      end_UTC <- end
+      attr(end_UTC, "tzone") <- "UTC"
+      if (length(day_seq) < 90){
+        if (nrow(realtime) < 30000){
+          new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+          if (nrow(new_realtime) > 30000){
+            new_realtime <- new_realtime[order(new_realtime$datetime) , ]
+            new_realtime <- utils::tail(new_realtime, 30000) #Retain only max 30000 data points for plotting performance
+          }
+          realtime <- rbind(realtime, new_realtime)
+          if (nrow(new_realtime) > 0){
+            new_dates <- seq.POSIXt(start, end, by = "days")
+            dates <- c(dates, new_dates)
+            get_daily <- FALSE
+          } else {
+            get_daily <- TRUE
+          }
         } else {
           get_daily <- TRUE
         }
       } else {
         get_daily <- TRUE
       }
-    } else {
-      get_daily <- TRUE
-    }
-    if (get_daily) {
-      new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , c("datetime", "value")]
-      realtime <- rbind(realtime, new_realtime)
-    }
-  }
-##-----------------------------------------------------------------------------
-  #Find out where values need to be filled in with daily means
-  if (length(dates) > 0){
-    for (i in 1:length(dates)){
-      toDate <- as.Date(dates[i]) #convert to plain date to check if there are any datetimes with that plain date
-      if (!(toDate %in% as.Date(realtime$datetime))){
-        row <- daily[daily$datetime == dates[i] , c("datetime", "value")]
-        realtime <- rbind(realtime, row)
+      if (get_daily) {
+        new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , c("datetime", "value")]
+        realtime <- rbind(realtime, new_realtime)
       }
     }
-  }
-  if (nrow(realtime) == 0){
-    stop("There is no data to plot within this range of years and days.")
-  }
-  #Add the ribbon values for the times between startDay and endDay
-  ribbon <- data.frame()
-  ribbon_seq <- seq.Date(min(as.Date(day_seq)), max(as.Date(day_seq)+1), by = "day") #Gets extended a day so that the ribbon matches the full length of the data (otherwise if high-res data is acquired, data points will go to 23:59 the next day but the ribbon ends at 00:00)
-  for (i in 1:length(ribbon_seq)){
-    target_date <- ribbon_seq[i]
-    if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29)){
-      if (overlaps){
-        row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
-        if (nrow(row) == 0){
-          lubridate::year(target_date) <- lubridate::year(target_date) -1
+    ##-----------------------------------------------------------------------------
+    #Find out where values need to be filled in with daily means
+    if (length(dates) > 0){
+      for (i in 1:length(dates)){
+        toDate <- as.Date(dates[i]) #convert to plain date to check if there are any datetimes with that plain date
+        if (!(toDate %in% as.Date(realtime$datetime))){
+          row <- daily[daily$datetime == dates[i] , c("datetime", "value")]
+          realtime <- rbind(realtime, row)
+        }
+      }
+    }
+    if (nrow(realtime) == 0){
+      stop("There is no data to plot within this range of years and days.")
+    }
+    #Add the ribbon values for the times between startDay and endDay
+    ribbon <- data.frame()
+    ribbon_seq <- seq.Date(min(as.Date(day_seq)), max(as.Date(day_seq)+1), by = "day") #Gets extended a day so that the ribbon matches the full length of the data (otherwise if high-res data is acquired, data points will go to 23:59 the next day but the ribbon ends at 00:00)
+    for (i in 1:length(ribbon_seq)){
+      target_date <- ribbon_seq[i]
+      if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29)){
+        if (overlaps){
           row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
+          if (nrow(row) == 0){
+            lubridate::year(target_date) <- lubridate::year(target_date) -1
+            row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
+          }
+        } else {
+          row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
+          if (nrow(row) == 0){
+            prev_date <- target_date
+            lubridate::year(prev_date) <- last_year - 1
+            row <- daily[as.Date(daily$datetime) == prev_date, !names(daily) %in% c("value", "grade", "approval")]
+            lubridate::year(row$datetime) <- last_year
+          }
+          if (i == length(ribbon_seq)){
+            row$datetime <- row$datetime - 1 #This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
+          }
         }
-      } else {
-        row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
-        if (nrow(row) == 0){
-          prev_date <- target_date
-          lubridate::year(prev_date) <- last_year - 1
-          row <- daily[as.Date(daily$datetime) == prev_date, !names(daily) %in% c("value", "grade", "approval")]
-          lubridate::year(row$datetime) <- last_year
-        }
-        if (i == length(ribbon_seq)){
-          row$datetime <- row$datetime - 1 #This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
+        if (nrow(row) > 0){
+          ribbon <- rbind(ribbon, row)
         }
       }
-      if (nrow(row) > 0){
-        ribbon <- rbind(ribbon, row)
+    }
+    if (min(ribbon$datetime) < min(realtime$datetime)){
+      first_date <- min(realtime$datetime)
+      lubridate::hour(first_date) <- 0
+      ribbon[ribbon$datetime == min(ribbon$datetime), "datetime"] <- first_date
+    }
+    realtime <- merge(realtime, ribbon, all = TRUE)
+
+    realtime$year <- lubridate::year(realtime$datetime) #year, month columns used for removing Feb 29 later
+    realtime$month <- lubridate::month(realtime$datetime)
+    realtime$day <- lubridate::day(realtime$datetime)
+    realtime <- realtime[!(realtime$month == 2 & realtime$day == 29), ] #Remove Feb 29
+    daily$year <- lubridate::year(daily$datetime)
+    daily$month <- lubridate::month(daily$datetime)
+    daily$day <- lubridate::month(daily$datetime)
+    daily <- daily[!(daily$month == 2 & daily$day == 29), ] #Remove Feb 29
+
+    if (overlaps){ # This section sorts out the overlap years, builds the plotting column
+      temp <- data.frame(date = day_seq)
+      temp$year = lubridate::year(temp$date)
+      temp <- temp[!(temp$year == max(temp$year)), ] #Remove the rows for days after the new year
+      temp$month = lubridate::month(temp$date)
+      temp$day = lubridate::day(temp$date)
+      temp$day <- stringr::str_pad(temp$day, 2, side = "left", pad = "0")
+
+      #Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)
+      temp$md <- paste0(temp$month, temp$day)
+      temp$md <- as.numeric(temp$md)
+      md_sequence <- seq(min(temp$md), max(temp$md))
+
+      realtime$day <- stringr::str_pad(realtime$day, 2, side = "left", pad = "0")
+      realtime$md <- paste0(realtime$month, realtime$day)
+      realtime$md <- as.numeric(realtime$md)
+
+      realtime$fake_datetime <- as.POSIXct(rep(NA, nrow(realtime)))
+      realtime$plot_year <- NA
+      for (i in 1:nrow(realtime)){  #!!!This desperately needs to be vectorized in some way. Super slow!
+        fake_datetime <- gsub("[0-9]{4}", if (realtime$md[i] %in% md_sequence) last_year else last_year + 1, realtime$datetime[i])
+        fake_datetime <- ifelse(nchar(fake_datetime) > 11, fake_datetime, paste0(fake_datetime, " 00:00:00"))
+        realtime$fake_datetime[i] <- as.POSIXct(fake_datetime, tz = tzone)
+        realtime$plot_year[i] <- if (realtime$md[i] %in% md_sequence) paste0(realtime$year[i], "-", realtime$year[i] +1) else paste0(realtime$year[i] -1, "-", realtime$year[i])
       }
+    } else { #Does not overlap the new year
+      realtime$plot_year <- as.character(realtime$year)
+      realtime$fake_datetime <- gsub("[0-9]{4}", last_year, realtime$datetime)
+      realtime$fake_datetime <- ifelse(nchar(realtime$fake_datetime) > 11, realtime$fake_datetime, paste0(realtime$fake_datetime, " 00:00:00"))
+      realtime$fake_datetime <- as.POSIXct(realtime$fake_datetime, tz = tzone, format='%Y-%m-%d %H:%M:%S') #Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
+    }
+
+    # apply datum correction where necessary
+    if (datum$conversion_m > 0){
+      daily[ , c("value", "max", "min", "q75", "q25")] <- apply(daily[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
+      realtime[ , c("value", "max", "min", "q75", "q25")] <- apply(realtime[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
     }
   }
-  if (min(ribbon$datetime) < min(realtime$datetime)){
-    first_date <- min(realtime$datetime)
-    lubridate::hour(first_date) <- 0
-    ribbon[ribbon$datetime == min(ribbon$datetime), "datetime"] <- first_date
-  }
-  realtime <- merge(realtime, ribbon, all = TRUE)
+#### ------------------------- CDDF data provided ------------------------- ####
+  if (!is.null(cddf_data)) {
+    #### Add this in here: ------------------
+    cddf <- cddf_data
+    # Calculate min, max, median
+    cddf$day <- format(cddf$datetime, "%m-%d")
+    summary_cddf <- cddf %>%
+      dplyr::group_by(day) %>%
+      dplyr::summarise(min = round(min(value), 0),
+                       max = round(max(value), 0),
+                       md = round(median(value), 0),
+                       q75 = round(quantile(value, 0.75), 0),
+                       q25 = round(quantile(value, 0.25), 0))
 
-  realtime$year <- lubridate::year(realtime$datetime) #year, month columns used for removing Feb 29 later
-  realtime$month <- lubridate::month(realtime$datetime)
-  realtime$day <- lubridate::day(realtime$datetime)
-  realtime <- realtime[!(realtime$month == 2 & realtime$day == 29), ] #Remove Feb 29
-  daily$year <- lubridate::year(daily$datetime)
-  daily$month <- lubridate::month(daily$datetime)
-  daily$day <- lubridate::month(daily$datetime)
-  daily <- daily[!(daily$month == 2 & daily$day == 29), ] #Remove Feb 29
+    # Add date
+    summary_cddf$datetime <- NA
+    # For days between 09-01 and 12-31, date is year. For days between 01-01 and 08-31, date is year + 1
+    summary_cddf[summary_cddf$day >= "09-01" & summary_cddf$day <= "12-31",]$datetime <- paste0(years, "-", summary_cddf[summary_cddf$day >= "09-01" & summary_cddf$day <= "12-31",]$day )
+    summary_cddf[summary_cddf$day >= "01-01" & summary_cddf$day <= "08-31",]$datetime <- paste0(years+1, "-", summary_cddf[summary_cddf$day >= "01-01" & summary_cddf$day <= "08-31",]$day )
+    summary_cddf$datetime <- as.POSIXct(summary_cddf$datetime, format="%Y-%m-%d")
 
-  if (overlaps){ # This section sorts out the overlap years, builds the plotting column
-    temp <- data.frame(date = day_seq)
-    temp$year = lubridate::year(temp$date)
-    temp <- temp[!(temp$year == max(temp$year)), ] #Remove the rows for days after the new year
-    temp$month = lubridate::month(temp$date)
-    temp$day = lubridate::day(temp$date)
-    temp$day <- stringr::str_pad(temp$day, 2, side = "left", pad = "0")
+    cddf$datetime <- as.POSIXct(cddf$datetime, format="%Y-%m-%d")
 
-    #Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)
-    temp$md <- paste0(temp$month, temp$day)
-    temp$md <- as.numeric(temp$md)
-    md_sequence <- seq(min(temp$md), max(temp$md))
+    # Add columns for year and value. If want to add additional years, then would only need to add value, not stats
+    tab <- merge(summary_cddf, cddf[cddf$datetime >= paste0(years, '-09-01')
+                                    & cddf$datetime <= paste0(years+1, '-06-14'),], by=c("day"), all.x = TRUE)
 
-    realtime$day <- stringr::str_pad(realtime$day, 2, side = "left", pad = "0")
-    realtime$md <- paste0(realtime$month, realtime$day)
-    realtime$md <- as.numeric(realtime$md)
+    # rename columns
+    colnames(tab) <- c("day", "min", "max", "md", "q75", "q25", "datetime", "datetime.y", "value")
 
-    realtime$fake_datetime <- as.POSIXct(rep(NA, nrow(realtime)))
-    realtime$plot_year <- NA
-    for (i in 1:nrow(realtime)){  #!!!This desperately needs to be vectorized in some way. Super slow!
-      fake_datetime <- gsub("[0-9]{4}", if (realtime$md[i] %in% md_sequence) last_year else last_year + 1, realtime$datetime[i])
-      fake_datetime <- ifelse(nchar(fake_datetime) > 11, fake_datetime, paste0(fake_datetime, " 00:00:00"))
-      realtime$fake_datetime[i] <- as.POSIXct(fake_datetime, tz = tzone)
-      realtime$plot_year[i] <- if (realtime$md[i] %in% md_sequence) paste0(realtime$year[i], "-", realtime$year[i] +1) else paste0(realtime$year[i] -1, "-", realtime$year[i])
-    }
-  } else { #Does not overlap the new year
-    realtime$plot_year <- as.character(realtime$year)
-    realtime$fake_datetime <- gsub("[0-9]{4}", last_year, realtime$datetime)
-    realtime$fake_datetime <- ifelse(nchar(realtime$fake_datetime) > 11, realtime$fake_datetime, paste0(realtime$fake_datetime, " 00:00:00"))
-    realtime$fake_datetime <- as.POSIXct(realtime$fake_datetime, tz = tzone, format='%Y-%m-%d %H:%M:%S') #Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
-  }
+    # Add columns to imitate hydrometContinuous realtime table
+    tab$year <- format(tab$datetime, "%Y")
+    tab$month <- format(tab$datetime, "%m")
+    tab$day <- format(tab$datetime, "%d")
+    tab$plot_year <- paste0(years, "-", years+1)
+    tab$datetime <- as.POSIXct(tab$datetime, format="%Y-%m-%d")
+    tab$fake_datetime <- tab$datetime
 
-  # apply datum correction where necessary
-  if (datum$conversion_m > 0){
-    daily[ , c("value", "max", "min", "q75", "q25")] <- apply(daily[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
-    realtime[ , c("value", "max", "min", "q75", "q25")] <- apply(realtime[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
+    # Add missing variables used for plotting!
+
+    #####----------------
+
+    realtime <- tab
+    test2 <<- realtime
+    daily <- cddf_data
+    day_seq <- realtime$datetime
+    units <- "\u00B0C"
+
   }
 
-  # Make the plot --------------------
+
+  # realtime <<- realtime
+  # test2 <<- day_seq
+  # ribbon <<- ribbon
+  # daily <<- daily
+  # test <<- parameter
+  print("Done getting data sorted out")
+#### ----------------------------- Make the plot -------------------------- ####
+  print("Plotting starting")
   colours = c("blue", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
     # c("black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#687C04", "#0097A9", "#7A9A01", "#CD7F32")
   line_size = 1
@@ -442,7 +509,7 @@ hydrometContinuous <- function(location,
   spread <- max-min
   end_time <- max(realtime$fake_datetime)
   if (!is.infinite(minHist)){
-    line1 <- paste0("\n         \n         \n        Historical range based\n        on years ", lubridate::year(min(daily$datetime)), " to ", lubridate::year(max(realtime$datetime))-1, "." )
+    line1 <- paste0("\n         \n         \n        Historical range based\n        on years ", lubridate::year(min(daily$datetime)), " to ", lubridate::year(max(realtime$datetime, na.rm = TRUE))-1, "." )
   } else {
     line1 <- "\n         \n         \n        Not enough data for\n        historical ranges"
     plot <- plot + #Adjust the legend spacing so that the text isn't pushed off the plot area
@@ -474,6 +541,7 @@ hydrometContinuous <- function(location,
   }
 
   # Wrap things up and return() -----------------------
+  print("Add plot title")
   if (title == TRUE){
     if (is.null(custom_title) == TRUE) {
       stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
@@ -482,11 +550,12 @@ hydrometContinuous <- function(location,
         ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
     } else if (is.null(custom_title) == FALSE) {
       plot <- plot +
-        ggplot2::labs(title=custom_title) +
+        ggplot2::labs(title=as.character(custom_title)) +
         ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
     }
   }
 
+  print("Done plotting")
   #Save it if requested
   if (!is.null(save_path)){
     ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz=tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz=tzone)), ".png"), plot=plot, height=8, width=12, units="in", device="png", dpi=500)
