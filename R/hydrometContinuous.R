@@ -344,12 +344,12 @@ hydrometContinuous <- function(location=NULL,
     # Calculate min, max, median
     cddf$day <- format(cddf$datetime, "%m-%d")
     summary_cddf <- cddf %>%
-      dplyr::group_by(day) %>%
+      dplyr::group_by(.data$day) %>%
       dplyr::summarise(min = round(min(value), 0),
                        max = round(max(value), 0),
-                       md = round(median(value), 0),
-                       q75 = round(quantile(value, 0.75), 0),
-                       q25 = round(quantile(value, 0.25), 0))
+                       md = round(stats::median(value), 0),
+                       q75 = round(stats::quantile(value, 0.75), 0),
+                       q25 = round(stats::quantile(value, 0.25), 0))
 
     # Add date
     summary_cddf$datetime <- NA
@@ -380,7 +380,6 @@ hydrometContinuous <- function(location=NULL,
     #####----------------
 
     realtime <- tab
-    test2 <<- realtime
     daily <- cddf_data
     day_seq <- realtime$datetime
     units <- "\u00B0C"

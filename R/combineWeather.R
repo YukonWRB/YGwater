@@ -57,10 +57,10 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
   } else {warning("The objects in the stations parameter must be either a station id (character string) or a dataframe")}
 
   # Subset to variables of interest and months of interest
-  station1 <- station1 %>% dplyr::select(c("date", all_of(variables))) %>%
+  station1 <- station1 %>% dplyr::select(c("date", tidyselect::all_of(variables))) %>%
     dplyr::filter(lubridate::month(date) %in% months)
 
-  station2 <- station2 %>% dplyr::select(c("date", all_of(variables))) %>%
+  station2 <- station2 %>% dplyr::select(c("date", tidyselect::all_of(variables))) %>%
     dplyr::filter(lubridate::month(date) %in% months)
 
 #-------------- Run for loop over every variable of interest ------------------#
