@@ -4,7 +4,7 @@
 \alias{combineWeather}
 \title{Combine continuous ECCC climate station data}
 \usage{
-combineWeather(stations, start, end, variable, months = NULL)
+combineWeather(stations, start, end, variables, months = NULL)
 }
 \arguments{
 \item{stations}{The two stations you want to combine, given as a list with two elements. Can either be a dataframe as outputted by getWeather or a station id. The station listed first is filled in with the 2nd dataset when possible.}
@@ -13,12 +13,12 @@ combineWeather(stations, start, end, variable, months = NULL)
 
 \item{end}{The end date of the dataset to create.}
 
-\item{variable}{The variable to combine in the station datasets.}
+\item{variables}{The variable or variables to combine in the station datasets, given as a character string. Ex: c("mean_temp", "total_precip").}
 
 \item{months}{The months to plot, given as a vector. Must be given as a character, where the January is "01" and October is "10".}
 }
 \value{
-A datraframe with a date column and a variable column.
+A list of dataframes, one for each variable. The dataframe has a date column and a variable column. All dates between start and end are included, whether or not data is available for those dates.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}

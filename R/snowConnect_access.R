@@ -3,7 +3,7 @@
 #' @description
 #' `r lifecycle::badge("stable")`
 #'
-#' Connects to the Snow Survey Access database, or, if this DB is supersceded by a .sqlite database, to an equivalent .sqlite DB. If the Snow Survey database is migrated to an SQLite database, beware that the tables and table columns might no longer be what you're expecting!
+#' Connects to the old Snow Survey Access database.To connect to the new postgres database, use [snowConnect()].
 #'
 #' @param path The path to the database. Currently supports either a Microsoft Access database or an .sqlite database. 'default' points to //carver/infosys/Snow/DB/SnowDB.mdb.
 #' @param silent TRUE suppresses messages except for errors.
