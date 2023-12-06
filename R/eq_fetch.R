@@ -21,12 +21,12 @@ eq_fetch <- function(EQcode,
                      BD = 2,
                      apply_standards = TRUE){
 
-  # EQcode <- "WLV"
-  # stationIDs <- c("MW05-3A","MW05-3B","MW05-4A","MW05-4B","MW05-5A","MW05-5B","MW06-8S","MW06-8M","MW06-8D","MW06-9S","MW06-9M","MW06-10S","MW06-10M","MW06-10D","W-9","W-82")
-  # paramIDs = c("Al-D","As-D","Cd-D","Cu-D","Fe-D","Hg-D","Pb-D","Se-D","U-D","Zn-D","Fluord","SO4","N-NH4")
-  # dates <- "all"
-  # BD <- 2
-  # apply_standards = TRUE
+  EQcode <- "WLV"
+  stationIDs = c("MW05-1A", "MW05-1B", "MW05-2A", "MW05-2B", "MW05-06A", "MW05-06B", "MW08-13", "T1", "T1-6m", "T1-9m", "S1", "S5", "SP", "UD-1", "UD-2", "W15", "W16", "W19", "W31", "W81")
+  paramIDs = c("Ag-D", "Al-D", "As-D", "Cd-D", "Cr-D", "Cu-D", "Fe-D", "Flourd", "Hg-D", "N-NH4", "Ni-D", "Pb-D", "Sb-D", "Se-D", "SO4", "U-D", "Zn-D")
+  dates <- "all"
+  BD <- 2
+  apply_standards = TRUE
 
   # Set a few options (I'll probs remove these)
 
@@ -58,12 +58,14 @@ eq_fetch <- function(EQcode,
         dplyr::mutate(StnCode = gsub(paste0("(", EQcode, ")"), "", StnCode, fixed = TRUE)) %>%
         dplyr::filter(StnCode %in% stationIDs)
     } else {
+      stns <- eqstns %>%
+        dplyr::filter(stringr::str_detect(StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
+        dplyr::mutate(StnCode = gsub(paste0("(", EQcode, ")"), "", StnCode, fixed = TRUE))
       stop()
     }
   },
   error = function(e) {
-    message("Please check your Station IDs")
-    print(e)
+    message(paste("The following stations do not match exactly what is in EQWin:", paste(setdiff(stationIDs, stns$StnCode), collapse = ", ")))
   }
   )
 
@@ -91,11 +93,11 @@ eq_fetch <- function(EQcode,
     } else if(all(paramIDs %in% eqparams$ParamCode)){
       params <- eqparams
     } else {
+      params <- eqparams
       stop()}
   },
   error = function(e){
-    message("Please check your parameter list")
-    print(e)
+    message(paste("The following stations do not match exactly what is in EQWin:", paste(setdiff(paramIDs, params$ParamCode), collapse = ", ")))
   }
   )
 
