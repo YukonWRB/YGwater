@@ -21,12 +21,12 @@ eq_fetch <- function(EQcode,
                      BD = 2,
                      apply_standards = TRUE){
 
-  EQcode <- "WLV"
-  stationIDs <- c("MW05-3A","MW05-3B","MW05-4A","MW05-4B","MW05-5A","MW05-5B","MW06-8S","MW06-8M","MW06-8D","MW06-9S","MW06-9M","MW06-10S","MW06-10M","MW06-10D","W-9","W-82")
-  paramIDs = c("Al-D","As-D","Cd-D","Cu-D","Fe-D","Hg-D","Pb-D","Se-D","U-D","Zn-D","Fluord","SO4","N-NH4")
-  dates <- "all"
-  BD <- 2
-  apply_standards = TRUE
+  # EQcode <- "WLV"
+  # stationIDs <- c("MW05-3A","MW05-3B","MW05-4A","MW05-4B","MW05-5A","MW05-5B","MW06-8S","MW06-8M","MW06-8D","MW06-9S","MW06-9M","MW06-10S","MW06-10M","MW06-10D","W-9","W-82")
+  # paramIDs = c("Al-D","As-D","Cd-D","Cu-D","Fe-D","Hg-D","Pb-D","Se-D","U-D","Zn-D","Fluord","SO4","N-NH4")
+  # dates <- "all"
+  # BD <- 2
+  # apply_standards = TRUE
 
   # Set a few options (I'll probs remove these)
 
