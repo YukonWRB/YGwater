@@ -5,11 +5,6 @@
 
 # DO NOT DO THE FOLLOWING FOR SPATIAL DATA:
 # prov_buff <- sf::read_sf(dsn = "dev/prov_buffers", layer = "Provinces_buffered_300km")
-#
-#
-# data <- list() #data must be a single object
-#
-# usethis::use_data(data, internal=TRUE, overwrite=TRUE)
 
 
 # However, other data that can be simply reloaded as R environment objects can be made into internal data simply:
@@ -20,8 +15,8 @@ spatial_stns <- read.csv("data-raw/spatial_stns.csv")
 peaks <- read.csv("data-raw/peaks.csv")
 flow_level_flood <- read.csv("data-raw/flow_level_flood.csv")
 snowcourse_factors <- read.csv("data-raw/snowcourse_factors.csv")
-eq_std_calc_CCME_Mn <- read.csv("data-raw/eq_std_calc_CCME_Mn.csv")
-eq_std_calc_CCME_NH4 <- read.csv("data-raw/eq_std_calc_CCME_NH4.csv")
+eq_std_calc_CCME_Mn <- read.csv("data-raw/eq_std_calc_CCME_Mn.csv", check.names = FALSE)
+eq_std_calc_CCME_NH4 <- read.csv("data-raw/eq_std_calc_CCME_NH4.csv", check.names = FALSE)
 
 
 data <- list(level_returns = level_returns, level_returns_max = level_returns_max, flow_returns = flow_returns, spatial_stns = spatial_stns, peaks = peaks, flow_level_flood = flow_level_flood, snowcourse_factors = snowcourse_factors, eq_std_calc_CCME_Mn = eq_std_calc_CCME_Mn, eq_std_calc_CCME_NH4 = eq_std_calc_CCME_NH4)

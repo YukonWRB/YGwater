@@ -10,7 +10,6 @@
 #' @param xle_file The file you wish to convert. Default "choose" allows you to point to the file.
 #' @param location The ID of the well in the form "YOWN-1500". You can also simply name the well, and if there is ambiguity regarding which well is the right one you will get a prompt to select from a list.
 #' @param save_path The location where the csv file should be saved.
-#' @param YOWN_master The location of the YOWN master spreadsheet. Default is in the YOWN_MASTER_TABLE folder.
 #'
 #' @return A csv of the logger data, ready for export to Aquarius or for general use.
 #' @export
@@ -86,7 +85,7 @@ xle_convert <- function(xle_file = "choose",
       print("New name has been inputted by user")
     }
   } else if (length(possible_names) == 0){
-    stop(paste0("It was impossible to find a match for any YOWN wells using the YOWN codes or well names in the YOWN master spreadsheet. Please correct the location you specified or ammend the YOWN master sheet. \n\nYou pointed me here for the YOWN master sheet: ", YOWN_master))
+    stop("It was impossible to find a match for any YOWN wells using the YOWN codes or well names in the YOWN master spreadsheet. Please correct the location you specified or ammend the YOWN master sheet.")
   }
 
   # CONVERT XLE TO XML
