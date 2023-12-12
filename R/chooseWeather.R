@@ -32,7 +32,7 @@
 # Map of station locations
 
 chooseWeather <-
-  function(location, coords, dist, interval, start, end, variable, months, return_data = FALSE) {
+  function(location=NULL, coords=NULL, dist, interval, start, end, variable, months=NULL, return_data = FALSE) {
     # For testing
     # location=NULL
     # coords=c(64.0639, -139.4333) #c(60.1660, -132.7247) # Dawson c(64.0639, -139.4333) Whitehorse: c(60.7197, -135.0523)
@@ -43,6 +43,15 @@ chooseWeather <-
     # variable=c("mean_temp")
     # months=c('01', '02', '03', '04', '05', '06', '07', '08', '09', 10, 11, 12)
     # return_data = TRUE
+
+    if (is.null(months)) {
+      months <- c('01', '02', '03', '04', '05', '06', '07', '08', '09', 10, 11, 12)
+    }
+
+    # If end is current year, get sys.date
+    if (end == format(Sys.Date(), "%Y")) {
+      end_date <- Sys.Date()
+    } else {end_date <- paste0(end, "-01-01")}
 
     # Get station list and metadata
     stns <- weathercan::stations_search(
@@ -63,7 +72,7 @@ chooseWeather <-
         table <- getWeather(
           station = s,
           start = paste0(start, "-01-01"),
-          end = paste0(end, "-01-01"),
+          end = end_date,
           interval = interval,
           save_path = NULL
         )

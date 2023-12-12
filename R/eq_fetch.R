@@ -20,13 +20,13 @@ eq_fetch <- function(EQcode,
                      dates = "all",
                      BD = 2,
                      apply_standards = TRUE){
-
-  # EQcode <- "WLV"
-  # stationIDs = c("MW05-1A", "MW05-1B", "MW05-2A", "MW05-2B", "MW05-06A", "MW05-06B", "MW08-13", "T1", "T1-6m", "T1-9m", "S1", "S5", "SP", "UD-1", "UD-2", "W15", "W16", "W19", "W31", "W81")
-  # paramIDs = c("Ag-D", "Al-D", "As-D", "Cd-D", "Cr-D", "Cu-D", "Fe-D", "Flourd", "Hg-D", "N-NH4", "Ni-D", "Pb-D", "Sb-D", "Se-D", "SO4", "U-D", "Zn-D")
-  # dates <- "all"
-  # BD <- 2
-  # apply_standards = TRUE
+#
+# EQcode <- "WLV"
+# stationIDs = c("MW05-1A", "MW05-1B", "MW05-2A", "MW05-2B", "MW05-06A", "MW05-06B", "MW08-13", "T1", "T1-6m", "T1-9m", "S-1", "S-5", "SP", "UD-1", "UD-2", "W-15", "W-16", "W-19", "W-31", "W-81")
+# paramIDs = c("Ag-D", "Al-D", "As-D", "Cd-D", "Cr-D", "Cu-D", "Fe-D", "Flourd", "Hg-D", "N-NH4", "Ni-D", "Pb-D", "Sb-D", "Se-D", "SO4", "U-D", "Zn-D")
+# dates <- "all"
+# BD <- 2
+# apply_standards = TRUE
 
   # Set a few options (I'll probs remove these)
 
@@ -173,9 +173,8 @@ eq_fetch <- function(EQcode,
     std_calc_tmp$MaxVal <- stringr::str_remove_all(std_calc_tmp$MaxVal, "=*") # Remove equal sign, leaving MaxVal with values matching values in eqcalcs access table
 
     # Process calculated standards
-    std_calcs <- eq_std_calc(data = sampledata,
+    std_calcs <- eq_std_calc(sampledata = sampledata,
                              calcs = std_calc_tmp)
-
 
     # Combine set and calculated standards, format and order
     stnstd <- rbind(std_set, std_calcs)
@@ -200,8 +199,7 @@ eq_fetch <- function(EQcode,
     stnstd <- stnstd %>% #Convert columns containing all NA to numeric
       dplyr::mutate_if(is.logical, as.numeric)
     stnstd <- stnstd %>% # Arrange stnstd such that parameter order matches sampledata
-      dplyr::select(all_of(c(head_stds, params_data)))
-
+      dplyr::select(dplyr::all_of(c(head_stds, params_data)))
   }
 
   # Extract by-station data and station standards filtered to desired output parameters, put into by-location list then add list to master EQ_fetch output

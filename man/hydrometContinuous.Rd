@@ -5,8 +5,8 @@
 \title{Continuous hydromet data plotting}
 \usage{
 hydrometContinuous(
-  location,
-  parameter,
+  location = NULL,
+  parameter = "variable",
   startDay = 1,
   endDay = 365,
   tzone = "MST",
@@ -21,7 +21,8 @@ hydrometContinuous(
   allowed_missing = 10,
   plot_scale = 1,
   save_path = NULL,
-  con = hydrometConnect()
+  con = hydrometConnect(),
+  cddf_data = NULL
 )
 }
 \arguments{
@@ -35,7 +36,7 @@ hydrometContinuous(
 
 \item{tzone}{The timezone to use for graphing. Only really evident for a small number of days.}
 
-\item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.}
+\item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year. Currently, only 1 year can be provided for when CDDF data is provided to function.}
 
 \item{datum}{Should a vertical datum be applied to the data, if available? TRUE or FALSE.}
 
@@ -58,6 +59,8 @@ hydrometContinuous(
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
 \item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
+
+\item{cddf_data}{A dataframe with the data to be plotted. Must contain the following columns: datetime, value. This will be removed when climate data is finished being added to the hydromet database.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
