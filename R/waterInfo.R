@@ -33,7 +33,7 @@ waterInfo <- function(con = hydrometConnect, locations = "all", level_flow = "bo
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the path to the folder where you want this report saved.")
+      message("Select the path to the folder where you want this report saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
     dir.create(paste0(save_path, "/WaterInfo_", Sys.Date()))
@@ -94,7 +94,7 @@ waterInfo <- function(con = hydrometConnect, locations = "all", level_flow = "bo
       extremes[[paste0(locs$location[i], "_", locs$parameter[i])]] <- fasstr::calc_annual_extremes(data = daily, dates = date, values = value, months_min = months_min, months_max = months_max, allowed_missing = allowed_missing, water_year_start = 1)
       data[[paste0(locs$location[i], "_", locs$parameter[i])]] <- daily
     }, error = function(e) {
-      print(paste0("Failed on location ", locs$location[i], " and parameter ", locs$parameter[i]))
+      message("Failed on location ", locs$location[i], " and parameter ", locs$parameter[i])
     })
   }
 
@@ -235,7 +235,7 @@ waterInfo <- function(con = hydrometConnect, locations = "all", level_flow = "bo
     } #End of plots loop
   }#End of loop working on extremes list of tables.
   if (plot_type == "combined" & plots & !quiet){
-    print("Minimum and maximum flow plots were combined and returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
+    message("Minimum and maximum flow plots were combined and returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
   }
 
 

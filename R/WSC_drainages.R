@@ -28,11 +28,11 @@ WSC_drainages <- function(inputs_folder = "choose",
   rlang::check_installed("sf", reason = "Package sf is required to use function drainageBasins") #This is here because whitebox is not a 'depends' of this package; it is only necessary for this function.
 
   if (inputs_folder == "choose") {
-    print("Select the inputs folder.")
+    message("Select the inputs folder.")
     inputs_folder <- as.character(utils::choose.dir(caption="Select Inputs Folder"))
   }
   if (save_path == "choose") {
-    print("Select the folder where you want the watershed shapefiles saved.")
+    message("Select the folder where you want the watershed shapefiles saved.")
     save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
   }
   temp <- tempdir(check=TRUE)
@@ -82,9 +82,9 @@ WSC_drainages <- function(inputs_folder = "choose",
     }
     #Write to file
     suppressMessages(sf::write_sf(poly, dsn = save_path, layer = "WSC_watersheds_polygons", driver = "ESRI Shapefile"))
-    print(paste0("The polygons shapefile has been saved in ", save_path))
+    message("The polygons shapefile has been saved in ", save_path)
   }, error = function(e) {
-    print("The polygons could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
+    message("The polygons could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
   })
 
   #rbind points together
@@ -99,9 +99,9 @@ WSC_drainages <- function(inputs_folder = "choose",
     }
     #Write to file
     suppressMessages(sf::write_sf(points, dsn = save_path, layer = "WSC_watersheds_points", driver = "ESRI Shapefile"))
-    print(paste0("The points shapefile has been saved in ", save_path))
+    message("The points shapefile has been saved in ", save_path)
   }, error = function(e) {
-    print("The points could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
+    message("The points could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
   })
   suppressWarnings(invisible(file.remove(list.files(tempdir(), full.names=TRUE))))
   unlink(temp, recursive=TRUE)

@@ -1,4 +1,4 @@
-test_that("continuous level plot is as expected for full year with numeric startDay and endDay", {
+test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file", {
   dir <- paste0(tempdir(), "/plots")
   unlink(dir, recursive=TRUE)
   dir.create(dir)
@@ -9,7 +9,7 @@ test_that("continuous level plot is as expected for full year with numeric start
   unlink(dir, recursive=TRUE)
 })
 
-test_that("console plot output is as expected", {
+test_that("continuous level plot is as expected for full year with numeric startDay and endDay when output to console", {
   plot <- suppressWarnings(hydrometContinuous("09EA004", "level", startDay = 1, endDay = 365, years = "2022"))
   vdiffr::expect_doppelganger("full yr numeric start/end", plot)
 })

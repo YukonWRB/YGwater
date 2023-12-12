@@ -105,7 +105,7 @@ basinPrecip <- function(location,
     }
 
   #Determine the appropriate clip polygon for the files to minimize space requirements.
-  polygons <- terra::vect(prov_buff)
+  polygons <- prov_buff
   polygons <- terra::project(polygons, "+proj=longlat +EPSG:3347")
 
   if (type == "WSC"){

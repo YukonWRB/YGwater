@@ -30,7 +30,7 @@ RWISConnect <- function(name = "rwdm", host = "rwis.gov.yk.ca", port = "5432", u
                          password = password)
 
   if(!DBI::dbIsValid(RWIS)){
-    print("Connection failed.")
+    error("Connection failed.")
   } else {
     return(RWIS)
   }

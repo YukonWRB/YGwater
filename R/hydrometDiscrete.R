@@ -36,7 +36,7 @@ hydrometDiscrete <- function(location=NULL,
                              plot_type = "violin",
                              plot_scale = 1,
                              save_path = NULL,
-                             con = hydrometConnect(),
+                             con = hydrometConnect(silent = TRUE),
                              discrete_data = NULL)
 {
 
@@ -87,17 +87,16 @@ hydrometDiscrete <- function(location=NULL,
     years <- sort(years, decreasing = TRUE)
     if (length(years) > 10){
       years <- years[1:10]
-      print("The parameter 'years' can only have up to 10 years. It's been truncated to the first 10 years in the vector.")
+      message("The parameter 'years' can only have up to 10 years. It's been truncated to the first 10 years in the vector.")
     }
   }
   # Select save path
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the folder where you want this graph saved.")
+      message("Select the folder where you want this graph saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
   }
-
 
   if (is.null(discrete_data)) {
 

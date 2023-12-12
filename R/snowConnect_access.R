@@ -25,12 +25,12 @@ snowConnect_access <- function(path = "default", silent=FALSE){
   if(stringr::str_detect(path, ".mdb")){
     snowCon <- DBI::dbConnect(drv = odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", path))
     if (!silent){
-      print("Remember to disconnect using DBI::dbDisconnect() when finished.")
+      message("Remember to disconnect using DBI::dbDisconnect() when finished.")
     }
   } else if (stringr::str_detect(path, ".sqlite")){
     snowCon <- DBI::dbConnect(RSQLite::SQLite(), path)
     if (!silent){
-      print("Be careful! The database is now an SQLite database, and the tables and their columns may have changed.")
+      message("Be careful! The database is now an SQLite database, and the tables and their columns may have changed.")
     }
   } else {
     stop("This script is not designed to work with a database having that file extension. Currently supporting .mdb and .sqlite databases.")

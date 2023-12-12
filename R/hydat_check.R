@@ -5,7 +5,7 @@
 #'
 #' Checks and, if necessary, updates the local version of the WSC HYDAT database. Intended for use on a schedule to ensure the user always has the latest version.
 #'
-#' @param silent Should messages be printed to the console?
+#' @param silent Should messages be output to the console?
 #'
 #' @return An updated local copy of hydat, if indicated by the age of the remote HYDAT.
 #' @export

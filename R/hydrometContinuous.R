@@ -64,11 +64,11 @@ hydrometContinuous <- function(location=NULL,
                                allowed_missing = 10,
                                plot_scale = 1,
                                save_path = NULL,
-                               con = hydrometConnect(),
+                               con = hydrometConnect(silent = TRUE),
                                cddf_data = NULL)
 {
 
-  print("start of function")
+  # print("start of function")
   # Commented code below is for testing...
   # location = "09EA004"
   # parameter = "flow"
@@ -109,13 +109,13 @@ hydrometContinuous <- function(location=NULL,
     years <- sort(years)
     if (length(years) > 10){
       years <- years[(length(years)-10):length(years)]
-      print("The parameter 'years' can only have up to 10 years. It's been truncated to the most recent 10 years.")
+      # print("The parameter 'years' can only have up to 10 years. It's been truncated to the most recent 10 years.")
     }
   }
   # Select save path
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the folder where you want this graph saved.")
+      # print("Select the folder where you want this graph saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
   }
@@ -125,10 +125,10 @@ hydrometContinuous <- function(location=NULL,
     message("Your parameter entry for 'return_max_year' is invalid (greater than the last year plotted). It has been adjusted to the last year plotted, or to the last year with enough data.")
   }
 
-  print("end of parameter checks")
+  # print("end of parameter checks")
 
 #### ----------------------- CDDF data is not provided -------------------- ####
-  print("Getting data sorted out")
+  # print("Getting data sorted out")
   if(is.null(cddf_data)) {
     #Confirm parameter and location exist in the database and that there is only one entry
     exist_check <- DBI::dbGetQuery(con, paste0("SELECT location, parameter, timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
@@ -392,9 +392,9 @@ hydrometContinuous <- function(location=NULL,
   # ribbon <<- ribbon
   # daily <<- daily
   # test <<- parameter
-  print("Done getting data sorted out")
+  # print("Done getting data sorted out")
 #### ----------------------------- Make the plot -------------------------- ####
-  print("Plotting starting")
+  # print("Plotting starting")
   colours = c("blue", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
     # c("black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#687C04", "#0097A9", "#7A9A01", "#CD7F32")
   line_size = 1
@@ -540,7 +540,7 @@ hydrometContinuous <- function(location=NULL,
   }
 
   # Wrap things up and return() -----------------------
-  print("Add plot title")
+  # print("Add plot title")
   if (title == TRUE){
     if (is.null(custom_title) == TRUE) {
       stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
@@ -554,7 +554,7 @@ hydrometContinuous <- function(location=NULL,
     }
   }
 
-  print("Done plotting")
+  # print("Done plotting")
   #Save it if requested
   if (!is.null(save_path)){
     ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz=tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz=tzone)), ".png"), plot=plot, height=8, width=12, units="in", device="png", dpi=500)

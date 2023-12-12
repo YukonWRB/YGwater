@@ -19,7 +19,7 @@ DB_get_meta <- function(con = hydrometConnect(), location = "all", save_path = N
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the the folder where you want location metadata saved.")
+      message("Select the the folder where you want location metadata saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
     if (!dir.exists(save_path)){
