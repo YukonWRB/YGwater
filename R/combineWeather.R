@@ -22,6 +22,8 @@
 
 ##TODO
 # Subset to months of interest currently doesn't work because all dates are filled in after subset. Need to think of a way to get around this.
+# Add station name to table.
+
 # Fill in remaining gaps with simple interpolation?
 # Fill out roxygen
 # stations = list("2101310", "2101300", "2101400")
@@ -30,7 +32,33 @@
 # variables=c("mean_temp", "total_precip", "total_rain", "total_snow", "min_temp", "max_temp")
 # months=NULL
 
-# test <- combineWeather(stations = list("2101310", "2101300", "2101400", "2101415", "2101303"), start='1940-01-01', end='2023-11-01', variables=c("mean_temp", "total_precip", "total_rain", "total_snow", "min_temp", "max_temp"), months=NULL)
+# test <- combineWeather(stations = list("2101310", "2101300", "2101400"), start='2010-01-01', end='2013-11-01', variables=c("mean_temp", "total_precip", "min_temp", "max_temp"), months=NULL)
+
+# # # Check for hourly data on missing days?
+# test <- whitehorse[whitehorse$variable=="mean_temp", ]
+# for (d in test[is.na(test$value), ]$date) {
+#   d <- as.Date(d)
+#   # Subset to row of interest
+#   rw <- test[test$date == d,]
+#   # Get station before this empty one
+#   stn <- test %>%
+#     dplyr::filter(date <= d, !is.na(value)) %>%
+#     dplyr::slice_max(order_by = date) %>%
+#     dplyr::pull(station)
+#
+#   # Get hourly data for that day
+#   test2 <- getWeather(station = stn, start = d, end = d,
+#                      tzone = "UTC",
+#                      interval = "hour",
+#                      save_path = NULL)
+#   # Calculate mean from min and max
+#   avg <- (max(test2$temp) - min(test2$temp)) / 2
+#   # Replace NA with avg
+#   test[test$date==d,]$value <- avg
+#   test[test$date==d,]$station <- stn
+# }
+
+
 
 combineWeather <- function(stations, start, end, variables, months=NULL) {
 
@@ -71,6 +99,9 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
         tidyr::pivot_longer(cols = variables,
                             names_to = "variable",
                             values_to = "value")
+
+      # Add column with station name
+      station$station <- stations[[s]]
     }
 
     # Replace in stations list
@@ -92,7 +123,7 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
     if (nrow(station2)==0) {next}
 
     # Run for loop over every variable of interest
-    combined_variables <- setNames(data.frame(matrix(ncol = 3, nrow = 0)), c("date", "value", "variable"))
+    combined_variables <- setNames(data.frame(matrix(ncol = 4, nrow = 0)), c("date", "value", "variable", "station"))
     for (v in variables) {
 
       print(paste0("Combining variable '", v, "'"))
@@ -106,7 +137,7 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       overlap <- dplyr::inner_join(stn1, stn2, by='date')
       # find earliest date that has the month and day +1 of max_d
       overlap <- overlap %>%
-        dplyr::filter(date >
+        dplyr::filter(date >=
                         min(
                           date[grepl(
                             paste0(
@@ -138,17 +169,18 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       missing_dates <- as.Date(setdiff(all_dates, stn1$date))
 
       if (length(missing_dates)>=1) {
-        missing_data <- data.frame(date = missing_dates, value = NA, variable = v)
-        stn1 <- dplyr::bind_rows(stn1[, c("date", "value", "variable")], missing_data)
+        missing_data <- data.frame(date = missing_dates, value = NA, variable = v, station = NA)
+        stn1 <- dplyr::bind_rows(stn1[, c("date", "value", "variable", "station")], missing_data)
       }
 
       # Replace NAs with corrected station 2
       combined_data <- stn1 %>%
         dplyr::left_join(stn2, by = "date", suffix = c("_stn1", "_stn2")) %>%
-        dplyr::mutate(value = dplyr::coalesce(.data$value_stn1, .data$value_stn2)
-                      , variable = .data$variable_stn1
+        dplyr::mutate(value = dplyr::coalesce(.data$value_stn1, .data$value_stn2),
+                      variable = .data$variable_stn1,
+                      station = ifelse(!is.na(value_stn1), station_stn1, station_stn2)
                       ) %>%
-        dplyr::select(date, value, variable) %>%
+        dplyr::select(date, value, variable, station) %>%
         dplyr::arrange(date)
 
       print("Gaps filled")
