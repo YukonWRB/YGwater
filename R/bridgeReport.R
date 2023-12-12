@@ -49,7 +49,7 @@ bridgeReport <- function(con = hydrometConnect(),
   }
 
   rmarkdown::render(
-    input = system.file("rmd", "Bridge_report.Rmd", package = "WRBfloods"),
+    input = system.file("rmd", "Bridge_report.Rmd", package = "YGwater"),
     output_file = paste0(Sys.Date(), "_Bridge-Radar-Report"),
     output_dir = save_path,
     params = list(

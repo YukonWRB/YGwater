@@ -20,7 +20,9 @@
 #'
 #' @seealso [getHRDPS()] if looking for forecast precipitation and other parameters in .tif format. For nice precipitation maps and tabular reports of precipitation (past or future), try [basinPrecip()].
 #' @export
-#'
+
+
+#TODO: Currently pulling polar stereographic images, need to switch to rotated lat/long grid
 getHRDPA <- function(start = Sys.time()-60*60*24,
                      end = Sys.time(),
                      clip = c("YT"),
