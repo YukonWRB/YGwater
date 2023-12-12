@@ -22,7 +22,7 @@ getHRDPS <- function(clip = c("YT"),
 
   #Save path
   if (save_path == "choose") {
-    print("Select the path to the folder where you want to save the raster(s).")
+    message("Select the path to the folder where you want to save the raster(s).")
     save_path <- as.character(utils::choose.dir(caption = "Select Save Folder"))
   }
 
@@ -52,7 +52,9 @@ getHRDPS <- function(clip = c("YT"),
   extent <- paste(clip, collapse="_")
   if (!is.null(clip)){
     clip <- prov_buff[prov_buff$PREABBR %in% clip, ]
-    clip <- terra::vect(clip)
+    if (nrow(clip) == 0){
+      clip <- NULL
+    }
   }
 
   existing <- list.files(save_path)

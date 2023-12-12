@@ -26,7 +26,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the path to the folder where you want this report saved.")
+      message("Select the path to the folder where you want this report saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
     dir.create(paste0(save_path, "/SnowInfo_", Sys.Date()))
@@ -50,7 +50,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
   } else {
     check_locs <- locations[!(locations %in% location_table$SNOW_COURSE_ID)]
     if (length(check_locs) > 0){
-      print(paste0("Could not find a record for location ", check_locs, ". Other locations will be returned."))
+      message("Could not find a record for location ", check_locs, ". Other locations will be returned.")
     }
     locations <- location_table[location_table$SNOW_COURSE_ID %in% locations , ]
   }
@@ -98,7 +98,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     locations <- locations[!(locations$SNOW_COURSE_ID == "09BA-SC02A") , ]
     corrected <- TRUE
   } else if (("09BA-SC02A" %in% locations$SNOW_COURSE_ID | "09BA-SC02B" %in% locations$SNOW_COURSE_ID ) & !quiet) {
-    print("Be careful with stations 09BA-SC02A and B. A is no longer active. When requesting data from both, a correction factor determined by operating the stations in parallel over several years is applied to A, and the result reported as 09BA-SC02B. Since you requested only data from A or B, no correction was applied.")
+    message("Be careful with stations 09BA-SC02A and B. A is no longer active. When requesting data from both, a correction factor determined by operating the stations in parallel over several years is applied to A, and the result reported as 09BA-SC02B. Since you requested only data from A or B, no correction was applied.")
   }
 
   if ("10AD-SC01" %in% locations$SNOW_COURSE_ID & "10AD-SC01B" %in% locations$SNOW_COURSE_ID){
@@ -133,7 +133,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     corrected <- TRUE
     locations <- locations[!(locations$SNOW_COURSE_ID == "10AD-SC01") , ]
   } else if (("10AD-SC01" %in% locations$SNOW_COURSE_ID | "10AD-SC01B" %in% locations$SNOW_COURSE_ID) & !quiet) {
-    print("Be careful with stations 10AD-SC01 (no letter) and 10AD-SC01B. The first is no longer active. When requesting data from both, a correction factor determined by operating the stations in parallel over several years is applied to the first, and the result reported as 10AD-SC01B. Since you requested only data from (no letter) or B, no correction was applied.")
+    message("Be careful with stations 10AD-SC01 (no letter) and 10AD-SC01B. The first is no longer active. When requesting data from both, a correction factor determined by operating the stations in parallel over several years is applied to the first, and the result reported as 10AD-SC01B. Since you requested only data from (no letter) or B, no correction was applied.")
   }
 
   if (!inactive){ #Filter out the inactive stations if inactive is FALSE
@@ -142,7 +142,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     locations <- locations[locations$ACTIVE_FLG == TRUE ,]
   }
   if (corrected & !quiet){
-    print("Warning: locations 09BA-SC02B and/or 10AD-SC01B are in fact composites of defunct locations 09BA-SC02A and/or 10AD-SC01. A correction factor (determined by operating locations in parallel over several years) was applied to defunct location data to make it comparable to the new locations.")
+    message("Warning: locations 09BA-SC02B and/or 10AD-SC01B are in fact composites of defunct locations 09BA-SC02A and/or 10AD-SC01. A correction factor (determined by operating locations in parallel over several years) was applied to defunct location data to make it comparable to the new locations.")
   }
 
 
@@ -427,7 +427,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     }
 
     if (plot_type == "combined"){
-      print("Combined SWE, depth, density plots were returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
+      message("Combined SWE, depth, density plots were returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
     }
   } #End of plots loop
 

@@ -28,11 +28,11 @@ getHRDPA <- function(start = Sys.time()-60*60*24,
 {
   #Save path
   if (save_path == "choose") {
-    print("Select the path to the folder where you want to save the raster(s).")
+    message("Select the path to the folder where you want to save the raster(s).")
     save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
   }
 
-  ###Determine the sequence of files within the start:end window, compare against what exists in save_path, make list of files to dl.
+  # Determine the sequence of files within the start:end window, compare against what exists in save_path, make list of files to dl. #####
   start <- as.POSIXct(start) + 60*60*4.8 #Assuming that rasters are issued a bit more than one hour post valid time, this sets the start time so that the 6 hours before the requested start time is not included.
   end <- as.POSIXct(end)
   attr(start, "tzone") <- "UTC"
@@ -44,7 +44,14 @@ getHRDPA <- function(start = Sys.time()-60*60*24,
   available <- xml2::read_html("https://dd.weather.gc.ca/analysis/precip/hrdpa/grib2/polar_stereographic/06/") #6 hour products
   available <- rvest::html_elements(available, xpath='//*[contains(@href, ".grib2")]') %>%
     rvest::html_attr("href")
-  available <- as.data.frame(as.character(available))
+  available <- data.frame()
+  for (i in c("00", "06", "12", "18")){
+    tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/model_hrdpa/2.5km/", i, "/"))
+    tmp <- rvest::html_elements(tmp, xpath='//*[contains(@href, ".grib2")]') %>%
+      rvest::html_attr("href")
+    available <- rbind(available, as.data.frame(as.character(tmp)))
+  }
+
   names(available) <- "link"
   available <- available %>% dplyr::mutate(cutoff = substr(.data$link, 20,23),
                                            valid = as.POSIXct(substr(.data$link, 45,54), format = "%Y%m%d%H", tz="UTC")
@@ -82,7 +89,9 @@ getHRDPA <- function(start = Sys.time()-60*60*24,
   extent <- paste(clip, collapse="_")
   if (!is.null(clip)){
     clip <- prov_buff[prov_buff$PREABBR %in% clip, ]
-    clip <- terra::vect(clip)
+    if (nrow(clip) == 0){
+      clip <- NULL
+    }
   }
 
   #Download the HRDPAs within the time window, save to disc. Don't re-dl files except to replace 1-hour-post raster with 7-hour-post
@@ -96,19 +105,21 @@ getHRDPA <- function(start = Sys.time()-60*60*24,
     if (!(name %in% list.files(save_path))){
         if (httr::HEAD(paste0("https://dd.weather.gc.ca/analysis/precip/hrdpa/grib2/polar_stereographic/06/CMC_HRDPA_APCP-006-0700cutoff_SFC_0_ps2.5km_", substr(i, 1, 4), substr(i, 6,7), substr(i, 9,10), substr(i, 12,13), "_000.grib2"))$status_code == 200){ #First try downloading all 7-hour post files
       raster <- terra::rast(paste0("https://dd.weather.gc.ca/analysis/precip/hrdpa/grib2/polar_stereographic/06/CMC_HRDPA_APCP-006-0700cutoff_SFC_0_ps2.5km_", substr(i, 1, 4), substr(i, 6,7), substr(i, 9,10), substr(i, 12,13), "_000.grib2"))
+      # paste0("https://dd.weather.gc.ca/model_hrdpa/2.5km/")
 
       } else { #...but if one is missing because data requested is too recent, get the 1-hour file
         name <- sub("07", "01", name)
         if (!(name %in% list.files(save_path))){ #But don't re-download it if it already exists!
           raster <- terra::rast(paste0("https://dd.weather.gc.ca/analysis/precip/hrdpa/grib2/polar_stereographic/06/CMC_HRDPA_APCP-006-0100cutoff_SFC_0_ps2.5km_", substr(i, 1, 4), substr(i, 6,7), substr(i, 9,10), substr(i, 12,13), "_000.grib2"))
 
+          # New code for rotated lat/long grid
         }
       }
 
       if (exists("raster")){
         if (clipped == FALSE){
           if (!is.null(clip)){
-            clip <- terra::project(clip, raster) #project vector to crs of the raster
+            clip <- terra::project(clip, raster) #project clip vector to crs of the raster
           }
           clipped <- TRUE #So that project doesn't happen after the first iteration
         }

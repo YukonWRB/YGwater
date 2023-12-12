@@ -106,12 +106,12 @@ floodReport <-
     #####Selection of image path and save path#####
     if (is.null(image_path) == FALSE) {
       if (image_path == "choose") {
-        print("Select the path to the folder containing your images.")
+        message("Select the path to the folder containing your images.")
         image_path <- utils::choose.dir( caption="Select Image Folder")
       }
     }
     if (save_path == "choose") {
-      print("Select the path to the folder where you want this report saved.")
+      message("Select the path to the folder where you want this report saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
 
@@ -123,7 +123,7 @@ floodReport <-
     #####Generate reports#####
     if (is.null(report_name) == FALSE & is.null(custom_report_stations) == FALSE) {
       #deals with mistakes
-      print("You specified custom report stations while the preset report was also set. I've set the preset to Custom Hydrometric Report so you get a custom report instead.")
+      message("You specified custom report stations while the preset report was also set. I've set the preset to Custom Hydrometric Report so you get a custom report instead.")
       report_name <- "Custom Hydrometric Report"
     }
 

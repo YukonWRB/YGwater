@@ -24,7 +24,7 @@ DB_get_spatial <- function(con = hydrometConnect(), type, rowid, save_path = NUL
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the folder where you want this polygon/raster saved.")
+      message("Select the folder where you want this polygon/raster saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
     if (!dir.exists(save_path)){

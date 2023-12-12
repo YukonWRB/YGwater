@@ -32,7 +32,7 @@ bridgeReport <- function(con = hydrometConnect(),
   }
 
   if (save_path == "choose") {
-    print("Select the path to the folder where you want this report saved.")
+    message("Select the path to the folder where you want this report saved.")
     save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
   }
 

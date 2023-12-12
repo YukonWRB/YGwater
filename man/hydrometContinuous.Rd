@@ -21,7 +21,7 @@ hydrometContinuous(
   allowed_missing = 10,
   plot_scale = 1,
   save_path = NULL,
-  con = hydrometConnect(),
+  con = hydrometConnect(silent = TRUE),
   cddf_data = NULL
 )
 }
