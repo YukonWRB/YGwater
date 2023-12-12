@@ -10,7 +10,7 @@
 delayedAssign("prov_buff", local({
   try(
     sf::read_sf(
-      system.file("extdata/prov_buffers/Provinces_buffered_300km.shp", package = "WRBtools")  #This lives in the /inst folder, but because of how /inst works the path does not include /inst. Read up on this behavior in the R packages e-book.
+      system.file("extdata/prov_buffers/Provinces_buffered_300km.shp", package = "YGwater")  #This lives in the /inst folder, but because of how /inst works the path does not include /inst. Read up on this behavior in the R packages e-book.
     ),
     silent = TRUE
   )
