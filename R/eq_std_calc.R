@@ -4,7 +4,7 @@
 #'
 #' Utility function to populate the std_calc_tmp table (product of EQ_fetch function) with calculated values, using averaged or calculated station parameters (pH, hardness, DOC, temp)
 #'
-#' @param data  Assigned to "sampledata" data frame created during EQ_fetch function process containing sample data
+#' @param sampledata  Assigned to "sampledata" data frame created during EQ_fetch function process containing sample data
 #' @param calcs Assigned to "std_calc_tmp" data frame of calculated standards, populated by this function
 #'
 #' @return Populated std_calc_tmp table in EQfetch function
@@ -15,48 +15,48 @@
 #' @details interim parameter values are assigned on an as-needs basis where required, such as standards where hardness is assigned a certain value if NA. These interim parameters are represented by the .x subscript (ie. pHx, hardx)
 # REVIEW should this also be explained in eq_fetch?
 
-eq_std_calc <- function(data = sampledata,
+eq_std_calc <- function(sampledata = sampledata,
                         calcs = std_calc_tmp){
 
-  #### Calculate input parameters from data ####
+  #### Calculate input parameters from sampledata ####
 
   # Calculate pH with calculation order preference
-  if(!all(is.na(data$`pH-F (pH units)`))) {
-    pH <- mean(stats::na.omit(data$`pH-F (pH units)`))
-  } else if(!all(is.na(data$`pH-L (pH units)`))) {
-    pH <- mean(stats::na.omit(data$`pH-L (pH units)`))
+  if(!all(is.na(sampledata$`pH-F (pH units)`))) {
+    pH <- mean(stats::na.omit(sampledata$`pH-F (pH units)`))
+  } else if(!all(is.na(sampledata$`pH-L (pH units)`))) {
+    pH <- mean(stats::na.omit(sampledata$`pH-L (pH units)`))
   } else {pH <- NA}
 
   # Calculate hardness with calculation order preference
-  suppressWarnings(if(!all(is.na(data$`Hard-D (mg/L)`))) {
-    hard <- mean(stats::na.omit(data$`Hard-D (mg/L)`))
-  } else if(!is.na(mean(stats::na.omit(data$`Ca-D (mg/L)`))*mean(stats::na.omit(data$`Mg-D (mg/L)`)))) {
-    hard <- 2.497*mean(stats::na.omit(data$`Ca-D (mg/L)`)) + 4.118*mean(stats::na.omit(data$`Mg-D (mg/L)`))
-  } else if(!all(is.na(data$`Hard-T (mg/L)`))){
-    hard <- mean(stats::na.omit(data$`Hard-T (mg/L)`))
-  } else if(!is.na(mean(stats::na.omit(data$`Ca-T (mg/L)`))*mean(stats::na.omit(data$`Mg-T (mg/L)`)))) {
-    hard <- 2.497*mean(stats::na.omit(data$`Ca-T (mg/L)`)) + 4.118*mean(stats::na.omit(data$`Mg-T (mg/L)`))
+  suppressWarnings(if(!all(is.na(sampledata$`Hard-D (mg/L)`))) {
+    hard <- mean(stats::na.omit(sampledata$`Hard-D (mg/L)`))
+  } else if(!is.na(mean(stats::na.omit(sampledata$`Ca-D (mg/L)`))*mean(stats::na.omit(sampledata$`Mg-D (mg/L)`)))) {
+    hard <- 2.497*mean(stats::na.omit(sampledata$`Ca-D (mg/L)`)) + 4.118*mean(stats::na.omit(sampledata$`Mg-D (mg/L)`))
+  } else if(!all(is.na(sampledata$`Hard-T (mg/L)`))){
+    hard <- mean(stats::na.omit(sampledata$`Hard-T (mg/L)`))
+  } else if(!is.na(mean(stats::na.omit(sampledata$`Ca-T (mg/L)`))*mean(stats::na.omit(sampledata$`Mg-T (mg/L)`)))) {
+    hard <- 2.497*mean(stats::na.omit(sampledata$`Ca-T (mg/L)`)) + 4.118*mean(stats::na.omit(sampledata$`Mg-T (mg/L)`))
   } else {
     hard <- NA}
   )
 
   # Calculate DOC
-  if(!all(is.na(data$`C-DOC (mg/L)`))){
-    DOC <- mean(stats::na.omit(data$`C-DOC (mg/L)`))
+  if(!all(is.na(sampledata$`C-DOC (mg/L)`))){
+    DOC <- mean(stats::na.omit(sampledata$`C-DOC (mg/L)`))
   } else {
     DOC <- NA
   }
 
   # Calculate temp
-  if(!all(is.na(data$`Temp-F (C)`))) {
-    temp <- plyr::round_any(mean(stats::na.omit(data$`Temp-F (C)`)), 5, f = floor)
+  if(!all(is.na(sampledata$`Temp-F (C)`))) {
+    temp <- plyr::round_any(mean(stats::na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
   } else {
     temp <- NA
   }
 
   # Calculate Cl with calculation order preference
-  if(!all(is.na(data$`Chlord (mg/L)`))) {
-    Cl <- mean(stats::na.omit(data$`Chlord (mg/L)`))
+  if(!all(is.na(sampledata$`Chlord (mg/L)`))) {
+    Cl <- mean(stats::na.omit(sampledata$`Chlord (mg/L)`))
   } else {Cl <- NA}
 
   #### CCME_LT (T/D) ####
@@ -117,11 +117,8 @@ eq_std_calc <- function(data = sampledata,
   }
   hardx <- floor(hardx)
 
-  lookup <- as.data.frame(openxlsx::read.xlsx(xlsxFile = "G:/water/Common_GW_SW/R-packages/WRBtools/EQfetch_std_lookup.xlsx",sheet="Mn", colNames=TRUE))
-  colnames(lookup) <- suppressWarnings(as.character(plyr::round_any(as.numeric(colnames(lookup)), accuracy = 0.1, f = ceiling)))
-  colnames(lookup)[1] <- "Min"
-  colnames(lookup)[2] <- "Max"
-  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup, hardx >= Min & hardx <= Max)[which(colnames(lookup) == as.character(pHx))])
+  lookup_mn <- data$eq_std_calc_CCME_Mn
+  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx >= Min & hardx <= Max)[which(colnames(lookup_mn) == as.character(pHx))])
   if(is.element("CCME_Mn-D_lt", calcs$MaxVal)){
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Mn-D_lt")] <- `CCME_Mn-D_lt`
   }
@@ -139,8 +136,8 @@ eq_std_calc <- function(data = sampledata,
     tempx <- temp
   }
 
-  lookup <- as.data.frame(openxlsx::read.xlsx(xlsxFile = "G:/water/Common_GW_SW/R-packages/WRBtools/EQfetch_std_lookup.xlsx",sheet="NH4", colNames=TRUE))
-  CCME_NH4_lt <- dplyr::pull(dplyr::filter(lookup, Temp == tempx)[which(colnames(lookup) == as.character(pHx))])
+  lookup_nh4 <- data$eq_std_calc_CCME_NH4
+  CCME_NH4_lt <- dplyr::pull(dplyr::filter(lookup_nh4, Temp == tempx)[which(colnames(lookup_nh4) == as.character(pHx))])
   if(is.element("CCME_NH4_lt", calcs$MaxVal)){
     calcs$MaxVal[which(calcs$MaxVal == "CCME_NH4_lt")] <- CCME_NH4_lt
   }
