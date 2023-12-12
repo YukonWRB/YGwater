@@ -16,7 +16,7 @@ hydrometDiscrete(
   plot_type = "violin",
   plot_scale = 1,
   save_path = NULL,
-  con = hydrometConnect(),
+  con = hydrometConnect(silent = TRUE),
   discrete_data = NULL
 )
 }
