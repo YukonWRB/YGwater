@@ -6,7 +6,7 @@
 #' @noRd
 
 app_ui <- function(request) {
-  
+
   #set up for background colors
   jsCode <- '
     shinyjs.backgroundCol = function(params) {
@@ -19,7 +19,7 @@ app_ui <- function(request) {
       var el = $("#" + params.id);
       el.css("background-color", params.col);
     }'
-  
+
   tagList(
     # Leave this function for adding external resources
     golem_add_external_resources(),
@@ -34,9 +34,9 @@ app_ui <- function(request) {
         tags$style(type='text/css', ".selectize-dropdown-content {max-height: 400px; }")
       ),
       shinyjs::extendShinyjs(text = jsCode, functions = c("backgroundCol")),
-      
+
       # Title
-      titlePanel("WRB Hydro App"),
+      titlePanel("Yukon Water Science and Stewardship Branch Hdyro App"),
       # Broad category selection
       selectInput("first_selection", "Choose a task", choices = c("View hydromet plots + data", "View precipitation maps + data", "Browse FOD comments")),
       conditionalPanel(
@@ -120,7 +120,7 @@ golem_add_external_resources <- function() {
     "www",
     app_sys("app/www")
   )
-  
+
   tags$head(
     favicon(),
     bundle_resources(

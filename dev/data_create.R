@@ -5,7 +5,6 @@
 # DO NOT DO THE FOLLOWING FOR SPATIAL DATA:
 # prov_buff <- sf::read_sf(dsn = "dev/prov_buffers", layer = "Provinces_buffered_300km")
 
-
 # However, other data that can be simply reloaded as R environment objects can be made into internal data simply:
 flow_returns_max <- read.csv("data-raw/flow_returns_max.csv")
 level_returns_max <- read.csv("data-raw/level_returns_max.csv")

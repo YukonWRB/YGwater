@@ -44,15 +44,20 @@ getHRDPA <- function(start = Sys.time()-60*60*24,
   available <- xml2::read_html("https://dd.weather.gc.ca/analysis/precip/hrdpa/grib2/polar_stereographic/06/") #6 hour products
   available <- rvest::html_elements(available, xpath='//*[contains(@href, ".grib2")]') %>%
     rvest::html_attr("href")
-  available <- data.frame()
-  for (i in c("00", "06", "12", "18")){
-    tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/model_hrdpa/2.5km/", i, "/"))
-    tmp <- rvest::html_elements(tmp, xpath='//*[contains(@href, ".grib2")]') %>%
-      rvest::html_attr("href")
-    available <- rbind(available, as.data.frame(as.character(tmp)))
-  }
+  # available <- data.frame()
+  # for (i in c("00", "06", "12", "18")){
+  #   tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/model_hrdpa/2.5km/", i, "/"))
+  #   tmp <- rvest::html_elements(tmp, xpath='//*[contains(@href, ".grib2")]') %>%
+  #     rvest::html_attr("href")
+  #   available <- rbind(available, as.data.frame(as.character(tmp)))
+  # }
+  #
+  # names(available) <- "link"
+  # available$cutoff <- "0700"
+  # available$cutoff[grepl("Prelim", available$link)] <- "0100"
+  # available$valid <- NA
+  # available$valid <- as.POSIXct(substr(available$link, 1, 11), format = "%Y%m%dT%H", tz="UTC")
 
-  names(available) <- "link"
   available <- available %>% dplyr::mutate(cutoff = substr(.data$link, 20,23),
                                            valid = as.POSIXct(substr(.data$link, 45,54), format = "%Y%m%d%H", tz="UTC")
                                            )
