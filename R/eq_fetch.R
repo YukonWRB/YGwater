@@ -20,10 +20,10 @@ eq_fetch <- function(EQcode,
                      dates = "all",
                      BD = 2,
                      apply_standards = TRUE){
-#
+
 # EQcode <- "WLV"
 # stationIDs = c("MW05-1A", "MW05-1B", "MW05-2A", "MW05-2B", "MW05-06A", "MW05-06B", "MW08-13", "T1", "T1-6m", "T1-9m", "S-1", "S-5", "SP", "UD-1", "UD-2", "W-15", "W-16", "W-19", "W-31", "W-81")
-# paramIDs = c("Ag-D", "Al-D", "As-D", "Cd-D", "Cr-D", "Cu-D", "Fe-D", "Flourd", "Hg-D", "N-NH4", "Ni-D", "Pb-D", "Sb-D", "Se-D", "SO4", "U-D", "Zn-D")
+# paramIDs = c("Ag-D", "Al-D", "As-D", "Cd-D", "Cr-D", "Cu-D", "Fe-D", "Fluord", "Hg-D", "N-NH4", "Ni-D", "Pb-D", "Sb-D", "Se-D", "SO4", "U-D", "Zn-D")
 # dates <- "all"
 # BD <- 2
 # apply_standards = TRUE
@@ -90,6 +90,7 @@ eq_fetch <- function(EQcode,
   tryCatch({
     if(tolower(paste(paramIDs, collapse = "") == "all")){
       params <- eqparams
+      paramIDs <- params$ParamCode
     } else if(all(paramIDs %in% eqparams$ParamCode)){
       params <- eqparams
     } else {
@@ -97,7 +98,7 @@ eq_fetch <- function(EQcode,
       stop()}
   },
   error = function(e){
-    message(paste("The following stations do not match exactly what is in EQWin:", paste(setdiff(paramIDs, params$ParamCode), collapse = ", ")))
+    message(paste("The following parameters do not match exactly what is in EQWin:", paste(setdiff(paramIDs, params$ParamCode), collapse = ", ")))
   }
   )
 
