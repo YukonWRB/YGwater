@@ -1,6 +1,6 @@
 #' Accumulated precipitation
 #'
-#' Calculates accumulated precipitation above defined drainages or immediately surrounding a specified point. If possible, make sure to specify a location in parameters hrdpa_loc and hrdps_loc to speed things up!
+#' Calculates accumulated precipitation above defined drainages or immediately surrounding a specified point. If possible, make sure to specify a location in parameters hrdpa_loc and hrdps_loc to speed things up! Uses functions [getHRDPA()] and [getHRDPS()] to bring in precipi rasters if any need to be downloaded.
 #'
 #' If specifying `location` as coordinates rather than a WSC station (or non WSC station, see note below), the numeric result will be of precipitation in the 2.5 km2 cell on which the point falls. Map output, if requested, will be for the smallest available drainage polygon containing that point.
 #'
@@ -152,16 +152,23 @@ basinPrecip <- function(location,
     sequence_hrdpa <- seq.POSIXt(start_hrdpa, end_hrdpa, by = "6 hour")
 
     #Check if any files exist yet to match sequence_hrdpa
-    available <- xml2::read_html("https://dd.weather.gc.ca/analysis/precip/hrdpa/grib2/polar_stereographic/06/") #6 hour products for first day
-    available <- rvest::html_elements(available, xpath='//*[contains(@href, ".grib2")]') %>%
-      rvest::html_attr("href")
-    available <- as.data.frame(as.character(available))
-    names(available) <- "link"
-    available <- available %>% dplyr::mutate(cutoff = substr(.data$link, 20,23),
-                                             valid = as.POSIXct(substr(.data$link, 45,54), format = "%Y%m%d%H", tz="UTC")
-    )
+    available <- data.frame()
+    for (i in c("00", "06", "12", "18")){
+      tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/model_hrdpa/2.5km/", i, "/"))
+      tmp <- rvest::html_elements(tmp, xpath='//*[contains(@href, ".grib2")]') %>%
+        rvest::html_attr("href")
+      available <- rbind(available, as.data.frame(as.character(tmp)))
+    }
 
-    last_available_01 <- max(dplyr::filter(available, .data$cutoff == "0100")$valid)
+    names(available) <- "link"
+    available$cutoff <- "0700"
+    available$cutoff[grepl("Prelim", available$link)] <- "0100"
+    available$valid <- NA
+    available$valid <- as.POSIXct(substr(available$link, 1, 11), format = "%Y%m%dT%H", tz="UTC")
+    available$integrate_time <- "6h"
+    available$integrate_time[grepl("24", available$link)] <- "24h"
+
+    last_available_01 <- available[available$valid == max(available$valid) & available$cutoff == "0100" & available$integrate_time == "6h", "valid"]
     if (min(sequence_hrdpa) <= last_available_01){ #TRUE means that there is at least one HRDPA available online or that there is one locally, so fetch it. Otherwise, no HRDPA is available yet and only HRDPS forecast will be used.
 
       if (!is.null(hrdpa_loc)){ #Get the list of available files locally, if hrdpa_loc != NULL
@@ -169,11 +176,11 @@ basinPrecip <- function(location,
           create <- ask(paste0("The directory you pointed to (", hrdpa_loc, ") does not exist. Do you wish to create it?"))
           if (create) {
             dir.create(hrdpa_loc)
-          } else stop("Directory will not be created. Try specifying the directory again.")
+          } else stop("Directory for storing the HRDPA will not be created. Try specifying the directory again.")
         }
 
         # check if the local files are labelled properly and if so, sufficient for the time span requested and of the correct clip.
-        available_local <- data.frame(files = list.files(hrdpa_loc))
+        available_local <- data.frame(files = list.files(hrdpa_loc, pattern = ".tiff$")) #pattern specified so as to not get the .aux files
         available_local <- available_local %>%
           dplyr::mutate(timedate = stringr::str_extract(.data$files, "[0-9]{10}"),
                         clipped = grepl("clipped", .data$files),
@@ -268,7 +275,7 @@ basinPrecip <- function(location,
         }
 
         #finally, make the list of files to use: when a clipped and full file can both work, use either.
-        available_local <- data.frame(files = list.files(hrdpa_loc))
+        available_local <- data.frame(files = list.files(hrdpa_loc, pattern = ".tiff$"))
         available_local <- available_local %>%
           dplyr::mutate(timedate = stringr::str_extract(.data$files, "[0-9]{10}")
           )
@@ -366,7 +373,30 @@ basinPrecip <- function(location,
   ###now the rasters are present for the extent and time required, finally! Proceed to accumulating them into a single raster.
   if (hrdpa == TRUE & hrdps == FALSE){
     if (length(hrdpa_files) > 1){
-      hrdpa_rasters <- terra::sds(paste0(hrdpa_loc, "/", hrdpa_files))
+      all_hrdpa <- list()
+      xmin <- numeric(0)
+      xmax <- numeric(0)
+      ymin <- numeric(0)
+      ymax <- numeric(0)
+      for (i in 1:length(hrdpa_files)){
+        all_hrdpa[[i]] <- terra::rast(paste0(hrdpa_loc, "/", hrdpa_files[i]))
+        xmin <- c(xmin, terra::ext(all_hrdpa[[i]])[1])
+        xmax <- c(xmax, terra::ext(all_hrdpa[[i]])[2])
+        ymin <- c(ymin, terra::ext(all_hrdpa[[i]])[3])
+        ymax <- c(ymax, terra::ext(all_hrdpa[[i]])[4])
+      }
+      # Check if at least one of the extents are not uniform across all rasters, trim if TRUE
+      if ((stats::var(xmin) != 0) | (stats::var(xmax) != 0) | (stats::var(ymin) != 0) | (stats::var(ymax) != 0)){
+        min_extent <- terra::rast()
+        min_extent <- terra::project(min_extent, all_hrdpa[[1]]) #Project must happend before setting the boundaries, otherwise the boundaries of the project from layer apply
+        terra::ext(min_extent) <- c(max(xmin), min(xmax), max(ymin), min(ymax))
+        min_extent <- terra::as.polygons(min_extent)
+        for (i in 1:length(all_hrdpa)){
+          all_hrdpa[[i]] <- terra::mask(all_hrdpa[[i]], min_extent)
+          all_hrdpa[[i]] <- terra::trim(all_hrdpa[[i]])
+        }
+      }
+      hrdpa_rasters <- terra::sds(all_hrdpa)
       total <- hrdpa_rasters[1] #prepare to accumulate/add raster values
       for (i in 2:length(hrdpa_rasters)){
         total <- total + hrdpa_rasters[i]
@@ -387,7 +417,30 @@ basinPrecip <- function(location,
   if (hrdpa == TRUE & hrdps == TRUE){
     #start with hrdpa
     if (length(hrdpa_files) > 1){
-      hrdpa_rasters <- terra::sds(paste0(hrdpa_loc, "/", hrdpa_files))
+      all_hrdpa <- list()
+      xmin <- numeric(0)
+      xmax <- numeric(0)
+      ymin <- numeric(0)
+      ymax <- numeric(0)
+      for (i in 1:length(hrdpa_files)){
+        all_hrdpa[[i]] <- terra::rast(paste0(hrdpa_loc, "/", hrdpa_files[i]))
+        xmin <- c(xmin, terra::ext(all_hrdpa[[i]])[1])
+        xmax <- c(xmax, terra::ext(all_hrdpa[[i]])[2])
+        ymin <- c(ymin, terra::ext(all_hrdpa[[i]])[3])
+        ymax <- c(ymax, terra::ext(all_hrdpa[[i]])[4])
+      }
+      # Check if at least one of the extents are not uniform across all rasters, trim if TRUE
+      if ((stats::var(xmin) != 0) | (stats::var(xmax) != 0) | (stats::var(ymin) != 0) | (stats::var(ymax) != 0)){
+        min_extent <- terra::rast()
+        min_extent <- terra::project(min_extent, all_hrdpa[[1]])
+        terra::ext(min_extent) <- c(max(xmin), min(xmax), max(ymin), min(ymax))
+        min_extent <- terra::as.polygons(min_extent)
+        for (i in 1:length(all_hrdpa)){
+          all_hrdpa[[i]] <- terra::mask(all_hrdpa[[i]], min_extent)
+          all_hrdpa[[i]] <- terra::trim(all_hrdpa[[i]])
+        }
+      }
+      hrdpa_rasters <- terra::sds(all_hrdpa)
       total_hrdpa <- hrdpa_rasters[1] #prepare to accumulate/add raster values
       for (i in 2:length(hrdpa_rasters)){
         total_hrdpa <- total_hrdpa + hrdpa_rasters[i]
