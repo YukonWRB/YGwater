@@ -53,11 +53,13 @@ getHRDPA <- function(start = Sys.time()-60*60*24,
   available$cutoff[grepl("Prelim", available$link)] <- "0100"
   available$valid <- NA
   available$valid <- as.POSIXct(substr(available$link, 1, 11), format = "%Y%m%dT%H", tz="UTC")
+  available$integrate_time <- "6h"
+  available$integrate_time[grepl("24", available$link)] <- "24h"
 
-  last_available_01 <- available[available$valid == max(available$valid) & available$cutoff == "0100", "valid"]
-  last_available_07 <- available[available$valid == max(available$valid) & available$cutoff == "0700", "valid"]
-  first_available_01 <- available[available$valid == min(available$valid) & available$cutoff == "0100", "valid"]
-  first_available_07 <- available[available$valid == min(available$valid) & available$cutoff == "0700", "valid"]
+  last_available_01 <- available[available$valid == max(available$valid) & available$cutoff == "0100" & available$integrate_time == "6h", "valid"]
+  last_available_07 <- available[available$valid == max(available$valid) & available$cutoff == "0700" & available$integrate_time == "6h", "valid"]
+  first_available_01 <- available[available$valid == min(available$valid) & available$cutoff == "0100" & available$integrate_time == "6h", "valid"]
+  first_available_07 <- available[available$valid == min(available$valid) & available$cutoff == "0700" & available$integrate_time == "6h", "valid"]
 
   #Make to nearest available time (correct times if they specify a yet-to-exist or no longer present file)
   if (start > last_available_01){

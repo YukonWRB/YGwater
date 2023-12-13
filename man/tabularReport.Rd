@@ -5,7 +5,7 @@
 \title{Tabular output of hydrometric data}
 \usage{
 tabularReport(
-  con = hydrometConnect(),
+  con = hydrometConnect(silent = TRUE),
   level_locations = "all",
   flow_locations = "all",
   snow_locations = "all",

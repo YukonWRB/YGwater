@@ -19,7 +19,7 @@
 
 # TODO: Adapt to use new DB
 
-tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose") {
+tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose") {
 
   if (level_locations[1] == "default"){
     level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
@@ -105,7 +105,7 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     for (i in precip_locations){
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       tryCatch({
-        #TODO: Update code directly below to get polygons direct from the DB once basinPrecip is updated.
+        #TODO: Update code below to get polygons direct from the DB once basinPrecip is updated.
         lastWeek <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
         lastThree <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
         lastTwo <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)
