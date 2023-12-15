@@ -74,16 +74,13 @@ aq_upload <- function(loc_id,
   result <- timeseries$waitForCompletedAppendRequest(timeseries$appendPoints(config$timeSeriesName, data, start, end), 120) #This makes it wait up to 120 seconds to show the append result - long enough for even giant datasets.
   points_in_file <- nrow(data)
 
-  now <- Sys.time()
-  attr(now, "tzone") <- "UTC"
-
   output <- list(appended = result$NumberOfPointsAppended,
                  input = points_in_file)
 
   if (result$AppendStatus == "Completed"){
-    cat("\n", paste0(crayon::bold$green("Your request was completed:\n"), result$NumberOfPointsAppended, " points were appended out of the ", points_in_file, " that were in the provided dataset.\nThe points were appended to the timeseries ", crayon::bold(ts_name), " at location ", crayon::bold(loc_id), "\n", now, " UTC"))
+    cat("\n", paste0(crayon::bold$green("Your request was completed:\n"), result$NumberOfPointsAppended, " points were appended out of the ", points_in_file, " that were in the provided dataset.\nThe points were appended to the timeseries ", crayon::bold(ts_name), " at location ", crayon::bold(loc_id), "."))
   } else {
-    cat("\n", paste0(crayon::bold$red("Your request was not completed or had an irregular status:\n"), "The status returned was ", crayon::bold(result$AppendStatus), "\n", result$NumberOfPointsAppended, " points were appended out of ", points_in_file, " requested.\nThe target timeseries was ", crayon::bold(ts_name), " at location ", crayon::bold(loc_id), "\n", now, " UTC"))
+    cat("\n", paste0(crayon::bold$red("Your request was not completed or had an irregular status:\n"), "The status returned was ", crayon::bold(result$AppendStatus), "\n", result$NumberOfPointsAppended, " points were appended out of ", points_in_file, " requested.\nThe target timeseries was ", crayon::bold(ts_name), " at location ", crayon::bold(loc_id), "."))
   }
 
   return(output)
