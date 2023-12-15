@@ -135,6 +135,10 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       print("--------------------------Next------------------------")
 
       #--------------------------- Apply correction ---------------------------#
+      # If there is no overlap, and as such, no bias, set bias to 0 so that the original data is kept
+      if (is.na(bias)) {
+        bias <- 0
+      }
       # Apply correction to all values of station 2
       stn2$value <- stn2$value + bias
 
