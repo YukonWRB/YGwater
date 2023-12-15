@@ -180,7 +180,7 @@ basinPrecip <- function(location,
         }
 
         # check if the local files are labelled properly and if so, sufficient for the time span requested and of the correct clip.
-        available_local <- data.frame(files = list.files(hrdpa_loc, pattern = ".tiff$")) #pattern specified so as to not get the .aux files
+        available_local <- data.frame(files = list.files(hrdpa_loc, pattern = "*.tiff$")) #pattern specified so as to not get the .aux files
         available_local <- available_local %>%
           dplyr::mutate(timedate = stringr::str_extract(.data$files, "[0-9]{10}"),
                         clipped = grepl("clipped", .data$files),
@@ -234,7 +234,7 @@ basinPrecip <- function(location,
         }
 
         #finally, make the list of files to use: when a clipped and full file can both work, use either.
-        available_local <- data.frame(files = list.files(hrdpa_loc))
+        available_local <- data.frame(files = list.files(hrdpa_loc, pattern = "*.tiff$"))
         available_local <- available_local %>%
           dplyr::mutate(timedate = stringr::str_extract(.data$files, "[0-9]{10}")
           )
@@ -253,7 +253,7 @@ basinPrecip <- function(location,
 
         #compare the sequence_hrdpa against what exists in save_path, make list of files to dl.
         #check if the local files are labelled properly and if so, sufficient for the time span requested and of the correct clip.
-        available_local <- data.frame(files = list.files(hrdpa_loc))
+        available_local <- data.frame(files = list.files(hrdpa_loc, pattern = "*.tiff$"))
         available_local <- available_local %>%
           dplyr::mutate(timedate = stringr::str_extract(.data$files, "[0-9]{10}"),
                         clipped = grepl("clipped", .data$files),
@@ -275,7 +275,7 @@ basinPrecip <- function(location,
         }
 
         #finally, make the list of files to use: when a clipped and full file can both work, use either.
-        available_local <- data.frame(files = list.files(hrdpa_loc, pattern = ".tiff$"))
+        available_local <- data.frame(files = list.files(hrdpa_loc, pattern = "*.tiff$"))
         available_local <- available_local %>%
           dplyr::mutate(timedate = stringr::str_extract(.data$files, "[0-9]{10}")
           )
@@ -300,7 +300,7 @@ basinPrecip <- function(location,
   if (hrdpa == FALSE){ #only hrdps need to be downloaded, times are in the future
     hrdps <- TRUE
     getHRDPS(clip = NULL, save_path = hrdps_loc, param = "APCP_Sfc") #This will not run through if the files are already present
-    available_hrdps <- data.frame(files = list.files(paste0(hrdps_loc, "/APCP_Sfc"), pattern = ".*.tiff$", full.names=TRUE))
+    available_hrdps <- data.frame(files = list.files(paste0(hrdps_loc, "/APCP_Sfc"), pattern = "*.tiff$", full.names=TRUE))
     available_hrdps <- available_hrdps %>%
       dplyr::mutate(from = paste0(stringr::str_extract(.data$files, "[0-9]{8}"), stringr::str_extract(.data$files, "T[0-9]{2}Z")),
                     time = as.numeric(substr(sub(".*Z_", "", .data$files), 1,2))
@@ -319,7 +319,7 @@ basinPrecip <- function(location,
     names(forecast_precip) <- "precip"
   } else if (hrdpa == TRUE & end > (Sys.time()-60*60*6)) { #There might be a need for some hrdps to fill in to the requested end time. Determine the difference between the actual end time and requested end time, fill in with hrdps if necessary
     getHRDPS(clip = NULL, save_path = hrdps_loc, param = "APCP_Sfc") #This will not run through if the files are already present
-    available_hrdps <- data.frame(files = list.files(paste0(hrdps_loc, "/APCP_Sfc"), pattern = ".*.tiff$", full.names=TRUE))
+    available_hrdps <- data.frame(files = list.files(paste0(hrdps_loc, "/APCP_Sfc"), pattern = "*.tiff$", full.names=TRUE))
     available_hrdps <- available_hrdps %>%
       dplyr::mutate(from = paste0(stringr::str_extract(.data$files, "[0-9]{8}"), stringr::str_extract(.data$files, "T[0-9]{2}Z")),
                     time = as.numeric(substr(sub(".*Z_", "", .data$files), 1,2))
@@ -380,6 +380,7 @@ basinPrecip <- function(location,
       ymax <- numeric(0)
       for (i in 1:length(hrdpa_files)){
         all_hrdpa[[i]] <- terra::rast(paste0(hrdpa_loc, "/", hrdpa_files[i]))
+        all_hrdpa[[i]] <- terra::project(all_hrdpa[[i]], all_hrdpa[[1]])
         xmin <- c(xmin, terra::ext(all_hrdpa[[i]])[1])
         xmax <- c(xmax, terra::ext(all_hrdpa[[i]])[2])
         ymin <- c(ymin, terra::ext(all_hrdpa[[i]])[3])
@@ -424,6 +425,7 @@ basinPrecip <- function(location,
       ymax <- numeric(0)
       for (i in 1:length(hrdpa_files)){
         all_hrdpa[[i]] <- terra::rast(paste0(hrdpa_loc, "/", hrdpa_files[i]))
+        all_hrdpa[[i]] <- terra::project(all_hrdpa[[i]], all_hrdpa[[1]])
         xmin <- c(xmin, terra::ext(all_hrdpa[[i]])[1])
         xmax <- c(xmax, terra::ext(all_hrdpa[[i]])[2])
         ymin <- c(ymin, terra::ext(all_hrdpa[[i]])[3])

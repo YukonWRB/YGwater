@@ -137,7 +137,7 @@ aq_download <- function(loc_id,
         ts[index,]$approval_description <- approvals$description[i]
       } # and if the last approval start is after then end of the ts, do nothing with it!
     }
-    ts <- tidyr::fill(ts, c(.data$grade_level, .data$grade_description, .data$approval_level, .data$approval_description), .direction = "down")
+    ts <- tidyr::fill(ts, c("grade_level", "grade_description", "approval_level", "approval_description"), .direction = "down")
   }
 
 
