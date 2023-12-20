@@ -48,8 +48,8 @@
 
 # hydrometContinuous(location="Dawson", parameter = "CDDF", startDay = "2022-09-01", endDay = "2023-06-14", tzone = "MST", years = c(2022), datum = TRUE, title = TRUE, custom_title = "Dawson CDDF", returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect(), continuous_data = test)
 
-hydrometContinuous <- function(location=NULL,
-                               parameter="variable",
+hydrometContinuous <- function(location = NULL,
+                               parameter = NULL,
                                startDay = 1,
                                endDay = 365,
                                tzone = "MST",
@@ -129,7 +129,7 @@ hydrometContinuous <- function(location=NULL,
 
 #### ----------------------- CDDF data is not provided -------------------- ####
   # print("Getting data sorted out")
-  if(is.null(cddf_data)) {
+  if (is.null(cddf_data)) {
     #Confirm parameter and location exist in the database and that there is only one entry
     exist_check <- DBI::dbGetQuery(con, paste0("SELECT location, parameter, timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
     if (nrow(exist_check) == 0){
@@ -180,7 +180,7 @@ hydrometContinuous <- function(location=NULL,
     day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
     # Find the necessary datum (latest datum)
-    if (datum & parameter == "level"){
+    if (datum & parameter %in% c("level", "distance")){
       datum <- DBI::dbGetQuery(con, paste0("SELECT * FROM datum_conversions WHERE location = '", location, "' AND current = TRUE"))
     } else {
       datum <- data.frame(conversion_m = 0)
@@ -387,12 +387,6 @@ hydrometContinuous <- function(location=NULL,
   }
 
 
-  # realtime <<- realtime
-  # test2 <<- day_seq
-  # ribbon <<- ribbon
-  # daily <<- daily
-  # test <<- parameter
-  # print("Done getting data sorted out")
 #### ----------------------------- Make the plot -------------------------- ####
   # print("Plotting starting")
   colours = c("blue", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
@@ -436,10 +430,20 @@ hydrometContinuous <- function(location=NULL,
     ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
 
   if (!is.infinite(minHist)){
-    plot <- plot +
-      ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"), na.rm = T) +
-      ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = "25th-75th Percentile"), na.rm = T) +
-      ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray85", "25th-75th Percentile" = "gray65"))
+    if (!identical(realtime$min, realtime$max)){ #if they're identical there's nothing to plot!
+      plot <- plot +
+        ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"), na.rm = T)
+      if (!all(is.na(realtime$q25))){
+        plot <- plot +
+          ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = "25th-75th Percentile"), na.rm = T) +
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray85", "25th-75th Percentile" = "gray65"))
+      } else {
+        plot <- plot +
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray85"))
+      }
+    } else {
+      minHist <- Inf # set to Inf here so that historical range is not printed later on the graph
+    }
   }
 
   plot <- plot +
