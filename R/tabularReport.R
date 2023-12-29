@@ -58,10 +58,13 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     message("Select the path to the folder where you want this report saved.")
     save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
   }
-  if (archive_path == "choose"){
-    message("Select the path to yesterday's file (refer to function help).")
-    archive_path <- as.character(utils::choose.files(caption="Select Yesterday's File"), multi = FALSE)
+  if (!is.null(archive_path)){
+    if (archive_path == "choose"){
+      message("Select the path to yesterday's file (refer to function help).")
+      archive_path <- as.character(utils::choose.files(caption="Select Yesterday's File"), multi = FALSE)
+    }
   }
+
 
   #Set the days for which to generate tables
   if (past < 8){
@@ -78,24 +81,29 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   }
 
   #Load yesterday's workbook -----------------
-  tryCatch({
-    yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
-    yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL)
-    for (i in names(yesterday_workbook)){
-      if (i != "precipitation"){
-        yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
-        yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6)
-      } else {
-        yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
-        yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8)
-      }
+  yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL)
+  if (!is.null(archive_path)){
+    tryCatch({
+      yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
+      for (i in names(yesterday_workbook)){
+        if (i != "precipitation"){
+          yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
+          yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6)
+        } else {
+          yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
+          yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8)
+        }
 
-    }
-    yesterday_comments <- TRUE
-  }, error = function(e) {
-    warning("Could not fetch information from yesterday's workbooks. Perhaps the file path you specified is incorrect; check the function help again.")
+      }
+      yesterday_comments <- TRUE
+    }, error = function(e) {
+      warning("Could not fetch information from yesterday's workbooks. Perhaps the file path you specified is incorrect; check the function help again.")
+      yesterday_comments <- FALSE
+    })
+  } else {
     yesterday_comments <- FALSE
-  })
+  }
+
 
 
   #Get the data -------------------------
