@@ -30,8 +30,8 @@
 #' @param precip Should precipitation data (accumulated precip above stations) and images (precip across whole territory) be included? TRUE or FALSE
 #' @param meteogram Should meteograms relevant to the stations in the report be included? TRUE or FALSE.
 #' @param WSC_images Should images from WSC fixed cameras be included? TRUE or FALSE.
-#' @param image_path The path to the directory (folder) containing the images you wish to include. Default to NULL to not include any extra images. Set to "choose" to navigate to the folder, or enter the folder path directly as a character string. Some reports automatically include web-hosted images, do not include them here.
-#' @param save_path The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string.
+#' @param image_path The path to the directory (folder) containing the images you wish to include. Default to NULL to not include any extra images. Set to "choose" to navigate to the folder, or enter the folder path directly as a character string. Some reports automatically include web-hosted images, do not include them here. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
+#' @param save_path The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #'
 #' @return A flood report containing flow and water level information in Microsoft Word format.
 #'

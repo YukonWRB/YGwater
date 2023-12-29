@@ -7,9 +7,9 @@
 #'
 #' Currently works with Solinst LT, LTC, and baro loggers. Note that LTs and baro loggers are functionally identical: they are differentiated solely by the pressure scale specified in the logger file header. Barologgers are labelled "M1.5" or similar (1.5 m water column), while the shallowest LT model is an "M5" or similar. Issues will arise if future baro loggers do not use the "1.5" designation, or if you are actually using a barologger to monitor very shallow water columns.
 #'
-#' @param xle_file The file you wish to convert. Default "choose" allows you to point to the file.
+#' @param xle_file The file you wish to convert. Default "choose" allows you to point to the file. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #' @param location The ID of the well in the form "YOWN-1500". You can also simply name the well, and if there is ambiguity regarding which well is the right one you will get a prompt to select from a list.
-#' @param save_path The location where the csv file should be saved.
+#' @param save_path The location where the csv file should be saved. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #'
 #' @return A csv of the logger data, ready for export to Aquarius or for general use.
 #' @export

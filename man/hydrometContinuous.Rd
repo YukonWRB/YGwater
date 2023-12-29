@@ -6,7 +6,7 @@
 \usage{
 hydrometContinuous(
   location = NULL,
-  parameter = "variable",
+  parameter = NULL,
   startDay = 1,
   endDay = 365,
   tzone = "MST",
@@ -14,6 +14,7 @@ hydrometContinuous(
   datum = TRUE,
   title = TRUE,
   custom_title = NULL,
+  filter = NULL,
   returns = "auto",
   return_type = "max",
   return_months = c(5:9),
@@ -43,6 +44,8 @@ hydrometContinuous(
 \item{title}{Should a title be included?}
 
 \item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
+
+\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out values > 2 * the IQR. Set this parameter to an integer, which specifies the rolling IQR 'window'.}
 
 \item{returns}{Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".}
 

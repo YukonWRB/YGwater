@@ -11,7 +11,7 @@ snowBulletin(sub_basin_name = NULL, year = NULL, save_path = "choose")
 
 \item{year}{Year for which the snow bulletin is to be created.}
 
-\item{save_path}{The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string.}
+\item{save_path}{The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.}
 }
 \value{
 A snow bulletin in Microsoft Word format.

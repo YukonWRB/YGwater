@@ -14,7 +14,7 @@
 #' @param start The start of the time period for which you want HRDPA rasters, up to one month prior to today. Use format `"yyyy-mm-dd hh:mm"` (character vector) in local time. See details for more info.
 #' @param end The end of the time period for which you want HRDPA rasters. Other details as per `start`.
 #' @param clip The two-digit abbreviation(s) as per [Canadian Census](https://www12.statcan.gc.ca/census-recensement/2021/ref/dict/tab/index-eng.cfm?ID=t1_8) for the province(s) with which to clip the HRDPA. A 300 km buffer is added beyond the provincial boundaries. Set to NULL for no clip.
-#' @param save_path The path to the directory (folder) where the raster(s) should be saved. Default `"choose"` lets you select your folder, or enter the path as a character string. Any necessary rasters already in the save path will not be downloaded again.
+#' @param save_path The path to the directory (folder) where the raster(s) should be saved. Default 'choose' lets you select your folder, or enter the path as a character string. Any necessary rasters already in the save path will not be downloaded again. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #'
 #' @return One of more rasters of precipitation amounts over 6 hour periods saved where specified. The date/time stamp in the file name refers to the end of the 6-hour valid period. Output is not assigned to an object, load the raster from the save_path if desired.
 #'
