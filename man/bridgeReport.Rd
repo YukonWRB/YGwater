@@ -5,8 +5,8 @@
 \title{Bridge radar reporting utility - internal}
 \usage{
 bridgeReport(
-  con = hydrometConnect(),
-  locations = c("29AH001", "09AH005", "29AE007", "29AB011", "29AB010"),
+  con = hydrometConnect(silent = TRUE),
+  locations = "all",
   zoom = TRUE,
   zoom_days = 30,
   save_path = "choose"
@@ -15,13 +15,13 @@ bridgeReport(
 \arguments{
 \item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
-\item{locations}{The list of locations for which you want a distance measurement. These must either be reporting radar distance in Aquarius as Distance.Corrected or in the WRB database as type distance.}
+\item{locations}{The list of locations for which you want a distance measurement, or default "all" to get every one in the database. These must be reporting radar distance in the WRB database as parameter 'distance'.}
 
-\item{zoom}{Set TRUE if you want a zoomed-in plot.}
+\item{zoom}{Set TRUE if you want zoomed-in plots.}
 
-\item{zoom_days}{Set the number of days on the x-axis of the zoomed in plot.}
+\item{zoom_days}{Set the number of days on the x-axis of the zoomed in plots.}
 
-\item{save_path}{The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string.}
+\item{save_path}{The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.}
 }
 \value{
 A Microsoft Word report containing bridge radar information, saved in the location specified.

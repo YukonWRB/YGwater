@@ -19,7 +19,7 @@ WSC_drainages(
 \arguments{
 \item{inputs_folder}{The location of the folder containing folders for each drainage region of interest (01-11, as defined by the WSC). Defaults to "choose", which opens file explorer to let you select the location. NOTE: This should contain one or more folders named ONLY with the two-digit drainage region code, i.e. folder names 09, 10, etc.}
 
-\item{save_path}{The path to the folder in which you wish to save the resultant ESRI shapefile. For hydrology this is likely G:/water/Hydrology/Data/BasinPolygons; parameter defaults to "choose".}
+\item{save_path}{The path to the folder in which you wish to save the resultant ESRI shapefile. For hydrology this is likely G:/water/Hydrology/Data/BasinPolygons; parameter defaults to 'choose'. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.}
 
 \item{active_only}{TRUE to retain only active stations; default FALSE retains discontinued stations as well.}
 

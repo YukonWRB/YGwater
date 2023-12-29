@@ -31,6 +31,7 @@
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out values > 2 * the IQR. Set this parameter to an integer, which specifies the rolling IQR 'window'.
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
 #' @param return_months Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within `startDay` and `endDay`, but will only consider data up to the last year specified in `years`. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of [fasstr::calc_annual_extremes()] and also used to set the 'water_year_start' parameter of this function.
@@ -57,6 +58,7 @@ hydrometContinuous <- function(location = NULL,
                                datum = TRUE,
                                title = TRUE,
                                custom_title = NULL,
+                               filter = NULL,
                                returns = "auto",
                                return_type = "max",
                                return_months = c(5:9),
@@ -124,8 +126,6 @@ hydrometContinuous <- function(location = NULL,
     return_max_year <- max(years)
     message("Your parameter entry for 'return_max_year' is invalid (greater than the last year plotted). It has been adjusted to the last year plotted, or to the last year with enough data.")
   }
-
-  # print("end of parameter checks")
 
 #### ----------------------- CDDF data is not provided -------------------- ####
   # print("Getting data sorted out")
@@ -384,11 +384,30 @@ hydrometContinuous <- function(location = NULL,
     day_seq <- realtime$datetime
     units <- "\u00B0C"
 
+  } #End of loop integrating provided data
+
+  if (!is.null(filter)){
+    if (!inherits(filter, "numeric")){
+      message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
+    } else {
+      rollmedian <- zoo::rollapply(realtime$value, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
+      rollmad <- zoo::rollapply(realtime$value, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
+      outlier <- abs(realtime$value - rollmedian) > 10* rollmad
+      realtime$value[outlier] <- NA
+
+      rollmedian <- zoo::rollapply(realtime$min, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
+      rollmad <- zoo::rollapply(realtime$min, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
+      outlier <- abs(realtime$min - rollmedian) > 10* rollmad
+      realtime$min[outlier] <- NA
+
+      rollmedian <- zoo::rollapply(realtime$max, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
+      rollmad <- zoo::rollapply(realtime$max, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
+      outlier <- abs(realtime$max - rollmedian) > 10* rollmad
+      realtime$max[outlier] <- NA
+    }
   }
 
-
 #### ----------------------------- Make the plot -------------------------- ####
-  # print("Plotting starting")
   colours = c("blue", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
     # c("black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#687C04", "#0097A9", "#7A9A01", "#CD7F32")
   line_size = 1
