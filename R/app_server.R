@@ -19,6 +19,7 @@ app_server <- function(input, output, session) {
   shinyjs::hide("standby")
   shinyjs::hide("export_fod_comments")
   shinyjs::hide("export_hydro_plot")
+  shinyjs::hide("export_plot_data")
   shinyjs::hide("export_precip_map")
 
   #Create containers
@@ -220,7 +221,7 @@ app_server <- function(input, output, session) {
   }, ignoreInit = TRUE)
 
 
-  # observe and observeEvents related to plotting level/flow/snow --------------------
+  # observe and observeEvents related to plotting level/flow/snow/bridge freeboard --------------------
   observeEvent(input$plot_data_type, {
     if (input$plot_data_type == "Discrete"){
       updateSelectizeInput(session, "plot_param", choices = c("SWE", "Snow depth"))
@@ -230,6 +231,7 @@ app_server <- function(input, output, session) {
       shinyjs::hide("end_doy")
       shinyjs::hide("start_doy")
       shinyjs::hide("plot_years_note")
+      shinyjs::hide("plot_filter")
       shinyjs::show("discrete_plot_type")
     } else if (input$plot_data_type == "Continuous"){
       updateSelectizeInput(session, "plot_param", choices = c("Level", "Flow", "Bridge freeboard", "SWE", "Snow depth"))
@@ -239,6 +241,7 @@ app_server <- function(input, output, session) {
       shinyjs::show("end_doy")
       shinyjs::show("start_doy")
       shinyjs::show("plot_years_note")
+      shinyjs::show("plot_filter")
       shinyjs::hide("discrete_plot_type")
     }
   })
@@ -366,8 +369,10 @@ app_server <- function(input, output, session) {
   observeEvent(input$return_periods, {
     if (input$return_periods == "none"){
       shinyjs::hide("return_type")
+      shinyjs::hide("return_months")
     } else {
       shinyjs::show("return_type")
+      shinyjs::show("return_months")
     }
   }, ignoreInit = TRUE)
 
@@ -385,7 +390,12 @@ app_server <- function(input, output, session) {
   observeEvent(input$plot_go, {
     tryCatch({
       if (plotContainer$plot_data_type == "continuous"){
-        plotContainer$plot <- hydrometContinuous(location = input$plot_loc_code, parameter = plotContainer$plot_param, startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, datum = input$apply_datum, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, plot_scale = 1.4)
+        if (input$plot_filter){
+          plotContainer$plot_filter <- 10
+        } else {
+          plotContainer$plot_filter <- NULL
+        }
+        plotContainer$plot <- hydrometContinuous(location = input$plot_loc_code, parameter = plotContainer$plot_param, startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, datum = input$apply_datum, filter = plotContainer$plot_filter, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, plot_scale = 1.4)
       } else if (plotContainer$plot_data_type == "discrete"){
         plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = plotContainer$plot_param, years = input$plot_years, plot_type = plotContainer$discrete_plot_type, plot_scale = 1.4)
       }
@@ -397,6 +407,13 @@ app_server <- function(input, output, session) {
         grDevices::png(file, width = 900, height = 700, units = "px")
         print(plotContainer$plot)  #WARNING do not remove this print call, it is not here for debugging purposes
         grDevices::dev.off()})
+    shinyjs::show("export_plot_data")
+    output$export_plot_data <- downloadHandler(
+      filename = function() {paste0(input$plot_loc_code, "_", plotContainer$plot_param, "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz="MST")), lubridate::minute(as.POSIXct(format(Sys.time()), tz="MST")), ".csv")},
+      content = function(file) {
+        write.csv(plotContainer$plot$data, file, row.names = FALSE)
+      }
+    )
     }, error = function(e){
       shinyalert::shinyalert("Error in rendering plot", "Try again with a different set of input parameters", type = "error")
     })

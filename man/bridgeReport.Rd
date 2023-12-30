@@ -15,7 +15,7 @@ bridgeReport(
 \arguments{
 \item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
-\item{locations}{The list of locations for which you want a distance measurement, or default "all" to get every one in the database. These must be reporting radar distance in the WRB database as parameter 'distance'.}
+\item{locations}{The list of locations for which you want a distance measurement, or default "all" to get every one in the database. These must be reporting radar distance in the WRB database as parameter 'distance'. Default "all" will only fetch locations where the network is listed as 'highways' in the timeseries table of the database.}
 
 \item{zoom}{Set TRUE if you want zoomed-in plots.}
 
