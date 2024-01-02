@@ -20,7 +20,7 @@
 # path = "C:/Users/estewart/Documents/R/Projects/"
 # circuit = "Carmacks"
 # target_date = "2023-03-01"
-#createSnowtemplate(target_date = "2023-04-01", path = "C:/Users/estewart/Documents/R/Projects/", circuit = "Ross")
+#createSnowtemplate(target_date = "2023-04-01", path = "C:/Users/estewart/Documents/R/Projects/", circuit = "Carmacks")
 
 
 createSnowtemplate <- function(target_date, path, circuit) {
