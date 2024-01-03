@@ -141,16 +141,13 @@ colnames(cddf) <- c("datetime", "value")
 return(cddf)
 }
 
-
-
-
 ```
 
 ```{r SWEbasins, include=FALSE}
 # Get SWE data for basins 
-swe_basins <- YGwater::SWE_basin(year <- year,
-                                   month <- c(3, 4, 5), # c(3)
-                                   threshold <- 6,
+swe_basins <- YGwater::SWE_basin(year = year,
+                                   month = c(3, 4, 5), # c(3)
+                                   threshold = 6,
                                    csv = FALSE,
                                    summarise = FALSE)
 ```
@@ -441,7 +438,7 @@ YGwater::hydrometContinuous(
 # B
 # Plotting 
 snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
-            year = year+1, swe_basins = swe_basins, custom_title = "Upper Yukon Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Upper Yukon Basin Monthly Snow Course Data")
 ``` 
 
 ```{r MonthlyPrecip, echo=FALSE, eval=include}
