@@ -53,3 +53,8 @@ test_that("depth plot works when overlaping new year, dates as numeric", {
   expect_snapshot_file(paste0(dir, "/depth1.png"))
   unlink(dir, recursive=TRUE)
 })
+
+test_that("continuous level plot is as expected for multiple years when output to console", {
+  plot <- suppressWarnings(hydrometContinuous("09EA004", "level", startDay = 1, endDay = 365, years = c(2019,2020,2021,2022)))
+  vdiffr::expect_doppelganger("multi yr numeric start/end", plot)
+})

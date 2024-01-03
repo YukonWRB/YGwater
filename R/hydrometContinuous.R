@@ -45,7 +45,7 @@
 #' @export
 #'
 #'
-# hydrometContinuous(location='09EA004', parameter = "flow", startDay = "2022-09-01", endDay = "2023-06-30", tzone = "MST", years = c(2021, 2022), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
+# hydrometContinuous(location='09EB001', parameter = "flow", startDay = "2024-01-01", endDay = "2024-12-31", tzone = "MST", years = c(2021, 2022, 2023), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
 # hydrometContinuous(location="Dawson", parameter = "CDDF", startDay = "2022-09-01", endDay = "2023-06-14", tzone = "MST", years = c(2022), datum = TRUE, title = TRUE, custom_title = "Dawson CDDF", returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect(), continuous_data = test)
 
@@ -102,7 +102,7 @@ hydrometContinuous <- function(location = NULL,
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     } else {
       if (!dir.exists(save_path)){
-        stop("The directory you pointed to with parameter 'save_path' does not exist.")
+        stop("The directory you pointed to with parameter 'save_path' does not exist")
       }
     }
   }
@@ -112,7 +112,7 @@ hydrometContinuous <- function(location = NULL,
     message("Your parameter entry for 'return_max_year' is invalid (greater than the last year to plot). It has been adjusted to the last year to plot, or to the last year with enough data.")
   }
 
-#### ----------------------- CDDF data is not provided -------------------- ####
+  #### ----------------------- CDDF data is not provided -------------------- ####
   if (is.null(cddf_data)) {
     #Confirm parameter and location exist in the database and that there is only one entry
     exist_check <- DBI::dbGetQuery(con, paste0("SELECT location, parameter, timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
@@ -141,7 +141,7 @@ hydrometContinuous <- function(location = NULL,
       lubridate::year(startDay) <- last_year
     }, error = function(e) {
       startDay <<- as.numeric(startDay)
-      if ((last_year %in% leap_list) & length(years) > 1){ #Skips over Feb 29 because it's not in every year
+      if (last_year %in% leap_list & length(years) > 1){ #Skips over Feb 29 because feb 29 has no historical info
         if (startDay == 59){
           startDay <<- startDay + 1
         }
@@ -155,9 +155,11 @@ hydrometContinuous <- function(location = NULL,
       lubridate::year(endDay) <- last_year
     }, error = function(e) {
       endDay <<- as.numeric(endDay)
-      if ((last_year %in% leap_list) & length(years) > 1){ #Skips over Feb 29 because it's not in every year
+      if (last_year %in% leap_list & length(years) > 1){ #Skips over Feb 29 because feb 29 has no historical info
         if (endDay == 59){
-          endDay <<- endDay + 1
+          if (endDay < 366) {
+            endDay <<- endDay + 1
+          }
         }
       }
       endDay <<- as.POSIXct(endDay*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
@@ -182,7 +184,7 @@ hydrometContinuous <- function(location = NULL,
     #Find the ts units
     units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM timeseries WHERE timeseries_id = ", tsid, ";"))
 
-    # Get the ribbon and return period data ############
+    # Get the necessary data -------------------
     realtime <- data.frame()
     dates <- lubridate::POSIXct(tz = tzone) #creates empty posixct vector
     daily_end <- endDay
@@ -200,7 +202,7 @@ hydrometContinuous <- function(location = NULL,
     daily$date <- as.POSIXct(daily$date, tz = tzone) #to posixct and not date so that it plays well with realtime df
     names(daily)[names(daily) == "date"] <- "datetime"
 
-    # Get the data for the years to plot ########
+    ##-----------------------------------------------------------------------------
     for (i in rev(years)){ #Using rev so that the most recent year gets realtime, if possible
       start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
       start_UTC <- start
@@ -251,7 +253,7 @@ hydrometContinuous <- function(location = NULL,
       stop("There is no data to plot within this range of years and days.")
     }
 
-    #Add the ribbon values for the times between startDay and endDay
+    # Add the ribbon values for the times between startDay and endDay
     ribbon <- data.frame()
     ribbon_seq <- seq.Date(min(as.Date(day_seq)), max(as.Date(day_seq)+1), by = "day") #Gets extended a day so that the ribbon matches the full length of the data (otherwise if high-res data is acquired, data points will go to 23:59 the next day but the ribbon ends at 00:00)
     for (i in 1:length(ribbon_seq)){
@@ -260,7 +262,7 @@ hydrometContinuous <- function(location = NULL,
         if (overlaps){
           row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
           if (nrow(row) == 0){
-            lubridate::year(target_date) <- lubridate::year(target_date) -1
+            lubridate::year(target_date) <- lubridate::year(target_date) - 1
             if (is.na(target_date)){
               next()
             }
@@ -338,7 +340,7 @@ hydrometContinuous <- function(location = NULL,
       realtime[ , c("value", "max", "min", "q75", "q25")] <- apply(realtime[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
     }
   }
-#### ------------------------- CDDF data provided ------------------------- ####
+  #### ------------------------- CDDF data provided ------------------------- ####
   if (!is.null(cddf_data)) {
     #### Add this in here: ------------------
     cddf <- cddf_data
@@ -408,10 +410,7 @@ hydrometContinuous <- function(location = NULL,
     }
   }
 
-#### ----------------------------- Make the plot -------------------------- ####
-  colours = c("#0097A9", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
-  #colours = c("black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#687C04", "#0097A9", "#7A9A01", "#CD7F32")
-  #colours = c("#0097A9","#F2A900", "#687C04", "#773F65")
+  #### ----------------------------- Make the plot -------------------------- ####
   line_size = 1
   minHist <- min(realtime$min, na.rm=TRUE)
   maxHist <- max(realtime$max, na.rm=TRUE)
@@ -457,7 +456,7 @@ hydrometContinuous <- function(location = NULL,
       if (!all(is.na(realtime$q25))){
         plot <- plot +
           ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = "25th-75th Percentile"), na.rm = T) +
-          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90", "25th-75th Percentile" = "gray75"))
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90", "25th-75th Percentile" = "gray80"))
       } else {
         plot <- plot +
           ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90"))
@@ -468,8 +467,8 @@ hydrometContinuous <- function(location = NULL,
   }
 
   plot <- plot +
-    ggplot2::geom_line(ggplot2::aes(colour = as.factor(.data$plot_year), group = as.factor(.data$plot_year)), linewidth = line_size, na.rm = T) +
-    ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = colours[1:legend_length], na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
+    ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
+    ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
 
 
   # Get or calculate return periods -------------
