@@ -59,7 +59,6 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       )
     } else {warning("The objects in the stations parameter must be either a station id (character string) or a dataframe")}
 
-    test2 <<- station
     # Check if data exists for this time frame
     if (nrow(station)==0) {
       station <- station
@@ -81,8 +80,6 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
 
     # Replace in stations list
     stations[[s]] <- station
-
-    test1 <<- stations
 
   }
 
