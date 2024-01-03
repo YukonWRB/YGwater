@@ -72,7 +72,7 @@ NOTE: Outlier values clearly caused by instrument error were automatically remov
 for (i in 1:nrow(tsid)){
   cat("  \n# Radar distance for", tsid[i, "name"])
   cat("  \n### Distance (past year)  \n")
-  plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 10)
+  plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 10, startDay = Sys.Date()-364, endDay = Sys.Date())
   if (min(plot$data$value, na.rm=TRUE) < 1) {
     plot <- plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
   }
