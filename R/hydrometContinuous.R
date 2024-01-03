@@ -45,7 +45,7 @@
 #' @export
 #'
 #'
-# hydrometContinuous(location='09EA004', parameter = "flow", startDay = "2022-09-01", endDay = "2023-06-30", tzone = "MST", years = c(2021, 2022), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
+# hydrometContinuous(location='09EB001', parameter = "flow", startDay = "2024-01-01", endDay = "2024-12-31", tzone = "MST", years = c(2021, 2022, 2023), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
 # hydrometContinuous(location="Dawson", parameter = "CDDF", startDay = "2022-09-01", endDay = "2023-06-14", tzone = "MST", years = c(2022), datum = TRUE, title = TRUE, custom_title = "Dawson CDDF", returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect(), continuous_data = test)
 
@@ -396,9 +396,8 @@ hydrometContinuous <- function(location = NULL,
   }
 
 #### ----------------------------- Make the plot -------------------------- ####
-  colours = c("#0097A9", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
-  #colours = c("black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#687C04", "#0097A9", "#7A9A01", "#CD7F32")
-  #colours = c("#0097A9","#F2A900", "#687C04", "#773F65")
+  #colours = c("#0097A9", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
+  # colours = c("#687C04", "black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#687C04", "#0097A9", "#7A9A01", "#CD7F32")
   line_size = 1
   minHist <- min(realtime$min, na.rm=TRUE)
   maxHist <- max(realtime$max, na.rm=TRUE)
@@ -444,19 +443,23 @@ hydrometContinuous <- function(location = NULL,
       if (!all(is.na(realtime$q25))){
         plot <- plot +
           ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = "25th-75th Percentile"), na.rm = T) +
-          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray95", "25th-75th Percentile" = "gray75"))
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90", "25th-75th Percentile" = "gray80"))
       } else {
         plot <- plot +
-          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray95"))
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90"))
       }
     } else {
       minHist <- Inf # set to Inf here so that historical range is not printed later on the graph
     }
   }
 
-  plot <- plot +
-    ggplot2::geom_line(ggplot2::aes(colour = as.factor(.data$plot_year), group = as.factor(.data$plot_year)), linewidth = line_size, na.rm = T) +
-    ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = colours[1:legend_length], na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
+  # plot <- plot +
+  #   ggplot2::geom_line(ggplot2::aes(colour = as.factor(.data$plot_year), group = as.factor(.data$plot_year)), linewidth = line_size, na.rm = T) +
+  # ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = colours[1:legend_length], na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
+
+    plot <- plot +
+    ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
+      ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
 
 
   # Get or calculate return periods -------------
