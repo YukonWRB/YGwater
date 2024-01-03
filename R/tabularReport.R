@@ -110,6 +110,9 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   tables <- list()
   if (!is.null(precip_locations)){ #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
     precip <- data.frame()
+    if (!yesterday_comments){
+      yesterday_comment_precip <- NULL
+    }
     for (i in precip_locations){
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       tryCatch({

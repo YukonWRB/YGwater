@@ -54,7 +54,7 @@ getHRDPA <- function(start = Sys.time()-60*60*24,
   available$valid <- NA
   available$valid <- as.POSIXct(substr(available$link, 1, 11), format = "%Y%m%dT%H", tz="UTC")
   available$integrate_time <- "6h"
-  available$integrate_time[grepl("24", available$link)] <- "24h"
+  available$integrate_time[grepl("Accum24h", available$link)] <- "24h"
 
   last_available_01 <- available[available$valid == max(available$valid) & available$cutoff == "0100" & available$integrate_time == "6h", "valid"]
   last_available_07 <- available[available$valid == max(available$valid) & available$cutoff == "0700" & available$integrate_time == "6h", "valid"]

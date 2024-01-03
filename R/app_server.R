@@ -391,7 +391,7 @@ app_server <- function(input, output, session) {
     tryCatch({
       if (plotContainer$plot_data_type == "continuous"){
         if (input$plot_filter){
-          plotContainer$plot_filter <- 10
+          plotContainer$plot_filter <- 20
         } else {
           plotContainer$plot_filter <- NULL
         }
