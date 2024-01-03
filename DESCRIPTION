@@ -70,7 +70,6 @@ Imports:
 Suggests: 
     testthat (>= 3.0.0),
     vdiffr,
-    whitebox,
     gmailr,
     weathercan,
     tidyhydat,

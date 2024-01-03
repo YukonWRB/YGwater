@@ -13,6 +13,8 @@
 YOWN_solinst_telem <- function(active_telem = c("YOWN-2201S"), path = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_XLE_file_dropbox/", auth_json = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\04_TELEMETRY\\gmail_interface.json"){
 
 
+  #NOTE:  !!!!package XML is deprecated in favor of xml2. See the GitHub issue for more info.
+
   #Initial setup
   rlang::check_installed("gmailr", reason = "Package gmailr is required to use function YOWN_solinst_telem") #This is here because gmailr is not a 'depends' of this package; it is only necessary for this function and this function isn't use by many users.
 
