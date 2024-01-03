@@ -100,6 +100,10 @@ hydrometContinuous <- function(location = NULL,
     if (save_path %in% c("Choose", "choose")) {
       # print("Select the folder where you want this graph saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+    } else {
+      if (!dir.exists(save_path)){
+        stop("The directory you pointed to with parameter 'save_path' does not exist.")
+      }
     }
   }
 
@@ -123,33 +127,40 @@ hydrometContinuous <- function(location = NULL,
     # Dealing with start/end dates ----------------------
     # Sort out startDay and endDay into actual dates if needed
     last_year <- max(years)
+
+    if (last_year > lubridate::year(Sys.Date())-1){
+      years <- years - 1
+      last_year <- last_year - 1
+      message("The greatest year you requested is too far into the future: you need to specify the December year when overlaping the New Year. See the function help for parameter 'years'. The year(s) you requested were all adjusted back by 1.")
+    }
+
     leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
     tryCatch({ #This part will fail if startDay specified as a number
       startDay <- as.character(startDay)
       startDay <- as.POSIXct(startDay, tz = tzone)
       lubridate::year(startDay) <- last_year
     }, error = function(e) {
-      if (last_year %in% leap_list){ #Skips over Feb 29 because feb 29 has no historical info
-        if (startDay > 59){
+      startDay <<- as.numeric(startDay)
+      if ((last_year %in% leap_list) & length(years) > 1){ #Skips over Feb 29 because it's not in every year
+        if (startDay == 59){
           startDay <<- startDay + 1
         }
       }
-      startDay <<- as.POSIXct(as.numeric(startDay)*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
+      startDay <<- as.POSIXct(startDay*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
       startDay <<- lubridate::force_tz(startDay, tzone)
     })
-    tryCatch({ #This part will fail if startDay specified as a number
+    tryCatch({ #This part will fail if endDay specified as a number
       endDay <- as.character(endDay)
       endDay <- as.POSIXct(endDay, tz = tzone)
       lubridate::year(endDay) <- last_year
     }, error = function(e) {
-      if (last_year %in% leap_list){ #Skips over Feb 29 because feb 29 has no historical info
-        if (endDay > 59){
-          if (endDay < 366) {
-            endDay <<- endDay + 1
-          }
+      endDay <<- as.numeric(endDay)
+      if ((last_year %in% leap_list) & length(years) > 1){ #Skips over Feb 29 because it's not in every year
+        if (endDay == 59){
+          endDay <<- endDay + 1
         }
       }
-      endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
+      endDay <<- as.POSIXct(endDay*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
       endDay <<- lubridate::force_tz(endDay, tzone)
     })
     if (startDay > endDay){ #if the user is wanting a range overlapping the new year
@@ -159,17 +170,11 @@ hydrometContinuous <- function(location = NULL,
       overlaps <- FALSE
     }
 
-    if (endDay > Sys.Date()){
-      lubridate::year(startDay) <- lubridate::year(startDay) -1
-      lubridate::year(endDay) <- lubridate::year(endDay) -1
-      years <- years -1
-    }
-
     day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
     # Find the necessary datum (latest datum)
     if (datum & parameter %in% c("level", "distance")){
-      datum <- DBI::dbGetQuery(con, paste0("SELECT * FROM datum_conversions WHERE location = '", location, "' AND current = TRUE"))
+      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location = '", location, "' AND current = TRUE"))
     } else {
       datum <- data.frame(conversion_m = 0)
     }
@@ -177,7 +182,7 @@ hydrometContinuous <- function(location = NULL,
     #Find the ts units
     units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM timeseries WHERE timeseries_id = ", tsid, ";"))
 
-    # Get the necessary data -------------------
+    # Get the ribbon and return period data ############
     realtime <- data.frame()
     dates <- lubridate::POSIXct(tz = tzone) #creates empty posixct vector
     daily_end <- endDay
@@ -186,12 +191,16 @@ hydrometContinuous <- function(location = NULL,
     } else {
       lubridate::year(daily_end) <- last_year
     }
-    daily_end <- daily_end + 60*60*24
+    daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
     daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", as.character(daily_end), "';"))
+    all_dates <- seq(min(daily$date), max(daily$date), by = "1 day")
+    complete <- data.frame(date = all_dates, value = NA, max = NA, min = NA, q75 = NA, q25 = NA)
+    complete[match(daily$date, all_dates) , ] <- daily
+    daily <- complete
     daily$date <- as.POSIXct(daily$date, tz = tzone) #to posixct and not date so that it plays well with realtime df
     names(daily)[names(daily) == "date"] <- "datetime"
 
-    ##-----------------------------------------------------------------------------
+    # Get the data for the years to plot ########
     for (i in rev(years)){ #Using rev so that the most recent year gets realtime, if possible
       start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
       start_UTC <- start
@@ -228,8 +237,7 @@ hydrometContinuous <- function(location = NULL,
         realtime <- rbind(realtime, new_realtime)
       }
     }
-    ##-----------------------------------------------------------------------------
-    #Find out where values need to be filled in with daily means
+    # Find out where values need to be filled in with daily means
     if (length(dates) > 0){
       for (i in 1:length(dates)){
         toDate <- as.Date(dates[i]) #convert to plain date to check if there are any datetimes with that plain date
@@ -242,17 +250,22 @@ hydrometContinuous <- function(location = NULL,
     if (nrow(realtime) == 0){
       stop("There is no data to plot within this range of years and days.")
     }
+
     #Add the ribbon values for the times between startDay and endDay
     ribbon <- data.frame()
     ribbon_seq <- seq.Date(min(as.Date(day_seq)), max(as.Date(day_seq)+1), by = "day") #Gets extended a day so that the ribbon matches the full length of the data (otherwise if high-res data is acquired, data points will go to 23:59 the next day but the ribbon ends at 00:00)
     for (i in 1:length(ribbon_seq)){
       target_date <- ribbon_seq[i]
-      if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29)){
+      if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29) | length(years) == 1){ #Can't have the Feb 29 date if there is more than 1 year, even if the last_year is leap
         if (overlaps){
           row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
           if (nrow(row) == 0){
             lubridate::year(target_date) <- lubridate::year(target_date) -1
+            if (is.na(target_date)){
+              next()
+            }
             row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
+            lubridate::year(row$datetime) <- lubridate::year(row$datetime) + 1
           }
         } else {
           row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
@@ -444,10 +457,10 @@ hydrometContinuous <- function(location = NULL,
       if (!all(is.na(realtime$q25))){
         plot <- plot +
           ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = "25th-75th Percentile"), na.rm = T) +
-          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray95", "25th-75th Percentile" = "gray75"))
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90", "25th-75th Percentile" = "gray75"))
       } else {
         plot <- plot +
-          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray95"))
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90"))
       }
     } else {
       minHist <- Inf # set to Inf here so that historical range is not printed later on the graph
