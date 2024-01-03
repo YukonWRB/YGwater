@@ -8,7 +8,7 @@ Authors@R: c(
            comment = c(ORCID = "0000-0002-5093-9185")),
     person("Cole", "Fischer", , "cole.fischer@hotmail.com", role = "aut",
            comment = c(ORCID = "0000-0002-7266-5760")),
-    person("Emilie", "Stwart-Jones", , "emilie.stewart-jones@yukon.ca", role = "aut")
+    person("Emilie", "Stewart-Jones", , "emilie.stewart-jones@yukon.ca", role = "aut")
   )
 Description: Stores various functions for use across the Water Science and
     Stweardship Branch disciplines, including for generating reports,
