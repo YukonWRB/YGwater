@@ -166,7 +166,7 @@ basinPrecip <- function(location,
     available$valid <- NA
     available$valid <- as.POSIXct(substr(available$link, 1, 11), format = "%Y%m%dT%H", tz="UTC")
     available$integrate_time <- "6h"
-    available$integrate_time[grepl("24", available$link)] <- "24h"
+    available$integrate_time[grepl("Accum24h", available$link)] <- "24h"
 
     last_available_01 <- available[available$valid == max(available$valid) & available$cutoff == "0100" & available$integrate_time == "6h", "valid"]
     if (min(sequence_hrdpa) <= last_available_01){ #TRUE means that there is at least one HRDPA available online or that there is one locally, so fetch it. Otherwise, no HRDPA is available yet and only HRDPS forecast will be used.
@@ -195,25 +195,25 @@ basinPrecip <- function(location,
         have_time <- available_local[which(available_local$timedate %in% sequence_hrdpa),]
 
         have_extent <- data.frame()
-        for (i in within){ #Since within could actually be many polygons
-          have_extent <- rbind(have_extent, have_time[which((stringr::str_detect(have_time$extent, i))),])
+        for (j in within){ #Since within could actually be many polygons
+          have_extent <- rbind(have_extent, have_time[which((stringr::str_detect(have_time$extent, j))),])
         }
         have_extent <- rbind(have_extent, have_time[have_time$clipped==FALSE,]) #add in the unclipped ones too
 
         missing_extent <- have_time[!(have_time$files %in% have_extent$files), ]
 
         #Check if have_time and/or have_extent are length 0, if they are, getHRDPA(clip) should get assigned the smallest clip polygon possible.
-        if(length(missing_time) > 0){
-          if(is.na(have_time$extent[1])){
+        if (length(missing_time) > 0){
+          if (is.na(have_time$extent[1])){
             smallest <- as.data.frame(prov_buff[prov_buff$PREABBR %in% within,])
             smallest <- smallest[order(smallest$Shape_Area),][1,2]
 
-            for (i in 1:length(missing_time)){
-              getHRDPA(start = missing_time[i], end = missing_time[i], clip = smallest, save_path = hrdpa_loc)
+            for (j in 1:length(missing_time)){
+              getHRDPA(start = missing_time[j], end = missing_time[j], clip = smallest, save_path = hrdpa_loc)
             }
           } else {
-            for (i in 1:length(missing_time)){
-              getHRDPA(start = missing_time[i], end = missing_time[i], clip = unique(have_time$extent)[1], save_path = hrdpa_loc)
+            for (j in 1:length(missing_time)){
+              getHRDPA(start = missing_time[j], end = missing_time[j], clip = unique(have_time$extent)[1], save_path = hrdpa_loc)
             }
           }
         }
@@ -223,12 +223,12 @@ basinPrecip <- function(location,
             smallest <- as.data.frame(prov_buff[prov_buff$PREABBR %in% within,])
             smallest <- smallest[order(smallest$Shape_Area),][1,2]
 
-            for (i in 1:length(missing_extent)){
-              getHRDPA(start = missing_extent[i,2], end = missing_extent[i,2], clip = smallest, save_path = hrdpa_loc)
+            for (j in 1:length(missing_extent)){
+              getHRDPA(start = missing_extent[j,2], end = missing_extent[j,2], clip = smallest, save_path = hrdpa_loc)
             }
           } else {
-            for (i in 1:length(missing_extent)){
-              getHRDPA(start = missing_extent[i,2], end = missing_extent[i,2], clip = unique(have_extent$extent)[1], save_path = hrdpa_loc)
+            for (j in 1:length(missing_extent)){
+              getHRDPA(start = missing_extent[j,2], end = missing_extent[j,2], clip = unique(have_extent$extent)[1], save_path = hrdpa_loc)
             }
           }
         }
@@ -269,8 +269,8 @@ basinPrecip <- function(location,
 
 
         if(length(missing_time) > 0){
-          for (i in 1:length(missing_time)){
-            getHRDPA(start = missing_time[i], end = missing_time[i], clip = NULL, save_path = hrdpa_loc)
+          for (j in 1:length(missing_time)){
+            getHRDPA(start = missing_time[j], end = missing_time[j], clip = NULL, save_path = hrdpa_loc)
           }
         }
 

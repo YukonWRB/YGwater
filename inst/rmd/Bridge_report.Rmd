@@ -72,7 +72,7 @@ NOTE: Outlier values clearly caused by instrument error were automatically remov
 for (i in 1:nrow(tsid)){
   cat("  \n# Radar distance for", tsid[i, "name"])
   cat("  \n### Distance (past year)  \n")
-  plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 10, startDay = Sys.Date()-364, endDay = Sys.Date())
+  plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 20, startDay = Sys.Date()-364, endDay = Sys.Date())
   if (min(plot$data$value, na.rm=TRUE) < 1) {
     plot <- plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
   }
@@ -81,7 +81,7 @@ for (i in 1:nrow(tsid)){
   
   if (zoom){
     cat ("  \n### Distance (past", zoom_days, "days)  \n")
-    zoom_plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", startDay = Sys.Date()-zoom_days, endDay = Sys.Date(), datum = FALSE, filter = 10)
+    zoom_plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", startDay = Sys.Date()-zoom_days, endDay = Sys.Date(), datum = FALSE, filter = 20)
     if (min(zoom_plot$data$value, na.rm=TRUE) < 1) {
     zoom_plot <- zoom_plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
   }
