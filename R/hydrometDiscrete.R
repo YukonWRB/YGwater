@@ -185,9 +185,6 @@ hydrometDiscrete <- function(location=NULL,
       new_discrete <- all_discrete[all_discrete$target_datetime >= start & all_discrete$target_datetime <= end , ]
       discrete <- rbind(discrete, new_discrete)
     }
-    if (nrow(discrete) == 0){
-      stop("There is no data to graph after filtering for your specified year(s) and day range. Try again with different days.")
-    }
 
   }
 
@@ -202,6 +199,10 @@ hydrometDiscrete <- function(location=NULL,
     ## Give units
     units <- unique(discrete$units)
   }
+
+  # if (nrow(discrete) == 0){
+  #   stop("There is no data to graph after filtering for your specified year(s) and day range. Try again with different days.")
+  # }
 
   if (plot_type == 'linedbox') {
     stats_discrete <- all_discrete %>%
@@ -244,9 +245,12 @@ hydrometDiscrete <- function(location=NULL,
     plot <- plot +
       ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE)
   }
-  plot <- plot +
-    ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = .data$fake_date, y = .data$value, colour = as.factor(.data$year), fill = as.factor(.data$year)), size = plot_scale*3.5, shape = 21) +
-    ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = colours[1:legend_length], aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
+  if (nrow(discrete) > 0) {
+    plot <- plot +
+      ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = .data$fake_date, y = .data$value, colour = as.factor(.data$year), fill = as.factor(.data$year)), size = plot_scale*3.5, shape = 21) +
+      ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = colours[1:legend_length], aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
+  }
+
 
   # Wrap things up and return() -----------------------
   if (title == TRUE){
