@@ -66,7 +66,7 @@ hydrometContinuous(
 \item{cddf_data}{A dataframe with the data to be plotted. Must contain the following columns: datetime, value. This will be removed when climate data is finished being added to the hydromet database.}
 }
 \value{
-A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
+A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
