@@ -27,7 +27,13 @@ SWE_station <-
            return_missing = FALSE,
            source = "hyromet") {
 
-    ## From hydromet ##
+    # First retrieve location-basin info
+    con <- snowConnect()
+    loc_basin <- DBI::dbGetQuery(con, "SELECT location, sub_basin FROM locations")
+    DBI::dbDisconnect(con)
+    colnames(loc_basin) <- c("location_id", "sub_basin")
+
+    ## From hydromet db ##
     if (source == "hydromet") {
       # Retrieve data from db
       con <- hydrometConnect()
@@ -44,15 +50,19 @@ SWE_station <-
       DBI::dbDisconnect(con)
       # Rename columns:
       colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter")
+
+  ## From snow db ##
     } else if (source == "snow") {
       # Retrieve data from db
       con <- snowConnect()
 
       # Get measurements
-      Meas <- DBI::dbGetQuery(con, "SELECT locations.name, means.location, means.swe, means.depth, surveys.target_date, means.sample_datetime
-                         FROM means
-                         INNER JOIN locations ON means.location=locations.location
-                         INNER JOIN surveys on means.survey_id=surveys.survey_id")
+      # Meas <- DBI::dbGetQuery(con, "SELECT locations.name, means.location, means.swe, means.depth, surveys.target_date, means.sample_datetime
+      #                    FROM means
+      #                    INNER JOIN locations ON means.location=locations.location
+      #                    INNER JOIN surveys on means.survey_id=surveys.survey_id")
+      Meas <- DBI::dbGetQuery(con, "SELECT means.name, means.location, means.swe, means.depth, means.target_date, means.sample_datetime
+                         FROM means")
       DBI::dbDisconnect(con)
 
       # Reformat table
@@ -160,12 +170,9 @@ SWE_station <-
 
     # Set swe_rat NaN to NULL
     swe_station_summary$swe_rat[swe_station_summary$swe_rat == "NaN"] <- NA
-    #
-    # swe_station_summary <- swe_station_summary %>%
-    #   dplyr::mutate(dplyr::across(
-    #     c("swe_med", "swe_rat"),
-    #     \(x) round (x, 1)
-    #   ))
+
+    # Add column for sub_basin
+    swe_station_summary <- merge(swe_station_summary, loc_basin, by="location_id")
 
     # Write csv if csv = TRUE
     if (csv == TRUE) {

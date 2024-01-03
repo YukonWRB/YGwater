@@ -7,11 +7,12 @@ output:
 date: "2023-09-18"
 params:
   year: year
+  month: month
   basins: basins
 ---
 
 ```{r setup, include=FALSE}
-#rmarkdown::render("C:/Users/estewart/Documents/R/Projects/YGwater/inst/rmd/Snow_bulletin.Rmd", params = list(year=2023, basins=c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Pell", "Liard", "Alsek")))
+#rmarkdown::render("C:/Users/estewart/Documents/R/Projects/YGwater/inst/rmd/Snow_bulletin.Rmd", params = list(year=2023, month=3, basins=c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek")))
 knitr::opts_chunk$set(echo = TRUE)
 con <- YGwater::hydrometConnect()
 ```
@@ -21,6 +22,7 @@ con <- YGwater::hydrometConnect()
 # Function to create lake level snow bulletin plots
 snowbullWater <- function(location, parameter, years, custom_title) {
   flood <- data$flow_level_flood
+  tryCatch({
   plot <-
     YGwater::hydrometContinuous(
       location = location,
@@ -32,6 +34,11 @@ snowbullWater <- function(location, parameter, years, custom_title) {
       custom_title = custom_title,
       con = con
     )
+  
+  
+  },
+  error = function(e) {
+    cat("Error")})
   
   if (exists('flood') &
       !is.null(flood) & parameter %in% c("level", "flow")) {
@@ -69,6 +76,7 @@ snowbullWater <- function(location, parameter, years, custom_title) {
   } else {
     plot <- plot
   }
+  
   return(plot)
 }
 
@@ -875,5 +883,12 @@ snowbullWater(location = station_id,
               parameter = "flow",
               years = year,
               custom_title = "Alsek River Discharge above Bates")
+``` 
+
+## Drainage Basin and Snow Course
+```{r table, echo=FALSE, fig.width=10}
+test <- SWE_station(year=year, month=month, return_missing = TRUE, source="hydromet")
+
+knitr::kable(test)
 ``` 
 

@@ -4,7 +4,7 @@ test_that("Outputted table has proper dimensions when reading from hydromet db",
                        csv = FALSE,
                        return_missing = FALSE,
                        source = 'hydromet'))
-  expect_equal(ncol(test), 9)
+  expect_equal(ncol(test), 10)
   expect_true(nrow(test) >= 1)
 })
 
@@ -14,6 +14,6 @@ test_that("Outputted table has proper dimensions when reading from snow db", {
                                        csv = FALSE,
                                        return_missing = FALSE,
                                        source = 'snow'))
-  expect_equal(ncol(test), 9)
+  expect_equal(ncol(test), 10)
   expect_true(nrow(test) >= 1)
 })
