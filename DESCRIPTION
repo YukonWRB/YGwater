@@ -1,14 +1,14 @@
 Package: YGwater
 Title: Utility functions for the Yukon Water Science and Stewardship
     Branch
-Version: 0.0.0
+Version: 1.0.5
 Date: 2023-10-03
 Authors@R: c(
     person("Ghislain", "de Laplante", , "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
     person("Cole", "Fischer", , "cole.fischer@hotmail.com", role = "aut",
            comment = c(ORCID = "0000-0002-7266-5760")),
-    person("Emilie", "Stwart-Jones", , "emilie.stewart-jones@yukon.ca", role = "aut")
+    person("Emilie", "Stewart-Jones", , "emilie.stewart-jones@yukon.ca", role = "aut")
   )
 Description: Stores various functions for use across the Water Science and
     Stweardship Branch disciplines, including for generating reports,
@@ -70,7 +70,6 @@ Imports:
 Suggests: 
     testthat (>= 3.0.0),
     vdiffr,
-    whitebox,
     gmailr,
     weathercan,
     tidyhydat,

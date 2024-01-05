@@ -6,8 +6,8 @@ output:
   word_document:
     reference_docx: style_template.docx
 params:
-  database: database
-  locations: locations
+  con: con
+  tsid: tsid
   zoom: zoom
   zoom_days: zoom_days
   
@@ -19,97 +19,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r Get location data, echo=FALSE, results='asis', message=FALSE, warning=FALSE}
 bridge_daily <- list()
-names <- NULL
 bridge_rt <- list()
 
-if (!is.null(database)){ #Get the data from the database. Connection already performed in the .R file.
-  for (i in locations){
-    bridge_daily[[i]] <- DBI::dbGetQuery(database, paste0("SELECT value, date, max, min, QP90, QP75, QP50, QP25, QP10 FROM daily WHERE location = '", i, "' AND parameter = 'distance' AND date BETWEEN '", Sys.Date()-365, "' AND '", Sys.Date(), "'" ))
-    names[i] <- DBI::dbGetQuery(database, paste0("SELECT name FROM locations WHERE location = '", i, "'"))[1,1]
-    bridge_rt[[i]] <-  DBI::dbGetQuery(database, paste0("SELECT value, datetime_UTC FROM realtime WHERE location = '", i, "' AND parameter = 'distance' AND datetime_UTC BETWEEN '", .POSIXct(Sys.time(), "UTC")-zoom_days * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
-  }
-  
-} else { #Get the data directly from Aquarius and/or the WSC
-  leap_list <- (seq(1800, 2100, by = 4))
-  for (i in locations) {
-    temp <- aq_download(i, "Distance.Corrected")
-    names[i] <- temp$metadata[1,2]
-    temp <- temp$timeseries[c(1,2)]
-    rt <- temp
-    #Calculate daily means and stats
-    temp <- temp %>%
-      dplyr::group_by(lubridate::year(.data$timestamp_UTC), lubridate::yday(.data$timestamp_UTC)) %>%
-      dplyr::summarize(date = mean(lubridate::date(.data$timestamp_UTC)),
-                       value = mean(.data$value),
-                       .groups = "drop")
-    temp <- temp[,c(3:4)]
-    temp <- fasstr::fill_missing_dates(temp, "date", pad_ends = FALSE)
-    
-    feb_29 <- temp[(lubridate::month(temp$date) == "2" & lubridate::mday(temp$date) == "29"), , drop = FALSE]
-    exFeb29 <- temp[!(lubridate::month(temp$date) == "2" & lubridate::mday(temp$date) == "29"), , drop = FALSE]
-    exFeb29 <- exFeb29 %>% dplyr::mutate(dayofyear = ifelse(lubridate::year(.data$date) %in% leap_list,
-                                                            ifelse(lubridate::month(.data$date) <= 2,
-                                                                   lubridate::yday(.data$date),
-                                                                   lubridate::yday(.data$date) - 1),
-                                                            lubridate::yday(.data$date)))
-    #selects only records beginning with the second dayofyear and having values for the second time from all_stats (those for which stats can be calculated)
-    exFeb29 <- exFeb29[order(exFeb29[ , "date"]) , ]
-    duplicated <- exFeb29[duplicated(exFeb29$dayofyear),]
-    all <- exFeb29
-    uncalc <- all[!(all$date %in% duplicated$date) ,]
-    exFeb29 <- exFeb29[exFeb29$date %in% duplicated$date , ]
-    
-    if (nrow(exFeb29) > 0){
-      for (j in 1:nrow(exFeb29)){
-        date <- exFeb29$date[j]
-        doy <- exFeb29$dayofyear[j]
-        current <- exFeb29$value[j]
-        past <- all[all$dayofyear == doy & all$date < date , ]$value #Importantly, does NOT include the current measurement. A current measure greater than past maximum will rank > 100%
-        past <- past[!is.na(past)]
-        if (length(past) >= 1){
-          exFeb29$max[j] <- max(past) #again, NOT including current measurement
-          exFeb29$min[j] <- min(past)
-          exFeb29$QP90[j] <- stats::quantile(past, 0.90)
-          exFeb29$QP75[j] <- stats::quantile(past, 0.75)
-          exFeb29$QP50[j] <- stats::quantile(past, 0.50)
-          exFeb29$QP25[j] <- stats::quantile(past, 0.25)
-          exFeb29$QP10[j] <- stats::quantile(past, 0.10)
-          if (length(past) > 1 & !is.na(current)){ #need at least 2 measurements to calculate a percent historic!
-            exFeb29$percent_historic_range[j] <- ((current - min(past)) / (max(past) - min(past))) * 100
-          }
-        }
-      }
-    }
-    if (nrow(feb_29) > 0 & !(substr(as.character(as.Date(.POSIXct(Sys.time(), "UTC"))), 6, 10) %in% c("02-29", "03-01,", "03-02"))){
-      for (k in 1:nrow(feb_29)){
-        date <- as.Date(feb_29$date[k])
-        before <- exFeb29[exFeb29$date == date - 1 , ]
-        after <- exFeb29[exFeb29$date == date + 1 , ]
-        feb_29$percent_historic_range[k] <- mean(c(before$percent_historic_range, after$percent_historic_range))
-        feb_29$max[k] <- mean(c(before$max, after$max))
-        feb_29$min[k] <- mean(c(before$min, after$min))
-        feb_29$QP90[k] <- mean(c(before$QP90, after$QP90))
-        feb_29$QP75[k] <- mean(c(before$QP75, after$QP75))
-        feb_29$QP50[k] <- mean(c(before$QP50, after$QP50))
-        feb_29$QP25[k] <- mean(c(before$QP25, after$QP25))
-        feb_29$QP10[k] <- mean(c(before$QP10, after$QP10))
-      }
-    }
-    daily <- dplyr::bind_rows(exFeb29, feb_29, uncalc)
-    daily <- daily[daily$date > Sys.Date()-365 , ]
-    bridge_daily[[i]] <- daily
-    
-    rt <- rt[rt$timestamp_UTC > .POSIXct(Sys.time(), "UTC") - (zoom_days+2)*60*60*24 , ]
-    colnames(rt)[colnames(rt) == "timestamp_UTC"] <- "datetime_UTC"
-    bridge_rt[[i]] <- rt
-  }
-}
-
-for (i in names(bridge_daily)){
-  bridge_daily[[i]]$date <- as.Date(bridge_daily[[i]]$date, tz="UTC")
-}
-for (i in names(bridge_rt)){
-  bridge_rt[[i]]$datetime_UTC <- as.POSIXct(bridge_rt[[i]]$datetime_UTC, tz="UTC")
+for (i in 1:nrow(tsid)){
+  bridge_daily[[tsid$location[i]]] <- DBI::dbGetQuery(con, paste0("SELECT value, date FROM calculated_daily WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND date BETWEEN '", Sys.Date()-365, "' AND '", Sys.Date(), "'" ))
+  bridge_rt[[tsid$location[i]]] <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-zoom_days * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
 }
 
 ```
@@ -117,19 +31,18 @@ for (i in names(bridge_rt)){
 ```{r create tables, echo=FALSE, results='asis', message=FALSE}
 cat("  \n# Summary of freeboard measurements and changes \n")
 
-levels <- data.frame("Location" = NA, "Current distance" = NA, "24 hr change (cm)" = NA, "48 hr change (cm)" = NA, "72 hr change (cm)" = NA, "1 week change (cm)" = NA, "Last data age" = NA)
-colnames(levels) <- c("Location", "Latest distance (m)", "24 hr change (cm)", "48 hr change (cm)", "72 hr change (cm)", "1 week change (cm)", "Last data age")
+levels <- data.frame("Location" = NA, "Current distance" = NA, "24 hr change (cm)" = NA, "48 hr change (cm)" = NA, "72 hr change (cm)" = NA, "1 week change (cm)" = NA, "Last data age" = NA, check.names = FALSE)
 
-for (i in 1:length(locations)){
-  latest <- bridge_rt[[i]][bridge_rt[[i]]$datetime_UTC == max(as.POSIXct(bridge_rt[[i]]$datetime_UTC)), ]
+for (i in 1:nrow(tsid)){
+  latest <- bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime == max(as.POSIXct(bridge_rt[[i]]$datetime)), ]
   current <- round(latest$value, 1)
-  day <- round(100 * (current - mean(bridge_rt[[i]][bridge_rt[[i]]$datetime_UTC < (latest$datetime_UTC - 60*60*23.5) & bridge_rt[[i]]$datetime_UTC > (latest$datetime_UTC - 60*60*24.5), ]$value)), 1)
-  twoday <- round(100 * (current - mean(bridge_rt[[i]][bridge_rt[[i]]$datetime_UTC < (latest$datetime_UTC - 60*60*23.5*2) & bridge_rt[[i]]$datetime_UTC > (latest$datetime_UTC - 60*60*24.5*2), ]$value)), 1)
-  threeday <- round(100* (current - mean(bridge_rt[[i]][bridge_rt[[i]]$datetime_UTC < (latest$datetime_UTC - 60*60*23.5*3) & bridge_rt[[i]]$datetime_UTC > (latest$datetime_UTC - 60*60*24.5*3), ]$value)), 1)
-  week <- round(100 * (current - mean(bridge_rt[[i]][bridge_rt[[i]]$datetime_UTC < (latest$datetime_UTC - 60*60*23.5*7) & bridge_rt[[i]]$datetime_UTC > (latest$datetime_UTC - 60*60*24.5*7), ]$value)), 1)
-  age <- Sys.time() - latest$datetime_UTC
+  day <- round(100 * (current - mean(bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime < (latest$datetime - 60*60*23.5) & bridge_rt[[tsid$location[i]]]$datetime > (latest$datetime - 60*60*24.5), ]$value)), 1)
+  twoday <- round(100 * (current - mean(bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime < (latest$datetime - 60*60*23.5*2) & bridge_rt[[tsid$location[i]]]$datetime > (latest$datetime - 60*60*24.5*2), ]$value)), 1)
+  threeday <- round(100* (current - mean(bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime < (latest$datetime - 60*60*23.5*3) & bridge_rt[[tsid$location[i]]]$datetime > (latest$datetime - 60*60*24.5*3), ]$value)), 1)
+  week <- round(100 * (current - mean(bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime < (latest$datetime - 60*60*23.5*7) & bridge_rt[[tsid$location[i]]]$datetime > (latest$datetime - 60*60*24.5*7), ]$value)), 1)
+  age <- Sys.time() - latest$datetime
   
-  levels[i,1] <- unlist(unname(names[i]))
+  levels[i,1] <- tsid$name[i]
   levels[i,2] <- current
   levels[i,3] <- day
   levels[i,4] <- twoday
@@ -148,77 +61,30 @@ if (TRUE %in% stringr::str_detect(levels$`Latest distance (m)`, "NA")){
 } else if (TRUE %in% suppressWarnings(stringr::str_detect(levels[,c(2:6)], "NA"))) {
     cat("NOTE: NA values indicate that data is missing.")
 }
-```
 
+```
+<br>
+
+NOTE: Outlier values clearly caused by instrument error were automatically removed prior to plot generation but NOT from the table above.  
+
+<br>
 ```{r Generate plots, echo=FALSE, fig.height=4.1, fig.width=7.4, message=FALSE, warning=FALSE, results='asis'}
-for (i in 1:length(locations)){
-  cat("  \n# Radar distance for", unname(unlist(names[i])))
+for (i in 1:nrow(tsid)){
+  cat("  \n# Radar distance for", tsid[i, "name"])
   cat("  \n### Distance (past year)  \n")
-  plot <- ggplot2::ggplot(bridge_daily[[i]], ggplot2::aes(x = .data$date, y = .data$value)) +
-    ggplot2::labs(x= "", y = "Distance (m)") +
-    ggplot2::scale_y_reverse()+ 
-    ggplot2::scale_x_date(date_breaks = "1 months", labels = scales::date_format("%b")) +
-    ggplot2::theme_classic() +
-    ggplot2::theme(legend.position = "right", legend.justification = c(0,0.8), legend.text = ggplot2::element_text(size = 8)) +
-    ggplot2::geom_point(ggplot2::aes(colour = "blue"), shape=19, size = 0.75, na.rm = T) +
-    ggplot2::geom_line(ggplot2::aes(colour = "blue"), size = 1, na.rm = T) +
-    ggplot2::scale_colour_manual(name = "", labels = "Distance (daily mean)", values = "blue", na.translate = FALSE)
-  if (!(all(is.na(bridge_daily[[i]]$max))) & !identical(bridge_daily[[i]]$max, bridge_daily[[i]]$min)){
-    plot <- plot +   
-    ggplot2::geom_ribbon(ggplot2::aes(ymin = min, ymax = max, fill = "Minimum - Maximum"), na.rm = T) +
-      ggplot2::geom_ribbon(ggplot2::aes(ymin = QP25, ymax = QP75, fill = "25th-75th Percentile"), na.rm = T) +
-      ggplot2::scale_fill_manual(name = "Historical Range", values = c("Minimum - Maximum" = "gray85", "25th-75th Percentile" = "gray65"))
-    }
+  plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 20, startDay = Sys.Date()-364, endDay = Sys.Date())
+  if (min(plot$data$value, na.rm=TRUE) < 1) {
+    plot <- plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
+  }
   print(plot)
   cat("  \n")
   
   if (zoom){
     cat ("  \n### Distance (past", zoom_days, "days)  \n")
-    
-    temp <- bridge_daily[[i]]
-    temp$date <- as.POSIXct(temp$date)
-    temp <- temp[, -which(names(temp) == "value")]
-    colnames(temp)[colnames(temp) == "date"] <- "datetime_UTC"
-    attr(temp$datetime_UTC, "tzone") <- "UTC"
-    temp_rt <- bridge_rt[[i]]
-    data <- merge(temp_rt, temp, all.x = TRUE)
-    
-    # x axis settings
-    if (zoom_days > 60) {
-      date_breaks = "1 month"
-      labs = scales::label_date("%b %d", tz=Sys.timezone())
-    } else if (zoom_days > 14) {
-      date_breaks="1 week"
-      labs = scales::label_date("%b %d", tz = Sys.timezone())
-    } else if (zoom_days > 7) {
-      date_breaks="2 days"
-      labs=scales::label_date("%b %d", tz = Sys.timezone())
-    } else if (zoom_days >= 2) {
-      date_breaks="1 days"
-      labs=scales::label_date("%b %d", tz = Sys.timezone())
-    } else if (zoom_days > 1){
-      date_breaks="24 hours"
-      labs=scales::label_time("%H:%M", tz = Sys.timezone())
-    } else if (zoom_days == 1) {
-      date_breaks="12 hour"
-      labs=scales::label_time(format="%H:%M", tz = Sys.timezone())
-    }
-    
-    zoom_plot <- ggplot2::ggplot(data, ggplot2::aes(x = .data$datetime_UTC, y = .data$value)) +
-      ggplot2::labs(x= "", y = "Distance (m)") +
-      ggplot2::scale_y_reverse()+ 
-      ggplot2::scale_x_datetime(date_breaks = date_breaks, labels = labs) +
-      ggplot2::theme_classic() +
-      ggplot2::theme(legend.position = "right", legend.justification = c(0,0.8), legend.text = ggplot2::element_text(size = 8)) +
-      ggplot2::geom_point(ggplot2::aes(colour = "blue"), shape=19, size = 0.75, na.rm = T) +
-      ggplot2::geom_line(ggplot2::aes(colour = "blue"), size = 1, na.rm = T) +
-      ggplot2::scale_colour_manual(name = "", labels = "Distance", values = "blue", na.translate = FALSE)
-    if (!(all(is.na(data$max))) & !identical(data$max, data$min)){
-      zoom_plot <- zoom_plot + 
-        ggplot2::geom_ribbon(ggplot2::aes(ymin = min, ymax = max, fill = "Minimum - Maximum"), na.rm = T) +
-      ggplot2::geom_ribbon(ggplot2::aes(ymin = QP25, ymax = QP75, fill = "25th-75th Percentile"), na.rm = T) +
-      ggplot2::scale_fill_manual(name = "Historical Range", values = c("Minimum - Maximum" = "gray85", "25th-75th Percentile" = "gray65"))
-    }
+    zoom_plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", startDay = Sys.Date()-zoom_days, endDay = Sys.Date(), datum = FALSE, filter = 20)
+    if (min(zoom_plot$data$value, na.rm=TRUE) < 1) {
+    zoom_plot <- zoom_plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
+  }
     print(zoom_plot)
     cat("  \n")
   } #End of zoom for loop

@@ -42,7 +42,7 @@ basinPrecip(
 The accumulated precipitation in mm of water within the drainage specified or immediately surrounding the point specified in \code{location} printed to the console and (optionally) a map of precipitation printed to the console. A list is also generated containing statistics and the optional plot; to save this plot to disc use either png() or dev.print(), or use the graphical device export functionality.
 }
 \description{
-Calculates accumulated precipitation above defined drainages or immediately surrounding a specified point. If possible, make sure to specify a location in parameters hrdpa_loc and hrdps_loc to speed things up!
+Calculates accumulated precipitation above defined drainages or immediately surrounding a specified point. If possible, make sure to specify a location in parameters hrdpa_loc and hrdps_loc to speed things up! Uses functions \code{\link[=getHRDPA]{getHRDPA()}} and \code{\link[=getHRDPS]{getHRDPS()}} to bring in precipi rasters if any need to be downloaded.
 }
 \details{
 If specifying \code{location} as coordinates rather than a WSC station (or non WSC station, see note below), the numeric result will be of precipitation in the 2.5 km2 cell on which the point falls. Map output, if requested, will be for the smallest available drainage polygon containing that point.

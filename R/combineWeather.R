@@ -34,31 +34,6 @@
 
 # test <- combineWeather(stations = list("2101310", "2101300", "2101400"), start='2010-01-01', end='2013-11-01', variables=c("mean_temp", "total_precip", "min_temp", "max_temp"), months=NULL)
 
-# # # Check for hourly data on missing days?
-# test <- whitehorse[whitehorse$variable=="mean_temp", ]
-# for (d in test[is.na(test$value), ]$date) {
-#   d <- as.Date(d)
-#   # Subset to row of interest
-#   rw <- test[test$date == d,]
-#   # Get station before this empty one
-#   stn <- test %>%
-#     dplyr::filter(date <= d, !is.na(value)) %>%
-#     dplyr::slice_max(order_by = date) %>%
-#     dplyr::pull(station)
-#
-#   # Get hourly data for that day
-#   test2 <- getWeather(station = stn, start = d, end = d,
-#                      tzone = "UTC",
-#                      interval = "hour",
-#                      save_path = NULL)
-#   # Calculate mean from min and max
-#   avg <- (max(test2$temp) - min(test2$temp)) / 2
-#   # Replace NA with avg
-#   test[test$date==d,]$value <- avg
-#   test[test$date==d,]$station <- stn
-# }
-
-
 
 combineWeather <- function(stations, start, end, variables, months=NULL) {
 
@@ -126,7 +101,7 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
     combined_variables <- setNames(data.frame(matrix(ncol = 4, nrow = 0)), c("date", "value", "variable", "station"))
     for (v in variables) {
 
-      print(paste0("Combining variable '", v, "'"))
+      print(paste0("---------------- Combining variable '", v, "'-------------"))
 
       # Subset station dataframe to variable of interest
       stn1 <- combined_stations[combined_stations$variable==v,]
@@ -135,19 +110,21 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       #----------------------------- Find overlap -----------------------------#
       # Find overlap
       overlap <- dplyr::inner_join(stn1, stn2, by='date')
-      # find earliest date that has the month and day +1 of max_d
-      overlap <- overlap %>%
-        dplyr::filter(date >=
-                        min(
-                          date[grepl(
-                            paste0(
-                              substr(
-                                as.character(max(overlap$date) + 1),
-                                nchar(as.character(max(overlap$date) + 1)) - 5,
-                                nchar(as.character(max(overlap$date) + 1))
-                              ), "$"
-                            ), format(date, "-%m-%d"))])
-        )
+      # Only keep overlap where both are not NA values
+      overlap <- overlap[!(is.na(overlap$value.x) | is.na(overlap$value.y)),]
+      # # find earliest date that has the month and day +1 of max_d
+      # overlap <- overlap %>%
+      #   dplyr::filter(date >=
+      #                   min(
+      #                     date[grepl(
+      #                       paste0(
+      #                         substr(
+      #                           as.character(max(overlap$date) + 1),
+      #                           nchar(as.character(max(overlap$date) + 1)) - 5,
+      #                           nchar(as.character(max(overlap$date) + 1))
+      #                         ), "$"
+      #                       ), format(date, "-%m-%d"))])
+      #   )
 
       #--------------------------- Calculate stats ---------------------------#
       print(paste0("Mean at station 1:", mean(overlap$value.x, na.rm=TRUE)))
@@ -155,8 +132,13 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       bias <- mean(overlap$value.x, na.rm=TRUE) - mean(overlap$value.y, na.rm=TRUE)
       print(paste0("Bias: ", bias))
       print(paste0("RMSE: ", sqrt(mean((overlap$value.x-overlap$value.y)^2, na.rm=TRUE))))
+      print("--------------------------Next------------------------")
 
       #--------------------------- Apply correction ---------------------------#
+      # If there is no overlap, and as such, no bias, set bias to 0 so that the original data is kept
+      if (is.na(bias)) {
+        bias <- 0
+      }
       # Apply correction to all values of station 2
       stn2$value <- stn2$value + bias
 

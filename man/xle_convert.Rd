@@ -7,13 +7,11 @@
 xle_convert(xle_file = "choose", location, save_path = "choose")
 }
 \arguments{
-\item{xle_file}{The file you wish to convert. Default "choose" allows you to point to the file.}
+\item{xle_file}{The file you wish to convert. Default "choose" allows you to point to the file. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.}
 
 \item{location}{The ID of the well in the form "YOWN-1500". You can also simply name the well, and if there is ambiguity regarding which well is the right one you will get a prompt to select from a list.}
 
-\item{save_path}{The location where the csv file should be saved.}
-
-\item{YOWN_master}{The location of the YOWN master spreadsheet. Default is in the YOWN_MASTER_TABLE folder.}
+\item{save_path}{The location where the csv file should be saved. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.}
 }
 \value{
 A csv of the logger data, ready for export to Aquarius or for general use.

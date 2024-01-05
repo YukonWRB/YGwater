@@ -31,6 +31,7 @@
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out values > 2 * the IQR. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data.
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
 #' @param return_months Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within `startDay` and `endDay`, but will only consider data up to the last year specified in `years`. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of [fasstr::calc_annual_extremes()] and also used to set the 'water_year_start' parameter of this function.
@@ -40,16 +41,16 @@
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param cddf_data A dataframe with the data to be plotted. Must contain the following columns: datetime, value. This will be removed when climate data is finished being added to the hydromet database.
-#' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
+#' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
 #' @export
 #'
 #'
-# hydrometContinuous(location='09EA004', parameter = "flow", startDay = "2022-09-01", endDay = "2023-06-30", tzone = "MST", years = c(2021, 2022), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
+# hydrometContinuous(location='09EB001', parameter = "flow", startDay = "2024-01-01", endDay = "2024-12-31", tzone = "MST", years = c(2021, 2022, 2023), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
 # hydrometContinuous(location="Dawson", parameter = "CDDF", startDay = "2022-09-01", endDay = "2023-06-14", tzone = "MST", years = c(2022), datum = TRUE, title = TRUE, custom_title = "Dawson CDDF", returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect(), continuous_data = test)
 
-hydrometContinuous <- function(location=NULL,
-                               parameter="variable",
+hydrometContinuous <- function(location = NULL,
+                               parameter = NULL,
                                startDay = 1,
                                endDay = 365,
                                tzone = "MST",
@@ -57,6 +58,7 @@ hydrometContinuous <- function(location=NULL,
                                datum = TRUE,
                                title = TRUE,
                                custom_title = NULL,
+                               filter = NULL,
                                returns = "auto",
                                return_type = "max",
                                return_months = c(5:9),
@@ -64,28 +66,9 @@ hydrometContinuous <- function(location=NULL,
                                allowed_missing = 10,
                                plot_scale = 1,
                                save_path = NULL,
-                               con = hydrometConnect(),
+                               con = hydrometConnect(silent = TRUE),
                                cddf_data = NULL)
 {
-
-  print("start of function")
-  # Commented code below is for testing...
-  # location = "09EA004"
-  # parameter = "flow"
-  # startDay = "2023-10-01"
-  # endDay = "2023-12-20"
-  # tzone = "MST"
-  # years = c(2023)
-  # datum = TRUE
-  # title = TRUE
-  # returns = "calculate"
-  # return_type = "max"
-  # return_months = c(9,10)
-  # return_max_year = 2022
-  # allowed_missing = 10
-  # plot_scale = 1
-  # save_path = NULL
-  # con = hydrometConnect()
 
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
   options(warn = -1)
@@ -103,33 +86,34 @@ hydrometContinuous <- function(location=NULL,
   }
 
   if (is.null(years)){
-    years <- as.numeric(substr(Sys.Date(), 1, 4))
+    years <- lubridate::year(Sys.Date())
   } else {
     years <- as.numeric(years)
     years <- sort(years)
     if (length(years) > 10){
       years <- years[(length(years)-10):length(years)]
-      print("The parameter 'years' can only have up to 10 years. It's been truncated to the most recent 10 years.")
+      message("The parameter 'years' can only have up to 10 years. It's been truncated to the most recent 10 years.")
     }
   }
   # Select save path
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the folder where you want this graph saved.")
+      # print("Select the folder where you want this graph saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+    } else {
+      if (!dir.exists(save_path)){
+        stop("The directory you pointed to with parameter 'save_path' does not exist")
+      }
     }
   }
 
   if (return_max_year > max(years)){
     return_max_year <- max(years)
-    message("Your parameter entry for 'return_max_year' is invalid (greater than the last year plotted). It has been adjusted to the last year plotted, or to the last year with enough data.")
+    message("Your parameter entry for 'return_max_year' is invalid (greater than the last year to plot). It has been adjusted to the last year to plot, or to the last year with enough data.")
   }
 
-  print("end of parameter checks")
-
-#### ----------------------- CDDF data is not provided -------------------- ####
-  print("Getting data sorted out")
-  if(is.null(cddf_data)) {
+  #### ----------------------- CDDF data is not provided -------------------- ####
+  if (is.null(cddf_data)) {
     #Confirm parameter and location exist in the database and that there is only one entry
     exist_check <- DBI::dbGetQuery(con, paste0("SELECT location, parameter, timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
     if (nrow(exist_check) == 0){
@@ -143,32 +127,42 @@ hydrometContinuous <- function(location=NULL,
     # Dealing with start/end dates ----------------------
     # Sort out startDay and endDay into actual dates if needed
     last_year <- max(years)
+
+    if (last_year > lubridate::year(Sys.Date())-1){
+      years <- years - 1
+      last_year <- last_year - 1
+      message("The greatest year you requested is too far into the future: you need to specify the December year when overlaping the New Year. See the function help for parameter 'years'. The year(s) you requested were all adjusted back by 1.")
+    }
+
     leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
-    tryCatch({
+    tryCatch({ #This part will fail if startDay specified as a number
       startDay <- as.character(startDay)
       startDay <- as.POSIXct(startDay, tz = tzone)
       lubridate::year(startDay) <- last_year
     }, error = function(e) {
-      if (last_year %in% leap_list){
-        if (startDay > 59){
+      startDay <<- as.numeric(startDay)
+      if (last_year %in% leap_list & length(years) > 1){ #Skips over Feb 29 because feb 29 has no historical info
+        if (startDay == 59){
           startDay <<- startDay + 1
         }
       }
-      startDay <<- as.POSIXct(as.numeric(startDay)*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
+      startDay <<- as.POSIXct(startDay*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
       startDay <<- lubridate::force_tz(startDay, tzone)
     })
-    tryCatch({
+    tryCatch({ #This part will fail if endDay specified as a number
       endDay <- as.character(endDay)
       endDay <- as.POSIXct(endDay, tz = tzone)
       lubridate::year(endDay) <- last_year
     }, error = function(e) {
-      tempStartDay <- lubridate::yday(startDay) #using yday because start is now in proper Date format and needs to be back-converted to yday
-      if (last_year %in% leap_list){
-        if (endDay > 59){
-          endDay <<- endDay + 1
+      endDay <<- as.numeric(endDay)
+      if (last_year %in% leap_list & length(years) > 1){ #Skips over Feb 29 because feb 29 has no historical info
+        if (endDay == 59){
+          if (endDay < 366) {
+            endDay <<- endDay + 1
+          }
         }
       }
-      endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
+      endDay <<- as.POSIXct(endDay*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
       endDay <<- lubridate::force_tz(endDay, tzone)
     })
     if (startDay > endDay){ #if the user is wanting a range overlapping the new year
@@ -177,11 +171,12 @@ hydrometContinuous <- function(location=NULL,
     } else {
       overlaps <- FALSE
     }
+
     day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
     # Find the necessary datum (latest datum)
-    if (datum & parameter == "level"){
-      datum <- DBI::dbGetQuery(con, paste0("SELECT * FROM datum_conversions WHERE location = '", location, "' AND current = TRUE"))
+    if (datum & parameter %in% c("level", "distance")){
+      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location = '", location, "' AND current = TRUE"))
     } else {
       datum <- data.frame(conversion_m = 0)
     }
@@ -198,8 +193,12 @@ hydrometContinuous <- function(location=NULL,
     } else {
       lubridate::year(daily_end) <- last_year
     }
-    daily_end <- daily_end + 60*60*24
+    daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
     daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", as.character(daily_end), "';"))
+    all_dates <- seq(min(daily$date), max(daily$date), by = "1 day")
+    complete <- data.frame(date = all_dates, value = NA, max = NA, min = NA, q75 = NA, q25 = NA)
+    complete[match(daily$date, all_dates) , ] <- daily
+    daily <- complete
     daily$date <- as.POSIXct(daily$date, tz = tzone) #to posixct and not date so that it plays well with realtime df
     names(daily)[names(daily) == "date"] <- "datetime"
 
@@ -240,8 +239,7 @@ hydrometContinuous <- function(location=NULL,
         realtime <- rbind(realtime, new_realtime)
       }
     }
-    ##-----------------------------------------------------------------------------
-    #Find out where values need to be filled in with daily means
+    # Find out where values need to be filled in with daily means
     if (length(dates) > 0){
       for (i in 1:length(dates)){
         toDate <- as.Date(dates[i]) #convert to plain date to check if there are any datetimes with that plain date
@@ -254,17 +252,22 @@ hydrometContinuous <- function(location=NULL,
     if (nrow(realtime) == 0){
       stop("There is no data to plot within this range of years and days.")
     }
-    #Add the ribbon values for the times between startDay and endDay
+
+    # Add the ribbon values for the times between startDay and endDay
     ribbon <- data.frame()
     ribbon_seq <- seq.Date(min(as.Date(day_seq)), max(as.Date(day_seq)+1), by = "day") #Gets extended a day so that the ribbon matches the full length of the data (otherwise if high-res data is acquired, data points will go to 23:59 the next day but the ribbon ends at 00:00)
     for (i in 1:length(ribbon_seq)){
       target_date <- ribbon_seq[i]
-      if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29)){
+      if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29) | length(years) == 1){ #Can't have the Feb 29 date if there is more than 1 year, even if the last_year is leap
         if (overlaps){
           row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
           if (nrow(row) == 0){
-            lubridate::year(target_date) <- lubridate::year(target_date) -1
+            lubridate::year(target_date) <- lubridate::year(target_date) - 1
+            if (is.na(target_date)){
+              next()
+            }
             row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
+            lubridate::year(row$datetime) <- lubridate::year(row$datetime) + 1
           }
         } else {
           row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
@@ -337,7 +340,7 @@ hydrometContinuous <- function(location=NULL,
       realtime[ , c("value", "max", "min", "q75", "q25")] <- apply(realtime[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
     }
   }
-#### ------------------------- CDDF data provided ------------------------- ####
+  #### ------------------------- CDDF data provided ------------------------- ####
   if (!is.null(cddf_data)) {
     #### Add this in here: ------------------
     cddf <- cddf_data
@@ -384,19 +387,30 @@ hydrometContinuous <- function(location=NULL,
     day_seq <- realtime$datetime
     units <- "\u00B0C"
 
+  } #End of loop integrating provided data
+
+  if (!is.null(filter)){
+    if (!inherits(filter, "numeric")){
+      message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
+    } else {
+      rollmedian <- zoo::rollapply(realtime$value, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
+      rollmad <- zoo::rollapply(realtime$value, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
+      outlier <- abs(realtime$value - rollmedian) > 10* rollmad
+      realtime$value[outlier] <- NA
+
+      rollmedian <- zoo::rollapply(realtime$min, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
+      rollmad <- zoo::rollapply(realtime$min, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
+      outlier <- abs(realtime$min - rollmedian) > 10* rollmad
+      realtime$min[outlier] <- NA
+
+      rollmedian <- zoo::rollapply(realtime$max, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
+      rollmad <- zoo::rollapply(realtime$max, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
+      outlier <- abs(realtime$max - rollmedian) > 10* rollmad
+      realtime$max[outlier] <- NA
+    }
   }
 
-
-  # realtime <<- realtime
-  # test2 <<- day_seq
-  # ribbon <<- ribbon
-  # daily <<- daily
-  # test <<- parameter
-  print("Done getting data sorted out")
-#### ----------------------------- Make the plot -------------------------- ####
-  print("Plotting starting")
-  colours = c("blue", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
-    # c("black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#687C04", "#0097A9", "#7A9A01", "#CD7F32")
+  #### ----------------------------- Make the plot -------------------------- ####
   line_size = 1
   minHist <- min(realtime$min, na.rm=TRUE)
   maxHist <- max(realtime$max, na.rm=TRUE)
@@ -436,15 +450,25 @@ hydrometContinuous <- function(location=NULL,
     ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
 
   if (!is.infinite(minHist)){
-    plot <- plot +
-      ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"), na.rm = T) +
-      ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = "25th-75th Percentile"), na.rm = T) +
-      ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray85", "25th-75th Percentile" = "gray65"))
+    if (!identical(realtime$min, realtime$max)){ #if they're identical there's nothing to plot!
+      plot <- plot +
+        ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"), na.rm = T)
+      if (!all(is.na(realtime$q25))){
+        plot <- plot +
+          ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = "25th-75th Percentile"), na.rm = T) +
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90", "25th-75th Percentile" = "gray80"))
+      } else {
+        plot <- plot +
+          ggplot2::scale_fill_manual(name = "Historical Range", values = c("Min - Max" = "gray90"))
+      }
+    } else {
+      minHist <- Inf # set to Inf here so that historical range is not printed later on the graph
+    }
   }
 
   plot <- plot +
-    ggplot2::geom_line(ggplot2::aes(colour = as.factor(.data$plot_year), group = as.factor(.data$plot_year)), linewidth = line_size, na.rm = T) +
-    ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = colours[1:legend_length], na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
+    ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
+    ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
 
 
   # Get or calculate return periods -------------
@@ -540,7 +564,7 @@ hydrometContinuous <- function(location=NULL,
   }
 
   # Wrap things up and return() -----------------------
-  print("Add plot title")
+  # print("Add plot title")
   if (title == TRUE){
     if (is.null(custom_title) == TRUE) {
       stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
@@ -554,7 +578,7 @@ hydrometContinuous <- function(location=NULL,
     }
   }
 
-  print("Done plotting")
+  # print("Done plotting")
   #Save it if requested
   if (!is.null(save_path)){
     ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz=tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz=tzone)), ".png"), plot=plot, height=8, width=12, units="in", device="png", dpi=500)

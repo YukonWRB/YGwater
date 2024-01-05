@@ -27,7 +27,7 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                     # Support schemeless and schemed hosts for convenience
                                     prefix <- "http://"
                                     if (startsWith(hostname, "http://") || startsWith(hostname, "https://")) {
-                                      url <- parse_url(hostname)
+                                      url <- httr::parse_url(hostname)
                                       hostname <- paste0(url$scheme, "://", url$hostname)
                                       prefix <- ""
                                     }

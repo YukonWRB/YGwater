@@ -25,7 +25,7 @@ DB_get_ts <- function(con = hydrometConnect(), locations, parameter, frequency, 
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the folder where you want this information saved.")
+      message("Select the folder where you want this information saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
     if (!dir.exists(save_path)){
@@ -66,6 +66,6 @@ DB_get_ts <- function(con = hydrometConnect(), locations, parameter, frequency, 
     }
     return(ls)
   } else {
-    print("No records matched your inputs.")
+    message("No records matched your inputs.")
   }
 }

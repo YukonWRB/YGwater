@@ -44,6 +44,6 @@ DB_browse_ts <- function(con = hydrometConnect(), operator = NULL, location = NU
     result <- list(timeseries = timeseries, locations = locations)
     return(result)
   } else {
-    print("No records matched your inputs.")
+    message("No records matched your inputs.")
   }
 }

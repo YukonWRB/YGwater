@@ -7,7 +7,7 @@
 hydat_check(silent = FALSE)
 }
 \arguments{
-\item{silent}{Should messages be printed to the console?}
+\item{silent}{Should messages be output to the console?}
 }
 \value{
 An updated local copy of hydat, if indicated by the age of the remote HYDAT.

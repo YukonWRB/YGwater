@@ -29,8 +29,8 @@
 #' @param level_returns Should level returns be calculated, plotted, and added to the level table? You have the option of using pre-determined level returns only (option "table"), auto-calculated values with no human verification (option "calculated", calculated on-the-fly using all data available from March to September, up to the current date), or "auto" (priority to pre-determined levels, fallback to auto-calculated levels), or none (option "none"). Defaults to "auto".
 #' @param rate Should rates of change for flow and level be included? The 24-hour rate of change will be plotted on zoomed-in graphs on the right y-axis, and a rate table will be included. TRUE/FALSE, defaults to TRUE.
 #' @param meteogram Should meteograms relevant to the stations in the report be generated? TRUE or FALSE.
-#' @param image_path The path to the directory (folder) containing the images you wish to include. Default to NULL to not include any extra images. Set to "choose" to navigate to the folder, or enter the folder path directly as a character string. Some reports automatically include web-hosted images, do not include them here.
-#' @param save_path The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string.
+#' @param image_path The path to the directory (folder) containing the images you wish to include. Default to NULL to not include any extra images. Set to "choose" to navigate to the folder, or enter the folder path directly as a character string. Some reports automatically include web-hosted images, do not include them here. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
+#' @param save_path The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #'
 #' @return A flood report containing flow and water level information in Microsoft Word format.
 #'
@@ -106,12 +106,12 @@ floodReport <-
     #####Selection of image path and save path#####
     if (is.null(image_path) == FALSE) {
       if (image_path == "choose") {
-        print("Select the path to the folder containing your images.")
+        message("Select the path to the folder containing your images.")
         image_path <- utils::choose.dir( caption="Select Image Folder")
       }
     }
     if (save_path == "choose") {
-      print("Select the path to the folder where you want this report saved.")
+      message("Select the path to the folder where you want this report saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
 
@@ -123,7 +123,7 @@ floodReport <-
     #####Generate reports#####
     if (is.null(report_name) == FALSE & is.null(custom_report_stations) == FALSE) {
       #deals with mistakes
-      print("You specified custom report stations while the preset report was also set. I've set the preset to Custom Hydrometric Report so you get a custom report instead.")
+      message("You specified custom report stations while the preset report was also set. I've set the preset to Custom Hydrometric Report so you get a custom report instead.")
       report_name <- "Custom Hydrometric Report"
     }
 

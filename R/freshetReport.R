@@ -30,8 +30,8 @@
 #' @param precip Should precipitation data (accumulated precip above stations) and images (precip across whole territory) be included? TRUE or FALSE
 #' @param meteogram Should meteograms relevant to the stations in the report be included? TRUE or FALSE.
 #' @param WSC_images Should images from WSC fixed cameras be included? TRUE or FALSE.
-#' @param image_path The path to the directory (folder) containing the images you wish to include. Default to NULL to not include any extra images. Set to "choose" to navigate to the folder, or enter the folder path directly as a character string. Some reports automatically include web-hosted images, do not include them here.
-#' @param save_path The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string.
+#' @param image_path The path to the directory (folder) containing the images you wish to include. Default to NULL to not include any extra images. Set to "choose" to navigate to the folder, or enter the folder path directly as a character string. Some reports automatically include web-hosted images, do not include them here. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
+#' @param save_path The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #'
 #' @return A flood report containing flow and water level information in Microsoft Word format.
 #'
@@ -112,12 +112,12 @@ freshetReport <-
     #####Selection of image path and save path#####
     if (is.null(image_path) == FALSE) {
       if (image_path == "choose") {
-        print("Select the path to the folder containing your images.")
+        message("Select the path to the folder containing your images.")
         image_path <- utils::choose.dir( caption="Select Image Folder")
       }
     }
     if (save_path == "choose") {
-      print("Select the path to the folder where you want this report saved.")
+      message("Select the path to the folder where you want this report saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
 
@@ -129,7 +129,7 @@ freshetReport <-
     #####Generate reports#####
     if (is.null(report_name) == FALSE & is.null(custom_report_stations) == FALSE) {
       #deals with mistakes
-      print("You specified custom report stations while the preset report was also set (it defaults to 'Territory' if you didn't change it). I've set the preset to Custom Water Report so you get a custom report instead.")
+      message("You specified custom report stations while the preset report was also set (it defaults to 'Territory' if you didn't change it). I've set the preset to Custom Water Report so you get a custom report instead.")
       report_name <- "Custom Water Report"
     }
 

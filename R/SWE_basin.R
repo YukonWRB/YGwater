@@ -30,6 +30,7 @@ SWE_basin <-
            csv = FALSE,
            summarise = FALSE,
            source = "hydromet") {
+
     ### Retrieve data from hydromet db
     if (source == "hydromet") {
       con <- hydrometConnect()
@@ -45,9 +46,8 @@ SWE_basin <-
     } else if (source == "snow") {
       ### Retrieve data from snow db
       con <- snowConnect()
-      test <- DBI::dbGetQuery(con, "SELECT means.location, means.swe, surveys.target_date
-                            FROM means
-                            INNER JOIN surveys on means.survey_id = surveys.survey_id")
+      test <- DBI::dbGetQuery(con, "SELECT location, swe, target_date
+                            FROM means")
       DBI::dbDisconnect(con)
       # Rename columns:
       colnames(Meas) <- c("location_id", "SWE", "target_date")

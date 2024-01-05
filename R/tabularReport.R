@@ -10,8 +10,8 @@
 #' @param bridge_locations List of bridge freeboard radar locations to include in the report, as a character vector. "default" includes all of the radars as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
 #' @param precip_locations List of flow/level locations for which to report precipitation. "default" is a pre-determined list of locations, "all" is all locations for which there is a drainage polygon (which may be more or less than the number of stations reporting level or flow information). NULL will not create the table. WARNING: this portion of the script is slow. Setting this parameter to "all" could take about an hour to get all information together.
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
-#' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report.
-#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments.
+#' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
+#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #'
 #' @return An Excel workbook containing the report with one tab per timeseries type.
 #' @export
@@ -19,7 +19,7 @@
 
 # TODO: Adapt to use new DB
 
-tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose") {
+tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose") {
 
   if (level_locations[1] == "default"){
     level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
@@ -58,10 +58,13 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
     message("Select the path to the folder where you want this report saved.")
     save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
   }
-  if (archive_path == "choose"){
-    message("Select the path to yesterday's file (refer to function help).")
-    archive_path <- as.character(utils::choose.files(caption="Select Yesterday's File"), multi = FALSE)
+  if (!is.null(archive_path)){
+    if (archive_path == "choose"){
+      message("Select the path to yesterday's file (refer to function help).")
+      archive_path <- as.character(utils::choose.files(caption="Select Yesterday's File"), multi = FALSE)
+    }
   }
+
 
   #Set the days for which to generate tables
   if (past < 8){
@@ -78,34 +81,42 @@ tabularReport <- function(con = hydrometConnect(), level_locations = "all", flow
   }
 
   #Load yesterday's workbook -----------------
-  tryCatch({
-    yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
-    yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL)
-    for (i in names(yesterday_workbook)){
-      if (i != "precipitation"){
-        yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
-        yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6)
-      } else {
-        yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
-        yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8)
-      }
+  yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL)
+  if (!is.null(archive_path)){
+    tryCatch({
+      yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
+      for (i in names(yesterday_workbook)){
+        if (i != "precipitation"){
+          yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
+          yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6)
+        } else {
+          yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
+          yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8)
+        }
 
-    }
-    yesterday_comments <- TRUE
-  }, error = function(e) {
-    warning("Could not fetch information from yesterday's workbooks. Perhaps the file path you specified is incorrect; check the function help again.")
+      }
+      yesterday_comments <- TRUE
+    }, error = function(e) {
+      warning("Could not fetch information from yesterday's workbooks. Perhaps the file path you specified is incorrect; check the function help again.")
+      yesterday_comments <- FALSE
+    })
+  } else {
     yesterday_comments <- FALSE
-  })
+  }
+
 
 
   #Get the data -------------------------
   tables <- list()
   if (!is.null(precip_locations)){ #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
     precip <- data.frame()
+    if (!yesterday_comments){
+      yesterday_comment_precip <- NULL
+    }
     for (i in precip_locations){
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       tryCatch({
-        #TODO: Update code directly below to get polygons direct from the DB once basinPrecip is updated.
+        #TODO: Update code below to get polygons direct from the DB once basinPrecip is updated.
         lastWeek <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
         lastThree <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
         lastTwo <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)

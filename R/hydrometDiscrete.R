@@ -36,7 +36,7 @@ hydrometDiscrete <- function(location=NULL,
                              plot_type = "violin",
                              plot_scale = 1,
                              save_path = NULL,
-                             con = hydrometConnect(),
+                             con = hydrometConnect(silent = TRUE),
                              discrete_data = NULL)
 {
 
@@ -87,17 +87,16 @@ hydrometDiscrete <- function(location=NULL,
     years <- sort(years, decreasing = TRUE)
     if (length(years) > 10){
       years <- years[1:10]
-      print("The parameter 'years' can only have up to 10 years. It's been truncated to the first 10 years in the vector.")
+      message("The parameter 'years' can only have up to 10 years. It's been truncated to the first 10 years in the vector.")
     }
   }
   # Select save path
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
-      print("Select the folder where you want this graph saved.")
+      message("Select the folder where you want this graph saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
     }
   }
-
 
   if (is.null(discrete_data)) {
 
@@ -186,9 +185,6 @@ hydrometDiscrete <- function(location=NULL,
       new_discrete <- all_discrete[all_discrete$target_datetime >= start & all_discrete$target_datetime <= end , ]
       discrete <- rbind(discrete, new_discrete)
     }
-    if (nrow(discrete) == 0){
-      stop("There is no data to graph after filtering for your specified year(s) and day range. Try again with different days.")
-    }
 
   }
 
@@ -204,6 +200,10 @@ hydrometDiscrete <- function(location=NULL,
     units <- unique(discrete$units)
   }
 
+  # if (nrow(discrete) == 0){
+  #   stop("There is no data to graph after filtering for your specified year(s) and day range. Try again with different days.")
+  # }
+
   if (plot_type == 'linedbox') {
     stats_discrete <- all_discrete %>%
       dplyr::group_by(.data$month) %>%
@@ -218,7 +218,7 @@ hydrometDiscrete <- function(location=NULL,
   }
 
   #Make the plot --------------------
-  colours = c("blue", "black", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
+  colours = c("black", "blue", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")
   # c("black", "#DC4405", "#512A44", "#F2A900", "#244C5A", "#687C04", "#C60D58", "#0097A9", "#7A9A01", "#834333")
   legend_length <- length(years)
   plot <- ggplot2::ggplot(all_discrete, ggplot2::aes(x = .data$fake_date, y = .data$value, group = .data$fake_date)) +
@@ -245,9 +245,22 @@ hydrometDiscrete <- function(location=NULL,
     plot <- plot +
       ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE)
   }
-  plot <- plot +
-    ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = .data$fake_date, y = .data$value, colour = as.factor(.data$year), fill = as.factor(.data$year)), size = plot_scale*3.5, shape = 21) +
-    ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = colours[1:legend_length], aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
+  if (nrow(discrete) > 0) {
+    plot <- plot +
+      ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = .data$fake_date, y = .data$value, colour = as.factor(.data$year), fill = as.factor(.data$year)), size = plot_scale*3.5, shape = 21)
+
+      if (plot_type == "violin" | plot_type == "boxplot") {
+        plot <- plot +
+        ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(discrete$year))), aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
+      }
+
+    if (plot_type == "linedbox") {
+      plot <- plot +
+        ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = colours[1:legend_length], aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
+
+    }
+  }
+
 
   # Wrap things up and return() -----------------------
   if (title == TRUE){

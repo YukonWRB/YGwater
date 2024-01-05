@@ -7,7 +7,7 @@
 #' WSC drainage polygons are published with one point and one polygon shapefile per folder, one folder for each WSC station, and each WSC station folder is in turn in a folder for the larger drainage basin numbered 01 to 11. This is not convenient for most purposes, and this function facilitates further geospatial work by lumping all polygons into one shapefile.. It is designed to work with WSC products such as those found [here](https://collaboration.cmc.ec.gc.ca/cmc/hydrometrics/www/HydrometricNetworkBasinPolygons/).
 #'
 #' @param inputs_folder The location of the folder containing folders for each drainage region of interest (01-11, as defined by the WSC). Defaults to "choose", which opens file explorer to let you select the location. NOTE: This should contain one or more folders named ONLY with the two-digit drainage region code, i.e. folder names 09, 10, etc.
-#' @param save_path The path to the folder in which you wish to save the resultant ESRI shapefile. For hydrology this is likely G:/water/Hydrology/Data/BasinPolygons; parameter defaults to "choose".
+#' @param save_path The path to the folder in which you wish to save the resultant ESRI shapefile. For hydrology this is likely G:/water/Hydrology/Data/BasinPolygons; parameter defaults to 'choose'. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #' @param active_only TRUE to retain only active stations; default FALSE retains discontinued stations as well.
 #' @param limit_stns Specify stations if you wish to narrow the geographic scope of the output. Useful if your end-use is only within a section of a drainage region and you wish to limit file size. Format: one list element with a name of form stns_XX composed of a vector of station IDs for each drainage region you wish to limit. Preset for Yukon, set to NULL to use all stations present in the inputs_folder
 #'
@@ -25,14 +25,14 @@ WSC_drainages <- function(inputs_folder = "choose",
 {
 
   #Initial setup
-  rlang::check_installed("sf", reason = "Package sf is required to use function drainageBasins") #This is here because whitebox is not a 'depends' of this package; it is only necessary for this function.
+  rlang::check_installed("sf", reason = "Package sf is required to use function drainageBasins") #This is here because sf is not a 'depends' of this package; it is only necessary for this function.
 
   if (inputs_folder == "choose") {
-    print("Select the inputs folder.")
+    message("Select the inputs folder.")
     inputs_folder <- as.character(utils::choose.dir(caption="Select Inputs Folder"))
   }
   if (save_path == "choose") {
-    print("Select the folder where you want the watershed shapefiles saved.")
+    message("Select the folder where you want the watershed shapefiles saved.")
     save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
   }
   temp <- tempdir(check=TRUE)
@@ -82,9 +82,9 @@ WSC_drainages <- function(inputs_folder = "choose",
     }
     #Write to file
     suppressMessages(sf::write_sf(poly, dsn = save_path, layer = "WSC_watersheds_polygons", driver = "ESRI Shapefile"))
-    print(paste0("The polygons shapefile has been saved in ", save_path))
+    message("The polygons shapefile has been saved in ", save_path)
   }, error = function(e) {
-    print("The polygons could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
+    message("The polygons could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
   })
 
   #rbind points together
@@ -99,9 +99,9 @@ WSC_drainages <- function(inputs_folder = "choose",
     }
     #Write to file
     suppressMessages(sf::write_sf(points, dsn = save_path, layer = "WSC_watersheds_points", driver = "ESRI Shapefile"))
-    print(paste0("The points shapefile has been saved in ", save_path))
+    message("The points shapefile has been saved in ", save_path)
   }, error = function(e) {
-    print("The points could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
+    message("The points could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
   })
   suppressWarnings(invisible(file.remove(list.files(tempdir(), full.names=TRUE))))
   unlink(temp, recursive=TRUE)

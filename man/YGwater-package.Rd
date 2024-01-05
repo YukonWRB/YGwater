@@ -22,7 +22,7 @@ Useful links:
 Authors:
 \itemize{
   \item Cole Fischer \email{cole.fischer@hotmail.com} (\href{https://orcid.org/0000-0002-7266-5760}{ORCID})
-  \item Emilie Stwart-Jones \email{emilie.stewart-jones@yukon.ca}
+  \item Emilie Stewart-Jones \email{emilie.stewart-jones@yukon.ca}
 }
 
 }

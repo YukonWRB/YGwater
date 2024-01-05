@@ -94,11 +94,13 @@ app_ui <- function(request) {
           shinyWidgets::pickerInput("return_type", "Select return type", choices = c("Min", "Max"), selected = "Max"),
           textInput("return_months", "Months for return calculation (comma delimited)", value = "5,6,7,8,9"),
           checkboxInput("apply_datum", "Apply vertical datum?"),
+          checkboxInput("plot_filter", "Filter extreme values?"),
           actionButton("plot_go", "Render plot")
         ),
         mainPanel(
           plotOutput("hydro_plot", height = "600px"),
-          downloadButton("export_hydro_plot", "Export as png")
+          downloadButton("export_hydro_plot", "Export as png"),
+          downloadButton("export_plot_data", "Export data as .csv")
         )
       )
     )

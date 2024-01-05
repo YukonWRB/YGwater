@@ -7,9 +7,9 @@
 #'
 #' Currently works with Solinst LT, LTC, and baro loggers. Note that LTs and baro loggers are functionally identical: they are differentiated solely by the pressure scale specified in the logger file header. Barologgers are labelled "M1.5" or similar (1.5 m water column), while the shallowest LT model is an "M5" or similar. Issues will arise if future baro loggers do not use the "1.5" designation, or if you are actually using a barologger to monitor very shallow water columns.
 #'
-#' @param xle_file The file you wish to convert. Default "choose" allows you to point to the file.
+#' @param xle_file The file you wish to convert. Default "choose" allows you to point to the file. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #' @param location The ID of the well in the form "YOWN-1500". You can also simply name the well, and if there is ambiguity regarding which well is the right one you will get a prompt to select from a list.
-#' @param save_path The location where the csv file should be saved.
+#' @param save_path The location where the csv file should be saved. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
 #'
 #' @return A csv of the logger data, ready for export to Aquarius or for general use.
 #' @export
@@ -21,11 +21,11 @@ xle_convert <- function(xle_file = "choose",
 
 
   if (xle_file == "choose"){
-    print("Select the path to the logger file.")
+    message("Select the path to the logger file.")
     xle_file <- as.character(utils::choose.files(caption="Select logger file"))
   }
   if (save_path == "choose"){
-    print("Select the path to the folder where you want this data saved.")
+    message("Select the path to the folder where you want this data saved.")
     save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
   }
 
@@ -63,7 +63,7 @@ xle_convert <- function(xle_file = "choose",
 
   # Now correct_name is a list (with 0, 1, or more elements) which corresponds to the different entries in the master spreadsheet that resembled the location you inputted. Here, either select the position of the element in correct_name that matches with the location you desire, or take this time to input the correct location (format: YOWN-XXXX STATIONNAME).
   if (length(possible_names) > 1){
-    print("Stations in the YOWN Master sheet that matched your input:")
+    message("Stations in the YOWN Master sheet that matched your input:")
     for (i in 1:length(possible_names)) {
       cat("Position ", i, " :", possible_names[i], "\n")
     }
@@ -79,10 +79,10 @@ xle_convert <- function(xle_file = "choose",
     # This regex expression returns true only if "choice" is a digit, false otherwise
     if (grepl("^[[:digit:]]+$", choice)) {
       location <- possible_names[as.numeric(choice)]
-      print("Location has been updated to match format in master spreadsheet")
+      message("Location has been updated to match format in master spreadsheet")
     } else {
       location <- choice
-      print("New name has been inputted by user")
+      message("New name has been inputted by user")
     }
   } else if (length(possible_names) == 0){
     stop("It was impossible to find a match for any YOWN wells using the YOWN codes or well names in the YOWN master spreadsheet. Please correct the location you specified or ammend the YOWN master sheet.")
@@ -268,9 +268,9 @@ xle_convert <- function(xle_file = "choose",
                                                  "input location?\nY/N\n")))
     if (grepl("^y", choice, ignore.case = TRUE)) {
       Location <- location
-      print("Correct location was user's location")
+      message("Correct location was user's location")
     } else {
-      print("Correct location was file's location")
+      message("Correct location was file's location")
 
       possible_names <- c()
       for (i in 1:nrow(yown_stn_names)) {
@@ -286,7 +286,7 @@ xle_convert <- function(xle_file = "choose",
         }
       }
 
-      print("Stations that matched the file:")
+      message("Stations that matched the file:")
       for (i in 1:length(possible_names)) {
         cat("Position ", i, " :", possible_names[i], "\n")
       }
@@ -294,10 +294,10 @@ xle_convert <- function(xle_file = "choose",
       # This regex expression return true only if "choice" is a digit, false otherwise
       if (grepl("^[[:digit:]]+$", choice)) { # Are choosing position in list
         location <- possible_names[as.numeric(choice)]
-        print("Location has been updated to match format in master spreadsheet")
+        message("Location has been updated to match format in master spreadsheet")
       } else {
         location <- choice
-        print("New name has been input by user")
+        message("New name has been input by user")
       }
     }
   }
