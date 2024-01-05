@@ -21,11 +21,11 @@ eq_fetch <- function(EQcode,
                      BD = 2,
                      apply_standards = TRUE){
 
-# EQcode <- "WLV"
-# stationIDs = c("MW05-1A", "MW05-1B", "MW05-2A", "MW05-2B", "MW05-06A", "MW05-06B", "MW08-13", "T1", "T1-6m", "T1-9m", "S-1", "S-5", "SP", "UD-1", "UD-2", "W-15", "W-16", "W-19", "W-31", "W-81")
-# paramIDs = c("Ag-D", "Al-D", "As-D", "Cd-D", "Cr-D", "Cu-D", "Fe-D", "Fluord", "Hg-D", "N-NH4", "Ni-D", "Pb-D", "Sb-D", "Se-D", "SO4", "U-D", "Zn-D")
-# dates <- "all"
-# BD <- 2
+# EQcode <- "EG"
+# stationIDs = "all"
+# paramIDs = "all"
+# dates = c("2009-01-01", "2015-01-01")
+# BD <- 0
 # apply_standards = TRUE
 
   # Set a few options (I'll probs remove these)
@@ -165,6 +165,12 @@ eq_fetch <- function(EQcode,
       merge(params, by.x ="ParamId", by.y = "ParamId")
     stds <- stds[, c("ParamCode", "ParamId", "StdCode", "StdName", "MaxVal", "MinVal","Units")] # Select relevant columns, reorder
 
+    # Separate stations and process calculated standards for each
+    stdlist <- list()
+    for(i in unique(sampledata$StnCode)){
+      sampledatafilt <- sampledata %>%
+        dplyr::filter(StnCode == i)
+
     # Separate calculated from set standards
     std_set <- suppressWarnings(stds %>%
                                   dplyr::mutate_at("MaxVal", as.numeric) %>% # Convert MaxVal to numeric
@@ -174,7 +180,7 @@ eq_fetch <- function(EQcode,
     std_calc_tmp$MaxVal <- stringr::str_remove_all(std_calc_tmp$MaxVal, "=*") # Remove equal sign, leaving MaxVal with values matching values in eqcalcs access table
 
     # Process calculated standards
-    std_calcs <- eq_std_calc(sampledata = sampledata,
+    std_calcs <- eq_std_calc(sampledata = sampledatafilt,
                              calcs = std_calc_tmp)
 
     # Combine set and calculated standards, format and order
@@ -201,18 +207,21 @@ eq_fetch <- function(EQcode,
       dplyr::mutate_if(is.logical, as.numeric)
     stnstd <- stnstd %>% # Arrange stnstd such that parameter order matches sampledata
       dplyr::select(dplyr::all_of(c(head_stds, params_data)))
+    stdlist[[i]] <- stnstd
+
+    }
   }
 
   # Extract by-station data and station standards filtered to desired output parameters, put into by-location list then add list to master EQ_fetch output
   EQ_fetch_list <- list()
-  for(i in unique(stns$StnCode)){
+  for(i in unique(sampledata$StnCode)){
     list <- list()
     stndata <- sampledata %>%
       dplyr::filter(StnCode == i) %>%
       dplyr::select(c("StnCode", "CollectDateTime", "StnType", which(as.vector(sapply(names(sampledata), function(x) sub(" \\(.*", "", x))) %in% paramIDs)))
     list[["stndata"]] <- stndata
     if(apply_standards == TRUE){
-      list[["stnstd"]] <- stnstd %>%
+      list[["stnstd"]] <- stdlist[[i]] %>%
         dplyr::select(c("StdName", "StdCode", which(as.vector(sapply(names(stnstd), function(x) sub(" \\(.*", "", x))) %in% paramIDs)))
     }
     EQ_fetch_list[[i]] <- list
