@@ -121,6 +121,10 @@ temps <- temps[format(temps$datetime, "%m") %in% c("09", "10", "11", "12", "01",
 first_yr <- format(min(temps$datetime), "%Y")
 last_yr <- format(max(temps$datetime), "%Y")
 
+# if (last_yr <= year) {
+#   last_yr <- year 
+# }
+
 cddf <- data.frame()
 # Run over every year
 for (y in first_yr:last_yr) {
@@ -128,9 +132,11 @@ for (y in first_yr:last_yr) {
     tab <- temps[temps$datetime >= paste0(y, '-09-01') 
                  & temps$datetime < paste0(y+1, '-06-14'),]
   # Only calculate if missing less than 10 days, but only for years that are not in the 'years' list
-    if (sum(!is.na(tab$value)) >= 276 | format(min(tab$datetime), "%Y") %in% year) {
+    if (length(tab$datetime) != 0) {
+      if (sum(!is.na(tab$value)) >= 276 | format(min(tab$datetime), "%Y") %in% c(year-1)) {
       cddf_y <- calcCDDF(tab)
       cddf <- rbind(cddf, cddf_y)
+    }
     }
 }
 
@@ -411,8 +417,8 @@ YGwater::hydrometContinuous(
   location = station_id,
   parameter = "SWE",
   startDay = paste0(year, "-09-01"),
-  endDay = paste0(year + 1, '-07-01'),
-  years = year,
+  endDay = paste0(year, '-07-01'),
+  years = year-1,
   returns = "none",
   custom_title = "Tagish Snow Water Equivalent",
   con = con
@@ -425,8 +431,8 @@ YGwater::hydrometContinuous(
   location = station_id,
   parameter = "SWE",
   startDay = paste0(year, "-09-01"),
-  endDay = paste0(year + 1, '-07-01'),
-  years = year,
+  endDay = paste0(year, '-07-01'),
+  years = year-1,
   returns = "none",
   custom_title = "Wolf Creek Subalpine Snow Water Equivalent",
   con = con
@@ -451,7 +457,9 @@ whitehorse <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_con
 
 whitehorse <- getCDDF(whitehorse, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", years = c(year), title = TRUE, custom_title = "Whitehorse CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = whitehorse)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31",  years = c(year-1), title = TRUE, custom_title = "Whitehorse CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, other_data = whitehorse)
+
+YGwater::hydrometContinuous(parameter= "Airtemp", startDay = "2023-09-01", endDay = "2024-08-31",  years = c(year-1), title = TRUE, custom_title = "Whitehorse Air temp", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, other_data = whitehorse)
 
 ``` 
 
@@ -462,7 +470,7 @@ station_id <- "09AB004"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "level",
-              years = year,
+              years = year-1,
               custom_title = "Marsh Lake Water Surface Elevation")
 ``` 
 
@@ -473,7 +481,7 @@ station_id <- "09AB010"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "level",
-              years = year,
+              years = year-1,
               custom_title = "Lake Laberge Water Surface Elevation")
 ``` 
 
@@ -490,7 +498,7 @@ if ("Teslin" %in% params$basins) {
 # B
 # Plotting
 snowbullSWE(loc= "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
-            year = year+1, swe_basins = swe_basins, custom_title = "Teslin - Big Salmon Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Teslin - Big Salmon Basin Monthly Snow Course Data")
 ``` 
 
 ```{r Teslin_CDDF, echo=FALSE, eval=include}
@@ -499,7 +507,7 @@ teslin <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_continu
 
 teslin <- getCDDF(teslin, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", years = c(year), title = TRUE, custom_title = "Teslin CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = teslin)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Teslin CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = teslin)
 
 ``` 
 
@@ -510,7 +518,7 @@ station_id <- "09AE002"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "level",
-              years = year,
+              years = year-1,
               custom_title = "Teslin Lake Water Surface Elevation")
 ``` 
 
@@ -527,7 +535,7 @@ if ("Central Yukon" %in% params$basins) {
 # B
 # Plotting
 snowbullSWE(loc= "Central Yukon", basin = "Central_Yukon",
-            year = year+1, swe_basins = swe_basins, custom_title = "Central Yukon Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Central Yukon Basin Monthly Snow Course Data")
 ``` 
 
 ```{r Carmacks_CDDF, echo=FALSE, eval=include}
@@ -536,7 +544,7 @@ carmacks <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_conti
 
 carmacks <- getCDDF(carmacks, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", years = c(year), title = TRUE, custom_title = "Carmacks CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = carmacks)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Carmacks CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = carmacks)
 
 ``` 
 
@@ -547,7 +555,7 @@ station_id <- "09AH004"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "Nordenskiold River Discharge below Rowlinson Creek")
 ``` 
 
@@ -570,7 +578,7 @@ YGwater::hydrometContinuous(
   parameter = "SWE",
   startDay = paste0(year, "-09-01"),
   endDay = paste0(year + 1, '-07-01'),
-  years = year,
+  years = year-1,
   returns = "none",
   con = con
 )
@@ -581,7 +589,7 @@ YGwater::hydrometContinuous(
 # B
 # Plotting 
 snowbullSWE(loc= "Pelly", basin = "Pelly",
-            year = year+1, swe_basins = swe_basins, custom_title = "Pelly Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Pelly Basin Monthly Snow Course Data")
 ``` 
 
 ```{r Faro_CDDF, echo=FALSE, eval=include}
@@ -590,7 +598,7 @@ faro <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_continuou
 
 faro <- getCDDF(faro, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", years = c(year), title = TRUE, custom_title = "Faro CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = faro)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Faro CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = faro)
 
 ``` 
 
@@ -601,7 +609,7 @@ station_id <- "09BC001"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "Pelly River Discharge at Pelly Crossing")
 ``` 
 
@@ -624,7 +632,7 @@ YGwater::hydrometContinuous(
   parameter = "SWE",
   startDay = paste0(year, "-09-01"),
   endDay = paste0(year + 1, '-07-01'),
-  years = year,
+  years = year-1,
   returns = "none",
   con = con
 )
@@ -635,7 +643,7 @@ YGwater::hydrometContinuous(
 # B
 # Plotting 
 snowbullSWE(loc= "Stewart", basin = "Stewart",
-            year = year+1, swe_basins = swe_basins, custom_title = "Stewart Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Stewart Basin Monthly Snow Course Data")
 ``` 
 
 ```{r Mayo_CDDF, echo=FALSE, eval=include}
@@ -644,7 +652,7 @@ mayo <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_continuou
 
 mayo <- getCDDF(mayo, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", years = c(year), title = TRUE, custom_title = "Mayo CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = mayo)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Mayo CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = mayo)
 
 ``` 
 
@@ -655,7 +663,7 @@ station_id <- "09DD003"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "Stewart River Discharge at Outlet")
 ``` 
 
@@ -672,7 +680,7 @@ if ("White" %in% params$basins) {
 # B
 # Plotting 
 snowbullSWE(loc= "White", basin = "White",
-            year = year+1, swe_basins = swe_basins, custom_title = "White Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "White Basin Monthly Snow Course Data")
 ``` 
 
 ```{r WhiteRiver, echo=FALSE, eval=include, fig.width=10}
@@ -682,7 +690,7 @@ station_id <- "09CB001"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "White River Discharge at Alaska Highway")
 ``` 
 
@@ -698,12 +706,12 @@ if ("Lower Yukon" %in% params$basins) {
 ```{r LowerYukonRiver_Snow, echo=FALSE, eval=include, out.width='.49\\linewidth', fig.width=5, fig.height=3,fig.show='hold',fig.align='center'}
 ## A King Solomon Dome
 # Set station ID
-station_id <- "09AE-SC01"
+station_id <- "09EA-SC01"
 # Plot SWE
 hydrometDiscrete(
   location = station_id,
   parameter = "SWE",
-  years = year,
+  years = year-1,
   con = con
 )
 
@@ -713,7 +721,7 @@ hydrometDiscrete(
 # B
 # Plotting 
 snowbullSWE(loc= "Lower Yukon", basin = "Lower_Yukon",
-            year = year+1, swe_basins = swe_basins, custom_title = "Lower Yukon Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Lower Yukon Basin Monthly Snow Course Data")
 ``` 
 
 ```{r Dawson_CDDF, echo=FALSE, eval=include}
@@ -722,7 +730,7 @@ dawson <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_continu
 
 dawson <- getCDDF(dawson, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", years = c(year), title = TRUE, custom_title = "Dawson CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = dawson)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Dawson CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = dawson)
 
 ``` 
 
@@ -733,7 +741,7 @@ station_id <- "09CD001"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "Yukon River Discharge at White River")
 ``` 
 
@@ -750,7 +758,7 @@ if ("Porcupine" %in% params$basins) {
 # B
 # Plotting 
 snowbullSWE(loc= "Porcupine", basin = "Porcupine",
-            year = year+1, swe_basins = swe_basins, custom_title = "Porcupine Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Porcupine Basin Monthly Snow Course Data")
 ``` 
 
 ```{r OldCrow_CDDF, echo=FALSE, eval=include}
@@ -759,7 +767,7 @@ oldcrow <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_contin
 
 oldcrow <- getCDDF(oldcrow, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", years = c(year), title = TRUE, custom_title = "Old Crow CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = oldcrow)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Old Crow CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = oldcrow)
 
 ``` 
 
@@ -770,7 +778,7 @@ station_id <- "09FD002"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "Porcupine River Discharge at Border")
 ``` 
 
@@ -787,7 +795,7 @@ if ("Peel" %in% params$basins) {
 # B
 # Plotting 
 snowbullSWE(loc= "Peel", basin = "Peel",
-            year = year+1, swe_basins = swe_basins, custom_title = "Peel Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Peel Basin Monthly Snow Course Data")
 ``` 
 
 ```{r PeelRiver, echo=FALSE, eval=include, fig.width=10}
@@ -797,7 +805,7 @@ station_id <- "10MA001"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "Peel River Discharge")
 ``` 
 
@@ -820,7 +828,7 @@ YGwater::hydrometContinuous(
   parameter = "SWE",
   startDay = paste0(year, "-09-01"),
   endDay = paste0(year + 1, '-07-01'),
-  years = year,
+  years = year-1,
   returns = "none",
   con = con
 )
@@ -831,7 +839,7 @@ YGwater::hydrometContinuous(
 # B
 # Plotting 
 snowbullSWE(loc= "Liard", basin = "Liard",
-            year = year+1, swe_basins = swe_basins, custom_title = "Liard Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Liard Basin Monthly Snow Course Data")
 ``` 
 
 ```{r WatsonLake_CDDF, echo=FALSE, eval=include}
@@ -840,7 +848,7 @@ watsonlake <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_con
 
 watsonlake <- getCDDF(watsonlake, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", years = c(year), title = TRUE, custom_title = "Watson Lake CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = watsonlake)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Watson Lake CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = watsonlake)
 
 ``` 
 
@@ -851,7 +859,7 @@ station_id <- "10AA001"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "Liard River Discharge at Upper Liard")
 ``` 
 
@@ -868,7 +876,7 @@ if ("Alsek" %in% params$basins) {
 # B
 # Plotting 
 snowbullSWE(loc= "Alsek", basin = "Alsek",
-            year = year+1, swe_basins = swe_basins, custom_title = "Alsek Basin Monthly Snow Course Data")
+            year = year, swe_basins = swe_basins, custom_title = "Alsek Basin Monthly Snow Course Data")
 ``` 
 
 ```{r AlsekRiver, echo=FALSE, eval=include, fig.width=10}
@@ -878,7 +886,7 @@ station_id <- "08AB001"
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              years = year,
+              years = year-1,
               custom_title = "Alsek River Discharge above Bates")
 ``` 
 
