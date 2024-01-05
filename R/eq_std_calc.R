@@ -114,13 +114,15 @@ eq_std_calc <- function(sampledata = sampledatafilt,
 
   if(is.na(hard)){
     hardx <- 50
+  } else if(hard > 670){
+    hardx <- 670
   } else {
     hardx <- hard
   }
   hardx <- floor(hardx)
 
   lookup_mn <- YGwater:::data$eq_std_calc_CCME_Mn
-  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx >= Min & hardx <= Max)[which(colnames(lookup_mn) == as.character(pHx))])
+  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx > Min & hardx <= Max)[which(colnames(lookup_mn) == as.character(pHx))])
   if(is.element("CCME_Mn-D_lt", calcs$MaxVal)){
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Mn-D_lt")] <- `CCME_Mn-D_lt`
   }
