@@ -168,7 +168,6 @@ eq_fetch <- function(EQcode,
     # Separate stations and process calculated standards for each
     stdlist <- list()
     for(i in unique(sampledata$StnCode)){
-      print(i)
       sampledatafilt <- sampledata %>%
         dplyr::filter(StnCode == i)
 
