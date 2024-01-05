@@ -15,7 +15,7 @@
 #' @details interim parameter values are assigned on an as-needs basis where required, such as standards where hardness is assigned a certain value if NA. These interim parameters are represented by the .x subscript (ie. pHx, hardx)
 # REVIEW should this also be explained in eq_fetch?
 
-eq_std_calc <- function(sampledata = sampledata,
+eq_std_calc <- function(sampledata = sampledatafilt,
                         calcs = std_calc_tmp){
 
   #### Calculate input parameters from sampledata ####
@@ -105,6 +105,8 @@ eq_std_calc <- function(sampledata = sampledata,
   # CCME_Mn-D_lt
   if(is.na(pH)){
     pHx <- 7.5
+  } else if(pH > 9){
+    pHx <- 9
   } else {
     pHx <- pH
   }
@@ -117,7 +119,7 @@ eq_std_calc <- function(sampledata = sampledata,
   }
   hardx <- floor(hardx)
 
-  lookup_mn <- data$eq_std_calc_CCME_Mn
+  lookup_mn <- YGwater:::data$eq_std_calc_CCME_Mn
   `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx >= Min & hardx <= Max)[which(colnames(lookup_mn) == as.character(pHx))])
   if(is.element("CCME_Mn-D_lt", calcs$MaxVal)){
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Mn-D_lt")] <- `CCME_Mn-D_lt`
@@ -126,17 +128,24 @@ eq_std_calc <- function(sampledata = sampledata,
   # CCME_NH4_lt
   if(is.na(pH)){
     pHx <- 7.5
-  } else {
+  } else if(pH < 6){
+    pHx <- 6
+  }else {
     pHx <- pH
   }
   pHx <- plyr::round_any(pHx, accuracy = 0.5, f = floor)
+  if(pHx <= 9.5 & pHx > 9){
+    pHx <- 9
+  } else if(pHx >9.5){
+    pHx <- 10
+  }
   if(is.na(temp)){
     tempx <- 30
   } else {
     tempx <- temp
   }
 
-  lookup_nh4 <- data$eq_std_calc_CCME_NH4
+  lookup_nh4 <- YGwater:::data$eq_std_calc_CCME_NH4
   CCME_NH4_lt <- dplyr::pull(dplyr::filter(lookup_nh4, Temp == tempx)[which(colnames(lookup_nh4) == as.character(pHx))])
   if(is.element("CCME_NH4_lt", calcs$MaxVal)){
     calcs$MaxVal[which(calcs$MaxVal == "CCME_NH4_lt")] <- CCME_NH4_lt
