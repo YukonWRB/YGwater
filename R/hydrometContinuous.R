@@ -45,7 +45,11 @@
 #' @export
 #'
 #'
-# hydrometContinuous(location='09EB001', parameter = "flow", startDay = "2024-01-01", endDay = "2024-12-31", tzone = "MST", years = c(2021, 2022, 2023), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
+# hydrometContinuous(location='09EB001', parameter = "flow", startDay = "2024-01-01", endDay = "2024-12-31", tzone = "MST", years = c(2021, 2022, 2023, 2024), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
+
+# hydrometContinuous(location='09EB001', parameter = "flow", startDay = 1, endDay = 365, tzone = "MST", years = 2024, datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
+
+# hydrometContinuous(location='09EB001', parameter = "flow", startDay = 1, endDay = 365, tzone = "MST", years = 2024, datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
 # hydrometContinuous(location="Dawson", parameter = "CDDF", startDay = "2022-09-01", endDay = "2023-06-14", tzone = "MST", years = c(2022), datum = TRUE, title = TRUE, custom_title = "Dawson CDDF", returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect(), continuous_data = test)
 
@@ -117,12 +121,6 @@ hydrometContinuous <- function(location = NULL,
   # Sort out startDay and endDay into actual dates if needed
   last_year <- max(years)
 
-  if (last_year > lubridate::year(Sys.Date())-1){
-    years <- years - 1
-    last_year <- last_year - 1
-    message("The greatest year you requested is too far into the future: you need to specify the December year when overlaping the New Year. See the function help for parameter 'years'. The year(s) you requested were all adjusted back by 1.")
-  }
-
   leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
   tryCatch({ #This part will fail if startDay specified as a number
     startDay <- as.character(startDay)
@@ -161,8 +159,21 @@ hydrometContinuous <- function(location = NULL,
     overlaps <- FALSE
   }
 
-  day_seq <- seq.POSIXt(startDay, endDay, by = "day")
+  # if (overlaps){
+  #   if (last_year > lubridate::year(Sys.Date())-1){
+  #     years <- years - 1
+  #     last_year <- last_year - 1
+  #     message("The greatest year you requested is too far into the future: you need to specify the December year when overlaping the New Year. See the function help for parameter 'years'. The year(s) you requested were all adjusted back by 1.")
+  #   }
+  # } else {
+  #   if (last_year > lubridate::year(Sys.Date())){
+  #     years <- years - 1
+  #     last_year <- last_year - 1
+  #     message("The greatest year you requested is too far into the future: you need to specify the December year when overlaping the New Year. See the function help for parameter 'years'. The year(s) you requested were all adjusted back by 1.")
+  #   }
+  # }
 
+  day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
@@ -251,7 +262,7 @@ hydrometContinuous <- function(location = NULL,
       }
     }
     if (nrow(realtime) == 0){
-      stop("There is no data to plot within this range of years and days.")
+      stop("There is no data to plot within this range of years and days. If you're wanting a plot overlaping the new year, remember that the last year requested should be the *December* year.")
     }
 
     # Add the ribbon values for the times between startDay and endDay
@@ -259,7 +270,7 @@ hydrometContinuous <- function(location = NULL,
     ribbon_seq <- seq.Date(min(as.Date(day_seq)), max(as.Date(day_seq)+1), by = "day") #Gets extended a day so that the ribbon matches the full length of the data (otherwise if high-res data is acquired, data points will go to 23:59 the next day but the ribbon ends at 00:00)
     for (i in 1:length(ribbon_seq)){
       target_date <- ribbon_seq[i]
-      if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29) | length(years) == 1){ #Can't have the Feb 29 date if there is more than 1 year, even if the last_year is leap
+      if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29)){ #Can't have the Feb 29 date because there is no Feb 29 ribbon
         if (overlaps){
           row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
           if (nrow(row) == 0){
@@ -273,9 +284,11 @@ hydrometContinuous <- function(location = NULL,
         } else {
           row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
           if (nrow(row) == 0){
-            prev_date <- target_date
-            lubridate::year(prev_date) <- last_year - 1
-            row <- daily[as.Date(daily$datetime) == prev_date, !names(daily) %in% c("value", "grade", "approval")]
+            lubridate::year(target_date) <- last_year - 1
+            if (is.na(target_date)){
+              next()
+            }
+            row <- daily[as.Date(daily$datetime) == target_date, !names(daily) %in% c("value", "grade", "approval")]
             lubridate::year(row$datetime) <- last_year
           }
           if (i == length(ribbon_seq)){
