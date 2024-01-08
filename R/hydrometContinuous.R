@@ -49,7 +49,7 @@
 
 # hydrometContinuous(location='09EB001', parameter = "flow", startDay = 1, endDay = 365, tzone = "MST", years = 2024, datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
-# hydrometContinuous(location='09EB001', parameter = "flow", startDay = 1, endDay = 365, tzone = "MST", years = 2024, datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
+# hydrometContinuous(location='08AA008', parameter = "level", startDay = "2023-12-20", endDay = "2025-01-31", tzone = "MST", years = c(2023,2024), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
 # hydrometContinuous(location="Dawson", parameter = "CDDF", startDay = "2022-09-01", endDay = "2023-06-14", tzone = "MST", years = c(2022), datum = TRUE, title = TRUE, custom_title = "Dawson CDDF", returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2022, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect(), continuous_data = test)
 
@@ -159,6 +159,15 @@ hydrometContinuous <- function(location = NULL,
     overlaps <- FALSE
   }
 
+  if (startDay > Sys.Date()){ #If left like this it results in wonky ribbon plotting and extra 'ghost' timeseries. Since there would be no data anyways change the year. endDay can stay in the future to enable plotting graphs with only the ribbon beyond the last day.
+    diff <- as.numeric(endDay - startDay)
+    lubridate::year(startDay) <- lubridate::year(Sys.Date())
+    if (startDay > Sys.Date()){ #Depending on where we are in the year and what the startDay is, startDay could still be in the future.
+      lubridate::year(startDay) <- lubridate::year(Sys.Date()) - 1
+    }
+    endDay <- startDay + (diff*60*60*24)
+  }
+
   day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
   #### ------------------------- Data is not provided ---------------------- ####
@@ -193,6 +202,9 @@ hydrometContinuous <- function(location = NULL,
       lubridate::year(daily_end) <- last_year
     }
     daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
+    if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29){
+      daily_end <- daily_end + 60*60*24
+    }
     daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", as.character(daily_end), "';"))
     all_dates <- seq(min(daily$date), max(daily$date), by = "1 day")
     complete <- data.frame(date = all_dates, value = NA, max = NA, min = NA, q75 = NA, q25 = NA)
@@ -218,8 +230,8 @@ hydrometContinuous <- function(location = NULL,
             new_realtime <- new_realtime[order(new_realtime$datetime) , ]
             new_realtime <- utils::tail(new_realtime, 30000) #Retain only max 30000 data points for plotting performance
           }
-          realtime <- rbind(realtime, new_realtime)
           if (nrow(new_realtime) > 0){
+            realtime <- rbind(realtime, new_realtime)
             new_dates <- seq.POSIXt(start, end, by = "days")
             dates <- c(dates, new_dates)
             get_daily <- FALSE
@@ -234,13 +246,15 @@ hydrometContinuous <- function(location = NULL,
       }
       if (get_daily) {
         new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , c("datetime", "value")]
-        realtime <- rbind(realtime, new_realtime)
+        if (nrow(new_realtime) > 0){
+          realtime <- rbind(realtime, new_realtime)
+        }
       }
     }
     # Find out where values need to be filled in with daily means
     if (length(dates) > 0){
       for (i in 1:length(dates)){
-        toDate <- as.Date(dates[i]) #convert to plain date to check if there are any datetimes with that plain date
+        toDate <- as.Date(dates[i]) #convert to plain date to check if there are any datetimes with that plain date in the data.frame
         if (!(toDate %in% as.Date(realtime$datetime))){
           row <- daily[daily$datetime == dates[i] , c("datetime", "value")]
           realtime <- rbind(realtime, row)
