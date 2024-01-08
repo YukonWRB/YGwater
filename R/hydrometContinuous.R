@@ -159,20 +159,6 @@ hydrometContinuous <- function(location = NULL,
     overlaps <- FALSE
   }
 
-  # if (overlaps){
-  #   if (last_year > lubridate::year(Sys.Date())-1){
-  #     years <- years - 1
-  #     last_year <- last_year - 1
-  #     message("The greatest year you requested is too far into the future: you need to specify the December year when overlaping the New Year. See the function help for parameter 'years'. The year(s) you requested were all adjusted back by 1.")
-  #   }
-  # } else {
-  #   if (last_year > lubridate::year(Sys.Date())){
-  #     years <- years - 1
-  #     last_year <- last_year - 1
-  #     message("The greatest year you requested is too far into the future: you need to specify the December year when overlaping the New Year. See the function help for parameter 'years'. The year(s) you requested were all adjusted back by 1.")
-  #   }
-  # }
-
   day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
   #### ------------------------- Data is not provided ---------------------- ####
