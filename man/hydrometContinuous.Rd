@@ -23,7 +23,7 @@ hydrometContinuous(
   plot_scale = 1,
   save_path = NULL,
   con = hydrometConnect(silent = TRUE),
-  cddf_data = NULL
+  continuous_data = NULL
 )
 }
 \arguments{
@@ -37,7 +37,7 @@ hydrometContinuous(
 
 \item{tzone}{The timezone to use for graphing. Only really evident for a small number of days.}
 
-\item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year. Currently, only 1 year can be provided for when CDDF data is provided to function.}
+\item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year. Currently, only 1 year can be provided for when other data is provided to function.}
 
 \item{datum}{Should a vertical datum be applied to the data, if available? TRUE or FALSE.}
 
@@ -45,7 +45,7 @@ hydrometContinuous(
 
 \item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
 
-\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out values > 2 * the IQR. Set this parameter to an integer, which specifies the rolling IQR 'window'.}
+\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out values > 2 * the IQR. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data.}
 
 \item{returns}{Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".}
 
@@ -63,7 +63,7 @@ hydrometContinuous(
 
 \item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
-\item{cddf_data}{A dataframe with the data to be plotted. Must contain the following columns: datetime, value. This will be removed when climate data is finished being added to the hydromet database.}
+\item{continuous_data}{A dataframe with the data to be plotted. Must contain the following columns: datetime, value.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.

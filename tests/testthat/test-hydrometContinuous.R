@@ -1,4 +1,6 @@
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plots")
   unlink(dir, recursive=TRUE)
   dir.create(dir)
@@ -10,11 +12,15 @@ test_that("continuous level plot is as expected for full year with numeric start
 })
 
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when output to console", {
+  skip_on_cran()
+  skip_on_ci()
   plot <- suppressWarnings(hydrometContinuous("09EA004", "level", startDay = 1, endDay = 365, years = "2022"))
   vdiffr::expect_doppelganger("full yr numeric start/end", plot)
 })
 
 test_that("continuous level plot is as expected for full year with character startDay and endDay", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plots")
   dir.create(dir)
   suppressWarnings(hydrometContinuous("09EA004", "level", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir))
@@ -25,6 +31,8 @@ test_that("continuous level plot is as expected for full year with character sta
 })
 
 test_that("continuous flow plot is as expected for full year with numeric startDay and endDay", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plots")
   dir.create(dir)
   suppressWarnings(hydrometContinuous("09EA004", "flow", startDay = 1, endDay = 365, years = "2022", save_path = dir))
@@ -35,6 +43,8 @@ test_that("continuous flow plot is as expected for full year with numeric startD
 })
 
 test_that("SWE plot works when overlaping new year, dates as character", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plots")
   dir.create(dir)
   suppressWarnings(hydrometContinuous("09AA-M1", "SWE", startDay = "2023-09-01", endDay = "2023-05-31", years = "2022", save_path = dir, return_months = c(4,5)))
@@ -45,6 +55,8 @@ test_that("SWE plot works when overlaping new year, dates as character", {
 })
 
 test_that("depth plot works when overlaping new year, dates as numeric", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plots")
   dir.create(dir)
   suppressWarnings(hydrometContinuous("09AA-M1", "snow depth", startDay = 250, endDay = 150, years = "2022", save_path = dir, return_months = c(4,5)))
@@ -55,6 +67,12 @@ test_that("depth plot works when overlaping new year, dates as numeric", {
 })
 
 test_that("continuous level plot is as expected for multiple years when output to console", {
+  skip_on_cran()
+  skip_on_ci()
   plot <- suppressWarnings(hydrometContinuous("09EA004", "level", startDay = 1, endDay = 365, years = c(2019,2020,2021,2022)))
   vdiffr::expect_doppelganger("multi yr numeric start/end", plot)
+})
+
+test_that("too big year error message happens", {
+  expect_error(hydrometContinuous("09EA004", "level", startDay = 1, endDay = 365, years = lubridate::year(Sys.Date()) + 2))
 })

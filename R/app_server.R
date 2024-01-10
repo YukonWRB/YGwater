@@ -415,7 +415,7 @@ app_server <- function(input, output, session) {
       }
     )
     }, error = function(e){
-      shinyalert::shinyalert("Error in rendering plot", "Try again with a different set of input parameters", type = "error")
+      shinyalert::shinyalert("Error in rendering plot", "Try again with a different set of input parameters. For plots overlaping the new year, use the *December* year.", type = "error")
     })
 
   }, ignoreInit = TRUE)

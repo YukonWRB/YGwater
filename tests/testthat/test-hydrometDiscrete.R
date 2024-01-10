@@ -1,7 +1,8 @@
 #NOTE: as of June 2023 hydrometDiscrete does not accept start/end dates other than 1 and 365. This explained in the help file.
 
-
 test_that("violin plot is as expected for full year with numeric startDay and endDay", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
   unlink(dir, recursive=TRUE)
@@ -13,11 +14,15 @@ test_that("violin plot is as expected for full year with numeric startDay and en
 })
 
 test_that("console plot output is as expected", {
+  skip_on_cran()
+  skip_on_ci()
   plot <- suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = 1, endDay = 365, years = "2022"))
   vdiffr::expect_doppelganger("full year violin", plot)
 })
 
 test_that("violin plot is as expected for full year with Date startDay and endDay", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
   suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir))
@@ -28,6 +33,8 @@ test_that("violin plot is as expected for full year with Date startDay and endDa
 })
 
 test_that("box plot is as expected for full year with numeric startDay and endDay", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
   suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = 1, endDay = 365, years = "2022", save_path = dir,  plot_type = "boxplot"))
@@ -38,6 +45,8 @@ test_that("box plot is as expected for full year with numeric startDay and endDa
 })
 
 test_that("box plot is as expected for full year with Date startDay and endDay", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
   suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir, plot_type = "boxplot"))
@@ -48,6 +57,8 @@ test_that("box plot is as expected for full year with Date startDay and endDay",
 })
 
 test_that("plot scale factor and titles works", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
   suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir, plot_type = "boxplot", plot_scale = 2, title = FALSE))
@@ -58,6 +69,8 @@ test_that("plot scale factor and titles works", {
 })
 
 test_that("depth plots work", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
   suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir))
@@ -68,6 +81,8 @@ test_that("depth plots work", {
 })
 
 test_that("violin plot is as expected when discrete data is given", {
+  skip_on_cran()
+  skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
   unlink(dir, recursive=TRUE)
