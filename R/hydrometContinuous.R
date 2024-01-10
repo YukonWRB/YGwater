@@ -477,8 +477,8 @@ hydrometContinuous <- function(location = NULL,
   legend_length <- length(unique(realtime$plot_year))
 
   plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = .data$fake_datetime, y = .data$value)) +
-    ggplot2::ylim(min, max) +
-    ggplot2::scale_x_datetime(date_breaks = date_breaks, labels = labs) +
+      ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0,0.05)) + # The expand argument controls space betweent the data and the y axis. Default for continuous variable is 0.05
+    ggplot2::scale_x_datetime(date_breaks = date_breaks, labels = labs, expand = c(0,0)) + # The expand argument controls space betweent the data and the y axis. Default for continuous variable is 0.05
     ggplot2::labs(x = "", y =  paste0((if (parameter != "SWE") stringr::str_to_title(parameter) else parameter), " (", units, ")")) +
     ggplot2::theme_classic() +
     ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
