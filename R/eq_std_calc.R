@@ -107,6 +107,8 @@ eq_std_calc <- function(sampledata = sampledatafilt,
     pHx <- 7.5
   } else if(pH > 9){
     pHx <- 9
+  } else if(pH < 5.5){
+    pHx <- 5.5
   } else {
     pHx <- pH
   }
