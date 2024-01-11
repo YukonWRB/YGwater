@@ -22,9 +22,9 @@ eq_fetch <- function(EQcode,
                      apply_standards = TRUE){
 
 # EQcode <- "EG"
-# stationIDs = c("MW22-HLF4b","MW22-HLF4a","MW22-HLF3b")
-# paramIDs = c("As-D","Al-D","Cd-D","Cu-D","Fe-D","Fluord","Hg-D","Se-D")
-# dates = "all"
+# stationIDs = "all"
+# paramIDs = "all"
+# dates = c("2009-01-01", "2015-01-01")
 # BD <- 0
 # apply_standards = TRUE
 
