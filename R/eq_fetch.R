@@ -24,7 +24,7 @@ eq_fetch <- function(EQcode,
 # EQcode <- "EG"
 # stationIDs = "all"
 # paramIDs = "all"
-# dates = c("2009-01-01", "2015-01-01")
+# dates = "all"
 # BD <- 0
 # apply_standards = TRUE
 

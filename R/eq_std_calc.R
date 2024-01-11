@@ -116,6 +116,8 @@ eq_std_calc <- function(sampledata = sampledatafilt,
 
   if(is.na(hard)){
     hardx <- 50
+  } else if(hard < 11){
+    hardx <- 11
   } else if(hard > 670){
     hardx <- 670
   } else {
