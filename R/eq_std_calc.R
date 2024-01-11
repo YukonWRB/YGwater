@@ -309,7 +309,7 @@ eq_std_calc <- function(sampledata = sampledatafilt,
     C3_AW_NH4 <- 18500/1000
   } else if(pH >= 7.5 & pH < 8){
     C3_AW_NH4 <- 11300/1000
-  } else if(pH >= 8 & pH > 8.5){
+  } else if(pH >= 8 & pH < 8.5){
     C3_AW_NH4 <- 3700/1000
   } else if(pH >= 8.5){
     C3_AW_NH4 <- 1310/1000
