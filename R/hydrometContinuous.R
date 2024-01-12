@@ -41,11 +41,11 @@
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
-#' @param continuous_data A dataframe with the data to be plotted. Must contain the following columns: datetime, value.
+#' @param continuous_data A data.frame with the data to be plotted. Must contain the following columns: datetime, value.
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
 #' @export
 #'
-#'
+
 # hydrometContinuous(location='09EB001', parameter = "flow", startDay = "2024-01-01", endDay = "2024-12-31", tzone = "MST", years = c(2021, 2022, 2023, 2024), datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect())
 
 # hydrometContinuous(location='09EB001', parameter = "flow", startDay = 1, endDay = 365, tzone = "MST", years = 2023, datum = TRUE, title = TRUE, custom_title = NULL, returns = "none", return_type = "max", return_months = c(5:9), return_max_year = 2023, allowed_missing = 10, plot_scale = 1, save_path = NULL, con = hydrometConnect(), historic_range = "last")
@@ -395,8 +395,13 @@ hydrometContinuous <- function(location = NULL,
       realtime[ , c("value", "max", "min", "q75", "q25")] <- apply(realtime[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
     }
   }
+
+
   #### --------------------------- Data provided -------------------------- ####
   if (!is.null(continuous_data)) {
+    if (!all(names(continuous_data) %in% c("datetime", "value"))){
+      stop("The data.frame passed to parameter 'continuous_data' must have columns named 'datetime' and 'value'.")
+    }
     #### Add this in here: ------------------
     dat <- continuous_data
     # Remove Feb 29
@@ -421,7 +426,6 @@ hydrometContinuous <- function(location = NULL,
       summary_dat[summary_dat$day >= format(startDay, "%m-%d") & summary_dat$day <= "12-31",]$datetime <- paste0(years, "-", summary_dat[summary_dat$day >= format(startDay, "%m-%d") & summary_dat$day <= "12-31",]$day )
       summary_dat[summary_dat$day >= "01-01" & summary_dat$day <= format(endDay, "%m-%d"),]$datetime <- paste0(years+1, "-", summary_dat[summary_dat$day >= "01-01" & summary_dat$day <= format(endDay, "%m-%d"),]$day )
       summary_dat$datetime <- as.POSIXct(summary_dat$datetime, format="%Y-%m-%d")
-
       dat$datetime <- as.POSIXct(dat$datetime, format="%Y-%m-%d")
 
       # Add columns for year and value. If want to add additional years, then would only need to add value, not stats
@@ -442,20 +446,19 @@ hydrometContinuous <- function(location = NULL,
       tab <- merge(summary_dat, dat[dat$datetime >= paste0(years, "-", format(startDay, "%m-%d"))
                                     & dat$datetime <= paste0(years, "-", format(endDay, "%m-%d")),], by=c("day"), all.x = TRUE)
     }
+    ribbon_start_end <- c(lubridate::year(min(summary_dat$datetime)), lubridate::year(max(summary_dat$datetime)))
 
     # rename columns
     colnames(tab) <- c("day", "min", "max", "md", "q75", "q25", "datetime", "datetime.y", "value")
-
     # Add columns to imitate hydrometContinuous realtime table
     tab$year <- format(tab$datetime, "%Y")
     tab$month <- format(tab$datetime, "%m")
     tab$day <- format(tab$datetime, "%d")
-    tab$plot_year <- paste0(years, "-", years+1)
+    tab$plot_year <- paste0(years, "-", years + 1)
     tab$datetime <- as.POSIXct(tab$datetime, format="%Y-%m-%d")
     tab$fake_datetime <- tab$datetime
 
     #####----------------
-
     realtime <- tab
     daily <- continuous_data
     day_seq <- realtime$datetime
