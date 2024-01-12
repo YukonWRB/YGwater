@@ -76,3 +76,18 @@ test_that("continuous level plot is as expected for multiple years when output t
 test_that("too big year error message happens", {
   expect_error(hydrometContinuous("09EA004", "level", startDay = 1, endDay = 365, years = lubridate::year(Sys.Date()) + 2))
 })
+
+#Test for historical range and return periods able to flex.
+test_that("historic range can be < requested year", {
+  skip_on_cran()
+  skip_on_ci()
+  plot <- suppressWarnings(hydrometContinuous("09EA004", "level", startDay = 1, endDay = 365, years = c(2018), historic_range = "all"))
+  vdiffr::expect_doppelganger("hist range > plotted year", plot)
+})
+#Test for historical range and return periods able to flex.
+test_that("returns can be for yrs > requested year", {
+  skip_on_cran()
+  skip_on_ci()
+  plot <- suppressWarnings(hydrometContinuous("09EA004", "level", startDay = 1, endDay = 365, years = c(2018), historic_range = "all", return_max_year = 2023))
+  vdiffr::expect_doppelganger("hist range > plotted year", plot)
+})

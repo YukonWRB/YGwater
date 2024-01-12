@@ -232,6 +232,8 @@ app_server <- function(input, output, session) {
       shinyjs::hide("start_doy")
       shinyjs::hide("plot_years_note")
       shinyjs::hide("plot_filter")
+      shinyjs::hide("historic_range")
+      shinyjs::hide("return_yrs")
       shinyjs::show("discrete_plot_type")
     } else if (input$plot_data_type == "Continuous"){
       updateSelectizeInput(session, "plot_param", choices = c("Level", "Flow", "Bridge freeboard", "SWE", "Snow depth"))
@@ -242,6 +244,8 @@ app_server <- function(input, output, session) {
       shinyjs::show("start_doy")
       shinyjs::show("plot_years_note")
       shinyjs::show("plot_filter")
+      shinyjs::show("historic_range")
+      shinyjs::show("return_yrs")
       shinyjs::hide("discrete_plot_type")
     }
   })
@@ -259,10 +263,9 @@ app_server <- function(input, output, session) {
     } else {
       updateTextInput(session, "return_months", value = "5,6,7,8,9")
     }
-
   })
 
-  #Update user's choices for plots based on selected plot type
+  # Update user's choices for plots based on selected plot type
   observe(
     if (input$plot_param == "Level"){
       if (input$plot_data_type == "Continuous"){
@@ -334,7 +337,7 @@ app_server <- function(input, output, session) {
       shinyjs::hide("apply_datum")
       updateCheckboxInput(session, "apply_datum", value = FALSE)
     }
-  }, ignoreInit = TRUE)
+  }) #Do not ignoreInit = TRUE otherwise will not added
 
   #Cross-updating of plot selection location name or code
   observeEvent(input$plot_loc_code, {
@@ -349,7 +352,6 @@ app_server <- function(input, output, session) {
       }
     }
   }, ignoreInit = TRUE)
-
   observeEvent(input$plot_loc_name, {
     updateSelectizeInput(session, "plot_loc_code", selected = plotContainer$all_ts[plotContainer$all_ts$name == input$plot_loc_name, "location"])
   }, ignoreInit = TRUE)
@@ -365,14 +367,15 @@ app_server <- function(input, output, session) {
       plotContainer$returns <- "table"
     }
   }) #Do not ignoreInit = TRUE otherwise will not be populated
-
   observeEvent(input$return_periods, {
     if (input$return_periods == "none"){
       shinyjs::hide("return_type")
       shinyjs::hide("return_months")
+      shinyjs::hide("return_yrs")
     } else {
       shinyjs::show("return_type")
       shinyjs::show("return_months")
+      shinyjs::show("return_yrs")
     }
   }, ignoreInit = TRUE)
 
@@ -395,7 +398,7 @@ app_server <- function(input, output, session) {
         } else {
           plotContainer$plot_filter <- NULL
         }
-        plotContainer$plot <- hydrometContinuous(location = input$plot_loc_code, parameter = plotContainer$plot_param, startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, datum = input$apply_datum, filter = plotContainer$plot_filter, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, plot_scale = 1.4)
+        plotContainer$plot <- hydrometContinuous(location = input$plot_loc_code, parameter = plotContainer$plot_param, startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, return_max_year = input$return_yrs, plot_scale = 1.4)
       } else if (plotContainer$plot_data_type == "discrete"){
         plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = plotContainer$plot_param, years = input$plot_years, plot_type = plotContainer$discrete_plot_type, plot_scale = 1.4)
       }
