@@ -36,7 +36,7 @@ app_ui <- function(request) {
       shinyjs::extendShinyjs(text = jsCode, functions = c("backgroundCol")),
 
       # Title
-      titlePanel("Yukon Water Science and Stewardship Branch Hdyro App"),
+      titlePanel("Yukon Water Science and Stewardship Branch Hydro App"),
       # Broad category selection
       selectInput("first_selection", "Choose a task", choices = c("View hydromet plots + data", "View precipitation maps + data", "Browse FOD comments")),
       conditionalPanel(
@@ -90,8 +90,10 @@ app_ui <- function(request) {
           shinyWidgets::pickerInput("plot_years", "Select years to plot", choices = "", multiple = TRUE, options = list("max-options" = 10,
                                                                                                                         "max-options-text" = "Cannot plot more than 10 lines")),
           shinyWidgets::pickerInput("discrete_plot_type", "Select plot type", choices = c("Violin plot", "Box plot"), selected = "Violin plot"),
+          selectizeInput("historic_range", "Historic range to today or last year plotted?", choices = c("all", "last"), selected = "all"),
           selectizeInput("return_periods", "Plot return periods?", choices = c("none", "auto select", "calculate", "from table"), selected = "auto select"),
           shinyWidgets::pickerInput("return_type", "Select return type", choices = c("Min", "Max"), selected = "Max"),
+          numericInput("return_yrs", "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),
           textInput("return_months", "Months for return calculation (comma delimited)", value = "5,6,7,8,9"),
           checkboxInput("apply_datum", "Apply vertical datum?"),
           checkboxInput("plot_filter", "Filter extreme values?"),
@@ -106,7 +108,6 @@ app_ui <- function(request) {
     )
   )
 }
-
 
 
 #' Add external Resources to the Application
