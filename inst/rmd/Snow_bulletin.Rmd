@@ -18,6 +18,13 @@ con <- YGwater::hydrometConnect()
 ```
 
 
+``` {r test, echo=FALSE}
+#print(year)
+#print(month)
+#print(basins)
+```
+
+
 ```{r Functions, echo=FALSE}
 # Function to create lake level snow bulletin plots
 snowbullWater <- function(location, parameter, years, custom_title) {
@@ -457,10 +464,7 @@ whitehorse <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_con
 
 whitehorse <- getCDDF(whitehorse, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31",  years = c(year-1), title = TRUE, custom_title = "Whitehorse CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, other_data = whitehorse)
-
-YGwater::hydrometContinuous(parameter= "Airtemp", startDay = "2023-09-01", endDay = "2024-08-31",  years = c(year-1), title = TRUE, custom_title = "Whitehorse Air temp", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, other_data = whitehorse)
-
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31",  years = c(year-1), title = TRUE, custom_title = "Whitehorse CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, continuous_data = whitehorse)
 ``` 
 
 ```{r MarshLake, echo=FALSE, eval=include, fig.width=10}
@@ -507,7 +511,7 @@ teslin <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_continu
 
 teslin <- getCDDF(teslin, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Teslin CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = teslin)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Teslin CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, continuous_data = teslin)
 
 ``` 
 
@@ -544,7 +548,7 @@ carmacks <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_conti
 
 carmacks <- getCDDF(carmacks, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Carmacks CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = carmacks)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Carmacks CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, continuous_data = carmacks)
 
 ``` 
 
@@ -598,7 +602,7 @@ faro <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_continuou
 
 faro <- getCDDF(faro, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Faro CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = faro)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Faro CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, continuous_data = faro)
 
 ``` 
 
@@ -652,7 +656,7 @@ mayo <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_continuou
 
 mayo <- getCDDF(mayo, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Mayo CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = mayo)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Mayo CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, continuous_data = mayo)
 
 ``` 
 
@@ -730,7 +734,7 @@ dawson <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_continu
 
 dawson <- getCDDF(dawson, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Dawson CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = dawson)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Dawson CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, continuous_data = dawson)
 
 ``` 
 
@@ -767,7 +771,7 @@ oldcrow <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_contin
 
 oldcrow <- getCDDF(oldcrow, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Old Crow CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = oldcrow)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Old Crow CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, continuous_data = oldcrow)
 
 ``` 
 
@@ -848,7 +852,7 @@ watsonlake <- DBI::dbGetQuery(con, "SELECT datetime, value FROM measurements_con
 
 watsonlake <- getCDDF(watsonlake, year)
 
-YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Watson Lake CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, cddf_data = watsonlake)
+YGwater::hydrometContinuous(parameter= "CDDF", startDay = "2023-09-01", endDay = "2024-08-31", years = c(year-1), title = TRUE, custom_title = "Watson Lake CDDF", returns = "none", allowed_missing = 10, plot_scale = 1, save_path = NULL, con = con, continuous_data = watsonlake)
 
 ``` 
 
@@ -891,9 +895,52 @@ snowbullWater(location = station_id,
 ``` 
 
 ## Drainage Basin and Snow Course
-```{r table, echo=FALSE, fig.width=10}
-test <- SWE_station(year=year, month=month, return_missing = TRUE, source="hydromet")
 
-knitr::kable(test)
+```{r table, fig.width=10, results='asis', echo=TRUE}
+tabl <- SWE_station(year=2023, month=month, return_missing = FALSE, source="hydromet")
+
+tabl <- tabl[, c("location_name", "location_id", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
+
+colnames(tabl) <- c("Name", "Number", "Date of Survey", "Snow depth (cm)", "Water content (SWE) (mm)", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
+
+# tbl <- knitr::kable(tbl, format="html", caption = "Caption")
+# 
+# tbl <- kableExtra::kable_styling(tbl, bootstrap_options = "striped", font_size = 12, position = "center")
+# 
+# print(tbl)
+
+# knitr::kable(tbl, align = "c", caption = "Caption") %>%
+#   #kableExtra::kbl(table.attr = "style='width:25%;'", caption = "Caption", align = "c") %>%  
+#   kableExtra::kable_styling(bootstrap_options = "striped", font_size = 12, position = "center") %>% 
+#   kableExtra::pack_rows(index=rowSums(table(tabl$sub_basin,tabl$location_id)))
+
+# tbl %>%
+#   kableExtra::kbl(table.attr = "style='width:25%;'", caption = "Caption",align = "c") %>%
+#   kableExtra::kable_styling(bootstrap_options = "striped", font_size = 12, position = "center") %>%
+#   kableExtra::pack_rows(index=rowSums(table(tabl$sub_basin,tabl$location_id)))
+
+# tbl <- tabl[, c("location_id", "location_name", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "swe_rat", "years")] %>% 
+#   kbl(table.attr = "style='width:25%;'", caption = "Caption",align = "c") %>%  
+#   kable_styling(bootstrap_options = "striped", font_size = 12, position = "center") %>% 
+#   pack_rows(index=rowSums(table(tabl$sub_basin,tabl$location_id)))
+
+# tbl
+#print(tbl)
+#knitr::kable(tbl)
+
+flextable::as_grouped_data(tabl, groups = "sub_basin", hide_grouplabel = TRUE) %>% 
+  flextable::as_flextable() %>% 
+  #flextable::set_header_labels(what = "") %>% 
+  flextable::bold(bold = TRUE, part="header") %>% 
+  #flextable::align(i = ~ !is.na(sub_basin), align = "left") %>% 
+  flextable::align(part="header", align="center") %>%
+  flextable::bold(i = ~ !is.na(sub_basin)) %>%
+  flextable::bg(bg="#0097A9", part="header") %>%
+  flextable::color(color="white", part="header") %>%
+  flextable::hline(part="all") %>%
+  flextable::vline()
+
+
+
 ``` 
 
