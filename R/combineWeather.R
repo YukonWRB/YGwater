@@ -139,10 +139,12 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       if (is.na(bias)) {
         bias <- 0
       }
-      # Apply correction to all values of station 2
-      stn2$value <- stn2$value + bias
 
-      print("Correction applied")
+      if (v %in% c("mean_temp", "max_temp", "min_temp")) {
+        # Apply correction to all values of station 2
+        stn2$value <- stn2$value + bias
+        print("Correction applied")
+      }
 
       #------------------------ Fill gaps in station 1 ------------------------#
       # Where station 1 is missing data in range, fill in with corrected station 2
