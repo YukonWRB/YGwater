@@ -31,12 +31,12 @@
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
-#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out values > 2 * the IQR. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "level", "flow", "snow depth", "SWE", "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
 #' @param return_months Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within `startDay` and `endDay`, but will only consider data up to the last year specified in `years`. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of [fasstr::calc_annual_extremes()] and also used to set the 'water_year_start' parameter of this function.
-#' @param return_max_year The last year of data to consider when calculating returns. Default uses all years *prior to* the last year plotted, giving historical context. If `historic_range` is set to 'last', cannot be greater than the last year in `year`; otherwise can be the max year for which there is data. Automatically set to max(years)-1 if `historic_range` is 'last', otherwise set to the current year - 1.
+#' @param return_max_year The last year of data to consider when calculating returns. If left NULL behavior depends on parameter `historic_range`: if `historic_range` is set to 'last' defaults to the last year in `year` otherwise uses all data available. Automatically set to max(years) if `historic_range` is 'last', otherwise set to the current year.
 #' @param allowed_missing Allowable % of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of [fasstr::calc_annual_extremes()].
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
@@ -191,7 +191,7 @@ hydrometContinuous <- function(location = NULL,
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
     #Confirm parameter and location exist in the database and that there is only one entry
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT location, parameter, timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
     if (nrow(exist_check) == 0){
       stop(paste0("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous data type."))
     } else if (nrow(exist_check) > 1){
@@ -255,17 +255,18 @@ hydrometContinuous <- function(location = NULL,
       }
       end_UTC <- end
       attr(end_UTC, "tzone") <- "UTC"
-      if (length(day_seq) < 90){
-        if (nrow(realtime) < 30000){
+      if (length(day_seq) < 90){ # 90 days at 5 minute data points is 25920 rows.
+        if (nrow(realtime) < 20000){ # if plotting 70-90 days of 5 minute data will only have the greatest year with 5 minute points
           new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-          if (nrow(new_realtime) > 30000){
+          if (nrow(new_realtime) > 20000){
             new_realtime <- new_realtime[order(new_realtime$datetime) , ]
-            new_realtime <- utils::tail(new_realtime, 30000) #Retain only max 30000 data points for plotting performance
+            new_realtime <- utils::tail(new_realtime, 20000) #Retain only max 20000 data points for plotting performance
+            end_new_dates <- min(new_realtime$datetime)
+            new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
+            dates <- c(dates, new_dates)
           }
           if (nrow(new_realtime) > 0){
             realtime <- rbind(realtime, new_realtime)
-            new_dates <- seq.POSIXt(start, end, by = "days")
-            dates <- c(dates, new_dates)
             get_daily <- FALSE
           } else {
             get_daily <- TRUE
@@ -304,7 +305,7 @@ hydrometContinuous <- function(location = NULL,
       if (historic_range == "all"){
         ribbon_seq <- seq.POSIXt(as.POSIXct(paste0(ribbon_yr - 1, substr(startDay, 5, 16)), tz = tzone), as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone), by = "day")
       } else {
-        ribbon_seq <- seq.POSIXt(as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone), as.POSIXct(paste0(last_year +1, substr(endDay, 5, 16)), tz = tzone), by = "day")
+        ribbon_seq <- seq.POSIXt(as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone), as.POSIXct(paste0(last_year + 1, substr(endDay, 5, 16)), tz = tzone), by = "day")
       }
     } else {
       if (historic_range == "all"){
@@ -315,7 +316,7 @@ hydrometContinuous <- function(location = NULL,
     }
 
     ribbon <- data.frame()
-    ribbon_start_end <- lubridate::year(min(daily$datetime))
+    ribbon_start_end <- if (overlaps) paste0(lubridate::year(min(daily$datetime)), "-", lubridate::year(min(daily$datetime)) +1 ) else lubridate::year(min(daily$datetime))
     for (i in 1:length(ribbon_seq)){
       target_date <- ribbon_seq[i]
       plot_date <- day_seq[i]
@@ -334,19 +335,27 @@ hydrometContinuous <- function(location = NULL,
         lubridate::year(row$datetime) <- lubridate::year(plot_date)
         if (i == length(ribbon_seq)){
           row$datetime <- row$datetime - 1 #This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
-          ribbon_start_end <- c(ribbon_start_end, lubridate::year(target_date))
+          ribbon_start_end <- if (overlaps) c(ribbon_start_end, paste0(lubridate::year(target_date) - 2, "-", lubridate::year(target_date) - 1)) else c(ribbon_start_end, lubridate::year(target_date) - 1)
         }
         if (nrow(row) > 0){
           ribbon <- rbind(ribbon, row)
         }
       }
     }
-    if (min(ribbon$datetime) < min(realtime$datetime)){
-      first_date <- min(realtime$datetime)
-      lubridate::hour(first_date) <- 0
-      ribbon[ribbon$datetime == min(ribbon$datetime), "datetime"] <- first_date
+    if (nrow(ribbon) > 0){
+      if (min(ribbon$datetime) < min(realtime$datetime)){
+        first_date <- min(realtime$datetime)
+        lubridate::hour(first_date) <- 0
+        ribbon[ribbon$datetime == min(ribbon$datetime), "datetime"] <- first_date
+      }
+      realtime <- merge(realtime, ribbon, all = TRUE, by = "datetime")
+    } else {
+      realtime$max <- NA
+      realtime$min <- NA
+      realtime$q75 <- NA
+      realtime$q25 <- NA
     }
-    realtime <- merge(realtime, ribbon, all = TRUE)
+
 
     realtime$year <- lubridate::year(realtime$datetime) #year, month columns used for removing Feb 29 later
     realtime$month <- lubridate::month(realtime$datetime)
@@ -446,7 +455,12 @@ hydrometContinuous <- function(location = NULL,
       tab <- merge(summary_dat, dat[dat$datetime >= paste0(years, "-", format(startDay, "%m-%d"))
                                     & dat$datetime <= paste0(years, "-", format(endDay, "%m-%d")),], by=c("day"), all.x = TRUE)
     }
-    ribbon_start_end <- c(lubridate::year(min(summary_dat$datetime)), lubridate::year(max(summary_dat$datetime)))
+    if (overlaps){
+      ribbon_start_end <- c(paste0(lubridate::year(min(summary_dat$datetime)), "-", lubridate::year(min(summary_dat$datetime)) + 1), paste0(lubridate::year(max(summary_dat$datetime)) - 1, "-", lubridate::year(max(summary_dat$datetime))))
+    } else {
+      ribbon_start_end <- c(lubridate::year(min(summary_dat$datetime)), lubridate::year(max(summary_dat$datetime)))
+    }
+
 
     # rename columns
     colnames(tab) <- c("day", "min", "max", "md", "q75", "q25", "datetime", "datetime.y", "value")
@@ -471,19 +485,29 @@ hydrometContinuous <- function(location = NULL,
     if (!inherits(filter, "numeric")){
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
+      if (parameter %in% c("level", "flow", "snow depth", "SWE", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
+        realtime[realtime$value < 0 & !is.na(realtime$value),"value"] <- NA
+        realtime[realtime$min < 0 & !is.na(realtime$min),"min"] <- NA
+        realtime[realtime$max < 0 & !is.na(realtime$max),"max"] <- NA
+      } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
+        realtime[realtime$value < -100 & !is.na(realtime$value),"value"] <- NA
+        realtime[realtime$min < -100 & !is.na(realtime$min),"min"] <- NA
+        realtime[realtime$max < -100 & !is.na(realtime$max),"max"] <- NA
+      }
+
       rollmedian <- zoo::rollapply(realtime$value, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
       rollmad <- zoo::rollapply(realtime$value, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
-      outlier <- abs(realtime$value - rollmedian) > 10* rollmad
+      outlier <- abs(realtime$value - rollmedian) > 5 * rollmad
       realtime$value[outlier] <- NA
 
       rollmedian <- zoo::rollapply(realtime$min, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
       rollmad <- zoo::rollapply(realtime$min, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
-      outlier <- abs(realtime$min - rollmedian) > 10* rollmad
+      outlier <- abs(realtime$min - rollmedian) > 5* rollmad
       realtime$min[outlier] <- NA
 
       rollmedian <- zoo::rollapply(realtime$max, width = filter, FUN=median, align = "center", fill = "extend", na.rm = TRUE)
       rollmad <- zoo::rollapply(realtime$max, width = filter, FUN=mad, align = "center", fill = "extend", na.rm = TRUE)
-      outlier <- abs(realtime$max - rollmedian) > 10* rollmad
+      outlier <- abs(realtime$max - rollmedian) > 5 * rollmad
       realtime$max[outlier] <- NA
     }
   }
@@ -610,9 +634,13 @@ hydrometContinuous <- function(location = NULL,
   spread <- max-min #Used to determine where to put the text
   end_time <- max(realtime$fake_datetime)
   if (!is.infinite(minHist)){
-    line1 <- paste0("\n         \n         \n        Historical range based\n        on years ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+    if (overlaps){
+      line1 <- paste0("\n         \n        Historical range based\n        on years\n        ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+    } else {
+      line1 <- paste0("\n         \n        Historical range based\n        on years ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+    }
   } else {
-    line1 <- "\n         \n         \n        Not enough data for\n        historical ranges"
+    line1 <- "\n         \n        Not enough data for\n        historical ranges"
     plot <- plot + #Adjust the legend spacing so that the text isn't pushed off the plot area
       ggplot2::theme(legend.box.spacing = ggplot2::unit(40, "pt"))
   }
@@ -634,7 +662,6 @@ hydrometContinuous <- function(location = NULL,
     plot <- plot +
       ggplot2::coord_cartesian(clip="off", default=TRUE) +
       ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize=8*plot_scale), just="left"), xmin=end_time, ymin = (max-spread/2)-8*spread/30, ymax =(max-spread/2)-8*spread/30)
-
   } else {
     plot <- plot +
       ggplot2::coord_cartesian(clip="off", default=TRUE) +

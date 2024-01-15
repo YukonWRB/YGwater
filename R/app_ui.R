@@ -90,7 +90,7 @@ app_ui <- function(request) {
           shinyWidgets::pickerInput("plot_years", "Select years to plot", choices = "", multiple = TRUE, options = list("max-options" = 10,
                                                                                                                         "max-options-text" = "Cannot plot more than 10 lines")),
           shinyWidgets::pickerInput("discrete_plot_type", "Select plot type", choices = c("Violin plot", "Box plot"), selected = "Violin plot"),
-          selectizeInput("historic_range", "Historic range to today or last year plotted?", choices = c("all", "last"), selected = "all"),
+          selectizeInput("historic_range", "Historic range includes all years of record or up to last year plotted?", choices = c("all", "last"), selected = "all"),
           selectizeInput("return_periods", "Plot return periods?", choices = c("none", "auto select", "calculate", "from table"), selected = "auto select"),
           shinyWidgets::pickerInput("return_type", "Select return type", choices = c("Min", "Max"), selected = "Max"),
           numericInput("return_yrs", "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),

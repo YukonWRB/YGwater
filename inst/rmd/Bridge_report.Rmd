@@ -31,7 +31,7 @@ for (i in 1:nrow(tsid)){
 ```{r create tables, echo=FALSE, results='asis', message=FALSE}
 cat("  \n# Summary of freeboard measurements and changes \n")
 
-levels <- data.frame("Location" = NA, "Current distance" = NA, "24 hr change (cm)" = NA, "48 hr change (cm)" = NA, "72 hr change (cm)" = NA, "1 week change (cm)" = NA, "Last data age" = NA, check.names = FALSE)
+levels <- data.frame("Location" = NA, "Last reported distance" = NA, "24 hr change (cm)" = NA, "48 hr change (cm)" = NA, "72 hr change (cm)" = NA, "1 week change (cm)" = NA, "Last data age" = NA, check.names = FALSE)
 
 for (i in 1:nrow(tsid)){
   latest <- bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime == max(as.POSIXct(bridge_rt[[i]]$datetime)), ]
@@ -72,20 +72,42 @@ NOTE: Outlier values clearly caused by instrument error were automatically remov
 for (i in 1:nrow(tsid)){
   cat("  \n# Radar distance for", tsid[i, "name"])
   cat("  \n### Distance (past year)  \n")
-  plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 20, startDay = Sys.Date()-364, endDay = Sys.Date())
-  if (min(plot$data$value, na.rm=TRUE) < 1) {
-    plot <- plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
+  year_seq <- data.frame(date = seq.Date(Sys.Date()-364, Sys.Date(), by = "day"))
+  year_seq$yday <- lubridate::yday(year_seq$date)
+  if (1 %in% year_seq$yday){
+   year <- lubridate::year(Sys.Date())-1 
+  } else {
+    year <- lubridate::year(Sys.Date())
   }
-  print(plot)
+  tryCatch({
+    plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 30, startDay = Sys.Date()-364, endDay = Sys.Date(), years = year)
+    if (min(plot$data$value, na.rm=TRUE) < 1) {
+      plot <- plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
+    }
+    print(plot)
+  }, error = function(E){
+    cat("Error in creating full year plot.")
+  })
   cat("  \n")
   
   if (zoom){
     cat ("  \n### Distance (past", zoom_days, "days)  \n")
-    zoom_plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", startDay = Sys.Date()-zoom_days, endDay = Sys.Date(), datum = FALSE, filter = 20)
-    if (min(zoom_plot$data$value, na.rm=TRUE) < 1) {
-    zoom_plot <- zoom_plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
-  }
-    print(zoom_plot)
+    zoom_seq <- data.frame(date = seq.Date(Sys.Date()-zoom_days, Sys.Date(), by = "day"))
+    zoom_seq$yday <- lubridate::yday(zoom_seq$date)
+    if (1 %in% zoom_seq$yday){
+      zoom_year <- lubridate::year(Sys.Date())-1 
+    } else {
+      zoom_year <- lubridate::year(Sys.Date())
+    }
+    tryCatch({
+      zoom_plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", startDay = Sys.Date()-zoom_days, endDay = Sys.Date(), datum = FALSE, filter = 50, years = zoom_year)
+      if (min(zoom_plot$data$value, na.rm=TRUE) < 1) {
+        zoom_plot <- zoom_plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
+      }
+      print(zoom_plot)
+    }, error = function(e) {
+      cat("Error in creating zoomed-in plot. ")
+    })
     cat("  \n")
   } #End of zoom for loop
 }

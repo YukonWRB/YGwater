@@ -20,6 +20,7 @@ bridgeReport <- function(con = hydrometConnect(silent=TRUE),
                          )
 {
 
+  on.exit(DBI::dbDisconnect(con))
   rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
   if (!rlang::is_installed("knitr")) { #This is here because knitr is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
     message("Installing dependency 'knitr'...")

@@ -21,6 +21,8 @@
 
 tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose") {
 
+  on.exit(DBI::dbDisconnect(con))
+
   if (level_locations[1] == "default"){
     level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
     level_locations <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'level' AND category = 'continuous' AND location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
