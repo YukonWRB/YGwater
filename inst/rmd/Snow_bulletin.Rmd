@@ -456,6 +456,13 @@ snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
 
 ```{r MonthlyPrecip, echo=FALSE, eval=include}
 # C
+test <- DBI::dbGetQuery(con, "SELECT * FROM measurements_continuous WHERE timeseries_id = 663") 
+attr(test$datetime, "tzone") <- "MST"
+test$month <- format(test$datetime, "%m")
+test$year <- format(test$datetime, "%Y")
+test$units <- "mm"
+  
+YGwater::hydrometDiscrete(location = "48168", parameter = "mly tot precip", startDay = "2023-09-01", tzone = "MST", years = c(2023), title = TRUE, custom_title = "Whitehorse precip", plot_type = "linedbox", plot_scale = 1, save_path = NULL, discrete_data = test, con = con)
 ``` 
 
 ```{r Whitehorse_CDDF, echo=FALSE}
@@ -903,6 +910,19 @@ tabl <- tabl[, c("location_name", "location_id", "sample_date", "depth", "swe", 
 
 colnames(tabl) <- c("Name", "Number", "Date of Survey", "Snow depth (cm)", "Water content (SWE) (mm)", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
 
+# Order rows
+target <- c("Upper_Yukon", "Teslin_Big_Salmon", "Central_Yukon", "Pelly", "Stewart", "White", "Lower_Yukon", "Porcupine", "Peel", "Liard", "Alsek", "Alaska")
+tabl <- tabl %>% dplyr::arrange(factor(sub_basin, levels = target))
+
+## Change basin names
+# Add River Basin to names
+tabl$sub_basin <- paste0(tabl$sub_basin, " River Basin")
+# Replace all _ with space
+tabl$sub_basin <- gsub("_", " ", tabl$sub_basin)
+tabl$sub_basin <- gsub("Alaska River Basin", "Alaska Snow Courses", tabl$sub_basin)
+  
+test1 <<- tabl
+
 # tbl <- knitr::kable(tbl, format="html", caption = "Caption")
 # 
 # tbl <- kableExtra::kable_styling(tbl, bootstrap_options = "striped", font_size = 12, position = "center")
@@ -928,19 +948,35 @@ colnames(tabl) <- c("Name", "Number", "Date of Survey", "Snow depth (cm)", "Wate
 #print(tbl)
 #knitr::kable(tbl)
 
-flextable::as_grouped_data(tabl, groups = "sub_basin", hide_grouplabel = TRUE) %>% 
-  flextable::as_flextable() %>% 
+# Single table using flextable 
+
+flextable::as_grouped_data(tabl, groups = "sub_basin") %>% 
+  flextable::as_flextable(hide_grouplabel = TRUE) %>% 
   #flextable::set_header_labels(what = "") %>% 
   flextable::bold(bold = TRUE, part="header") %>% 
   #flextable::align(i = ~ !is.na(sub_basin), align = "left") %>% 
   flextable::align(part="header", align="center") %>%
+  flextable::align(align="center", j=c(2:8)) %>%
   flextable::bold(i = ~ !is.na(sub_basin)) %>%
   flextable::bg(bg="#0097A9", part="header") %>%
   flextable::color(color="white", part="header") %>%
   flextable::hline(part="all") %>%
-  flextable::vline()
+  flextable::vline(part="body") %>% 
+  flextable::border_outer() %>% 
+  flextable::autofit() %>%
+  flextable::width(j="Number", width=1.2) %>%
+  flextable::width(j="Date of Survey", width=1.1) %>%
+  flextable::width(j=c(4,5,6,7,8), width = 0.8) %>%
+  flextable::width(j=c(1), width = 1.7) %>%
+  flextable::font(fontname="Nunito Sans", part="all") %>%
+  flextable::fontsize(size=11)
 
-
+# Multiple tables using kable
+for (b in unique(tabl$sub_basin)) {
+  tbl <- knitr::kable(tabl[tabl$sub_basin == b, c(2:8)], caption = b)
+  print(tbl)
+}
+#knitr::kable(tabl, caption = "Caption")
 
 ``` 
 
