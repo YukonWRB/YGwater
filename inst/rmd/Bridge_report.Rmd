@@ -34,6 +34,16 @@ cat("  \n# Summary of freeboard measurements and changes \n")
 levels <- data.frame("Location" = NA, "Last reported distance" = NA, "24 hr change (cm)" = NA, "48 hr change (cm)" = NA, "72 hr change (cm)" = NA, "1 week change (cm)" = NA, "Last data age" = NA, check.names = FALSE)
 
 for (i in 1:nrow(tsid)){
+  if (nrow(bridge_rt[[tsid$location[i]]]) == 0){
+    levels[i,1] <- tsid$name[i]
+    levels[i,2] <- NA
+    levels[i,3] <- NA
+    levels[i,4] <- NA
+    levels[i,5] <- NA
+    levels[i,6] <- NA
+    levels[i,7] <- "No data"
+    next() 
+  }
   latest <- bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime == max(as.POSIXct(bridge_rt[[i]]$datetime)), ]
   current <- round(latest$value, 1)
   day <- round(100 * (current - mean(bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime < (latest$datetime - 60*60*23.5) & bridge_rt[[tsid$location[i]]]$datetime > (latest$datetime - 60*60*24.5), ]$value)), 1)
