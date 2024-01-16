@@ -192,7 +192,10 @@ hydrometDiscrete <- function(location=NULL,
     ## Create all_discrete
     all_discrete <- discrete_data
     # add fake_date
-    all_discrete$fake_date <- as.Date(paste0(max(years), "-0", all_discrete$month, "-01" ))
+    if (all(nchar(all_discrete$month) == 2)) {
+      all_discrete$fake_date <- as.Date(paste0(max(years), "-", all_discrete$month, "-01" ))
+    } else {all_discrete$fake_date <- as.Date(paste0(max(years), "-0", all_discrete$month, "-01" ))}
+
     ## Create discrete
     #discrete <- all_discrete %>% dplyr::filter(year %in% years)
     discrete <- all_discrete[all_discrete$year %in% years, ]
