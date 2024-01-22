@@ -15,10 +15,11 @@ hydrometContinuous(
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
+  historic_range = "all",
   returns = "auto",
   return_type = "max",
   return_months = c(5:9),
-  return_max_year = max(years) - 1,
+  return_max_year = NULL,
   allowed_missing = 10,
   plot_scale = 1,
   save_path = NULL,
@@ -45,7 +46,9 @@ hydrometContinuous(
 
 \item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
 
-\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out values > 2 * the IQR. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data.}
+\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "level", "flow", "snow depth", "SWE", "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
+
+\item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
 
 \item{returns}{Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".}
 
@@ -53,7 +56,7 @@ hydrometContinuous(
 
 \item{return_months}{Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within \code{startDay} and \code{endDay}, but will only consider data up to the last year specified in \code{years}. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of \code{\link[fasstr:calc_annual_extremes]{fasstr::calc_annual_extremes()}} and also used to set the 'water_year_start' parameter of this function.}
 
-\item{return_max_year}{The last year of data to consider when calculating returns. Default uses all years \emph{prior to} the last year plotted, giving historical context. Cannot be greater than the last year plotted but can be earlier than the first.}
+\item{return_max_year}{The last year of data to consider when calculating returns. If left NULL behavior depends on parameter \code{historic_range}: if \code{historic_range} is set to 'last' defaults to the last year in \code{year} otherwise uses all data available. Automatically set to max(years) if \code{historic_range} is 'last', otherwise set to the current year.}
 
 \item{allowed_missing}{Allowable \% of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of \code{\link[fasstr:calc_annual_extremes]{fasstr::calc_annual_extremes()}}.}
 
@@ -63,7 +66,7 @@ hydrometContinuous(
 
 \item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
-\item{continuous_data}{A dataframe with the data to be plotted. Must contain the following columns: datetime, value.}
+\item{continuous_data}{A data.frame with the data to be plotted. Must contain the following columns: datetime, value.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.

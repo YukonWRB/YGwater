@@ -462,7 +462,7 @@ test$month <- format(test$datetime, "%m")
 test$year <- format(test$datetime, "%Y")
 test$units <- "mm"
   
-YGwater::hydrometDiscrete(location = "48168", parameter = "mly tot precip", startDay = "2023-09-01", tzone = "MST", years = c(2023), title = TRUE, custom_title = "Whitehorse precip", plot_type = "linedbox", plot_scale = 1, save_path = NULL, discrete_data = test, con = con)
+YGwater::hydrometDiscrete(location = "48168", parameter = "mly tot precip", startDay = "2023-09-01", tzone = "MST", years = c(year), title = TRUE, custom_title = "Whitehorse precip", plot_type = "linedbox", plot_scale = 1, save_path = NULL, discrete_data = test, con = con)
 ``` 
 
 ```{r Whitehorse_CDDF, echo=FALSE}
@@ -722,7 +722,7 @@ station_id <- "09EA-SC01"
 hydrometDiscrete(
   location = station_id,
   parameter = "SWE",
-  years = year-1,
+  years = year,
   con = con
 )
 
@@ -904,7 +904,9 @@ snowbullWater(location = station_id,
 ## Drainage Basin and Snow Course
 
 ```{r table, fig.width=10, results='asis', echo=TRUE}
-tabl <- SWE_station(year=2023, month=month, return_missing = FALSE, source="hydromet")
+tabl <- SWE_station(year=2023, month=month, return_missing = TRUE, active = TRUE, source="hydromet")
+
+test1 <<- tabl
 
 tabl <- tabl[, c("location_name", "location_id", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
 
@@ -921,7 +923,7 @@ tabl$sub_basin <- paste0(tabl$sub_basin, " River Basin")
 tabl$sub_basin <- gsub("_", " ", tabl$sub_basin)
 tabl$sub_basin <- gsub("Alaska River Basin", "Alaska Snow Courses", tabl$sub_basin)
   
-test1 <<- tabl
+test2 <<- tabl
 
 # tbl <- knitr::kable(tbl, format="html", caption = "Caption")
 # 
@@ -959,6 +961,7 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   flextable::align(align="center", j=c(2:8)) %>%
   flextable::bold(i = ~ !is.na(sub_basin)) %>%
   flextable::bg(bg="#0097A9", part="header") %>%
+  #flextable::bg(bg="#77A3A9", part="header") %>%
   flextable::color(color="white", part="header") %>%
   flextable::hline(part="all") %>%
   flextable::vline(part="body") %>% 

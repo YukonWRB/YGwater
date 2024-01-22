@@ -9,6 +9,7 @@ SWE_station(
   month,
   csv = FALSE,
   return_missing = FALSE,
+  active = TRUE,
   source = "hyromet"
 )
 }
@@ -20,6 +21,8 @@ SWE_station(
 \item{csv}{TRUE or FALSE. If TRUE, a csv will be created.}
 
 \item{return_missing}{TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.}
+
+\item{active}{TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.}
 
 \item{source}{Database from which to fetch this data. Options are: hydromet or snow.}
 }
