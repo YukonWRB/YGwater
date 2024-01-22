@@ -8,6 +8,7 @@
 #' @param month The month of interest. Options are 3, 4 and 5 for March, April and May, respectively. Historical stats are given for the first day of this month.
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
 #' @param return_missing TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.
+#' @param active TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.
 #' @param source Database from which to fetch this data. Options are: hydromet or snow.
 #' @return A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.
 #' @export
@@ -25,13 +26,14 @@ SWE_station <-
            month,
            csv = FALSE,
            return_missing = FALSE,
+           active = TRUE,
            source = "hyromet") {
 
     # First retrieve location-basin info
     con <- snowConnect()
-    loc_basin <- DBI::dbGetQuery(con, "SELECT location, sub_basin FROM locations")
+    loc_basin <- DBI::dbGetQuery(con, "SELECT location, sub_basin, active FROM locations")
     DBI::dbDisconnect(con)
-    colnames(loc_basin) <- c("location_id", "sub_basin")
+    colnames(loc_basin) <- c("location_id", "sub_basin", "active")
 
     ## From hydromet db ##
     if (source == "hydromet") {
@@ -173,6 +175,11 @@ SWE_station <-
 
     # Add column for sub_basin
     swe_station_summary <- merge(swe_station_summary, loc_basin, by="location_id")
+
+    # Remove those that are inactive or not
+    if (active == TRUE) {
+      swe_station_summary <- swe_station_summary[swe_station_summary$active == TRUE, ]
+    } else {swe_station_summary <- swe_station_summary}
 
     # Write csv if csv = TRUE
     if (csv == TRUE) {

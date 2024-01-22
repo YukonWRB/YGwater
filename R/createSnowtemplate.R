@@ -17,27 +17,32 @@
 #TODO: add option to create workbook for all circuits
 
 # # For testing
-# path = "C:/Users/estewart/Documents/R/Projects/"
+# path = "C:/Users/estewart/Documents/R/Projects/NewTemplate_test.xlsx"
 # circuit = "Carmacks"
-# target_date = "2023-03-01"
-#createSnowtemplate(target_date = "2023-04-01", path = "C:/Users/estewart/Documents/R/Projects/", circuit = "Carmacks")
+# target_date = "2023-04-01"
+# template = "NewTemplate_test.xlsx"
+#createSnowtemplate(target_date = "2023-04-01", path = "C:/Users/estewart/Documents/R/Projects/NewTemplate_test.xlsx", circuit = "Dawson")
 
 
 createSnowtemplate <- function(target_date, path, circuit) {
 
-template <- openxlsx::loadWorkbook(paste0(path, "NewTemplate.xlsx"))
+template <- openxlsx::loadWorkbook(path)
 
 #### ----------------------- Create circuits ------------------------------ ####
 if (circuit == "Carmacks") {
+  #courses <- c("09CD-SC01", "09CA-SC02", "09AH-SC01", "09CA-SC01", "09AH-SC03", "09AH-SC04")
   courses <- c("Casino Creek", "MacIntosh", "Mount Berdoe", "Mount Nansen", "Satasha Lake", "Williams Creek")
 }
 if (circuit == "Dawson") {
+  #courses <- c("09EB-SC01", "09FB-SC01", "09FB-SC02", "09EA-SC02", "10MA-SC02", "10MA-SC01", "09EA-SC01", "09FA-SC01")
   courses <- c("Blackstone River", "Eagle Plains", "Eagle River", "Grizzly Creek", "King Solomon Dome", "Midnight Dome", "Ogilvie River", "Riffs Ridge")
 }
 if (circuit == "HJ") {
+  #courses <- c("09CA-SC03", "08AA-SC04", "09CB-SC01", "08AB-SC03", "09CB-SC02")
   courses <- c("Beaver Creek", "Burwash Airstrip", "Chair Mountain", "Haines Junction Farm", "Summit")
 }
 if (circuit == "KluaneP") {
+  #courses <- c("08AA-SC02")
   courses <- c("Alder Creek")
 }
 if (circuit == "Mayo") {
@@ -76,6 +81,15 @@ if (circuit == "YEC") {
   courses <- c("Aishihik Lake", "Canyon Lake")
 }
 
+## Get maintenance for all courses
+con <- snowConnect()
+maintenance <- DBI::dbGetQuery(con, paste0("SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance ",
+                                           "INNER JOIN locations ON maintenance.location = locations.location " ,
+                                           "WHERE completed = FALSE AND name IN ('", paste(courses, collapse = "', '"), "') ",
+                                           "AND completed = FALSE"))
+DBI::dbDisconnect(con)
+
+
 #### ------------ Add sheet for each snow course of the circuit ----------- ####
 # Put courses in alphabetical order
   courses <- sort(courses)
@@ -90,10 +104,19 @@ for (c in 1:length(courses2)) {
   openxlsx::writeData(template, sheet = courses2[c], x = circuit, xy = c(4,4))
   openxlsx::writeData(template, sheet = courses2[c], x = courses[c], xy = c(4,5))
   openxlsx::writeData(template, sheet = courses2[c], x = target_date, xy = c(4,6))
+  # Fill in maintenance
+  maint <- maintenance[maintenance$name == courses[c],]
+  for (m in maint$maintenance) {
+    if (m == "Brush snow course") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,45))}
+    if (m == "Brush landing") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,46))}
+    if (m == "Replace marker plate/plates") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,47))}
+  }
+  }
 
-}
+
 # Delete original worksheet
 openxlsx::removeWorksheet(template, "Sheet1")
+
 
 #### ------------------------- Create summary sheet ----------------------- ####
   # Pull data from hydro database
@@ -152,6 +175,6 @@ openxlsx::removeWorksheet(template, "Sheet1")
   }
 
 # Write new template (template_test)
-openxlsx::saveWorkbook(template, file=paste0(path, paste0(circuit, "_", target_date, ".xlsx")), overwrite = TRUE)
+openxlsx::saveWorkbook(template, file=paste0(sub("/[^/]+$", "/", path), paste0(circuit, "_", target_date, ".xlsx")), overwrite = TRUE)
 
 }
