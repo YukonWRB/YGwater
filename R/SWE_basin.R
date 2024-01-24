@@ -36,9 +36,10 @@ SWE_basin <-
       con <- hydrometConnect()
       Meas <-
         DBI::dbGetQuery(con,
-                        "SELECT timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime
+                        "SELECT locations.location, measurements_discrete.value, measurements_discrete.target_datetime
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id = timeseries.timeseries_id
+                      INNER JOIN locations ON timeseries.location_id = locations.location_id
                       WHERE parameter = 'SWE'")
       DBI::dbDisconnect(con)
       # Rename columns:
@@ -46,7 +47,7 @@ SWE_basin <-
     } else if (source == "snow") {
       ### Retrieve data from snow db
       con <- snowConnect()
-      test <- DBI::dbGetQuery(con, "SELECT location, swe, target_date
+      Meas <- DBI::dbGetQuery(con, "SELECT location, swe, target_date
                             FROM means")
       DBI::dbDisconnect(con)
       # Rename columns:
@@ -121,7 +122,7 @@ SWE_basin <-
         # calculate total percent of available numbers
         perc <- sum(as.numeric(sweb$perc))
         if (perc > 10) {
-          swe <- sum(sweb$swe)
+          swe <- sum(as.numeric(sweb$swe))
           warning(paste0(
             "Factors for location ",
             l,

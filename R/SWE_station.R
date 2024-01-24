@@ -42,7 +42,7 @@ SWE_station <-
 
       # Get measurements
       Meas <- DBI::dbGetQuery(con,
-                              "SELECT locations.name, timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, timeseries.parameter
+                              "SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, timeseries.parameter
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
                       INNER JOIN locations ON timeseries.location=locations.location
@@ -180,6 +180,9 @@ SWE_station <-
     if (active == TRUE) {
       swe_station_summary <- swe_station_summary[swe_station_summary$active == TRUE, ]
     } else {swe_station_summary <- swe_station_summary}
+
+    # remove active column
+    swe_station_summary <- subset(swe_station_summary, select = -active)
 
     # Write csv if csv = TRUE
     if (csv == TRUE) {
