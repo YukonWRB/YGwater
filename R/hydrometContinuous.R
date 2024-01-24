@@ -24,6 +24,7 @@
 #'
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
+#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location, parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
 #' @param tzone The timezone to use for graphing. Only really evident for a small number of days.
@@ -58,6 +59,7 @@
 
 hydrometContinuous <- function(location = NULL,
                                parameter = NULL,
+                               record_rate = NULL,
                                startDay = 1,
                                endDay = 365,
                                tzone = "MST",
@@ -86,6 +88,13 @@ hydrometContinuous <- function(location = NULL,
   #### --------- Checks on input parameters and other start-up bits ------- ####
   if (parameter != "SWE"){
     parameter <- tolower(parameter)
+  }
+
+  if (!is.null(record_rate)){
+    if (!(record_rate %in% c('< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'))){
+      warning("Your entry for parameter record_rate is invalid. It's been reset to the default NULL.")
+      record_rate <- NULL
+    }
   }
 
   return_type <- tolower(return_type)
@@ -190,19 +199,46 @@ hydrometContinuous <- function(location = NULL,
 
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
+    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
     #Confirm parameter and location exist in the database and that there is only one entry
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
-    if (nrow(exist_check) == 0){
-      stop(paste0("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous data type."))
-    } else if (nrow(exist_check) > 1){
-      stop(paste0("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Please alert the person responsible for database maintenance."))
+    if (is.null(record_rate)){
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous';"))
     } else {
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter = '", parameter, "' AND category = 'continuous' AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+    }
+    if (nrow(exist_check) == 0){
+      if (is.null(record_rate)){
+        stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data.")
+      } else {
+        stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", record_rate, " and continuous category data You could try leaving the record rate to the default 'null'.")
+      }
+    } else if (nrow(exist_check) > 1){
+      if (is.null(record_rate)) {
+        warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one with the most frequent recording rate.")
+        tsid <- exist_check[exist_check$record_rate == "< 1 day", "timeseries_id"]
+        if (is.na(tsid)){
+          tsid <- exist_check[exist_check$record_rate == "1 day", "timeseries_id"]
+        }
+        if (is.na(tsid)){
+          tsid <- exist_check[exist_check$record_rate == "1 week", "timeseries_id"]
+        }
+        if (is.na(tsid)){
+          tsid <- exist_check[exist_check$record_rate == "4 weeks", "timeseries_id"]
+        }
+        if (is.na(tsid)){
+          tsid <- exist_check[exist_check$record_rate == "1 month", "timeseries_id"]
+        }
+        if (is.na(tsid)){
+          tsid <- exist_check[exist_check$record_rate == "year", "timeseries_id"]
+        }
+      }
+    } else if (nrow(exist_check) == 1) {
       tsid <- exist_check$timeseries_id
     }
 
     # Find the necessary datum (latest datum)
     if (datum & parameter %in% c("level", "distance")){
-      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location = '", location, "' AND current = TRUE"))
+      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
     } else {
       datum <- data.frame(conversion_m = 0)
     }

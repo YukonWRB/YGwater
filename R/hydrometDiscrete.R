@@ -25,7 +25,7 @@
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
 #' @export
 
-hydrometDiscrete <- function(location=NULL,
+hydrometDiscrete <- function(location = NULL,
                              parameter,
                              startDay = 1,
                              endDay = 365,
@@ -99,7 +99,6 @@ hydrometDiscrete <- function(location=NULL,
   }
 
   if (is.null(discrete_data)) {
-
     # Dealing with start/end dates ----------------------
     # Sort out startDay and endDay into actual dates if needed
     last_year <- max(years)
@@ -141,11 +140,12 @@ hydrometDiscrete <- function(location=NULL,
     day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
     #Check for existence of timeseries, then for presence of data within the time range requested.
-    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, unit, parameter FROM timeseries WHERE location = '", location, "' AND parameter = '", parameter, "' AND category = 'discrete'"))
+    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, unit, parameter FROM timeseries WHERE location_id = '", location_id, "' AND parameter = '", parameter, "' AND category = 'discrete'"))
     if (nrow(exists) == 0){
       stop("There is no entry for the location and parameter combination that you specified of discrete data type. If you are trying to graph continuous data use hydrometContinuous.")
     } else if (nrow(exists) > 1){
-      stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager ASAP.")
+      stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager.")
     } else {
       tsid <- exists$timeseries_id
       units <- exists$unit

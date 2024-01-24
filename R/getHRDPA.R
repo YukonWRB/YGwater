@@ -93,7 +93,7 @@ getHRDPA <- function(start = Sys.time()-60*60*24,
   }
 
   #Download the HRDPAs within the time window, save to disc. Don't re-dl files except to replace 1-hour-post raster with 7-hour-post
-  clipped <- FALSE #So that clip happens the first time around
+  clipped <- FALSE #So that clip gets projected the first time around
   for (i in sequence){
     name <- paste0(ifelse(is.null(clip)==FALSE, paste0("clipped_", extent, "_"), ""), "HRDPA_6hrs_07_", substr(i, 1, 13), ".tiff")
     name <- gsub(" ", "", name)

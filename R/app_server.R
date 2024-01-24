@@ -47,11 +47,11 @@ app_server <- function(input, output, session) {
       }
     } else if (input$first_selection == "View hydromet plots + data"){
       if (!runCheck$plots){
-        timeseries <- DBI::dbGetQuery(con, "SELECT timeseries_id, location, parameter, param_type, unit, category, start_datetime, end_datetime FROM timeseries")
-        locations <- DBI::dbGetQuery(con, "SELECT location, name FROM locations")
+        timeseries <- DBI::dbGetQuery(con, "SELECT timeseries_id, location_id, location, parameter, param_type, unit, category, start_datetime, end_datetime FROM timeseries")
+        locations <- DBI::dbGetQuery(con, "SELECT location, location_id, name FROM locations")
         result <- merge(timeseries, locations)
         plotContainer$all_ts <- result
-        datum_conversions <- DBI::dbGetQuery(con, "SELECT location, datum_id_to, conversion_m, current FROM datum_conversions")
+        datum_conversions <- DBI::dbGetQuery(con, "SELECT locations.location, datum_conversions.location_id, datum_id_to, conversion_m, current FROM datum_conversions INNER JOIN locations ON locations.location_id = datum_conversions.location_id")
         datum_list <- DBI::dbGetQuery(con, "SELECT datum_id, datum_name_en FROM datum_list")
         datums <- merge(datum_conversions, datum_list, by.x = "datum_id_to", by.y = "datum_id")
         datums$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", datums$datum_name_en)
