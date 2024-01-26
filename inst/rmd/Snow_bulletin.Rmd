@@ -4,7 +4,7 @@ title: "Yukon Snow Survey \n Bulletin & Water \n Supply Forecast"
 output: 
   word_document:
       reference_docx: style_template2.docx
-date: "2023-09-18"
+date: "March 1st 2024"
 params:
   year: year
   month: month
