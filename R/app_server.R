@@ -38,7 +38,7 @@ app_server <- function(input, output, session) {
   observeEvent(input$first_selection, {
     if (input$first_selection == "View precipitation maps + data"){
       if (!runCheck$precip){
-        temp <- DBI::dbGetQuery(con, "SELECT name, description FROM polygons WHERE polygon_type = 'drainage_basin';")
+        temp <- DBI::dbGetQuery(con, "SELECT feature_name, description FROM vectors WHERE layer_name = 'Drainage basins';")
         names(temp) <- c("code", "name")
         precip$poly_names_codes <- temp
         updateSelectizeInput(session, "precip_loc_code", choices = c("", precip$poly_names_codes$code))

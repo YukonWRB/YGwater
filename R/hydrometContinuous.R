@@ -24,7 +24,7 @@
 #'
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
-#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location, parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
+#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
 #' @param tzone The timezone to use for graphing. Only really evident for a small number of days.
@@ -40,6 +40,7 @@
 #' @param return_max_year The last year of data to consider when calculating returns. If left NULL behavior depends on parameter `historic_range`: if `historic_range` is set to 'last' defaults to the last year in `year` otherwise uses all data available. Automatically set to max(years) if `historic_range` is 'last', otherwise set to the current year.
 #' @param allowed_missing Allowable % of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of [fasstr::calc_annual_extremes()].
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
+#' @param legend Should a legend (including text for min/max range and return periods) be added to the plot?
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param continuous_data A data.frame with the data to be plotted. Must contain the following columns: datetime, value.
@@ -75,6 +76,7 @@ hydrometContinuous <- function(location = NULL,
                                return_max_year = NULL,
                                allowed_missing = 10,
                                plot_scale = 1,
+                               legend = TRUE,
                                save_path = NULL,
                                con = hydrometConnect(silent = TRUE),
                                continuous_data = NULL)
@@ -578,14 +580,17 @@ hydrometContinuous <- function(location = NULL,
     labs=scales::label_time(format="%H:%M", tz = Sys.timezone())
   }
 
-  legend_length <- length(unique(realtime$plot_year))
-
   plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = .data$fake_datetime, y = .data$value)) +
       ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0,0.05)) + # The expand argument controls space betweent the data and the y axis. Default for continuous variable is 0.05
     ggplot2::scale_x_datetime(date_breaks = date_breaks, labels = labs, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
     ggplot2::labs(x = "", y =  paste0((if (parameter != "SWE") stringr::str_to_title(parameter) else parameter), " (", units, ")")) +
-    ggplot2::theme_classic() +
-    ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
+    ggplot2::theme_classic()
+  if (legend){
+    plot <- plot + ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
+  } else {
+    plot <- plot + ggplot2::theme(legend.position = "none")
+  }
+
 
   if (!is.infinite(minHist)){
     if (!identical(realtime$min, realtime$max)){ #if they're identical there's nothing to plot!
@@ -667,45 +672,46 @@ hydrometContinuous <- function(location = NULL,
     }
   }
   #Add some information below the legend
-  spread <- max-min #Used to determine where to put the text
-  end_time <- max(realtime$fake_datetime)
-  if (!is.infinite(minHist)){
-    if (overlaps){
-      line1 <- paste0("\n         \n        Historical range based\n        on years\n        ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+  if (legend){
+    spread <- max-min #Used to determine where to put the text
+    end_time <- max(realtime$fake_datetime)
+    if (!is.infinite(minHist)){
+      if (overlaps){
+        line1 <- paste0("\n         \n        Historical range based\n        on years\n        ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+      } else {
+        line1 <- paste0("\n         \n        Historical range based\n        on years ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+      }
     } else {
-      line1 <- paste0("\n         \n        Historical range based\n        on years ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+      line1 <- "\n         \n        Not enough data for\n        historical ranges"
+      plot <- plot + #Adjust the legend spacing so that the text isn't pushed off the plot area
+        ggplot2::theme(legend.box.spacing = ggplot2::unit(40, "pt"))
     }
-  } else {
-    line1 <- "\n         \n        Not enough data for\n        historical ranges"
-    plot <- plot + #Adjust the legend spacing so that the text isn't pushed off the plot area
-      ggplot2::theme(legend.box.spacing = ggplot2::unit(40, "pt"))
-  }
-  if (returns == "calculate"){
-    line2 <- paste0("        \n        \n        Return periods calculated\n        using months ", month.abb[return_months[1]], " to ",  month.abb[return_months[length(return_months)]], " \n        and years ", return_yrs[1], " to ", return_yrs[2], ". \n        ", nrow(analysis$Freq_Analysis_Data), " data points retained after\n        removing years with > ", allowed_missing, " %\n        missing data.")
-    lines <- paste0(line1, line2)
-    plot <- plot +
-      ggplot2::coord_cartesian(clip="off", default=TRUE) +
-      ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize=8*plot_scale), just="left"), xmin=end_time, ymin = (max-spread/2)-8*spread/30, ymax =(max-spread/2)-8*spread/30)
-  } else if (returns == "table"){
-    line2 <- "        \n        \n        Return periods are based\n        on statistical analysis\n        of select data from the\n        start of records to 2021."
-    lines <- paste0(line1, line2)
-    plot <- plot +
-      ggplot2::coord_cartesian(clip="off", default=TRUE) +
-      ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize=8*plot_scale), just="left"), xmin=end_time, ymin = (max-spread/2)-8*spread/30, ymax =(max-spread/2)-8*spread/30)
-  } else if (returns == "failed") {
-    line2 <- "        \n        \n        Insufficient data to \n        calculate returns using\n        last requested year."
-    lines <- paste0(line1, line2)
-    plot <- plot +
-      ggplot2::coord_cartesian(clip="off", default=TRUE) +
-      ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize=8*plot_scale), just="left"), xmin=end_time, ymin = (max-spread/2)-8*spread/30, ymax =(max-spread/2)-8*spread/30)
-  } else {
-    plot <- plot +
-      ggplot2::coord_cartesian(clip="off", default=TRUE) +
-      ggplot2::annotation_custom(grid::textGrob(line1, gp = grid::gpar(fontsize=8*plot_scale), just = "left"), xmin=end_time, ymin = (max-spread/2)-7*spread/30, ymax=(max-spread/2)-7*spread/30)
+    if (returns == "calculate"){
+      line2 <- paste0("        \n        \n        Return periods calculated\n        using months ", month.abb[return_months[1]], " to ",  month.abb[return_months[length(return_months)]], " \n        and years ", return_yrs[1], " to ", return_yrs[2], ". \n        ", nrow(analysis$Freq_Analysis_Data), " data points retained after\n        removing years with > ", allowed_missing, " %\n        missing data.")
+      lines <- paste0(line1, line2)
+      plot <- plot +
+        ggplot2::coord_cartesian(clip="off", default=TRUE) +
+        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize=8*plot_scale), just="left"), xmin=end_time, ymin = (max-spread/2)-8*spread/30, ymax =(max-spread/2)-8*spread/30)
+    } else if (returns == "table"){
+      line2 <- "        \n        \n        Return periods are based\n        on statistical analysis\n        of select data from the\n        start of records to 2021."
+      lines <- paste0(line1, line2)
+      plot <- plot +
+        ggplot2::coord_cartesian(clip="off", default=TRUE) +
+        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize=8*plot_scale), just="left"), xmin=end_time, ymin = (max-spread/2)-8*spread/30, ymax =(max-spread/2)-8*spread/30)
+    } else if (returns == "failed") {
+      line2 <- "        \n        \n        Insufficient data to \n        calculate returns using\n        last requested year."
+      lines <- paste0(line1, line2)
+      plot <- plot +
+        ggplot2::coord_cartesian(clip="off", default=TRUE) +
+        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize=8*plot_scale), just="left"), xmin=end_time, ymin = (max-spread/2)-8*spread/30, ymax =(max-spread/2)-8*spread/30)
+    } else {
+      plot <- plot +
+        ggplot2::coord_cartesian(clip="off", default=TRUE) +
+        ggplot2::annotation_custom(grid::textGrob(line1, gp = grid::gpar(fontsize=8*plot_scale), just = "left"), xmin=end_time, ymin = (max-spread/2)-7*spread/30, ymax=(max-spread/2)-7*spread/30)
+    }
   }
 
   # Wrap things up and return() -----------------------
-  # print("Add plot title")
   if (title == TRUE){
     if (is.null(custom_title) == TRUE) {
       stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
@@ -719,7 +725,6 @@ hydrometContinuous <- function(location = NULL,
     }
   }
 
-  # print("Done plotting")
   #Save it if requested
   if (!is.null(save_path)){
     ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz=tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz=tzone)), ".png"), plot=plot, height=8, width=12, units="in", device="png", dpi=500)
