@@ -7,6 +7,7 @@
 hydrometContinuous(
   location = NULL,
   parameter = NULL,
+  record_rate = NULL,
   startDay = 1,
   endDay = 365,
   tzone = "MST",
@@ -22,6 +23,7 @@ hydrometContinuous(
   return_max_year = NULL,
   allowed_missing = 10,
   plot_scale = 1,
+  legend = TRUE,
   save_path = NULL,
   con = hydrometConnect(silent = TRUE),
   continuous_data = NULL
@@ -31,6 +33,8 @@ hydrometContinuous(
 \item{location}{The location for which you want a plot.}
 
 \item{parameter}{The parameter you wish to plot. The location:parameter combo must be in the local database.}
+
+\item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.}
 
 \item{startDay}{The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
 
@@ -61,6 +65,8 @@ hydrometContinuous(
 \item{allowed_missing}{Allowable \% of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of \code{\link[fasstr:calc_annual_extremes]{fasstr::calc_annual_extremes()}}.}
 
 \item{plot_scale}{Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.}
+
+\item{legend}{Should a legend (including text for min/max range and return periods) be added to the plot?}
 
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
