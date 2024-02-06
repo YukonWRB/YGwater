@@ -5,7 +5,7 @@
 \title{Plots and tabular data for hydrometric locations}
 \usage{
 waterInfo(
-  con = hydrometConnect,
+  con = hydrometConnect(),
   locations = "all",
   level_flow = "both",
   end_date = Sys.Date(),

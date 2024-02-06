@@ -26,10 +26,8 @@
 #' @seealso [snowInfo()] for a similar function dealing with snowpack data.
 #' @export
 
-waterInfo <- function(con = hydrometConnect, locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
+waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
   {
-
-  #TODO: this function is not yet adapted to run with the new DB.
 
   if (!is.null(save_path)){
     if (save_path %in% c("Choose", "choose")) {
@@ -87,8 +85,8 @@ waterInfo <- function(con = hydrometConnect, locations = "all", level_flow = "bo
   data <- list()
   extremes <- list()
   for (i in 1:nrow(locs)){
-    daily <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM daily WHERE location = '", locs$location[i], "' AND parameter = '", locs$parameter[i], "' AND date < '", as.character(end_date), "'"))
-    daily$date <- lubridate::year(daily$date)
+    daily <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily WHERE timeseries_id = '", locs[i, "timeseries_id"], "' AND date < '", as.character(end_date), "'"))
+    daily$year <- lubridate::year(daily$date)
     daily$month <- lubridate::month(daily$date)
     tryCatch({
       extremes[[paste0(locs$location[i], "_", locs$parameter[i])]] <- fasstr::calc_annual_extremes(data = daily, dates = date, values = value, months_min = months_min, months_max = months_max, allowed_missing = allowed_missing, water_year_start = 1)
