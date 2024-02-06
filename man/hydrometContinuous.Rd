@@ -7,6 +7,7 @@
 hydrometContinuous(
   location = NULL,
   parameter = NULL,
+  record_rate = NULL,
   startDay = 1,
   endDay = 365,
   tzone = "MST",
@@ -31,6 +32,8 @@ hydrometContinuous(
 \item{location}{The location for which you want a plot.}
 
 \item{parameter}{The parameter you wish to plot. The location:parameter combo must be in the local database.}
+
+\item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location, parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.}
 
 \item{startDay}{The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
 

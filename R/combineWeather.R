@@ -82,7 +82,6 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
     # Replace in stations list
     stations[[s]] <- station
 
-    test1 <<- stations
 
   }
 
