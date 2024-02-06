@@ -44,6 +44,7 @@
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
 #' @param continuous_data A data.frame with the data to be plotted. Must contain the following columns: datetime, value.
+#' @param snowbulletin If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
 #' @export
 #'
@@ -79,7 +80,8 @@ hydrometContinuous <- function(location = NULL,
                                legend = TRUE,
                                save_path = NULL,
                                con = hydrometConnect(silent = TRUE),
-                               continuous_data = NULL)
+                               continuous_data = NULL,
+                               snowbulletin = FALSE)
 {
 
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
@@ -443,8 +445,20 @@ hydrometContinuous <- function(location = NULL,
     }
   }
 
+  #test1 <<- daily
 
   #### --------------------------- Data provided -------------------------- ####
+
+  if (snowbulletin == TRUE) {
+    # Order realtime by fake_datetime
+    realtime <- realtime[order(realtime$fake_datetime),]
+    # Apply rolling mean
+    realtime$q25 <- zoo::rollmean(realtime$q25, 5, fill=NA, align="left")
+    realtime$q75 <- zoo::rollmean(realtime$q75, 5, fill=NA, align="left")
+    realtime$min <- zoo::rollmean(realtime$min, 5, fill=NA, align="left")
+    realtime$max <- zoo::rollmean(realtime$max, 5, fill=NA, align="left")
+  }
+
   if (!is.null(continuous_data)) {
     if (!all(names(continuous_data) %in% c("datetime", "value"))){
       stop("The data.frame passed to parameter 'continuous_data' must have columns named 'datetime' and 'value'.")
@@ -609,9 +623,16 @@ hydrometContinuous <- function(location = NULL,
     }
   }
 
-  plot <- plot +
-    ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
+  if (snowbulletin == FALSE) {
+    plot <- plot +
+      ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
       ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
+  } else {
+    plot <- plot +
+      ggplot2::geom_line(ggplot2::aes(y=max), colour = "#0097A9", size=1) +
+      ggplot2::geom_line(ggplot2::aes(y=min), colour = "#834333", size=1) +
+      ggplot2::geom_line(colour = "black", linewidth = line_size, na.rm = T)
+  }
 
 
   # Get or calculate return periods -------------

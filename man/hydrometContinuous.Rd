@@ -26,7 +26,8 @@ hydrometContinuous(
   legend = TRUE,
   save_path = NULL,
   con = hydrometConnect(silent = TRUE),
-  continuous_data = NULL
+  continuous_data = NULL,
+  snowbulletin = FALSE
 )
 }
 \arguments{
@@ -73,6 +74,8 @@ hydrometContinuous(
 \item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
 
 \item{continuous_data}{A data.frame with the data to be plotted. Must contain the following columns: datetime, value.}
+
+\item{snowbulletin}{If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
