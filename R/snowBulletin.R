@@ -11,9 +11,9 @@
 #' To download data, you MUST have your hydromet credentials loaded
 #' into your .Renviron profile as values pairs of hydrometHost="10.250.12.154", hydrometPort="5433", hydrometUser="hydromet_read", hydrometPass="hydromet".
 #'
-#' @param sub_basin_name The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
+#' @param basins The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
 #' @param year Year for which the snow bulletin is to be created.
-#' @param save_path The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
+#' @param save_path The path to the directory (folder) where the report should be saved. Enter the path as a character string.
 #'
 #' @return A snow bulletin in Microsoft Word format.
 #'
@@ -22,13 +22,14 @@
 
 #TODO:
 
-# base::file.choose()
-# snowBulletin(sub_basin_name = "Upper Yukon", year = 2023, save_path = "choose")
+# snowBulletin(year = 2023, month = 3, scale = 1, basins = "Upper Yukon", save_path = "C:/Users/estewart/Documents/R/Projects/YGwater")
 
 snowBulletin <-
-  function(sub_basin_name = NULL,
-           year = NULL,
-           save_path = "choose") {
+  function(year,
+           month,
+           scale = 1,
+           basins = NULL,
+           save_path) {
 
     # Make sure knitr is installed
     rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
@@ -49,7 +50,7 @@ snowBulletin <-
     }
 
     ### Generate a snow bulletin for the whole territory###
-    if (is.null(sub_basin_name) == TRUE) {
+    if (is.null(basins) == TRUE) {
 
         basins <- c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek")
 
@@ -57,24 +58,24 @@ snowBulletin <-
           input = system.file("rmd", "Snow_bulletin.Rmd", package="YGwater"),
           output_file = paste0("Snow Bulletin ", Sys.Date()),
           output_dir = save_path,
-          params = list(
-            basins = basins,
-            year = year)
+          params = list(year = year,
+                        month = month,
+                        scale = scale,
+                        basins = basins)
         )
       } #End of territory report
 
     ### Generate a snow bulletin for specified basins ###
-    if (is.null(sub_basin_name) == FALSE) {
-
-      basins <- sub_basin_name
+    if (is.null(basins) == FALSE) {
 
       rmarkdown::render(
         input = system.file("rmd", "Snow_bulletin.Rmd", package="YGwater"),
         output_file = paste0("Snow Bulletin ", Sys.Date()),
         output_dir = save_path,
-        params = list(
-          basins = basins,
-          year = year)
+        params = list(year = year,
+                      month = month,
+                      scale = scale,
+                      basins = basins)
       )
     } #End of report
 

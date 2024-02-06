@@ -611,7 +611,7 @@ hydrometContinuous <- function(location = NULL,
 
   plot <- plot +
     ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
-    ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
+      ggplot2::scale_colour_manual(name = "Year", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks=rev(unique(realtime$plot_year)))
 
 
   # Get or calculate return periods -------------

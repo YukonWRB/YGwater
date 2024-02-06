@@ -21,7 +21,7 @@
 # circuit = "Carmacks"
 # target_date = "2023-04-01"
 # template = "NewTemplate_test.xlsx"
-#createSnowtemplate(target_date = "2023-04-01", path = "C:/Users/estewart/Documents/R/Projects/NewTemplate_test.xlsx", circuit = "Dawson")
+#createSnowtemplate(target_date = "2024-03-01", path = "C:/Users/estewart/Documents/R/Projects/NewTemplate.xlsx", circuit = "Carmacks")
 
 
 createSnowtemplate <- function(target_date, path, circuit) {
@@ -74,8 +74,8 @@ if (circuit == "Watson") {
   courses <- c("Frances River", "Hyland River B", "Hyland Snow Scale", "Watson Lake Airport", "Hyland River") #
 }
 # Buckbrush snow scales is not in db. Whitehorse Airport A is actually Whitehorse Airport A
-if (circuit == "WRB") {
-  courses <- c("Buckbrush Snow Scales", "Mt McIntyre B", "Whitehorse Airport", "Whitehorse Airport B")
+if (circuit == "Whitehorse") {
+  courses <- c("Buckbrush Snow Pillow", "Mt McIntyre B", "Whitehorse Airport", "Whitehorse Airport B")
 }
 if (circuit == "YEC") {
   courses <- c("Aishihik Lake", "Canyon Lake")
@@ -107,9 +107,9 @@ for (c in 1:length(courses2)) {
   # Fill in maintenance
   maint <- maintenance[maintenance$name == courses[c],]
   for (m in maint$maintenance) {
-    if (m == "Brush snow course") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,45))}
-    if (m == "Brush landing") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,46))}
-    if (m == "Replace marker plate/plates") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,47))}
+    if (m == "Brush snow course") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,49))}
+    if (m == "Brush helipad/access trail") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,50))}
+    if (m == "Replace marker plate/plates") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,51))}
   }
   }
 
@@ -151,8 +151,11 @@ openxlsx::removeWorksheet(template, "Sheet1")
   }
   # SWE
   for (s in 1:length(courses)) {
-    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IFERROR(IF('", courses2[s], "'!D9=", '"bulk", ', "'", courses2[s], "'!G23*10, '", courses2[s], "'!G25*10), ", '"")'), startCol=6, startRow=2+s)
+    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IFERROR('", courses2[s], "'!G25*10, \"\")"), startCol=6, startRow=2+s)
   }
+  # for (s in 1:length(courses)) {
+  #   openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IFERROR(IF('", courses2[s], "'!D9=", '"bulk", ', "'", courses2[s], "'!G23*10, '", courses2[s], "'!G25*10), ", '"")'), startCol=6, startRow=2+s)
+  # }
   # SWE ratio
   for (s in 1:length(courses)) {
     openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IFERROR(F", 2+s, "/H", 2+s, "*100, ", '"")'), startCol=9, startRow=2+s)
@@ -172,6 +175,14 @@ openxlsx::removeWorksheet(template, "Sheet1")
   # Add QAQC yes/no
   for (s in 1:length(courses)) {
     openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IF(ISBLANK('", courses2[s], "'!L25), ",'"no", "yes")'), startCol=11, startRow=2+s)
+  }
+  # Add maintenance required yes/no
+  for (s in 1:length(courses)) {
+    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IF(OR('", courses2[s], "'!I49<>\"\", '", courses2[s], "'!I50<>\"\", '", courses2[s], "'!I51<>\"\"), ",'"yes", "no")'), startCol=12, startRow=2+s)
+  }
+  # Add ice yes/no
+  for (s in 1:length(courses)) {
+    openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IF(OR('", courses2[s], "'!E38<>\"\", '", courses2[s], "'!I38<>\"\", '", courses2[s], "'!B40<>\"\"), ",'"yes", "no")'), startCol=13, startRow=2+s)
   }
 
 # Write new template (template_test)
