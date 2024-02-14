@@ -108,10 +108,10 @@ eq_fetch <- function(EQcode,
 
   # Deal with values below detection limits according to user choice
   if(BD == 0){
-    results[grepl(results$Result, pattern = "<"),] <- 0
-    results$Result <- suppressWarnings(as.numeric(results$Result))
+    results$Result[grepl("<", results$Result)] <- 0
   } else if(BD == 1){
     results$Result <- suppressWarnings(as.numeric(results$Result))
+    results$Result <- as.numeric(results$Result)
   } else if(BD == 2){
     isBD <- grepl("<", results$Result)
     results$Result[isBD] <- round(as.numeric(gsub("<(.*)", "\\1", results$Result[isBD]))/2, digits = 7)

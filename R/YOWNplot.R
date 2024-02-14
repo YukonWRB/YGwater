@@ -34,7 +34,7 @@ YOWNplot <- function(AQID,
                      server ="https://yukon.aquaticinformatics.net/AQUARIUS"){
 
   # Debug and development params. Leave as comments.
-  # AQID = "YOWN-1901"
+  # AQID = "YOWN-0101"
   # timeSeriesID = "Wlevel_bgs.Calculated"
   # chartXinterval = "auto"
   # dateRange = "all"
@@ -46,8 +46,7 @@ YOWNplot <- function(AQID,
 
   #### Setup ####
   # Sort out save location
-  saveTo <- tolower(saveTo)
-  if(saveTo == "desktop") {
+  if(tolower(saveTo) == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
   } else if (dir.exists(saveTo) == FALSE) {
     stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
@@ -56,7 +55,7 @@ YOWNplot <- function(AQID,
   #### Download time series data from Aquarius, preliminary formatting ####
   # Download data from Aquarius
   print("Downloading data from Aquarius")
-  datalist <- suppressMessages(aq_download(loc_id = AQID,
+  datalist <- suppressMessages(YGwater::aq_download(loc_id = AQID,
                                            ts_name = timeSeriesID,
                                            login = login,
                                            server = server))
@@ -544,10 +543,10 @@ YOWNplot <- function(AQID,
     cowplot::draw_plot(final)
 
   # Create save folder in specified directory
-  dir.create(paste0(saveTo, "/", AQID), showWarnings = FALSE)
+  dir.create(paste0(saveTo, "\\", AQID), showWarnings = FALSE)
 
   # Final plot saving
-  ggplot2::ggsave(plot = final_plot, filename = paste0(saveTo, "/", AQID, "/", AQID, "_", name, "_", "stats", stats, "_smooth", smooth, ".pdf"),  height = 8.5, width = 11, units = "in")
+  ggplot2::ggsave(plot = final_plot, filename = paste0(saveTo, "\\", AQID, "\\", AQID, "_", name, "_", "stats", stats, "_smooth", smooth, ".pdf"),  height = 8.5, width = 11, units = "in")
 
   print(paste0("Plot written to ", saveTo, "/", AQID))
 }

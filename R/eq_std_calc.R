@@ -22,41 +22,50 @@ eq_std_calc <- function(sampledata = sampledatafilt,
 
   # Calculate pH with calculation order preference
   if(!all(is.na(sampledata$`pH-F (pH units)`))) {
-    pH <- mean(stats::na.omit(sampledata$`pH-F (pH units)`))
+    vec <- sampledata$`pH-F (pH units)`
+    pH <- mean(vec[vec != 0 & !is.na(vec)])
   } else if(!all(is.na(sampledata$`pH-L (pH units)`))) {
-    pH <- mean(stats::na.omit(sampledata$`pH-L (pH units)`))
+    vec <- sampledata$`pH-L (pH units)`
+    pH <- mean(vec[vec != 0 & !is.na(vec)])
   } else {pH <- NA}
 
   # Calculate hardness with calculation order preference
-  suppressWarnings(if(!all(is.na(sampledata$`Hard-D (mg/L)`))) {
-    hard <- mean(stats::na.omit(sampledata$`Hard-D (mg/L)`))
-  } else if(!is.na(mean(stats::na.omit(sampledata$`Ca-D (mg/L)`))*mean(stats::na.omit(sampledata$`Mg-D (mg/L)`)))) {
-    hard <- 2.497*mean(stats::na.omit(sampledata$`Ca-D (mg/L)`)) + 4.118*mean(stats::na.omit(sampledata$`Mg-D (mg/L)`))
+  if(!all(is.na(sampledata$`Hard-D (mg/L)`))) {
+    vec <- sampledata$`Hard-D (mg/L)`
+    hard <- mean(vec[vec != 0 & !is.na(vec)])
+  } else if(!is.na(mean(na.omit(sampledata$`Ca-D (mg/L)`))*mean(na.omit(sampledata$`Mg-D (mg/L)`)))) {
+    Ca <- sampledata$`Ca-D (mg/L)`
+    Mg <- sampledata$`Mg-D (mg/L)`
+    hard <- 2.497*mean(Ca[Ca != 0 & !is.na(Ca)]) + 4.118*mean(Mg[Mg != 0 & !is.na(Mg)])
   } else if(!all(is.na(sampledata$`Hard-T (mg/L)`))){
-    hard <- mean(stats::na.omit(sampledata$`Hard-T (mg/L)`))
-  } else if(!is.na(mean(stats::na.omit(sampledata$`Ca-T (mg/L)`))*mean(stats::na.omit(sampledata$`Mg-T (mg/L)`)))) {
-    hard <- 2.497*mean(stats::na.omit(sampledata$`Ca-T (mg/L)`)) + 4.118*mean(stats::na.omit(sampledata$`Mg-T (mg/L)`))
+    vec <- sampledata$`Hard-T (mg/L)`
+    hard <- mean(vec[vec != 0 & !is.na(vec)])
+  } else if(!is.na(mean(na.omit(sampledata$`Ca-T (mg/L)`))*mean(na.omit(sampledata$`Mg-T (mg/L)`)))) {
+    Ca <- sampledata$`Ca-T (mg/L)`
+    Mg <- sampledata$`Mg-T (mg/L)`
+    hard <- 2.497*mean(Ca[Ca != 0 & !is.na(Ca)]) + 4.118*mean(Mg[Mg != 0 & !is.na(Mg)])
   } else {
     hard <- NA}
-  )
 
   # Calculate DOC
   if(!all(is.na(sampledata$`C-DOC (mg/L)`))){
-    DOC <- mean(stats::na.omit(sampledata$`C-DOC (mg/L)`))
+    vec <- sampledata$`C-DOC (mg/L)`
+    DOC <- mean(vec[vec != 0 & !is.na(vec)])
   } else {
     DOC <- NA
   }
 
   # Calculate temp
   if(!all(is.na(sampledata$`Temp-F (C)`))) {
-    temp <- plyr::round_any(mean(stats::na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
+    temp <- plyr::round_any(mean(na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
   } else {
     temp <- NA
   }
 
-  # Calculate Cl with calculation order preference
+  # Calculate Cl
   if(!all(is.na(sampledata$`Chlord (mg/L)`))) {
-    Cl <- mean(stats::na.omit(sampledata$`Chlord (mg/L)`))
+    vec <- sampledata$`Chlord (mg/L)`
+    Cl <- mean(vec[vec != 0 & !is.na(vec)])
   } else {Cl <- NA}
 
   #### CCME_LT (T/D) ####
