@@ -22,41 +22,50 @@ eq_std_calc <- function(sampledata = sampledatafilt,
 
   # Calculate pH with calculation order preference
   if(!all(is.na(sampledata$`pH-F (pH units)`))) {
-    pH <- mean(stats::na.omit(sampledata$`pH-F (pH units)`))
+    vec <- sampledata$`pH-F (pH units)`
+    pH <- mean(vec[vec != 0 & !is.na(vec)])
   } else if(!all(is.na(sampledata$`pH-L (pH units)`))) {
-    pH <- mean(stats::na.omit(sampledata$`pH-L (pH units)`))
+    vec <- sampledata$`pH-L (pH units)`
+    pH <- mean(vec[vec != 0 & !is.na(vec)])
   } else {pH <- NA}
 
   # Calculate hardness with calculation order preference
-  suppressWarnings(if(!all(is.na(sampledata$`Hard-D (mg/L)`))) {
-    hard <- mean(stats::na.omit(sampledata$`Hard-D (mg/L)`))
-  } else if(!is.na(mean(stats::na.omit(sampledata$`Ca-D (mg/L)`))*mean(stats::na.omit(sampledata$`Mg-D (mg/L)`)))) {
-    hard <- 2.497*mean(stats::na.omit(sampledata$`Ca-D (mg/L)`)) + 4.118*mean(stats::na.omit(sampledata$`Mg-D (mg/L)`))
+  if(!all(is.na(sampledata$`Hard-D (mg/L)`))) {
+    vec <- sampledata$`Hard-D (mg/L)`
+    hard <- mean(vec[vec != 0 & !is.na(vec)])
+  } else if(!is.na(mean(na.omit(sampledata$`Ca-D (mg/L)`))*mean(na.omit(sampledata$`Mg-D (mg/L)`)))) {
+    Ca <- sampledata$`Ca-D (mg/L)`
+    Mg <- sampledata$`Mg-D (mg/L)`
+    hard <- 2.497*mean(Ca[Ca != 0 & !is.na(Ca)]) + 4.118*mean(Mg[Mg != 0 & !is.na(Mg)])
   } else if(!all(is.na(sampledata$`Hard-T (mg/L)`))){
-    hard <- mean(stats::na.omit(sampledata$`Hard-T (mg/L)`))
-  } else if(!is.na(mean(stats::na.omit(sampledata$`Ca-T (mg/L)`))*mean(stats::na.omit(sampledata$`Mg-T (mg/L)`)))) {
-    hard <- 2.497*mean(stats::na.omit(sampledata$`Ca-T (mg/L)`)) + 4.118*mean(stats::na.omit(sampledata$`Mg-T (mg/L)`))
+    vec <- sampledata$`Hard-T (mg/L)`
+    hard <- mean(vec[vec != 0 & !is.na(vec)])
+  } else if(!is.na(mean(na.omit(sampledata$`Ca-T (mg/L)`))*mean(na.omit(sampledata$`Mg-T (mg/L)`)))) {
+    Ca <- sampledata$`Ca-T (mg/L)`
+    Mg <- sampledata$`Mg-T (mg/L)`
+    hard <- 2.497*mean(Ca[Ca != 0 & !is.na(Ca)]) + 4.118*mean(Mg[Mg != 0 & !is.na(Mg)])
   } else {
     hard <- NA}
-  )
 
   # Calculate DOC
   if(!all(is.na(sampledata$`C-DOC (mg/L)`))){
-    DOC <- mean(stats::na.omit(sampledata$`C-DOC (mg/L)`))
+    vec <- sampledata$`C-DOC (mg/L)`
+    DOC <- mean(vec[vec != 0 & !is.na(vec)])
   } else {
     DOC <- NA
   }
 
   # Calculate temp
   if(!all(is.na(sampledata$`Temp-F (C)`))) {
-    temp <- plyr::round_any(mean(stats::na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
+    temp <- plyr::round_any(mean(na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
   } else {
     temp <- NA
   }
 
-  # Calculate Cl with calculation order preference
+  # Calculate Cl
   if(!all(is.na(sampledata$`Chlord (mg/L)`))) {
-    Cl <- mean(stats::na.omit(sampledata$`Chlord (mg/L)`))
+    vec <- sampledata$`Chlord (mg/L)`
+    Cl <- mean(vec[vec != 0 & !is.na(vec)])
   } else {Cl <- NA}
 
   #### CCME_LT (T/D) ####
@@ -107,6 +116,8 @@ eq_std_calc <- function(sampledata = sampledatafilt,
     pHx <- 7.5
   } else if(pH > 9){
     pHx <- 9
+  } else if(pH < 5.5){
+    pHx <- 5.5
   } else {
     pHx <- pH
   }
@@ -114,13 +125,17 @@ eq_std_calc <- function(sampledata = sampledatafilt,
 
   if(is.na(hard)){
     hardx <- 50
+  } else if(hard < 11){
+    hardx <- 11
+  } else if(hard > 670){
+    hardx <- 670
   } else {
     hardx <- hard
   }
   hardx <- floor(hardx)
 
   lookup_mn <- YGwater:::data$eq_std_calc_CCME_Mn
-  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx >= Min & hardx <= Max)[which(colnames(lookup_mn) == as.character(pHx))])
+  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx > Min & hardx <= Max)[which(colnames(lookup_mn) == as.character(pHx))])
   if(is.element("CCME_Mn-D_lt", calcs$MaxVal)){
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Mn-D_lt")] <- `CCME_Mn-D_lt`
   }
@@ -301,13 +316,13 @@ eq_std_calc <- function(sampledata = sampledatafilt,
     C3_AW_NH4 <- NA
   } else if(pH < 7){
     C3_AW_NH4 <- 18400/1000
-  } else if(pH <= 7.5 & pH >7){
+  } else if(pH >= 7 & pH < 7.5){
     C3_AW_NH4 <- 18500/1000
-  } else if(pH <= 8 & pH >7.5){
+  } else if(pH >= 7.5 & pH < 8){
     C3_AW_NH4 <- 11300/1000
-  } else if(pH <= 8 & pH >8.5){
+  } else if(pH >= 8 & pH < 8.5){
     C3_AW_NH4 <- 3700/1000
-  } else if(pH <= 8.5){
+  } else if(pH >= 8.5){
     C3_AW_NH4 <- 1310/1000
   }
   if(is.element("C3_AW_NH4", calcs$MaxVal)){
