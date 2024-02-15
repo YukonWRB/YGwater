@@ -70,7 +70,7 @@ hydrometDiscrete <- function(location = NULL,
     message("Parameter endDay is not currently in use and has been reset to the default of 365.")
   }
 
-  # Checks on input parameters  and other start-up bits------------------
+  # Checks on input parameters  and other start-up bits------------------------
   if (parameter != "SWE"){
     parameter <- tolower(parameter)
   }
@@ -99,7 +99,7 @@ hydrometDiscrete <- function(location = NULL,
   }
 
   if (is.null(discrete_data)) {
-    # Dealing with start/end dates ----------------------
+    # Dealing with start/end dates --------------------------------------------
     # Sort out startDay and endDay into actual dates if needed
     last_year <- max(years)
     leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
@@ -130,6 +130,8 @@ hydrometDiscrete <- function(location = NULL,
       endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year-1, "-12-31 23:59:59"), tz = "UTC")
       endDay <<- lubridate::force_tz(endDay, tzone)
     })
+    #test1 <<- startDay
+    #test2 <<- endDay
     if (startDay > endDay){ #if the user is wanting a range overlapping the new year
       lubridate::year(endDay) <- lubridate::year(endDay)+1
       overlaps <- TRUE
@@ -139,7 +141,8 @@ hydrometDiscrete <- function(location = NULL,
 
     day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
-    #Check for existence of timeseries, then for presence of data within the time range requested.
+    # Check for existence of timeseries ---------------------------------------
+    #then for presence of data within the time range requested.
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
     exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, unit, parameter FROM timeseries WHERE location_id = '", location_id, "' AND parameter = '", parameter, "' AND category = 'discrete'"))
     if (nrow(exists) == 0){
@@ -152,7 +155,7 @@ hydrometDiscrete <- function(location = NULL,
       parameter <- exists$parameter
     }
 
-    # Get the data ---------------------
+    # Get the data ------------------------------------------------------------
     all_discrete <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, datetime, value FROM measurements_discrete WHERE timeseries_id = ", tsid, " AND datetime < '", paste0(max(years), substr(endDay, 5, 19)), "'"))
     if (nrow(all_discrete) == 0){
       stop(paste0("There doesn't appear to be any data for the year and days you specified: this timeseries starts ",  exists$start_datetime))
@@ -197,8 +200,10 @@ hydrometDiscrete <- function(location = NULL,
     } else {all_discrete$fake_date <- as.Date(paste0(max(years), "-0", all_discrete$month, "-01" ))}
 
     ## Create discrete
-    #discrete <- all_discrete %>% dplyr::filter(year %in% years)
-    discrete <- all_discrete[all_discrete$year %in% years, ]
+      #discrete <- all_discrete[all_discrete$datetime >= startDay & all_discrete$datetime <= endDay, ]
+      #discrete$fake_date <- discrete
+      discrete <- all_discrete[all_discrete$year %in% years, ]
+
     ## Give units
     units <- unique(discrete$units)
   }
@@ -217,8 +222,30 @@ hydrometDiscrete <- function(location = NULL,
       dplyr::bind_rows(all_discrete %>%
                   dplyr::group_by(.data$month) %>%
                   dplyr::summarise(value = stats::median(.data$value), type = "median"))
-    stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
-  }
+
+    # # Add fake_date
+    # # Change startDay and endDay to day of year
+    # startDay <- lubridate::yday(startDay)
+    # endDay <- lubridate::yday(endDay)
+    # if (startDay > endDay) {
+    #   stats_discrete$fake_date <- NA
+    #   # Fake_date for those before Jan
+    #   mon <- month(ymd("2024-01-01") + days(startDay - 1))
+    #   stats_discrete[as.numeric(stats_discrete$month) >= mon,]$fake_date <- as.Date(paste0(max(years-1), "-", stats_discrete[as.numeric(stats_discrete$month) >= mon,]$month, "-01"))
+    #   # Fake_date for those after Jan
+    #   mon <- month(ymd("2024-01-01") + days(endDay - 1))
+    #   stats_discrete[as.numeric(stats_discrete$month) <= mon,]$fake_date <- as.Date(paste0(max(years), "-", stats_discrete[as.numeric(stats_discrete$month) <= mon,]$month, "-01"))
+    # } else {
+      stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
+    }
+  #}
+
+  # test1 <<- stats_discrete
+  # test2 <<- all_discrete
+  # test3 <<- discrete
+
+  # Add all_discrete date column
+  #all_discrete$date <- as.Date(all_discrete$datetime)
 
   #Make the plot --------------------
   colours = c("black", "blue", "darkorchid3", "cyan2", "firebrick3", "aquamarine4", "gold1", "chartreuse1", "darkorange", "lightsalmon4")

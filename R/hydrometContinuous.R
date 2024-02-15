@@ -449,16 +449,6 @@ hydrometContinuous <- function(location = NULL,
 
   #### --------------------------- Data provided -------------------------- ####
 
-  if (snowbulletin == TRUE) {
-    # Order realtime by fake_datetime
-    realtime <- realtime[order(realtime$fake_datetime),]
-    # Apply rolling mean
-    realtime$q25 <- zoo::rollmean(realtime$q25, 5, fill=NA, align="left")
-    realtime$q75 <- zoo::rollmean(realtime$q75, 5, fill=NA, align="left")
-    realtime$min <- zoo::rollmean(realtime$min, 5, fill=NA, align="left")
-    realtime$max <- zoo::rollmean(realtime$max, 5, fill=NA, align="left")
-  }
-
   if (!is.null(continuous_data)) {
     if (!all(names(continuous_data) %in% c("datetime", "value"))){
       stop("The data.frame passed to parameter 'continuous_data' must have columns named 'datetime' and 'value'.")
@@ -532,6 +522,15 @@ hydrometContinuous <- function(location = NULL,
 
   } #End of loop integrating provided data
 
+  if (snowbulletin == TRUE) {
+    # Order realtime by fake_datetime
+    realtime <- realtime[order(realtime$fake_datetime),]
+    # Apply rolling mean
+    realtime$q25 <- zoo::rollmean(realtime$q25, 5, fill=NA, align="left")
+    realtime$q75 <- zoo::rollmean(realtime$q75, 5, fill=NA, align="left")
+    realtime$min <- zoo::rollmean(realtime$min, 5, fill=NA, align="left")
+    realtime$max <- zoo::rollmean(realtime$max, 5, fill=NA, align="left")
+  }
 
   if (!is.null(filter)){
     if (!inherits(filter, "numeric")){
