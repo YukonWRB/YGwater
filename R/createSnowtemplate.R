@@ -28,6 +28,8 @@ createSnowtemplate <- function(target_date, path, circuit) {
 
 template <- openxlsx::loadWorkbook(path)
 
+#template_bc <- openxlsx::loadWorkbook(sub(".xlsx", "_bc.xlsx", path))
+
 #### ----------------------- Create circuits ------------------------------ ####
 if (circuit == "Carmacks") {
   #courses <- c("09CD-SC01", "09CA-SC02", "09AH-SC01", "09CA-SC01", "09AH-SC03", "09AH-SC04")
@@ -35,7 +37,7 @@ if (circuit == "Carmacks") {
 }
 if (circuit == "Dawson") {
   #courses <- c("09EB-SC01", "09FB-SC01", "09FB-SC02", "09EA-SC02", "10MA-SC02", "10MA-SC01", "09EA-SC01", "09FA-SC01")
-  courses <- c("Blackstone River", "Eagle Plains", "Eagle River", "Grizzly Creek", "King Solomon Dome", "Midnight Dome", "Ogilvie River", "Riffs Ridge")
+  courses <- c("Blackstone River", "Eagle Plains", "Eagle River", "Grizzly Creek", "King Solomon Dome", "King Solomon Dome Scale", "Midnight Dome", "Ogilvie River", "Riffs Ridge")
 }
 if (circuit == "HJ") {
   #courses <- c("09CA-SC03", "08AA-SC04", "09CB-SC01", "08AB-SC03", "09CB-SC02")
@@ -64,7 +66,7 @@ if (circuit == "Ross") {
 }
 # Snow scale/pillow locations not in db.
 if (circuit == "SLakes") {
-  courses <- c("Atlin (B.C)", "Log Cabin (B.C.)", "Montana Mountain", "Tagish", "Tagish Snow Scale", "Tagish Snow Pillow")
+  courses <- c("Atlin (B.C)", "Log Cabin (B.C)", "Log Cabin Pillow (B.C)", "Montana Mountain", "Montana Mountain Pillow", "Tagish", "Tagish Snow Scale", "Tagish Snow Pillow")
 }
 if (circuit == "Teslin") {
   courses <- c("Meadow Creek", "Morley Lake", "Pine Lake Airstrip")
@@ -98,8 +100,13 @@ DBI::dbDisconnect(con)
   courses2 <- gsub("'", "", courses2)
 # Clone worksheets and fill in
 for (c in 1:length(courses2)) {
+  # Set template depending on if it is a BC site or not
+  if (grepl("(B.C)", courses2[c])) {
+    sheet_name <- "Sheet1_bc"
+  } else {sheet_name <- "Sheet1"}
+
   # Clone worksheet
-  openxlsx::cloneWorksheet(template, sheetName = courses2[c], clonedSheet = "Sheet1")
+  openxlsx::cloneWorksheet(template, sheetName = courses2[c], clonedSheet = sheet_name)
   # Fill in worksheet
   openxlsx::writeData(template, sheet = courses2[c], x = circuit, xy = c(4,4))
   openxlsx::writeData(template, sheet = courses2[c], x = courses[c], xy = c(4,5))
@@ -116,6 +123,7 @@ for (c in 1:length(courses2)) {
 
 # Delete original worksheet
 openxlsx::removeWorksheet(template, "Sheet1")
+openxlsx::removeWorksheet(template, "Sheet1_bc")
 
 
 #### ------------------------- Create summary sheet ----------------------- ####
@@ -185,7 +193,9 @@ openxlsx::removeWorksheet(template, "Sheet1")
     openxlsx::writeFormula(template, sheet="Summary", x=paste0("=IF(OR('", courses2[s], "'!E38<>\"\", '", courses2[s], "'!I38<>\"\", '", courses2[s], "'!B40<>\"\"), ",'"yes", "no")'), startCol=13, startRow=2+s)
   }
 
-# Write new template (template_test)
-openxlsx::saveWorkbook(template, file=paste0(sub("/[^/]+$", "/", path), paste0(circuit, "_", target_date, ".xlsx")), overwrite = TRUE)
+#### -------------------------- Write new template ------------------------ ####
+openxlsx::saveWorkbook(template,
+                       file=paste0(sub("/[^/]+$", "/", path), paste0(circuit, "_", target_date, ".xlsx")),
+                       overwrite = TRUE)
 
 }
