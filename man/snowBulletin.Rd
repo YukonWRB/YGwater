@@ -9,6 +9,10 @@ snowBulletin(year, month, scale = 1, basins = NULL, save_path)
 \arguments{
 \item{year}{Year for which the snow bulletin is to be created.}
 
+\item{month}{Month for which the snow bulletin is to be created. Options are 3, 4 or 5.}
+
+\item{scale}{Scale of the snow bulletin plots. Default is 1. Enter a scale number above or below 1 to get larger or smaller titles and axis labels.}
+
 \item{basins}{The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.}
 
 \item{save_path}{The path to the directory (folder) where the report should be saved. Enter the path as a character string.}

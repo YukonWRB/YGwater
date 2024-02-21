@@ -59,7 +59,6 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       )
     } else {warning("The objects in the stations parameter must be either a station id (character string) or a dataframe")}
 
-    test2 <<- station
     # Check if data exists for this time frame
     if (nrow(station)==0) {
       station <- station
@@ -97,7 +96,7 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
     if (nrow(station2)==0) {next}
 
     # Run for loop over every variable of interest
-    combined_variables <- setNames(data.frame(matrix(ncol = 4, nrow = 0)), c("date", "value", "variable", "station"))
+    combined_variables <- stats::setNames(data.frame(matrix(ncol = 4, nrow = 0)), c("date", "value", "variable", "station"))
     for (v in variables) {
 
       print(paste0("---------------- Combining variable '", v, "'-------------"))

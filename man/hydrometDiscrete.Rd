@@ -25,9 +25,9 @@ hydrometDiscrete(
 
 \item{parameter}{The parameter you wish to plot. The location:parameter combo must be in the local database.}
 
-\item{startDay}{NOT CURRENTLY IN USE The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
+\item{startDay}{Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
 
-\item{endDay}{NOT CURRENTLY IN USE The end day of year for the plot x-axis. As per \code{startDay}.}
+\item{endDay}{The end day of year for the plot x-axis. As per \code{startDay}.}
 
 \item{tzone}{The timezone to use for fetching data. Datetimes are stored in the database in UTC offset, so this parameter could make a difference to what day a particular sample is considered to be on. In most cases you can ignore this parameter.}
 
