@@ -80,7 +80,7 @@
 <text x='320.86' y='556.06' text-anchor='middle' style='font-size: 9.00px; fill: #4D4D4D; font-family: sans;' textLength='24.02px' lengthAdjust='spacingAndGlyphs'>Jul 01</text>
 <text x='415.17' y='556.06' text-anchor='middle' style='font-size: 9.00px; fill: #4D4D4D; font-family: sans;' textLength='28.53px' lengthAdjust='spacingAndGlyphs'>Sep 01</text>
 <text x='507.96' y='556.06' text-anchor='middle' style='font-size: 9.00px; fill: #4D4D4D; font-family: sans;' textLength='28.52px' lengthAdjust='spacingAndGlyphs'>Nov 01</text>
-<text transform='translate(13.05,283.32) rotate(-90)' text-anchor='middle' style='font-size: 11.00px; font-family: sans;' textLength='45.85px' lengthAdjust='spacingAndGlyphs'>Level (m)</text>
+<text transform='translate(13.05,283.32) rotate(-90)' text-anchor='middle' style='font-size: 11.00px; font-family: sans;' textLength='78.24px' lengthAdjust='spacingAndGlyphs'>Water Level (m)</text>
 <rect x='610.19' y='39.79' width='104.33' height='58.06' style='stroke-width: 1.07; stroke: none; fill: #FFFFFF;' />
 <text x='615.67' y='52.39' style='font-size: 9.00px; font-family: sans;' textLength='66.04px' lengthAdjust='spacingAndGlyphs'>Historical Range</text>
 <rect x='616.38' y='58.52' width='15.86' height='15.86' style='stroke-width: 1.07; stroke: none; stroke-linecap: butt; stroke-linejoin: miter; fill: #CCCCCC;' />
