@@ -573,7 +573,10 @@ hydrometContinuous <- function(location = NULL,
   max <- if (maxHist > maxLines) maxHist else maxLines
 
   # x axis settings
-  if (length(day_seq) > 60) {
+  if  (length(day_seq) > 200) {
+    date_breaks = "2 months"
+    labs = scales::label_date("%b %d", tz=Sys.timezone())
+  } else if (length(day_seq) > 60) {
     date_breaks = "1 month"
     labs = scales::label_date("%b %d", tz=Sys.timezone())
   } else if (length(day_seq) > 14) {
@@ -581,29 +584,28 @@ hydrometContinuous <- function(location = NULL,
     labs = scales::label_date("%b %d", tz = Sys.timezone())
   } else if (length(day_seq) > 7) {
     date_breaks="2 days"
-    labs=scales::label_date("%b %d", tz = Sys.timezone())
+    labs = scales::label_date("%b %d", tz = Sys.timezone())
   } else if (length(day_seq) >= 2) {
-    date_breaks="1 days"
-    labs=scales::label_date("%b %d", tz = Sys.timezone())
+    date_breaks = "1 days"
+    labs = scales::label_date("%b %d", tz = Sys.timezone())
   } else if (length(day_seq) > 1){
-    date_breaks="24 hours"
+    date_breaks = "24 hours"
     labs=scales::label_time("%H:%M", tz = Sys.timezone())
   } else if (length(day_seq) == 1) {
-    date_breaks="12 hour"
+    date_breaks = "12 hour"
     labs=scales::label_time(format="%H:%M", tz = Sys.timezone())
   }
 
   plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = .data$fake_datetime, y = .data$value)) +
-      ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0,0.05)) + # The expand argument controls space betweent the data and the y axis. Default for continuous variable is 0.05
+      ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0,0.05)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
     ggplot2::scale_x_datetime(date_breaks = date_breaks, labels = labs, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
     ggplot2::labs(x = "", y =  paste0((if (parameter != "SWE") stringr::str_to_title(parameter) else parameter), " (", units, ")")) +
     ggplot2::theme_classic()
   if (legend){
-    plot <- plot + ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
+    plot <- plot + ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 11*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
   } else {
-    plot <- plot + ggplot2::theme(legend.position = "none")
+    plot <- plot + ggplot2::theme(legend.position = "none", axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
   }
-
 
   if (!is.infinite(minHist)){
     if (!identical(realtime$min, realtime$max)){ #if they're identical there's nothing to plot!
@@ -737,11 +739,11 @@ hydrometContinuous <- function(location = NULL,
       stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
       plot <- plot +
         ggplot2::labs(title=paste0("Location ", location, ": ", stn_name)) +
-        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
+        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale))
     } else if (is.null(custom_title) == FALSE) {
       plot <- plot +
         ggplot2::labs(title=as.character(custom_title)) +
-        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14*plot_scale))
+        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale))
     }
   }
 

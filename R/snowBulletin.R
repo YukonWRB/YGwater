@@ -11,8 +11,10 @@
 #' To download data, you MUST have your hydromet credentials loaded
 #' into your .Renviron profile as values pairs of hydrometHost="10.250.12.154", hydrometPort="5433", hydrometUser="hydromet_read", hydrometPass="hydromet".
 #'
-#' @param basins The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
 #' @param year Year for which the snow bulletin is to be created.
+#' @param month Month for which the snow bulletin is to be created. Options are 3, 4 or 5.
+#' @param scale Scale of the snow bulletin plots. Default is 1. Enter a scale number above or below 1 to get larger or smaller titles and axis labels.
+#' @param basins The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
 #' @param save_path The path to the directory (folder) where the report should be saved. Enter the path as a character string.
 #'
 #' @return A snow bulletin in Microsoft Word format.
