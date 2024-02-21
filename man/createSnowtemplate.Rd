@@ -11,7 +11,7 @@ createSnowtemplate(target_date, path, circuit)
 
 \item{path}{The path to the master snow survey template. This will be removed when the template is added to package data.}
 
-\item{circuit}{The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, North Slope, Old Crow, PellyFarm, Ross, SLakes, Teslin, Watson, WRB, and YEC.}
+\item{circuit}{The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, NorthSlope, OldCrow, PellyFarm, Ross, SLakes, Teslin, Watson, Whitehorse, and YEC.}
 }
 \value{
 A snow survey template called template_test (currently) for the specified circuit and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
