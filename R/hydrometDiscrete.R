@@ -63,27 +63,27 @@ hydrometDiscrete <- function(location = NULL,
 
 
 #### ------- Checks on input parameters  and other start-up bits ---------- ####
-  if (parameter != "SWE"){
+  if (parameter != "SWE") {
     parameter <- tolower(parameter)
   }
 
   plot_type <- tolower(plot_type)
-  if (!(plot_type %in% c("violin", "boxplot", "linedbox"))){
+  if (!(plot_type %in% c("violin", "boxplot", "linedbox"))) {
     stop("Parameter 'plot_type' must be one of 'violin', 'boxplot', or 'linedbox'")
   }
 
-  if (is.null(years)){
+  if (is.null(years)) {
     years <- as.numeric(substr(Sys.Date(), 1, 4))
   } else {
     years <- as.numeric(years)
     years <- sort(years, decreasing = TRUE)
-    if (length(years) > 10){
+    if (length(years) > 10) {
       years <- years[1:10]
       message("The parameter 'years' can only have up to 10 years. It's been truncated to the first 10 years in the vector.")
     }
   }
   # Select save path
-  if (!is.null(save_path)){
+  if (!is.null(save_path)) {
     if (save_path %in% c("Choose", "choose")) {
       message("Select the folder where you want this graph saved.")
       save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
@@ -100,8 +100,8 @@ hydrometDiscrete <- function(location = NULL,
       startDay <- as.POSIXct(startDay, tz = tzone)
       lubridate::year(startDay) <- last_year
     }, error = function(e) {
-      if (last_year %in% leap_list){
-        if (startDay > 59){
+      if (last_year %in% leap_list) {
+        if (startDay > 59) {
           startDay <<- startDay + 1
         }
       }
@@ -115,8 +115,8 @@ hydrometDiscrete <- function(location = NULL,
 
     }, error = function(e) {
       tempStartDay <- lubridate::yday(startDay) #using yday because start is now in proper Date format and needs to be back-converted to yday
-      if (last_year %in% leap_list){
-        if (as.numeric(endDay) > 59){
+      if (last_year %in% leap_list) {
+        if (as.numeric(endDay) > 59) {
           endDay <<- as.character(as.numeric(endDay) + 1)
         }
       }
@@ -125,7 +125,7 @@ hydrometDiscrete <- function(location = NULL,
       endDay <<- lubridate::force_tz(endDay, tzone)
     })
 
-    if (startDay > endDay){ #if the user is wanting a range overlapping the new year
+    if (startDay > endDay) { #if the user is wanting a range overlapping the new year
       lubridate::year(endDay) <- lubridate::year(endDay)+1
       overlaps <- TRUE
       last_year <- last_year + 1
@@ -140,15 +140,15 @@ hydrometDiscrete <- function(location = NULL,
     # Check for existence of timeseries ---------------------------------------
     #then for presence of data within the time range requested.
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
-    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, unit, parameter FROM timeseries WHERE location_id = '", location_id, "' AND parameter = '", parameter, "' AND category = 'discrete'"))
-    if (nrow(exists) == 0){
+    parameter_code <- DBI::dbGetQuery(con, paste0("SELECT param_code FROM parameters WHERE param_name = '", parameter, "';"))[1,1]
+    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, unit FROM timeseries WHERE location_id = '", location_id, "' AND parameter = ", parameter_code, " AND category = 'discrete'"))
+    if (nrow(exists) == 0) {
       stop("There is no entry for the location and parameter combination that you specified of discrete data type. If you are trying to graph continuous data use hydrometContinuous.")
-    } else if (nrow(exists) > 1){
+    } else if (nrow(exists) > 1) {
       stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager.")
     } else {
       tsid <- exists$timeseries_id
       units <- exists$unit
-      parameter <- exists$parameter
     }
 
     # Get the data ------------------------------------------------------------
@@ -160,7 +160,7 @@ hydrometDiscrete <- function(location = NULL,
     }
 
     # Check if data is empty
-    if (nrow(all_discrete) == 0){
+    if (nrow(all_discrete) == 0) {
       stop(paste0("There doesn't appear to be any data for the year and days you specified: this timeseries starts ",  exists$start_datetime))
     }
 
@@ -173,7 +173,7 @@ hydrometDiscrete <- function(location = NULL,
     all_discrete$day <- lubridate::day(all_discrete$target_datetime)
     #Separate, modify, and re-bind feb29 days, if any
     feb29 <- all_discrete[all_discrete$month == 2 & all_discrete$day == 29, ]
-    if (nrow(feb29) > 0){
+    if (nrow(feb29) > 0) {
       all_discrete <- all_discrete[!(all_discrete$month == 2 & all_discrete$day == 29), ]
       feb29$target_datetime <- feb29$target_datetime + 1
       feb29$month <- 3
@@ -187,11 +187,11 @@ hydrometDiscrete <- function(location = NULL,
     all_discrete <- all_discrete[all_discrete$fake_date >= startDay & all_discrete$fake_date <= endDay, ]
 
     discrete <- data.frame()
-    for (i in years){
+    for (i in years) {
       start <- as.Date(paste0(i, substr(startDay, 5, 10)))
       end <- as.Date(paste0(i, substr(endDay, 5, 10)))
 
-      if (overlaps){
+      if (overlaps) {
         lubridate::year(end) <- lubridate::year(end) +1
       }
 
@@ -232,13 +232,13 @@ hydrometDiscrete <- function(location = NULL,
 
 
     discrete <- data.frame()
-    for (i in years){
+    for (i in years) {
       start <- as.Date(paste0(i, substr(startDay, 5, 10)))
       if (overlaps) {
         end <- as.Date(paste0(i+1, substr(endDay, 5, 10)))
       } else {end <- as.Date(paste0(i, substr(endDay, 5, 10)))}
 
-      # if (overlaps){
+      # if (overlaps) {
       #   lubridate::year(end) <- lubridate::year(end) +1
       # }
 
@@ -268,7 +268,7 @@ hydrometDiscrete <- function(location = NULL,
     units <- unique(discrete$units)
   }
 
-  # if (nrow(discrete) == 0){
+  # if (nrow(discrete) == 0) {
   #   stop("There is no data to graph after filtering for your specified year(s) and day range. Try again with different days.")
   # }
 
@@ -333,7 +333,7 @@ hydrometDiscrete <- function(location = NULL,
   } else if (plot_type == "violin") {
     plot <- plot +
       ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width") #Using a scale other than "width" may result in issues for locations where there are many "0" values.
-  } else if (plot_type == "boxplot"){
+  } else if (plot_type == "boxplot") {
     plot <- plot +
       ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE)
   }
@@ -361,9 +361,9 @@ hydrometDiscrete <- function(location = NULL,
   }
 
 #### ---------------------- Wrap things up and return() ------------------- ####
-  if (title){
+  if (title) {
     if (is.null(custom_title)) {
-      if (is.null(discrete_data)){
+      if (is.null(discrete_data)) {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
         titl <- paste0("Location ", location, ": ", stn_name)
       } else {
@@ -382,7 +382,7 @@ hydrometDiscrete <- function(location = NULL,
   }
 
   #Save it if requested
-  if (!is.null(save_path)){
+  if (!is.null(save_path)) {
     ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz=tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz=tzone)), ".png"), plot=plot, height=8, width=12, units="in", device="png", dpi=500)
   }
 
