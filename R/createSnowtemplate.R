@@ -7,7 +7,7 @@
 #'
 #' @param target_date The target date of the snow survey, given in the form yyyy-mm-dd. Example: for the march snow survey of 2024, target_date = '2024-03-01'
 #' @param path The path to the master snow survey template. This will be removed when the template is added to package data.
-#' @param circuit The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, North Slope, Old Crow, PellyFarm, Ross, SLakes, Teslin, Watson, WRB, and YEC.
+#' @param circuit The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, NorthSlope, OldCrow, PellyFarm, Ross, SLakes, Teslin, Watson, Whitehorse, and YEC.
 #'
 #' @return A snow survey template called template_test (currently) for the specified circuit and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
 #'
@@ -73,7 +73,7 @@ if (circuit == "Teslin") {
 }
 # Hyland River does not exist in hydromet db, but is in snow db
 if (circuit == "Watson") {
-  courses <- c("Frances River", "Hyland River B", "Hyland Snow Scale", "Watson Lake Airport", "Hyland River") #
+  courses <- c("Frances River", "Hyland River B", "Hyland Snow Scale", "Watson Lake Airport") #
 }
 # Buckbrush snow scales is not in db. Whitehorse Airport A is actually Whitehorse Airport A
 if (circuit == "Whitehorse") {
