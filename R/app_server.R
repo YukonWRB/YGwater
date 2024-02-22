@@ -51,6 +51,11 @@ app_server <- function(input, output, session) {
         locations <- DBI::dbGetQuery(con, "SELECT location, location_id, name FROM locations")
         result <- merge(timeseries, locations)
         plotContainer$all_ts <- result
+
+        parameters <- DBI::dbGetQuery(con, "SELECT param_code, param_name FROM parameters")
+        plotContainer$parameters <- parameters
+        updateSelectizeInput(session, "plot_param", choices = c("", parameters$param_name), selected = "water level")
+
         datum_conversions <- DBI::dbGetQuery(con, "SELECT locations.location, datum_conversions.location_id, datum_id_to, conversion_m, current FROM datum_conversions INNER JOIN locations ON locations.location_id = datum_conversions.location_id")
         datum_list <- DBI::dbGetQuery(con, "SELECT datum_id, datum_name_en FROM datum_list")
         datums <- merge(datum_conversions, datum_list, by.x = "datum_id_to", by.y = "datum_id")
@@ -221,9 +226,10 @@ app_server <- function(input, output, session) {
   }, ignoreInit = TRUE)
 
 
-  # observe and observeEvents related to plotting level/flow/snow/bridge freeboard --------------------
+  # observe and observeEvents related to plotting continuous data --------------------
   observeEvent(input$plot_data_type, {
     if (input$plot_data_type == "Discrete") {
+      updateSelectizeInput(session, "plot_type", choices = c("Violin plot", "Box plot"), selected = "Violin plot")
       updateSelectizeInput(session, "plot_param", choices = c("SWE", "Snow depth"))
       shinyjs::hide("return_periods")
       shinyjs::hide("return_type")
@@ -234,9 +240,10 @@ app_server <- function(input, output, session) {
       shinyjs::hide("plot_filter")
       shinyjs::hide("historic_range")
       shinyjs::hide("return_yrs")
-      shinyjs::show("discrete_plot_type")
     } else if (input$plot_data_type == "Continuous") {
       updateSelectizeInput(session, "plot_param", choices = c("Level", "Flow", "Bridge freeboard", "SWE", "Snow depth"))
+      # updateSelectizeInput(session, "plot_type", choices = c("Overlapping years", "Long timeseries"), selected = "Overlapping years") #This to be uncommented once "long timeseries" works
+      updateSelectizeInput(session, "plot_type", choices = c("Overlapping years"), selected = "Overlapping years")
       shinyjs::show("return_periods")
       shinyjs::show("return_type")
       shinyjs::show("return_months")
@@ -246,7 +253,6 @@ app_server <- function(input, output, session) {
       shinyjs::show("plot_filter")
       shinyjs::show("historic_range")
       shinyjs::show("return_yrs")
-      shinyjs::hide("discrete_plot_type")
     }
   })
 
@@ -267,6 +273,7 @@ app_server <- function(input, output, session) {
 
   # Update user's choices for plots based on selected plot type
   observe(
+
     if (input$plot_param == "Level") {
       if (input$plot_data_type == "Continuous") {
         plotContainer$plot_data_type <- "continuous"
@@ -279,6 +286,9 @@ app_server <- function(input, output, session) {
         updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$category == "discrete", "name"]))
         updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$category == "discrete", "location"]))
       }
+
+
+
     } else if (input$plot_param == "Flow") {
       if (input$plot_data_type == "Continuous") {
         plotContainer$plot_data_type <- "continuous"
@@ -383,12 +393,15 @@ app_server <- function(input, output, session) {
     plotContainer$return_months <- as.numeric(unlist(strsplit(input$return_months,",")))
   }) #Do not ignoreInit = TRUE otherwise will not be populated
 
-  observeEvent(input$discrete_plot_type, {
-    if (input$discrete_plot_type == "Box plot") {
-      plotContainer$discrete_plot_type <- "boxplot"
-    } else if (input$discrete_plot_type == "Violin plot")
-      plotContainer$discrete_plot_type <- "violin"
-  }) #Do not ignoreInit = TRUE otherwise will not be populated
+  observeEvent(input$plot_type, {
+    if (input$plot_type == "Box plot") {
+      plotContainer$plot_type <- "boxplot"
+    } else if (input$plot_type == "Violin plot") {
+      plotContainer$plot_type <- "violin"
+    } else if (input$plot_type == "Overlapping years") {
+      plotContainer$plot_type <- "hydrometContinuous"
+    }
+  }) #Do not ignoreInit = TRUE otherwise will not be populated initially
 
   observeEvent(input$plot_go, {
     tryCatch({
@@ -398,14 +411,19 @@ app_server <- function(input, output, session) {
         } else {
           plotContainer$plot_filter <- NULL
         }
-        plotContainer$plot <- hydrometContinuous(location = input$plot_loc_code, parameter = plotContainer$plot_param, startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, return_max_year = input$return_yrs, plot_scale = 1.4)
+        if (plotContainer$plot_type == "hydrometContinuous") {
+          plotContainer$plot <- hydrometContinuous(location = input$plot_loc_code, parameter = plotContainer$plot_param, startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, return_max_year = input$return_yrs, plot_scale = 1.4)
+        }
       } else if (plotContainer$plot_data_type == "discrete") {
-        plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = plotContainer$plot_param, years = input$plot_years, plot_type = plotContainer$discrete_plot_type, plot_scale = 1.4)
+        if (plotContainer$plot_type %in% c("violin", "boxplot")) {
+          plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = plotContainer$plot_param, years = input$plot_years, plot_type = plotContainer$plot_type, plot_scale = 1.4)
+        }
+        
       }
     output$hydro_plot <- renderPlot(plotContainer$plot)
     shinyjs::show("export_hydro_plot")
     output$export_hydro_plot <- downloadHandler(
-      filename = function() {paste0(input$plot_loc_code, "_", plotContainer$plot_param, "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz="MST")), lubridate::minute(as.POSIXct(format(Sys.time()), tz="MST")), ".png")},
+      filename = function() {paste0(input$plot_loc_code, "_", plotContainer$plot_param, "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz = "MST")), lubridate::minute(as.POSIXct(format(Sys.time()), tz = "MST")), ".png")},
       content = function(file) {
         grDevices::png(file, width = 900, height = 700, units = "px")
         print(plotContainer$plot)  #WARNING do not remove this print call, it is not here for debugging purposes

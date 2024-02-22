@@ -12,7 +12,7 @@
 #' @export
 #'
 
-bridgeReport <- function(con = hydrometConnect(silent=TRUE),
+bridgeReport <- function(con = hydrometConnect(silent = TRUE),
                          locations = "all",
                          zoom = TRUE,
                          zoom_days = 30,
@@ -25,7 +25,7 @@ bridgeReport <- function(con = hydrometConnect(silent=TRUE),
   if (!rlang::is_installed("knitr")) { #This is here because knitr is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
     message("Installing dependency 'knitr'...")
     utils::install.packages("knitr")
-    if (rlang::is_installed("knitr")){
+    if (rlang::is_installed("knitr")) {
       message("Package knitr successfully installed.")
     } else {
       stop("Failed to install package knitr. You could troubleshoot by running utils::install.packages('knitr') by itself.")
@@ -33,20 +33,67 @@ bridgeReport <- function(con = hydrometConnect(silent=TRUE),
   }
 
   if (save_path == "choose") {
+    if (!interactive()) {
+      stop("You must specify a save path when running in non-interactive mode.")
+    }
     message("Select the path to the folder where you want this report saved.")
-    save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+    save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
   }
-
-  if (locations == "all"){
-    tsid <- DBI::dbGetQuery(con, "SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND network = 'highways';")[,c(1:2)]
-    names <- DBI::dbGetQuery(con, paste0("SELECT location, name FROM locations WHERE location IN ('", paste(tsid$location, collapse = "', '"), "');"))[,c(1,2)]
+  
+  if (locations == "all") {
+    tsid <- DBI::dbGetQuery(con, "
+    SELECT t.location, t.timeseries_id, l.name 
+    FROM timeseries AS t 
+    JOIN parameters AS p ON t.parameter = p.param_code 
+    JOIN locations_networks AS ln ON t.location_id = ln.location_id 
+    JOIN networks AS n ON ln.network_id = n.network_id 
+    JOIN (
+        SELECT location_id, name 
+        FROM locations 
+        WHERE location IN (
+            SELECT location 
+            FROM timeseries AS t 
+            JOIN parameters AS p ON t.parameter = p.param_code 
+            JOIN locations_networks AS ln ON t.location_id = ln.location_id 
+            JOIN networks AS n ON ln.network_id = n.network_id 
+            WHERE p.param_name = 'distance' 
+            AND n.name = 'Highway Observation Network'
+        )
+    ) AS l ON t.location_id = l.location_id 
+    WHERE p.param_name = 'distance' 
+    AND n.name = 'Highway Observation Network';
+")
+    
+    
     tsid <- merge(tsid, names)
   } else {
-    tsid <- DBI::dbGetQuery(Con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND location IN ('", paste(locations, collapse = "', '"), "');"))[,c(1:2)]
+    tsid <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND location IN ('", paste(locations, collapse = "', '"), "');"))[,c(1:2)]
     names <- DBI::dbGetQuery(con, paste0("SELECT location, name FROM locations WHERE location IN ('", paste(tsid$location, collapse = "', '"), "');"))[,c(1,2)]
-    tsid <- merge(tsid, names)
+    tsid <- DBI::dbGetQuery(con, "
+    SELECT t.location, t.timeseries_id, l.name 
+    FROM timeseries AS t 
+    JOIN parameters AS p ON t.parameter = p.param_code 
+    JOIN locations_networks AS ln ON t.location_id = ln.location_id 
+    JOIN networks AS n ON ln.network_id = n.network_id 
+    JOIN (
+        SELECT location_id, name 
+        FROM locations 
+        WHERE location IN (
+            SELECT location 
+            FROM timeseries AS t 
+            JOIN parameters AS p ON t.parameter = p.param_code 
+            JOIN locations_networks AS ln ON t.location_id = ln.location_id 
+            JOIN networks AS n ON ln.network_id = n.network_id 
+            WHERE p.param_name = 'distance' 
+            AND n.name = 'Highway Observation Network'
+        )
+    ) AS l ON t.location_id = l.location_id 
+    WHERE p.param_name = 'distance' 
+    AND n.name = 'Highway Observation Network'
+    AND t.location IN ('", paste(locations, collapse = "', '"), "');
+")
   }
-
+  
   rmarkdown::render(
     input = system.file("rmd", "Bridge_report.Rmd", package = "YGwater"),
     output_file = paste0(Sys.Date(), "_Bridge-Radar-Report"),

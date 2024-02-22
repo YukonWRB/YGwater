@@ -31,7 +31,7 @@ app_ui <- function(request) {
         tags$link(rel = "apple-touch-icon", href = "icon.png"),
         tags$link(rel = "icon", type = "image/png", href = "icon.png"),
         tags$script(src = "serviceworker.js", type = "text/javascript"),
-        tags$style(type='text/css', ".selectize-dropdown-content {max-height: 400px; }")
+        tags$style(type = 'text/css', ".selectize-dropdown-content {max-height: 400px; }")
       ),
       shinyjs::extendShinyjs(text = jsCode, functions = c("backgroundCol")),
 
@@ -44,7 +44,7 @@ app_ui <- function(request) {
         sidebarPanel(
           selectInput("comment_type", "Select comment type", choices = c("General comments", "Location-specific comments"), selected = "General comments"),
           selectInput("comment_data_type", "Select a data type", choices = c("All", "Water levels", "Water flows", "Bridge freeboard", "Snow pillows", "Precipitation")),
-          dateInput("comment_start_date", "Start date (inclusive)", value = Sys.Date()-7, max = Sys.Date()-1),
+          dateInput("comment_start_date", "Start date (inclusive)", value = Sys.Date() - 7, max = Sys.Date() - 1),
           dateInput("comment_end_date", "End date (inclusive)",value = Sys.Date(), max = Sys.Date()),
           actionButton("FOD_go", "Load data")
         ),
@@ -58,8 +58,8 @@ app_ui <- function(request) {
         sidebarPanel(
           selectizeInput("precip_loc_code", "Select watershed by code", choices = ""),
           selectizeInput("precip_loc_name", "Select watershed by name", choices = ""),
-          shinyWidgets::airDatepickerInput("precip_start", "Start date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time() - 60*60*24*7, tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date()+3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
-          shinyWidgets::airDatepickerInput("precip_end", "End date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time(), tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date()+3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
+          shinyWidgets::airDatepickerInput("precip_start", "Start date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time() - 60 * 60 * 24 * 7, tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date() + 3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
+          shinyWidgets::airDatepickerInput("precip_end", "End date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time(), tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date() + 3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
           checkboxInput("show_map", "Render map?"),
           actionButton("precip_go", "Calculate precip"),
           textOutput("time_adj_note"),
@@ -81,7 +81,8 @@ app_ui <- function(request) {
         condition = "input.first_selection == 'View hydromet plots + data'",
         sidebarPanel(
           shinyWidgets::radioGroupButtons("plot_data_type", "Data type", choices = c("Continuous", "Discrete"), selected = "Continuous"),
-          selectizeInput("plot_param", label = "Plotting parameter", choices = c("Level", "Flow", "Bridge freeboard", "SWE", "Snow depth")),
+          shinyWidgets::radioGroupButtons("plot_type", "Plot type", choices = ""), #Choices are entered depending on the plot_data_type selection
+          selectizeInput("plot_param", label = "Plotting parameter", choices = c("Water Level", "Water Flow", "Bridge freeboard", "SWE", "Snow depth")),
           selectizeInput("plot_loc_code", "Select location by code", choices = ""),
           selectizeInput("plot_loc_name", "Select location by name", choices = ""),
           dateInput("start_doy", "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
@@ -89,7 +90,7 @@ app_ui <- function(request) {
           textOutput("plot_years_note"),
           shinyWidgets::pickerInput("plot_years", "Select years to plot", choices = "", multiple = TRUE, options = list("max-options" = 10,
                                                                                                                         "max-options-text" = "Cannot plot more than 10 lines")),
-          shinyWidgets::pickerInput("discrete_plot_type", "Select plot type", choices = c("Violin plot", "Box plot"), selected = "Violin plot"),
+          # shinyWidgets::pickerInput("discrete_plot_type", "Select plot type", choices = c("Violin plot", "Box plot"), selected = "Violin plot"),
           selectizeInput("historic_range", "Historic range includes all years of record or up to last year plotted?", choices = c("all", "last"), selected = "all"),
           selectizeInput("return_periods", "Plot return periods?", choices = c("none", "auto select", "calculate", "from table"), selected = "auto select"),
           shinyWidgets::pickerInput("return_type", "Select return type", choices = c("Min", "Max"), selected = "Max"),

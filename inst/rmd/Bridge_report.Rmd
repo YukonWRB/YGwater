@@ -21,7 +21,7 @@ knitr::opts_chunk$set(echo = TRUE)
 bridge_daily <- list()
 bridge_rt <- list()
 
-for (i in 1:nrow(tsid)){
+for (i in 1:nrow(tsid)) {
   bridge_daily[[tsid$location[i]]] <- DBI::dbGetQuery(con, paste0("SELECT value, date FROM calculated_daily WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND date BETWEEN '", Sys.Date()-365, "' AND '", Sys.Date(), "'" ))
   bridge_rt[[tsid$location[i]]] <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-zoom_days * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
 }
@@ -33,8 +33,8 @@ cat("  \n# Summary of freeboard measurements and changes \n")
 
 levels <- data.frame("Location" = NA, "Last reported distance" = NA, "24 hr change (cm)" = NA, "48 hr change (cm)" = NA, "72 hr change (cm)" = NA, "1 week change (cm)" = NA, "Last data age" = NA, check.names = FALSE)
 
-for (i in 1:nrow(tsid)){
-  if (nrow(bridge_rt[[tsid$location[i]]]) == 0){
+for (i in 1:nrow(tsid)) {
+  if (nrow(bridge_rt[[tsid$location[i]]]) == 0) {
     levels[i,1] <- tsid$name[i]
     levels[i,2] <- NA
     levels[i,3] <- NA
@@ -63,7 +63,7 @@ for (i in 1:nrow(tsid)){
 
 print(knitr::kable(levels, align = "lcccccc"))
 
-if (TRUE %in% stringr::str_detect(levels$`Latest distance (m)`, "NA")){
+if (TRUE %in% stringr::str_detect(levels$`Latest distance (m)`, "NA")) {
   cat("NOTE: NA values in column 'latest distance' means that there is no current measurement.")
   if (TRUE %in% stringr::str_detect(levels[,c(2:6)], "NA")) {
     cat("NA values in subsequent columns indicate that historical data is missing.")
@@ -79,12 +79,12 @@ NOTE: Outlier values clearly caused by instrument error were automatically remov
 
 <br>
 ```{r Generate plots, echo=FALSE, fig.height=4.1, fig.width=7.4, message=FALSE, warning=FALSE, results='asis'}
-for (i in 1:nrow(tsid)){
+for (i in 1:nrow(tsid)) {
   cat("  \n# Radar distance for", tsid[i, "name"])
   cat("  \n### Distance (past year)  \n")
   year_seq <- data.frame(date = seq.Date(Sys.Date()-364, Sys.Date(), by = "day"))
   year_seq$yday <- lubridate::yday(year_seq$date)
-  if (1 %in% year_seq$yday){
+  if (1 %in% year_seq$yday) {
    year <- lubridate::year(Sys.Date())-1 
   } else {
     year <- lubridate::year(Sys.Date())
@@ -95,16 +95,16 @@ for (i in 1:nrow(tsid)){
       plot <- plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
     }
     print(plot)
-  }, error = function(E){
+  }, error = function(E) {
     cat("Error in creating full year plot.")
   })
   cat("  \n")
   
-  if (zoom){
+  if (zoom) {
     cat ("  \n### Distance (past", zoom_days, "days)  \n")
     zoom_seq <- data.frame(date = seq.Date(Sys.Date()-zoom_days, Sys.Date(), by = "day"))
     zoom_seq$yday <- lubridate::yday(zoom_seq$date)
-    if (1 %in% zoom_seq$yday){
+    if (1 %in% zoom_seq$yday) {
       zoom_year <- lubridate::year(Sys.Date())-1 
     } else {
       zoom_year <- lubridate::year(Sys.Date())
