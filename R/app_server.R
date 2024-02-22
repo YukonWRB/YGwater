@@ -51,6 +51,11 @@ app_server <- function(input, output, session) {
         locations <- DBI::dbGetQuery(con, "SELECT location, location_id, name FROM locations")
         result <- merge(timeseries, locations)
         plotContainer$all_ts <- result
+
+        parameters <- DBI::dbGetQuery(con, "SELECT param_code, param_name FROM parameters")
+        plotContainer$parameters <- parameters
+        updateSelectizeInput(session, "plot_param", choices = c("", parameters$param_name), selected = "water level")
+
         datum_conversions <- DBI::dbGetQuery(con, "SELECT locations.location, datum_conversions.location_id, datum_id_to, conversion_m, current FROM datum_conversions INNER JOIN locations ON locations.location_id = datum_conversions.location_id")
         datum_list <- DBI::dbGetQuery(con, "SELECT datum_id, datum_name_en FROM datum_list")
         datums <- merge(datum_conversions, datum_list, by.x = "datum_id_to", by.y = "datum_id")
@@ -221,7 +226,7 @@ app_server <- function(input, output, session) {
   }, ignoreInit = TRUE)
 
 
-  # observe and observeEvents related to plotting level/flow/snow/bridge freeboard --------------------
+  # observe and observeEvents related to plotting continuous data --------------------
   observeEvent(input$plot_data_type, {
     if (input$plot_data_type == "Discrete") {
       updateSelectizeInput(session, "plot_param", choices = c("SWE", "Snow depth"))
@@ -267,6 +272,7 @@ app_server <- function(input, output, session) {
 
   # Update user's choices for plots based on selected plot type
   observe(
+
     if (input$plot_param == "Level") {
       if (input$plot_data_type == "Continuous") {
         plotContainer$plot_data_type <- "continuous"
@@ -279,6 +285,9 @@ app_server <- function(input, output, session) {
         updateSelectizeInput(session, "plot_loc_name", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$category == "discrete", "name"]))
         updateSelectizeInput(session, "plot_loc_code", choices = c("", plotContainer$all_ts[plotContainer$all_ts$parameter == "level" & plotContainer$all_ts$category == "discrete", "location"]))
       }
+
+
+
     } else if (input$plot_param == "Flow") {
       if (input$plot_data_type == "Continuous") {
         plotContainer$plot_data_type <- "continuous"

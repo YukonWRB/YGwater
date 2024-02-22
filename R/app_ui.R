@@ -31,7 +31,7 @@ app_ui <- function(request) {
         tags$link(rel = "apple-touch-icon", href = "icon.png"),
         tags$link(rel = "icon", type = "image/png", href = "icon.png"),
         tags$script(src = "serviceworker.js", type = "text/javascript"),
-        tags$style(type='text/css', ".selectize-dropdown-content {max-height: 400px; }")
+        tags$style(type = 'text/css', ".selectize-dropdown-content {max-height: 400px; }")
       ),
       shinyjs::extendShinyjs(text = jsCode, functions = c("backgroundCol")),
 
@@ -58,8 +58,8 @@ app_ui <- function(request) {
         sidebarPanel(
           selectizeInput("precip_loc_code", "Select watershed by code", choices = ""),
           selectizeInput("precip_loc_name", "Select watershed by name", choices = ""),
-          shinyWidgets::airDatepickerInput("precip_start", "Start date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time() - 60*60*24*7, tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date()+3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
-          shinyWidgets::airDatepickerInput("precip_end", "End date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time(), tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date()+3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
+          shinyWidgets::airDatepickerInput("precip_start", "Start date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time() - 60 * 60 * 24 * 7, tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date() + 3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
+          shinyWidgets::airDatepickerInput("precip_end", "End date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time(), tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date() + 3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
           checkboxInput("show_map", "Render map?"),
           actionButton("precip_go", "Calculate precip"),
           textOutput("time_adj_note"),
@@ -81,7 +81,7 @@ app_ui <- function(request) {
         condition = "input.first_selection == 'View hydromet plots + data'",
         sidebarPanel(
           shinyWidgets::radioGroupButtons("plot_data_type", "Data type", choices = c("Continuous", "Discrete"), selected = "Continuous"),
-          selectizeInput("plot_param", label = "Plotting parameter", choices = c("Level", "Flow", "Bridge freeboard", "SWE", "Snow depth")),
+          selectizeInput("plot_param", label = "Plotting parameter", choices = c("Water Level", "Water Flow", "Bridge freeboard", "SWE", "Snow depth")),
           selectizeInput("plot_loc_code", "Select location by code", choices = ""),
           selectizeInput("plot_loc_name", "Select location by name", choices = ""),
           dateInput("start_doy", "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
