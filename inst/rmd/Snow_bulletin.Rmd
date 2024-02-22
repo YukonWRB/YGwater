@@ -13,7 +13,7 @@ params:
 ---
 
 ```{r setup, include=FALSE}
-# snowBulletin(year = 2023, month = 4, scale = 0.9, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater")
+# snowBulletin(year = 2023, month = 5, scale = 0.9, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater")
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi=300)
 con <- YGwater::hydrometConnect()
 ```
@@ -63,6 +63,26 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title) {
   return(plot)
 }
 
+
+#### ------------- C: Function to create monthly precip plots ------------- ####
+snowBullPrecip <- function(tsid, year, scale, custom_title) {
+  tab <- DBI::dbGetQuery(con, paste0("SELECT * FROM measurements_continuous WHERE timeseries_id = ", tsid,
+                                     " AND datetime >= ", year-40, "-10-01"))
+  attr(tab$datetime, "tzone") <- "MST"
+  tab$month <- format(tab$datetime, "%m")
+  tab$year <- format(tab$datetime, "%Y")
+  tab$units <- "mm"
+
+  plot <- hydrometDiscrete(location = NULL, parameter = "Total precipitation",
+                 tzone = "MST",
+                 years = year-1,#c(params$year),
+                 startDay = "2023-10-01", # 275
+                 endDay = "2024-05-01", #120
+                 title = TRUE, custom_title = custom_title,
+                 plot_type = "linedbox", plot_scale = scale,
+                 save_path = NULL, discrete_data = tab, con = con)
+  plot + ggplot2::theme(legend.position = "none")
+}
 
 #### --------------- D: Functions to create CDDF plots -------------------- ####
 
@@ -377,20 +397,20 @@ Gathering snow measurements and data from across our vast territory requires wor
 partners. We’d like to recognize the following agencies/individuals for their significant contributions to the snow survey
 bulletin:
 
-* Data Collection Officer, Natural Resources Conservation Service, United States Department of Agriculture
-* Meteorologist, Wildland Fire Management, Yukon Department of Community Services, Whitehorse
-* Officer in Charge, Water Survey of Canada, Whitehorse
-* Water Management Engineer, Yukon Energy Corporation
-* Research Technologists, McMaster University
+* *Data Collection Officer, Natural Resources Conservation Service, United States Department of Agriculture*
+* *Meteorologist, Wildland Fire Management, Yukon Department of Community Services, Whitehorse*
+* *Officer in Charge, Water Survey of Canada, Whitehorse*
+* *Water Management Engineer, Yukon Energy Corporation*
+* *Research Technologists, McMaster University*
 
 Agencies cooperating with Environment Yukon in the Snow Survey Program are:
 
-* B.C. Ministry of Environment, Water Stewardship Division
-* Parks Canada, Kluane National Park and Reserve
-* Yukon Department of Highways and Public Works
-* Yukon Department of Energy Mines and Resources, Compliance Monitoring and Inspections Branch
-* Yukon Department of Environment, Information Management and Technology Branch
-* Vuntut Gwitchin First Nation
+* *B.C. Ministry of Environment, Water Stewardship Division*
+* *Parks Canada, Kluane National Park and Reserve*
+* *Yukon Department of Highways and Public Works*
+* *Yukon Department of Energy Mines and Resources, Compliance Monitoring and Inspections Branch*
+* *Yukon Department of Environment, Information Management and Technology Branch*
+* *Vuntut Gwitchin First Nation*
 
 
 
@@ -691,7 +711,7 @@ snowbullpillow(location = station_id, custom_title = "A2: Wolf Creek Subalpine S
 
 ``` 
 
-```{r UpperYukon_basin, echo=FALSE, eval=FALSE, out.width="50%", fig.align='center'}
+```{r UpperYukon_basin, echo=FALSE, eval=include, out.width="50%", fig.align='center'}
 # B
 # Plotting 
 snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
@@ -700,24 +720,10 @@ snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
 
 Whitehorse precipitation has been __ from October to February (Figure C). Cumulative winter precipitation is ___ % below/above median on `r month.name[params$month]` 1. Cumulative degreedays of freezing (CDDF) are __ % below/above average, with ___ oC-Days on `r month.name[params$month]` 1 (Figure D), which suggests that the thickness of the ice cover on rivers and lakes of the region is likely ____ than normal.
 
-```{r Monthly_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", warnings=FALSE}
+```{r UpperYukon_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", warnings=FALSE}
 par(mfrow = c(1, 2))
 # C
-test <- DBI::dbGetQuery(con, "SELECT * FROM measurements_continuous WHERE timeseries_id = 663")
-attr(test$datetime, "tzone") <- "MST"
-test$month <- format(test$datetime, "%m")
-test$year <- format(test$datetime, "%Y")
-test$units <- "mm"
-
-plot <- hydrometDiscrete(location = NULL, parameter = "Total precipitation",
-                 tzone = "MST",
-                 years = params$year-1,#c(params$year),
-                 startDay = "2023-10-01", # 275
-                 endDay = "2024-05-01", #120
-                 title = TRUE, custom_title = "C: Whitehorse Monthly Precipitation",
-                 plot_type = "linedbox", plot_scale = params$scale,
-                 save_path = NULL, discrete_data = test, con = con)
-plot + ggplot2::theme(legend.position = "none")
+snowBullPrecip(663, params$year, params$scale, "C: Whitehorse Monthly Precipitation")
 
 # D
 snowbullCDDF(timeseries_id = 484, custom_title = "D: Cumulative Degree-Days of Freezing in Whitehorse")
@@ -772,7 +778,10 @@ snowbullSWE(loc= "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Teslin - Big Salmon Basin Monthly Snow Course Data")
 ``` 
 
-```{r Teslin_CDDF, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+```{r Teslin_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+par(mfrow = c(1, 2))
+# C
+snowBullPrecip(665, params$year, params$scale, "C: Teslin Monthly Precipitation")
 # D
 snowbullCDDF(timeseries_id = 532, custom_title = "D: Cumulative Degree-Days of Freezing in Teslin")
 
@@ -808,7 +817,10 @@ snowbullSWE(loc= "Central Yukon", basin = "Central_Yukon",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Central Yukon Basin Monthly Snow Course Data")
 ``` 
 
-```{r Carmacks_CDDF, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+```{r Carmacks_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+par(mfrow = c(1, 2))
+# C
+snowBullPrecip(666, params$year, params$scale, "C: Carmacks Monthly Precipitation")
 # D
 snowbullCDDF(timeseries_id = 540, custom_title = "D: Cumulative Degree-Days of Freezing in Carmacks")
 
@@ -882,22 +894,23 @@ if ("Stewart" %in% params$basins) {
 The Stewart River Basin snowpack is _____ average. At Withers Lake Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **`r pillow_stats[pillow_stats$location=='09DB-M1',]$perc`%** of the historical median (Figure A). The The Stewart River basin-averaged SWE is estimated to be **`r basins_stats[basins_stats$basin=='Stewart',]$swe_relative * 100`%** of the historical median, with **`r basins_stats[basins_stats$basin=='Stewart',]$swe`** **mm** as of `r month.name[params$month]` 1 (Figure B).
 
 ```{r StewartRiver_Snow, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+par(mfrow = c(1, 2))
 ## A Withers Lake
 # Set station ID
 station_id <- "09DB-M1"
 # Plot SWE
 snowbullpillow(location = station_id, custom_title = "A: Withers Lake Snow Water Equivalent", year = params$year)
-
-``` 
-
-```{r Stewart_basin, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
 # B
 # Plotting 
 snowbullSWE(loc= "Stewart", basin = "Stewart",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Stewart Basin Monthly Snow Course Data")
+
 ``` 
 
-```{r Mayo_CDDF, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+```{r Mayo_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+par(mfrow = c(1, 2))
+# C
+snowBullPrecip(668, params$year, params$scale, "C: Mayo Monthly Precipitation")
 # D
 snowbullCDDF(timeseries_id = 548, custom_title = "D: Cumulative Degree-Days of Freezing in Mayo")
 
@@ -957,16 +970,10 @@ if ("Lower Yukon" %in% params$basins) {
 The Lower Yukon River Basin snowpack is _____ average. Established in 2022, the King Solomon Dome Meteorological Station registered Snow Water Equivalent (SWE) at **`r pillow_stats[pillow_stats$location=='09EA-M1',]$perc`%** % of the historical median when compared with the manual snow survey record for that site (Figure A). The Lower Yukon basin-averaged SWE is estimated to be **`r basins_stats[basins_stats$basin=='Lower_Yukon',]$swe_relative * 100`%** of the historical median, with **`r basins_stats[basins_stats$basin=='Lower_Yukon',]$swe`** **mm** as of `r month.name[params$month]` 1 (Figure B).
 
 ```{r LowerYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+
+par(mfrow = c(1, 2))
+
 ## A King Solomon Dome
-# # Set station ID
-# station_id <- "09EA-SC01"
-# # Plot SWE
-# hydrometDiscrete(
-#   location = station_id,
-#   parameter = "SWE",
-#   years = params$year,
-#   con = con
-# )
 # Get this years snow pillow
 snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily ",
                             "WHERE timeseries_id = 85 ",
@@ -975,7 +982,7 @@ snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily 
 # Get historical snow survey data
 snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measurements_discrete ",
                             "WHERE timeseries_id = 317 "))
-  snow_s$fake_date <- as.Date(paste0(2024, "-", format(snow_s$target_datetime, "%m-%d"))) #params$year
+  snow_s$fake_date <- as.Date(paste0(params$year, "-", format(snow_s$target_datetime, "%m-%d"))) #params$year
   # Only keep those for March, April, May
   snow_s <- snow_s[format(snow_s$fake_date, "%m-%d") %in% c("03-01", "04-01", "05-01"),]
   # Calculate stats
@@ -993,16 +1000,17 @@ ggplot2::ggplot() +
   ggplot2::geom_line(data=snow_p, ggplot2::aes(y=value, x=date)) +
   ggplot2::geom_point(dat=snow_s, ggplot2::aes(y=value, x=fake_date, colour=type))
 
-```
-
-```{r LowerYukon_basin, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
 # B
 # Plotting 
 snowbullSWE(loc= "Lower Yukon", basin = "Lower_Yukon",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Lower Yukon Basin Monthly Snow Course Data")
-``` 
 
-```{r Dawson_CDDF, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+```
+
+```{r Dawson_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+par(mfrow = c(1, 2))
+# C
+snowBullPrecip(664, params$year, params$scale, "C: Dawson Monthly Precipitation")
 # D
 snowbullCDDF(timeseries_id = 492, custom_title = "D: Cumulative Degree-Days of Freezing in Dawson")
 
@@ -1038,7 +1046,10 @@ snowbullSWE(loc= "Porcupine", basin = "Porcupine",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Porcupine Basin Monthly Snow Course Data")
 ``` 
 
-```{r OldCrow_CDDF, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+```{r OldCrow_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+par(mfrow = c(1, 2))
+# C
+snowBullPrecip(671, params$year, params$scale, "C: Old Crow Monthly Precipitation")
 # D
 snowbullCDDF(timeseries_id = 556, custom_title = "D: Cumulative Degree-Days of Freezing in Old Crow")
 
@@ -1098,22 +1109,26 @@ if ("Liard" %in% params$basins) {
 The Liard River Basin snowpack is _____ average. At Hyland Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **`r pillow_stats[pillow_stats$location=='10AD-M2',]$perc`%** of the historical median (Figure A). The Liard River basin-averaged SWE is estimated to be **`r basins_stats[basins_stats$basin=='Liard',]$swe_relative * 100`%** of the historical median, with **`r basins_stats[basins_stats$basin=='Liard',]$swe`** **mm** as of `r month.name[params$month]` 1 (Figure B).
 
 ```{r LiardRiver_Snow, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+
+par(mfrow = c(1, 2))
+
 ## A Hyland River
 # Set station ID
 station_id <- "10AD-M2"
 # Plot SWE
 snowbullpillow(location = station_id, custom_title = "A: Hyland River Snow Water Equivalent", year = params$year)
 
-```
-
-```{r Liard_basin, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
 # B
 # Plotting 
 snowbullSWE(loc= "Liard", basin = "Liard",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Liard Basin Monthly Snow Course Data")
-``` 
 
-```{r WatsonLake_CDDF, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+```
+
+```{r WatsonLake_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+par(mfrow = c(1, 2))
+# C
+snowBullPrecip(667, params$year, params$scale, "C: Watson Lake Monthly Precipitation")
 # D
 snowbullCDDF(timeseries_id = 508, custom_title = "D: Cumulative Degree-Days of Freezing in Watson Lake")
 
