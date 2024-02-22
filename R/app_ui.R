@@ -44,7 +44,7 @@ app_ui <- function(request) {
         sidebarPanel(
           selectInput("comment_type", "Select comment type", choices = c("General comments", "Location-specific comments"), selected = "General comments"),
           selectInput("comment_data_type", "Select a data type", choices = c("All", "Water levels", "Water flows", "Bridge freeboard", "Snow pillows", "Precipitation")),
-          dateInput("comment_start_date", "Start date (inclusive)", value = Sys.Date()-7, max = Sys.Date()-1),
+          dateInput("comment_start_date", "Start date (inclusive)", value = Sys.Date() - 7, max = Sys.Date() - 1),
           dateInput("comment_end_date", "End date (inclusive)",value = Sys.Date(), max = Sys.Date()),
           actionButton("FOD_go", "Load data")
         ),
@@ -81,6 +81,7 @@ app_ui <- function(request) {
         condition = "input.first_selection == 'View hydromet plots + data'",
         sidebarPanel(
           shinyWidgets::radioGroupButtons("plot_data_type", "Data type", choices = c("Continuous", "Discrete"), selected = "Continuous"),
+          shinyWidgets::radioGroupButtons("plot_type", "Plot type", choices = ""), #Choices are entered depending on the plot_data_type selection
           selectizeInput("plot_param", label = "Plotting parameter", choices = c("Water Level", "Water Flow", "Bridge freeboard", "SWE", "Snow depth")),
           selectizeInput("plot_loc_code", "Select location by code", choices = ""),
           selectizeInput("plot_loc_name", "Select location by name", choices = ""),
@@ -89,7 +90,7 @@ app_ui <- function(request) {
           textOutput("plot_years_note"),
           shinyWidgets::pickerInput("plot_years", "Select years to plot", choices = "", multiple = TRUE, options = list("max-options" = 10,
                                                                                                                         "max-options-text" = "Cannot plot more than 10 lines")),
-          shinyWidgets::pickerInput("discrete_plot_type", "Select plot type", choices = c("Violin plot", "Box plot"), selected = "Violin plot"),
+          # shinyWidgets::pickerInput("discrete_plot_type", "Select plot type", choices = c("Violin plot", "Box plot"), selected = "Violin plot"),
           selectizeInput("historic_range", "Historic range includes all years of record or up to last year plotted?", choices = c("all", "last"), selected = "all"),
           selectizeInput("return_periods", "Plot return periods?", choices = c("none", "auto select", "calculate", "from table"), selected = "auto select"),
           shinyWidgets::pickerInput("return_type", "Select return type", choices = c("Min", "Max"), selected = "Max"),
