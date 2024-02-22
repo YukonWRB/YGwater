@@ -42,11 +42,12 @@ SWE_station <-
 
       # Get measurements
       Meas <- DBI::dbGetQuery(con,
-                              "SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, timeseries.parameter
+                              "SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
                       INNER JOIN locations ON timeseries.location=locations.location
-                      WHERE timeseries.parameter = 'SWE' OR timeseries.parameter = 'snow depth'"
+                      INNER JOIN parameters ON timeseries.parameter = parameters.param_code
+                      WHERE parameters.param_name = 'SWE' OR parameters.param_name = 'snow depth'"
       )
 
       DBI::dbDisconnect(con)

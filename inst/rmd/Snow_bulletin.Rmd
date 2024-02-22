@@ -13,9 +13,10 @@ params:
 ---
 
 ```{r setup, include=FALSE}
-# snowBulletin(year = 2023, month = 5, scale = 0.9, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater")
+# snowBulletin(year = 2023, month = 5, scale = 1, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater")
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi=300)
 con <- YGwater::hydrometConnect()
+knitr::include_graphics
 ```
 
 
@@ -67,7 +68,7 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title) {
 #### ------------- C: Function to create monthly precip plots ------------- ####
 snowBullPrecip <- function(tsid, year, scale, custom_title) {
   tab <- DBI::dbGetQuery(con, paste0("SELECT * FROM measurements_continuous WHERE timeseries_id = ", tsid,
-                                     " AND datetime >= ", year-40, "-10-01"))
+                                     " AND datetime >= '", year-40, "-10-01'"))
   attr(tab$datetime, "tzone") <- "MST"
   tab$month <- format(tab$datetime, "%m")
   tab$year <- format(tab$datetime, "%Y")
@@ -190,7 +191,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale) {
    # ggplot2::geom_line(ggplot2::aes(y=zoo::rollmean(min,5, fill=NA)), colour = "#834333", size=1)
   
   if (exists('flood') &
-      !is.null(flood) & parameter %in% c("level", "flow")) {
+      !is.null(flood) & parameter %in% c("water level", "water flow")) {
     if (parameter == "level") {
       plot <- plot +
         ggplot2::geom_hline(
@@ -243,7 +244,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale) {
 
 ```
 
-```{r SWEbasins, include=FALSE}
+```{r SWEbasins, include=FALSE, eval=FALSE}
 # Get SWE data for basins 
 swe_basins <- YGwater::SWE_basin(year = params$year,
                                    month = c(3, 4, 5), # c(3)
@@ -252,6 +253,7 @@ swe_basins <- YGwater::SWE_basin(year = params$year,
                                    summarise = FALSE)
   # Add datetime to data
   swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
+  swe_basins <<- swe_basins
 # Get stats for text
   # Basin % historical median and SWE on target date
   basins_stats <- YGwater::SWE_basin(year = params$year,
@@ -261,6 +263,7 @@ swe_basins <- YGwater::SWE_basin(year = params$year,
                                      summarise = TRUE)
   basins_stats <- basins_stats[,c("basin", "swe", "swe_relative")]
   basins_stats$swe <- round(basins_stats$swe, 0)
+  basins_stats <<- basins_stats
 
   # Snow pillow/scale % of historical median
   pillow_stats <- DBI::dbGetQuery(con, paste0("SELECT value, q50, location FROM calculated_daily 
@@ -273,7 +276,7 @@ swe_basins <- YGwater::SWE_basin(year = params$year,
 ```
 \newpage
   
-# PREFACE
+# Preface
 
 The Department of Environment’s Water Resources Branch issues the Yukon Snow Survey Bulletin and Water Supply Forecast three times annually – early March, April and May. The bulletin provides a summary of winter meteorological and streamflow conditions for the Yukon, as well as current snow depth and snow water equivalent observations for 57 locations. This information is used to evaluate the potential for spring flooding caused by both breakup ice jams and large spring snowmelt (freshet) flows. It is important to note that other processes such as summer rain and glacier melt can significantly influence maximum annual water levels in specific Yukon basins. March weather conditions for the Yukon are presented in two maps, one showing temperature anomalies (deviation from climate normals), and another showing precipitation anomalies. Territory-wide snowpack data are presented in a third map showing snow water equivalent (SWE) as a percent of historical median for each station, as well as the basinaveraged estimated SWE for 11 watersheds (or river basins). Complementary meteorological and hydrological data are presented for each basin through a series of five graphs, depending on data availability:
 
@@ -282,6 +285,55 @@ The Department of Environment’s Water Resources Branch issues the Yukon Snow S
 * __Figure C:__ Monthly winter precipitation (rain and/or snow) compared with historical data, complementing the information presented in Figure B.
 * __Figure D:__ Cumulated degree-days of freezing (CDDF, sum of negative daily temperatures) compared with historical data, functioning as an indicator of winter coldness and overall river ice thickness; variables that influence river ice breakup scenarios in the spring.
 * __Figure E:__ Current, estimated daily discharge or measured water level, compared with historical data, representing an overview of the watershed hydrological conditions.
+
+
+```{r legend, echo=FALSE, eval=TRUE, fig.align='center', out.width="40%"} 
+#fig.height=10, fig.width=5}
+
+# # Plot A example
+# plot <- snowbullpillow(location = "09DB-M1", 
+#                custom_title = "A", 
+#                year = 2019)
+# plot + ggplot2::annotate(geom="text", x=as.POSIXct("2019-02-01", format="%Y-%m-%d"), y=350, label="Maximum", colour='#0097A9')
+# 
+# # Plot B example
+# 
+# # Plot D example
+# snowbullCDDF(timeseries_id = 500, 
+#              custom_title = "D")
+# 
+# # Plot E example
+# snowbullWater(location = "09AB010",
+#               parameter = "level",
+#               year = 2019,
+#               custom_title = "E",
+#               scale = 0.9)
+#dev.new(width=4, height=10, unit="cm")
+lines <- c("Maximum observed value", "Minimum observed value", "Median observed value", "Current year", "Flood level", "25th-75th percentile range \nof observed values", "Min - max range of \nobserved values")  # Example list of unique legend elements
+
+# Test 1
+ plot <- ggplot2::ggplot() +
+  ggplot2::theme_void() + 
+  ggplot2::theme(legend.position = c(0.5,0.5), 
+                 legend.text=ggplot2::element_text(size=13), 
+                 legend.title=ggplot2::element_blank(),
+                 legend.spacing.x = ggplot2::unit(0.5, 'cm'),
+                 legend.spacing.y = ggplot2::unit(0.6, 'cm')
+                 ) +  # Adjust legend position as needed
+  #ggplot2::labs(title = "Figure Legend") +  # Set legend title
+  ggplot2::scale_color_manual(name = "Legend", values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
+  ggplot2::scale_size_manual(name = "Legend", values = c(1.5, 1.5, 1.5, 1.5, 1, 8, 8), labels = lines) +  # Customize legend entries for fill
+  ggplot2::scale_linetype_manual(name = "Legend", values = c("solid", "solid", "solid", "solid", "dashed", "solid", "solid"), labels = lines) +  # Customize legend entries for shape
+  #theme_minimal() +  
+   ggplot2::geom_line(ggplot2::aes(x=1, y=1, color= lines, size=lines, linetype=lines)) +
+   ggplot2::theme(legend.key.width= ggplot2::unit(2, "cm")) +
+  ggplot2::guides(color = ggplot2::guide_legend(byrow = TRUE))
+ 
+ ggplot2::ggsave("test_plot.png", plot=plot, width=3.1, height=5)
+ 
+ knitr::include_graphics("test_plot.png")
+
+``` 
 
 For information about the bulletin, snowpack conditions, or streamflow projections please contact waterlevels@yukon.ca
 
@@ -303,85 +355,7 @@ Department of Environment \n
 Government of Yukon \n
 Box 2703, Whitehorse, Yukon Y1A 2C6
 
-
-
-# LEGEND
-```{r legend, echo=FALSE, eval=TRUE, fig.align='center', out.width="50%"}
-# # Plot A example
-# plot <- snowbullpillow(location = "09DB-M1", 
-#                custom_title = "A", 
-#                year = 2019)
-# plot + ggplot2::annotate(geom="text", x=as.POSIXct("2019-02-01", format="%Y-%m-%d"), y=350, label="Maximum", colour='#0097A9')
-# 
-# # Plot B example
-# 
-# # Plot D example
-# snowbullCDDF(timeseries_id = 500, 
-#              custom_title = "D")
-# 
-# # Plot E example
-# snowbullWater(location = "09AB010",
-#               parameter = "level",
-#               year = 2019,
-#               custom_title = "E",
-#               scale = 0.9)
-
-lines <- c("Maximum observed value", "Minimum observed value", "Median observed value", "Current year", "Flood level", "25th-75th percentile range of observed values", "Min - max range of observed values")  # Example list of unique legend elements
-
-# Test 1
- ggplot2::ggplot() +
-  ggplot2::theme_void() + 
-  ggplot2::theme(legend.position = "left") +  # Adjust legend position as needed
-  ggplot2::labs(title = "Master Legend") +  # Set legend title
-  ggplot2::scale_color_manual(name = "Legend", values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
-  ggplot2::scale_size_manual(name = "Legend", values = c(1, 1, 1, 1, 1, 7, 7), labels = lines) +  # Customize legend entries for fill
-  ggplot2::scale_linetype_manual(name = "Legend", values = c("solid", "solid", "solid", "solid", "dashed", "solid", "solid"), labels = lines) +  # Customize legend entries for shape
-  #theme_minimal() +  
-   ggplot2::geom_line(ggplot2::aes(x=1, y=1, color= lines, size=lines, linetype=lines)) +
-   ggplot2::theme(legend.key.width= ggplot2::unit(2, "cm"))
-
- 
-# Test 2  
- lines <- data.frame(
-  y = 1:6,
-  lty = c("solid", "solid", "solid", "solid", "dashed", "solid"),
-  col = c("#0097A9", "#834333", "#7A9A01", "black", "red", "grey"),
-  siz = c(1.5, 1.5, 1.5, 1.5, 1.5, 7))
-
- ggplot2::ggplot(lines, ggplot2::aes(0,y)) +
-  #theme_void() + 
-  ggplot2::theme(legend.position = "left") +  # Adjust legend position as needed
-  ggplot2::labs(title = "Master Legend") +  # Set legend title
-  # scale_color_manual(name = "Legend", values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "grey"), labels = lines) +  # Customize legend entries for color
-  # scale_size_manual(name = "Legend", values = c(1.5, 1.5, 1.5, 1.5, 1.5, 5), labels = lines) +  # Customize legend entries for fill
-  # scale_shape_manual(name = "Legend", values = c("solid", "solid", "solid", "solid", "dashed", "solid"), labels = lines) +  # Customize legend entries for shape
-  #theme_minimal() +  
-   ggplot2::geom_segment(ggplot2::aes(xend=1, yend=y, color=col, size=siz, shape=lty)) +
-  ggplot2::scale_x_continuous(NULL, breaks = NULL) + 
-  ggplot2::scale_y_reverse(NULL, breaks = NULL) 
- 
- 
-# Test 3
-lnames <- c("Maximum", "Minimum", "Median", "Year", "Flood level", "25th-75th percentile") 
-lty <- c("solid", "solid", "solid", "solid", "dashed", "solid")
-colty <- c("#0097A9", "#834333", "#7A9A01", "black", "red", "grey")
-linetypes <- data.frame(
-  y = seq_along(lty),
-  lty = lty
-) 
-ggplot2::ggplot(linetypes, ggplot2::aes(0, y)) + 
-  ggplot2::geom_segment(ggplot2::aes(xend = 2, yend = y, linetype = lty, colour = lnames)) + 
-  ggplot2::scale_linetype_identity() + 
-  ggplot2::scale_color_manual(name = "Legend", values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "grey"), 
-                     labels = lines) +
-  ggplot2::geom_text(ggplot2::aes(label = lnames), hjust = 0, nudge_y = 0.2) +
-  ggplot2::scale_x_continuous(NULL, breaks = NULL) + 
-  ggplot2::scale_y_reverse(NULL, breaks = NULL) 
-  
-
-``` 
-
-# ACKNOWLEDGEMENTS
+# Acknowledgements
 
 The Yukon Snow Survey Bulletin forms part of the Yukon Snow Survey Program administered by the Water Resources
 Branch, Department of Environment, Government of Yukon. The Water Resources Branch (WRB) strives for water
@@ -414,7 +388,7 @@ Agencies cooperating with Environment Yukon in the Snow Survey Program are:
 
 
 
-# DISCLAIMER AND LIMITATION OF LIABILITY
+# Disclaimer and Limitation of Liability
 
 The User understands and acknowledges that the use of the data is solely at their own risk. The User is solely
 responsible for confirming the accuracy, availability, suitability, reliability, usability, completeness or timeliness of the
@@ -432,7 +406,7 @@ for direct, indirect, special, incidental, or consequential damages arising from
 
 
 
-# YUKON TERRITORY WEATHER AND SNOWPACK CONDITIONS
+# Yukon Territory Weather and Snowpack Conditions
 
 **October**
 
@@ -450,7 +424,7 @@ for direct, indirect, special, incidental, or consequential damages arising from
 
 **Snowpack**
 
-# YUKON TERRITORY FLOW CONDITIONS AND OUTLOOK
+# Yukon Territory Flow Conditions and Outlook
 
 
 # All basins
@@ -680,7 +654,7 @@ plot <- hydrometDiscrete2(location = "all basins", parameter = "SWE", startDay =
 
 ``` 
 
-# Upper Yukon river basin (Southern lakes/Whitehorse)
+# Upper Yukon River Basin (Southern Lakes/Whitehorse)
 
 The Upper Yukon River Basin snowpack is _____ average. At Tagish Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **`r pillow_stats[pillow_stats$location=='09AA-M1',]$perc`%** of the historical median (Figure A1), while at Wolf Creek Subalpine Meteorological Station, SWE is estimated to be **`r pillow_stats[pillow_stats$location=='29AB-M3',]$perc`%** of the historical median (Figure A2). The Upper Yukon basin-averaged SWE is estimated to be **`r basins_stats[basins_stats$basin=='Upper_Yukon',]$swe_relative * 100`%** of the historical median, with **`r basins_stats[basins_stats$basin=='Upper_Yukon',]$swe`** **mm** as of `r month.name[params$month]` 1 (Figure B).
 
@@ -693,7 +667,7 @@ if ("Upper Yukon" %in% params$basins) {
 }
 ``` 
 
-```{r UpperYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%"}
+```{r UpperYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", fig.height=3.5}
 #r UpperYukonRiver_Snow, echo=FALSE, eval=include, out.width='.49\\linewidth', fig.width=4, fig.height=3,fig.show='hold',fig.align='center'
 par(mfrow = c(1, 2))
 ## A1 Tagish
@@ -711,7 +685,7 @@ snowbullpillow(location = station_id, custom_title = "A2: Wolf Creek Subalpine S
 
 ``` 
 
-```{r UpperYukon_basin, echo=FALSE, eval=include, out.width="50%", fig.align='center'}
+```{r UpperYukon_basin, echo=FALSE, eval=include, out.width="50%", fig.align='center', fig.height=3.5}
 # B
 # Plotting 
 snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
@@ -720,7 +694,7 @@ snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
 
 Whitehorse precipitation has been __ from October to February (Figure C). Cumulative winter precipitation is ___ % below/above median on `r month.name[params$month]` 1. Cumulative degreedays of freezing (CDDF) are __ % below/above average, with ___ oC-Days on `r month.name[params$month]` 1 (Figure D), which suggests that the thickness of the ice cover on rivers and lakes of the region is likely ____ than normal.
 
-```{r UpperYukon_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", warnings=FALSE}
+```{r UpperYukon_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", warnings=FALSE, fig.height=3.5}
 par(mfrow = c(1, 2))
 # C
 snowBullPrecip(663, params$year, params$scale, "C: Whitehorse Monthly Precipitation")
@@ -733,31 +707,31 @@ snowbullCDDF(timeseries_id = 484, custom_title = "D: Cumulative Degree-Days of F
 The measured water surface elevation (relative to sea level) in Marsh Lake is currently ___ average (Figure E). The current snow and groundwater conditions suggest that water levels will be ___ average this summer. However, weather conditions over the spring and summer will determine the peak water level in Marsh Lake, which typically occurs in late summer in response to peak glacial runoff and large precipitation events. 
 Lake Laberge level is currently ___ the historic maximum for this time of year (Figure E2). Lake Laberge follows a similar summer pattern to the upper Southern Lakes and is expected to experience ___ average water levels this summer. 
 
-```{r MarshLake, echo=FALSE, eval=include, fig.align='center', fig.width=9, fig.height=3.6}
+```{r MarshLake, echo=FALSE, eval=include, fig.align='center', fig.width=9, fig.height=3.1}
 # E1
 # Set station ID
 station_id <- "09AB004"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "level",
+              parameter = "water level",
               year = params$year-1, #2023, #
               custom_title = "E1: Marsh Lake Water Surface Elevation",
               scale = params$scale)
 ``` 
 
-```{r LakeLaberge, echo=FALSE, eval=include, fig.align='center', fig.width=9, fig.height=3.6}
+```{r LakeLaberge, echo=FALSE, eval=include, fig.align='center', fig.width=9, fig.height=3.1}
 # E2
 # Set station ID
 station_id <- "09AB010"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "level",
+              parameter = "water level",
               year = params$year-1,
               custom_title = "E2: Lake Laberge Water Surface Elevation",
               scale = params$scale)
 ``` 
 
-# Teslin river basin
+# Teslin River Basin
 
 The Teslin River Basin snowpack is ____. The basin-averaged SWE is estimated at **`r basins_stats[basins_stats$basin=='Teslin_Big_Salmon',]$swe_relative * 100`%** of the
 historical median, with **`r basins_stats[basins_stats$basin=='Teslin_Big_Salmon',]$swe`** **mm** as of `r month.name[params$month]` 1 (Figure B).
@@ -793,13 +767,13 @@ snowbullCDDF(timeseries_id = 532, custom_title = "D: Cumulative Degree-Days of F
 station_id <- "09AE002"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "level",
+              parameter = "water level",
               year = params$year-1,
               custom_title = "E: Teslin Lake Water Surface Elevation",
               scale = params$scale)
 ``` 
 
-# Central Yukon river basin (Carmacks area)
+# Central Yukon River Basin (Carmacks Area)
 ```{r Central Yukon, echo=FALSE}
 if ("Central Yukon" %in% params$basins) {
   include <- TRUE
@@ -832,13 +806,13 @@ snowbullCDDF(timeseries_id = 540, custom_title = "D: Cumulative Degree-Days of F
 station_id <- "09AH004"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: Nordenskiold River Discharge below Rowlinson Creek",
               scale = params$scale)
 ``` 
 
-# Pelly river basin
+# Pelly River Basin
 ```{r Pelly, echo=FALSE}
 if ("Pelly" %in% params$basins) {
   include <- TRUE
@@ -876,13 +850,13 @@ snowbullCDDF(timeseries_id = 500, custom_title = "D: Cumulative Degree-Days of F
 station_id <- "09BC001"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: Pelly River Discharge at Pelly Crossing",
               scale = params$scale)
 ``` 
 
-# Stewart river basin
+# Stewart River Basin
 ```{r Stewart, echo=FALSE}
 if ("Stewart" %in% params$basins) {
   include <- TRUE
@@ -922,13 +896,13 @@ snowbullCDDF(timeseries_id = 548, custom_title = "D: Cumulative Degree-Days of F
 station_id <- "09DD003"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: Stewart River Discharge at Outlet",
               scale = params$scale)
 ``` 
 
-# White river basin
+# White River Basin
 ```{r White, echo=FALSE}
 if ("White" %in% params$basins) {
   include <- TRUE
@@ -952,13 +926,13 @@ snowbullSWE(loc= "White", basin = "White",
 station_id <- "09CB001"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: White River Discharge at Alaska Highway",
               scale = params$scale)
 ``` 
 
-# Lower Yukon River basin (Dawson area)
+# Lower Yukon River Basin (Dawson Area)
 ```{r Lower Yukon, echo=FALSE}
 if ("Lower Yukon" %in% params$basins) {
   include <- TRUE
@@ -995,10 +969,18 @@ snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measur
       dplyr::bind_rows(snow_s %>%
                   dplyr::group_by(.data$fake_date) %>%
                   dplyr::summarise(value = stats::median(.data$value), type = "median"))
+  
+  plot_scale <- params$scale
 
 ggplot2::ggplot() +
-  ggplot2::geom_line(data=snow_p, ggplot2::aes(y=value, x=date)) +
-  ggplot2::geom_point(dat=snow_s, ggplot2::aes(y=value, x=fake_date, colour=type))
+  ggplot2::theme_classic() +
+  ggplot2::geom_line(data=snow_p, ggplot2::aes(y=value, x=date), linewidth = plot_scale *1) +
+  ggplot2::geom_point(dat=snow_s, ggplot2::aes(y=value, x=fake_date, colour=type), size=plot_scale*2) +
+  ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
+  ggplot2::theme(legend.position = "none") +
+  ggplot2::theme(axis.title.y = ggplot2::element_text(size = 11*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale), plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale)) +
+  ggplot2::labs(x = "", y = "SWE (mm)", title = "A: King Solomon Dome Snow Water Equivalent")
+  
 
 # B
 # Plotting 
@@ -1022,13 +1004,13 @@ snowbullCDDF(timeseries_id = 492, custom_title = "D: Cumulative Degree-Days of F
 station_id <- "09CD001"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: Yukon River Discharge at White River",
               scale = params$scale)
 ``` 
 
-# Porcupine River basin
+# Porcupine River Basin
 ```{r Porcupine, echo=FALSE}
 if ("Porcupine" %in% params$basins) {
   include <- TRUE
@@ -1061,13 +1043,13 @@ snowbullCDDF(timeseries_id = 556, custom_title = "D: Cumulative Degree-Days of F
 station_id <- "09FD002"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: Porcupine River Discharge at Border",
               scale = params$scale)
 ``` 
 
-# Peel River basin
+# Peel River Basin
 ```{r Peel, echo=FALSE}
 if ("Peel" %in% params$basins) {
   include <- TRUE
@@ -1091,13 +1073,13 @@ snowbullSWE(loc= "Peel", basin = "Peel",
 station_id <- "10MA001"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: Peel River Discharge",
               scale = params$scale)
 ``` 
 
-# Liard River basin
+# Liard River Basin
 ```{r Liard, echo=FALSE}
 if ("Liard" %in% params$basins) {
   include <- TRUE
@@ -1140,13 +1122,13 @@ snowbullCDDF(timeseries_id = 508, custom_title = "D: Cumulative Degree-Days of F
 station_id <- "10AA001"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: Liard River Discharge at Upper Liard",
               scale = params$scale)
 ``` 
 
-# Alsek River basin
+# Alsek River Basin
 ```{r Alsek, echo=FALSE}
 if ("Alsek" %in% params$basins) {
   include <- TRUE
@@ -1170,7 +1152,7 @@ snowbullSWE(loc= "Alsek", basin = "Alsek",
 station_id <- "08AB001"
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "flow",
+              parameter = "water flow",
               year = params$year-1,
               custom_title = "E: Alsek River Discharge above Bates",
               scale = params$scale)
@@ -1179,7 +1161,9 @@ snowbullWater(location = station_id,
 # Drainage Basin and Snow Course
 
 ```{r table, fig.width=10, results='asis', echo=FALSE}
-tabl <- SWE_station(year=params$year, month=params$month, return_missing = TRUE, active = TRUE, source="hydromet")
+year <- params$year
+month <- params$month
+tabl <- SWE_station(year=year, month=month, return_missing = TRUE, active = TRUE, source="hydromet")
 
 tabl <- tabl[, c("location_name", "location_id", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
 
@@ -1195,7 +1179,8 @@ tabl$sub_basin <- paste0(tabl$sub_basin, " River Basin")
 # Replace all _ with space
 tabl$sub_basin <- gsub("_", " ", tabl$sub_basin)
 tabl$sub_basin <- gsub("Alaska River Basin", "Alaska Snow Courses", tabl$sub_basin)
-
+# Remove 'Snow Course' from name
+tabl$Name <- sub(" Snow Course", "", tabl$Name)
 # Single table using flextable 
 
 flextable::as_grouped_data(tabl, groups = "sub_basin") %>% 

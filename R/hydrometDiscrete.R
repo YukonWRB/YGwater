@@ -316,7 +316,7 @@ hydrometDiscrete <- function(location = NULL,
   plot <- ggplot2::ggplot(all_discrete, ggplot2::aes(x = .data$fake_date, y = .data$value, group = .data$fake_date)) +
     ggplot2::labs(x = "", y = if (parameter == "SWE") paste0("SWE (", units, ")") else paste0(stringr::str_to_title(parameter), " (", units, ")")) +
     ggplot2::theme_classic() +
-    ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 10*plot_scale), axis.title.y = ggplot2::element_text(size = 11*plot_scale), axis.text.x = ggplot2::element_text(size = 9*plot_scale), axis.text.y = ggplot2::element_text(size = 9*plot_scale))
+    ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 10*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale))
 
   if (plot_type == "linedbox") {
     for (m in unique(stats_discrete$month)) {
@@ -378,7 +378,7 @@ hydrometDiscrete <- function(location = NULL,
 
     plot <- plot +
       ggplot2::labs(title=titl) +
-      ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale))
+      ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale,face = "bold"))
   }
 
   #Save it if requested
