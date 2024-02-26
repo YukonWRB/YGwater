@@ -173,7 +173,7 @@ app_server <- function(input, output, session) {
       for (i in as.character(FOD_seq)) {
         for (j in types) {
           if (length(FOD_comments$comments$general[[j]][[i]]) > 0) {
-            fod_name <- if(length(FOD_comments$comments$FOD[[j]][[i]]) > 0) FOD_comments$comments$FOD[[j]][[i]] else FOD_comments$comments$FOD[["levels"]][[i]]
+            fod_name <- if (length(FOD_comments$comments$FOD[[j]][[i]]) > 0) FOD_comments$comments$FOD[[j]][[i]] else FOD_comments$comments$FOD[["levels"]][[i]]
             fod_cmt <- FOD_comments$comments$general[[j]][[i]]
             if (length(fod_name) == 0) {
               fod_name <- NA_character_
@@ -204,7 +204,7 @@ app_server <- function(input, output, session) {
               row <- FOD_comments$comments$specific[[j]][[i]][k , ]
               if (!is.na(row$Location.specific.comments)[1]) {
                 append_row <- data.frame("Date" = i,
-                                         "Forecaster" = if(length(FOD_comments$comments$FOD[[j]][[i]]) > 0) FOD_comments$comments$FOD[[j]][[i]] else FOD_comments$comments$FOD[["levels"]][[i]],
+                                         "Forecaster" = if (length(FOD_comments$comments$FOD[[j]][[i]]) > 0) FOD_comments$comments$FOD[[j]][[i]] else FOD_comments$comments$FOD[["levels"]][[i]],
                                          "Location" = FOD_comments$comments$specific[[j]][[i]][k,"Location"],
                                          "Data sheet source" = j,
                                          "Location name" = FOD_comments$comments$specific[[j]][[i]][k,"Name"],
@@ -430,7 +430,7 @@ app_server <- function(input, output, session) {
         grDevices::dev.off()})
     shinyjs::show("export_plot_data")
     output$export_plot_data <- downloadHandler(
-      filename = function() {paste0(input$plot_loc_code, "_", plotContainer$plot_param, "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz="MST")), lubridate::minute(as.POSIXct(format(Sys.time()), tz="MST")), ".csv")},
+      filename = function() {paste0(input$plot_loc_code, "_", plotContainer$plot_param, "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz="MST")), lubridate::minute(as.POSIXct(format(Sys.time()), tz = "MST")), ".csv")},
       content = function(file) {
         write.csv(plotContainer$plot$data, file, row.names = FALSE)
       }
