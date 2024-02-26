@@ -4,7 +4,7 @@ title: "Yukon Snow Survey \n Bulletin & Water \n Supply Forecast"
 output: 
   word_document:
       reference_docx: style_template2.docx
-date: "March 1st 2024"
+date: "March 1, 2024"
 params:
   year: year
   month: month
@@ -692,7 +692,7 @@ snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Upper Yukon Basin Monthly Snow Course Data")
 ``` 
 
-Whitehorse precipitation has been __ from October to February (Figure C). Cumulative winter precipitation is ___ % below/above median on `r month.name[params$month]` 1. Cumulative degreedays of freezing (CDDF) are __ % below/above average, with ___ oC-Days on `r month.name[params$month]` 1 (Figure D), which suggests that the thickness of the ice cover on rivers and lakes of the region is likely ____ than normal.
+Whitehorse precipitation has been __ from October to February (Figure C). Cumulative winter precipitation is ___ % below/above median on `r month.name[params$month]` 1. Cumulative degreedays of freezing (CDDF) are __ % below/above average, with ___ $^\circ$C-Days on `r month.name[params$month]` 1 (Figure D), which suggests that the thickness of the ice cover on rivers and lakes of the region is likely ____ than normal.
 
 ```{r UpperYukon_weather, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", warnings=FALSE, fig.height=3.5}
 par(mfrow = c(1, 2))
@@ -829,8 +829,8 @@ par(mfrow = c(1, 2))
 # Set station ID
 station_id <- "09BA-M7"
 # Plot SWE
-snowbullpillow(location = station_id, custom_title = "A: Twin Creeks Snow Water Equivalent", year = params$year)
-
+plot <- snowbullpillow(location = station_id, custom_title = "A: Twin Creeks Snow Water Equivalent", year = params$year)
+plot
 # B
 # Plotting 
 snowbullSWE(loc= "Pelly", basin = "Pelly",
