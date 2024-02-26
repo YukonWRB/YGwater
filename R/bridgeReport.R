@@ -63,12 +63,7 @@ bridgeReport <- function(con = hydrometConnect(silent = TRUE),
     WHERE p.param_name = 'distance' 
     AND n.name = 'Highway Observation Network';
 ")
-    
-    
-    tsid <- merge(tsid, names)
   } else {
-    tsid <- DBI::dbGetQuery(con, paste0("SELECT location, timeseries_id FROM timeseries WHERE parameter = 'distance' AND location IN ('", paste(locations, collapse = "', '"), "');"))[,c(1:2)]
-    names <- DBI::dbGetQuery(con, paste0("SELECT location, name FROM locations WHERE location IN ('", paste(tsid$location, collapse = "', '"), "');"))[,c(1,2)]
     tsid <- DBI::dbGetQuery(con, "
     SELECT t.location, t.timeseries_id, l.name 
     FROM timeseries AS t 

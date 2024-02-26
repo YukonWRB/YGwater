@@ -31,7 +31,7 @@ for (i in 1:nrow(tsid)) {
 ```{r create tables, echo=FALSE, results='asis', message=FALSE}
 cat("  \n# Summary of freeboard measurements and changes \n")
 
-levels <- data.frame("Location" = NA, "Last reported distance" = NA, "24 hr change (cm)" = NA, "48 hr change (cm)" = NA, "72 hr change (cm)" = NA, "1 week change (cm)" = NA, "Last data age" = NA, check.names = FALSE)
+levels <- data.frame("Location" = NA, "Last reported distance (m)" = NA, "24 hr change (cm)" = NA, "48 hr change (cm)" = NA, "72 hr change (cm)" = NA, "1 week change (cm)" = NA, "Last data age" = NA, check.names = FALSE)
 
 for (i in 1:nrow(tsid)) {
   if (nrow(bridge_rt[[tsid$location[i]]]) == 0) {
@@ -105,13 +105,13 @@ for (i in 1:nrow(tsid)) {
     zoom_seq <- data.frame(date = seq.Date(Sys.Date()-zoom_days, Sys.Date(), by = "day"))
     zoom_seq$yday <- lubridate::yday(zoom_seq$date)
     if (1 %in% zoom_seq$yday) {
-      zoom_year <- lubridate::year(Sys.Date())-1 
+      zoom_year <- lubridate::year(Sys.Date()) - 1 
     } else {
       zoom_year <- lubridate::year(Sys.Date())
     }
     tryCatch({
       zoom_plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", startDay = Sys.Date()-zoom_days, endDay = Sys.Date(), datum = FALSE, filter = 50, years = zoom_year)
-      if (min(zoom_plot$data$value, na.rm=TRUE) < 1) {
+      if (min(zoom_plot$data$value, na.rm = TRUE) < 1) {
         zoom_plot <- zoom_plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
       }
       print(zoom_plot)
