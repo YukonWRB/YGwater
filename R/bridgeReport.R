@@ -38,6 +38,10 @@ bridgeReport <- function(con = hydrometConnect(silent = TRUE),
     }
     message("Select the path to the folder where you want this report saved.")
     save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
+  } else {
+    if (!dir.exists(save_path)) {
+      stop("The save path you specified does not exist.")
+    }
   }
   
   if (locations == "all") {

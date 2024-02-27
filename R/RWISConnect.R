@@ -17,20 +17,21 @@
 #' @export
 #'
 
-RWISConnect <- function(name = "rwdm", host = "rwis.gov.yk.ca", port = "5432", username = "rwdmread", password = "rwdmread"){
-
+RWISConnect <- function(name = "rwdm", host = "rwis.gov.yk.ca", port = "5432", username = "rwdmread", password = "rwdmread") 
+{
+  
   #initial checks
   rlang::check_installed("RPostgres", reason = "Package RPostgres is required to use function RWISConnect") #This is here because RPostgreSQL is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-
+  
   RWIS <- DBI::dbConnect(drv = RPostgres::Postgres(),
                          dbname = name,
                          host = host,
                          port = port,
                          user = username,
                          password = password)
-
-  if(!DBI::dbIsValid(RWIS)){
-    error("Connection failed.")
+  
+  if (!DBI::dbIsValid(RWIS)) {
+    stop("Connection failed.")
   } else {
     return(RWIS)
   }
