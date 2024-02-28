@@ -378,7 +378,7 @@ hydrometDiscrete <- function(location = NULL,
 
     plot <- plot +
       ggplot2::labs(title=titl) +
-      ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale,face = "bold"))
+      ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face = "bold"))
   }
 
   #Save it if requested

@@ -740,11 +740,11 @@ hydrometContinuous <- function(location = NULL,
       stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
       plot <- plot +
         ggplot2::labs(title=paste0("Location ", location, ": ", stn_name)) +
-        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale))
+        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face = "bold"))
     } else if (is.null(custom_title) == FALSE) {
       plot <- plot +
         ggplot2::labs(title=as.character(custom_title)) +
-        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale))
+        ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face = "bold"))
     }
   }
 

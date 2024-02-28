@@ -89,5 +89,5 @@ test_that("returns can be for yrs > requested year", {
   skip_on_cran()
   skip_on_ci()
   plot <- suppressWarnings(hydrometContinuous("09EA004", "water level", startDay = 1, endDay = 365, years = c(2018), historic_range = "all", return_max_year = 2022))
-  vdiffr::expect_doppelganger("hist range > plotted year", plot)
+  vdiffr::expect_doppelganger("returns > yr", plot)
 })
