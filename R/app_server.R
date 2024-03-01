@@ -7,6 +7,9 @@
 
 app_server <- function(input, output, session) {
 
+  
+  shinyjs::useShinyjs()
+  
   #Initial tasks ----------------
   con <- hydrometConnect(silent = TRUE)
   onStop(function() {DBI::dbDisconnect(con)}
