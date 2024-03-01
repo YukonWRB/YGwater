@@ -39,6 +39,10 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     stop("target_date must be a character string")
   }
   
+  if (length(circuit) != 1) {
+    stop("parameter circuit must be a single string, one of 'all' or a specific circuit name.")
+  }
+  
   circuit <- tolower(circuit)
   
   if (circuit == "all") {
@@ -108,6 +112,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     # Add _ to worksheet names and remove '
     courses2 <- gsub(" ", "_", courses)
     courses2 <- gsub("'", "", courses2)
+    sheet_names <- gsub("/", ".", courses)
     # Clone worksheets and fill in
     for (c in 1:length(courses2)) {
       # Set template depending on if it is a BC site or not
@@ -116,18 +121,19 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
       } else {sheet_name <- "Sheet1"}
       
       # Clone worksheet
-      openxlsx::cloneWorksheet(template, sheetName = courses2[c], clonedSheet = sheet_name)
+      
+      openxlsx::cloneWorksheet(template, sheetName = sheet_names[c], clonedSheet = sheet_name)
       # Fill in worksheet
-      openxlsx::writeData(template, sheet = courses2[c], x = circuit, xy = c(4,4))
-      openxlsx::writeData(template, sheet = courses2[c], x = courses[c], xy = c(4,5))
-      openxlsx::writeData(template, sheet = courses2[c], x = target_date, xy = c(4,6))
+      openxlsx::writeData(template, sheet = sheet_names[c], x = circuit, xy = c(4,4))
+      openxlsx::writeData(template, sheet = sheet_names[c], x = courses[c], xy = c(4,5))
+      openxlsx::writeData(template, sheet = sheet_names[c], x = target_date, xy = c(4,6))
       # Fill in maintenance
       if (con_flag) {
         maint <- maintenance[maintenance$name == courses[c],]
         for (m in maint$maintenance) {
-          if (m == "Brush snow course") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,49))}
-          if (m == "Brush helipad/access trail") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,50))}
-          if (m == "Replace marker plate/plates") {openxlsx::writeData(template, sheet = courses2[c], x = "x", xy = c(9,51))}
+          if (m == "Brush snow course") {openxlsx::writeData(template, sheet = sheet_names[c], x = "x", xy = c(9,49))}
+          if (m == "Brush helipad/access trail") {openxlsx::writeData(template, sheet = sheet_names[c], x = "x", xy = c(9,50))}
+          if (m == "Replace marker plate/plates") {openxlsx::writeData(template, sheet = sheet_names[c], x = "x", xy = c(9,51))}
         }
       }
     }
@@ -190,8 +196,8 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
                              startCol = 10, startRow = 2 + s)
     }
     # Add hyperlink to each page
-    for (s in 1:length(courses2)) {
-      openxlsx::writeFormula(template, sheet = courses2[s],
+    for (s in 1:length(sheet_names)) {
+      openxlsx::writeFormula(template, sheet = sheet_names[s],
                              x = paste0("=HYPERLINK(", '"#', "'Summary'", '!A', 2 + s, '", "Link to summary sheet")'),
                              startCol = 2, startRow = 1)
     }

@@ -1,5 +1,10 @@
 #' Plot a continous timeseries from the hydromet database
 #'
+#' @description
+#' `r lifecycle::badge('experimental')`
+#' 
+#' 
+#' 
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
@@ -14,33 +19,27 @@
 #' @param return_months Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within `startDay` and `endDay`, but will only consider data up to the last year specified in `years`. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of [fasstr::calc_annual_extremes()] and also used to set the 'water_year_start' parameter of this function.
 #' @param return_max_year The last year of data to consider when calculating returns. If left NULL behavior depends on parameter `historic_range`: if `historic_range` is set to 'last' defaults to the last year in `year` otherwise uses all data available. Automatically set to max(years) if `historic_range` is 'last', otherwise set to the current year.
 #' @param allowed_missing Allowable % of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of [fasstr::calc_annual_extremes()].
-#' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
-#' @param legend Should a legend (including text for min/max range and return periods) be added to the plot?
-#' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the database. Default uses function [hydrometConnect()].
 #'
-#' @return
+#' @return A plotly object
 #' @export
 
-location <- "09EB001"
-parameter = "water level"
-record_rate = NULL
-start_date = "1970-01-01"
-end_date = Sys.Date()
-datum = TRUE
-title = TRUE
-custom_title = NULL
-filter = 20
-historic_range = TRUE
-returns = "auto"
-return_type = "max"
-return_months = c(5:9)
-return_max_year = NULL
-allowed_missing = 10
-plot_scale = 1
-legend = TRUE
-save_path = NULL
-con = hydrometConnect(silent = TRUE)
+# location <- "09EB001"
+# parameter = "water level"
+# record_rate = NULL
+# start_date = "1970-01-01"
+# end_date = Sys.Date()
+# datum = TRUE
+# title = TRUE
+# custom_title = NULL
+# filter = 20
+# historic_range = TRUE
+# returns = "auto"
+# return_type = "max"
+# return_months = c(5:9)
+# return_max_year = NULL
+# allowed_missing = 10
+# con = hydrometConnect(silent = TRUE)
 
 
 
@@ -59,9 +58,6 @@ plotTimeseries <- function(location,
                            return_months = c(5:9),
                            return_max_year = NULL,
                            allowed_missing = 10,
-                           plot_scale = 1,
-                           legend = TRUE,
-                           save_path = NULL,
                            con = hydrometConnect(silent = TRUE)) {
   
   # Checks and initial work ##########################################
@@ -98,18 +94,6 @@ plotTimeseries <- function(location,
   returns <- tolower(returns)
   if (!returns %in% c("table", "auto", "calculate", "none")) {
     stop("Your entry for the parameter 'return' is invalid. Please review the function documentation and try again.")
-  }
-  
-  # Select save path
-  if (!is.null(save_path)) {
-    if (save_path %in% c("Choose", "choose")) {
-      # print("Select the folder where you want this graph saved.")
-      save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"), "Desktop"))
-    } else {
-      if (!dir.exists(save_path)) {
-        stop("The directory you pointed to with parameter 'save_path' does not exist")
-      }
-    }
   }
   
   if (!inherits(historic_range, "logical")) {
@@ -234,15 +218,22 @@ plotTimeseries <- function(location,
   }
   plot_data <- plot_data[order(plot_data$date),]
   
+  if (filter) { # Use the same approach as in plotOverlap to filter the value column
+    message("filter option is not yet implemented")
+  }
+  
   # Make the plot ###################################
-  plotly::plot_ly(plot_data) %>%
-    plotly::add_ribbons(x = ~date, ymin = ~q25, ymax = ~q75, name = "IQR", color = I("grey40")) %>%
-    plotly::add_ribbons(x = ~date, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80")) %>%
-    plotly::layout(title = stringr::str_to_title(name), xaxis = list(title = "Date"), yaxis = list(title = paste0(if (parameter != "SWE") stringr::str_to_title(parameter) else parameter, " (", units, ")"))) %>%
+  plot <- plotly::plot_ly(plot_data) %>%
+    plotly::add_ribbons(x = ~date, ymin = ~q25, ymax = ~q75, name = "IQR", color = I("grey40"), line = list(width = 0.2)) %>%
+    plotly::add_ribbons(x = ~date, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2)) %>%
+    plotly::layout(title = stringr::str_to_title(name), xaxis = list(title = "Date", showgrid = FALSE, showline = TRUE), yaxis = list(title = paste0(if (parameter != "SWE") stringr::str_to_title(parameter) else parameter, " (", units, ")"), showgrid = FALSE, showline = TRUE)) %>%
   plotly::add_lines(x = ~date, y = ~value, type = "scatter", mode = "lines", name = if (parameter != "SWE") stringr::str_to_title(parameter) else parameter, color = I("#0097A9"))
   
   # Add returns if requested ########################
   # If returns != "table" or if returns = "calculate" or if "auto" and no data is available in the database extrema table, get the missing data from range_data (which might have 0 rows) and add.
+  if (returns != "none") {
+    message("returns option is not yet implemented")
+  }
   
-  # Save the plot if requested ######################
+  return(plot)
 }

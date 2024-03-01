@@ -533,28 +533,14 @@ plotOverlap <- function(location = NULL,
     } else {
       if (parameter %in% c("water level", "water flow", "snow depth", "SWE", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
         realtime[realtime$value < 0 & !is.na(realtime$value),"value"] <- NA
-        realtime[realtime$min < 0 & !is.na(realtime$min),"min"] <- NA
-        realtime[realtime$max < 0 & !is.na(realtime$max),"max"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         realtime[realtime$value < -100 & !is.na(realtime$value),"value"] <- NA
-        realtime[realtime$min < -100 & !is.na(realtime$min),"min"] <- NA
-        realtime[realtime$max < -100 & !is.na(realtime$max),"max"] <- NA
       }
 
       rollmedian <- zoo::rollapply(realtime$value, width = filter, FUN = median, align = "center", fill = "extend", na.rm = TRUE)
       rollmad <- zoo::rollapply(realtime$value, width = filter, FUN = mad, align = "center", fill = "extend", na.rm = TRUE)
       outlier <- abs(realtime$value - rollmedian) > 5 * rollmad
       realtime$value[outlier] <- NA
-
-      rollmedian <- zoo::rollapply(realtime$min, width = filter, FUN = median, align = "center", fill = "extend", na.rm = TRUE)
-      rollmad <- zoo::rollapply(realtime$min, width = filter, FUN = mad, align = "center", fill = "extend", na.rm = TRUE)
-      outlier <- abs(realtime$min - rollmedian) > 5 * rollmad
-      realtime$min[outlier] <- NA
-
-      rollmedian <- zoo::rollapply(realtime$max, width = filter, FUN = median, align = "center", fill = "extend", na.rm = TRUE)
-      rollmad <- zoo::rollapply(realtime$max, width = filter, FUN = mad, align = "center", fill = "extend", na.rm = TRUE)
-      outlier <- abs(realtime$max - rollmedian) > 5 * rollmad
-      realtime$max[outlier] <- NA
     }
   }
 
