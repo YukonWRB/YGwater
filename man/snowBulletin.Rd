@@ -4,7 +4,15 @@
 \alias{snowBulletin}
 \title{Function for creating snow bulletin (Rmarkdown)- internal}
 \usage{
-snowBulletin(year, month, scale = 1, basins = NULL, save_path)
+snowBulletin(
+  year,
+  month,
+  scale = 1,
+  basins = NULL,
+  save_path,
+  synchronize = FALSE,
+  language = "english"
+)
 }
 \arguments{
 \item{year}{Year for which the snow bulletin is to be created.}
@@ -16,6 +24,10 @@ snowBulletin(year, month, scale = 1, basins = NULL, save_path)
 \item{basins}{The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.}
 
 \item{save_path}{The path to the directory (folder) where the report should be saved. Enter the path as a character string.}
+
+\item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized.}
+
+\item{language}{The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".}
 }
 \value{
 A snow bulletin in Microsoft Word format.
