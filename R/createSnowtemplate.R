@@ -77,7 +77,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     } else if (circuit == "ross") { # Snow scale/pillow locations not in  snow db. Twin Creeks A not in hydromet, but is in snow db
       courses <- c("Bonnet Plume Lake", "Burns Lake", "Edwards Lake", "Finlayson Airstrip", "Ford Lake", "Fuller Lake", "Hoole River", "Jordan Lake", "Plata Airstrip", "Rackla Lake", "Rose Creek", "Russell Lake", "Tintina Airstrip", "Twin Creeks A", "Twin Creeks B", "Withers Lake", "Twin Creeks B Snow Scale", "Withers Pillow", "Withers Scale") #
     } else if (circuit == "slakes") { # Snow scale/pillow locations not in db.
-      courses <- c("Atlin (B.C)", "Log Cabin (B.C)", "Log Cabin Pillow (B.C)", "Montana Mountain", "Montana Mountain Pillow", "Tagish", "Tagish Snow Scale", "Tagish Snow Pillow")
+      courses <- c("Atlin (B.C.)", "Log Cabin (B.C.)", "Log Cabin Pillow (B.C.)", "Montana Mountain", "Montana Mountain Pillow", "Tagish", "Tagish Snow Scale", "Tagish Snow Pillow")
     } else if (circuit == "teslin") {
       courses <- c("Meadow Creek", "Morley Lake", "Pine Lake Airstrip")
     } else if (circuit == "watson") {
@@ -116,7 +116,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     # Clone worksheets and fill in
     for (c in 1:length(courses2)) {
       # Set template depending on if it is a BC site or not
-      if (grepl("(B.C)", courses2[c])) {
+      if (grepl("(B.C.)", courses2[c])) {
         sheet_name <- "Sheet1_bc"
       } else {sheet_name <- "Sheet1"}
       
