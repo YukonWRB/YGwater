@@ -25,7 +25,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     if (!interactive()) {
       stop("You must specify a save path when running in non-interactive mode.")
     }
-    message("Select the path to the folder where you want this report saved.")
+    message("Select the path to the folder where you want the workbook(s) saved.")
     save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
   } else {
     if (!dir.exists(save_path)) {
@@ -51,7 +51,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     circuits <- circuit
   }
   
-  con_flag <- TRUE # sets flag so that DB connection is attempted at start. If fails, flag is set to FALSE and function continues without DB connection.
+  snowCon_flag <- TRUE # sets flag so that snow DB connection is attempted at start. If fails, flag is set to FALSE and function continues without DB connection.
   for (circuit in circuits) {
     
     template <- openxlsx::loadWorkbook(system.file("snow_survey/SnowSurveyTemplate.xlsx", package = "YGwater")) # reloaded each time to start from original
@@ -77,7 +77,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     } else if (circuit == "ross") { # Snow scale/pillow locations not in  snow db. Twin Creeks A not in hydromet, but is in snow db
       courses <- c("Bonnet Plume Lake", "Burns Lake", "Edwards Lake", "Finlayson Airstrip", "Ford Lake", "Fuller Lake", "Hoole River", "Jordan Lake", "Plata Airstrip", "Rackla Lake", "Rose Creek", "Russell Lake", "Tintina Airstrip", "Twin Creeks A", "Twin Creeks B", "Withers Lake", "Twin Creeks B Snow Scale", "Withers Pillow", "Withers Scale") #
     } else if (circuit == "slakes") { # Snow scale/pillow locations not in db.
-      courses <- c("Atlin (B.C)", "Log Cabin (B.C)", "Log Cabin Pillow (B.C)", "Montana Mountain", "Montana Mountain Pillow", "Tagish", "Tagish Snow Scale", "Tagish Snow Pillow")
+      courses <- c("Atlin (B.C.)", "Log Cabin (B.C.)", "Log Cabin Pillow (B.C.)", "Montana Mountain", "Montana Mountain Pillow", "Tagish", "Tagish Snow Scale", "Tagish Snow Pillow")
     } else if (circuit == "teslin") {
       courses <- c("Meadow Creek", "Morley Lake", "Pine Lake Airstrip")
     } else if (circuit == "watson") {
@@ -91,7 +91,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     }
     
     ## Get maintenance for all courses
-    if (con_flag) {
+    if (snowCon_flag) {
       tryCatch({
         con <- snowConnect(silent = TRUE)
         maintenance <- DBI::dbGetQuery(con, paste0("SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance ",
@@ -100,7 +100,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
                                                    "AND completed = FALSE"))
         try(DBI::dbDisconnect(con))
       }, error = function(e) {
-        con_flag <<- FALSE
+        snowCon_flag <<- FALSE
         warning("Could not connect to snow database. Maintenance information will not be included in the report. Do you have the correct credentials in your .Renviron file?")
       })
     }
@@ -112,11 +112,12 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     # Add _ to worksheet names and remove '
     courses2 <- gsub(" ", "_", courses)
     courses2 <- gsub("'", "", courses2)
-    sheet_names <- gsub("/", ".", courses)
+    courses2 <- gsub("/", ".", courses2)
+    sheet_names <- courses2
     # Clone worksheets and fill in
     for (c in 1:length(courses2)) {
       # Set template depending on if it is a BC site or not
-      if (grepl("(B.C)", courses2[c])) {
+      if (grepl("(B.C.)", courses2[c])) {
         sheet_name <- "Sheet1_bc"
       } else {sheet_name <- "Sheet1"}
       
@@ -128,7 +129,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
       openxlsx::writeData(template, sheet = sheet_names[c], x = courses[c], xy = c(4,5))
       openxlsx::writeData(template, sheet = sheet_names[c], x = target_date, xy = c(4,6))
       # Fill in maintenance
-      if (con_flag) {
+      if (snowCon_flag) {
         maint <- maintenance[maintenance$name == courses[c],]
         for (m in maint$maintenance) {
           if (m == "Brush snow course") {openxlsx::writeData(template, sheet = sheet_names[c], x = "x", xy = c(9,49))}
@@ -146,7 +147,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     
     #### ------------------------- Create summary sheet ----------------------- ####
     # Pull data from hydro database
-    if (con_flag) {
+    if (snowCon_flag) {
       summary <- SWE_station(year = as.numeric(substr(target_date, start = 1, stop = 4)),
                              month = as.numeric(substr(target_date, start = 7, stop = 7)),
                              return_missing = TRUE, source = "snow")

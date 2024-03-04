@@ -28,7 +28,8 @@ plotOverlap(
   save_path = NULL,
   con = hydrometConnect(silent = TRUE),
   continuous_data = NULL,
-  snowbulletin = FALSE
+  snowbulletin = FALSE,
+  language = "en"
 )
 
 hydrometContinuous(
@@ -54,7 +55,8 @@ hydrometContinuous(
   save_path = NULL,
   con = hydrometConnect(silent = TRUE),
   continuous_data = NULL,
-  snowbulletin = FALSE
+  snowbulletin = FALSE,
+  language = "en"
 )
 }
 \arguments{
@@ -78,7 +80,7 @@ hydrometContinuous(
 
 \item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
 
-\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "level", "flow", "snow depth", "SWE", "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
+\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "level" ("niveau d'eau"), "flow" ("débit d'eau"), "snow depth" ("profondeur de al neige"), "SWE" ("EEN"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
 \item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
 
@@ -103,6 +105,8 @@ hydrometContinuous(
 \item{continuous_data}{A data.frame with the data to be plotted. Must contain the following columns: datetime, value.}
 
 \item{snowbulletin}{If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.}
+
+\item{language}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
