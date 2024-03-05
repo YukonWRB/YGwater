@@ -473,6 +473,7 @@ plotOverlap <- function(location = NULL,
     if (!all(names(continuous_data) %in% c("datetime", "value"))) {
       stop("The data.frame passed to parameter 'continuous_data' must have columns named 'datetime' and 'value'.")
     }
+    parameter_name <- parameter
     #### Add this in here: ------------------
     dat <- continuous_data
     # Remove Feb 29
