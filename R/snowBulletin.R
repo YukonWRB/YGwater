@@ -39,15 +39,14 @@ snowBulletin <-
 
     # Check parameters
     # Language
-    lc <- Sys.getlocale("LC_TIME")
-    on.exit(Sys.setlocale("LC_TIME", lc), add=TRUE)
-    
-    if (!(language %in% c("french", "english"))) {
-      stop("Parameter 'language' must be one of the options: 'english' or 'french'.")
-    }
-    if (language=="french") {
-      Sys.setlocale("LC_TIME", "French")
-    }
+    # if (!(language %in% c("french", "english"))) {
+    #   stop("Parameter 'language' must be one of the options: 'english' or 'french'.")
+    # }
+    # if (language=="french") {
+    #   lc <- Sys.getlocale("LC_TIME")
+    #   Sys.setlocale("LC_TIME", "French")
+    #   on.exit(Sys.setlocale("LC_TIME", lc), add=TRUE)
+    # }
 
     
     # Make sure knitr is installed

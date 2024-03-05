@@ -19,7 +19,7 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 ---
 
 ```{r setup, include=FALSE}
-# snowBulletin(year = 2023, month = 5, scale = 1, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater")
+# snowBulletin(year = 2024, month = 3, scale = 1, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater", synchronize=FALSE, language="english")
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi=300)
 con <- YGwater::hydrometConnect()
 knitr::include_graphics
@@ -59,6 +59,7 @@ return(plot)
 snowbullSWE <- function(loc, basin, year, swe_basins, custom_title) {
   # Subset data
   swe_basin <- swe_basins[swe_basins$location==basin,]
+  swe_basin$datetime <- as.POSIXct(swe_basin$datetime)
   # Plot
   plot <- hydrometDiscrete(location = loc, parameter = "SWE", startDay = 1, tzone = "MST", years = c(year), title = TRUE, custom_title = custom_title, plot_type = "linedbox", save_path = NULL, discrete_data = swe_basin, con = con, plot_scale = params$scale)
   
@@ -66,7 +67,7 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title) {
   
   if(language == "french") {
   plot <- plot + ggplot2::labs(y="EEN (mm)")
-}
+  }
   
   return(plot)
 }
@@ -84,7 +85,7 @@ snowBullPrecip <- function(tsid, year, scale, custom_title, language) {
   if (language=="french") {
     custom_title <- paste0("C: Précipitations mensuelles à ", custom_title)
   } else {
-    custom_title <- paste0("C: ", custom_title, "Monthly Precipitation")
+    custom_title <- paste0("C: ", custom_title, " Monthly Precipitation")
   }
 
   plot <- hydrometDiscrete(location = NULL, parameter = "Total precipitation",
@@ -233,7 +234,12 @@ snowbullWater <- function(location, parameter, year, custom_title, scale) {
       plot_scale = scale * 0.9,
       snowbulletin = TRUE
     )
-  #plot <- plot + ggplot2::scale_x_datetime(date_breaks = "2 mois", labels = labs, expand = c(0,0))
+  
+  # if (params$language == "french") {
+  #   plot <- plot + 
+  #   ggplot2::scale_x_datetime(date_breaks = waiver(), labels = labs, expand = c(0,0))
+  # }
+  
   #plot <- plot + ggplot2::geom_line(ggplot2::aes(y=zoo::rollmean(max,5, fill=NA)), colour = "#0097A9", size=1) +
    # ggplot2::geom_line(ggplot2::aes(y=zoo::rollmean(min,5, fill=NA)), colour = "#834333", size=1)
   
@@ -387,14 +393,20 @@ graphs, depending on data availability:
     the spring.
 -   **Figure E:** Current, estimated daily discharge or measured water
     level, compared with historical data, representing an overview of
-    the watershed hydrological conditions.The flood level refers to the 
+    the watershed hydrological conditions. The flood level refers to the 
     lowest elevation at which flood impacts are estimated to occur.
 
 ```{r legend, echo=FALSE, eval=TRUE, fig.align='center', out.width="40%"}
 
-lines <- c("Maximum observed value", "Minimum observed value", "Median observed value", "Current year", "Flood level", "Average range of \nobserved values", "Min - max range of \nobserved values")  # Example list of unique legend elements
+if (language == "french") {
+  lines <- c("Valeur maximale observée", "Valeur minimale observée", "Valeur médiane observée", "Année actuelle", "Niveau d'inondation", "L'étendue moyenne des \nvaleurs observées", "L'étendue min - max des \nvaleurs observées")
+  legend_title <- "Légende des figures"
+} else {
+  lines <- c("Maximum observed value", "Minimum observed value", "Median observed value", "Current year", "Flood level", "Average range of \nobserved values", "Min - max range of \nobserved values")  # Example list of unique legend elements
+  legend_title <- "Figure Legend"
+}
 
-# Test 1
+# Plotting figure
  plot <- ggplot2::ggplot() +
   ggplot2::theme_void() + 
   ggplot2::theme(legend.position = c(0.5,0.5), 
@@ -410,16 +422,16 @@ lines <- c("Maximum observed value", "Minimum observed value", "Median observed 
                  legend.margin = ggplot2::margin(t = 0.3, r=0.3, b=0.3, l=0.3, unit="cm")
                  ) +  # Adjust legend position as needed
   #ggplot2::labs(legend.title = "Figure Legend") +  # Set legend title
-  ggplot2::scale_color_manual(name = "Figure Legend", values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
-  ggplot2::scale_size_manual(name = "Figure Legend", values = c(1.5, 1.5, 1.5, 1.5, 1, 10, 10), labels = lines) +  # Customize legend entries for fill
-  ggplot2::scale_linetype_manual(name = "Figure Legend", values = c("solid", "solid", "solid", "solid", "dashed", "solid", "solid"), labels = lines) +  # Customize legend entries for shape
+  ggplot2::scale_color_manual(name = legend_title, values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
+  ggplot2::scale_size_manual(name = legend_title, values = c(1.5, 1.5, 1.5, 1.5, 1, 10, 10), labels = lines) +  # Customize legend entries for fill
+  ggplot2::scale_linetype_manual(name = legend_title, values = c("solid", "solid", "solid", "solid", "dashed", "solid", "solid"), labels = lines) +  # Customize legend entries for shape
   #theme_minimal() +  
    ggplot2::geom_line(ggplot2::aes(x=1, y=1, color= lines, size=lines, linetype=lines)) +
   ggplot2::guides(color = ggplot2::guide_legend(byrow = TRUE
                                                 #,title.vjust=-1
                                                 ))
  
- ggplot2::ggsave("legend_plot.png", plot=plot, width=3.3, height=5.3)
+ ggplot2::ggsave("legend_plot.png", plot=plot, width=3.3, height=5.8)
  
  knitr::include_graphics("legend_plot.png")
 
@@ -630,7 +642,11 @@ ggplot2::ggplot() +
   ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
   ggplot2::theme(legend.position = "none") +
   ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale), plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face="bold")) +
-  ggplot2::labs(x = NULL, y = "SWE (mm)", title = custom_title)
+    if (language == "french") {
+    ggplot2::labs(x = NULL, y = "EEN (mm)", title = custom_title)
+  } else {
+    ggplot2::labs(x = NULL, y = "SWE (mm)", title = custom_title)
+  }
 
 # B
 # Plotting 
@@ -1177,8 +1193,12 @@ ggplot2::ggplot() +
   ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
   ggplot2::theme(legend.position = "none") +
   ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale), plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face="bold")) +
-  ggplot2::labs(x = NULL, y = "SWE (mm)", title = custom_title)
   
+  if (language == "french") {
+    ggplot2::labs(x = NULL, y = "EEN (mm)", title = custom_title)
+  } else {
+    ggplot2::labs(x = NULL, y = "SWE (mm)", title = custom_title)
+  }
 
 # B
 # Plotting 
