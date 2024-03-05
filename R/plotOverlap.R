@@ -91,13 +91,13 @@ plotOverlap <- function(location = NULL,
   }
 
   if (language == "fr") {
-    lc <- Sys.getlocale("LC_TIME")
-    Sys.setlocale("LC_TIME", "French")
-    on.exit(Sys.setlocale("LC_TIME", lc), add = TRUE)
+    lc <- Sys.getlocale("LC_ALL")
+    Sys.setlocale("LC_ALL", "French")
+    on.exit(Sys.setlocale("LC_ALL", lc), add = TRUE)
   } else if (language == "en") {
-    lc <- Sys.getlocale("LC_TIME")
-    Sys.setlocale("LC_TIME", "English")
-    on.exit(Sys.setlocale("LC_TIME", lc), add = TRUE)
+    lc <- Sys.getlocale("LC_ALL")
+    Sys.setlocale("LC_ALL", "English")
+    on.exit(Sys.setlocale("LC_ALL", lc), add = TRUE)
   }
 
   if (!is.null(record_rate)) {
@@ -207,13 +207,22 @@ plotOverlap <- function(location = NULL,
   }
 
   day_seq <- seq.POSIXt(startDay, endDay, by = "day")
+  if (length(day_seq) < 30) {
+    warning("The date range you have selected is less than 30 days. This graph type is not optimized for fewer than 30 days.")
+  }
 
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
     #Confirm parameter and location exist in the database and that there is only one entry
     escaped_parameter <- gsub("'", "''", parameter)
-    parameter_code <- DBI::dbGetQuery(con, paste0("SELECT param_code FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))[1,1]
+    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+    parameter_code <- parameter_tbl$param_code[1]
+    if (language == "fr") {
+      parameter_name <- parameter_tbl$param_name_fr[1]
+    } else if (language == "en" || is.na(parameter_name)) {
+      parameter_name <- parameter_tbl$param_name[1]
+    }
     if (is.na(parameter_code)) {
       stop("The parameter you entered does not exist in the database.")
     }
@@ -572,33 +581,59 @@ plotOverlap <- function(location = NULL,
   # x axis settings
   if  (length(day_seq) > 200) {
     date_breaks = "2 months"
-    labs = scales::label_date("%b %d", tz = Sys.timezone())
+    if (language == "fr") {
+      labs = "%d %b"
+    } else {
+      labs = "%b %d"
+    }
   } else if (length(day_seq) > 60) {
     date_breaks = "1 month"
-    labs = scales::label_date("%b %d", tz = Sys.timezone())
+    if (language == "fr") {
+      labs = "%d %b"
+    } else {
+      labs = "%b %d"
+    }
   } else if (length(day_seq) > 14) {
     date_breaks = "1 week"
-    labs = scales::label_date("%b %d", tz = Sys.timezone())
+    if (language == "fr") {
+      labs = "%d %b"
+    } else {
+      labs = "%b %d"
+    }
   } else if (length(day_seq) > 7) {
     date_breaks = "2 days"
-    labs = scales::label_date("%b %d", tz = Sys.timezone())
+    if (language == "fr") {
+      labs = "%d %b"
+    } else {
+      labs = "%b %d"
+    }
   } else if (length(day_seq) >= 2) {
     date_breaks = "1 days"
-    labs = scales::label_date("%b %d", tz = Sys.timezone())
+    if (language == "fr") {
+      labs = "%d %b"
+    } else {
+      labs = "%b %d"
+    }
   } else if (length(day_seq) > 1) {
     date_breaks = "24 hours"
-    labs = scales::label_time("%H:%M", tz = Sys.timezone())
+    if (language == "fr") {
+      labs = "%H:%M"
+    } else {
+      labs = "%H:%M"
+    }
   } else if (length(day_seq) == 1) {
     date_breaks = "12 hour"
-    labs = scales::label_time(format = "%H:%M", tz = Sys.timezone())
+    if (language == "fr") {
+      labs = "%H:%M"
+    } else {
+      labs = "%H:%M"
+    }
   }
-  
-  
 
   plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = .data$fake_datetime, y = .data$value)) +
       ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0,0.05)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
-    ggplot2::scale_x_datetime(date_breaks = date_breaks, labels = labs, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
-    ggplot2::labs(x = NULL, y =  paste0((if (!(parameter %in% c("EEN", "SWE"))) titleCase(parameter, language) else parameter), " (", units, ")")) +
+    ggplot2::scale_x_datetime(date_breaks = date_breaks, date_labels = labs, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
+    ggplot2::labs(x = NULL, y =  paste0((if (!(parameter_name %in% c("EEN", "SWE"))) titleCase(parameter_name, language) else parameter_name), " (", units, ")")) +
     ggplot2::theme_classic()
   if (legend) {
     plot <- plot + ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale))
@@ -612,8 +647,8 @@ plotOverlap <- function(location = NULL,
         ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"), na.rm = T)
       if (!all(is.na(realtime$q25))) {
         plot <- plot +
-          ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = if (language == "en") "25th-75th Percentile" else "25e-75e percentile"), na.rm = T) +
-          ggplot2::scale_fill_manual(name = if (language == "en") "Historical Range" else "Plage historique", values = if (language == "en") c("Min - Max" = "gray90", "25th-75th Percentile" = "gray80") else c("Min - Max" = "gray90", "25e-75e percentile" = "gray80"))
+          ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = if (language == "en") "25th-75th Percentile  " else "25e-75e percentile    "), na.rm = T) +
+          ggplot2::scale_fill_manual(name = if (language == "en") "Historical Range" else "Plage historique", values = if (language == "en") c("Min - Max" = "gray90", "25th-75th Percentile  " = "gray80") else c("Min - Max" = "gray90", "25e-75e percentile    " = "gray80"))
       } else {
         plot <- plot +
           ggplot2::scale_fill_manual(name = if (language == "en") "Historical Range" else "Plage historique", values = c("Min - Max" = "gray90"))
@@ -696,9 +731,10 @@ plotOverlap <- function(location = NULL,
   #Add some information below the legend
   if (legend) {
     spread_vert <- max - min #Used to determine where to put the text
-    spreads_horz <- as.numeric(range(realtime$fake_datetime, na.rm = TRUE))
+    # spreads_horz <- as.numeric(range(realtime$fake_datetime, na.rm = TRUE))
     # Calculate positions as a fraction of the data range
-    end_time1 <- as.POSIXct(spreads_horz[1] + (spreads_horz[2] - spreads_horz[1]) * 0.95) # 95% of the way along the x-axis
+    # end_time1 <- as.POSIXct(spreads_horz[1] + (spreads_horz[2] - spreads_horz[1]))
+    end_time1 <- max(realtime$fake_datetime, na.rm = TRUE)
     if (!is.infinite(minHist)) {
       if (overlaps) {
         if (language == "en") {
@@ -726,7 +762,7 @@ plotOverlap <- function(location = NULL,
       if (language == "en") {
         line2 <- paste0("        \n        \n        Return periods calculated\n        using months ", month.abb[return_months[1]], " to ",  month.abb[return_months[length(return_months)]], " \n        and years ", return_yrs[1], " to ", return_yrs[2], ". \n        ", nrow(analysis$Freq_Analysis_Data), " data points retained after\n        removing years with > ", allowed_missing, " %\n        missing data.")
       } else {
-        line2 <- paste0("        \n        \n        Périodes de retour calculées\n        en utilisant les mois de ", format(ISOdate(2000, return_months[1], 1), "%b"), " à ",  format(ISOdate(2000, return_months[length(return_months)], 1), "%b"), "\n        et les années de ", return_yrs[1], " à ", return_yrs[2], ". \n        ", nrow(analysis$Freq_Analysis_Data), " points de données conservés\n        après avoir retiré les années avec", " \n        > ", allowed_missing, "% de données manquantes.")
+        line2 <- paste0("        \n        \n        Périodes de retour calculées\n        en utilisant les mois de ", format(ISOdate(2000, return_months[1], 1), "%b"), "\n        à ",  format(ISOdate(2000, return_months[length(return_months)], 1), "%b"), " et les années de ", return_yrs[1], "\n        à ", return_yrs[2], ". ", nrow(analysis$Freq_Analysis_Data), " points de données\n        conservés après avoir retiré\n        les années avec > ", allowed_missing, "% de\n        données manquantes.")
       }
       lines <- paste0(line1, line2)
       plot <- plot +
@@ -736,7 +772,7 @@ plotOverlap <- function(location = NULL,
       if (language == "en") {
         line2 <- "        \n        \n        Return periods are based\n        on statistical analysis\n        of select data from the\n        start of records to 2021."
       } else {
-        line2 <- "        \n        \n        Périodes de retour basées\n        sur l'analyse statistique\n        de données sélectionnées depuis\n        le début des enregistrements jusqu'à 2021."
+        line2 <- "        \n        \n        Périodes de retour basées\n        sur l'analyse statistique\n        de données sélectionnées\n        depuis le début des enregistrements\n        jusqu'à 2021."
       }
       lines <- paste0(line1, line2)
       plot <- plot +
@@ -746,7 +782,7 @@ plotOverlap <- function(location = NULL,
       if (language == "en") {
         line2 <- "        \n        \n        Insufficient data to \n        calculate returns using\n        last requested year."
       } else {
-        line2 <- "        \n        \n        Données insuffisantes pour\n        calculer les périodes de retour\n        en utilisant la dernière année demandée."
+        line2 <- "        \n        \n        Données insuffisantes \n        pour calculer les périodes\n        de retour en utilisant\n        la dernière année demandée."
       }
       lines <- paste0(line1, line2)
       plot <- plot +
@@ -769,6 +805,7 @@ plotOverlap <- function(location = NULL,
       if (language == "en" || is.na(stn_name) == TRUE) {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
       }
+      stn_name <- titleCase(stn_name, language)
       
       plot <- plot +
         ggplot2::labs(title = stn_name) +
