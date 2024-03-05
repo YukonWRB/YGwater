@@ -1,4 +1,6 @@
 #' Capitalize titles in French or English
+#' 
+#' This function capitalizes a string according to the rules of the English or French language. It is based on the `str_to_title` function from the `stringr` package, but with additional rules to handle lowercase words and proper nouns specific to the Yukon, such as Klondike, Alsek, Takhini, and others.
 #'
 #' @param text The text to capitalize.
 #' @param language The language to use for capitalization, limited to 'fr' or 'en'.
@@ -13,30 +15,28 @@ titleCase <- function(text, language = "en") {
     stop("Language must be either 'en' or 'fr'.")
   }
   
-  capitalize <- function(word) {
-    return(stringr::str_to_title(word))
-  }
-  
   lowercase_words <- c("the", "and", "but", "or", "for", "nor", "on", "at", "to", "from", "by", "de", "d'", "et", "à", "la", "le", "les", "un", "une", "des")
-  uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Pelly", "Stewart Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines Junction","Ross River", "Rancheria")
+  uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Pelly", "Stewart", "Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines", "Junction", "Ross", " River", "Rancheria")
   
   # Split the text into words
   words <- unlist(strsplit(text, "\\s+"))
   
-  # Capitalize function that respects lowercase words list
+  # Capitalize function that respects lowercase and uppercase words list
   words_capitalized <- mapply(function(word, index) {
     if (tolower(word) %in% lowercase_words & index != 1 & index != length(words)) {
       return(tolower(word))
+    } else if (index == 1) {
+      return(stringr::str_to_title(word))
     } else {
       if (language == "en") {
-        return(capitalize(word))
+        return(stringr::str_to_title(word))
       } else if (language == "fr") {
-        if (capitalize(word) %in% uppercase_words) {
-          return(capitalize(word))
+        if (stringr::str_to_title(word) %in% uppercase_words) {
+          return(stringr::str_to_title(word))
         } else {
           return(tolower(word))}
       }
-    }
+    } 
   }, words, seq_along(words))
   
   # Special handling for French apostrophes
