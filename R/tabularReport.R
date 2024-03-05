@@ -153,7 +153,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
                                    "lastTwo" = round(lastTwo$mean_precip, 1),
                                    "lastOne" = round(lastOne$mean_precip, 1),
                                    "next24" = round(next24$mean_precip, 1),
-                                   "next48"= round(next48$mean_precip, 1),
+                                   "next48" = round(next48$mean_precip, 1),
                                    "location_comments" = NA,
                                    "yesterday_comments" = if (length(yesterday_comment_precip) < 1 | is.null(yesterday_comment_precip)) NA else yesterday_comment_precip))
       }, error = function(e) {
@@ -165,7 +165,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
                                     "lastTwo" = NA,
                                     "lastOne" = NA,
                                     "next24" = NA,
-                                    "next48"= NA,
+                                    "next48" = NA,
                                     "location_comments" = "Failed to fetch precipitation for this station.",
                                     "yesterday_comments" = if (length(yesterday_comment_precip) < 1 | is.null(yesterday_comment_precip)) NA else yesterday_comment_precip))
       })
@@ -184,16 +184,16 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     for (i in 1:nrow(level_locations)) {
       daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         level_daily[[level_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", level_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", level_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         level_rt[[level_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) >0) {
+      if (nrow(rt) > 0 | nrow(daily) > 0) {
         names_level[level_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", level_locations[i, "location"], "'"))))
       }
     }
@@ -416,7 +416,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       if (is.na(week)) { #expand the range if no data within the 2 hour timespan
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
-      yesterday_comment_flows <- if(yesterday_comments) yesterday$yesterday_locs$flows[yesterday$yesterday_locs$flows$Location == i, "Location.specific.comments"] else NA
+      yesterday_comment_flows <- if (yesterday_comments) yesterday$yesterday_locs$flows[yesterday$yesterday_locs$flows$Location == i, "Location.specific.comments"] else NA
 
       if (past <= 7) {
         flows <- rbind(flows,
