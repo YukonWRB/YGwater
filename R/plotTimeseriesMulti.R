@@ -11,7 +11,6 @@
 #' @param start_date The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01 but the plot is zoomable.
 #' @param end_date The day on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
-#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "level", "flow", "snow depth", "SWE", "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
@@ -53,8 +52,6 @@ plotTimeseries <- function(location,
   old_warn <- getOption("warn")
   on.exit(options(warn = old_warn))
   
-  rlang::check_installed("plotly", "necessary for interactive plots")
-  
   if (inherits(start_date, "character")) {
     start_date <- as.Date(start_date)
   }
@@ -75,6 +72,17 @@ plotTimeseries <- function(location,
   if (!(language %in% c("en", "fr"))) {
     stop("Your entry for the parameter 'language' is invalid. Please review the function documentation and try again.")
   }
+
+  #Code below doesn't appear necessary with plotly as the locale is set in the plot call
+#   if (language == "fr") {
+#     lc <- Sys.getlocale("LC_ALL")
+#     Sys.setlocale("LC_ALL", "fr_CA")
+#     on.exit(Sys.setlocale("LC_ALL", lc), add = TRUE)
+#   } else if (language == "en") {
+#     lc <- Sys.getlocale("LC_ALL")
+#     Sys.setlocale("LC_ALL", "en_CA")
+#     on.exit(Sys.setlocale("LC_ALL", lc), add = TRUE)
+#   }
   
   if (!is.null(record_rate)) {
     if (!(record_rate %in% c('< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'))) {
@@ -240,8 +248,8 @@ plotTimeseries <- function(location,
         plot_data[plot_data$value < -100 & !is.na(plot_data$value),"value"] <- NA
       }
       
-      rollmedian <- zoo::rollapply(plot_data$value, width = filter, FUN = "median", align = "center", fill = "extend", na.rm = TRUE)
-      rollmad <- zoo::rollapply(plot_data$value, width = filter, FUN = "mad", align = "center", fill = "extend", na.rm = TRUE)
+      rollmedian <- zoo::rollapply(plot_data$value, width = filter, FUN = median, align = "center", fill = "extend", na.rm = TRUE)
+      rollmad <- zoo::rollapply(plot_data$value, width = filter, FUN = mad, align = "center", fill = "extend", na.rm = TRUE)
       outlier <- abs(plot_data$value - rollmedian) > 5 * rollmad
       plot_data$value[outlier] <- NA
     }

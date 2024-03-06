@@ -13,16 +13,6 @@
 #' @return A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
 #' @export
 
-#TODO:
-
-# For testing
-# test <- SWE_basin(year=2023,
-#            month=3,
-#            threshold = 7,
-#            csv = FALSE,
-#            summarise = TRUE,
-#            source = 'snow')
-
 SWE_basin <-
   function(year,
            month,
@@ -33,7 +23,7 @@ SWE_basin <-
 
     ### Retrieve data from hydromet db
     if (source == "hydromet") {
-      con <- hydrometConnect()
+      con <- hydrometConnect(silent = TRUE)
       Meas <-
         DBI::dbGetQuery(con,
                         "SELECT locations.location, measurements_discrete.value, measurements_discrete.target_datetime
@@ -47,7 +37,7 @@ SWE_basin <-
       colnames(Meas) <- c("location_id", "SWE", "target_date")
     } else if (source == "snow") {
       ### Retrieve data from snow db
-      con <- snowConnect()
+      con <- snowConnect(silent = TRUE)
       Meas <- DBI::dbGetQuery(con, "SELECT location, swe, target_date
                             FROM means")
       DBI::dbDisconnect(con)

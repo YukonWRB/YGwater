@@ -7,7 +7,7 @@
 #'
 #' Notice: in many cases, you're better off using the Shiny app at [hydroApp()] to generate and export your plot. Read on if you need additional control over the final product.
 #'
-#' This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database, use the function [DB_browse_ts()] to see what's in there first. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
+#' This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
 #'
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
@@ -39,20 +39,6 @@ hydrometDiscrete <- function(location = NULL,
                              con = hydrometConnect(silent = TRUE),
                              discrete_data = NULL)
 {
-
-#
-# Commented code below is for testing...
-# location = "08AA-SC01"
-# parameter = "SWE"
-# startDay = 1
-# endDay = 365
-# tzone = "MST"
-# years = c(2022)
-# title = TRUE
-# plot_scale = 1
-# plot_type = "boxplot"
-# save_path = NULL
-# discrete_data = NULL
 
   # TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
 
@@ -86,7 +72,7 @@ hydrometDiscrete <- function(location = NULL,
   if (!is.null(save_path)) {
     if (save_path %in% c("Choose", "choose")) {
       message("Select the folder where you want this graph saved.")
-      save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+      save_path <- as.character(utils::choose.dir(caption = "Select Save Folder"))
     }
   }
 
@@ -105,7 +91,7 @@ hydrometDiscrete <- function(location = NULL,
           startDay <<- startDay + 1
         }
       }
-      startDay <<- as.POSIXct(as.numeric(startDay)*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
+      startDay <<- as.POSIXct(as.numeric(startDay)*60*60*24, origin = paste0(last_year - 1, "-12-31"), tz = "UTC")
       startDay <<- lubridate::force_tz(startDay, tzone)
     })
     tryCatch({
@@ -132,8 +118,6 @@ hydrometDiscrete <- function(location = NULL,
     } else {
       overlaps <- FALSE
     }
-
-    day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
 #### ------------------------ Data is not given --------------------------- ####
   if (is.null(discrete_data)) {

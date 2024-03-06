@@ -17,7 +17,7 @@ test_that("french labels work with full year", {
   dir <- paste0(tempdir(), "/plots")
   unlink(dir, recursive = TRUE)
   dir.create(dir)
-  plot <- suppressWarnings(plotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", save_path = dir,  historic_range = "last"))
+  plot <- suppressWarnings(plotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", save_path = dir,  historic_range = "last", language = "fr"))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/level1_fr.png"))
   expect_snapshot_file(paste0(dir, "/level1_fr.png"))

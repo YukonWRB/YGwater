@@ -6,8 +6,7 @@
       
        Your request was completed:
       0 points were appended out of the 337 that were in the provided dataset.
-      The points were appended to the timeseries Air Temp.Temperature at location TEST
-      2023-12-12 18:50:18.007947 UTC
+      The points were appended to the timeseries Air Temp.Temperature at location TEST.
       $appended
       [1] 0
       
@@ -24,8 +23,7 @@
       
        Your request was completed:
       337 points were appended out of the 337 that were in the provided dataset.
-      The points were appended to the timeseries Air Temp.Temperature at location TEST
-      2023-12-12 18:51:13.219372 UTC
+      The points were appended to the timeseries Air Temp.Temperature at location TEST.
       $appended
       [1] 337
       

@@ -13,7 +13,7 @@
 #'
 #' @return Two ESRI shapefiles (points + polygons) saved in the directory you specified.
 #'
-#' @seealso [drainageBasins()] to generate drainage polygons for any user-specified pour point.
+#' @seealso SAiVE::drainageBasins() to generate drainage polygons for any user-specified pour point.
 #' @export
 #'
 
