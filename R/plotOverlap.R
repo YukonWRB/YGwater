@@ -7,7 +7,7 @@
 #'
 #' Notice: in many cases, you're better off using the Shiny app at [hydroApp()] to generate and export your plot. Read on if you need additional control over the final product.
 #'
-#' This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for continuous data. This function can only plot what's in the database, use the function [DB_browse_ts()] to see what's in there first. Plots will include bands representing the historic min, max, and 25th-75th percentiles based on the last year of data requested. If necessary for performance, data may be down-sampled to daily means: see details.
+#' This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for continuous data. This function can only plot what's in the database. Plots will include bands representing the historic min, max, and 25th-75th percentiles based on the last year of data requested. If necessary for performance, data may be down-sampled to daily means: see details.
 #'
 #' @details
 #' Superseded functions WRBfloods::levelPlot() and WRBfloods::flowPlot() can be used in the event that this function does not yield your desired graph, or if you cannot use the local database and must use data directly from the Water Survey of Canada.
@@ -219,9 +219,9 @@ plotOverlap <- function(location = NULL,
     parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
     parameter_code <- parameter_tbl$param_code[1]
     if (language == "fr") {
-      parameter_name <- parameter_tbl$param_name_fr[1]
+      parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
     } else if (language == "en" || is.na(parameter_name)) {
-      parameter_name <- parameter_tbl$param_name[1]
+      parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
     }
     if (is.na(parameter_code)) {
       stop("The parameter you entered does not exist in the database.")
@@ -235,7 +235,7 @@ plotOverlap <- function(location = NULL,
       if (is.null(record_rate)) {
         stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data.")
       } else {
-        stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", record_rate, " and continuous category data You could try leaving the record rate to the default 'null'.")
+        stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", record_rate, " and continuous category data. You could try leaving the record rate to the default 'null'.")
       }
     } else if (nrow(exist_check) > 1) {
       if (is.null(record_rate)) {
@@ -473,7 +473,7 @@ plotOverlap <- function(location = NULL,
     if (!all(names(continuous_data) %in% c("datetime", "value"))) {
       stop("The data.frame passed to parameter 'continuous_data' must have columns named 'datetime' and 'value'.")
     }
-    parameter_name <- parameter
+    parameter_name <- if (!(parameter %in% c("SWE", "EEN"))) titleCase(parameter) else parameter
     #### Add this in here: ------------------
     dat <- continuous_data
     # Remove Feb 29
@@ -563,8 +563,8 @@ plotOverlap <- function(location = NULL,
         realtime[realtime$value < -100 & !is.na(realtime$value),"value"] <- NA
       }
 
-      rollmedian <- zoo::rollapply(realtime$value, width = filter, FUN = median, align = "center", fill = "extend", na.rm = TRUE)
-      rollmad <- zoo::rollapply(realtime$value, width = filter, FUN = mad, align = "center", fill = "extend", na.rm = TRUE)
+      rollmedian <- zoo::rollapply(realtime$value, width = filter, FUN = "median", align = "center", fill = "extend", na.rm = TRUE)
+      rollmad <- zoo::rollapply(realtime$value, width = filter, FUN = "mad", align = "center", fill = "extend", na.rm = TRUE)
       outlier <- abs(realtime$value - rollmedian) > 5 * rollmad
       realtime$value[outlier] <- NA
     }
@@ -634,7 +634,7 @@ plotOverlap <- function(location = NULL,
   plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = .data$fake_datetime, y = .data$value)) +
       ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0,0.05)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
     ggplot2::scale_x_datetime(date_breaks = date_breaks, date_labels = labs, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
-    ggplot2::labs(x = NULL, y =  paste0((if (!(parameter_name %in% c("EEN", "SWE"))) titleCase(parameter_name, language) else parameter_name), " (", units, ")")) +
+    ggplot2::labs(x = NULL, y =  paste0(parameter_name, " (", units, ")")) +
     ggplot2::theme_classic()
   if (legend) {
     plot <- plot + ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale))

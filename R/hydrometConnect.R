@@ -14,7 +14,6 @@
 #'
 #' @return A connection to the database.
 #'
-#' @seealso [DB_browse_ts()], [DB_browse_spatial()]to browse the database contents; [DB_get_meta()] to extract metadata; [DB_get_ts()] to extract timeseries information; and [DB_get_spatial()] to extract spatial content.
 #' @export
 #'
 

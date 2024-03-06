@@ -15,5 +15,5 @@ titleCase(text, language = "en")
 A string with proper capitalization for the language.
 }
 \description{
-Capitalize titles in French or English
+This function capitalizes a string according to the rules of the English or French language. It is based on the \code{str_to_title} function from the \code{stringr} package, but with additional rules to handle lowercase words and proper nouns specific to the Yukon, such as Klondike, Alsek, Takhini, and others.
 }

@@ -118,7 +118,7 @@ Generate plots of water level/flow, snow pillows, or other continuous data prese
 
 Notice: in many cases, you're better off using the Shiny app at \code{\link[=hydroApp]{hydroApp()}} to generate and export your plot. Read on if you need additional control over the final product.
 
-This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for continuous data. This function can only plot what's in the database, use the function \code{\link[=DB_browse_ts]{DB_browse_ts()}} to see what's in there first. Plots will include bands representing the historic min, max, and 25th-75th percentiles based on the last year of data requested. If necessary for performance, data may be down-sampled to daily means: see details.
+This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for continuous data. This function can only plot what's in the database. Plots will include bands representing the historic min, max, and 25th-75th percentiles based on the last year of data requested. If necessary for performance, data may be down-sampled to daily means: see details.
 }
 \details{
 Superseded functions WRBfloods::levelPlot() and WRBfloods::flowPlot() can be used in the event that this function does not yield your desired graph, or if you cannot use the local database and must use data directly from the Water Survey of Canada.

@@ -4,8 +4,8 @@ test_that("violin plot is as expected for full year with numeric startDay and en
   skip_on_cran()
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
-  dir.create(dir)
   unlink(dir, recursive = TRUE)
+  dir.create(dir)
   suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = 1, endDay = 365, years = "2022", save_path = dir))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow.png"))
@@ -80,22 +80,24 @@ test_that("depth plots work", {
   unlink(dir, recursive = TRUE)
 })
 
+# Run swe_basin to get discrete_data for the next two tests
+discrete_data <- SWE_basin(year = 2022,
+                           month = c(3,4,5),
+                           threshold = 6,
+                           csv = FALSE,
+                           summarise = FALSE)
+discrete_data$datetime <- paste0(discrete_data$year, "-0", discrete_data$month, "-01")
+discrete_data <- discrete_data %>% 
+  dplyr::filter(location == "Upper_Yukon")
+
 test_that("violin plot is as expected when discrete data is given", {
   skip_on_cran()
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
-  dir.create(dir)
   unlink(dir, recursive = TRUE)
-  # Run swe_basin to get discrete_data
-  discrete_data <- suppressWarnings(SWE_basin(year = 2022,
-                                        month = c(3,4,5),
-                                        threshold = 6,
-                                        csv = FALSE,
-                                        summarise = FALSE))
-  discrete_data$datetime <- paste0(discrete_data$year, "-0", discrete_data$month, "-01")
-  discrete_data <- discrete_data %>% dplyr::filter(location == "Upper_Yukon")
+  dir.create(dir)
   # use discrete data in hydrometDiscrete
-  suppressWarnings(hydrometDiscrete(location = NULL, parameter = 'SWE', years = c(2021, 2022), title = TRUE, plot_type = "boxplot", save_path = dir, discrete_data = discrete_data))
+  hydrometDiscrete(location = NULL, parameter = 'SWE', years = c(2021, 2022), title = TRUE, plot_type = "boxplot", save_path = dir, discrete_data = discrete_data)
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow7.png"))
   expect_snapshot_file(paste0(dir, "/snow7.png"))
@@ -107,51 +109,56 @@ test_that("linedbox plot is as expected when discrete data is given", {
   skip_on_cran()
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
-  dir.create(dir)
   unlink(dir, recursive = TRUE)
-  # Run swe_basin to get discrete_data
-  discrete_data <- suppressWarnings(SWE_basin(year = 2023,
-                                              month = c(3,4,5),
-                                              threshold = 6,
-                                              csv = FALSE,
-                                              summarise = FALSE))
-  discrete_data$datetime <- paste0(discrete_data$year, "-0", discrete_data$month, "-01")
-  discrete_data <- discrete_data %>% dplyr::filter(location == "Upper_Yukon")
+  dir.create(dir)
   # use discrete data in hydrometDiscrete
-  suppressWarnings(
-    hydrometDiscrete(location = "Upper Yukon", parameter = "SWE",
-                     startDay = 1, tzone = "MST", years = 2023, title = TRUE,
+    hydrometDiscrete(location = "Upper Yukon", 
+                     parameter = "SWE",
+                     startDay = 1, 
+                     tzone = "MST", 
+                     years = 2022, 
+                     title = TRUE,
                      custom_title = "Upper Yukon Basin Monthly Snow Course Data",
-                     plot_type = "linedbox", save_path = dir,
-                     discrete_data = discrete_data, con = con, plot_scale = 1)
-    )
+                     plot_type = "linedbox", 
+                     save_path = dir,
+                     discrete_data = discrete_data,
+                     plot_scale = 1)
+    
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow8.png"))
   expect_snapshot_file(paste0(dir, "/snow8.png"))
   unlink(dir, recursive = TRUE)
 })
 
+rm(discrete_data)
+
 test_that("linedbox plot that starts and ends in different years is as expected when discrete data is given", {
   skip_on_cran()
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
-  dir.create(dir)
   unlink(dir, recursive = TRUE)
+  dir.create(dir)
   # Get precipitation data from measurements_continuous
+  con <- hydrometConnect(silent = TRUE)
   discrete_data <- DBI::dbGetQuery(con, "SELECT * FROM measurements_continuous WHERE timeseries_id = 663")
   attr(discrete_data$datetime, "tzone") <- "MST"
   discrete_data$month <- format(discrete_data$datetime, "%m")
   discrete_data$year <- format(discrete_data$datetime, "%Y")
   discrete_data$units <- "mm"
 
-  suppressWarnings(hydrometDiscrete(location = NULL, parameter = "Total precipitation",
+  hydrometDiscrete(location = NULL, parameter = "Total precipitation",
                    tzone = "MST",
-                   years = 2023,#c(params$year),
-                   startDay = "2023-10-01", # 275
-                   endDay = "2024-05-01", #120
-                   title = TRUE, custom_title = "Whitehorse Monthly Precipitation",
-                   plot_type = "linedbox", plot_scale = 1,#params$scale,
-                   save_path = dir, discrete_data = discrete_data, con = con))
+                   years = 2022,
+                   startDay = "2022-10-01", # 275
+                   endDay = "2023-05-01", #120
+                   title = TRUE, 
+                   custom_title = "Whitehorse Monthly Precipitation",
+                   plot_type = "linedbox", 
+                   plot_scale = 1,#params$scale,
+                   save_path = dir, 
+                   discrete_data = discrete_data, 
+                   con = con)
+  DBI::dbDisconnect(con)
 
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow9.png"))
