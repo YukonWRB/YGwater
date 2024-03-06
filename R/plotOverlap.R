@@ -32,7 +32,7 @@
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
-#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "level" ("niveau d'eau"), "flow" ("débit d'eau"), "snow depth" ("profondeur de al neige"), "SWE" ("EEN"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "level" ("niveau d'eau"), "flow" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "SWE" ("EEN"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
@@ -557,7 +557,7 @@ plotOverlap <- function(location = NULL,
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "water flow", "débit d'eau", "snow depth", "profondeur de la neige", "SWE", "EEN", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
+      if (parameter %in% c("water level", "niveau d'eau", "water flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "SWE", "EEN", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
         realtime[realtime$value < 0 & !is.na(realtime$value),"value"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         realtime[realtime$value < -100 & !is.na(realtime$value),"value"] <- NA
@@ -662,7 +662,7 @@ plotOverlap <- function(location = NULL,
   if (snowbulletin == FALSE) {
     plot <- plot +
       ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
-      ggplot2::scale_colour_manual(name = if (language == "en") "Year" else "Année", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks = rev(unique(realtime$plot_year)))
+      ggplot2::scale_colour_manual(name = if (language == "en") "Year" else "Ann\u00E9e", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks = rev(unique(realtime$plot_year)))
   } else {
     plot <- plot +
       ggplot2::geom_line(ggplot2::aes(y = max), colour = "#0097A9", size = 1) +
@@ -741,20 +741,20 @@ plotOverlap <- function(location = NULL,
         if (language == "en") {
           line1 <- paste0("\n         \n        Historical range based\n        on years\n        ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
         } else {
-          line1 <- paste0("\n         \n        Plage historique basée\n        sur les années\n        ", ribbon_start_end[1], " à ", ribbon_start_end[2], "." )
+          line1 <- paste0("\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es\n        ", ribbon_start_end[1], " \u00E0 ", ribbon_start_end[2], "." )
         } 
       } else {
         if (language == "en") {
           line1 <- paste0("\n         \n        Historical range based\n        on years ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
         } else {
-          line1 <- paste0("\n         \n        Plage historique basée\n        sur les années ", ribbon_start_end[1], " à ", ribbon_start_end[2], "." )
+          line1 <- paste0("\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es ", ribbon_start_end[1], " \u00E0 ", ribbon_start_end[2], "." )
         }
       }
     } else {
       if (language == "en") {
         line1 <- "\n         \n        Not enough data for\n        historical ranges"
       } else {
-        line1 <- "\n         \n        Pas assez de données pour\n        les plages historiques"
+        line1 <- "\n         \n        Pas assez de donn\u00E9es pour\n        les plages historiques"
       }
       plot <- plot + #Adjust the legend spacing so that the text isn't pushed off the plot area
         ggplot2::theme(legend.box.spacing = ggplot2::unit(0, "pt"), legend.box.margin = ggplot2::margin(0, 0, 0, 0))
@@ -763,7 +763,7 @@ plotOverlap <- function(location = NULL,
       if (language == "en") {
         line2 <- paste0("        \n        \n        Return periods calculated\n        using months ", month.abb[return_months[1]], " to ",  month.abb[return_months[length(return_months)]], " \n        and years ", return_yrs[1], " to ", return_yrs[2], ". \n        ", nrow(analysis$Freq_Analysis_Data), " data points retained after\n        removing years with > ", allowed_missing, " %\n        missing data.")
       } else {
-        line2 <- paste0("        \n        \n        Périodes de retour calculées\n        en utilisant les mois de ", format(ISOdate(2000, return_months[1], 1), "%b"), "\n        à ",  format(ISOdate(2000, return_months[length(return_months)], 1), "%b"), " et les années de ", return_yrs[1], "\n        à ", return_yrs[2], ". ", nrow(analysis$Freq_Analysis_Data), " points de données\n        conservés après avoir retiré\n        les années avec > ", allowed_missing, "% de\n        données manquantes.")
+        line2 <- paste0("        \n        \n        P\u00E9riodes de retour calcul\u00E9es\n        en utilisant les mois de ", format(ISOdate(2000, return_months[1], 1), "%b"), "\n        \u00E0 ",  format(ISOdate(2000, return_months[length(return_months)], 1), "%b"), " et les ann\u00E9es de ", return_yrs[1], "\n        \u00E0 ", return_yrs[2], ". ", nrow(analysis$Freq_Analysis_Data), " points de donn\u00E9es\n        conserv\u00E9s apr\u00E8s avoir retir\u00E9\n        les ann\u00E9es avec > ", allowed_missing, "% de\n        donn\u00E9es manquantes.")
       }
       lines <- paste0(line1, line2)
       plot <- plot +
@@ -773,7 +773,7 @@ plotOverlap <- function(location = NULL,
       if (language == "en") {
         line2 <- "        \n        \n        Return periods are based\n        on statistical analysis\n        of select data from the\n        start of records to 2021."
       } else {
-        line2 <- "        \n        \n        Périodes de retour basées\n        sur l'analyse statistique\n        de données sélectionnées\n        depuis le début des enregistrements\n        jusqu'à 2021."
+        line2 <- "        \n        \n        P\u00E9riodes de retour bas\u00E9es\n        sur l'analyse statistique\n        de donn\u00E9es s\u00E9lectionn\u00E9es\n        depuis le d\u00E9but des enregistrements\n        jusqu'\u00E0 2021."
       }
       lines <- paste0(line1, line2)
       plot <- plot +
@@ -783,7 +783,7 @@ plotOverlap <- function(location = NULL,
       if (language == "en") {
         line2 <- "        \n        \n        Insufficient data to \n        calculate returns using\n        last requested year."
       } else {
-        line2 <- "        \n        \n        Données insuffisantes \n        pour calculer les périodes\n        de retour en utilisant\n        la dernière année demandée."
+        line2 <- "        \n        \n        Donn\u00E9es insuffisantes \n        pour calculer les p\u00E9riodes\n        de retour en utilisant\n        la derni\u00E8re ann\u00E9e demand\u00E9e."
       }
       lines <- paste0(line1, line2)
       plot <- plot +

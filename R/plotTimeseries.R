@@ -234,7 +234,7 @@ plotTimeseries <- function(location,
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "water flow", "débit d'eau", "snow depth", "profondeur de la neige", "SWE", "EEN", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
+      if (parameter %in% c("water level", "niveau d'eau", "water flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "SWE", "EEN", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
         plot_data[plot_data$value < 0 & !is.na(plot_data$value),"value"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         plot_data[plot_data$value < -100 & !is.na(plot_data$value),"value"] <- NA
