@@ -31,7 +31,7 @@ language <- params$language
 
 ```{r Functions, echo=FALSE}
 #### -------------------- A: snow scale/pillow plots ---------------------- ####
-snowbullpillow <- function(location, custom_title, year, number="") {
+snowbullpillow <- function(location, custom_title, year, number="", language="en") {
   
   plot <- YGwater::hydrometContinuous(
   location = location,
@@ -43,13 +43,14 @@ snowbullpillow <- function(location, custom_title, year, number="") {
   custom_title = custom_title,
   con = con,
   plot_scale = params$scale, 
-  snowbulletin = TRUE
+  snowbulletin = TRUE, 
+  language = language
 )
 plot <- plot + ggplot2::theme(legend.position = "none")
 
-if(language == "french") {
-  plot <- plot + ggplot2::labs(y="EEN (mm)")
-}
+# if(language == "french") {
+#   plot <- plot + ggplot2::labs(y="EEN (mm)")
+# }
 
 return(plot)
 
@@ -174,13 +175,13 @@ return(cddf)
 }
 
 # Function to create CDDF plots
-snowbullCDDF <- function(timeseries_id, custom_title, language) {
+snowbullCDDF <- function(timeseries_id, custom_title, language="en") {
   location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", timeseries_id))
 
   location <- getCDDF(location, params$year)
   
   # Set title based on language
-  if (language=="french") {
+  if (language=="fr") {
     custom_title <- paste0("D: Degrés-jours de gel cumulés à ", custom_title)
   } else {
     custom_title <- paste0("D: Cumulative Degree-Days of Freezing in ", custom_title)
@@ -198,10 +199,11 @@ snowbullCDDF <- function(timeseries_id, custom_title, language) {
                                       save_path = NULL, 
                                       con = con, 
                                       continuous_data = location, 
-                                      snowbulletin = TRUE)
+                                      snowbulletin = TRUE,
+                                      language = language)
   plot <- plot + ggplot2::theme(legend.position = "none") 
   
-    if(language == "french") {
+    if(language == "fr") {
       plot <- plot + ggplot2::labs(y="DJGC (\u00B0C-jours)")
     } else {
       plot <- plot + ggplot2::labs(y="CDDF (\u00B0C days)")
@@ -218,7 +220,7 @@ snowbullCDDF <- function(timeseries_id, custom_title, language) {
 
 #### --------- E: Function to create lake level snow bulletin plots ------- ####
 
-snowbullWater <- function(location, parameter, year, custom_title, scale) {
+snowbullWater <- function(location, parameter, year, custom_title, scale, language="en") {
   flood <- data$flow_level_flood
   tryCatch({
   plot <-
@@ -232,7 +234,8 @@ snowbullWater <- function(location, parameter, year, custom_title, scale) {
       custom_title = custom_title,
       con = con,
       plot_scale = scale * 0.9,
-      snowbulletin = TRUE
+      snowbulletin = TRUE,
+      language = language
     )
   
   # if (params$language == "french") {
@@ -261,7 +264,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale) {
         #   colour = "red",
         #   vjust = -0.5
         # )
-             if(language == "french") {
+             if(language == "fr") {
       plot <- plot + ggplot2::labs(y="Niveau d'eau (m)")
       } 
       
@@ -283,7 +286,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale) {
         #   ) + 
         ggplot2::scale_y_log10() 
       
-      if(language == "french") {
+      if(language == "fr") {
       plot <- plot + ggplot2::labs(y="Débit (m3/s)")
       } 
     }
@@ -305,13 +308,14 @@ snowbullWater <- function(location, parameter, year, custom_title, scale) {
 
 ```
 
-```{r SWEbasins, include=FALSE, eval=TRUE}
+```{r SWEbasins, include=FALSE, eval=FALSE}
 # Get SWE data for basins 
 swe_basins <- YGwater::SWE_basin(year = params$year,
                                    month = c(3, 4, 5), # c(3)
                                    threshold = 6,
                                    csv = FALSE,
-                                   summarise = FALSE)
+                                   summarise = FALSE,
+                                   source = "hydromet")
   # Add datetime to data
   swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
   swe_basins <<- swe_basins
@@ -321,7 +325,9 @@ swe_basins <- YGwater::SWE_basin(year = params$year,
                                      month = params$month, # c(3)
                                      threshold = 6,
                                      csv = FALSE,
-                                     summarise = TRUE)
+                                     summarise = TRUE, 
+                                     source = "hydromet"
+                                     )
   basins_stats <- basins_stats[,c("basin", "swe", "swe_relative")]
   basins_stats$swe <- round(basins_stats$swe, 0)
   basins_stats <<- basins_stats
@@ -399,7 +405,7 @@ graphs, depending on data availability:
 ```{r legend, echo=FALSE, eval=TRUE, fig.align='center', out.width="40%"}
 
 if (language == "french") {
-  lines <- c("Valeur maximale observée", "Valeur minimale observée", "Valeur médiane observée", "Année actuelle", "Niveau d'inondation", "L'étendue moyenne des \nvaleurs observées", "L'étendue min - max des \nvaleurs observées")
+  lines <- c("Valeur maximale observée", "Valeur minimale observée", "Valeur médiane observée", "Année courante", "Niveau d'inondation", "L'étendue moyenne des \nvaleurs observées", "L'étendue min - max des \nvaleurs observées")
   legend_title <- "Légende des figures"
 } else {
   lines <- c("Maximum observed value", "Minimum observed value", "Median observed value", "Current year", "Flood level", "Average range of \nobserved values", "Min - max range of \nobserved values")  # Example list of unique legend elements
@@ -570,7 +576,7 @@ if ("Upper Yukon" %in% params$basins) {
 
 
 # Plot D
-  plot_d <- snowbullCDDF(timeseries_id = 484, custom_title = "Whitehorse", language = language)
+  plot_d <- snowbullCDDF(timeseries_id = 484, custom_title = "Whitehorse", language = substr(params$language, 1, 2))
 
 ```
 
@@ -582,7 +588,7 @@ par(mfrow = c(1, 2))
 station_id <- "09AA-M1"
 # Plot SWE
 if (language=="french") {
-  snowbullpillow(location = station_id, custom_title = "A1: Équivalent en eau de neige - Tagish", year = params$year)
+  snowbullpillow(location = station_id, custom_title = "A1: Équivalent en eau de neige - Tagish", year = params$year, language="fr")
 } else {
   snowbullpillow(location = station_id, custom_title = "A1: Tagish Snow Water Equivalent", year = params$year)
 }
@@ -593,7 +599,7 @@ if (language=="french") {
 station_id <- "29AB-M3"
 # Plot SWE
 if (language=="french") {
-  snowbullpillow(location = station_id, custom_title = "A2: Équivalent en eau de neige - Wolf Creek", year = params$year)
+  snowbullpillow(location = station_id, custom_title = "A2: Équivalent en eau de neige - Wolf Creek", year = params$year, language="fr")
 } else {
   snowbullpillow(location = station_id, custom_title = "A2: Wolf Creek Subalpine Snow Water Equivalent", year = params$year)
 }
@@ -609,6 +615,8 @@ snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily 
                             "WHERE timeseries_id = 649 ",
                             "AND date >= '", params$year-1, "-09-01' ", #params$year
                             "AND date <= '", params$year, "-07-01' ")) #params$year
+snow_p$date <- as.POSIXct(snow_p$date)
+test2 <<- snow_p
 # Get historical snow survey data
 snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measurements_discrete ",
                             "WHERE timeseries_id = 217 "))
@@ -625,8 +633,23 @@ snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measur
       dplyr::bind_rows(snow_s %>%
                   dplyr::group_by(.data$fake_date) %>%
                   dplyr::summarise(value = stats::median(.data$value), type = "median"))
-  
+  snow_s$fake_date <- as.POSIXct(snow_s$fake_date)
   plot_scale <- params$scale
+  
+  if (language == "french") {
+      labs = "%d %b"
+    } else {
+      labs = "%b %d"
+      # labs = format(c(paste0(params$year-1, "-09-01"), paste0(params$year-1, "-11-01"),
+      #                 paste0(params$year, "-01-01"), paste0(params$year, "-03-01"),
+      #                 paste0(params$year, "-05-01")), 
+      #               format="%b %d")
+      #labs = c("Sep 01", "Nov 01", "Jan 01", "Mar 01", "May 01")
+      # labs = format(c(paste0(year-1, "-09-01"), paste0(year-1, "-11-01"),
+      #                 paste0(year, "-01-01"), paste0(year, "-03-01"),
+      #                 paste0(year, "-05-01")), 
+      #               format="%b %d")
+    }
   
   # title language
   if (language == "french") {
@@ -639,6 +662,8 @@ ggplot2::ggplot() +
   ggplot2::theme_classic() +
   ggplot2::geom_line(data=snow_p, ggplot2::aes(y=value, x=date), linewidth = plot_scale *1) +
   ggplot2::geom_point(dat=snow_s, ggplot2::aes(y=value, x=fake_date, colour=type), size=plot_scale*2) +
+  ggplot2::scale_x_datetime(date_breaks = "2 months", date_labels = labs, expand = c(0,0), 
+                            limits=c(as.POSIXct(paste0(params$year-1, "-09-01")), as.POSIXct(paste0(params$year, "-06-30")))) + 
   ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
   ggplot2::theme(legend.position = "none") +
   ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale), plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face="bold")) +
@@ -701,7 +726,8 @@ if (params$language == "french") {
               parameter = "water level",
               year = params$year-1, #2023, #
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 
 
 ```
@@ -720,7 +746,8 @@ if (params$language == "french") {
               parameter = "water level",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 
 
 ```
@@ -739,7 +766,7 @@ if ("Teslin" %in% params$basins) {
 # Plot C
 plot_c <- snowBullPrecip(665, params$year, params$scale, "Teslin", language = language)
 # Plot D
-plot_d <- snowbullCDDF(timeseries_id = 532, custom_title = "Teslin", language = language)
+plot_d <- snowbullCDDF(timeseries_id = 532, custom_title = "Teslin", language = substr(params$language, 1, 2))
 ```
 
 The Teslin River Basin snowpack is \-\-\-\-- average. The basin-averaged
@@ -752,7 +779,7 @@ of the historical median, with
 ```{r TeslinBigSalmon_basin, echo=FALSE, eval=include, fig.align='center', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin Teslin - Big Salmon")
 } else {
@@ -795,7 +822,8 @@ snowbullWater(location = station_id,
               parameter = "water level",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Central Yukon River Basin (Carmacks Area)
@@ -812,7 +840,7 @@ if ("Central Yukon" %in% params$basins) {
 # Create plot C
 plot_c <- snowBullPrecip(666, params$year, params$scale, "Carmacks", language = language)
 # Plot D
-plot_d <- snowbullCDDF(timeseries_id = 540, custom_title = "Carmacks", language = language)
+plot_d <- snowbullCDDF(timeseries_id = 540, custom_title = "Carmacks", language = substr(params$language, 1, 2))
 ```
 
 The Central Yukon River Basin snowpack is \-\-\-\-- average. The
@@ -825,7 +853,7 @@ of `r month.name[params$month]` 1 (Figure B).
 ```{r CentralYukon_basin, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Central Yukon", basin = "Central_Yukon",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin central du Yukon")
 } else {
@@ -873,7 +901,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Pelly River Basin
@@ -888,7 +917,7 @@ if ("Pelly" %in% params$basins) {
 
 ```{r Pelly2, echo=FALSE, eval=include}
 # Create plot D
-plot_d <- snowbullCDDF(timeseries_id = 500, custom_title = "Faro", language = language)
+plot_d <- snowbullCDDF(timeseries_id = 500, custom_title = "Faro", language = substr(params$language, 1, 2))
 ```
 
 The Pelly River Basin snowpack is \-\-\-\-- average. At Twin Creeks
@@ -908,14 +937,14 @@ par(mfrow = c(1, 2))
 station_id <- "09BA-M7"
 # Plot SWE
 if (language == "french") {
-  snowbullpillow(location = station_id, custom_title = "A: Équivalent en eau de neige à Twin Creeks", year = params$year)
+  snowbullpillow(location = station_id, custom_title = "A: Équivalent en eau de neige à Twin Creeks", year = params$year, language="fr")
 } else {
   snowbullpillow(location = station_id, custom_title = "A: Twin Creeks Snow Water Equivalent", year = params$year)
 }
 
 # B
 # Plotting 
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Pelly", basin = "Pelly",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin Pelly")
 } else {
@@ -964,7 +993,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Stewart River Basin
@@ -981,7 +1011,7 @@ if ("Stewart" %in% params$basins) {
 # Create plot c
 plot_c <- snowBullPrecip(668, params$year, params$scale, "Mayo", language = language)
 # Create plot D
-plot_d <- snowbullCDDF(timeseries_id = 548, custom_title = "Mayo", language = language)
+plot_d <- snowbullCDDF(timeseries_id = 548, custom_title = "Mayo", language = substr(params$language, 1, 2))
 ```
 
 The Stewart River Basin snowpack is \-\-\-\-- average. At Withers Lake
@@ -1001,14 +1031,14 @@ par(mfrow = c(1, 2))
 station_id <- "09DB-M1"
 # Plot SWE
 if (language == "french") {
-  snowbullpillow(location = station_id, custom_title = "A: Équivalent en eau de neige au lac Withers", year = params$year)
+  snowbullpillow(location = station_id, custom_title = "A: Équivalent en eau de neige au lac Withers", year = params$year, language="fr")
 } else {
   snowbullpillow(location = station_id, custom_title = "A: Withers Lake Snow Water Equivalent", year = params$year)
 }
 
 # B
 # Plotting 
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Stewart", basin = "Stewart",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin Stewart")
 } else {
@@ -1059,7 +1089,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # White River Basin
@@ -1082,7 +1113,7 @@ of the historical median, with
 ```{r White_basin, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting 
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "White", basin = "White",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin White")
 } else {
@@ -1119,7 +1150,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Lower Yukon River Basin (Dawson Area)
@@ -1136,7 +1168,7 @@ if ("Lower Yukon" %in% params$basins) {
 # Create plot C
 plot_c <- snowBullPrecip(664, params$year, params$scale, "Dawson", language = language)
 # Create plot D
-plot_d <- snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = language)
+plot_d <- snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = substr(params$language, 1, 2))
 
 ```
 
@@ -1160,6 +1192,7 @@ snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily 
                             "WHERE timeseries_id = 85 ",
                             "AND date >= '", params$year-1, "-09-01' ", #params$year
                             "AND date <= '", params$year, "-07-01' ")) #params$year
+snow_p$date <- as.POSIXct(snow_p$date)
 # Get historical snow survey data
 snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measurements_discrete ",
                             "WHERE timeseries_id = 317 "))
@@ -1176,8 +1209,15 @@ snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measur
       dplyr::bind_rows(snow_s %>%
                   dplyr::group_by(.data$fake_date) %>%
                   dplyr::summarise(value = stats::median(.data$value), type = "median"))
+  snow_s$fake_date <- as.POSIXct(snow_s$fake_date)
   
   plot_scale <- params$scale
+  
+    if (language == "french") {
+      labs = "%d %b"
+    } else {
+      labs = "%b %d"
+    }
   
   # title language
   if (language == "french") {
@@ -1190,6 +1230,8 @@ ggplot2::ggplot() +
   ggplot2::theme_classic() +
   ggplot2::geom_line(data=snow_p, ggplot2::aes(y=value, x=date), linewidth = plot_scale *1) +
   ggplot2::geom_point(dat=snow_s, ggplot2::aes(y=value, x=fake_date, colour=type), size=plot_scale*2) +
+  ggplot2::scale_x_datetime(date_breaks = "2 months", date_labels = labs, expand = c(0,0),
+                            limits=(c(as.POSIXct(paste0(params$year-1, "-09-01")), as.POSIXct(paste0(params$year, "-06-30"))))) + 
   ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
   ggplot2::theme(legend.position = "none") +
   ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale), plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face="bold")) +
@@ -1202,7 +1244,7 @@ ggplot2::ggplot() +
 
 # B
 # Plotting 
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Lower Yukon", basin = "Lower_Yukon",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin inf. Yukon")
 } else {
@@ -1256,7 +1298,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Porcupine River Basin
@@ -1273,7 +1316,7 @@ if ("Porcupine" %in% params$basins) {
 # Create plot C and associated stat
 plot_c <- snowBullPrecip(671, params$year, params$scale, "Old Crow", language = language)
 # Create plot D and associated stat
-plot_d <- snowbullCDDF(timeseries_id = 556, custom_title = "Old Crow", language = language)
+plot_d <- snowbullCDDF(timeseries_id = 556, custom_title = "Old Crow", language = substr(params$language, 1, 2))
 
 ```
 
@@ -1287,7 +1330,7 @@ of the historical median, with
 ```{r Porcupine_basin, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting 
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Porcupine", basin = "Porcupine",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin Porcupine")
 } else {
@@ -1335,7 +1378,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Peel River Basin
@@ -1358,7 +1402,7 @@ the historical median, with
 ```{r Peel_basin, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting 
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Peel", basin = "Peel",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin Peel")
 } else {
@@ -1389,7 +1433,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Liard River Basin
@@ -1406,7 +1451,7 @@ if ("Liard" %in% params$basins) {
 # Create plot C and associated stat
 plot_c <- snowBullPrecip(667, params$year, params$scale, "Watson Lake", language = language)
 # Create plot D and associated stat
-plot_d <- snowbullCDDF(timeseries_id = 508, custom_title = "Watson Lake", language = language)
+plot_d <- snowbullCDDF(timeseries_id = 508, custom_title = "Watson Lake", language = substr(params$language, 1, 2))
 ```
 
 The Liard River Basin snowpack is \-\-\-\-- average. At Hyland
@@ -1428,7 +1473,7 @@ par(mfrow = c(1, 2))
 station_id <- "10AD-M2"
 # Plot SWE
 if (language == "french") {
-  snowbullpillow(location = station_id, custom_title = "A: Équivalent en eau de neige à la rivière Hyland", year = params$year)
+  snowbullpillow(location = station_id, custom_title = "A: Équivalent en eau de neige à la rivière Hyland", year = params$year, language="fr")
 } else {
   snowbullpillow(location = station_id, custom_title = "A: Hyland River Snow Water Equivalent", year = params$year)
 }
@@ -1436,7 +1481,7 @@ if (language == "french") {
 
 # B
 # Plotting 
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Liard", basin = "Liard",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin Liard")
 } else {
@@ -1485,7 +1530,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Alsek River Basin
@@ -1508,7 +1554,7 @@ of the historical median, with
 ```{r Alsek_basin, echo=FALSE, eval=include, fig.show='hold', fig.align='center', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting 
-if (language == "french") {
+if (params$language == "french") {
   snowbullSWE(loc= "Alsek", basin = "Alsek",
             year = params$year, swe_basins = swe_basins, custom_title = "B: Relevés nivométriques - bassin Alsek")
 } else {
@@ -1541,7 +1587,8 @@ snowbullWater(location = station_id,
               parameter = "water flow",
               year = params$year-1,
               custom_title = custom_title,
-              scale = params$scale)
+              scale = params$scale,
+              language = substr(params$language, 1, 2))
 ```
 
 # Drainage Basin and Snow Course
