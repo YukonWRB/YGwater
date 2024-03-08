@@ -105,7 +105,7 @@ snowBulletin <-
     for (b in basins) {
       if (!(b %in%  c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", 
                           "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"))){
-        message(paste0(b, "is not a basin option and was not outputted in the snow bulletin word document. Please check spelling."))
+        message(paste0(b, " is not a basin option and was not outputted in the snow bulletin word document. Please check spelling."))
       }
     }
     

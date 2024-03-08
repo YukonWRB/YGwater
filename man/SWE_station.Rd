@@ -5,15 +5,19 @@
 \title{Calculates snow survey stats for stations}
 \usage{
 SWE_station(
+  stations = "all",
   year,
   month,
   csv = FALSE,
   return_missing = FALSE,
   active = TRUE,
-  source = "hyromet"
+  source = "hyromet",
+  summarise = TRUE
 )
 }
 \arguments{
+\item{stations}{A vector of snow course stations, identified with their location ID. Default is "all", where all stations in the snow db are taken.}
+
 \item{year}{The year of interest. The stats will be calculated based on all years prior to 'year'.}
 
 \item{month}{The month of interest. Options are 3, 4 and 5 for March, April and May, respectively. Historical stats are given for the first day of this month.}
