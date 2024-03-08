@@ -17,35 +17,42 @@ titleCase <- function(text, language = "en") {
   
   lowercase_words <- c("the", "and", "but", "or", "for", "nor", "on", "at", "to", "from", "by", "de", "d'", "et", "\u00E0", "la", "le", "les", "un", "une", "des")
   uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Stewart", "Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines", "Junction", "Ross", " River", "Rancheria", "Nisutlin", "Laberge", "Old", "Crow", "C.-B.", "Colombie", "Britanique", "Nord-Ouest", "King", "Solomon", "Midnight", "North")
+  all_uppercase_words <- c("SWE", "EEN")
   
-  # Split the text into words
-  words <- unlist(strsplit(text, "\\s+"))
-  
-  # Capitalize function that respects lowercase and uppercase words list
-  words_capitalized <- mapply(function(word, index) {
-    if (tolower(word) %in% lowercase_words & index != 1 & index != length(words)) {
-      return(tolower(word))
-    } else if (index == 1) {
-      return(stringr::str_to_title(word))
-    } else {
-      if (language == "en") {
+  processText <- function(text) {
+    words <- unlist(strsplit(text, "\\s+"))
+    
+    # Capitalize function that respects lowercase and uppercase words list
+    words_capitalized <- mapply(function(word, index) {
+      if (word %in% all_uppercase_words) {
+        return(toupper(word))
+      } else if (tolower(word) %in% lowercase_words & index != 1 & index != length(words)) {
+        return(tolower(word))
+      } else if (index == 1) {
         return(stringr::str_to_title(word))
-      } else if (language == "fr") {
-        if (stringr::str_to_title(word) %in% uppercase_words) {
+      } else {
+        if (language == "en") {
           return(stringr::str_to_title(word))
-        } else {
-          return(tolower(word))}
-      }
-    } 
-  }, words, seq_along(words))
-  
-  # Special handling for French apostrophes
-  if (language == "fr") {
-    words_capitalized <- gsub(" D'", " d'", paste(words_capitalized, collapse = " "), ignore.case = FALSE)
+        } else if (language == "fr") {
+          if (stringr::str_to_title(word) %in% uppercase_words) {
+            return(stringr::str_to_title(word))
+          } else {
+            return(tolower(word))}
+        }
+      } 
+    }, words, seq_along(words))
+    
+    # Special handling for French apostrophes
+    if (language == "fr") {
+      words_capitalized <- gsub(" D'", " d'", paste(words_capitalized, collapse = " "), ignore.case = FALSE)
+    }
+    
+    result <- paste(words_capitalized, collapse = " ")
+    return(result)
   }
   
-  # Re-join the words into a single string
-  result <- paste(words_capitalized, collapse = " ")
+  # Use vapply to apply processText to each element of text, ensuring character output
+  result <- vapply(text, processText, character(1))
   
-  return(result)
+  return(unname(result))
 }

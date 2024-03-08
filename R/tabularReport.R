@@ -76,10 +76,10 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
   }
   if (!is.null(archive_path)) {
-    if (!interactive()) {
-      stop("You must specify a save path when running in non-interactive mode.")
-    }
     if (archive_path == "choose") {
+      if (!interactive()) {
+        stop("You must specify a a path to the old file when running in non-interactive mode.")
+      }
       message("Select the path to yesterday's file (refer to function help).")
       archive_path <- rstudioapi::selectFile(caption = "Select Yesterday's File", path = save_path, filter = "Excel files  (*.xlsx)")
     }

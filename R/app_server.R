@@ -6,8 +6,6 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-  
-  shinyjs::useShinyjs()
 
   #Initial tasks ----------------
   con <- hydrometConnect(silent = TRUE)
@@ -49,18 +47,11 @@ app_server <- function(input, output, session) {
       }
     } else if (input$first_selection == "View hydromet plots + data") {
       if (!runCheck$plots) {
-        timeseries <- DBI::dbGetQuery(con, "SELECT timeseries_id, location_id, location, parameter, param_type, unit, category, start_datetime, end_datetime FROM timeseries")
-        locations <- DBI::dbGetQuery(con, "SELECT location, location_id, name FROM locations")
-        result <- merge(timeseries, locations)
-        plotContainer$all_ts <- result
-
-        parameters <- DBI::dbGetQuery(con, "SELECT param_code, param_name FROM parameters")
-        plotContainer$parameters <- parameters
-        updateSelectizeInput(session, "plot_param", choices = c("", parameters$param_name), selected = "water level")
-
-        datum_conversions <- DBI::dbGetQuery(con, "SELECT locations.location, datum_conversions.location_id, datum_id_to, conversion_m, current FROM datum_conversions INNER JOIN locations ON locations.location_id = datum_conversions.location_id")
-        datum_list <- DBI::dbGetQuery(con, "SELECT datum_id, datum_name_en FROM datum_list")
-        datums <- merge(datum_conversions, datum_list, by.x = "datum_id_to", by.y = "datum_id")
+        plotContainer$all_ts <- DBI::dbGetQuery(con, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.param_type, ts.unit, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
+        plotContainer$parameters_discrete <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
+        plotContainer$parameters_continuous <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'continuous';")
+        datums <- DBI::dbGetQuery(con, "SELECT dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
+        
         datums$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", datums$datum_name_en)
         datums$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", datums$datum_name_en)
         datums$datum_name_en <- gsub("APPROXIMATE", "approx.", datums$datum_name_en)
@@ -69,7 +60,6 @@ app_server <- function(input, output, session) {
       }
     }
   })
-
 
   #observeEvents related to precipitation data/maps -----------------------
   #Change the actionButton for rendering a map/data depending on which option the user chooses
@@ -228,24 +218,25 @@ app_server <- function(input, output, session) {
   }, ignoreInit = TRUE)
 
 
-  # observe and observeEvents related to plotting continuous data --------------------
+  # observe and observeEvents related to plotting data --------------------
   observeEvent(input$plot_data_type, {
     if (input$plot_data_type == "Discrete") {
-      updateSelectizeInput(session, "plot_type", choices = c("Violin plot", "Box plot"), selected = "Violin plot")
-      updateSelectizeInput(session, "plot_param", choices = c("SWE", "Snow depth"))
+      updateSelectizeInput(session, "plot_param", choices = titleCase(plotContainer$parameters_discrete$param_name))
       shinyjs::hide("return_periods")
       shinyjs::hide("return_type")
       shinyjs::hide("return_months")
       shinyjs::hide("end_doy")
       shinyjs::hide("start_doy")
+      shinyjs::hide("start_date")
+      shinyjs::hide("end_date")
       shinyjs::hide("plot_years_note")
       shinyjs::hide("plot_filter")
       shinyjs::hide("historic_range")
       shinyjs::hide("return_yrs")
+      shinyjs::show("plot_sub_type")
+      updateSelectizeInput(session, "plot_type", choices = c("hydrometDiscrete"), selected = "hydrometDiscrete")
     } else if (input$plot_data_type == "Continuous") {
-      updateSelectizeInput(session, "plot_param", choices = c("Level", "Flow", "Bridge freeboard", "SWE", "Snow depth"))
-      # updateSelectizeInput(session, "plot_type", choices = c("Overlapping years", "Long timeseries"), selected = "Overlapping years") #This to be uncommented once "long timeseries" works
-      updateSelectizeInput(session, "plot_type", choices = c("Overlapping years"), selected = "Overlapping years")
+      updateSelectizeInput(session, "plot_param", choices = titleCase(plotContainer$parameters_continuous$param_name))
       shinyjs::show("return_periods")
       shinyjs::show("return_type")
       shinyjs::show("return_months")
@@ -253,29 +244,73 @@ app_server <- function(input, output, session) {
       shinyjs::show("start_doy")
       shinyjs::show("plot_years_note")
       shinyjs::show("plot_filter")
-      shinyjs::show("historic_range")
-      shinyjs::show("return_yrs")
+      shinyjs::hide("plot_sub_type")
+      updateSelectizeInput(session, "plot_type", choices = c("Overlapping years", "Long timeseries", "Multi timeseries"), selected = "Overlapping years")
     }
   })
-
+  
   observeEvent(input$plot_param, {
-    if (input$plot_param %in% c("SWE", "Snow depth")) {
-      if (input$plot_data_type == "Discrete") {  #NOTE: This is only set to -12-31 and -01-01 because of limitations in how the plotting function handles start/end dates for discrete data. Can be modified once the plotting utility is adapted, if desired.
-        updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-12-31"))
-        updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()), "-01-01"))
+    if (input$plot_data_type == "Discrete") {  #NOTE: This is only set to -12-31 and -01-01 because of limitations in how the plotting function handles start/end dates for discrete data. Can be modified once the plotting utility is adapted, if desired.
+      updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-12-31"))
+      updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()), "-01-01"))
+      
+        code <- plotContainer$parameters_discrete[plotContainer$parameters_discrete$param_name == if (input$plot_param == "SWE") input$plot_param else tolower(input$plot_param), "param_code"]
+        updateSelectizeInput(session, "plot_loc_name", choices = plotContainer$all_ts[plotContainer$all_ts$parameter == code, "name"])
+        updateSelectizeInput(session, "plot_loc_code", selected = plotContainer$all_ts[plotContainer$all_ts$parameter == code, "location"])
+      
       } else if (input$plot_data_type == "Continuous") {
-        updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
-        updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
-        updateTextInput(session, "return_months", value = "3,4,5")
+        code <- plotContainer$parameters_discrete[plotContainer$parameters_discrete$param_name == if (input$plot_param == "SWE") input$plot_param else tolower(input$plot_param), "param_code"]
+        updateSelectizeInput(session, "plot_loc_name", choices = plotContainer$all_ts[plotContainer$all_ts$parameter == code, "name"])
+        updateSelectizeInput(session, "plot_loc_code", selected = plotContainer$all_ts[plotContainer$all_ts$parameter == code, "location"])
+        if (input$plot_param %in% c("SWE", "Depth")) {
+          updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
+          updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
+          updateTextInput(session, "return_months", value = "3,4,5")
+        }  else {
+          updateTextInput(session, "return_months", value = "5,6,7,8,9")
+        }
       }
-    } else {
-      updateTextInput(session, "return_months", value = "5,6,7,8,9")
+    })
+  
+  observeEvent(input$plot_type, {
+    if (input$plot_type == "Overlapping years") {
+      shinyjs::show("return_periods")
+      shinyjs::show("return_type")
+      shinyjs::show("return_months")
+      shinyjs::show("end_doy")
+      shinyjs::show("start_doy")
+      shinyjs::show("plot_years_note")
+      shinyjs::hide("historic_range")
+      shinyjs::hide("return_yrs")
+      shinyjs::hide("start_date")
+      shinyjs::hide("end_date")
+    } else if (input$plot_type == "Long timeseries") {
+      shinyjs::hide("return_periods")
+      shinyjs::hide("return_type")
+      shinyjs::hide("return_months")
+      shinyjs::hide("end_doy")
+      shinyjs::hide("start_doy")
+      shinyjs::hide("plot_years_note")
+      shinyjs::hide("return_yrs")
+      shinyjs::show("historic_range")
+      shinyjs::show("start_date")
+      shinyjs::show("end_date")
+    } else if (input$plot_type == "Multi timeseries") {
+      shinyjs::hide("return_periods")
+      shinyjs::hide("return_type")
+      shinyjs::hide("return_months")
+      shinyjs::hide("end_doy")
+      shinyjs::hide("start_doy")
+      shinyjs::hide("plot_years_note")
+      shinyjs::hide("return_yrs")
+      shinyjs::show("historic_range")
+      shinyjs::show("start_date")
+      shinyjs::show("end_date")
     }
   })
-
-  # Update user's choices for plots based on selected plot type
+  
+  # Update user's choices for location name and code based on selected plot type and parameter
   observe(
-
     if (input$plot_param == "Level") {
       if (input$plot_data_type == "Continuous") {
         plotContainer$plot_data_type <- "continuous"
