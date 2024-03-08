@@ -21,7 +21,8 @@
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param con A connection to the database. Default uses function [hydrometConnect()].
 #'
-#' @return A plotly object
+#' @return A plotly object 
+#' 
 #' @export
 
 plotTimeseriesMulti <- function(location,
@@ -192,7 +193,7 @@ plotTimeseriesMulti <- function(location,
   if (historic_range) { # get data from the calculated_daily table for historic ranges plus values from measurements_continuous. Where there isn't any data in measurements_continuous fill in with the value from the daily table.
     range_end <- end_date + 1*24*60*60
     range_start <- start_date - 1*24*60*60
-    range_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, min, max, q75, q50, q25  FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", range_start, "' AND '", range_end, "' ORDER BY date ASC;"))
+    range_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, min, max, q75, q25  FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", range_start, "' AND '", range_end, "' ORDER BY date ASC;"))
     range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
     attr(range_data$datetime, "tzone") <- tzone
     if (rate == "day") {
@@ -209,9 +210,9 @@ plotTimeseriesMulti <- function(location,
       trace_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "';"))
       trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     } else if (rate == "hour") {
-      trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "';"))
+      trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
     } else if (rate == "max") {
-      trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "';"))
+      trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
     }
     attr(trace_data$datetime, "tzone") <- tzone
   }
@@ -219,7 +220,7 @@ plotTimeseriesMulti <- function(location,
   # Find the most common interval between points in trace_data and fill gaps with NA values
   min_trace <- min(trace_data$datetime, na.rm = TRUE)
   if (!is.infinite(min_trace)) {
-    interval <- as.numeric(stats::median(diff(trace_data$datetime))) * 60 * 60
+    interval <- stats::median(diff(as.numeric(trace_data$datetime)))
     all_times <- seq.POSIXt(from = min_trace, to = max(trace_data$datetime), by = interval)
     trace_data <- merge(trace_data, data.frame(datetime = all_times), by = "datetime", all = TRUE)
     
@@ -247,9 +248,7 @@ plotTimeseriesMulti <- function(location,
       range_data$min <- range_data$min + datum$conversion_m
       range_data$max <- range_data$max + datum$conversion_m
       range_data$q25 <- range_data$q25 + datum$conversion_m
-      range_data$q50 <- range_data$q50 + datum$conversion_m
       range_data$q75 <- range_data$q75 + datum$conversion_m
-      range_data <- range_data[order(range_data$datetime),]
     }
   }
   trace_data <- trace_data[order(trace_data$datetime),]
@@ -275,12 +274,12 @@ plotTimeseriesMulti <- function(location,
   plot <- plotly::plot_ly()
   if (historic_range) {
     plot <- plot %>%
-      plotly::add_ribbons(data = range_data, x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (language == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2)) %>%
-      plotly::add_ribbons(data = range_data,x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2)) 
+      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (language == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2), hoverinfo = "text", text = ~paste("q25:", round(q25, 2), " q75:", round(q75, 2))) %>%
+      plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2), hoverinfo = "text", text = ~paste("Min:", round(min, 2), " Max:", round(max, 2))) 
   }
   plot <- plot %>%
     plotly::layout(title = list(text = stn_name, x = 0.05, xref = "container"), xaxis = list(title = list(standoff = 0, font = list(size = 1)), showgrid = FALSE, showline = TRUE, tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", rangeslider = list(visible = if (slider) TRUE else FALSE)), yaxis = list(title = paste0(parameter_name, " (", units, ")"), showgrid = FALSE, showline = TRUE), margin = list(b = 0), hovermode = "x unified") %>%
-    plotly::add_lines(data = trace_data, x = ~datetime, y = ~value, type = "scatter", mode = "lines", name = parameter_name, color = I("#0097A9")) %>%
+    plotly::add_lines(data = trace_data, x = ~datetime, y = ~value, type = "scatter", mode = "lines", name = parameter_name, color = I("#0097A9"), hoverinfo = "text", text = ~paste(parameter_name, ":", round(value, 4))) %>%
     plotly::config(locale = language)
   
   return(plot)
