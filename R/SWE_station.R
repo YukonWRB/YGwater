@@ -4,6 +4,7 @@
 #' `r lifecycle::badge('stable')`
 #' The purpose of this script is to summarise the SWE data of each station for a particular year and month and compare to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course" summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
 
+#' @param stations A vector of snow course stations, identified with their location ID. Default is "all", where all stations in the snow db are taken.
 #' @param year The year of interest. The stats will be calculated based on all years prior to 'year'.
 #' @param month The month of interest. Options are 3, 4 and 5 for March, April and May, respectively. Historical stats are given for the first day of this month.
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
@@ -16,182 +17,204 @@
 #TODO: (1) Add units and parameter to table (2) Create tests (2) query more than 1 month
 
 # # For testing
-# test <- SWE_station(year=2023,
+# test1 <- SWE_station(stations = "08AA-SC01",
+#                      year=2024,
 #            month=c(3),
-#            csv = TRUE,
-#            return_missing = TRUE, source = "snow")
+#            csv = FALSE,
+#            return_missing = TRUE,
+#            active = TRUE,
+#            source = "snow",
+#            summarise = TRUE)
+# # 
+# stations = "08AA-SC01"
+# year <- 2024
+# month <- 3
+# csv = FALSE
+# return_missing = TRUE
+# active = TRUE
+# source <- "snow"
+# summarise = TRUE
+
 
 SWE_station <-
-  function(year,
+  function(stations = "all",
+           year,
            month,
            csv = FALSE,
            return_missing = FALSE,
            active = TRUE,
-           source = "hyromet") {
-
-    # First retrieve location-basin info
+           source = "hyromet",
+           summarise = TRUE) {
+    
+    # First retrieve location-basin info from snow db
     con <- snowConnect(silent = TRUE)
     loc_basin <- DBI::dbGetQuery(con, "SELECT location, sub_basin, active FROM locations")
     DBI::dbDisconnect(con)
     colnames(loc_basin) <- c("location_id", "sub_basin", "active")
+    
+    # Create list of stations
+    if (stations == "all") {
+      stations <- unique(loc_basin$location_id)
+    }
 
+#### --------------------------- Retrieve data ---------------------------- ####
     ## From hydromet db ##
     if (source == "hydromet") {
       # Retrieve data from db
       con <- hydrometConnect(silent = TRUE)
-
+      
       # Get measurements
       Meas <- DBI::dbGetQuery(con,
-                              "SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name
+                              paste0("SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name, datum_conversions.conversion_m
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
                       INNER JOIN locations ON timeseries.location=locations.location
                       INNER JOIN parameters ON timeseries.parameter = parameters.param_code
-                      WHERE parameters.param_name = 'SWE' OR parameters.param_name = 'snow depth'"
+                      INNER JOIN datum_conversions ON locations.location_id = datum_conversions.location_id
+                      WHERE parameters.param_name = 'SWE' OR parameters.param_name = 'snow depth' AND
+                              locations.location IN ('", paste0(stations, collapse="', '"), "')")
       )
-
+      
       DBI::dbDisconnect(con)
       # Rename columns:
-      colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter")
-
-  ## From snow db ##
+      colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation")
+      
+      ## From snow db ##
     } else if (source == "snow") {
       # Retrieve data from db
       con <- snowConnect(silent = TRUE)
-
+      
       # Get measurements
       # Meas <- DBI::dbGetQuery(con, "SELECT locations.name, means.location, means.swe, means.depth, surveys.target_date, means.sample_datetime
       #                    FROM means
       #                    INNER JOIN locations ON means.location=locations.location
       #                    INNER JOIN surveys on means.survey_id=surveys.survey_id")
-      Meas <- DBI::dbGetQuery(con, "SELECT means.name, means.location, means.swe, means.depth, means.target_date, means.sample_datetime
-                         FROM means")
+      Meas <- DBI::dbGetQuery(con, paste0("SELECT means.name, means.location, means.swe, means.depth, means.target_date,
+                         means.sample_datetime, locations.elevation
+                         FROM means
+                         INNER JOIN locations ON means.location = locations.location
+                         WHERE means.location IN ('", paste0(stations, collapse="', '"), "')"))
       DBI::dbDisconnect(con)
-
+      
       # Reformat table
-      Meas <- reshape2::melt(Meas, id.vars = c("name", "location", "target_date", "sample_datetime"), variable.name = "parameter", value.name = "value")
-
+      Meas <- reshape2::melt(Meas, id.vars = c("name", "location", "target_date", "sample_datetime", "elevation"), variable.name = "parameter", value.name = "value")
+      
       # Set swe upper case
       Meas$parameter <- as.character(Meas$parameter)
       Meas$parameter[Meas$parameter == "swe"] <- "SWE"
       Meas$parameter[Meas$parameter == "depth"] <- "snow depth"
-
+      
       # Change column names
-      colnames(Meas) <- c("location_name", "location_id", "target_date", "sample_date", "parameter", "value")
-
+      colnames(Meas) <- c("location_name", "location_id", "target_date", "sample_date", "elevation", "parameter", "value")
+      
       # Extract date from sample_datetime
       Meas$sample_date <- as.Date(Meas$sample_date)
-
+      
     } else {stop("Parameter 'source' must be either 'hydromet' or 'snow'")}
-
-
+    
+    
     # Add Day, Month and Year columns to the Meas dataframe:
     Meas$mon <- lubridate::month(Meas$target_date)
     Meas$yr <- lubridate::year(Meas$target_date)
     Meas$day <- lubridate::day(Meas$target_date)
-
-    # Get elevation (elevation is not in locations table in db...)
-
+    
     # Only take target_date ending in 0?-01 (to get month of interest and remove mid-month targets
-    Meas <- Meas %>% dplyr::filter(grepl(paste0("0", month, "-01"), .data$target_date))
-
-    # For each station: calculate historical median, years of record, and retrieve last years SWE and this years SWE and depth.
-    # Create empty table
-    swe_station_summary <-
-      stats::setNames(data.frame(matrix(ncol = 9, nrow = 0)),
-                      c("location_name", "location_id", "sample_date",
-                        "depth", "swe", "swe_prevyear", "swe_med", "swe_rat", "years"))
-    # swe_station_summary <-
-    #   data.frame(location_name=character(),
-    #              location_id=character(),
-    #              sample_date=character(),
-    #              depth=numeric(),
-    #              swe=numeric(),
-    #              swe_prevyear=numeric(),
-    #              swe_med=numeric(),
-    #              swe_rat=numeric(),
-    #              years=numeric(),
-    #              stringsAsFactors=FALSE)
-
-    for (l in unique(Meas$location_id)) {
-      # Subset to location of interest
-      tab <- Meas %>% dplyr::filter(.data$location_id == l)
-      if (return_missing == FALSE) {
-        if (length(tab[tab$yr == year,]$value) == 0) next
+    Meas <- Meas %>% dplyr::filter(.data$mon %in% month & .data$day == 1)
+    # Denote record years, estimate years and years outside of valid sampling range
+    tabl <- Meas
+    
+#### ------------------------- Summarise results -------------------------- ####
+    if (summarise == TRUE) {
+      # For each station: calculate historical median, years of record, and retrieve last years SWE and this years SWE and depth.
+      # Create empty table
+      swe_station_summary <-
+        stats::setNames(data.frame(matrix(ncol = 10, nrow = 0)),
+                        c("location_name", "location_id", "elevation", "sample_date",
+                          "depth", "swe", "swe_prevyear", "swe_med", "swe_rat", "years"))
+      
+      for (l in unique(Meas$location_id)) {
+        # Subset to location of interest
+        tab <- Meas %>% dplyr::filter(.data$location_id == l)
+        if (return_missing == FALSE) {
+          if (length(tab[tab$yr == year,]$value) == 0) next
+        }
+        
+        # get sample date
+        sample_date <- tab[tab$yr == year & tab$parameter == "SWE",]$sample_date
+        sample_date <- as.Date(sample_date)
+        if (length(sample_date) == 0) {sample_date <- NA}
+        # Get current years depth
+        depth <- tab[tab$yr == year & tab$parameter == "snow depth",]$value
+        if (length(depth) == 0) {depth <- NA}
+        # Get current years swe
+        swe <- tab[tab$yr == year & tab$parameter == "SWE",]$value
+        if (length(swe) == 0) {swe <- NA}
+        # get previous years swe
+        swe_prevyear <- tab[tab$yr == year - 1 & tab$parameter == "SWE",]$value
+        if (length(swe_prevyear) == 0) {swe_prevyear <- NA}
+        # Get median swe not including year of interest. Is that right?
+        swe_med <- stats::median(tab[tab$yr != year & tab$parameter == "SWE",]$value)
+        if (length(swe_med) == 0) {swe_med <- NA}
+        # Get ratio between current year and median
+        swe_rat <- swe/swe_med
+        if (length(swe_rat) == 0 | is.infinite(swe_rat)) {swe_rat <- NA}
+        
+        # create vector will all row values
+        swe_summary_loc <- c(unique(tab$location_name),                # get location name
+                             l, # location id
+                             unique(tab$elevation),
+                             sample_date,
+                             depth,
+                             swe,
+                             swe_prevyear,
+                             swe_med,
+                             swe_rat,
+                             length(unique(tab$target_date))                # get years of record
+        )
+        if (length(swe_summary_loc) != 10) {
+          warning(paste0("Location ", l, " does not have complete data"))
+        }
+        # append to table
+        swe_station_summary[nrow(swe_station_summary) + 1, ] = swe_summary_loc
       }
-
-      # get sample date
-       sample_date <- tab[tab$yr == year & tab$parameter == "SWE",]$sample_date
-       sample_date <- as.Date(sample_date)
-       if (length(sample_date) == 0) {sample_date <- NA}
-      # Get current years depth
-       depth <- tab[tab$yr == year & tab$parameter == "snow depth",]$value
-       if (length(depth) == 0) {depth <- NA}
-      # Get current years swe
-       swe <- tab[tab$yr == year & tab$parameter == "SWE",]$value
-       if (length(swe) == 0) {swe <- NA}
-      # get previous years swe
-       swe_prevyear <- tab[tab$yr == year - 1 & tab$parameter == "SWE",]$value
-       if (length(swe_prevyear) == 0) {swe_prevyear <- NA}
-      # Get median swe not including year of interest. Is that right?
-       swe_med <- stats::median(tab[tab$yr != year & tab$parameter == "SWE",]$value)
-       if (length(swe_med) == 0) {swe_med <- NA}
-       # Get ratio between current year and median
-       swe_rat <- swe/swe_med
-       if (length(swe_rat) == 0 | is.infinite(swe_rat)) {swe_rat <- NA}
-
-      # create vector will all row values
-      swe_summary_loc <- c(unique(tab$location_name),                # get location name
-               l,                                                    # location id
-               sample_date,
-               depth,
-               swe,
-               swe_prevyear,
-               swe_med,
-               swe_rat,
-               length(unique(tab$target_date))                # get years of record
-               )
-      if (length(swe_summary_loc) != 9) {
-        warning(paste0("Location ", l, " does not have complete data"))
-      }
-     # append to table
-      swe_station_summary[nrow(swe_station_summary) + 1, ] = swe_summary_loc
+      
+      # Set column classes
+      swe_station_summary$depth <- as.numeric(swe_station_summary$depth)
+      swe_station_summary$swe <- as.numeric(swe_station_summary$swe)
+      swe_station_summary$swe_prevyear <- as.numeric(swe_station_summary$swe_prevyear)
+      swe_station_summary$swe_med <- as.numeric(swe_station_summary$swe_med)
+      swe_station_summary$swe_rat <- as.numeric(swe_station_summary$swe_rat)
+      swe_station_summary$years <- as.numeric(swe_station_summary$years)
+      swe_station_summary$sample_date <- as.Date(as.numeric(swe_station_summary$sample_date), origin = "1970-01-01")
+      
+      # Round swe median and ratio
+      swe_station_summary$swe_med <- round(swe_station_summary$swe_med, 0)
+      swe_station_summary$swe_rat <- round(swe_station_summary$swe_rat, 2)
+      
+      # Set swe_rat NaN to NULL
+      swe_station_summary$swe_rat[swe_station_summary$swe_rat == "NaN"] <- NA
+      
+      tabl <- swe_station_summary
     }
-
-    # Set column classes
-    swe_station_summary$depth <- as.numeric(swe_station_summary$depth)
-    swe_station_summary$swe <- as.numeric(swe_station_summary$swe)
-    swe_station_summary$swe_prevyear <- as.numeric(swe_station_summary$swe_prevyear)
-    swe_station_summary$swe_med <- as.numeric(swe_station_summary$swe_med)
-    swe_station_summary$swe_rat <- as.numeric(swe_station_summary$swe_rat)
-    swe_station_summary$years <- as.numeric(swe_station_summary$years)
-    swe_station_summary$sample_date <- as.Date(as.numeric(swe_station_summary$sample_date), origin = "1970-01-01")
-
-    # Round swe median and ratio
-    swe_station_summary$swe_med <- round(swe_station_summary$swe_med, 0)
-    swe_station_summary$swe_rat <- round(swe_station_summary$swe_rat, 2)
-
-    # Set swe_rat NaN to NULL
-    swe_station_summary$swe_rat[swe_station_summary$swe_rat == "NaN"] <- NA
-
+    
     # Add column for sub_basin
-    swe_station_summary <- merge(swe_station_summary, loc_basin, by = "location_id")
-
+    tabl <- merge(tabl, loc_basin, by = "location_id")
+   
+#### ----------------------------- Last bits ------------------------------ ####
+    
     # Remove those that are inactive or not
     if (active == TRUE) {
-      swe_station_summary <- swe_station_summary[swe_station_summary$active == TRUE, ]
-    } else {swe_station_summary <- swe_station_summary}
-
+      tabl <- tabl[tabl$active == TRUE, ]
+    } else {tabl <- tabl}
+    
     # remove active column
-    swe_station_summary <- subset(swe_station_summary, select = -active)
-
+    tabl <- subset(tabl, select = -active)
+    
     # Write csv if csv = TRUE
     if (csv == TRUE) {
-      utils::write.csv(swe_station_summary, file = paste0("SweSationSummary_", year, "-0", month, ".csv"), row.names = FALSE)
+      utils::write.csv(tabl, file = paste0("SweSationSummary_", year, "-0", month, ".csv"), row.names = FALSE)
     }
-
-    return(swe_station_summary)
-
+    
+    return(tabl)
+    
   }
-
-

@@ -371,15 +371,17 @@ locations. This information is used to evaluate the potential for spring
 flooding caused by both breakup ice jams and large spring snowmelt
 (freshet) flows. It is important to note that other processes such as
 summer rain and glacier melt can significantly influence maximum annual
-water levels in specific Yukon basins. March weather conditions for the
+water levels in specific Yukon basins. 
+
+Weather conditions for the
 Yukon are presented in two maps, one showing temperature anomalies
 (deviation from climate normals), and another showing precipitation
 anomalies. Territory-wide snowpack data are presented in a third map
 showing snow water equivalent (SWE) as a percent of historical median
-for each station, as well as the basinaveraged estimated SWE for 11
-watersheds (or river basins). Complementary meteorological and
-hydrological data are presented for each basin through a series of five
-graphs, depending on data availability:
+for each station, as well as the basin averaged estimated SWE for 11
+watersheds (or river basins). Where available, complementary meteorological 
+and hydrological data are presented for each basin through a series of plots, 
+detailed below. Not all basins contain the instrumentation to support all five figure types.
 
 -   **Figure A:** Daily Snow Water Equivalent (SWE) data starting in
     September at one specific location in the watershed, showing an
@@ -505,8 +507,8 @@ are:
 -   *Yukon Department of Highways and Public Works*
 -   *Yukon Department of Energy Mines and Resources, Compliance
     Monitoring and Inspections Branch*
--   *Yukon Department of Environment, Information Management and
-    Technology Branch*
+-   *Yukon Department of Environment, Client, Business and
+    Technology Solutions*
 -   *Vuntut Gwitchin First Nation*
 
 # Disclaimer and Limitation of Liability
@@ -557,7 +559,7 @@ data.
 The Upper Yukon River Basin snowpack is \-\-\-\-- average. 
 At Tagish Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **`r pillow_stats[pillow_stats$location=='09AA-M1',]$perc`%** of the historical median (Figure A1), 
 while at Wolf Creek Subalpine Meteorological Station, SWE is estimated to be **`r pillow_stats[pillow_stats$location=='29AB-M3',]$perc`%** of the historical median (Figure A2). 
-Established in 2023, the Log Cabin Meteorological Station registered Snow Water Equivalent (SWE) at \-\--% of the historical median when compared with the manual snow survey record for that site (Figure A3). 
+Established in 2023, Log Cabin Meteorological Station registered Snow Water Equivalent (SWE) at \-\--% of the historical median when compared with the manual snow survey record for that site (Figure A3). 
 The Upper Yukon basin-averaged SWE is estimated to be **`r basins_stats[basins_stats$basin=='Upper_Yukon',]$swe_relative * 100`%** of the historical median, with **`r basins_stats[basins_stats$basin=='Upper_Yukon',]$swe`** **mm** as of `r month.name[params$month]` 1 (Figure B).
 
 ```{r Upper Yukon, echo=FALSE}
@@ -616,7 +618,6 @@ snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily 
                             "AND date >= '", params$year-1, "-09-01' ", #params$year
                             "AND date <= '", params$year, "-07-01' ")) #params$year
 snow_p$date <- as.POSIXct(snow_p$date)
-test2 <<- snow_p
 # Get historical snow survey data
 snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measurements_discrete ",
                             "WHERE timeseries_id = 217 "))
@@ -1173,7 +1174,7 @@ plot_d <- snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = 
 ```
 
 The Lower Yukon River Basin snowpack is \-\-\-\-- average. Established
-in 2022, the King Solomon Dome Meteorological Station registered Snow
+in 2022, King Solomon Dome Meteorological Station registered Snow
 Water Equivalent (SWE) at \-\--% of the historical median when compared
 with the manual snow survey record for that site (Figure A). The Lower
 Yukon basin-averaged SWE is estimated to be
@@ -1598,9 +1599,9 @@ year <- params$year
 month <- params$month
 tabl <- SWE_station(year=year, month=month, return_missing = TRUE, active = TRUE, source="hydromet")
 
-tabl <- tabl[, c("location_name", "location_id", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
+tabl <- tabl[, c("location_name", "location_id", "elevation", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
 
-colnames(tabl) <- c("Name", "Number", "Date of Survey", "Snow depth (cm)", "Water content (SWE) (mm)", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
+colnames(tabl) <- c("Name", "Number", "Elevation (m)", "Date of Survey", "Snow depth (cm)", "Water content (SWE) (mm)", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
 
 # Order rows
 target <- c("Upper_Yukon", "Teslin_Big_Salmon", "Central_Yukon", "Pelly", "Stewart", "White", "Lower_Yukon", "Porcupine", "Peel", "Liard", "Alsek", "Alaska")
@@ -1622,7 +1623,7 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   flextable::bold(bold = TRUE, part="header") %>% 
   #flextable::align(i = ~ !is.na(sub_basin), align = "left") %>% 
   flextable::align(part="header", align="center") %>%
-  flextable::align(align="center", j=c(2:8)) %>%
+  flextable::align(align="center", j=c(2:9)) %>%
   flextable::bold(i = ~ !is.na(sub_basin)) %>%
   flextable::bg(bg="#0097A9", part="header") %>%
   #flextable::bg(bg="#77A3A9", part="header") %>%
@@ -1633,10 +1634,11 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   flextable::autofit() %>%
   flextable::width(j="Number", width=1.2) %>%
   flextable::width(j="Date of Survey", width=1.1) %>%
-  flextable::width(j=c(4,5,6,7,8), width = 0.8) %>%
-  flextable::width(j=c(1), width = 1.7) %>%
+  flextable::width(j=c(3,5,6,7,8,9), width = 0.7) %>%
+  flextable::width(j=c(2), width = 1.1) %>%
+  flextable::width(j=c(1), width = 1.5) %>%
   flextable::font(fontname="Nunito Sans", part="all") %>%
-  flextable::fontsize(size=11) %>%
+  flextable::fontsize(size=10, part="all") %>%
   flextable::line_spacing(space=1) %>%
   flextable::padding(padding.top = 0.8, padding.bottom = 0.8)
 
