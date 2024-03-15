@@ -197,7 +197,7 @@ plotTimeseriesMulti <- function(location,
     range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
     attr(range_data$datetime, "tzone") <- tzone
     if (rate == "day") {
-      trace_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "';"))
+      trace_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY date DESC;"))
       trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     } else if (rate == "hour") {
       trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
@@ -207,7 +207,7 @@ plotTimeseriesMulti <- function(location,
     attr(trace_data$datetime, "tzone") <- tzone
   } else { #No historic range requested
     if (rate == "day") {
-      trace_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "';"))
+      trace_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY date DESC;"))
       trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     } else if (rate == "hour") {
       trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
@@ -220,7 +220,7 @@ plotTimeseriesMulti <- function(location,
   # Find the most common interval between points in trace_data and fill gaps with NA values
   min_trace <- min(trace_data$datetime, na.rm = TRUE)
   if (!is.infinite(min_trace)) {
-    interval <- stats::median(diff(as.numeric(trace_data$datetime)))
+    interval <- abs(stats::median(diff(as.numeric(trace_data$datetime))))
     all_times <- seq.POSIXt(from = min_trace, to = max(trace_data$datetime), by = interval)
     trace_data <- merge(trace_data, data.frame(datetime = all_times), by = "datetime", all = TRUE)
     

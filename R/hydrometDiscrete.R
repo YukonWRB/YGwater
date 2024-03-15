@@ -9,10 +9,11 @@
 #'
 #' This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
 #'
-#' @param location The location for which you want a plot.
-#' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
+#' @param location The location for which you want a plot. Can be left NULL if `discrete_data` is provided.
+#' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database unless `discrete_data` is provided. In this later case, the parameter must still be specified to label the y-axis.
 #' @param startDay Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
+#' @param binwidth The width of the bins in the violin/boxplot in days, specified as an integer of **n** days or as "1 day", "1 week", "1 month", etc. Default is one month.
 #' @param tzone The timezone to use for fetching data. Datetimes are stored in the database in UTC offset, so this parameter could make a difference to what day a particular sample is considered to be on. In most cases you can ignore this parameter.
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
 #' @param title Should a title be included?
@@ -29,6 +30,7 @@ hydrometDiscrete <- function(location = NULL,
                              parameter,
                              startDay = 1,
                              endDay = 365,
+                             binwidth = "1 month",
                              tzone = "MST",
                              years = NULL,
                              title = TRUE,
@@ -51,6 +53,9 @@ hydrometDiscrete <- function(location = NULL,
 #### ------- Checks on input parameters  and other start-up bits ---------- ####
   if (parameter != "SWE") {
     parameter <- tolower(parameter)
+  } 
+  if (tolower(parameter) == "swe") {
+    parameter <- "SWE"
   }
 
   plot_type <- tolower(plot_type)
@@ -107,12 +112,12 @@ hydrometDiscrete <- function(location = NULL,
         }
       }
 
-      endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year-1, "-12-31"), tz = "UTC")
+      endDay <<- as.POSIXct(as.numeric(endDay)*60*60*24, origin = paste0(last_year - 1, "-12-31"), tz = "UTC")
       endDay <<- lubridate::force_tz(endDay, tzone)
     })
 
     if (startDay > endDay) { #if the user is wanting a range overlapping the new year
-      lubridate::year(endDay) <- lubridate::year(endDay)+1
+      lubridate::year(endDay) <- lubridate::year(endDay) + 1
       overlaps <- TRUE
       last_year <- last_year + 1
     } else {
@@ -138,9 +143,9 @@ hydrometDiscrete <- function(location = NULL,
     # Get the data ------------------------------------------------------------
     # Pull data from db for timeseries and period of interest
     if (overlaps) {
-      all_discrete <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, datetime, value FROM measurements_discrete WHERE timeseries_id = ", tsid, " AND datetime < '", paste0(max(years) + 1, substr(endDay, 5, 19)), "'"))
+      all_discrete <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, datetime, value FROM measurements_discrete WHERE timeseries_id = ", tsid, " AND datetime <= '", paste0(max(years) + 1, substr(endDay, 5, 19)), "'"))
     } else {
-      all_discrete <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, datetime, value FROM measurements_discrete WHERE timeseries_id = ", tsid, " AND datetime < '", paste0(max(years), substr(endDay, 5, 19)), "'"))
+      all_discrete <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, datetime, value FROM measurements_discrete WHERE timeseries_id = ", tsid, " AND datetime <= '", paste0(max(years), substr(endDay, 5, 19)), "'"))
     }
 
     # Check if data is empty
@@ -176,7 +181,7 @@ hydrometDiscrete <- function(location = NULL,
       end <- as.Date(paste0(i, substr(endDay, 5, 10)))
 
       if (overlaps) {
-        lubridate::year(end) <- lubridate::year(end) +1
+        lubridate::year(end) <- lubridate::year(end) + 1
       }
 
       new_discrete <- all_discrete[all_discrete$target_datetime >= start & all_discrete$target_datetime <= end , ]
@@ -327,14 +332,14 @@ hydrometDiscrete <- function(location = NULL,
       if (plot_type == "violin" | plot_type == "boxplot") {
         plot <- plot +
           ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = .data$fake_date, y = .data$value, colour = as.factor(.data$year), fill = as.factor(.data$year)), size = plot_scale*3.5, shape = 21) +
-        ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(discrete$year))), aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(discrete$year))[1:legend_length])
+        ggplot2::scale_colour_manual(name = "Year", labels = unique(discrete$year), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(discrete$year))), aesthetics = c("colour", "fill"), na.translate = FALSE, breaks = unique(stats::na.omit(discrete$year))[1:legend_length])
       }
 
     if (plot_type == "linedbox") {
       plot <- plot +
         ggplot2::geom_segment(data = discrete, linewidth = plot_scale*1.5,
-                              ggplot2::aes(yend=value,
-                                           x = .data$fake_date - 12, xend = .data$fake_date + 12), color='black')
+                              ggplot2::aes(yend = value,
+                                           x = .data$fake_date - 12, xend = .data$fake_date + 12), color = 'black')
       # plot <- plot +
       #   ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = .data$fake_date, y = .data$value, colour = as.factor(.data$year), fill = as.factor(.data$year)), size = plot_scale*3.5, shape = 21)
 
@@ -361,8 +366,8 @@ hydrometDiscrete <- function(location = NULL,
 
 
     plot <- plot +
-      ggplot2::labs(title=titl) +
-      ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face = "bold"))
+      ggplot2::labs(title = titl) +
+      ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12*plot_scale, face = "bold"))
   }
 
   #Save it if requested
