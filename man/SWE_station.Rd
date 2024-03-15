@@ -11,7 +11,7 @@ SWE_station(
   csv = FALSE,
   return_missing = FALSE,
   active = TRUE,
-  source = "hyromet",
+  source = "hydromet",
   summarise = TRUE
 )
 }

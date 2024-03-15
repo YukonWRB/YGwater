@@ -146,7 +146,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     
     
     #### ------------------------- Create summary sheet ----------------------- ####
-    # Pull data from hydro database
+    # Pull data from snow database
     if (snowCon_flag) {
       summary <- SWE_station(year = as.numeric(substr(target_date, start = 1, stop = 4)),
                              month = as.numeric(substr(target_date, start = 7, stop = 7)),

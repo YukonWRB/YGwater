@@ -43,7 +43,7 @@ SWE_station <-
            csv = FALSE,
            return_missing = FALSE,
            active = TRUE,
-           source = "hyromet",
+           source = "hydromet",
            summarise = TRUE) {
     
     # First retrieve location-basin info from snow db
@@ -53,7 +53,7 @@ SWE_station <-
     colnames(loc_basin) <- c("location_id", "sub_basin", "active")
     
     # Create list of stations
-    if (stations == "all") {
+    if (all(stations == "all")) {
       stations <- unique(loc_basin$location_id)
     }
 
@@ -71,7 +71,7 @@ SWE_station <-
                       INNER JOIN locations ON timeseries.location=locations.location
                       INNER JOIN parameters ON timeseries.parameter = parameters.param_code
                       INNER JOIN datum_conversions ON locations.location_id = datum_conversions.location_id
-                      WHERE parameters.param_name = 'SWE' OR parameters.param_name = 'snow depth' AND
+                      WHERE (parameters.param_name = 'SWE' OR parameters.param_name = 'snow depth') AND
                               locations.location IN ('", paste0(stations, collapse="', '"), "')")
       )
       
@@ -79,22 +79,31 @@ SWE_station <-
       # Rename columns:
       colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation")
       
+      # Calculate density
+      # Spread the data into separate columns for swe and snow_depth
+      wider_data <- Meas %>%
+        tidyr::pivot_wider(names_from = parameter, values_from = value)
+      # calculate
+      wider_data$density <- round(wider_data$SWE / wider_data$'snow depth' * 10, 2)
+      # Reformat into long format
+      Meas <- wider_data %>%
+        tidyr::pivot_longer(cols = c(SWE, 'snow depth', density), names_to = "parameter", values_to = "value")
+      
       ## From snow db ##
     } else if (source == "snow") {
       # Retrieve data from db
       con <- snowConnect(silent = TRUE)
       
       # Get measurements
-      # Meas <- DBI::dbGetQuery(con, "SELECT locations.name, means.location, means.swe, means.depth, surveys.target_date, means.sample_datetime
-      #                    FROM means
-      #                    INNER JOIN locations ON means.location=locations.location
-      #                    INNER JOIN surveys on means.survey_id=surveys.survey_id")
       Meas <- DBI::dbGetQuery(con, paste0("SELECT means.name, means.location, means.swe, means.depth, means.target_date,
                          means.sample_datetime, locations.elevation
                          FROM means
                          INNER JOIN locations ON means.location = locations.location
                          WHERE means.location IN ('", paste0(stations, collapse="', '"), "')"))
       DBI::dbDisconnect(con)
+      
+      # Calculate density
+      Meas$density <- round((Meas$swe / Meas$depth) *10, 2)
       
       # Reformat table
       Meas <- reshape2::melt(Meas, id.vars = c("name", "location", "target_date", "sample_datetime", "elevation"), variable.name = "parameter", value.name = "value")
@@ -128,9 +137,11 @@ SWE_station <-
       # For each station: calculate historical median, years of record, and retrieve last years SWE and this years SWE and depth.
       # Create empty table
       swe_station_summary <-
-        stats::setNames(data.frame(matrix(ncol = 10, nrow = 0)),
+        stats::setNames(data.frame(matrix(ncol = 18, nrow = 0)),
                         c("location_name", "location_id", "elevation", "sample_date",
-                          "depth", "swe", "swe_prevyear", "swe_med", "swe_rat", "years"))
+                          "swe", "swe_prevyear", "swe_med", "swe_norm", "swe_rat", "swe_min", 
+                          "swe_max", "depth", "depth_med", "density", "density_med", 
+                          "years", "record_flag", "date_flag"))
       
       for (l in unique(Meas$location_id)) {
         # Subset to location of interest
@@ -138,38 +149,79 @@ SWE_station <-
         if (return_missing == FALSE) {
           if (length(tab[tab$yr == year,]$value) == 0) next
         }
-        
+        test1 <<- tab
         # get sample date
         sample_date <- tab[tab$yr == year & tab$parameter == "SWE",]$sample_date
         sample_date <- as.Date(sample_date)
         if (length(sample_date) == 0) {sample_date <- NA}
-        # Get current years depth
-        depth <- tab[tab$yr == year & tab$parameter == "snow depth",]$value
-        if (length(depth) == 0) {depth <- NA}
         # Get current years swe
         swe <- tab[tab$yr == year & tab$parameter == "SWE",]$value
         if (length(swe) == 0) {swe <- NA}
         # get previous years swe
         swe_prevyear <- tab[tab$yr == year - 1 & tab$parameter == "SWE",]$value
         if (length(swe_prevyear) == 0) {swe_prevyear <- NA}
-        # Get median swe not including year of interest. Is that right?
-        swe_med <- stats::median(tab[tab$yr != year & tab$parameter == "SWE",]$value)
+        # Get median swe not including year of interest.
+        swe_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "SWE",]$value), 0)
         if (length(swe_med) == 0) {swe_med <- NA}
+        # Get normal swe (1991-2020)
+        swe_norm <- round(mean(tab[tab$parameter == "SWE" &
+                                          tab$yr >= 1991 & tab$yr <= 2020,]$value), 0)
+        if (length(swe_norm) == 0 | swe_norm == "NaN") {swe_norm <- NA}
         # Get ratio between current year and median
-        swe_rat <- swe/swe_med
+        swe_rat <- round(swe/swe_med, 2)
         if (length(swe_rat) == 0 | is.infinite(swe_rat)) {swe_rat <- NA}
+        # Get min SWE not including year of interest
+        swe_min <- round(min(tab[tab$yr != year & tab$parameter == "SWE",]$value), 0)
+        if (length(swe_min) == 0 | is.infinite(swe_min)) {swe_min <- NA}
+        # Get max SWE not including year of interest
+        swe_max <- round(max(tab[tab$yr != year & tab$parameter == "SWE",]$value), 0)
+        if (length(swe_max) == 0 | is.infinite(swe_max)) {swe_max <- NA}
+        # Get current years depth
+        depth <- tab[tab$yr == year & tab$parameter == "snow depth",]$value
+        if (length(depth) == 0) {depth <- NA}
+        # Get median depth not including year of interest
+        depth_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "snow depth",]$value), 0)
+        if (length(depth_med) == 0) {depth_med <- NA}
+        # Get current year % density 
+        density <- round(tab[tab$yr == year & tab$parameter == "density",]$value, 0)
+        if (length(density) == 0) {density <- NA}
+        # Get median % density not including year of interest
+        density_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "density",]$value, na.rm=TRUE), 0)
+        if (length(density_med) == 0) {density_med <- NA}
+        # Record flag
+        if (is.na(swe) | is.na(swe_max)) {
+          record_flag <- FALSE
+        } else if (swe > swe_max) {
+          record_flag <- TRUE
+        } else if (swe < swe_max) {record_flag <- FALSE}
+        # date flag (sample_date outside of valid sampling range)
+        target_date <- tab[tab$yr == year & tab$parameter == "SWE",]$target_date
+        if (length(target_date) == 0) {
+          date_flag <- FALSE
+        } else if (sample_date > target_date + lubridate::days(6) |
+            sample_date < target_date - lubridate::days(6)) {
+          date_flag <- TRUE
+        } else {date_flag <- FALSE}
         
-        # create vector will all row values
+        # create vector with all row values
         swe_summary_loc <- c(unique(tab$location_name),                # get location name
                              l, # location id
                              unique(tab$elevation),
                              sample_date,
-                             depth,
                              swe,
                              swe_prevyear,
                              swe_med,
+                             swe_norm,
                              swe_rat,
-                             length(unique(tab$target_date))                # get years of record
+                             swe_min,
+                             swe_max,
+                             depth,
+                             depth_med,
+                             density,
+                             density_med,
+                             length(unique(tab$target_date)),  # get years of record
+                             record_flag,
+                             date_flag
         )
         if (length(swe_summary_loc) != 10) {
           warning(paste0("Location ", l, " does not have complete data"))
@@ -179,19 +231,21 @@ SWE_station <-
       }
       
       # Set column classes
-      swe_station_summary$depth <- as.numeric(swe_station_summary$depth)
+      swe_station_summary$sample_date <- as.Date(as.numeric(swe_station_summary$sample_date), origin = "1970-01-01")
       swe_station_summary$swe <- as.numeric(swe_station_summary$swe)
       swe_station_summary$swe_prevyear <- as.numeric(swe_station_summary$swe_prevyear)
       swe_station_summary$swe_med <- as.numeric(swe_station_summary$swe_med)
+      swe_station_summary$swe_norm <- as.numeric(swe_station_summary$swe_norm)
       swe_station_summary$swe_rat <- as.numeric(swe_station_summary$swe_rat)
+      swe_station_summary$swe_min <- as.numeric(swe_station_summary$swe_min)
+      swe_station_summary$swe_max <- as.numeric(swe_station_summary$swe_max)
+      swe_station_summary$depth <- as.numeric(swe_station_summary$depth)
+      swe_station_summary$depth_med <- as.numeric(swe_station_summary$depth_med)
+      swe_station_summary$density <- as.numeric(swe_station_summary$density)
+      swe_station_summary$density_med <- as.numeric(swe_station_summary$density_med)
       swe_station_summary$years <- as.numeric(swe_station_summary$years)
-      swe_station_summary$sample_date <- as.Date(as.numeric(swe_station_summary$sample_date), origin = "1970-01-01")
       
-      # Round swe median and ratio
-      swe_station_summary$swe_med <- round(swe_station_summary$swe_med, 0)
-      swe_station_summary$swe_rat <- round(swe_station_summary$swe_rat, 2)
-      
-      # Set swe_rat NaN to NULL
+      # Set swe_rat NaN to NA
       swe_station_summary$swe_rat[swe_station_summary$swe_rat == "NaN"] <- NA
       
       tabl <- swe_station_summary
