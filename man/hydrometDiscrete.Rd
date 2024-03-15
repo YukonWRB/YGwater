@@ -9,6 +9,7 @@ hydrometDiscrete(
   parameter,
   startDay = 1,
   endDay = 365,
+  binwidth = "1 month",
   tzone = "MST",
   years = NULL,
   title = TRUE,
@@ -21,13 +22,15 @@ hydrometDiscrete(
 )
 }
 \arguments{
-\item{location}{The location for which you want a plot.}
+\item{location}{The location for which you want a plot. Can be left NULL if \code{discrete_data} is provided.}
 
-\item{parameter}{The parameter you wish to plot. The location:parameter combo must be in the local database.}
+\item{parameter}{The parameter you wish to plot. The location:parameter combo must be in the local database unless \code{discrete_data} is provided. In this later case, the parameter must still be specified to label the y-axis.}
 
 \item{startDay}{Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
 
 \item{endDay}{The end day of year for the plot x-axis. As per \code{startDay}.}
+
+\item{binwidth}{The width of the bins in the violin/boxplot in days, specified as an integer of \strong{n} days or as "1 day", "1 week", "1 month", etc. Default is one month.}
 
 \item{tzone}{The timezone to use for fetching data. Datetimes are stored in the database in UTC offset, so this parameter could make a difference to what day a particular sample is considered to be on. In most cases you can ignore this parameter.}
 

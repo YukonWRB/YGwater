@@ -80,18 +80,19 @@ app_ui <- function(request) {
         condition = "input.first_selection == 'View hydromet plots + data'",
         sidebarPanel(
           shinyWidgets::radioGroupButtons("plot_data_type", "Data type", choices = c("Continuous", "Discrete"), selected = "Continuous"),
-          selectizeInput("plot_type", label = "Plot type", choices = c("Overlapping years", "Long timeseries", "Multi timeseries")), #Discrete plot types are selected in the server
+          selectizeInput("plot_type", label = "Plot type", choices = c("Overlapping years", "Long timeseries", "Multi timeseries", "Binned", "Scatter")), #Discrete plot types are selected in the server
           selectizeInput("plot_sub_type", label = "Plot sub-type", choices = c("Violin plot", "Box plot", "Line-box plot"), selected = "Violin plot"),
-          selectizeInput("plot_param", label = "Plotting parameter", choices = ""), #Choices are selected in the server
-          selectizeInput("plot_loc_code", "Select location by code", choices = ""), #Choices are selected in the server
-          selectizeInput("plot_loc_name", "Select location by name", choices = ""), #Choices are selected in the server
+          selectizeInput("plot_param", label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_loc_code", "Select location by code", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_loc_name", "Select location by name", choices = "placeholder"), #Choices are selected in the server
           dateInput("start_doy", "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")), # Only used for plotOverlap, turned on/off by shinyjs
           dateInput("end_doy", "End day-of-year", value = paste0(lubridate::year(Sys.Date()), "-12-31")), # Only used for plotOverlap, turned on/off by shinyjs
-          dateInput("start_date", "Start date", value = Sys.Date() - 365, max = Sys.Date() + 1), # Only used for plotTimeseries, turned on/off by shinyjs
-          dateInput("end_date", "End date", value = Sys.Date(), max = Sys.Date() - 1), # Only used for plotTimeseries, turned on/off by shinyjs
+          dateInput("start_date", "Start date", value = Sys.Date() - 365, max = Sys.Date() - 1), # Only used for plotTimeseries, turned on/off by shinyjs
+          dateInput("end_date", "End date", value = Sys.Date(), max = Sys.Date()), # Only used for plotTimeseries, turned on/off by shinyjs
           textOutput("plot_years_note"),
           shinyWidgets::pickerInput("plot_years", "Select years to plot", choices = "", multiple = TRUE, options = list("max-options" = 10, "max-options-text" = "Cannot plot more than 10 lines")), # Only used for plotTimeseries, turned on/off by shinyjs
-          selectizeInput("historic_range_overlap", "Historic range includes all years of record or up to last year plotted?", choices = c("all", "last"), selected = "all"),
+          selectizeInput("historic_range_overlap", "Historic range includes all years of record or up to last year plotted?", choices = c("all", "last"), selected = "all"), # Only used for plotOverlap, turned on/off by shinyjs
+          checkboxInput("historic_range", "Plot historic range?"), # Only used for plotTimeseries, turned on/off by shinyjs")
           selectizeInput("return_periods", "Plot return periods?", choices = c("none", "auto select", "calculate", "from table"), selected = "auto select"),
           shinyWidgets::pickerInput("return_type", "Select return type", choices = c("Min", "Max"), selected = "Max"),
           numericInput("return_yrs", "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),
@@ -102,6 +103,7 @@ app_ui <- function(request) {
         ),
         mainPanel(
           plotOutput("hydro_plot", height = "600px"),
+          plotly::plotlyOutput("hydro_plotly", height = "600px"),
           downloadButton("export_hydro_plot", "Export as png"),
           downloadButton("export_plot_data", "Export data as .csv")
         )
