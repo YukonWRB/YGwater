@@ -31,6 +31,10 @@ snowBulletinStats <-
            save_path,
            synchronize=FALSE) {
     
+    con <- hydrometConnect()
+    year <- 2024
+    month <- 3
+    
     #### ----------------- Pillows with historical record ----------------- ####
       pillow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name, locations.location, date,  
                     parameters.param_name, value, q50, max, min FROM calculated_daily 
@@ -38,11 +42,11 @@ snowBulletinStats <-
                     INNER JOIN locations ON timeseries.location = locations.location
                     INNER JOIN parameters ON timeseries.parameter = parameters.param_code
                     WHERE calculated_daily.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
-                    AND date = '", year_param, "-0", month_param, "-01'"))
+                    AND date = '", year, "-0", month, "-01'"))
       pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$q50 * 100)
     
     #### -----------------------  SWE stations ---------------------------- ####
-      station_stats <- SWE_station(stations="all", year=year_param, month=month_param, return_missing = TRUE, 
+      station_stats <- SWE_station(stations="all", year=year, month=month, return_missing = TRUE, 
                   active = TRUE, source="hydromet", summarise=TRUE)
     
     #### ---------------- Pillows with snow survey record ----------------- ####
@@ -59,8 +63,8 @@ snowBulletinStats <-
       pillow_stats[pillow_stats$location == "09EA-M1", ]$perc_hist_med <- (pillow_stats[pillow_stats$location == "09EA-M1", ]$value /
                                                                              pillow_stats[pillow_stats$location == "09EA-M1", ]$q50) * 100
     #### --------------------------- Basins ------------------------------- ####
-        basin_stats <- SWE_basin(year = year_param,
-                                 month = month_param,
+        basin_stats <- SWE_basin(year = year,
+                                 month = month,
                                  threshold = 6,
                                  csv = FALSE,
                                  summarise = TRUE,
@@ -68,117 +72,125 @@ snowBulletinStats <-
         basin_stats$perc_hist_med <- basin_stats$swe_relative *100
         
     #### ------------------------- Monthly precip ------------------------- ####
-        tsid <- c(663, 665, 666, 668, 664, 671, 667)
-        # Should also bring in location ID and name
-        tab <- DBI::dbGetQuery(con, paste0("SELECT locations.name, locations.location, datetime, value
+        precipStats <- function() {
+          tsid <- c(663, 665, 666, 668, 664, 671, 667)
+          # Should also bring in location ID and name
+          tab <- DBI::dbGetQuery(con, paste0("SELECT locations.name, locations.location, datetime, value
                                            FROM measurements_continuous 
                                            INNER JOIN timeseries ON measurements_continuous.timeseries_id = timeseries.timeseries_id
                                            INNER JOIN locations ON timeseries.location = locations.location
                                            WHERE measurements_continuous.timeseries_id IN ('", paste0(tsid, collapse="', '"),
-                                           "')"))
-                                           #AND datetime >= '", year_param-40, "-10-01'"))
-        attr(tab$datetime, "tzone") <- "MST"
-        tab$date <- as.Date(tab$datetime - lubridate::days(1))
-        tab$month <- format(tab$datetime, "%m")
-        tab$year <- format(tab$datetime, "%Y")
-        
-        # Only keep Oct to month of interest
-        if (month_param == 3) {
-          tab <- tab[tab$month %in% c(10, 11, 12, '01', '02'),]
-        } else if (month_param == 4) {
-          tab <- tab[tab$month %in% c(10, 11, 12, '01', '02', '03'),]
-        } else if (month_param == 5) {
-          tab <- tab[tab$month %in% c(10, 11, 12, '01', '02', '03', '04'),]
+                                             "')"))
+          #AND datetime >= '", year_param-40, "-10-01'"))
+          attr(tab$datetime, "tzone") <- "MST"
+          tab$date <- as.Date(tab$datetime - lubridate::days(1))
+          tab$month <- format(tab$datetime, "%m")
+          tab$year <- format(tab$datetime, "%Y")
+          
+          # Only keep Oct to month of interest
+          if (month == 3) {
+            tab <- tab[tab$month %in% c(10, 11, 12, '01', '02'),]
+          } else if (month_param == 4) {
+            tab <- tab[tab$month %in% c(10, 11, 12, '01', '02', '03'),]
+          } else if (month_param == 5) {
+            tab <- tab[tab$month %in% c(10, 11, 12, '01', '02', '03', '04'),]
+          }
+          
+          # Calculate Oct-month of interest cumulative precip for each loc and year
+          # Add fake_year. Where month is 1,2,3,4, change year to year - 1
+          tab$fake_year <- NA
+          tab[tab$month %in% c("01", "02", "03", "04"),]$fake_year <- as.numeric(tab[tab$month %in% c("01", "02", "03", "04"),]$year)
+          tab[tab$month %in% c("10", "11", "12"),]$fake_year <- as.numeric(tab[tab$month %in% c("10", "11", "12"),]$year) + 1 
+          
+          precip_years <- tab %>%
+            dplyr::group_by(.data$fake_year, .data$location, .data$name) %>%
+            dplyr::summarise(value = sum(.data$value), 
+                             count = dplyr::n(),
+                             type = "sum")
+          # Only keep those with all 5, 6 or 7 months (depending on month_param)
+          precip_years <- precip_years[precip_years$count == 2+month,]
+          
+          # Get value from year of interest
+          tab_yr <- precip_years[precip_years$fake_year == year, ]
+          # Remove year of interest from precip_years
+          precip_years <- precip_years[precip_years$fake_year != year, ]
+          
+          ### Calculate stats
+          # Calculate stats. For entire period of record
+          precip_allyrs <- precip_years %>%
+            dplyr::group_by(.data$location, .data$name) %>%
+            dplyr::summarise(value = min(.data$value), type = "min") %>%
+            dplyr::bind_rows(precip_years %>%
+                               dplyr::group_by(.data$location, .data$name) %>%
+                               dplyr::summarise(value = max(.data$value), type = "max")) %>%
+            dplyr::bind_rows(precip_years %>%
+                               dplyr::group_by(.data$location, .data$name) %>%
+                               dplyr::summarise(value = stats::median(.data$value), type = "median"))
+          # Add period column
+          precip_allyrs$period <- paste0("All years")
+          
+          # Calculate stats. For last 40 years
+          precip_40yrs <- precip_years[precip_years$fake_year > year-40,]
+          precip_40yrs <- precip_40yrs %>%
+            dplyr::group_by(.data$location, .data$name) %>%
+            dplyr::summarise(value = min(.data$value), type = "min") %>%
+            dplyr::bind_rows(precip_40yrs %>%
+                               dplyr::group_by(.data$location, .data$name) %>%
+                               dplyr::summarise(value = max(.data$value), type = "max")) %>%
+            dplyr::bind_rows(precip_40yrs %>%
+                               dplyr::group_by(.data$location, .data$name) %>%
+                               dplyr::summarise(value = stats::median(.data$value), type = "median"))
+          # Add period column
+          precip_40yrs$period <- paste0("Last 40 years")
+          
+          # Calculate stats. For last 1991-2020 period
+          precip_9120 <- precip_years[precip_years$fake_year >= 1991 & 
+                                        precip_years$fake_year <= 2020,]
+          precip_9120 <- precip_9120 %>%
+            dplyr::group_by(.data$location, .data$name) %>%
+            dplyr::summarise(value = min(.data$value), type = "min") %>%
+            dplyr::bind_rows(precip_9120 %>%
+                               dplyr::group_by(.data$location, .data$name) %>%
+                               dplyr::summarise(value = max(.data$value), type = "max")) %>%
+            dplyr::bind_rows(precip_9120 %>%
+                               dplyr::group_by(.data$location, .data$name) %>%
+                               dplyr::summarise(value = stats::median(.data$value), type = "median"))
+          # Add period column
+          precip_9120$period <- paste0("1991-2020")
+          
+          # Calculate stats. For last 1981-2010 period
+          precip_8110 <- precip_years[precip_years$fake_year >= 1981 & 
+                                        precip_years$fake_year <= 2010,]
+          precip_8110 <- precip_8110 %>%
+            dplyr::group_by(.data$location, .data$name) %>%
+            dplyr::summarise(value = min(.data$value), type = "min") %>%
+            dplyr::bind_rows(precip_8110 %>%
+                               dplyr::group_by(.data$location, .data$name) %>%
+                               dplyr::summarise(value = max(.data$value), type = "max")) %>%
+            dplyr::bind_rows(precip_8110 %>%
+                               dplyr::group_by(.data$location, .data$name) %>%
+                               dplyr::summarise(value = stats::median(.data$value), type = "median"))
+          # Add period column
+          precip_8110$period <- paste0("1981-2010")
+          
+          ## Bind all together
+          precip_stats <- rbind(precip_40yrs, precip_9120, precip_8110, precip_allyrs)
+          
+          # Reshape to wide format
+          precip_stats <- tidyr::pivot_wider(precip_stats, names_from = c(type), values_from = value)
+          # Bind current year data
+          precip_stats <- merge(precip_stats, tab_yr[, c("location", "name", "value")])
+          # Calculate percent historical
+          precip_stats$perc_hist_med <- round(precip_stats$value / precip_stats$median *100, 0)
+          # Add variable coloumn
+          precip_stats$variable <- paste0("Oct - ", month.abb[month-1], " cumulative precipitation")
+          
+          return(precip_stats)
         }
         
-        # Calculate Oct-month of interest cumulative precip for each loc and year
-        # Add fake_year. Where month is 1,2,3,4, change year to year - 1
-        tab$fake_year <- NA
-        tab[tab$month %in% c("01", "02", "03", "04"),]$fake_year <- as.numeric(tab[tab$month %in% c("01", "02", "03", "04"),]$year)
-        tab[tab$month %in% c("10", "11", "12"),]$fake_year <- as.numeric(tab[tab$month %in% c("10", "11", "12"),]$year) + 1 
+        precip_stats <- precipStats()
         
-        precip_years <- tab %>%
-          dplyr::group_by(.data$fake_year, .data$location, .data$name) %>%
-          dplyr::summarise(value = sum(.data$value), 
-                           count = dplyr::n(),
-                           type = "sum")
-        # Only keep those with all 5, 6 or 7 months (depending on month_param)
-        precip_years <- precip_years[precip_years$count == 2+month_param,]
         
-        # Get value from year of interest
-        tab_yr <- precip_years[precip_years$fake_year == year_param, ]
-        # Remove year of interest from precip_years
-        precip_years <- precip_years[precip_years$fake_year != year_param, ]
-        
-        ### Calculate stats
-        # Calculate stats. For entire period of record
-        precip_allyrs <- precip_years %>%
-          dplyr::group_by(.data$location, .data$name) %>%
-          dplyr::summarise(value = min(.data$value), type = "min") %>%
-          dplyr::bind_rows(precip_years %>%
-                             dplyr::group_by(.data$location, .data$name) %>%
-                             dplyr::summarise(value = max(.data$value), type = "max")) %>%
-          dplyr::bind_rows(precip_years %>%
-                             dplyr::group_by(.data$location, .data$name) %>%
-                             dplyr::summarise(value = stats::median(.data$value), type = "median"))
-        # Add period column
-        precip_allyrs$period <- paste0("All years")
-        
-        # Calculate stats. For last 40 years
-        precip_40yrs <- precip_years[precip_years$fake_year > year_param-40,]
-        precip_40yrs <- precip_40yrs %>%
-          dplyr::group_by(.data$location, .data$name) %>%
-          dplyr::summarise(value = min(.data$value), type = "min") %>%
-          dplyr::bind_rows(precip_40yrs %>%
-                             dplyr::group_by(.data$location, .data$name) %>%
-                             dplyr::summarise(value = max(.data$value), type = "max")) %>%
-          dplyr::bind_rows(precip_40yrs %>%
-                             dplyr::group_by(.data$location, .data$name) %>%
-                             dplyr::summarise(value = stats::median(.data$value), type = "median"))
-        # Add period column
-        precip_40yrs$period <- paste0("Last 40 years")
-        
-        # Calculate stats. For last 1991-2020 period
-        precip_9120 <- precip_years[precip_years$fake_year >= 1991 & 
-                                     precip_years$fake_year <= 2020,]
-        precip_9120 <- precip_9120 %>%
-          dplyr::group_by(.data$location, .data$name) %>%
-          dplyr::summarise(value = min(.data$value), type = "min") %>%
-          dplyr::bind_rows(precip_9120 %>%
-                             dplyr::group_by(.data$location, .data$name) %>%
-                             dplyr::summarise(value = max(.data$value), type = "max")) %>%
-          dplyr::bind_rows(precip_9120 %>%
-                             dplyr::group_by(.data$location, .data$name) %>%
-                             dplyr::summarise(value = stats::median(.data$value), type = "median"))
-        # Add period column
-        precip_9120$period <- paste0("1991-2020")
-        
-        # Calculate stats. For last 1981-2010 period
-        precip_8110 <- precip_years[precip_years$fake_year >= 1981 & 
-                                      precip_years$fake_year <= 2010,]
-        precip_8110 <- precip_8110 %>%
-          dplyr::group_by(.data$location, .data$name) %>%
-          dplyr::summarise(value = min(.data$value), type = "min") %>%
-          dplyr::bind_rows(precip_8110 %>%
-                             dplyr::group_by(.data$location, .data$name) %>%
-                             dplyr::summarise(value = max(.data$value), type = "max")) %>%
-          dplyr::bind_rows(precip_8110 %>%
-                             dplyr::group_by(.data$location, .data$name) %>%
-                             dplyr::summarise(value = stats::median(.data$value), type = "median"))
-        # Add period column
-        precip_8110$period <- paste0("1981-2010")
-        
-        ## Bind all together
-        precip_stats <- rbind(precip_40yrs, precip_9120, precip_8110, precip_allyrs)
-        
-        # Reshape to wide format
-        precip_stats <- tidyr::pivot_wider(precip_stats, names_from = c(type), values_from = value)
-        # Bind current year data
-        precip_stats <- merge(precip_stats, tab_yr[, c("location", "name", "value")])
-        # Calculate percent historical
-        precip_stats$perc_hist_med <- round(precip_stats$value / precip_stats$median *100, 0)
-        # Add variable coloumn
-        precip_stats$variable <- paste0("Oct - ", month.abb[month_param-1], " cumulative precipitation")
         
     
     #### ------------------------------ CDDF ------------------------------ ####

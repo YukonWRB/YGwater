@@ -149,7 +149,7 @@ SWE_station <-
         if (return_missing == FALSE) {
           if (length(tab[tab$yr == year,]$value) == 0) next
         }
-        test1 <<- tab
+        
         # get sample date
         sample_date <- tab[tab$yr == year & tab$parameter == "SWE",]$sample_date
         sample_date <- as.Date(sample_date)
