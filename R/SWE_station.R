@@ -139,7 +139,7 @@ SWE_station <-
       swe_station_summary <-
         stats::setNames(data.frame(matrix(ncol = 18, nrow = 0)),
                         c("location_name", "location_id", "elevation", "sample_date",
-                          "swe", "swe_prevyear", "swe_med", "swe_norm", "swe_rat", "swe_min", 
+                          "swe", "swe_prevyear", "swe_med", "swe_norm_1991_2020", "swe_rat", "swe_min", 
                           "swe_max", "depth", "depth_med", "density", "density_med", 
                           "years", "record_flag", "date_flag"))
       
@@ -164,9 +164,9 @@ SWE_station <-
         swe_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "SWE",]$value), 0)
         if (length(swe_med) == 0) {swe_med <- NA}
         # Get normal swe (1991-2020)
-        swe_norm <- round(mean(tab[tab$parameter == "SWE" &
+        swe_norm_1991_2020 <- round(mean(tab[tab$parameter == "SWE" &
                                           tab$yr >= 1991 & tab$yr <= 2020,]$value), 0)
-        if (length(swe_norm) == 0 | swe_norm == "NaN") {swe_norm <- NA}
+        if (length(swe_norm_1991_2020) == 0 | swe_norm_1991_2020 == "NaN") {swe_norm_1991_2020 <- NA}
         # Get ratio between current year and median
         swe_rat <- round(swe/swe_med, 2)
         if (length(swe_rat) == 0 | is.infinite(swe_rat)) {swe_rat <- NA}
@@ -211,7 +211,7 @@ SWE_station <-
                              swe,
                              swe_prevyear,
                              swe_med,
-                             swe_norm,
+                             swe_norm_1991_2020,
                              swe_rat,
                              swe_min,
                              swe_max,
@@ -235,7 +235,7 @@ SWE_station <-
       swe_station_summary$swe <- as.numeric(swe_station_summary$swe)
       swe_station_summary$swe_prevyear <- as.numeric(swe_station_summary$swe_prevyear)
       swe_station_summary$swe_med <- as.numeric(swe_station_summary$swe_med)
-      swe_station_summary$swe_norm <- as.numeric(swe_station_summary$swe_norm)
+      swe_station_summary$swe_norm_1991_2020 <- as.numeric(swe_station_summary$swe_norm_1991_2020)
       swe_station_summary$swe_rat <- as.numeric(swe_station_summary$swe_rat)
       swe_station_summary$swe_min <- as.numeric(swe_station_summary$swe_min)
       swe_station_summary$swe_max <- as.numeric(swe_station_summary$swe_max)
