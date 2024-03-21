@@ -22,6 +22,7 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 # snowBulletin(year = 2024, month = 3, scale = 1, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater", synchronize=FALSE, language="english")
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi=300)
 con <- YGwater::hydrometConnect()
+on.exit(DBI::dbDisconnect(con))
 knitr::include_graphics
 fig.height_half <- 2.9
 fig.height_full <- 2.7
@@ -1336,7 +1337,7 @@ jam severity and peak water levels
 station_id <- "09FD002"
 
 if (language_param == "french") {
-  custom_title  <- "E : Débit de la rivière Porcupine à la frontiere"
+  custom_title  <- "E : Débit de la rivière Porcupine à la frontière"
 } else {
   custom_title <- "E: Porcupine River Discharge at Border"
 }
