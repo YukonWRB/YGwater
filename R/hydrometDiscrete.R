@@ -45,8 +45,8 @@ hydrometDiscrete <- function(location = NULL,
   # TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
 
   # Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
-  options(warn = -1)
   old_warn <- getOption("warn")
+  options(warn = -1)
   on.exit(options(warn = old_warn))
 
 

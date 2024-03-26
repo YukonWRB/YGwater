@@ -77,8 +77,8 @@ plotOverlap <- function(location = NULL,
 {
   
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
-  options(warn = -1)
   old_warn <- getOption("warn")
+  options(warn = -1)
   on.exit(options(warn = old_warn), add = TRUE)
 
   #### --------- Checks on input parameters and other start-up bits ------- ####

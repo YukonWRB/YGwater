@@ -402,13 +402,6 @@ app_server <- function(input, output, session) {
       if (plotContainer$plot_type == "plotOverlap") {
         plotContainer$plot <- plotOverlap(location = input$plot_loc_code, parameter = tolower(input$plot_param), startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, historic_range = input$historic_range_overlap, datum = input$apply_datum, filter = plotContainer$plot_filter, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, return_max_year = input$return_yrs, plot_scale = 1.4, con = con)
       } else if (plotContainer$plot_type == "plotTimeseries") {
-        print(input$plot_loc_code)
-        print(tolower(input$plot_param))
-        print(input$start_date)
-        print(input$end_date)
-        print(input$historic_range)
-        print(input$apply_datum)
-        print(plotContainer$plot_filter)
         plotContainer$plot <- plotTimeseries(location = input$plot_loc_code, parameter = tolower(input$plot_param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, con = con)
       } else if (plotContainer$plot_type == "plotTimeseriesMulti") {
         #TODO: add multi timeseries plot

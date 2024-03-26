@@ -43,8 +43,8 @@ plotTimeseriesMulti <- function(location,
   
   # Checks and initial work ##########################################
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
-  options(warn = -1)
   old_warn <- getOption("warn")
+  options(warn = -1)
   on.exit(options(warn = old_warn))
   
   rlang::check_installed("plotly", "necessary for interactive plots")
