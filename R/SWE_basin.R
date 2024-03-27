@@ -85,20 +85,21 @@ SWE_basin <-
       # Go through each basin one by one
       for (b in basins) {
         # subset factors to only what we need
-        fact <- Factors %>% dplyr::select(tidyselect::all_of(c(b, "location_id"))) %>%
-          dplyr::rename(val = b) %>%
-          dplyr::filter(.data$val != 0)
+        fact <- Factors[, c(b, "location_id")]
+        names(fact) <- c("val", "location_id")
+        fact <- fact[fact$val != 0,]
+      
         # Go through each location one by one
-        sweb <- stats::setNames(data.frame(matrix(ncol = 3, nrow = 0)),
-                         c("location_id", "swe", "perc"))
+        # Initialize empty dataframe
+        sweb <- data.frame("location_id" = numeric(),
+                           "swe" = numeric(),
+                           "perc" = numeric())
         for (l in fact$location_id) {
           # Check if location has measurement in tab
           if (length(tab[tab$location_id == l,]$SWE) == 0 |
               is.null(tab[tab$location_id == l,]$SWE)) {
             # Create vector with location, swe, percentage of basin that it represents. 0 if value is missing
-            swe <- c(l,
-                     NA,
-                     0)
+            swe <- c(l, NA, 0)
           } else if (!is.null(tab[tab$location_id == l,]$SWE &
                               length(tab[tab$location_id == l,]$SWE) == 1)) {
             # Create vector with location, swe, percentage of basin that it represents
@@ -111,33 +112,15 @@ SWE_basin <-
           sweb[nrow(sweb) + 1, ] = swe
         }
         # calculate total percent of available numbers
-        perc <- sum(as.numeric(sweb$perc))
-        if (perc > 10) {
-          swe <- sum(as.numeric(sweb$swe))
-          warning(paste0(
-            "Factors for location ",
-            l,
-            " add up to ",
-            perc,
-            " for the year ",
-            ym
-          ))
-        } else if (perc == 10) {
-          swe <- sum(as.numeric(sweb$swe), na.rm = TRUE)
+        perc <- sum(as.numeric(sweb$perc), na.rm = TRUE)
+        if (perc >= 10) {
+          swe <- hablar::rationalize(sum(as.numeric(sweb$swe), na.rm = TRUE))
         } else {
-          swe <- sum(as.numeric(sweb$swe), na.rm = TRUE) * 10 / perc
-          warning(paste0(
-            "Factors for location ",
-            l,
-            " add up to ",
-            perc,
-            " for the year ",
-            ym
-          ))
+          swe <- hablar::rationalize(sum(as.numeric(sweb$swe), na.rm = TRUE) * 10 / perc)
         }
-        swe_basin_year[nrow(swe_basin_year) + 1, ] = c(b, yr_mon[ym,1], yr_mon[ym,2], swe, perc)
+        swe_basin_year[nrow(swe_basin_year) + 1, ]  <- c(b, yr_mon[ym,1], yr_mon[ym,2], swe, perc)
       }
-      swe_basin_year[nrow(swe_basin_year) + 1, ] = swe_basin_year
+      # swe_basin_year[nrow(swe_basin_year) + 1, ]  <- swe_basin_year
     }
 
     # Set column classes
@@ -169,7 +152,7 @@ SWE_basin <-
           year_max = .data$yr[which.max(swe)],
           swe_min = min(swe),
           year_min = .data$yr[which.min(swe)],
-          swe_median = stats::median(swe)
+          swe_median = stats::median(swe, na.rm = TRUE)
         )
       # combine tables
       swe_basin_summary <-
@@ -181,7 +164,7 @@ SWE_basin <-
       swe_basin_summary <- swe_basin_summary %>%
         dplyr::mutate(dplyr::across(
           c("swe_max", "swe_min", "swe_median", "swe", "swe_relative"),
-          \(x) round (x, 2)
+          \(x) round(x, 2)
         ))
       swe_basin <- swe_basin_summary
     }
