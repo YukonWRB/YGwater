@@ -66,7 +66,7 @@ SWE_station <-
       
       # Get measurements
       Meas <- DBI::dbGetQuery(con,
-                              paste0("SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name, datum_conversions.conversion_m
+                              paste0("SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name, datum_conversions.conversion_m, measurements_discrete.note
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
                       INNER JOIN locations ON timeseries.location=locations.location
@@ -78,7 +78,7 @@ SWE_station <-
       
       DBI::dbDisconnect(con)
       # Rename columns:
-      colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation")
+      colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "note")
       
       # Calculate density
       # Spread the data into separate columns for swe and snow_depth
@@ -138,11 +138,11 @@ SWE_station <-
       # For each station: calculate historical median, years of record, and retrieve last years SWE and this years SWE and depth.
       # Create empty table
       swe_station_summary <-
-        stats::setNames(data.frame(matrix(ncol = 18, nrow = 0)),
+        stats::setNames(data.frame(matrix(ncol = 19, nrow = 0)),
                         c("location_name", "location_id", "elevation", "sample_date",
                           "swe", "swe_prevyear", "swe_med", "swe_norm_1991_2020", "swe_rat", "swe_min", 
                           "swe_max", "depth", "depth_med", "density", "density_med", 
-                          "years", "record_flag", "date_flag"))
+                          "years", "record_flag", "date_flag", "estimate_flag"))
       
       for (l in unique(Meas$location_id)) {
         # Subset to location of interest
@@ -192,7 +192,7 @@ SWE_station <-
         # Record flag
         if (is.na(swe) | is.na(swe_max)) {
           record_flag <- FALSE
-        } else if (swe > swe_max) {
+        } else if (swe > swe_max | swe < swe_min) {
           record_flag <- TRUE
         } else if (swe < swe_max) {record_flag <- FALSE}
         # date flag (sample_date outside of valid sampling range)
@@ -203,6 +203,14 @@ SWE_station <-
             sample_date < target_date - lubridate::days(6)) {
           date_flag <- TRUE
         } else {date_flag <- FALSE}
+        # estimate_flag
+        if (length(tab[tab$yr==year & tab$parameter=="SWE",]$note) == 0) {
+          estimate_flag <- FALSE
+        } else if (is.na(tab[tab$yr==year & tab$parameter=="SWE",]$note)) {
+          estimate_flag <- FALSE
+        } else if (tab[tab$yr==year & tab$parameter=="SWE",]$note == 'estimated') {
+          estimate_flag <- TRUE
+        } else {estimate_flag <- FALSE}
         
         # create vector with all row values
         swe_summary_loc <- c(unique(tab$location_name),                # get location name
@@ -222,7 +230,8 @@ SWE_station <-
                              density_med,
                              length(unique(tab$target_date)),  # get years of record
                              record_flag,
-                             date_flag
+                             date_flag,
+                             estimate_flag
         )
         if (length(swe_summary_loc) != 10) {
           warning(paste0("Location ", l, " does not have complete data"))
