@@ -60,7 +60,7 @@ test_that("SWE plot works when overlaping new year, dates as character", {
   skip_on_ci()
   dir <- paste0(tempdir(), "/plots")
   dir.create(dir)
-  suppressWarnings(plotOverlap("09AA-M1", "SWE", startDay = "2023-09-01", endDay = "2023-05-31", years = "2022", save_path = dir, return_months = c(4,5), historic_range = "last"))
+  suppressWarnings(plotOverlap("09AA-M1", "snow water equivalent", startDay = "2023-09-01", endDay = "2023-05-31", years = "2022", save_path = dir, return_months = c(4,5), historic_range = "last"))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/SWE1.png"))
   expect_snapshot_file(paste0(dir, "/SWE1.png"))
