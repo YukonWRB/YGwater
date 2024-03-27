@@ -6,7 +6,7 @@ test_that("violin plot is as expected for full year with numeric startDay and en
   dir <- paste0(tempdir(), "/plot")
   unlink(dir, recursive = TRUE)
   dir.create(dir)
-  suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = 1, endDay = 365, years = "2022", save_path = dir))
+  suppressWarnings(hydrometDiscrete("08AA-SC01", "snow water equivalent", startDay = 1, endDay = 365, years = "2022", save_path = dir))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow.png"))
   expect_snapshot_file(paste0(dir, "/snow.png"))
@@ -16,7 +16,7 @@ test_that("violin plot is as expected for full year with numeric startDay and en
 test_that("console plot output is as expected", {
   skip_on_cran()
   skip_on_ci()
-  plot <- suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = 1, endDay = 365, years = "2022"))
+  plot <- suppressWarnings(hydrometDiscrete("08AA-SC01", "snow water equivalent", startDay = 1, endDay = 365, years = "2022"))
   vdiffr::expect_doppelganger("full year violin", plot)
 })
 
@@ -25,7 +25,7 @@ test_that("violin plot is as expected for full year with Date startDay and endDa
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
-  suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir))
+  suppressWarnings(hydrometDiscrete("08AA-SC01", "snow water equivalent", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow2.png"))
   expect_snapshot_file(paste0(dir, "/snow2.png"))
@@ -37,7 +37,7 @@ test_that("box plot is as expected for full year with numeric startDay and endDa
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
-  suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = 1, endDay = 365, years = "2022", save_path = dir,  plot_type = "boxplot"))
+  suppressWarnings(hydrometDiscrete("08AA-SC01", "snow water equivalent", startDay = 1, endDay = 365, years = "2022", save_path = dir,  plot_type = "boxplot"))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow3.png"))
   expect_snapshot_file(paste0(dir, "/snow3.png"))
@@ -49,7 +49,7 @@ test_that("box plot is as expected for full year with Date startDay and endDay",
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
-  suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir, plot_type = "boxplot"))
+  suppressWarnings(hydrometDiscrete("08AA-SC01", "snow water equivalent", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir, plot_type = "boxplot"))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow4.png"))
   expect_snapshot_file(paste0(dir, "/snow4.png"))
@@ -61,7 +61,7 @@ test_that("plot scale factor and titles works", {
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
-  suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir, plot_type = "boxplot", plot_scale = 2, title = FALSE))
+  suppressWarnings(hydrometDiscrete("08AA-SC01", "snow water equivalent", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir, plot_type = "boxplot", plot_scale = 2, title = FALSE))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow5.png"))
   expect_snapshot_file(paste0(dir, "/snow5.png"))
@@ -73,7 +73,7 @@ test_that("depth plots work", {
   skip_on_ci()
   dir <- paste0(tempdir(), "/plot")
   dir.create(dir)
-  suppressWarnings(hydrometDiscrete("08AA-SC01", "SWE", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir))
+  suppressWarnings(hydrometDiscrete("08AA-SC01", "snow water equivalent", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = dir))
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow6.png"))
   expect_snapshot_file(paste0(dir, "/snow6.png"))
@@ -81,11 +81,11 @@ test_that("depth plots work", {
 })
 
 # Run swe_basin to get discrete_data for the next two tests
-discrete_data <- SWE_basin(year = 2022,
+discrete_data <- suppressWarnings(SWE_basin(year = 2022,
                            month = c(3,4,5),
                            threshold = 6,
                            csv = FALSE,
-                           summarise = FALSE)
+                           summarise = FALSE))
 discrete_data$datetime <- paste0(discrete_data$year, "-0", discrete_data$month, "-01")
 discrete_data <- discrete_data %>% 
   dplyr::filter(location == "Upper_Yukon")
@@ -97,7 +97,7 @@ test_that("violin plot is as expected when discrete data is given", {
   unlink(dir, recursive = TRUE)
   dir.create(dir)
   # use discrete data in hydrometDiscrete
-  hydrometDiscrete(location = NULL, parameter = 'SWE', years = c(2021, 2022), title = TRUE, plot_type = "boxplot", save_path = dir, discrete_data = discrete_data)
+  hydrometDiscrete(location = NULL, parameter = 'snow water equivalent', years = c(2021, 2022), title = TRUE, plot_type = "boxplot", save_path = dir, discrete_data = discrete_data)
   path <- list.files(dir, full.names = TRUE)
   file.rename(path, paste0(dir, "/snow7.png"))
   expect_snapshot_file(paste0(dir, "/snow7.png"))
@@ -113,7 +113,7 @@ test_that("linedbox plot is as expected when discrete data is given", {
   dir.create(dir)
   # use discrete data in hydrometDiscrete
     hydrometDiscrete(location = "Upper Yukon", 
-                     parameter = "SWE",
+                     parameter = "snow water equivalent",
                      startDay = 1, 
                      tzone = "MST", 
                      years = 2022, 

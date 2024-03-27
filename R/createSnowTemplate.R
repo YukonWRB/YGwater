@@ -18,7 +18,6 @@
 
 createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose") {
   
-  
   template <- openxlsx::loadWorkbook(system.file("snow_survey/SnowSurveyTemplate.xlsx", package = "YGwater"))
   
   if (save_path == "choose") {

@@ -43,11 +43,11 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
 
   if (snow_locations[1] == "default") {
     snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
-    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'SWE' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
   } else if (snow_locations[1] == "all") {
-    snow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'SWE' AND t.category = 'continuous' ORDER BY location;")
+    snow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' ORDER BY location;")
   } else {
-    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'SWE' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
   }
 
   if (bridge_locations[1] == "default") {

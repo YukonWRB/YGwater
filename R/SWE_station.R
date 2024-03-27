@@ -11,6 +11,7 @@
 #' @param return_missing TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.
 #' @param active TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.
 #' @param source Database from which to fetch this data. Options are: hydromet or snow.
+#' @param summarise TRUE or FALSE. If TRUE, the output table is summarised by sub-basin. If FALSE, the output table is not summarised.
 #' @return A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.
 #' @export
 
@@ -71,7 +72,7 @@ SWE_station <-
                       INNER JOIN locations ON timeseries.location=locations.location
                       INNER JOIN parameters ON timeseries.parameter = parameters.param_code
                       INNER JOIN datum_conversions ON locations.location_id = datum_conversions.location_id
-                      WHERE (parameters.param_name = 'SWE' OR parameters.param_name = 'snow depth') AND
+                      WHERE (parameters.param_name = 'snow water equivalent' OR parameters.param_name = 'snow depth') AND
                               locations.location IN ('", paste0(stations, collapse="', '"), "')")
       )
       
@@ -82,12 +83,12 @@ SWE_station <-
       # Calculate density
       # Spread the data into separate columns for swe and snow_depth
       wider_data <- Meas %>%
-        tidyr::pivot_wider(names_from = parameter, values_from = value)
+        tidyr::pivot_wider(names_from = "parameter", values_from = "value")
       # calculate
-      wider_data$density <- round(wider_data$SWE / wider_data$'snow depth' * 10, 2)
+      wider_data$density <- round(wider_data$`snow water equivalent` / wider_data$`snow depth` * 10, 2)
       # Reformat into long format
       Meas <- wider_data %>%
-        tidyr::pivot_longer(cols = c(SWE, 'snow depth', density), names_to = "parameter", values_to = "value")
+        tidyr::pivot_longer(cols = c("snow water equivalent", "snow depth", "density"), names_to = "parameter", values_to = "value")
       
       ## From snow db ##
     } else if (source == "snow") {

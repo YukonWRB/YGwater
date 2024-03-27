@@ -32,7 +32,7 @@
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
-#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "level" ("niveau d'eau"), "flow" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "SWE" ("EEN"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "water flow" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
@@ -77,14 +77,12 @@ plotOverlap <- function(location = NULL,
 {
   
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
-  options(warn = -1)
   old_warn <- getOption("warn")
+  options(warn = -1)
   on.exit(options(warn = old_warn), add = TRUE)
 
   #### --------- Checks on input parameters and other start-up bits ------- ####
-  if (!(parameter %in% c("EEN", "SWE"))) {
-    parameter <- tolower(parameter)
-  }
+  parameter <- tolower(parameter)
   
   if (!(language %in% c("en", "fr"))) {
     stop("Your entry for the parameter 'language' is invalid. Please review the function documentation and try again.")
@@ -473,7 +471,7 @@ plotOverlap <- function(location = NULL,
     if (!all(names(continuous_data) %in% c("datetime", "value"))) {
       stop("The data.frame passed to parameter 'continuous_data' must have columns named 'datetime' and 'value'.")
     }
-    parameter_name <- if (!(parameter %in% c("SWE", "EEN"))) titleCase(parameter) else parameter
+    parameter_name <- titleCase(parameter)
     #### Add this in here: ------------------
     dat <- continuous_data
     # Remove Feb 29
@@ -557,7 +555,7 @@ plotOverlap <- function(location = NULL,
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "water flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "SWE", "EEN", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
+      if (parameter %in% c("water level", "niveau d'eau", "water flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
         realtime[realtime$value < 0 & !is.na(realtime$value),"value"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         realtime[realtime$value < -100 & !is.na(realtime$value),"value"] <- NA

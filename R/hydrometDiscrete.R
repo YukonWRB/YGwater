@@ -3,7 +3,7 @@
 #' @description
 #' `r lifecycle::badge('stable')`
 #'
-#' Generate plots of snow survey data (SWE and depth) or other variables sampled at regular intervals (weekly or monthly).
+#' Generate plots of snow survey data (snow water equivalent and snow depth) or other variables sampled at regular intervals (weekly or monthly).
 #'
 #' Notice: in many cases, you're better off using the Shiny app at [hydroApp()] to generate and export your plot. Read on if you need additional control over the final product.
 #'
@@ -45,18 +45,13 @@ hydrometDiscrete <- function(location = NULL,
   # TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
 
   # Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
-  options(warn = -1)
   old_warn <- getOption("warn")
+  options(warn = -1)
   on.exit(options(warn = old_warn))
 
 
 #### ------- Checks on input parameters  and other start-up bits ---------- ####
-  if (parameter != "SWE") {
-    parameter <- tolower(parameter)
-  } 
-  if (tolower(parameter) == "swe") {
-    parameter <- "SWE"
-  }
+  parameter <- tolower(parameter)
 
   plot_type <- tolower(plot_type)
   if (!(plot_type %in% c("violin", "boxplot", "linedbox"))) {
@@ -303,20 +298,20 @@ hydrometDiscrete <- function(location = NULL,
   # c("black", "#DC4405", "#512A44", "#F2A900", "#244C5A", "#687C04", "#C60D58", "#0097A9", "#7A9A01", "#834333")
   legend_length <- length(years)
   plot <- ggplot2::ggplot(all_discrete, ggplot2::aes(x = .data$fake_date, y = .data$value, group = .data$fake_date)) +
-    ggplot2::labs(x = NULL, y = if (parameter == "SWE") paste0("SWE (", units, ")") else paste0(stringr::str_to_title(parameter), " (", units, ")")) +
+    ggplot2::labs(x = NULL, y = paste0(titleCase(parameter), " (", units, ")")) +
     ggplot2::theme_classic() +
     ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 10*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale))
 
   if (plot_type == "linedbox") {
     for (m in unique(stats_discrete$month)) {
       plot <- plot +
-        ggplot2::geom_rect(data = stats_discrete[stats_discrete$month == m,], fill = 'grey87', ggplot2::aes(xmin = .data$fake_date - 12, xmax = .data$fake_date + 12, ymin=min(.data$value), ymax=max(.data$value)))
+        ggplot2::geom_rect(data = stats_discrete[stats_discrete$month == m,], fill = 'grey87', ggplot2::aes(xmin = .data$fake_date - 12, xmax = .data$fake_date + 12, ymin = min(.data$value), ymax = max(.data$value)))
     }
     plot <- plot +
-      ggplot2::geom_segment(data = stats_discrete, linewidth = plot_scale *1.5,
-                            ggplot2::aes(color=.data$type, yend=value,
+      ggplot2::geom_segment(data = stats_discrete, linewidth = plot_scale * 1.5,
+                            ggplot2::aes(color = .data$type, yend = value,
                                          x = .data$fake_date - 12, xend = .data$fake_date + 12)) +
-      ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
+      ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
       ggnewscale::new_scale_color()
 
   } else if (plot_type == "violin") {
@@ -354,12 +349,12 @@ hydrometDiscrete <- function(location = NULL,
     if (is.null(custom_title)) {
       if (is.null(discrete_data)) {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))
-        titl <- paste0("Location ", location, ": ", stn_name)
+        titl <- paste0("Location ", location, ": ", titleCase(stn_name))
       } else {
         if (!is.null(location)) {
           titl <- paste0("Location: ", location)}
         else {
-          titl <- paste0("Location: ", unique(all_discrete$location))
+          titl <- paste0("Location: ", titleCase(unique(all_discrete$location)))
         }
       }
     } else (titl <- custom_title)
@@ -372,7 +367,7 @@ hydrometDiscrete <- function(location = NULL,
 
   #Save it if requested
   if (!is.null(save_path)) {
-    ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz=tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz=tzone)), ".png"), plot=plot, height=8, width=12, units="in", device="png", dpi=500)
+    ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz = tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz = tzone)), ".png"), plot = plot, height = 8, width = 12, units = "in", device = "png", dpi = 500)
   }
 
   return(plot)
