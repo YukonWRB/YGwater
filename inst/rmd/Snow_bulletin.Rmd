@@ -22,7 +22,7 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 # snowBulletin(year = 2024, month = 3, scale = 1, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater", synchronize=FALSE, language="english")
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi=300)
 con <- YGwater::hydrometConnect()
-on.exit(DBI::dbDisconnect(con))
+#on.exit(DBI::dbDisconnect(con))
 knitr::include_graphics
 fig.height_half <- 2.9
 fig.height_full <- 2.7
@@ -31,15 +31,47 @@ year_param <- params$year
 month_param <- params$month
 scale_param <- params$scale
 
+library(officedown)
+library(officer)
+
 ```
 
 ```{r Functions, echo=FALSE}
+#### -------------------- Conditional text colours ------------------------ ####
+textColour <- function(desc) {
+  if (length(desc) == 0) {
+    text_colour <- fp_text_lite(color = "black", bold = TRUE, font.size=11)
+  } else if (desc %in% c("slightly above", "above", "well above")) {
+    text_colour <- fp_text_lite(color = "#0097A9", bold = TRUE, font.size=11)
+  } else if (desc %in% c("close to")) {
+    text_colour <- fp_text_lite(color = "#7A9A01", bold = TRUE, font.size=11)
+  } else if (desc %in% c("slightly below", "below", "well below")) {
+    text_colour <- fp_text_lite(color = "#834333", bold = TRUE, font.size=11)
+  }
+  return(text_colour)
+}
+
+#### ------------------------- Conditional text --------------------------- ####
+iceThickness <- function(cddf) {
+  if (cddf >= 90 & cddf < 98) {
+    ice_thickness <- "close to normal ice thickness"
+  } else if (cddf >= 99 & cddf <= 102) {
+    ice_thickness <- "normal ice thickness"
+  } else if (cddf >= 103 & cddf <= 109) {
+    ice_thickness <- "close to normal ice thickness"
+  } else if (cddf <= 91) {
+    ice_thickness <- "thinner than normal ice cover"
+  } else if (cddf >= 110) {
+    ice_thickness <- "thicker than normal ice cover "
+  } 
+}
+
 #### -------------------- A: snow scale/pillow plots ---------------------- ####
 snowbullpillow <- function(location, custom_title, year, number="", language="en", scale=scale_param) {
   
   plot <- YGwater::hydrometContinuous(
   location = location,
-  parameter = "SWE",
+  parameter = "snow water equivalent",
   startDay = paste0(year, "-09-01"),
   endDay = paste0(year, '-07-01'),
   years = year-1,
@@ -62,12 +94,16 @@ return(plot)
 
 #### -------------- A: snow pillow without historical data ---------------- ####
 
-snowbullpillow2 <- function(location_pil, location_surv, custom_title, language=language_param, year=year_param, scale=scale_param) {
+snowbullpillow2 <- function(location_pil, location_surv, custom_title, language=language_param, year=year_param, scale=scale_param, month=month_param) {
   # Get this years snow pillow
+# snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily ",
+#                             "WHERE timeseries_id = ", location_pil,
+#                             " AND date >= '", year-1, "-09-01' ", #year_param
+#                             "AND date <= '", year, "-07-01' ")) #year_param
 snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily ",
                             "WHERE timeseries_id = ", location_pil,
                             " AND date >= '", year-1, "-09-01' ", #year_param
-                            "AND date <= '", year, "-07-01' ")) #year_param
+                            "AND date <= '", year, "-0", month, "-01' ")) #year_param
 snow_p$date <- as.POSIXct(snow_p$date)
 # Get historical snow survey data
 snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measurements_discrete ",
@@ -134,6 +170,7 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale=scale_
 snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language, month = month_param) {
   tab <- DBI::dbGetQuery(con, paste0("SELECT * FROM measurements_continuous WHERE timeseries_id = ", tsid,
                                      " AND datetime >= '", year-40, "-10-01'"))
+
   attr(tab$datetime, "tzone") <- "MST"
   tab$month <- format(tab$datetime, "%m")
   tab$year <- format(tab$datetime, "%Y")
@@ -157,16 +194,9 @@ snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language
   
     if(language == "french") {
   plot <- plot + ggplot2::labs(y="Précipitations (mm)")
-}
-
-  # Calculate stats (% above/below median of cumulative winter precip)
-  # Cumulative median / value on date
-  stats_c <- round(sum(plot$plot_env$discrete[plot$plot_env$discrete$month <= month | 
-                                            plot$plot_env$discrete$month >= 10, ]$value) /
-                   sum(plot$plot_env$stats_discrete[plot$plot_env$stats_discrete$type == "median" &
-                                            (plot$plot_env$stats_discrete$month <= month | 
-                                            plot$plot_env$stats_discrete$month >= 10), ]$value) * 100)
-  return(list(plot, stats_c))
+    }
+  
+  return(plot)
 }
 
 #### --------------- D: Functions to create CDDF plots -------------------- ####
@@ -232,7 +262,10 @@ return(cddf)
 # Function to create CDDF plots
 snowbullCDDF <- function(timeseries_id, custom_title, language="en", 
                          year=year_param, month=month_param, scale=scale_param) {
-  location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", timeseries_id))
+  location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value 
+                                          FROM measurements_continuous 
+                                          WHERE timeseries_id = ", timeseries_id, 
+                                           " AND datetime <= '", year, "-0", month, "-01' "))
 
   location <- getCDDF(location, year)
   
@@ -266,11 +299,12 @@ snowbullCDDF <- function(timeseries_id, custom_title, language="en",
       }
 
   
-  stats_d <- plot$data[plot$data$datetime == paste0(year, "-0", month, "-01"),]
-  #stats_d <- plot$data[plot$data$datetime == paste0(2024, "-0", 2, "-28"),]
-  stats_d <- c(round(stats_d$value / stats_d$md *100), round(stats_d$value))
+  # stats_d <- plot$data[plot$data$datetime == paste0(year, "-0", month, "-01"),]
+  # #stats_d <- plot$data[plot$data$datetime == paste0(2024, "-0", 2, "-28"),]
+  # stats_d <- c(round(stats_d$value / stats_d$md *100), round(stats_d$value))
     
-  return(list(plot, stats_d))
+  #return(list(plot, stats_d))
+  return(plot)
 }
 
 #### --------- E: Function to create lake level snow bulletin plots ------- ####
@@ -372,27 +406,10 @@ swe_basins <- YGwater::SWE_basin(year = year_param,
                                    source = "hydromet")
   # Add datetime to data
   swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
-  #swe_basins <<- swe_basins
+  swe_basins <<- swe_basins
 # Get stats for text
-  # Basin % historical median and SWE on target date
-  basins_stats <- YGwater::SWE_basin(year = year_param,
-                                     month = month_param, # c(3)
-                                     threshold = 6,
-                                     csv = FALSE,
-                                     summarise = TRUE, 
-                                     source = "hydromet"
-                                     )
-  basins_stats <- basins_stats[,c("basin", "swe", "swe_relative")]
-  basins_stats$swe <- round(basins_stats$swe, 0)
-  #basins_stats <<- basins_stats
-
-  # Snow pillow/scale % of historical median
-  pillow_stats <- DBI::dbGetQuery(con, paste0("SELECT value, q50, location FROM calculated_daily 
-                  INNER JOIN timeseries ON calculated_daily.timeseries_id = timeseries.timeseries_id
-                  WHERE calculated_daily.timeseries_id IN (20, 145, 51, 75, 122, 85)
-                  AND date = '", year_param, "-0", month_param, "-01'"))
-  pillow_stats$perc <- round(pillow_stats$value / pillow_stats$q50 * 100)
-  #pillow_stats <<- pillow_stats
+  stats <- snowBulletinStats(year=year_param, month=month_param, excel_output=FALSE)
+  stats <<- stats
 
 ```
 
@@ -425,17 +442,17 @@ locations. This information is used to evaluate the potential for spring
 flooding caused by both breakup ice jams and large spring snowmelt
 (freshet) flows. It is important to note that other processes such as
 summer rain and glacier melt can significantly influence maximum annual
-water levels in specific Yukon basins. 
+water levels in specific Yukon basins.
 
-Weather conditions for the
-Yukon are presented in two maps, one showing temperature anomalies
-(deviation from climate normals), and another showing precipitation
-anomalies. Territory-wide snowpack data are presented in a third map
-showing snow water equivalent (SWE) as a percent of historical median
-for each station, as well as the basin averaged estimated SWE for 11
-watersheds (or river basins). Where available, complementary meteorological 
-and hydrological data are presented for each basin through a series of plots, 
-detailed below. Not all basins contain the instrumentation to support all five figure types.
+Weather conditions for the Yukon are presented in two maps, one showing
+temperature anomalies (deviation from climate normals), and another
+showing precipitation anomalies. Territory-wide snowpack data are
+presented in a third map showing snow water equivalent (SWE) as a
+percent of historical median for each station, as well as the basin
+averaged estimated SWE for 11 watersheds (or river basins). Where
+available, complementary meteorological and hydrological data are
+presented for each basin through a series of plots, detailed below. Not
+all basins contain the instrumentation to support all five figure types.
 
 -   **Figure A:** Daily Snow Water Equivalent (SWE) data starting in
     September at one specific location in the watershed, showing an
@@ -455,7 +472,7 @@ detailed below. Not all basins contain the instrumentation to support all five f
     the spring.
 -   **Figure E:** Current, estimated daily discharge or measured water
     level, compared with historical data, representing an overview of
-    the watershed hydrological conditions. The flood level refers to the 
+    the watershed hydrological conditions. The flood level refers to the
     lowest elevation at which flood impacts are estimated to occur.
 
 ```{r legend, echo=FALSE, eval=TRUE, out.width="40%"}
@@ -561,8 +578,8 @@ are:
 -   *Yukon Department of Highways and Public Works*
 -   *Yukon Department of Energy Mines and Resources, Compliance
     Monitoring and Inspections Branch*
--   *Yukon Department of Environment, Client, Business and
-    Technology Solutions*
+-   *Yukon Department of Environment, Client, Business and Technology
+    Solutions*
 -   *Vuntut Gwitchin First Nation*
 
 # Disclaimer and Limitation of Liability
@@ -610,11 +627,27 @@ data.
 
 # Upper Yukon River Basin (Southern Lakes/Whitehorse)
 
-The Upper Yukon River Basin snowpack is \-\-\-\-- average. 
-At Tagish Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **`r pillow_stats[pillow_stats$location=='09AA-M1',]$perc`%** of the historical median (Figure`r knitr::asis_output("\U00A0")`A1), 
-while at Wolf Creek Subalpine Meteorological Station, SWE is estimated to be **`r pillow_stats[pillow_stats$location=='29AB-M3',]$perc`%** of the historical median (Figure`r knitr::asis_output("\U00A0")`A2). 
-Established in 2023, Log Cabin Meteorological Station registered Snow Water Equivalent (SWE) at \-\--% of the historical median when compared with the manual snow survey record for that site (Figure`r knitr::asis_output("\U00A0")`A3). 
-The Upper Yukon basin-averaged SWE is estimated to be **`r basins_stats[basins_stats$basin=='Upper_Yukon',]$swe_relative * 100`%** of the historical median, with **`r basins_stats[basins_stats$basin=='Upper_Yukon',]$swe`** **mm** as of `r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+The Upper Yukon River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Upper_Yukon",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Upper_Yukon",]$description))`.
+At Tagish Meteorological Station, Snow Water Equivalent (SWE) is estimated to be
+**`r stats$pillow_stats[stats$pillow_stats$location_id=='09AA-M1',]$perc_hist_med`%**
+of the historical median (Figure`r knitr::asis_output("\U00A0")`A1),
+while at Wolf Creek Subalpine Meteorological Station, SWE is estimated
+to be
+**`r stats$pillow_stats[stats$pillow_stats$location_id=='29AB-M3',]$perc_hist_med`%**
+of the historical median (Figure`r knitr::asis_output("\U00A0")`A2).
+Established in 2023, Log Cabin Meteorological Station registered Snow
+Water Equivalent (SWE) at
+**`r stats$pillow_stats[stats$pillow_stats$location_id=='09AA-M2',]$perc_hist_med`%**
+of the historical median when compared with the manual snow survey
+record for that site (Figure`r knitr::asis_output("\U00A0")`A3). The
+Upper Yukon basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Upper_Yukon',]$perc_hist_med`%**
+of the historical median, with
+**`r stats$basin_stats[stats$basin_stats$basin=='Upper_Yukon',]$swe`**
+**mm** as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r Upper Yukon, echo=FALSE}
 # Run or don't run following chunks
@@ -623,16 +656,6 @@ if ("Upper Yukon" %in% params$basins) {
 } else {
   include <- FALSE
 }
-
-```
-
-```{r Upper Yukon2, echo=FALSE, eval=include}
-# Plot C 
-  plot_c <- snowBullPrecip(663, year_param, scale_param, "Whitehorse", language = language_param)
-
-
-# Plot D
-  plot_d <- snowbullCDDF(timeseries_id = 484, custom_title = "Whitehorse", language = substr(language_param, 1, 2))
 
 ```
 
@@ -646,7 +669,7 @@ station_id <- "09AA-M1"
 if (language=="french") {
   snowbullpillow(location = station_id, custom_title = "A1: Équivalent en eau de la neige - Tagish", year = year_param, language="fr")
 } else {
-  snowbullpillow(location = station_id, custom_title = "A1: Tagish Snow Water Equivalent", year = year_param)
+  snowbullpillow(location = station_id, custom_title = "A1: Tagish Snow Water Equivalent", year = year_param, language="en")
 }
   
 
@@ -668,9 +691,9 @@ par(mfrow = c(1, 2))
 
 ## A3: Log Cabin
 if (language_param == "french") {
-  snowbullpillow2(location_pil=649, location_surv=217, custom_title="A2 : Équivalent en eau de la neige - Log Cabin (C-B)" , year=year_param, scale=scale_param)
+  snowbullpillow2(location_pil=649, location_surv=217, custom_title="A3 : Équivalent en eau de la neige - Log Cabin (C-B)" , year=year_param, scale=scale_param)
 } else {
-  snowbullpillow2(location_pil=649, location_surv=217, custom_title="A2: Log Cabin (B.C) Snow Water Equivalent" , year=year_param, scale=scale_param)
+  snowbullpillow2(location_pil=649, location_surv=217, custom_title="A3: Log Cabin (B.C) Snow Water Equivalent" , year=year_param, scale=scale_param)
 }
 
 # B
@@ -685,32 +708,45 @@ if (language_param == "french") {
 
 ```
 
-Whitehorse precipitation has been ----- median since October... (Figure`r knitr::asis_output("\U00A0")`C). 
-Cumulative winter precipitation was **`r plot_c[[2]]`%** of historical median on `r month.name[params$month]` 1. 
-Cumulative degree-days of freezing (CDDF) are **`r plot_d[[2]][1]`%** of historical median, with **`r plot_d[[2]][2]`$^\circ$C-Days** on
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`D), 
-which suggests \-\-\-\- than normal ice cover on rivers and lakes of the region.
+Whitehorse precipitation has been
+`r ftext(paste0(stats$precip_stats[stats$precip_stats$location_id==48168 & stats$precip_stats$period=='All years',]$description, " normal"), textColour(stats$precip_stats[stats$precip_stats$location_id==48168 & stats$precip_stats$period=='All years',]$description))` from October through `r month.name[params$month-1]`
+(Figure`r knitr::asis_output("\U00A0")`C). Cumulative winter
+precipitation was
+**`r stats$precip_stats[stats$precip_stats$location_id==48168 & stats$precip_stats$period=='All years',]$perc_hist_med`%**
+of historical median on `r month.name[params$month]` 1. Cumulative
+degree-days of freezing (CDDF) are
+**`r stats$cddf_stats[stats$cddf_stats$location_id==48168 & stats$cddf_stats$period=='All years',]$perc_hist_med`%**
+of historical median, with
+**`r stats$cddf_stats[stats$cddf_stats$location_id==48168 & stats$cddf_stats$period=='All years',]$value`**$^\circ$C-Days
+on `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`D), which suggests `r iceThickness(stats$cddf_stats[stats$cddf_stats$location_id==48168 & stats$cddf_stats$period=='All years',]$perc_hist_med) ` on rivers and lakes of the region.
 
 ```{r UpperYukon_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", warnings=FALSE, fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# C
-plot_c[[1]]
+# Plot C 
+  snowBullPrecip(663, year_param, scale_param, "Whitehorse", language = language_param)
 
-# D
-plot_d[[1]]
+# Plot D
+  snowbullCDDF(timeseries_id = 484, custom_title = "Whitehorse", language = substr(language_param, 1, 2))
 
 ```
 
 The measured water surface elevation (relative to sea level) in Marsh
-Lake is currently \-\-\-\-- average (Figure`r knitr::asis_output("\U00A0")`E1). The current snow and
-groundwater conditions suggest that water levels will be \-\-\-\--
+Lake is currently 
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AB004",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AB004",]$description))` 
+(Figure`r knitr::asis_output("\U00A0")`E1). 
+The current snow and groundwater conditions suggest that water levels will be \-\-\-\--
 average this summer. However, weather conditions over the spring and
 summer will determine the peak water level in Marsh Lake, which
 typically occurs in late summer in response to peak glacial runoff and
-large precipitation events. Lake Laberge level is currently \-\-\-\--
-the historic maximum for this time of year (Figure`r knitr::asis_output("\U00A0")`E2). Lake Laberge
-follows a similar summer pattern to the upper Southern Lakes and is
-expected to experience \-\-\-\-- average water levels this summer.
+large precipitation events. 
+Lake Laberge level is currently 
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AB010",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AB010",]$description))` 
+(Figure`r knitr::asis_output("\U00A0")`E2). 
+Lake Laberge follows a similar summer pattern to the upper Southern Lakes and is expected to
+experience \-\-\-\-- average water levels this summer.
 
 ```{r MarshLake, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E1
@@ -762,19 +798,15 @@ if ("Teslin" %in% params$basins) {
 }
 ```
 
-```{r Teslin2, echo=FALSE, eval=include}
-# Plot C
-plot_c <- snowBullPrecip(665, year_param, scale_param, "Teslin", language = language_param)
-# Plot D
-plot_d <- snowbullCDDF(timeseries_id = 532, custom_title = "Teslin", language = substr(language_param, 1, 2))
-```
-
-The Teslin River Basin snowpack is \-\-\-\-- average. The basin-averaged
-SWE is estimated at
-**`r basins_stats[basins_stats$basin=='Teslin_Big_Salmon',]$swe_relative * 100`%**
+The Teslin River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Teslin_Big_Salmon",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Teslin_Big_Salmon",]$description))`.
+The basin-averaged SWE is estimated at
+**`r stats$basin_stats[stats$basin_stats$basin=='Teslin_Big_Salmon',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='Teslin_Big_Salmon',]$swe`**
-**mm** as of `r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='Teslin_Big_Salmon',]$swe`**
+**mm** as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r TeslinBigSalmon_basin, echo=FALSE, eval=include, out.width="50%", fig.height=fig.height_half}
 # B
@@ -789,24 +821,36 @@ if (language_param == "french") {
 
 ```
 
-Teslin precipitation has been \-\-\-\-- median since October... (Figure`r knitr::asis_output("\U00A0")`C). 
-Cumulative winter precipitation was **`r plot_c[[2]]`%** of historical median on `r month.name[params$month]` 1.
-Cumulative degree-days of freezing (CDDF) are **`r plot_d[[2]][1]`%** of historical median, with **`r plot_d[[2]][2]`$^\circ$C-Days** on
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`D).
+Teslin precipitation has been
+`r ftext(paste0(stats$precip_stats[stats$precip_stats$location_id==8985 & stats$precip_stats$period=='All years',]$description, " normal"), textColour(stats$precip_stats[stats$precip_stats$location_id==8985 & stats$precip_stats$period=='All years',]$description))` from October through `r month.name[params$month-1]`
+(Figure`r knitr::asis_output("\U00A0")`C). Cumulative winter
+precipitation was
+**`r stats$precip_stats[stats$precip_stats$location_id==8985 & stats$precip_stats$period=='All years',]$perc_hist_med`%**
+of historical median on `r month.name[params$month]` 1. Cumulative
+degree-days of freezing (CDDF) are
+**`r stats$cddf_stats[stats$cddf_stats$location_id==8985 & stats$cddf_stats$period=='All years',]$perc_hist_med`%**
+of historical median, with
+**`r stats$cddf_stats[stats$cddf_stats$location_id==8985 & stats$cddf_stats$period=='All years',]$value`**$^\circ$C-Days
+on `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`D), which suggests ----- than normal ice cover
+on rivers and lakes of the region.
+
 
 ```{r Teslin_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# C
-plot_c[[1]]
-# D
-plot_d[[1]]
+# Plot C
+snowBullPrecip(665, year_param, scale_param, "Teslin", language = language_param)
+# Plot D
+snowbullCDDF(timeseries_id = 532, custom_title = "Teslin", language = substr(language_param, 1, 2))
 
 ```
 
-The measured water surface elevation (relative to sea level) in Teslin
-Lake is currently \-\-\-\-- average (Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- snowpack
-and \-\-\-\-- water level suggest that summer water levels will be
-\-\-\-\--.
+The measured water surface elevation (relative to sea level) in Teslin Lake is currently 
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AE002",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AE002",]$description))` 
+(Figure`r knitr::asis_output("\U00A0")`E). 
+The \-\-\-\-- snowpack and \-\-\-\-- water level suggest that summer water levels will be
+\-\-\-\--. Weather conditions in March and April will determine the most probable spring scenario.
 
 ```{r TeslinLake, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -836,19 +880,15 @@ if ("Central Yukon" %in% params$basins) {
 }
 ```
 
-```{r Central Yukon2, echo=FALSE, eval=include}
-# Create plot C
-plot_c <- snowBullPrecip(666, year_param, scale_param, "Carmacks", language = language_param)
-# Plot D
-plot_d <- snowbullCDDF(timeseries_id = 540, custom_title = "Carmacks", language = substr(language_param, 1, 2))
-```
-
-The Central Yukon River Basin snowpack is \-\-\-\-- average. The
-basin-averaged SWE is estimated to be
-**`r basins_stats[basins_stats$basin=='Central_Yukon',]$swe_relative * 100`%**
+The Central Yukon River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Central_Yukon",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Central_Yukon",]$description))`.
+The basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Central_Yukon',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='Central_Yukon',]$swe`** **mm** as
-of `r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='Central_Yukon',]$swe`**
+**mm** as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r CentralYukon_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
@@ -863,28 +903,41 @@ if (language_param == "french") {
 
 ```
 
-Carmacks precipitation has been \-\-\-\-- median since October... (Figure`r knitr::asis_output("\U00A0")`C). 
-Cumulative winter precipitation was **`r plot_c[[2]]`%** of historical median on `r month.name[params$month]` 1. 
-Cumulative degree-days of freezing (CDDF) are **`r plot_d[[2]][1]`%** of historical median, with **`r plot_d[[2]][2]`$^\circ$C-Days** on
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`D).
+Carmacks precipitation has been
+`r ftext(paste0(stats$precip_stats[stats$precip_stats$location_id==27950 & stats$precip_stats$period=='All years',]$description, " normal"), textColour(stats$precip_stats[stats$precip_stats$location_id==27950 & stats$precip_stats$period=='All years',]$description))` from October through `r month.name[params$month-1]`
+(Figure`r knitr::asis_output("\U00A0")`C). Cumulative winter
+precipitation was
+**`r stats$precip_stats[stats$precip_stats$location_id==27950 & stats$precip_stats$period=='All years',]$perc_hist_med`%**
+of historical median on `r month.name[params$month]` 1. Cumulative
+degree-days of freezing (CDDF) are
+**`r stats$cddf_stats[stats$cddf_stats$location_id==27950 & stats$cddf_stats$period=='All years',]$perc_hist_med`%**
+of historical median, with
+**`r stats$cddf_stats[stats$cddf_stats$location_id==27950 & stats$cddf_stats$period=='All years',]$value`**$^\circ$C-Days
+on `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`D), which suggests ----- than normal ice cover
+on rivers and lakes of the region.
+
 
 ```{r Carmacks_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# C
-plot_c[[1]]
-# D
-plot_d[[1]]
+# Create plot C
+snowBullPrecip(666, year_param, scale_param, "Carmacks", language = language_param)
+# Plot D
+snowbullCDDF(timeseries_id = 540, custom_title = "Carmacks", language = substr(language_param, 1, 2))
 
 ```
 
-The estimated Nordenskiold River discharge is currently \-\-\-\--
-average (Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average snowpack combined with
-\-\-\-\-- winter flows in the watershed suggests spring freshet flow
-volumes will be \-\-\-\-- average with a potential for.... A combination
-of local conditions such as ice thickness, freeze-up levels, and current
-flow volumes suggest a \-\-\-\-- average ice jam risk. Weather patterns
-leading to breakup and the spring freshet will play a critical role in
-determining potential ice jam severity and peak water levels.
+The estimated Nordenskiold River discharge is currently 
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AH004",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AH004",]$description))` 
+(Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average
+snowpack combined with \-\-\-\-- winter flows in the watershed suggests
+spring freshet flow volumes will be \-\-\-\-- average with a potential
+for.... A combination of local conditions such as ice thickness,
+freeze-up levels, and current flow volumes suggest a \-\-\-\-- average
+ice jam risk. Weather patterns leading to breakup and the spring freshet
+will play a critical role in determining potential ice jam severity and
+peak water levels.
 
 ```{r Nordenskiold, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -915,20 +968,19 @@ if ("Pelly" %in% params$basins) {
 }
 ```
 
-```{r Pelly2, echo=FALSE, eval=include}
-# Create plot D
-plot_d <- snowbullCDDF(timeseries_id = 500, custom_title = "Faro", language = substr(language_param, 1, 2))
-```
-
-The Pelly River Basin snowpack is \-\-\-\-- average. At Twin Creeks
-Meteorological Station, Snow Water Equivalent (SWE) is estimated to be
-**`r pillow_stats[pillow_stats$location=='09BA-M7',]$perc`%** of the
-historical median (Figure`r knitr::asis_output("\U00A0")`A). The Pelly River basin-averaged SWE is
-estimated to be
-**`r basins_stats[basins_stats$basin=='Pelly',]$swe_relative * 100`%**
+The Pelly River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Pelly",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Pelly",]$description))`.
+At Twin Creeks Meteorological Station, Snow Water Equivalent
+(SWE) is estimated to be
+**`r stats$pillow_stats[stats$pillow_stats$location_id=='09BA-M7',]$perc_hist_med`%**
+of the historical median (Figure`r knitr::asis_output("\U00A0")`A). The
+Pelly River basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Pelly',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='Pelly',]$swe`** **mm** as of
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='Pelly',]$swe`** **mm**
+as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r Pelly_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
@@ -955,27 +1007,33 @@ if (language_param == "french") {
 
 ```
 
-Precipitation at Faro has not been recorded, but snowpack observations
-indicate values are \-\-\-\-- the climate normals. 
-Cumulative degree-days of freezing (CDDF) are **`r plot_d[[2]][1]`%** of historical median, with **`r plot_d[[2]][2]`$^\circ$C-Days** on
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`D),
-which suggests \-\-\-\- than normal ice cover on rivers and lakes of the region.
+There are no precipitation data available at Faro but the snowpack data
+suggests it has been
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=='Pelly',]$description, " climate normals"), textColour(stats$basin_stats[stats$basin_stats$basin=='Pelly',]$description))`. Cumulative degree-days of freezing (CDDF) are
+**`r stats$cddf_stats[stats$cddf_stats$location_id==8964 & stats$cddf_stats$period=='All years',]$perc_hist_med`%**
+of historical median, with
+**`r stats$cddf_stats[stats$cddf_stats$location_id==8964 & stats$cddf_stats$period=='All years',]$value`**$^\circ$C-Days
+on `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`D), which suggests \-\-\-- than
+normal ice cover on rivers and lakes of the region.
 
 ```{r Faro_CDDF, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
-# D
-plot_d[[1]]
+# Create plot D
+snowbullCDDF(timeseries_id = 500, custom_title = "Faro", language = substr(language_param, 1, 2))
 
 ```
 
 The estimated Pelly River discharge at Pelly Crossing is currently
-\-\-\-\-- average (Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average snowpack combined
-with \-\-\-\-- winter flows in the watershed suggests spring freshet
-flow volumes will be \-\-\-\-- average with a potential for \-\-\-\--
-spring freshet flows. A combination of local conditions such as ice
-thickness, freeze-up levels, and current flow volumes suggest a
-\-\-\-\-- average ice jam risk. Weather patterns leading to breakup and
-the spring freshet will play a critical role in determining potential
-ice jam severity and peak water levels.
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09BC001",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09BC001",]$description))`
+(Figure`r knitr::asis_output("\U00A0")`E). The
+\-\-\-\-- average snowpack combined with \-\-\-\-- winter flows in the
+watershed suggests spring freshet flow volumes will be \-\-\-\-- average
+with a potential for \-\-\-\-- spring freshet flows. A combination of
+local conditions such as ice thickness, freeze-up levels, and current
+flow volumes suggest a \-\-\-\-- average ice jam risk. Weather patterns
+leading to breakup and the spring freshet will play a critical role in
+determining potential ice jam severity and peak water levels.
 
 ```{r PellyRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -1007,22 +1065,19 @@ if ("Stewart" %in% params$basins) {
 }
 ```
 
-```{r Stewart2, echo=FALSE, eval=include}
-# Create plot c
-plot_c <- snowBullPrecip(668, year_param, scale_param, "Mayo", language = language_param)
-# Create plot D
-plot_d <- snowbullCDDF(timeseries_id = 548, custom_title = "Mayo", language = substr(language_param, 1, 2))
-```
-
-The Stewart River Basin snowpack is \-\-\-\-- average. At Withers Lake
-Meteorological Station, Snow Water Equivalent (SWE) is estimated to be
-**`r pillow_stats[pillow_stats$location=='09DB-M1',]$perc`%** of the
-historical median (Figure`r knitr::asis_output("\U00A0")`A). The The Stewart River basin-averaged SWE
-is estimated to be
-**`r basins_stats[basins_stats$basin=='Stewart',]$swe_relative * 100`%**
+The Stewart River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Stewart",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Stewart",]$description))`.
+At Withers Lake Meteorological Station, Snow Water Equivalent
+(SWE) is estimated to be
+**`r stats$pillow_stats[stats$pillow_stats$location_id=='09DB-M1',]$perc_hist_med`%**
+of the historical median (Figure`r knitr::asis_output("\U00A0")`A). The
+The Stewart River basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Stewart',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='Stewart',]$swe`** **mm** as of
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='Stewart',]$swe`**
+**mm** as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r StewartRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
@@ -1049,29 +1104,40 @@ if (language_param == "french") {
 
 ```
 
-Mayo precipitation has been \-\-\-\-- median since October...(Figure`r knitr::asis_output("\U00A0")`C).
-Cumulative winter precipitation was **`r plot_c[[2]]`%** of historical median on `r month.name[params$month]` 1. 
-Cumulative degree-days of freezing (CDDF) are **`r plot_d[[2]][1]`%** of historical median, with **`r plot_d[[2]][2]`$^\circ$C-Days** on
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`D), 
-which suggests \-\-\-\- than normal ice cover on rivers and lakes of the region.
+Mayo precipitation has been
+`r ftext(paste0(stats$precip_stats[stats$precip_stats$location_id==51426 & stats$precip_stats$period=='All years',]$description, " normal"), textColour(stats$precip_stats[stats$precip_stats$location_id==51426 & stats$precip_stats$period=='All years',]$description))` from October through `r month.name[params$month-1]`
+(Figure`r knitr::asis_output("\U00A0")`C). Cumulative winter
+precipitation was
+**`r stats$precip_stats[stats$precip_stats$location_id==51426 & stats$precip_stats$period=='All years',]$perc_hist_med`%**
+of historical median on `r month.name[params$month]` 1. Cumulative
+degree-days of freezing (CDDF) are
+**`r stats$cddf_stats[stats$cddf_stats$location_id==51426 & stats$cddf_stats$period=='All years',]$perc_hist_med`%**
+of historical median, with
+**`r stats$cddf_stats[stats$cddf_stats$location_id==51426 & stats$cddf_stats$period=='All years',]$value`**$^\circ$C-Days
+on `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`D), which suggests \-\-\-- than
+normal ice cover on rivers and lakes of the region.
 
 ```{r Mayo_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# C
-plot_c[[1]]
-# D
-plot_d[[1]]
+# Create plot c
+snowBullPrecip(668, year_param, scale_param, "Mayo", language = language_param)
+# Create plot D
+snowbullCDDF(timeseries_id = 548, custom_title = "Mayo", language = substr(language_param, 1, 2))
 
 ```
 
 The estimated Stewart River discharge at the outlet is currently
-\-\-\-\-- average (Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average snowpack combined
-with \-\-\-\-- winter flows in the watershed suggests spring freshet
-flow volumes will be \-\-\-\-- average. A combination of local
-conditions such as ice thickness, freeze-up levels, and current flow
-volumes suggest a \-\-\-\-- average ice jam risk. Weather patterns
-leading to breakup and the spring freshet will play a critical role in
-determining potential ice jam severity and peak water levels.
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09DD003",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09DD003",]$description))`
+(Figure`r knitr::asis_output("\U00A0")`E). The
+\-\-\-\-- average snowpack combined with \-\-\-\-- winter flows in the
+watershed suggests spring freshet flow volumes will be \-\-\-\--
+average. A combination of local conditions such as ice thickness,
+freeze-up levels, and current flow volumes suggest a \-\-\-\-- average
+ice jam risk. Weather patterns leading to breakup and the spring freshet
+will play a critical role in determining potential ice jam severity and
+peak water levels.
 
 ```{r StewartRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -1103,12 +1169,15 @@ if ("White" %in% params$basins) {
 }
 ```
 
-The White River Basin snowpack is \-\-\-\-- average. The basin-averaged
-SWE is estimated to be
-**`r basins_stats[basins_stats$basin=='White',]$swe_relative * 100`%**
+The White River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="White",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="White",]$description))`. 
+The basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='White',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='White',]$swe`** **mm** as of
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='White',]$swe`** **mm**
+as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r White_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
@@ -1124,15 +1193,17 @@ if (language_param == "french") {
 ```
 
 The estimated White River discharge at the Alaska Highway is currently
-\-\-\-\-- average (Figure`r knitr::asis_output("\U00A0")`E1). In this watershed, high flows are
-dominated by mountain snowmelt and glacial melt that are largely
-influenced by summer temperatures and precipitation. The \-\-\-\--
-average snowpack combined with \-\-\-\-- average winter flows suggests
-spring freshet flow volumes will be \-\-\-\-- average with a potential
-for \-\-\-\-- spring freshet water levels. Warm and/or wet weather
-anomalies during the next four months will \-\-\-\-- generate high peak
-flows, including in rivers and streams crossing the Alaska Highway in
-the Kluane region
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09CB001",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CB001",]$description))` 
+(Figure`r knitr::asis_output("\U00A0")`E1). In this
+watershed, high flows are dominated by mountain snowmelt and glacial
+melt that are largely influenced by summer temperatures and
+precipitation. The \-\-\-\-- average snowpack combined with \-\-\-\--
+average winter flows suggests spring freshet flow volumes will be
+\-\-\-\-- average with a potential for \-\-\-\-- spring freshet water
+levels. Warm and/or wet weather anomalies during the next four months
+will \-\-\-\-- generate high peak flows, including in rivers and streams
+crossing the Alaska Highway in the Kluane region.
 
 ```{r WhiteRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -1164,23 +1235,20 @@ if ("Lower Yukon" %in% params$basins) {
 }
 ```
 
-```{r Lower Yukon2, echo=FALSE, eval=include}
-# Create plot C
-plot_c <- snowBullPrecip(664, year_param, scale_param, "Dawson", language = language_param)
-# Create plot D
-plot_d <- snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = substr(language_param, 1, 2))
-
-```
-
-The Lower Yukon River Basin snowpack is \-\-\-\-- average. Established
-in 2022, King Solomon Dome Meteorological Station registered Snow
-Water Equivalent (SWE) at \-\--% of the historical median when compared
-with the manual snow survey record for that site (Figure`r knitr::asis_output("\U00A0")`A). The Lower
-Yukon basin-averaged SWE is estimated to be
-**`r basins_stats[basins_stats$basin=='Lower_Yukon',]$swe_relative * 100`%**
+The Lower Yukon River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Lower_Yukon",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Lower_Yukon",]$description))`.
+Established in 2022, King Solomon Dome Meteorological Station
+registered Snow Water Equivalent (SWE) at
+**`r stats$pillow_stats[stats$pillow_stats$location_id=='09EA-M1',]$perc_hist_med`%**
+of the historical median when compared with the manual snow survey
+record for that site (Figure`r knitr::asis_output("\U00A0")`A). The
+Lower Yukon basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Lower_Yukon',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='Lower_Yukon',]$swe`** **mm** as
-of `r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='Lower_Yukon',]$swe`**
+**mm** as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r LowerYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 
@@ -1206,32 +1274,42 @@ if (language_param == "french") {
 
 ```
 
-Precipitation at Dawson Airport has been \-\-\-\- median since October... (Figure`r knitr::asis_output("\U00A0")`C). 
-Cumulative winter precipitation was **`r plot_c[[2]]`%** of historical median on `r month.name[params$month]` 1. 
-Cumulative degree-days of freezing (CDDF) are **`r plot_d[[2]][1]`%** of historical median, with **`r plot_d[[2]][2]`$^\circ$C-Days** on
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`D), 
-which suggests \-\-\-\- than normal ice cover on rivers and lakes of the region.
+Precipitation at Dawson Airport has been
+`r ftext(paste0(stats$precip_stats[stats$precip_stats$location_id==10194 & stats$precip_stats$period=='All years',]$description, " normal"), textColour(stats$precip_stats[stats$precip_stats$location_id==10194 & stats$precip_stats$period=='All years',]$description))` from October through `r month.name[params$month-1]`
+(Figure`r knitr::asis_output("\U00A0")`C). Cumulative winter
+precipitation was
+**`r stats$precip_stats[stats$precip_stats$location_id==10194 & stats$precip_stats$period=='All years',]$perc_hist_med`%**
+of historical median on `r month.name[params$month]` 1. Cumulative
+degree-days of freezing (CDDF) are
+**`r stats$cddf_stats[stats$cddf_stats$location_id==10194 & stats$cddf_stats$period=='All years',]$perc_hist_med`%**
+of historical median, with
+**`r stats$cddf_stats[stats$cddf_stats$location_id==10194 & stats$cddf_stats$period=='All years',]$value`**$^\circ$C-Days
+on `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`D), which suggests \-\-\-- than
+normal ice cover on rivers and lakes of the region.
 
 ```{r Dawson_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# C
-plot_c[[1]]
-# D
-plot_d[[1]]
+# Create plot C
+snowBullPrecip(664, year_param, scale_param, "Dawson", language = language_param)
+# Create plot D
+snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = substr(language_param, 1, 2))
 
 ```
 
-The estimated Yukon River discharge at the White River is \-\-\-\--
-(Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average snowpack combined with \-\-\-\--
-average winter flows suggests spring freshet flow volumes will be
-\-\-\-\-- average with a \-\-\-\-- potential for \-\-\-\-- spring
-freshet water levels. Weather conditions in \-\-\-\-- will determine the
-most probable spring scenario. A combination of local conditions such as
-ice thickness, freeze-up levels, and current flow volumes suggest an
-\-\-\-\-- ice jam risk. Weather patterns leading to breakup and the
-spring freshet will play a critical role in determining potential ice
-jam severity and peak water levels. These statements also apply to the
-Klondike River.
+The estimated Yukon River discharge at the White River is currently
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description))` 
+(Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average
+snowpack combined with \-\-\-\-- average winter flows suggests spring
+freshet flow volumes will be \-\-\-\-- average with a \-\-\-\--
+potential for \-\-\-\-- spring freshet water levels. Weather conditions
+in \-\-\-\-- will determine the most probable spring scenario. A
+combination of local conditions such as ice thickness, freeze-up levels,
+and current flow volumes suggest an \-\-\-\-- ice jam risk. Weather
+patterns leading to breakup and the spring freshet will play a critical
+role in determining potential ice jam severity and peak water levels.
+These statements also apply to the Klondike River.
 
 ```{r YukonRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E1
@@ -1281,20 +1359,15 @@ if ("Porcupine" %in% params$basins) {
 }
 ```
 
-```{r Porcupine2, echo=FALSE, eval=include}
-# Create plot C and associated stat
-plot_c <- snowBullPrecip(671, year_param, scale_param, "Old Crow", language = language_param)
-# Create plot D and associated stat
-plot_d <- snowbullCDDF(timeseries_id = 556, custom_title = "Old Crow", language = substr(language_param, 1, 2))
-
-```
-
-The Porcupine River Basin snowpack is \-\-\-\-- average. The
-basin-averaged SWE is estimated to be
-**`r basins_stats[basins_stats$basin=='Porcupine',]$swe_relative * 100`%**
+The Porcupine River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Porcupine",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Porcupine",]$description))`.
+The basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Porcupine',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='Porcupine',]$swe`** **mm** as of
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='Porcupine',]$swe`**
+**mm** as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r Porcupine_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
@@ -1309,27 +1382,38 @@ if (language_param == "french") {
 
 ```
 
-Precipitation at Old Crow Airport has been \-\-\-\-- median since October... (Figure`r knitr::asis_output("\U00A0")`C). 
-Cumulative winter precipitation was **`r plot_c[[2]]`%** of historical median on `r month.name[params$month]` 1. 
-Cumulative degree-days of freezing (CDDF) are **`r plot_d[[2]][1]`%** of historical median, with **`r plot_d[[2]][2]`$^\circ$C-Days** on
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`D), 
-which suggests \-\-\-\- than normal ice cover on rivers and lakes of the region.
+Precipitation at Old Crow Airport has been
+`r ftext(paste0(stats$precip_stats[stats$precip_stats$location_id==26894 & stats$precip_stats$period=='All years',]$description, " normal"), textColour(stats$precip_stats[stats$precip_stats$location_id==26894 & stats$precip_stats$period=='All years',]$description))` from October through `r month.name[params$month-1]`
+(Figure`r knitr::asis_output("\U00A0")`C). Cumulative winter
+precipitation was
+**`r stats$precip_stats[stats$precip_stats$location_id==26894 & stats$precip_stats$period=='All years',]$perc_hist_med`%**
+of historical median on `r month.name[params$month]` 1. Cumulative
+degree-days of freezing (CDDF) are
+**`r stats$cddf_stats[stats$cddf_stats$location_id==26894 & stats$cddf_stats$period=='All years',]$perc_hist_med`%**
+of historical median, with
+**`r stats$cddf_stats[stats$cddf_stats$location_id==26894 & stats$cddf_stats$period=='All years',]$value`**$^\circ$C-Days
+on `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`D), which suggests \-\-\-- than
+normal ice cover on rivers and lakes of the region.
 
 ```{r OldCrow_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# C
-plot_c[[1]]
-# D
-plot_d[[1]]
+# Create plot C
+snowBullPrecip(671, year_param, scale_param, "Old Crow", language = language_param)
+# Create plot D
+snowbullCDDF(timeseries_id = 556, custom_title = "Old Crow", language = substr(language_param, 1, 2))
 
 ```
 
-The estimated Porcupine River discharge is \-\-\-\-- average (Figure`r knitr::asis_output("\U00A0")`E).
-The \-\-\-\-- average snowpack in the watershed suggests spring freshet
-flow volumes will be \-\-\-\-- average with a potential for \-\-\-\--
-spring freshet water levels. Weather patterns leading to breakup and the
-spring freshet will play a critical role in determining potential ice
-jam severity and peak water levels
+The estimated Porcupine River discharge is currently
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09FD002",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09FD002",]$description))` 
+(Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average
+snowpack in the watershed suggests spring freshet flow volumes will be
+\-\-\-\-- average with a potential for \-\-\-\-- spring freshet water
+levels. Weather patterns leading to breakup and the spring freshet will
+play a critical role in determining potential ice jam severity and peak
+water levels
 
 ```{r PorcupineRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -1361,12 +1445,15 @@ if ("Peel" %in% params$basins) {
 }
 ```
 
-The Peel River Basin snowpack is \-\-\-\-- average. The basin-averaged
-SWE is estimated to be
-**`r basins_stats[basins_stats$basin=='Peel',]$swe_relative * 100`%** of
-the historical median, with
-**`r basins_stats[basins_stats$basin=='Peel',]$swe`** **mm** as of
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+The Peel River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Peel",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Peel",]$description))`.
+The basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Peel',]$perc_hist_med`%**
+of the historical median, with
+**`r stats$basin_stats[stats$basin_stats$basin=='Peel',]$swe`** **mm**
+as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r Peel_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
@@ -1381,10 +1468,13 @@ if (language_param == "french") {
 
 ```
 
-The estimated Peel River discharge is \-\-\-\-- average (Figure`r knitr::asis_output("\U00A0")`E). The
-\-\-\-\-- average snowpack suggests spring freshet flow volumes will be
-\-\-\-\-- average with a potential for \-\-\-\-- spring freshet water
-levels, including rivers and streams crossing the Dempster Highway.
+The estimated Peel River discharge is 
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="10MA001",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="10MA001",]$description))` 
+(Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average
+snowpack suggests spring freshet flow volumes will be \-\-\-\-- average
+with a potential for \-\-\-\-- spring freshet water levels, including
+rivers and streams crossing the Dempster Highway.
 
 ```{r PeelRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -1416,22 +1506,19 @@ if ("Liard" %in% params$basins) {
 }
 ```
 
-```{r Liard2, echo=FALSE, eval=include}
-# Create plot C and associated stat
-plot_c <- snowBullPrecip(667, year_param, scale_param, "Watson Lake", language = language_param)
-# Create plot D and associated stat
-plot_d <- snowbullCDDF(timeseries_id = 508, custom_title = "Watson Lake", language = substr(language_param, 1, 2))
-```
-
-The Liard River Basin snowpack is \-\-\-\-- average. At Hyland
-Meteorological Station, Snow Water Equivalent (SWE) is estimated to be
-**`r pillow_stats[pillow_stats$location=='10AD-M2',]$perc`%** of the
-historical median (Figure`r knitr::asis_output("\U00A0")`A). The Liard River basin-averaged SWE is
-estimated to be
-**`r basins_stats[basins_stats$basin=='Liard',]$swe_relative * 100`%**
+The Liard River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description))`.
+At Hyland Meteorological Station, Snow Water Equivalent (SWE)
+is estimated to be
+**`r stats$pillow_stats[stats$pillow_stats$location_id=='10AD-M2',]$perc_hist_med`%**
+of the historical median (Figure`r knitr::asis_output("\U00A0")`A). The
+Liard River basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Liard',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='Liard',]$swe`** **mm** as of
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='Liard',]$swe`** **mm**
+as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r LiardRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 
@@ -1461,27 +1548,39 @@ if (language_param == "french") {
 
 ```
 
-Precipitation at Watson Lake Airport has been \-\-\-\-- median since October... (Figure`r knitr::asis_output("\U00A0")`C).
-Cumulative winter precipitation was **`r plot_c[[2]]`%** of historical median on `r month.name[params$month]` 1.
-Cumulative degree-days of freezing (CDDF) are **`r plot_d[[2]][1]`%** of historical median, with **`r plot_d[[2]][2]`$^\circ$C-Days** on
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`D).
+Precipitation at Watson Lake Airport has been
+`r ftext(paste0(stats$precip_stats[stats$precip_stats$location_id==32293 & stats$precip_stats$period=='All years',]$description, " normal"), textColour(stats$precip_stats[stats$precip_stats$location_id==32293 & stats$precip_stats$period=='All years',]$description))` from October through `r month.name[params$month-1]`
+(Figure`r knitr::asis_output("\U00A0")`C). Cumulative winter
+precipitation was
+**`r stats$precip_stats[stats$precip_stats$location_id==32293 & stats$precip_stats$period=='All years',]$perc_hist_med`%**
+of historical median on `r month.name[params$month]` 1. Cumulative
+degree-days of freezing (CDDF) are
+**`r stats$cddf_stats[stats$cddf_stats$location_id==32293 & stats$cddf_stats$period=='All years',]$perc_hist_med`%**
+of historical median, with
+**`r stats$cddf_stats[stats$cddf_stats$location_id==32293 & stats$cddf_stats$period=='All years',]$value`**$^\circ$C-Days
+on `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`D), which suggests ----- than normal ice cover
+on rivers and lakes of the region.
+
 
 ```{r WatsonLake_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# C
-plot_c[[1]]
-# D
-plot_d[[1]]
+# Create plot C
+snowBullPrecip(667, year_param, scale_param, "Watson Lake", language = language_param)
+# Create plot D
+snowbullCDDF(timeseries_id = 508, custom_title = "Watson Lake", language = substr(language_param, 1, 2))
 
 ```
 
-The estimated Liard River discharge at Upper Liard is \-\-\-\-- average
-(Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average snowpack in the watershed combined
-with \-\-\-\-- average winter flows suggests spring freshet flows and
-levels will be \-\-\-\-- average. Weather patterns leading to spring
-freshet have the potential to generate \-\-\-\-- average water levels on
-small to medium creeks and rivers including those crossing the Alaska and
-Robert Campbell highways.
+The estimated Liard River discharge at Upper Liard is currently
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="10AA001",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="10AA001",]$description))`
+(Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average
+snowpack in the watershed combined with \-\-\-\-- average winter flows
+suggests spring freshet flows and levels will be \-\-\-\-- average.
+Weather patterns leading to spring freshet have the potential to
+generate \-\-\-\-- average water levels on small to medium creeks and
+rivers including those crossing the Alaska and Robert Campbell highways.
 
 ```{r LiardRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -1513,12 +1612,15 @@ if ("Alsek" %in% params$basins) {
 }
 ```
 
-The Alsek River Basin snowpack is \-\-\-\-- average. The basin-averaged
-SWE is estimated to be
-**`r basins_stats[basins_stats$basin=='Alsek',]$swe_relative * 100`%**
+The Alsek River Basin snowpack is
+`r ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Alsek",]$description,
+" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Alsek",]$description))`.
+The basin-averaged SWE is estimated to be
+**`r stats$basin_stats[stats$basin_stats$basin=='Alsek',]$perc_hist_med`%**
 of the historical median, with
-**`r basins_stats[basins_stats$basin=='Alsek',]$swe`** **mm** as of
-`r month.name[params$month]` 1 (Figure`r knitr::asis_output("\U00A0")`B).
+**`r stats$basin_stats[stats$basin_stats$basin=='Alsek',]$swe`** **mm**
+as of `r month.name[params$month]` 1
+(Figure`r knitr::asis_output("\U00A0")`B).
 
 ```{r Alsek_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
@@ -1533,12 +1635,14 @@ if (language_param == "french") {
 
 ```
 
-The estimated Alsek River discharge is currently \-\-\-\-- average
-(Figure`r knitr::asis_output("\U00A0")`E). High flows in this watershed are dominated by mountain
-snowmelt and glacial melt that are largely influenced by summer
-temperatures and precipitation. The snowpack in the St. Elias Range is
-likely to generate \-\-\-\-- average freshet volumes. Weather conditions
-over the spring and summer will determine peak flows.
+The estimated Alsek River discharge is currently
+`r ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="08AB001",]$description,
+" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="08AB001",]$description))`
+(Figure`r knitr::asis_output("\U00A0")`E). High flows in this watershed
+are dominated by mountain snowmelt and glacial melt that are largely
+influenced by summer temperatures and precipitation. The snowpack in the
+St. Elias Range is likely to generate \-\-\-\-- average freshet volumes.
+Weather conditions over the spring and summer will determine peak flows.
 
 ```{r AlsekRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -1563,9 +1667,23 @@ snowbullWater(location = station_id,
 # Drainage Basin and Snow Course
 
 ```{r table, fig.width=10, results='asis', echo=FALSE}
-tabl <- SWE_station(year=year_param, month=month_param, return_missing = TRUE, 
-                    active = TRUE, source="hydromet")
 
+tabl <- stats$station_stats
+
+# Add R next to record swe
+tabl[tabl$record_flag==TRUE,]$swe <- paste0(tabl[tabl$record_flag==TRUE,]$swe, " R")
+# Add E next to estimated swe
+tabl[tabl$estimate_flag==TRUE,]$swe <- paste0(tabl[tabl$estimate_flag==TRUE,]$swe, " E")
+# Add B next to swe outside of sampling period
+if (length(tabl[tabl$date_flag==TRUE,]$swe) > 0) {
+  tabl[tabl$date_flag==TRUE,]$swe <- paste0(tabl[tabl$date_flag==TRUE,]$swe, " B")
+}
+# Not N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
+tabl$sample_date <- as.character(tabl$sample_date)
+tabl$sample_date[is.na(tabl$sample_date)] <- "N.S."
+tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "N.S."
+
+# Subset to columns of interest
 tabl <- tabl[, c("location_name", "location_id", "elevation", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
 
 colnames(tabl) <- c("Name", "Number", "Elevation (m)", "Date of Survey", "Snow depth (cm)", "Water content (SWE) (mm)", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
@@ -1599,11 +1717,13 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   flextable::vline(part="body") %>% 
   flextable::border_outer() %>% 
   flextable::autofit() %>%
-  flextable::width(j="Number", width=1.2) %>%
+  flextable::width(j="Name", width = 1.5) %>%
+  flextable::width(j="Number", width=1.1) %>%
+  flextable::width(j=3, width=0.8) %>%
   flextable::width(j="Date of Survey", width=1.1) %>%
-  flextable::width(j=c(3,5,6,7,8,9), width = 0.7) %>%
-  flextable::width(j=c(2), width = 1.1) %>%
-  flextable::width(j=c(1), width = 1.5) %>%
+  flextable::width(j=c(5,6,7), width = 0.7) %>%
+  flextable::width(j=8, width=0.8) %>%
+  flextable::width(j=9, width=0.6) %>%
   flextable::font(fontname="Nunito Sans", part="all") %>%
   flextable::fontsize(size=10, part="all") %>%
   flextable::line_spacing(space=1) %>%

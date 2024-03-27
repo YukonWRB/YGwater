@@ -546,6 +546,7 @@ plotOverlap <- function(location = NULL,
   if (snowbulletin == TRUE) {
     # Order realtime by fake_datetime
     realtime <- realtime[order(realtime$fake_datetime),]
+    realtime[realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"),]$value <- NA
     # Apply rolling mean
     realtime$q25 <- zoo::rollmean(realtime$q25, 5, fill = NA, align = "left")
     realtime$q75 <- zoo::rollmean(realtime$q75, 5, fill = NA, align = "left")

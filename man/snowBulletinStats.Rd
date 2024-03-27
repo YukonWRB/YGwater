@@ -9,7 +9,7 @@ snowBulletinStats(
   month,
   basins = NULL,
   excel_output = FALSE,
-  save_path = NULL,
+  save_path = "choose",
   synchronize = FALSE
 )
 }

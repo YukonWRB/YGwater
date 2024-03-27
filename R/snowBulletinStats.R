@@ -23,20 +23,38 @@
 #' @export
 #'
 
-# test <- snowBulletinStats(year=2024, month=3)
+# test <- snowBulletinStats(year=2024, month=3, excel_output=TRUE)
 # year <- 2024
 # month <- 3
+# excel_output <- TRUE
+# save_path = "choose"
 
 snowBulletinStats <-
   function(year,
            month,
            basins = NULL,
            excel_output = FALSE,
-           save_path = NULL,
+           save_path = "choose",
            synchronize = FALSE) {
     
     con <- hydrometConnect()
     on.exit(DBI::dbDisconnect(con))
+    
+    # Set up save_path
+    if (excel_output == TRUE) {
+      if (save_path == "choose") {
+        if (!interactive()) {
+          stop("You must specify a save path when running in non-interactive mode.")
+        }
+        message("Select the path to the folder where you want the workbook(s) saved.")
+        save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
+      } else {
+        if (!dir.exists(save_path)) {
+          stop("The save path you specified does not exist.")
+        }
+      }
+    }
+    
 
     #### ---------------------------- Functions --------------------------- ####
     precipStats <- function() {
@@ -88,13 +106,15 @@ snowBulletinStats <-
       # Calculate stats. For entire period of record
       precip_allyrs <- precip_years %>%
         dplyr::group_by(.data$location_id, .data$location_name) %>%
-        dplyr::summarise(value = min(.data$value), type = "min") %>%
+        dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
         dplyr::bind_rows(precip_years %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                           dplyr::summarise(value = max(.data$value), type = "max",
+                                            years = dplyr::n())) %>%
         dplyr::bind_rows(precip_years %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                           dplyr::summarise(value = stats::median(.data$value), 
+                                            type = "median", years = dplyr::n()))
       # Add period column
       precip_allyrs$period <- paste0("All years")
       
@@ -102,13 +122,15 @@ snowBulletinStats <-
       precip_40yrs <- precip_years[precip_years$fake_year > year-40,]
       precip_40yrs <- precip_40yrs %>%
         dplyr::group_by(.data$location_id, .data$location_name) %>%
-        dplyr::summarise(value = min(.data$value), type = "min") %>%
+        dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
         dplyr::bind_rows(precip_40yrs %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                           dplyr::summarise(value = max(.data$value), type = "max", 
+                                            years = dplyr::n())) %>%
         dplyr::bind_rows(precip_40yrs %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                           dplyr::summarise(value = stats::median(.data$value), 
+                                            type = "median", years = dplyr::n()))
       # Add period column
       precip_40yrs$period <- paste0("Last 40 years")
       
@@ -117,13 +139,15 @@ snowBulletinStats <-
                                     precip_years$fake_year <= 2020,]
       precip_9120 <- precip_9120 %>%
         dplyr::group_by(.data$location_id, .data$location_name) %>%
-        dplyr::summarise(value = min(.data$value), type = "min") %>%
+        dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
         dplyr::bind_rows(precip_9120 %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                           dplyr::summarise(value = max(.data$value), type = "max", 
+                                            years = dplyr::n())) %>%
         dplyr::bind_rows(precip_9120 %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                           dplyr::summarise(value = stats::median(.data$value), 
+                                            type = "median", years = dplyr::n()))
       # Add period column
       precip_9120$period <- paste0("1991-2020")
       
@@ -132,13 +156,15 @@ snowBulletinStats <-
                                     precip_years$fake_year <= 2010,]
       precip_8110 <- precip_8110 %>%
         dplyr::group_by(.data$location_id, .data$location_name) %>%
-        dplyr::summarise(value = min(.data$value), type = "min") %>%
+        dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
         dplyr::bind_rows(precip_8110 %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                           dplyr::summarise(value = max(.data$value), type = "max", 
+                                            years = dplyr::n())) %>%
         dplyr::bind_rows(precip_8110 %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                           dplyr::summarise(value = stats::median(.data$value), 
+                                            type = "median", years = dplyr::n()))
       # Add period column
       precip_8110$period <- paste0("1981-2010")
       
@@ -153,9 +179,21 @@ snowBulletinStats <-
       precip_stats$perc_hist_med <- round(precip_stats$value / precip_stats$median *100, 0)
       # Add variable coloumn
       precip_stats$variable <- paste0("Oct - ", month.abb[month-1], " cumulative precipitation")
+      # Add description of % median
+      precip_stats <- precip_stats %>%
+        dplyr::mutate(description = dplyr::case_when(
+          perc_hist_med <= 65 ~ "well below",
+          perc_hist_med >= 66 & perc_hist_med <= 89 ~ "below",
+          perc_hist_med >= 90 & perc_hist_med <= 109 ~ "close to",
+          perc_hist_med >= 98 & perc_hist_med <= 102 ~ "",
+          perc_hist_med >= 110 & perc_hist_med <= 134 ~ "above",
+          perc_hist_med >= 135 ~ "well above",
+          # Add more conditions as needed
+          TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
+        ))
       # Reorder columns
       precip_stats <- precip_stats[, c("location_name", "location_id", "variable", "period", "value",
-                                       "median", "min", "max", "perc_hist_med")]
+                                       "median", "min", "max", "perc_hist_med", "description", "years")]
       
       return(precip_stats)
     }
@@ -260,13 +298,15 @@ snowBulletinStats <-
       # Calculate stats. For entire period of record
       cddf_allyrs <- cddf %>%
         dplyr::group_by(.data$location_id, .data$location_name) %>%
-        dplyr::summarise(value = min(.data$value), type = "min") %>%
+        dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
         dplyr::bind_rows(cddf %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                           dplyr::summarise(value = max(.data$value), type = "max", 
+                                            years = dplyr::n())) %>%
         dplyr::bind_rows(cddf %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                           dplyr::summarise(value = stats::median(.data$value), 
+                                            type = "median", years = dplyr::n()))
       # Add period column
       cddf_allyrs$period <- paste0("All years")
       
@@ -274,13 +314,15 @@ snowBulletinStats <-
       cddf_40yrs <- cddf[cddf$year > year-40,]
       cddf_40yrs <- cddf_40yrs %>%
         dplyr::group_by(.data$location_id, .data$location_name) %>%
-        dplyr::summarise(value = min(.data$value), type = "min") %>%
+        dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
         dplyr::bind_rows(cddf_40yrs %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                           dplyr::summarise(value = max(.data$value), type = "max", 
+                                            years = dplyr::n())) %>%
         dplyr::bind_rows(cddf_40yrs %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                           dplyr::summarise(value = stats::median(.data$value), 
+                                            type = "median", years = dplyr::n()))
       # Add period column
       cddf_40yrs$period <- paste0("Last 40 years")
       
@@ -289,13 +331,15 @@ snowBulletinStats <-
                           cddf$year <= 2020,]
       cddf_9120 <- cddf_9120 %>%
         dplyr::group_by(.data$location_id, .data$location_name) %>%
-        dplyr::summarise(value = min(.data$value), type = "min") %>%
+        dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
         dplyr::bind_rows(cddf_9120 %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                           dplyr::summarise(value = max(.data$value), type = "max", 
+                                            years = dplyr::n())) %>%
         dplyr::bind_rows(cddf_9120 %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                           dplyr::summarise(value = stats::median(.data$value), 
+                                            type = "median", years = dplyr::n()))
       # Add period column
       cddf_9120$period <- paste0("1991-2020")
       
@@ -304,13 +348,15 @@ snowBulletinStats <-
                           cddf$year <= 2010,]
       cddf_8110 <- cddf_8110 %>%
         dplyr::group_by(.data$location_id, .data$location_name) %>%
-        dplyr::summarise(value = min(.data$value), type = "min") %>%
+        dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
         dplyr::bind_rows(cddf_8110 %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                           dplyr::summarise(value = max(.data$value), type = "max", 
+                                            years = dplyr::n())) %>%
         dplyr::bind_rows(cddf_8110 %>%
                            dplyr::group_by(.data$location_id, .data$location_name) %>%
-                           dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                           dplyr::summarise(value = stats::median(.data$value), 
+                                            type = "median", years = dplyr::n()))
       # Add period column
       cddf_8110$period <- paste0("1981-2010")
       
@@ -327,7 +373,7 @@ snowBulletinStats <-
       cddf_stats$variable <- paste0(month.name[month], " 1st CDDF")
       # Reorder columns
       cddf_stats <- cddf_stats[, c("location_name", "location_id", "variable", "period", "value",
-                                       "median", "min", "max", "perc_hist_med")]
+                                       "median", "min", "max", "perc_hist_med", "years")]
       
       return(cddf_stats)
     }
@@ -335,7 +381,7 @@ snowBulletinStats <-
     #### ----------------- Pillows with historical record ----------------- ####
       pillow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
                     locations.location AS location_id, date, parameters.param_name AS variable, 
-                    value, q50 AS median, min, max FROM calculated_daily 
+                    value, q50 AS median, min, max, doy_count AS years FROM calculated_daily 
                     INNER JOIN timeseries ON calculated_daily.timeseries_id = timeseries.timeseries_id
                     INNER JOIN locations ON timeseries.location = locations.location
                     INNER JOIN parameters ON timeseries.parameter = parameters.param_code
@@ -350,23 +396,23 @@ snowBulletinStats <-
     
     #### ---------------- Pillows with snow survey record ----------------- ####
       # Log Cabin
-      if (nrow(pillow_stats[pillow_stats$location == "09AA-M2", ]) > 0) {
-        pillow_stats[pillow_stats$location == "09AA-M2", ]$q50 <- station_stats[station_stats$location_id == "09AA-SC03",]$swe_med
-        pillow_stats[pillow_stats$location == "09AA-M2", ]$max <- station_stats[station_stats$location_id == "09AA-SC03",]$swe_max
-        pillow_stats[pillow_stats$location == "09AA-M2", ]$min <- station_stats[station_stats$location_id == "09AA-SC03",]$swe_min
-        pillow_stats[pillow_stats$location == "09AA-M2", ]$perc_hist_med <- (pillow_stats[pillow_stats$location == "09AA-M2", ]$value /
-                                                                               pillow_stats[pillow_stats$location == "09AA-M2", ]$q50) * 100
+      if (nrow(pillow_stats[pillow_stats$location_id == "09AA-M2", ]) > 0) {
+        pillow_stats[pillow_stats$location_id == "09AA-M2", ]$median <- station_stats[station_stats$location_id == "09AA-SC03",]$swe_med
+        pillow_stats[pillow_stats$location_id == "09AA-M2", ]$max <- station_stats[station_stats$location_id == "09AA-SC03",]$swe_max
+        pillow_stats[pillow_stats$location_id == "09AA-M2", ]$min <- station_stats[station_stats$location_id == "09AA-SC03",]$swe_min
+        pillow_stats[pillow_stats$location_id == "09AA-M2", ]$perc_hist_med <- round((pillow_stats[pillow_stats$location_id == "09AA-M2", ]$value /
+                                                                               pillow_stats[pillow_stats$location_id == "09AA-M2", ]$median) * 100)
       } else {
         message("Log Cabin does not have pillow stats for this year")
       }
       
       # King Solomon Dome
-      if (nrow(pillow_stats[pillow_stats$location == "09EA-M1", ]) > 0) {
-        pillow_stats[pillow_stats$location == "09EA-M1", ]$q50 <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_med
-        pillow_stats[pillow_stats$location == "09EA-M1", ]$max <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_max
-        pillow_stats[pillow_stats$location == "09EA-M1", ]$min <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_min
-        pillow_stats[pillow_stats$location == "09EA-M1", ]$perc_hist_med <- (pillow_stats[pillow_stats$location == "09EA-M1", ]$value /
-                                                                               pillow_stats[pillow_stats$location == "09EA-M1", ]$q50) * 100
+      if (nrow(pillow_stats[pillow_stats$location_id == "09EA-M1", ]) > 0) {
+        pillow_stats[pillow_stats$location_id == "09EA-M1", ]$median <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_med
+        pillow_stats[pillow_stats$location_id == "09EA-M1", ]$max <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_max
+        pillow_stats[pillow_stats$location_id == "09EA-M1", ]$min <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_min
+        pillow_stats[pillow_stats$location_id == "09EA-M1", ]$perc_hist_med <- (pillow_stats[pillow_stats$location_id == "09EA-M1", ]$value /
+                                                                               pillow_stats[pillow_stats$location_id == "09EA-M1", ]$median) * 100
       } else {
         message("King Solomon Dome does not have pillow stats for this year")
       }
@@ -379,6 +425,19 @@ snowBulletinStats <-
                                  summarise = TRUE,
                                  source = "hydromet")
         basin_stats$perc_hist_med <- basin_stats$swe_relative *100
+        basin_stats$swe <- round(basin_stats$swe)
+        # Add description of % median
+        basin_stats <- basin_stats %>%
+          dplyr::mutate(description = dplyr::case_when(
+            perc_hist_med <= 65 ~ "well below",
+            perc_hist_med >= 66 & perc_hist_med <= 89 ~ "below",
+            perc_hist_med >= 90 & perc_hist_med <= 109 ~ "close to",
+            perc_hist_med >= 98 & perc_hist_med <= 102 ~ "",
+            perc_hist_med >= 110 & perc_hist_med <= 134 ~ "above",
+            perc_hist_med >= 135 ~ "well above",
+            # Add more conditions as needed
+            TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
+          ))
         
     #### ------------------------- Monthly precip ------------------------- ####
       
@@ -387,6 +446,31 @@ snowBulletinStats <-
     #### ------------------------------ CDDF ------------------------------ ####
         
         cddf_stats <- cddfStats()
+        
+    #### ------------------------- Flow/level stats ----------------------- ####
+        
+        flow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
+                    locations.location AS location_id, date, parameters.param_name AS variable, 
+                    value, q50 AS median, min, max, doy_count AS years FROM calculated_daily 
+                    INNER JOIN timeseries ON calculated_daily.timeseries_id = timeseries.timeseries_id
+                    INNER JOIN locations ON timeseries.location = locations.location
+                    INNER JOIN parameters ON timeseries.parameter = parameters.param_code
+                    WHERE calculated_daily.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
+                    AND date = '", year, "-0", month, "-01'"))
+        flow_stats$perc_hist_med <- round(flow_stats$value / flow_stats$median * 100)
+        # Add description of % median
+        flow_stats <- flow_stats %>%
+          dplyr::mutate(description = dplyr::case_when(
+            perc_hist_med <= 65 ~ "well below",
+            perc_hist_med >= 66 & perc_hist_med <= 89 ~ "below",
+            perc_hist_med >= 90 & perc_hist_med <= 109 ~ "close to",
+            perc_hist_med >= 98 & perc_hist_med <= 102 ~ "",
+            perc_hist_med >= 110 & perc_hist_med <= 134 ~ "above",
+            perc_hist_med >= 135 ~ "well above",
+            # Add more conditions as needed
+            TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
+          ))
+
         
     #### ---------------------------- Map stats --------------------------- ####
         
@@ -400,11 +484,42 @@ snowBulletinStats <-
         
     #### -------------------- Bringing it all together -------------------- ####
         
+        tables <- list("pillow_stats" = pillow_stats, "station_stats" = station_stats, 
+                       "basin_stats" = basin_stats, "precip_stats" = precip_stats, 
+                       "cddf_stats" = cddf_stats, "flow_stats" = flow_stats,
+                       "swe_basin_summary" = swe_basin_summary, "swe_compiled" = swe_compiled)
+        
         if (excel_output == TRUE) {
           
+          ## Main workbook
+          wb <- openxlsx::createWorkbook()
+          # Loop through the list of tables and add each one as a new sheet
+          for (i in 1:5) {
+            # Add a new sheet with a name based on the index
+            openxlsx::addWorksheet(wb, paste(names(tables)[i]))
+            
+            # Write the table to the newly added sheet
+            openxlsx::writeDataTable(wb, sheet = i, x = tables[[i]])
+            
+            # Optionally, you can customize the table style here by specifying the `tableStyle` argument in `writeDataTable`
+          }
+          
+          # Save the workbook
+          openxlsx::saveWorkbook(wb, paste0(save_path, "/SnowbulletinStats_", year, "-0", month, ".xlsx"), overwrite = TRUE)
+          
+          ## swe_compiled workbook
+          wb <- openxlsx::createWorkbook()
+          openxlsx::addWorksheet(wb, "data")
+          openxlsx::writeDataTable(wb, sheet = 1, x = swe_compiled)
+          openxlsx::saveWorkbook(wb, paste0(save_path, "/swe_compiled.xlsx"), overwrite = TRUE)
+          
+          ## swe_basin_summary workbook
+          wb <- openxlsx::createWorkbook()
+          openxlsx::addWorksheet(wb, "data")
+          openxlsx::writeDataTable(wb, sheet = 1, x = swe_basin_summary)
+          openxlsx::saveWorkbook(wb, paste0(save_path, "/swe_basin_summary.xlsx"), overwrite = TRUE)
+            
         } else {
-          tables <- list(pillow_stats, station_stats, basin_stats, precip_stats, 
-                         cddf_stats, swe_basin_summary, swe_compiled)
           
           return(tables)
         }
