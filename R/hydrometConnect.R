@@ -26,7 +26,7 @@ hydrometConnect <- function(name = "hydromet", host = Sys.getenv("hydrometHost")
                             port = port,
                             user = username,
                             password = password)
-    if (!silent){
+    if (!silent) {
       message("Remember to disconnect using DBI::dbDisconnect() when finished.")
     }
     return(hydro)
