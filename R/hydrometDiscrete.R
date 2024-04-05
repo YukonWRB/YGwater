@@ -260,13 +260,13 @@ hydrometDiscrete <- function(location = NULL,
   if (plot_type == 'linedbox') {
     stats_discrete <- all_discrete %>%
       dplyr::group_by(.data$month) %>%
-      dplyr::summarise(value = min(.data$value), type = "min") %>%
+      dplyr::summarise(value = min(.data$value, na.rm=TRUE), type = "min") %>%
       dplyr::bind_rows(all_discrete %>%
                   dplyr::group_by(.data$month) %>%
-                  dplyr::summarise(value = max(.data$value), type = "max")) %>%
+                  dplyr::summarise(value = max(.data$value, na.rm=TRUE), type = "max")) %>%
       dplyr::bind_rows(all_discrete %>%
                   dplyr::group_by(.data$month) %>%
-                  dplyr::summarise(value = stats::median(.data$value), type = "median"))
+                  dplyr::summarise(value = stats::median(.data$value, na.rm=TRUE), type = "median"))
 
     # Add fake_date
     # Change startDay and endDay to day of year

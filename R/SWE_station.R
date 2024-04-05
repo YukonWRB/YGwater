@@ -79,16 +79,24 @@ SWE_station <-
       DBI::dbDisconnect(con)
       # Rename columns:
       colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "note")
+      # Change 'snow water equivalent' to SWE
+      Meas[Meas$parameter=='snow water equivalent',]$parameter <- "SWE"
+      # Where note = estimated, make estimate_flag = TRUE
+      Meas$estimate_flag <- NA
+      Meas[grep("estimated", Meas$note), ]$estimate_flag <- TRUE
+      # Remove note
+      Meas <- subset(Meas, select = -c(note))
       
       # Calculate density
       # Spread the data into separate columns for swe and snow_depth
       wider_data <- Meas %>%
         tidyr::pivot_wider(names_from = "parameter", values_from = "value")
       # calculate
-      wider_data$density <- round(wider_data$`snow water equivalent` / wider_data$`snow depth` * 10, 2)
+      wider_data$density <- round(wider_data$SWE / wider_data$`snow depth` * 10, 2)
       # Reformat into long format
       Meas <- wider_data %>%
-        tidyr::pivot_longer(cols = c("snow water equivalent", "snow depth", "density"), names_to = "parameter", values_to = "value")
+        tidyr::pivot_longer(cols = c("SWE", "snow depth", "density"), names_to = "parameter", values_to = "value")
+      
       
       ## From snow db ##
     } else if (source == "snow") {
@@ -97,7 +105,7 @@ SWE_station <-
       
       # Get measurements
       Meas <- DBI::dbGetQuery(con, paste0("SELECT means.name, means.location, means.swe, means.depth, means.target_date,
-                         means.sample_datetime, locations.elevation
+                         means.survey_date, locations.elevation, means.estimate_flag
                          FROM means
                          INNER JOIN locations ON means.location = locations.location
                          WHERE means.location IN ('", paste0(stations, collapse="', '"), "')"))
@@ -107,7 +115,8 @@ SWE_station <-
       Meas$density <- round((Meas$swe / Meas$depth) *10, 2)
       
       # Reformat table
-      Meas <- reshape2::melt(Meas, id.vars = c("name", "location", "target_date", "sample_datetime", "elevation"), variable.name = "parameter", value.name = "value")
+      Meas <- reshape2::melt(Meas, id.vars = c("name", "location", "target_date", "survey_date", 
+                                               "elevation", "estimate_flag"), variable.name = "parameter", value.name = "value")
       
       # Set swe upper case
       Meas$parameter <- as.character(Meas$parameter)
@@ -115,7 +124,8 @@ SWE_station <-
       Meas$parameter[Meas$parameter == "depth"] <- "snow depth"
       
       # Change column names
-      colnames(Meas) <- c("location_name", "location_id", "target_date", "sample_date", "elevation", "parameter", "value")
+      colnames(Meas) <- c("location_name", "location_id", "target_date", "sample_date", 
+                          "elevation", "estimate_flag", "parameter", "value")
       
       # Extract date from sample_datetime
       Meas$sample_date <- as.Date(Meas$sample_date)
@@ -150,7 +160,6 @@ SWE_station <-
         if (return_missing == FALSE) {
           if (length(tab[tab$yr == year,]$value) == 0) next
         }
-        
         # get sample date
         sample_date <- tab[tab$yr == year & tab$parameter == "SWE",]$sample_date
         sample_date <- as.Date(sample_date)
@@ -199,18 +208,24 @@ SWE_station <-
         target_date <- tab[tab$yr == year & tab$parameter == "SWE",]$target_date
         if (length(target_date) == 0) {
           date_flag <- FALSE
-        } else if (sample_date > target_date + lubridate::days(6) |
-            sample_date < target_date - lubridate::days(6)) {
+        } else if (sample_date > target_date + lubridate::days(7) |
+            sample_date < target_date - lubridate::days(7)) {
           date_flag <- TRUE
         } else {date_flag <- FALSE}
         # estimate_flag
-        if (length(tab[tab$yr==year & tab$parameter=="SWE",]$note) == 0) {
+        estimate_flag <- tab[tab$yr==year & tab$parameter=="SWE",]$estimate_flag
+        if (length(estimate_flag) == 0) {
           estimate_flag <- FALSE
-        } else if (is.na(tab[tab$yr==year & tab$parameter=="SWE",]$note)) {
+        } else if (is.na(estimate_flag)) {
           estimate_flag <- FALSE
-        } else if (tab[tab$yr==year & tab$parameter=="SWE",]$note == 'estimated') {
-          estimate_flag <- TRUE
-        } else {estimate_flag <- FALSE}
+        } 
+        # if (length(tab[tab$yr==year & tab$parameter=="SWE",]$note) == 0) {
+        #   estimate_flag <- FALSE
+        # } else if (is.na(tab[tab$yr==year & tab$parameter=="SWE",]$note)) {
+        #   estimate_flag <- FALSE
+        # } else if (tab[tab$yr==year & tab$parameter=="SWE",]$note == 'estimated') {
+        #   estimate_flag <- TRUE
+        # } else {estimate_flag <- FALSE}
         
         # create vector with all row values
         swe_summary_loc <- c(unique(tab$location_name),                # get location name

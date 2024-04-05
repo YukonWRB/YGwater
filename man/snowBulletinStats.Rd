@@ -10,7 +10,8 @@ snowBulletinStats(
   basins = NULL,
   excel_output = FALSE,
   save_path = "choose",
-  synchronize = FALSE
+  synchronize = FALSE,
+  source = "hydromet"
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ snowBulletinStats(
 \item{save_path}{The path to the directory (folder) where the excel files should be saved. Enter the path as a character string.}
 
 \item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized.}
+
+\item{source}{Should the SWE statistics for stations (station_stats) be calculated from the hydro database or the snow database. Default is hydro database.}
 }
 \value{
 A snow bulletin in Microsoft Word format.

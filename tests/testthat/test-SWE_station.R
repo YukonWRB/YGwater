@@ -4,7 +4,7 @@ test_that("Outputted table (summarise=TRUE) has proper dimensions when reading f
                        csv = FALSE,
                        return_missing = FALSE,
                        source = 'hydromet'))
-  expect_equal(ncol(test), 19)
+  expect_equal(ncol(test), 20)
   expect_true(nrow(test) >= 1)
 })
 
@@ -15,7 +15,7 @@ test_that("Outputted table (summarise=FALSE) has proper dimensions when reading 
                                        return_missing = FALSE,
                                        source = 'hydromet',
                                        summarise = FALSE))
-  expect_equal(ncol(test), 11)
+  expect_equal(ncol(test), 12)
   expect_true(nrow(test) >= 1)
 })
 
@@ -25,7 +25,7 @@ test_that("Outputted table (summarise=TRUE) has proper dimensions when reading f
                                        csv = FALSE,
                                        return_missing = FALSE,
                                        source = 'snow'))
-  expect_equal(ncol(test), 19)
+  expect_equal(ncol(test), 20)
   expect_true(nrow(test) >= 1)
 })
 
@@ -36,6 +36,6 @@ test_that("Outputted table (summarise=FALSE) has proper dimensions when reading 
                                        return_missing = FALSE,
                                        source = 'snow',
                                        summarise = FALSE))
-  expect_equal(ncol(test), 11)
+  expect_equal(ncol(test), 12)
   expect_true(nrow(test) >= 1)
 })
