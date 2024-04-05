@@ -17,13 +17,14 @@
 #' @param excel_output If TRUE, calculated stats will be outputted in multiple excel tables. 
 #' @param save_path The path to the directory (folder) where the excel files should be saved. Enter the path as a character string.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. 
+#' @param source Should the SWE statistics for stations (station_stats) be calculated from the hydro database or the snow database. Default is hydro database.
 #'
 #' @return A snow bulletin in Microsoft Word format.
 #'
 #' @export
 #'
 
-# test <- snowBulletinStats(year=2024, month=3, excel_output=TRUE)
+# test <- snowBulletinStats(year=2024, month=4, excel_output=TRUE)
 # year <- 2024
 # month <- 3
 # excel_output <- TRUE
@@ -35,7 +36,8 @@ snowBulletinStats <-
            basins = NULL,
            excel_output = FALSE,
            save_path = "choose",
-           synchronize = FALSE) {
+           synchronize = FALSE,
+           source = "hydromet") {
     
     con <- hydrometConnect()
     on.exit(DBI::dbDisconnect(con))
@@ -77,9 +79,9 @@ snowBulletinStats <-
       # Only keep Oct to month of interest
       if (month == 3) {
         tab <- tab[tab$month %in% c(10, 11, 12, '01', '02'),]
-      } else if (month_param == 4) {
+      } else if (month == 4) {
         tab <- tab[tab$month %in% c(10, 11, 12, '01', '02', '03'),]
-      } else if (month_param == 5) {
+      } else if (month == 5) {
         tab <- tab[tab$month %in% c(10, 11, 12, '01', '02', '03', '04'),]
       }
       
@@ -174,7 +176,12 @@ snowBulletinStats <-
       # Reshape to wide format
       precip_stats <- tidyr::pivot_wider(precip_stats, names_from = c(type), values_from = value)
       # Bind current year data
-      precip_stats <- merge(precip_stats, tab_yr[, c("location_id", "location_name", "value")])
+      if (nrow(tab_yr) == 0) {
+        precip_stats$value <- NA
+      } else {
+        precip_stats <- merge(precip_stats, tab_yr[, c("location_id", "location_name", "value")])
+      }
+      
       # Calculate percent historical
       precip_stats$perc_hist_med <- round(precip_stats$value / precip_stats$median *100, 0)
       # Add variable coloumn
@@ -182,11 +189,11 @@ snowBulletinStats <-
       # Add description of % median
       precip_stats <- precip_stats %>%
         dplyr::mutate(description = dplyr::case_when(
-          perc_hist_med <= 65 ~ "well below",
-          perc_hist_med >= 66 & perc_hist_med <= 89 ~ "below",
-          perc_hist_med >= 90 & perc_hist_med <= 109 ~ "close to",
-          perc_hist_med >= 98 & perc_hist_med <= 102 ~ "",
-          perc_hist_med >= 110 & perc_hist_med <= 134 ~ "above",
+          perc_hist_med < 66 ~ "well below",
+          perc_hist_med >= 66 & perc_hist_med < 90 ~ "below",
+          perc_hist_med >= 98 & perc_hist_med < 103 ~ "",
+          perc_hist_med >= 90 & perc_hist_med < 110 ~ "close to",
+          perc_hist_med >= 110 & perc_hist_med < 135 ~ "above",
           perc_hist_med >= 135 ~ "well above",
           # Add more conditions as needed
           TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
@@ -256,7 +263,7 @@ snowBulletinStats <-
       
       return(cddf)
     }
-    cddfStats <- function() {
+    cddfStats <- function(month, year) {
       tsid <- c(484, 532, 540, 500, 548, 492, 556, 508)
       tabl <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name, 
                                                 locations.location AS location_id,
@@ -366,7 +373,11 @@ snowBulletinStats <-
       # Reshape to wide format
       cddf_stats <- tidyr::pivot_wider(cddf_stats, names_from = c(type), values_from = value)
       # Bind current year data
+      if (nrow(cddf_yr) == 0) {
+        cddf_stats$value <- NA
+      } else {
       cddf_stats <- merge(cddf_stats, cddf_yr[, c("location_id", "location_name", "value")])
+      }
       # Calculate percent historical
       cddf_stats$perc_hist_med <- round(cddf_stats$value / cddf_stats$median *100, 0)
       # Add variable column
@@ -391,7 +402,7 @@ snowBulletinStats <-
     
     #### -----------------------  SWE stations ---------------------------- ####
       station_stats <- SWE_station(stations="all", year=year, month=month, return_missing = TRUE, 
-                  active = TRUE, source="hydromet", summarise=TRUE)
+                  active = TRUE, source=source, summarise=TRUE)
       # Remove 'Snow Course' from name
     
     #### ---------------- Pillows with snow survey record ----------------- ####
@@ -411,8 +422,8 @@ snowBulletinStats <-
         pillow_stats[pillow_stats$location_id == "09EA-M1", ]$median <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_med
         pillow_stats[pillow_stats$location_id == "09EA-M1", ]$max <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_max
         pillow_stats[pillow_stats$location_id == "09EA-M1", ]$min <- station_stats[station_stats$location_id == "09EA-SC01",]$swe_min
-        pillow_stats[pillow_stats$location_id == "09EA-M1", ]$perc_hist_med <- (pillow_stats[pillow_stats$location_id == "09EA-M1", ]$value /
-                                                                               pillow_stats[pillow_stats$location_id == "09EA-M1", ]$median) * 100
+        pillow_stats[pillow_stats$location_id == "09EA-M1", ]$perc_hist_med <- round((pillow_stats[pillow_stats$location_id == "09EA-M1", ]$value /
+                                                                               pillow_stats[pillow_stats$location_id == "09EA-M1", ]$median) * 100)
       } else {
         message("King Solomon Dome does not have pillow stats for this year")
       }
@@ -429,23 +440,27 @@ snowBulletinStats <-
         # Add description of % median
         basin_stats <- basin_stats %>%
           dplyr::mutate(description = dplyr::case_when(
-            perc_hist_med <= 65 ~ "well below",
-            perc_hist_med >= 66 & perc_hist_med <= 89 ~ "below",
-            perc_hist_med >= 90 & perc_hist_med <= 109 ~ "close to",
-            perc_hist_med >= 98 & perc_hist_med <= 102 ~ "",
-            perc_hist_med >= 110 & perc_hist_med <= 134 ~ "above",
+            perc_hist_med < 66 ~ "well below",
+            perc_hist_med >= 66 & perc_hist_med < 90 ~ "below",
+            perc_hist_med >= 90 & perc_hist_med < 98 ~ "close to",
+            perc_hist_med >= 98 & perc_hist_med < 103 ~ "",
+            perc_hist_med >= 103 & perc_hist_med < 110 ~ "close to",
+            perc_hist_med >= 110 & perc_hist_med < 135 ~ "above",
             perc_hist_med >= 135 ~ "well above",
             # Add more conditions as needed
             TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
           ))
         
     #### ------------------------- Monthly precip ------------------------- ####
-      
+      # if (Sys.Date() < paste0(year, "-0", month, "-01")) {
+      #   precip_stats <- NULL
+      # } else {
         precip_stats <- precipStats()
+      # }
+        
         
     #### ------------------------------ CDDF ------------------------------ ####
-        
-        cddf_stats <- cddfStats()
+        cddf_stats <- cddfStats(month, year)
         
     #### ------------------------- Flow/level stats ----------------------- ####
         
@@ -461,11 +476,11 @@ snowBulletinStats <-
         # Add description of % median
         flow_stats <- flow_stats %>%
           dplyr::mutate(description = dplyr::case_when(
-            perc_hist_med <= 65 ~ "well below",
-            perc_hist_med >= 66 & perc_hist_med <= 89 ~ "below",
-            perc_hist_med >= 90 & perc_hist_med <= 109 ~ "close to",
-            perc_hist_med >= 98 & perc_hist_med <= 102 ~ "",
-            perc_hist_med >= 110 & perc_hist_med <= 134 ~ "above",
+            perc_hist_med < 66 ~ "well below",
+            perc_hist_med >= 66 & perc_hist_med < 90 ~ "below",
+            perc_hist_med >= 90 & perc_hist_med < 110 ~ "close to",
+            perc_hist_med >= 98 & perc_hist_med < 103 ~ "",
+            perc_hist_med >= 110 & perc_hist_med < 135 ~ "above",
             perc_hist_med >= 135 ~ "well above",
             # Add more conditions as needed
             TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
@@ -475,8 +490,12 @@ snowBulletinStats <-
     #### ---------------------------- Map stats --------------------------- ####
         
         swe_basin_summary <- basin_stats[, c("basin", "swe_relative")]
-        swe_basin_summary$Bulletin_Edition <- paste0(year, "-", month.name[month])
-        colnames(swe_basin_summary) <- c("SWE_Basin", "RELATIVE_SWE", "Bulletin_Edition")
+        if (nrow(basin_stats) == 0) {
+          swe_basin_summary <- swe_basin_summary
+        } else {
+          swe_basin_summary$Bulletin_Edition <- paste0(year, "-", month.name[month])
+          colnames(swe_basin_summary) <- c("SWE_Basin", "RELATIVE_SWE", "Bulletin_Edition")
+        }
         
         swe_compiled <- station_stats[, c("location_name", "swe_rat")]
         swe_compiled$Bulletin_Edition <- paste0(year, "-", month.name[month])

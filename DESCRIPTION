@@ -77,7 +77,8 @@ Suggests:
     testthat (>= 3.0.0),
     tidyhydat,
     vdiffr,
-    weathercan
+    weathercan,
+    officer
 VignetteBuilder: 
     knitr
 Remotes:

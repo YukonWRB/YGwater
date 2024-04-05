@@ -48,6 +48,18 @@ snowBulletin <-
       on.exit(Sys.setlocale("LC_TIME", lc), add=TRUE)
     }
 
+    # Make sure officer is installed
+    rlang::check_installed("officer", reason = "necessary to create word document with special formatting using Rmarkdown.")
+    if (!rlang::is_installed("officer")) { #This is here because officer is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
+      message("Installing dependency 'officer'...")
+      utils::install.packages("officer")
+      if (rlang::is_installed("officer")) {
+        message("Package officer successfully installed.")
+      } else {
+        stop("Failed to install package officer. You could troubleshoot by running utils::install.packages('officer') by itself.")
+      }
+    }
+    
     
     # Make sure knitr is installed
     rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
@@ -67,6 +79,8 @@ snowBulletin <-
       if (DBI::dbIsReadOnly(HydroMetDB::hydrometConnect(silent = TRUE))) {
         message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")
       } else {
+        # Make sure most recent version of HydroMetDB is downloaded
+        remotes::install_github("YukonWRB/HydroMetDB")
         # Synchronize
         HydroMetDB::synchronize(con = HydroMetDB::hydrometConnect(silent = TRUE), 
                                 timeseries_id = c(20, 145, 51, 75, 122, # For plot A
@@ -74,8 +88,8 @@ snowBulletin <-
                                                   #663, 665, 666, 668, 664, 671, 667, # For plot c (cannot be synchronized)
                                                   484, 532, 540, 500, 548, 492, 556, 508, # For plot D
                                                   30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14, # For plot E
-                                                  323, 324, 209, 210, 211, 212, # Alaska sites
-                                                  189:356), 
+                                                  323, 324, 209, 210, 211, 212, # Alaska snow survey sites
+                                                  189:356), # Snow survey sites 
                                 start_datetime = paste0(year-1, "-09-01"), discrete = TRUE)
       }
       
