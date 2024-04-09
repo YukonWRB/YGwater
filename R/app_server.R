@@ -48,7 +48,7 @@ app_server <- function(input, output, session) {
       }
     } else if (input$first_selection == "View hydromet plots + data") {
       if (!runCheck$plots) {
-        plotContainer$all_ts <- DBI::dbGetQuery(con, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.param_type, ts.unit, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
+        plotContainer$all_ts <- DBI::dbGetQuery(con, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.param_type, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         plotContainer$parameters_discrete <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
         plotContainer$parameters_continuous <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'continuous';")
         datums <- DBI::dbGetQuery(con, "SELECT dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")

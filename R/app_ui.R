@@ -21,7 +21,6 @@ app_ui <- function(request) {
     }'
 
   tagList(
-    # Your application UI logic
     fluidPage(
       tags$head(
         tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
