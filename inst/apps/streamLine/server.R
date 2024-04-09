@@ -1,51 +1,65 @@
-
-# Establish database connection
-pool <- pool::dbPool(
-  drv = RPostgres::Postgres(),
-  dbname = "hydromet",
-  host = Sys.getenv("hydrometHost"),
-  port = Sys.getenv("hydrometPort"),
-  user = Sys.getenv("hydrometUser"),
-  password = Sys.getenv("hydrometPass"))
-
 server <- function(input, output, session) {
+  
+  # Initial setup #
+  # Automatically update URL every time an input changes
+  observe({
+    reactiveValuesToList(input)
+    session$doBookmark()
+  })
+  # Update the query string
+  onBookmarked(updateQueryString)
   
   # Language selection ########################################################
   
-  # Determine user's browser language
+  # Determine user's browser language. This should only run once when the app is loaded.
   shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
-Shiny.onInputChange('user_lang', language);
+Shiny.onInputChange('userLang', language);
 console.log(language);")
   
-  # Check if lang_check contains en or fr in the string and set the language accordingly
-  observeEvent(input$user_lang, {
-    if (substr(input$user_lang , 1, 2) == "en") {
-      updateSelectInput(session, "languageSelect", selected = "English")
-    } else if (substr(input$user_lang , 1, 2) == "fr") {
-      updateSelectInput(session, "languageSelect", selected = "Français")
+  # Some elements lack attributes that screen readers use to identify them. This adds an aria-label to the language selector.
+  observe({
+    shinyjs::runjs('$("#langSelect-selectized").attr("aria-label", "Language Selector");')
+    shinyjs::runjs('$("#langSelect").attr("title", "Language Selector");')
+  })
+  
+  # Check if userLang contains en or fr in the string and set the language accordingly
+  observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
+    if (substr(input$userLang , 1, 2) == "en") {
+      updateSelectizeInput(session, "langSelect", selected = "English")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
+    } else if (substr(input$userLang , 1, 2) == "fr") {
+      updateSelectizeInput(session, "langSelect", selected = "Français")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "fr"))  # Updates the language in the web page html head.
+      
     } else {
-      updateSelectInput(session, "languageSelect", selected = "English")
+      updateSelectizeInput(session, "langSelect", selected = "English")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
+      
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
-  observeEvent(input$languageSelect, {
-    newLang <- input$languageSelect
+  languageSelection <- reactive({
+    input$langSelect
+  })
+  
+  observeEvent(input$langSelect, {
+    newLang <- input$langSelect
+    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(newLang == "English", "en", "fr")))  # Updates the language in the web page html head.
     output$home_title <- renderText({
-     as.character(translations[translations$id == "home", ..newLang])
+     translations[translations$id == "home", ..newLang][[1]]
     })
     output$map_title <- renderText({
-      as.character(translations[translations$id == "map_view_title", ..newLang])
+      translations[translations$id == "map_view_title", ..newLang][[1]]
     })
-    output$settings_title <- renderText({
-      as.character(translations[translations$id == "settings", ..newLang])
+    output$data_title <- renderText({
+     translations[translations$id == "data_view_title", ..newLang][[1]]
     })
   })
   
+  
   # Map View Module ###########################################################
-  mapView("map_view", con = pool, translations = translations)
+  map("map", con = pool, language = languageSelection)
   
-  # Download Data Module
-  # downloadData("download_data")
-  
-  # Include other modules as needed
+  # Data view module ##########################################################
+  data("data", con = pool, language = languageSelection)
 }

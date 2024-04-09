@@ -1,10 +1,22 @@
-﻿id,English,Français
-id,en,fr
-home,Home,Accueil
-settings,Settings,Paramètres
-welcome_msg,Welcome to StreamLine!,Bienvenue à StreamLine!
-map_view_title,Map View,Vue carte
-map_filter,Filters,Filtres
-visualize_title,Visualize/Plot Data,Visualiser/tracer les données
-dl_data,Download Data,Télécharger les données
-chg_lang,Change Language,Changer de langue
+﻿id,description,English,Français
+titleCase,Sets language in titleCase function,en,fr
+all,direct translation,All,Tout
+home,direct translation,Home,Accueil
+settings,direct translation,Settings,Paramètres
+welcome_msg,direct translation,Welcome to StreamLine!,Bienvenue à StreamLine!
+map_view_title,tab panel title,Map,Carte
+data_view_title,tab panel title,Data,Données
+doc_view_title,tab panel title,Documents,Documents
+img_view_title,tab panel title,Images,Images
+visualize_title,tab panel title,Visualize/Plot Data,Visualiser/tracer les données
+data_type,direct translation,Data Type,Types de données
+parameter,direct translation,Parameter,Paramètre
+project,direct translation,Project,Projet
+network,direct translation,Network,Réseau
+reset,direct translation,Reset,Réinitialiser
+param_name_col,DB column selection ,param_name,param_name_fr
+param_type_col,DB column selection ,param_type,param_type_fr
+generic_name_col,DB column selection ,name,name_fr
+dl_data,direct translation for tab panel title,Download Data,Télécharger les données
+chg_lang,direct translation for language selection,Change Language,Changer de langue
+map_tooltip,map filter tooltip,Filters affect each other by limiting subsequent options. Reset to clear all filters.,Les filtres s'affectent mutuellement en limitant les options suivantes. Réinitialiser pour effacer tous les filtres.

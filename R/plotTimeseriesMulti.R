@@ -110,9 +110,9 @@ plotTimeseriesMulti <- function(location,
     stop("The parameter you entered does not exist in the database.")
   }
   if (is.null(record_rate)) {
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, start_datetime, end_datetime, unit FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous';"))
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous';"))
   } else {
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, end_datetime, unit FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
   }
   if (nrow(exist_check) == 0) {
     if (is.null(record_rate)) {
@@ -174,7 +174,8 @@ plotTimeseriesMulti <- function(location,
   }
   
   # Find the ts units
-  units <- exist_check$unit
+  units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM parameters WHERE param_code = ", parameter_code, ";"))[1,1]
+  
   
   range <- seq.POSIXt(start_date, end_date, by = "day")
   if (is.null(rate)) {

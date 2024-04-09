@@ -267,7 +267,7 @@ plotOverlap <- function(location = NULL,
     }
 
     # Find the ts units
-    units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM timeseries WHERE timeseries_id = ", tsid, ";"))
+    units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM parameters WHERE param_code = ", parameter_code, ";"))
 
     # Get the necessary data -------------------
     # start with daily means data
