@@ -160,6 +160,9 @@ SWE_station <-
         if (return_missing == FALSE) {
           if (length(tab[tab$yr == year,]$value) == 0) next
         }
+        # Remove duplicate rows to deal with error....hopefully can eventually remove when error is fixed
+        # tab <- tab %>% 
+        #   dplyr::distinct(location_id, estimate_flag, parameter, mon, yr, day, .keep_all = TRUE)
         # get sample date
         sample_date <- tab[tab$yr == year & tab$parameter == "SWE",]$sample_date
         sample_date <- as.Date(sample_date)

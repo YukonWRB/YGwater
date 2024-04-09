@@ -128,29 +128,31 @@ SWE_basin <-
     swe_basin_year$swe <- as.numeric(swe_basin_year$swe)
     swe_basin_year$perc <- as.numeric(swe_basin_year$perc)
 
+    # Add units and parameter
+    swe_basin_year$parameter <- rep("SWE", length(swe_basin_year$basin))
+    swe_basin_year$units <- rep("mm", length(swe_basin_year$basin))
+    
+    # Get current year values
+    swe_basin_current <- swe_basin_year %>%
+      dplyr::filter(.data$yr == year)
+    
     # Remove years based on percentage of basin stations with measurements
     swe_basin_year <- swe_basin_year %>% dplyr::filter(perc >= threshold)
     swe_basin <- swe_basin_year
 
-    # Add units and parameter
-    swe_basin$parameter <- rep("SWE", length(swe_basin$basin))
-    swe_basin$units <- rep("mm", length(swe_basin$basin))
     # rename columns
     colnames(swe_basin) <- c("location", "year", "month", "value", "perc", "parameter", "units")
 
     ## Calculate max, min and median historical SWE for each basin if summarise = TRUE
     if (summarise == TRUE) {
-      # Get current year values
-      swe_basin_current <- swe_basin_year %>%
-        dplyr::filter(.data$yr == year)
       # calculate stats excluding current year
       swe_basin_summary <- swe_basin_year %>%
         dplyr::filter(.data$yr != year) %>%
         dplyr::group_by(.data$basin, .data$mon) %>%
         dplyr::summarize(
-          swe_max = max(swe),
+          swe_max = max(swe, na.rm = TRUE),
           year_max = .data$yr[which.max(swe)],
-          swe_min = min(swe),
+          swe_min = min(swe, na.rm = TRUE),
           year_min = .data$yr[which.min(swe)],
           swe_median = stats::median(swe, na.rm = TRUE)
         )

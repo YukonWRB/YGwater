@@ -50,29 +50,13 @@ snowBulletin <-
 
     # Make sure officer is installed
     rlang::check_installed("officer", reason = "necessary to create word document with special formatting using Rmarkdown.")
-    if (!rlang::is_installed("officer")) { #This is here because officer is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-      message("Installing dependency 'officer'...")
-      utils::install.packages("officer")
-      if (rlang::is_installed("officer")) {
-        message("Package officer successfully installed.")
-      } else {
-        stop("Failed to install package officer. You could troubleshoot by running utils::install.packages('officer') by itself.")
-      }
-    }
-    
-    
+
+    # Make sure officer is installed
+    rlang::check_installed("officedown", reason = "necessary to create word document with special formatting using Rmarkdown.")
+
     # Make sure knitr is installed
     rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
-    if (!rlang::is_installed("knitr")) { #This is here because knitr is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-      message("Installing dependency 'knitr'...")
-      utils::install.packages("knitr")
-      if (rlang::is_installed("knitr")){
-        message("Package knitr successfully installed.")
-      } else {
-        stop("Failed to install package knitr You could troubleshoot by running utils::install.packages('knitr') by itself.")
-      }
-    }
-    
+
     ## Synchronize time series of interest
     # Check for credentials with read/write authority
     if (synchronize) {

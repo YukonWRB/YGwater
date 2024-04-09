@@ -235,44 +235,24 @@ hydrometDiscrete <- function(location = NULL,
       discrete <- rbind(discrete, new_discrete)
     }
 
-    # if (all(nchar(all_discrete$month) == 2)) {
-    #   if (overlaps) {
-    #     all_discrete$fake_date <- as.Date(paste0(max(years), "-", all_discrete$month, "-01" ))
-    #   }
-    #
-    #   all_discrete$fake_date <- as.Date(paste0(max(years), "-", all_discrete$month, "-01" ))
-    # } else {all_discrete$fake_date <- as.Date(paste0(max(years), "-0", all_discrete$month, "-01" ))}
-    #
-    # ## Create discrete
-    #   #discrete <- all_discrete[all_discrete$datetime >= startDay & all_discrete$datetime <= endDay, ]
-    #   #discrete$fake_date <- discrete
-    #   discrete <- all_discrete[all_discrete$year %in% years, ]
-
     ## Give units
     units <- unique(discrete$units)
   }
 
-  # if (nrow(discrete) == 0) {
-  #   stop("There is no data to graph after filtering for your specified year(s) and day range. Try again with different days.")
-  # }
-
 #### ------------------ Calculate stats for "lined box" ------------------- ####
   if (plot_type == 'linedbox') {
-    stats_discrete <- all_discrete %>%
+    # Calculate stats, removing current year first
+    stats_discrete <- all_discrete[all_discrete$year < max(years),]
+    stats_discrete <- stats_discrete %>%
       dplyr::group_by(.data$month) %>%
       dplyr::summarise(value = min(.data$value, na.rm=TRUE), type = "min") %>%
-      dplyr::bind_rows(all_discrete %>%
+      dplyr::bind_rows(stats_discrete %>%
                   dplyr::group_by(.data$month) %>%
                   dplyr::summarise(value = max(.data$value, na.rm=TRUE), type = "max")) %>%
-      dplyr::bind_rows(all_discrete %>%
+      dplyr::bind_rows(stats_discrete %>%
                   dplyr::group_by(.data$month) %>%
                   dplyr::summarise(value = stats::median(.data$value, na.rm=TRUE), type = "median"))
 
-    # Add fake_date
-    # Change startDay and endDay to day of year
-    #startDay <- lubridate::yday(startDay)
-    #endDay <- lubridate::yday(endDay)
-    #if (startDay > endDay) {
     if (overlaps) {
       stats_discrete$fake_date <- NA
       # Fake_date for those before Jan
@@ -288,9 +268,6 @@ hydrometDiscrete <- function(location = NULL,
     }
   }
 
-
-  # Add all_discrete date column
-  #all_discrete$date <- as.Date(all_discrete$datetime)
 
 #### ---------------------------- Make the plot --------------------------- ####
 

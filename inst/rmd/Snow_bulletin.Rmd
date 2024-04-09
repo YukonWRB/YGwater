@@ -155,7 +155,7 @@ return(plot)
 
 
 #### ------------- B: Function to create basin SWE boxplots --------------- ####
-snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale=scale_param) {
+snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale=scale_param, language) {
   # Subset data
   swe_basin <- swe_basins[swe_basins$location==basin,]
   swe_basin$datetime <- as.POSIXct(swe_basin$datetime)
@@ -176,7 +176,8 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale=scale_
 #### ------------- C: Function to create monthly precip plots ------------- ####
 snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language, month = month_param) {
   tab <- DBI::dbGetQuery(con, paste0("SELECT * FROM measurements_continuous WHERE timeseries_id = ", tsid,
-                                     " AND datetime >= '", year-40, "-10-01'"))
+                                     " AND datetime >= '", year-40, "-10-01'",
+                                     " AND datetime <= '", year, "-0", month_param, "-02'"))
 
   attr(tab$datetime, "tzone") <- "MST"
   tab$month <- format(tab$datetime, "%m")
@@ -631,10 +632,9 @@ data.
 **Snowpack**
 
 # Yukon Territory Flow Conditions and Outlook
-
-# `r officer::ftext("Map 1. Temperature Anomalies", fp_text_lite(color = "white", font.size=1))`
-# `r officer::ftext("Map 2. Precipitation", fp_text_lite(color = "white", font.size=1))` 
-# `r officer::ftext("Map 3. Snow Water Equivalent", fp_text_lite(color = "white", font.size=1))` 
+# `r officer::ftext("Map 1. Temperature Anomalies", officer::fp_text_lite(color = "white", font.size=1))`
+# `r officer::ftext("Map 2. Precipitation", officer::fp_text_lite(color = "white", font.size=1))` 
+# `r officer::ftext("Map 3. Snow Water Equivalent", officer::fp_text_lite(color = "white", font.size=1))` 
 # Upper Yukon River Basin (Southern Lakes/Whitehorse)
 
 The Upper Yukon River Basin snowpack is
@@ -709,10 +709,10 @@ if (language_param == "french") {
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin sup. du Yukon")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin sup. du Yukon", language = language_param)
 } else {
   snowbullSWE(loc= "Upper Yukon", basin = "Upper_Yukon",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Upper Yukon Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Upper Yukon Basin Monthly Snow Course", language = language_param)
 }
 
 ```
@@ -823,10 +823,10 @@ of the historical median, with
 # Plotting
 if (language_param == "french") {
   snowbullSWE(loc= "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Teslin - Big Salmon")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Teslin - Big Salmon", language = language_param)
 } else {
   snowbullSWE(loc= "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Teslin - Big Salmon Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Teslin - Big Salmon Basin Monthly Snow Course", language = language_param)
 }
 
 ```
@@ -906,10 +906,10 @@ of the historical median, with
 # Plotting
 if (language_param == "french") {
   snowbullSWE(loc= "Central Yukon", basin = "Central_Yukon",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin central du Yukon")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin central du Yukon", language = language_param)
 } else {
   snowbullSWE(loc= "Central Yukon", basin = "Central_Yukon",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Central Yukon Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Central Yukon Basin Monthly Snow Course", language = language_param)
 }
 
 ```
@@ -1009,10 +1009,10 @@ if (language == "french") {
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "Pelly", basin = "Pelly",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Pelly")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Pelly", language = language_param)
 } else {
   snowbullSWE(loc= "Pelly", basin = "Pelly",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Pelly Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Pelly Basin Monthly Snow Course", language = language_param)
 }
 
 
@@ -1105,10 +1105,10 @@ if (language == "french") {
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "Stewart", basin = "Stewart",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Stewart")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Stewart", language = language_param)
 } else {
   snowbullSWE(loc= "Stewart", basin = "Stewart",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Stewart Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Stewart Basin Monthly Snow Course", language = language_param)
 }
 
 
@@ -1193,10 +1193,10 @@ as of `r month.name[params$month]` 1
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "White", basin = "White",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin White")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin White", language = language_param)
 } else {
   snowbullSWE(loc= "White", basin = "White",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: White Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: White Basin Monthly Snow Course", language = language_param)
 }
 
 ```
@@ -1274,10 +1274,10 @@ if (language_param == "french") {
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "Lower Yukon", basin = "Lower_Yukon",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin inf. Yukon")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin inf. Yukon", language = language_param)
 } else {
   snowbullSWE(loc= "Lower Yukon", basin = "Lower_Yukon",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Lower Yukon Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Lower Yukon Basin Monthly Snow Course", language = language_param)
 }
 
 
@@ -1343,7 +1343,7 @@ snowbullWater(location = station_id,
 station_id <- "09EA003"
 
 if (language_param == "french") {
-  custom_title  <- "E2 : Débit da la rivière Klondike en amont du ruisseau Bonanza"
+  custom_title  <- "E2 : Débit de la rivière Klondike en amont du ruisseau Bonanza"
 } else {
   custom_title <- "E2: Klondike River Discharge above Bonanza Creek"
 }
@@ -1382,10 +1382,10 @@ of the historical median, with
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "Porcupine", basin = "Porcupine",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Porcupine")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Porcupine", language = language_param)
 } else {
   snowbullSWE(loc= "Porcupine", basin = "Porcupine",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Porcupine Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Porcupine Basin Monthly Snow Course", language = language_param)
 }
 
 ```
@@ -1467,10 +1467,10 @@ as of `r month.name[params$month]` 1
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "Peel", basin = "Peel",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Peel")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Peel", language = language_param)
 } else {
   snowbullSWE(loc= "Peel", basin = "Peel",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Peel Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Peel Basin Monthly Snow Course", language = language_param)
 }
 
 ```
@@ -1546,10 +1546,10 @@ if (language == "french") {
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "Liard", basin = "Liard",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Liard")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Liard", language = language_param)
 } else {
   snowbullSWE(loc= "Liard", basin = "Liard",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Liard Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Liard Basin Monthly Snow Course", language = language_param)
 }
 
 
@@ -1633,10 +1633,10 @@ as of `r month.name[params$month]` 1
 # Plotting 
 if (language_param == "french") {
   snowbullSWE(loc= "Alsek", basin = "Alsek",
-            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Alsek")
+            year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Alsek", language = language_param)
 } else {
   snowbullSWE(loc= "Alsek", basin = "Alsek",
-            year = year_param, swe_basins = swe_basins, custom_title = "B: Alsek Basin Monthly Snow Course")
+            year = year_param, swe_basins = swe_basins, custom_title = "B: Alsek Basin Monthly Snow Course", language = language_param)
 }
 
 ```
@@ -1742,4 +1742,4 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
 
 ```
 
-# `r officer::ftext("Map 4. Location of Water Resources Snow Courses", fp_text_lite(color = "white", font.size=1))` 
+# `r officer::ftext("Map 4. Location of Water Resources Snow Courses", officer::fp_text_lite(color = "white", font.size=1))` 
