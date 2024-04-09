@@ -11,13 +11,13 @@ check_reticulate <- function(silent) {
   if (!rlang::is_installed("reticulate")) {
     if (silent) {                                                           
       message("Installing dependency 'reticulate'...")
-      install.packages("reticulate")
+      utils::install.packages("reticulate")
       message("Installed.")
     } else {
       message("Package 'reticulate' is required to use this function. Would you like to install it now? (y/n)")
       response <- readline()
       if (tolower(response) == "y") {
-        install.packages("reticulate")
+        utils::install.packages("reticulate")
         message("Installed.")
       } else {                
         stop("Package 'reticulate' is required to use this function.")

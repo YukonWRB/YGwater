@@ -448,7 +448,7 @@ app_server <- function(input, output, session) {
         output$export_plot_data <- downloadHandler(
           filename = function() {paste0(input$plot_loc_code, "_", tolower(input$plot_param), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz = "MST")), lubridate::minute(as.POSIXct(format(Sys.time()), tz = "MST")), ".csv")},
           content = function(file) {
-            write.csv(plotContainer$plot$data, file, row.names = FALSE)
+            utils::write.csv(plotContainer$plot$data, file, row.names = FALSE)
           }
         )
       }
