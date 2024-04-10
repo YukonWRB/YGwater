@@ -16,8 +16,8 @@ titleCase <- function(text, language = "en") {
   }
   
   lowercase_words <- c("the", "and", "but", "or", "for", "nor", "on", "at", "to", "from", "by", "de", "d'", "et", "\u00E0", "la", "le", "les", "un", "une", "des")
-  uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Stewart", "Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines", "Junction", "Ross", " River", "Rancheria", "Nisutlin", "Laberge", "Old", "Crow", "C.-B.", "Colombie", "Britanique", "Nord-Ouest", "King", "Solomon", "Midnight", "North")
-  all_uppercase_words <- c("SWE", "EEN")
+  uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Stewart", "Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines", "Junction", "Ross", " River", "Rancheria", "Nisutlin", "Laberge", "Old", "Crow", "C.-B.", "Colombie", "Britanique", "Nord-Ouest", "King", "Solomon", "Midnight", "North", "États-Unis", "(États-Unis)")
+  all_uppercase_words <- c("SWE", "EEN", "ECCC", "d'ECCC", "(US)")
   
   processText <- function(text) {
     words <- unlist(strsplit(text, "\\s+"))

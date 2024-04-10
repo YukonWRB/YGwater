@@ -9,12 +9,22 @@ server <- function(input, output, session) {
   # Update the query string
   onBookmarked(updateQueryString)
   
+  isRestoring <- reactiveVal(FALSE)
+  onRestore(function(state) {
+    isRestoring(TRUE)
+  })
+  
   # Language selection ########################################################
   
   # Determine user's browser language. This should only run once when the app is loaded.
-  shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
+  observe({
+    if (!isRestoring()) {
+      shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
 Shiny.onInputChange('userLang', language);
 console.log(language);")
+    }
+  })
+  
   
   # Some elements lack attributes that screen readers use to identify them. This adds an aria-label to the language selector.
   observe({

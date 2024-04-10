@@ -50,15 +50,15 @@ ui <- function(request) {
                      class = "right-aligned-lang-select")
     ),
     navbarPage("StreamLine",
+               id = "navbar",
                theme = shinythemes::shinytheme("flatly"), # Optional theme
                windowTitle = "StreamLine",
-               tabPanel(title = uiOutput("home_title"), value = "HomeView", 
-               ),
-               
+               tabPanel(title = uiOutput("home_title"), value = "HomeView"),
                tabPanel(title = uiOutput("map_title"), value = "map", 
                         mapUI("map")),
                tabPanel(title = uiOutput("data_title"), value = "data",
                         dataUI("data"))
+               
     )
   )
 }
