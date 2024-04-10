@@ -27,5 +27,6 @@ streamLine <- function(dev = FALSE) {
   }
   
   enableBookmarking(store = "url")
+  set
   shiny::runApp(appDir, display.mode = "normal")
 }

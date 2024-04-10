@@ -6,6 +6,8 @@ server <- function(input, output, session) {
     reactiveValuesToList(input)
     session$doBookmark()
   })
+  setBookmarkExclude("userLang")
+  
   # Update the query string
   onBookmarked(updateQueryString)
   
@@ -48,13 +50,10 @@ console.log(language);")
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
-  languageSelection <- reactive({
-    input$langSelect
-  })
-  
+  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
   observeEvent(input$langSelect, {
     newLang <- input$langSelect
-    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(newLang == "English", "en", "fr")))  # Updates the language in the web page html head.
+    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(newLang == "Français", "fr", "en")))  # Updates the language in the web page html head.
     output$home_title <- renderText({
      translations[translations$id == "home", ..newLang][[1]]
     })
@@ -64,8 +63,21 @@ console.log(language);")
     output$data_title <- renderText({
      translations[translations$id == "data_view_title", ..newLang][[1]]
     })
+    
+    # Update the mailto link with the correct language
+    subject <- translations[translations$id == "feedback", ..newLang][[1]]
+    body <- translations[translations$id == "feedback_text", ..newLang][[1]]
+    mailtoLink <- sprintf("mailto:waterlevels@yukon.ca?subject=%s&body=%s", URLencode(subject), URLencode(body))
+    session$sendCustomMessage("updateMailtoLink", mailtoLink) #Update using custom JS handler defined in the UI
   })
   
+  # Language selection reactive based on the user's selected language (which is automatically set to the browser's language on load)
+  languageSelection <- reactive({
+    input$langSelect
+  })
+  
+  # Home View Module ##########################################################
+  home("home", language = languageSelection)
   
   # Map View Module ###########################################################
   map("map", con = pool, language = languageSelection)
