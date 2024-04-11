@@ -50,13 +50,13 @@ ui <- function(request) {
     }
     @font-face {
       font-family: 'Nunito Sans';
-      src: url('www/fonts/NunitoSans/NunitoSans-VariableFont_YTLC,opsz,wdth,wght.woff2') format('woff2-variations');
+      src: url('www/fonts/NunitoSans/NunitoSans-Variable_YTLC.woff2') format('woff2-variations');
       font-weight: 100 900;
       font-style: normal;
     }
     @font-face {
       font-family: 'Nunito Sans';
-      src: url('www/fonts/NunitoSans/NunitoSans-Italic-VariableFont_YTLC,opsz,wdth,wght.woff2') format('woff2-variations');
+      src: url('www/fonts/NunitoSans/NunitoSans-Italic-Variable_YTLC.woff2') format('woff2-variations');
       font-weight: 100 900;
       font-style: italic;
     }
@@ -77,7 +77,7 @@ ui <- function(request) {
   "))
     ),
     
-    # Language selector positioned above navbarPage but styled to appear integrated
+    # Language selector and logo positioned above navbarPage
     fluidRow( class = "top-bar-container",
               column(2,
                      div(class = "logo-container",

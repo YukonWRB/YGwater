@@ -46,6 +46,7 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
   ## For each station
   for (s in 1:length(stations)) {
 
+    #NOTE: s will always NOT be a data.frame as it's an integer from 1 to the length of stations
     # Get data
     if (is.data.frame(s)) {
       station <- stations[[s]]
@@ -60,17 +61,18 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
     } else {warning("The objects in the stations parameter must be either a station id (character string) or a dataframe")}
 
     # Check if data exists for this time frame
-    if (nrow(station)==0) {
+    if (nrow(station) == 0) {
+      # NOTE: line below doesn't actually do anything. 
       station <- station
       warning(paste0("Station ", station, " does not have data for this time frame"))
     } else {
       # Subset to variables of interest and months of interest
       station <- station %>% dplyr::select(c("date", tidyselect::all_of(variables))) %>%
-        dplyr::filter(lubridate::month(date) %in% months)
+        dplyr::filter(lubridate::month(.data$date) %in% months)
 
       # Transform to long format
       station <- station %>%
-        tidyr::pivot_longer(cols = variables,
+        tidyr::pivot_longer(cols = tidyselect::all_of(variables),
                             names_to = "variable",
                             values_to = "value")
 
@@ -93,21 +95,21 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
     # Select station from list to be added
     station2 <- stations[[s]]
 
-    if (nrow(station2)==0) {next}
+    if (nrow(station2) == 0) {next}
 
     # Run for loop over every variable of interest
     combined_variables <- stats::setNames(data.frame(matrix(ncol = 4, nrow = 0)), c("date", "value", "variable", "station"))
     for (v in variables) {
 
-      print(paste0("---------------- Combining variable '", v, "'-------------"))
+      print(paste0("------------- Combining variable '", v, "'--------------"))
 
       # Subset station dataframe to variable of interest
-      stn1 <- combined_stations[combined_stations$variable==v,]
-      stn2 <- station2[station2$variable==v,]
+      stn1 <- combined_stations[combined_stations$variable == v,]
+      stn2 <- station2[station2$variable == v,]
 
       #----------------------------- Find overlap -----------------------------#
       # Find overlap
-      overlap <- dplyr::inner_join(stn1, stn2, by='date')
+      overlap <- dplyr::inner_join(stn1, stn2, by = 'date')
       # Only keep overlap where both are not NA values
       overlap <- overlap[!(is.na(overlap$value.x) | is.na(overlap$value.y)),]
       # # find earliest date that has the month and day +1 of max_d
@@ -125,11 +127,11 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       #   )
 
       #--------------------------- Calculate stats ---------------------------#
-      print(paste0("Mean at station 1:", mean(overlap$value.x, na.rm=TRUE)))
-      print(paste0("Mean at station 2:", mean(overlap$value.y, na.rm=TRUE)))
-      bias <- mean(overlap$value.x, na.rm=TRUE) - mean(overlap$value.y, na.rm=TRUE)
+      print(paste0("Mean at station 1:", mean(overlap$value.x, na.rm = TRUE)))
+      print(paste0("Mean at station 2:", mean(overlap$value.y, na.rm = TRUE)))
+      bias <- mean(overlap$value.x, na.rm = TRUE) - mean(overlap$value.y, na.rm = TRUE)
       print(paste0("Bias: ", bias))
-      print(paste0("RMSE: ", sqrt(mean((overlap$value.x-overlap$value.y)^2, na.rm=TRUE))))
+      print(paste0("RMSE: ", sqrt(mean((overlap$value.x - overlap$value.y)^2, na.rm = TRUE))))
       print("--------------------------Next------------------------")
 
       #--------------------------- Apply correction ---------------------------#
@@ -147,11 +149,14 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
       #------------------------ Fill gaps in station 1 ------------------------#
       # Where station 1 is missing data in range, fill in with corrected station 2
       # Fill in all missing days in range for station 1 with NAs
-      all_dates <- seq(as.Date(start), as.Date(end), by = "days")
+      all_dates <- seq.Date(as.Date(start), as.Date(end), by = "days")
       missing_dates <- as.Date(setdiff(all_dates, stn1$date))
 
-      if (length(missing_dates)>=1) {
-        missing_data <- data.frame(date = missing_dates, value = NA, variable = v, station = NA)
+      if (length(missing_dates) >= 1) {
+        missing_data <- data.frame("date" = missing_dates, 
+                                   "value" = NA, 
+                                   "variable" = v, 
+                                   "station" = NA)
         stn1 <- dplyr::bind_rows(stn1[, c("date", "value", "variable", "station")], missing_data)
       }
 
@@ -160,10 +165,10 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
         dplyr::left_join(stn2, by = "date", suffix = c("_stn1", "_stn2")) %>%
         dplyr::mutate(value = dplyr::coalesce(.data$value_stn1, .data$value_stn2),
                       variable = .data$variable_stn1,
-                      station = ifelse(!is.na(value_stn1), station_stn1, station_stn2)
+                      station = ifelse(!is.na(.data$value_stn1), .data$station_stn1, .data$station_stn2)
                       ) %>%
-        dplyr::select(date, value, variable, station) %>%
-        dplyr::arrange(date)
+        dplyr::select("date", "value", "variable", "station") %>%
+        dplyr::arrange("date")
 
       print("Gaps filled")
 

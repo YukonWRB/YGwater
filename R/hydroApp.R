@@ -16,6 +16,7 @@ hydroApp <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOpti
   rlang::check_installed("shiny", reason = "required to use hydroApp.")
   rlang::check_installed("shinyjs", reason = "required to use hydroApp.")
   rlang::check_installed("shinyWidgets", reason = "required to use hydroApp.")
+  rlang::check_installed("shinyalert", reason = "required to use hydroApp.")
   rlang::check_installed("DT", reason = "required to use hydroApp.")
 
   appDir <- system.file("apps/hydroApp", package = "YGwater")
@@ -25,6 +26,5 @@ hydroApp <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOpti
     stop("hydroApp app not found.")
   }
   
-  enableBookmarking(store = "url")
   shiny::runApp(appDir, display.mode = "normal", host = host, port = port)
 }

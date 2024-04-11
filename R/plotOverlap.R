@@ -700,7 +700,7 @@ plotOverlap <- function(location = NULL,
     }
     if (returns == "calculate") {
       tryCatch({
-        extremes <- suppressWarnings(fasstr::calc_annual_extremes(daily[daily$year <= return_max_year , ], dates = datetime, values = value, water_year_start = return_months[1], months = return_months, allowed_missing = allowed_missing))
+        extremes <- suppressWarnings(fasstr::calc_annual_extremes(daily[daily$year <= return_max_year , ], dates = "datetime", values = "value", water_year_start = return_months[1], months = return_months, allowed_missing = allowed_missing))
         extremes$Measure <- "1-Day"
         if (return_type == "max") {
           analysis <- fasstr::compute_frequency_analysis(data = extremes, events = "Year", values = "Max_1_Day", use_max = TRUE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))

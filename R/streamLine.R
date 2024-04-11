@@ -18,15 +18,15 @@ streamLine <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
   rlang::check_installed("shinyjs", reason = "required to use streamLine application.")
   rlang::check_installed("shinythemes", reason = "required to use streamLine application.")
   rlang::check_installed("leaflet", reason = "required to use streamLine application.")
-
-
-    appDir <- system.file("apps/streamLine", package = "YGwater")
-    source(system.file("apps/streamLine/app_globals.R", package = "YGwater"))
+  
+  
+  appDir <- system.file("apps/streamLine", package = "YGwater")
+  source(system.file("apps/streamLine/app_globals.R", package = "YGwater"))
   
   if (appDir == "") {
     stop("StreamLine app not found.")
   }
   
-  enableBookmarking(store = "url")
+  shiny::enableBookmarking(store = "url")
   shiny::runApp(appDir, display.mode = "normal", host = host, port = port)
 }

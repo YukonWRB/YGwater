@@ -68,7 +68,7 @@ snowBulletinStats <-
                                            FROM measurements_continuous 
                                            INNER JOIN timeseries ON measurements_continuous.timeseries_id = timeseries.timeseries_id
                                            INNER JOIN locations ON timeseries.location = locations.location
-                                           WHERE measurements_continuous.timeseries_id IN ('", paste0(tsid, collapse="', '"),
+                                           WHERE measurements_continuous.timeseries_id IN ('", paste0(tsid, collapse = "', '"),
                                          "')"))
       #AND datetime >= '", year_param-40, "-10-01'"))
       attr(tab$datetime, "tzone") <- "MST"
@@ -174,7 +174,7 @@ snowBulletinStats <-
       precip_stats <- rbind(precip_40yrs, precip_9120, precip_8110, precip_allyrs)
       
       # Reshape to wide format
-      precip_stats <- tidyr::pivot_wider(precip_stats, names_from = c(type), values_from = value)
+      precip_stats <- tidyr::pivot_wider(precip_stats, names_from = c("type"), values_from = "value")
       # Bind current year data
       if (nrow(tab_yr) == 0) {
         precip_stats$value <- NA
@@ -371,7 +371,7 @@ snowBulletinStats <-
       cddf_stats <- rbind(cddf_40yrs, cddf_9120, cddf_8110, cddf_allyrs)
       
       # Reshape to wide format
-      cddf_stats <- tidyr::pivot_wider(cddf_stats, names_from = c(type), values_from = value)
+      cddf_stats <- tidyr::pivot_wider(cddf_stats, names_from = c("type"), values_from = "value")
       # Bind current year data
       if (nrow(cddf_yr) == 0) {
         cddf_stats$value <- NA

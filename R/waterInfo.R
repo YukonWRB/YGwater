@@ -28,19 +28,24 @@
 
 waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
   {
+  
+  rlang::check_installed("trend", reason = "necessary to calculate trends.")
+  if (plots) {
+    rlang::check_installed("gridExtra", reason = "necessary to create plots.")
+  }
 
-  if (!is.null(save_path)){
+  if (!is.null(save_path)) {
     if (save_path %in% c("Choose", "choose")) {
       message("Select the path to the folder where you want this report saved.")
-      save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+      save_path <- as.character(utils::choose.dir(caption = "Select Save Folder"))
     }
     dir.create(paste0(save_path, "/WaterInfo_", Sys.Date()))
-    if (plots){
+    if (plots) {
       dir.create(paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots"))
     }
   }
 
-  if (!(level_flow %in% c("both", "one"))){
+  if (!(level_flow %in% c("both", "one"))) {
     stop("Parameter level_flow must be either 'both' or 'one'")
   }
 
@@ -48,10 +53,10 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
   attr(end_date, "tzone") <- "UTC"
 
   #select the locations
-  if (length(locations) == 1){
-    if (locations %in% c("WRB", "WSC")){
+  if (length(locations) == 1) {
+    if (locations %in% c("WRB", "WSC")) {
       locs <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE parameter IN ('level', 'flow') AND operator = '", locations, "'"))
-    } else if (locations == "all"){
+    } else if (locations == "all") {
       locs <- DBI::dbGetQuery(con, "SELECT * FROM timeseries WHERE parameter IN ('level', 'flow')")
     }
   } else {
@@ -59,20 +64,20 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
   }
 
   #now retain only level or flow if level_flow == 'one'.
-  if (level_flow == "one"){
-    for (i in unique(locs$location)){
+  if (level_flow == "one") {
+    for (i in unique(locs$location)) {
       sub <- locs[locs$location == i ,]
-      if (nrow(sub) > 1){
-        if ("flow" %in% sub$parameter){
+      if (nrow(sub) > 1) {
+        if ("flow" %in% sub$parameter) {
           level_end <- as.POSIXct(sub[sub$parameter == "level", "end_datetime_UTC"])
-          if (level_end > end_date){
+          if (level_end > end_date) {
             level_end <- end_date
           }
           flow_end <- as.POSIXct(sub[sub$parameter == "flow", "end_datetime_UTC"])
-          if (flow_end > end_date){
+          if (flow_end > end_date) {
             flow_end <- end_date
           }
-          if (flow_end > level_end - 6*30*24*60*60){ #check if last flow is recent enough
+          if (flow_end > level_end - 6*30*24*60*60) { #check if last flow is recent enough
             locs <- locs[!(locs$location == i & locs$parameter == "level") ,] #drop level
           } else {
             locs <- locs[!(locs$location == i & locs$parameter == "flow") ,] #drop flow
@@ -84,7 +89,7 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
 
   data <- list()
   extremes <- list()
-  for (i in 1:nrow(locs)){
+  for (i in 1:nrow(locs)) {
     daily <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily WHERE timeseries_id = '", locs[i, "timeseries_id"], "' AND date < '", as.character(end_date), "'"))
     daily$year <- lubridate::year(daily$date)
     daily$month <- lubridate::month(daily$date)
@@ -100,10 +105,10 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
   metadata <- data.frame()
   info <- data.frame()
   trends <- data.frame()
-  if (plots){
+  if (plots) {
     plot_list <- list()
   }
-  for (i in names(extremes)){
+  for (i in names(extremes)) {
     tbl <- extremes[[i]]
     name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", sub("_.*", "", i), "'"))[1,1]
     #metadata
@@ -123,12 +128,12 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
     yrs_max <- yrs_max[!is.na(yrs_max)]
     tryCatch({
       gaps_min <- seq(min(yrs_min), max(yrs_min))[!(seq(min(yrs_min), max(yrs_min)) %in% yrs_min)]
-    }, error = function(e){
+    }, error = function(e) {
       gaps_min <<- NA
     })
     tryCatch({
       gaps_max <- seq(min(yrs_max), max(yrs_max))[!(seq(min(yrs_max), max(yrs_max)) %in% yrs_max)]
-    }, error = function(e){
+    }, error = function(e) {
       gaps_max <<- NA
     })
     info <- rbind(info, data.frame("location" = sub("_.*", "", i),
@@ -138,14 +143,14 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
                                    "end" = max(max(yrs_min), max(yrs_max)),
                                    "missing_yrs_min" = paste(gaps_min, collapse = ", "),
                                    "missing_yrs_max" = paste(gaps_max, collapse = ", "),
-                                   "min_min" = round(min(tbl$Min_1_Day, na.rm=TRUE), 1),
-                                   "mean_min" = round(mean(tbl$Min_1_Day, na.rm=TRUE), 1),
-                                   "median_min" = round(stats::median(tbl$Min_1_Day, na.rm=TRUE), 1),
-                                   "max_min" = round(max(tbl$Min_1_Day, na.rm=TRUE), 1),
-                                   "min_max" = round(min(tbl$Max_1_Day, na.rm=TRUE), 1),
-                                   "mean_max" = round(mean(tbl$Max_1_Day, na.rm=TRUE), 1),
-                                   "median_max" = round(stats::median(tbl$Max_1_Day, na.rm=TRUE), 1),
-                                   "max_max" = round(max(tbl$Max_1_Day, na.rm=TRUE), 1)
+                                   "min_min" = round(min(tbl$Min_1_Day, na.rm = TRUE), 1),
+                                   "mean_min" = round(mean(tbl$Min_1_Day, na.rm = TRUE), 1),
+                                   "median_min" = round(stats::median(tbl$Min_1_Day, na.rm = TRUE), 1),
+                                   "max_min" = round(max(tbl$Min_1_Day, na.rm = TRUE), 1),
+                                   "min_max" = round(min(tbl$Max_1_Day, na.rm = TRUE), 1),
+                                   "mean_max" = round(mean(tbl$Max_1_Day, na.rm = TRUE), 1),
+                                   "median_max" = round(stats::median(tbl$Max_1_Day, na.rm = TRUE), 1),
+                                   "max_max" = round(max(tbl$Max_1_Day, na.rm = TRUE), 1)
     ))
 
     #Trends
@@ -185,18 +190,18 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
                                        "note" = paste0("Percent annual change based on intercepts of ", round(min_intercept, 1), " at the start year for miniumum values and ", round(max_intercept, 1), " at the start year for maximum values"))
     )
 
-    if (plots){
+    if (plots) {
       x_lim <- c(min(min(yrs_min), min(yrs_max)), max(max(yrs_min), max(yrs_max)))
-      plot <- ggplot2::ggplot(data=tbl, ggplot2::aes(x = .data$Year, y = .data$Min_1_Day)) +
+      plot <- ggplot2::ggplot(data = tbl, ggplot2::aes(x = .data$Year, y = .data$Min_1_Day)) +
         ggplot2::geom_point(color = "royalblue4") +
         ggplot2::geom_line(linewidth = 0.1, color = "royalblue4") +
         ggplot2::theme_classic() +
         ggplot2::xlim(x_lim)
-      if (plot_type == "combined"){
+      if (plot_type == "combined") {
         plot <- plot +
           ggplot2::geom_point(ggplot2::aes(y = .data$Max_1_Day), color = "red3") +
           ggplot2::geom_line(ggplot2::aes(y = .data$Max_1_Day), linewidth = 0.1, color = "red3")
-        if (sub(".*_", "", i) == "flow"){
+        if (sub(".*_", "", i) == "flow") {
           plot <- plot +
             ggplot2::labs(y = "Annual extreme value (log scale)", title = paste0(sub("_.*", "", i), ": " , name), subtitle = paste0("Parameter: ", sub(".*_", "", i), ", m3/s")) +
             ggplot2::scale_y_log10()
@@ -207,11 +212,11 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
 
         plot_list[[i]] <- plot
 
-      } else if (plot_type == "separate"){
+      } else if (plot_type == "separate") {
         plot <- plot +
           ggplot2::labs(y = "Annual Minimum")
 
-        plot2 <- ggplot2::ggplot(data=tbl, ggplot2::aes(x = .data$Year, y = .data$Max_1_Day)) +
+        plot2 <- ggplot2::ggplot(data = tbl, ggplot2::aes(x = .data$Year, y = .data$Max_1_Day)) +
           ggplot2::labs(y = "Annual Maximum", title = paste0(sub("_.*", "", i), ": " , name), subtitle = paste0("Parameter: ", sub(".*_", "", i))) +
           ggplot2::xlim(x_lim) +
           ggplot2::geom_point() +
@@ -223,27 +228,27 @@ waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "
         plots_separate <- gridExtra::arrangeGrob(plot2, plot)
         plot_list[[i]] <- plots_separate
       }
-      if (!is.null(save_path)){
-        if (plot_type == "combined"){
-          ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", name, "_", sub(".*_", "", i), "_combined.png"), plot=plot, height=8, width=10, units="in", device="png", dpi=500)
+      if (!is.null(save_path)) {
+        if (plot_type == "combined") {
+          ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", name, "_", sub(".*_", "", i), "_combined.png"), plot = plot, height = 8, width = 10, units = "in", device = "png", dpi = 500)
         } else {
-          ggplot2::ggsave(filename=paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", name,"_", sub(".*_", "", i),  "_separate.png"), plot=plots_separate, height=7, width=9, units="in", device="png", dpi=500)
+          ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", name,"_", sub(".*_", "", i),  "_separate.png"), plot = plots_separate, height = 7, width = 9, units = "in", device = "png", dpi = 500)
         }
       }
     } #End of plots loop
   }#End of loop working on extremes list of tables.
-  if (plot_type == "combined" & plots & !quiet){
+  if (plot_type == "combined" & plots & !quiet) {
     message("Minimum and maximum flow plots were combined and returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
   }
 
 
   result <- list("locations" = metadata, "stats" = info, "trends" = trends)
 
-  if (!is.null(save_path)){
+  if (!is.null(save_path)) {
     openxlsx::write.xlsx(result, paste0(save_path, "/WaterInfo_", Sys.Date(), "/measurements+stats.xlsx"))
   }
 
-  if (plots){
+  if (plots) {
     result <- list("locations" = metadata, "stats" = info, "trends" = trends, "plots" = plot_list)
   }
   return(result)
