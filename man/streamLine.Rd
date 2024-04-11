@@ -4,14 +4,21 @@
 \alias{streamLine}
 \title{StreamLine Shiny application for WRB data viewing}
 \usage{
-streamLine()
+streamLine(
+  host = getOption("shiny.host", "127.0.0.1"),
+  port = getOption("shiny.port")
+)
+}
+\arguments{
+\item{host}{Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in \code{port} to be open on the host machine.}
+
+\item{port}{Port number (numeric). Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network.}
 }
 \value{
 Opens a Shiny application.
 }
 \description{
-Loads a Shiny application for viewing WRB data.
-}
-\examples{
-streamLine()
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+
+The in-development public-facing Shiny application for viewing WRB data. Not intended for public viewing yet, but please experiment!.
 }

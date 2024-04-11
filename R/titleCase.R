@@ -1,5 +1,8 @@
 #' Capitalize titles in French or English
 #' 
+#' @description
+#' `r lifecycle::badge('stable')`
+#' 
 #' This function capitalizes a string according to the rules of the English or French language. It is based on the `str_to_title` function from the `stringr` package, but with additional rules to handle lowercase words and proper nouns specific to the Yukon, such as Klondike, Alsek, Takhini, and others.
 #'
 #' @param text The text to capitalize.

@@ -15,5 +15,7 @@ titleCase(text, language = "en")
 A string with proper capitalization for the language.
 }
 \description{
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
+
 This function capitalizes a string according to the rules of the English or French language. It is based on the \code{str_to_title} function from the \code{stringr} package, but with additional rules to handle lowercase words and proper nouns specific to the Yukon, such as Klondike, Alsek, Takhini, and others.
 }
