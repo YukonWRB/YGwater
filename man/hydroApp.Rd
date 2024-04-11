@@ -2,42 +2,23 @@
 % Please edit documentation in R/hydroApp.R
 \name{hydroApp}
 \alias{hydroApp}
-\title{Hydrometric data, plot, + map viewing app}
+\title{Original Shiny application (hydroApp) for WRB data viewing}
 \usage{
 hydroApp(
-  onStart = NULL,
-  options = list(),
-  enableBookmarking = NULL,
-  uiPattern = "/",
-  ...
+  host = getOption("shiny.host", "127.0.0.1"),
+  port = getOption("shiny.port")
 )
 }
 \arguments{
-\item{onStart}{A function that will be called before the app is actually run.
-This is only needed for \code{shinyAppObj}, since in the \code{shinyAppDir}
-case, a \code{global.R} file can be used for this purpose.}
+\item{host}{Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in \code{port} to be open on the host machine.}
 
-\item{options}{Named options that should be passed to the \code{runApp} call
-(these can be any of the following: "port", "launch.browser", "host", "quiet",
-"display.mode" and "test.mode"). You can also specify \code{width} and
-\code{height} parameters which provide a hint to the embedding environment
-about the ideal height/width for the app.}
-
-\item{enableBookmarking}{Can be one of \code{"url"}, \code{"server"}, or
-\code{"disable"}. The default value, \code{NULL}, will respect the setting from
-any previous calls to  \code{\link[shiny:enableBookmarking]{enableBookmarking()}}. See \code{\link[shiny:enableBookmarking]{enableBookmarking()}}
-for more information on bookmarking your app.}
-
-\item{uiPattern}{A regular expression that will be applied to each \code{GET}
-request to determine whether the \code{ui} should be used to handle the
-request. Note that the entire request path must match the regular
-expression in order for the match to be considered successful.}
-
-\item{...}{Do not use. Arguments to pass to golem_opts.
-See \code{?golem::get_golem_options} for more details.}
+\item{port}{Port number (numeric). Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network.}
+}
+\value{
+Opens a Shiny application.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Easy app-type interface for viewing forecaster of the day comments, level/flow plots, precipitation maps, and more. Data can be exported as .csv or .png file formats with the click of a button. Requires access to the G drive for full functionality.
+The original WRB Shiny application. Not intended for public viewing.
 }

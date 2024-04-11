@@ -24,9 +24,9 @@ home <- function(id, language) {
       
       output$title <- renderUI({
         HTML(paste0('<div class="montserrat" style="font-size: 24px; font-weight: 600; font-style: normal">',
-                    titleCase(translations[translations$id == "homeTitle", ..lang][[1]], abbrev),
+                    translations[translations$id == "homeTitle", ..lang][[1]]),
                     '</div>'
-        ))
+        )
       })
       
       output$text <- renderUI({

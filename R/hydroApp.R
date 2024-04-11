@@ -1,34 +1,30 @@
-#' Hydrometric data, plot, + map viewing app
+#' Original Shiny application (hydroApp) for WRB data viewing
 #' 
 #' @description
-#' `r lifecycle::badge('experimental')`
+#' `r lifecycle::badge('stable')`
 #' 
-#' Easy app-type interface for viewing forecaster of the day comments, level/flow plots, precipitation maps, and more. Data can be exported as .csv or .png file formats with the click of a button. Requires access to the G drive for full functionality.
+#' The original WRB Shiny application. Not intended for public viewing.
 #'
-#' @param ... Do not use. Arguments to pass to golem_opts.
-#' See `?golem::get_golem_options` for more details.
-#' @inheritParams shiny::shinyApp
-#'
+#' @param host Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in `port` to be open on the host machine.
+#' @param port Port number (numeric). Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network.
+#' @return Opens a Shiny application.
 #' @export
-#' @importFrom shiny shinyApp
-#' @importFrom golem with_golem_options
-hydroApp <- function(
-    onStart = NULL,
-    options = list(),
-    enableBookmarking = NULL,
-    uiPattern = "/",
-    ...
-) {
-  with_golem_options(
-    app = shinyApp(
-      ui = app_ui,
-      server = app_server,
-      onStart = onStart,
-      options = options,
-      enableBookmarking = enableBookmarking,
-      uiPattern = uiPattern
-    ),
-    golem_opts = list(...)
-  )
+#'
+
+hydroApp <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port")) {
   
+  rlang::check_installed("shiny", reason = "required to use hydroApp.")
+  rlang::check_installed("shinyjs", reason = "required to use hydroApp.")
+  rlang::check_installed("shinyWidgets", reason = "required to use hydroApp.")
+  rlang::check_installed("DT", reason = "required to use hydroApp.")
+
+  appDir <- system.file("apps/hydroApp", package = "YGwater")
+
+  
+  if (appDir == "") {
+    stop("hydroApp app not found.")
+  }
+  
+  enableBookmarking(store = "url")
+  shiny::runApp(appDir, display.mode = "normal", host = host, port = port)
 }
