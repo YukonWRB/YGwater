@@ -16,6 +16,7 @@ dataUI <- function(id) {
 data <- function(id, con, language) {
   moduleServer(id, function(input, output, session) {
     
+    setBookmarkExclude(c("reset", "view"))
     data_types <- DBI::dbGetQuery(con, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);")
     parameters <- DBI::dbGetQuery(con, "SELECT p.* FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
     parameters <- DBI::dbGetQuery(con, "SELECT * FROM parameters")
