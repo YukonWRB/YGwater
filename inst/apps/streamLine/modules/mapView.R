@@ -263,7 +263,7 @@ map <- function(id, con, language) {
     # Create the map ###########################################################
     
     output$map <- leaflet::renderLeaflet({
-      leaflet::leaflet() %>%
+      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 10)) %>%
         leaflet::addTiles() %>% 
         leaflet::addProviderTiles("Esri.WorldTopoMap") %>%
         leaflet::setView(lng = -135.05, lat = 65.00, zoom = 5)  %>% # Center on Yukon
@@ -354,7 +354,8 @@ map <- function(id, con, language) {
       
       leaflet::leafletProxy("map", session = session) %>%
         leaflet::clearMarkers() %>%
-        leaflet::addMarkers(data = loc.sub, lng = ~longitude, lat = ~latitude, popup = ~titleCase(loc.sub[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev))
+        leaflet::clearMarkerClusters() %>%
+        leaflet::addMarkers(data = loc.sub, lng = ~longitude, lat = ~latitude, popup = ~titleCase(loc.sub[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev), clusterOptions = leaflet::markerClusterOptions())
     })
     
     

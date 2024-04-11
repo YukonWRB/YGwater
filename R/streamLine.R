@@ -6,14 +6,14 @@
 #' @return Opens a Shiny application.
 #' @export
 #'
-#' @examples
-#' streamLine()
 
 streamLine <- function(dev = FALSE) {
   
   rlang::check_installed("shiny", reason = "required to use streamLine application.")
   rlang::check_installed("shinyjs", reason = "required to use streamLine application.")
-  
+  rlang::check_installed("shinythemes", reason = "required to use streamLine application.")
+  rlang::check_installed("leaflet", reason = "required to use streamLine application.")
+
   if (dev) {
     appDir <- system.file("apps/streamLine_dev", package = "YGwater")
     source(system.file("apps/streamLine_dev/app_globals.R", package = "YGwater"))
@@ -27,6 +27,5 @@ streamLine <- function(dev = FALSE) {
   }
   
   enableBookmarking(store = "url")
-  set
-  shiny::runApp(appDir, display.mode = "normal")
+  shiny::runApp(appDir, display.mode = "normal", host = "0.0.0.0", port = 3838)
 }
