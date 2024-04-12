@@ -19,28 +19,54 @@ titleCase <- function(text, language = "en") {
   }
   
   lowercase_words <- c("the", "and", "but", "or", "for", "nor", "on", "at", "to", "from", "by", "de", "d'", "et", "\u00E0", "la", "le", "les", "un", "une", "des")
-  uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Stewart", "Johnson's", "Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines", "Junction", "Ross", " River", "Rancheria", "Nisutlin", "Laberge", "Old", "Crow", "C.-B.", "Colombie", "Britanique", "Nord-Ouest", "King", "Solomon", "Midnight", "North", "\u00C9tats-Unis", "(\u00C9tats-Unis)", "Burwash", "Landing", "Wellgreen", "Kluane", "Quill", "Duke", "Silver", "City", "Christmas", "Summit", "Dezadeash", "Pine", "Profile", "Felsite", "Alder", "Dalton", "Post", "Million", "Dollar", "South", "Canol", "Stevens", "Plume")
-  all_uppercase_words <- c("SWE", "EEN", "ECCC", "d'ECCC", "(US)", "SWDF")
+  uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Stewart", "Johnson's", "Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines", "Junction", "Ross", " River", "Rancheria", "Nisutlin", "Laberge", "Old", "Crow", "Colombie", "Britanique", "Nord-Ouest", "King", "Solomon", "Midnight", "North", "\u00C9tats-Unis", "(\u00C9tats-Unis)", "Burwash", "Landing", "Wellgreen", "Kluane", "Quill", "Duke", "Silver", "City", "Christmas", "Summit", "Dezadeash", "Pine", "Profile", "Felsite", "Alder", "Dalton", "Post", "Million", "Dollar", "South", "Canol", "Stevens", "Plume", "Atlin", "Log", "Cabin", "McIntyre")
+  all_uppercase_words <- c("SWE", "EEN", "ECCC", "d'ECCC", "(US)", "SWDF", "(B.C.)", "C.-B.", "(C.-B.)")
   
-  french_keywords <- c("rivi\u00E8re", "ruisseau", "montagne", "sommet", "lac", "pont", "route", "autoroute")
+  french_keywords <- c("rivi\u00E8re", "ruisseau", "montagne", "sommet", "mont", "lac", "pont", "route", "autoroute", "plage")
   
   processText <- function(text) {
     words <- unlist(strsplit(text, "\\s+"))
     
     # Capitalize function that respects lowercase and uppercase words list
     words_capitalized <- mapply(function(word, index) {
-      if (word %in% all_uppercase_words) {
-        return(toupper(word))
-      } else if (tolower(word) %in% lowercase_words & index != 1 & index != length(words)) {
-        return(tolower(word))
-      } else if (index == 1) {
-        return(stringr::str_to_title(word))
+      if (language == "fr") {
+        if (grepl("'", word)) {
+          apostrophe <- TRUE
+          word.sub <- substr(word, 3, nchar(word))
+        } else {
+          apostrophe <- FALSE
+          word.sub <- word
+        }
       } else {
+        apostrophe <- FALSE
+        word.sub <- word
+      }
+      if (word.sub %in% all_uppercase_words) {
+        return(toupper(word))
+      } else if (tolower(word.sub) %in% lowercase_words & index != 1) {
+        return(tolower(word))
+      } else if (index == 1) { #The first word should always be capitalized
+        if (apostrophe) { #The first letter and the letter after the apostrophe should be capitalized
+          before_apostrophe <- toupper(substr(word, 1, 2))
+          char_after_apostrophe <- toupper(substr(word, 3, 3))
+          after_apostrophe <- substr(word, 4, nchar(word))
+          return(paste0(before_apostrophe, char_after_apostrophe, after_apostrophe))
+        } else {
+          return(stringr::str_to_title(word))
+        }
+      } else { #The rest of the words should be capitalized if in English. In French, only if they are specified as uppercase word
         if (language == "en") {
           return(stringr::str_to_title(word))
         } else if (language == "fr") {
-          if (stringr::str_to_title(word) %in% uppercase_words) {
-            return(stringr::str_to_title(word))
+          if (tolower(word.sub) %in% tolower(uppercase_words)) {
+            if (apostrophe) {
+              before_apostrophe <- tolower(substr(word, 1, 2))
+              char_after_apostrophe <- toupper(substr(word, 3, 3))
+              after_apostrophe <- substr(word, 4, nchar(word))
+              return(paste0(before_apostrophe, char_after_apostrophe, after_apostrophe))
+            } else {
+              return(stringr::str_to_title(word))
+            }
           } else {
             return(tolower(word))}
         }
@@ -49,27 +75,27 @@ titleCase <- function(text, language = "en") {
     
     # French capitalization rule for keywords
     if (language == "fr") {
-      if (length(words) > 1) {
-        for (i in 1:(length(words) - 1)) {
-          if (tolower(words[i]) %in% french_keywords) {
-            if (words[i + 1] != "de") {
+      if (length(words_capitalized) > 1) {
+        for (i in 1:(length(words_capitalized) - 1)) {
+          stripped <- tolower(sub("^.+?'", "", words_capitalized[i]))
+          if (stripped %in% french_keywords) {
+            if (!(words_capitalized[[i + 1]] %in% c("de", "du", "des"))) {
               words_capitalized[[i + 1]] <- stringr::str_to_title(words_capitalized[[i + 1]])
             } else {
-              if (i < (length(words) - 1)) {
-                words_capitalized[[i + 2]] <- stringr::str_to_title(words_capitalized[[i + 2]])
+              if (i < (length(words_capitalized) - 1)) {
+                if (grepl("'", words_capitalized[[i + 2]])) {
+                  before_apostrophe <- substr(words_capitalized[[i + 2]], 1, 2)
+                  char_after_apostrophe <- toupper(substr(words_capitalized[[i + 2]], 3, 3))
+                  after_apostrophe <- substr(words_capitalized[[i + 2]], 4, nchar(words_capitalized[[i + 2]]))
+                  words_capitalized[[i + 2]] <- paste0(before_apostrophe, char_after_apostrophe, after_apostrophe)
+                } else {
+                  words_capitalized[[i + 2]] <- stringr::str_to_title(words_capitalized[[i + 2]])
+                }
               }
             }
-            
           }
         }
       }
-      
-    }
-    
-    # Special handling for French apostrophes
-    if (language == "fr") {
-      words_capitalized <- gsub(" D'", " d'", paste(words_capitalized, collapse = " "), ignore.case = FALSE)
-      words_capitalized <- gsub(" L'", " l'", paste(words_capitalized, collapse = " "), ignore.case = FALSE)
     }
     
     result <- paste(words_capitalized, collapse = " ")
