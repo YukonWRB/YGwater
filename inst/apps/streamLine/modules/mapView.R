@@ -198,7 +198,7 @@ map <- function(id, con, language) {
     # Create the map ###########################################################
     
     output$map <- leaflet::renderLeaflet({
-      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 10)) %>%
+      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 12)) %>%
         leaflet::addTiles() %>% 
         leaflet::addProviderTiles("Esri.WorldTopoMap") %>%
         leaflet::setView(lng = -135.05, lat = 65.00, zoom = 5)  %>% # Center on Yukon

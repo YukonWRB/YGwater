@@ -19,6 +19,6 @@ if (!exists("pool")) {
     port = Sys.getenv("hydrometPort"),
     user = Sys.getenv("hydrometUser"),
     password = Sys.getenv("hydrometPass")
-    )
+  )
 }
 
