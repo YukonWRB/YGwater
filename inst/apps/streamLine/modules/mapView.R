@@ -210,87 +210,87 @@ map <- function(id, con, language) {
     
     # Filter the map data based on user's selection ############################
     observe({
-      lang <- language()
-      abbrev <- translations[translations$id == "titleCase", ..lang][[1]]
-      
-      if (!is.null(input$typeFlt)) {
-        if (length(input$typeFlt) > 1) {
-          timeseries.sub <- timeseries[timeseries$category %in% input$typeFlt, ]
-        } else {
-          if (input$typeFlt == "All") {
-            timeseries.sub <- timeseries
+        lang <- language()
+        abbrev <- translations[translations$id == "titleCase", ..lang][[1]]
+        
+        if (!is.null(input$typeFlt)) {
+          if (length(input$typeFlt) > 1) {
+            timeseries.sub <- timeseries[timeseries$category %in% input$typeFlt, ]
           } else {
-            timeseries.sub <- timeseries[timeseries$category == input$typeFlt, ]
+            if (input$typeFlt == "All") {
+              timeseries.sub <- timeseries
+            } else {
+              timeseries.sub <- timeseries[timeseries$category == input$typeFlt, ]
+            }
           }
-        }
-      } else {
-        timeseries.sub <- timeseries
-      }
-      
-      if (!is.null(input$paramFlt)) {
-        if (length(input$paramFlt) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% input$paramFlt, ]
         } else {
-          if (input$paramFlt == "All") {
-            timeseries.sub <- timeseries.sub
-          } else {
-            timeseries.sub <- timeseries.sub[timeseries.sub$parameter == input$paramFlt, ]
-          }
+          timeseries.sub <- timeseries
         }
-      } else {
-        timeseries.sub <- timeseries.sub
-      }
-      
-      if (!is.null(input$paramTypeFlt)) {
-        if (length(input$paramTypeFlt) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$param_type %in% input$paramTypeFlt, ]
+        
+        if (!is.null(input$paramFlt)) {
+          if (length(input$paramFlt) > 1) {
+            timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% input$paramFlt, ]
+          } else {
+            if (input$paramFlt == "All") {
+              timeseries.sub <- timeseries.sub
+            } else {
+              timeseries.sub <- timeseries.sub[timeseries.sub$parameter == input$paramFlt, ]
+            }
+          }
         } else {
-          if (input$paramTypeFlt == "All") {
-            timeseries.sub <- timeseries.sub
-          } else {
-            timeseries.sub <- timeseries.sub[timeseries.sub$param_type == input$paramTypeFlt, ]
-          }
+          timeseries.sub <- timeseries.sub
         }
-      } else {
-        timeseries.sub <- timeseries.sub
-      }
-      
-      if (!is.null(input$projFlt)) {
-        if (length(input$projFlt) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id %in% input$projFlt, "location_id"], ]
+        
+        if (!is.null(input$paramTypeFlt)) {
+          if (length(input$paramTypeFlt) > 1) {
+            timeseries.sub <- timeseries.sub[timeseries.sub$param_type %in% input$paramTypeFlt, ]
+          } else {
+            if (input$paramTypeFlt == "All") {
+              timeseries.sub <- timeseries.sub
+            } else {
+              timeseries.sub <- timeseries.sub[timeseries.sub$param_type == input$paramTypeFlt, ]
+            }
+          }
         } else {
-          if (input$projFlt == "All") {
-            timeseries.sub <- timeseries.sub
-          } else {
-            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id == input$projFlt, "location_id"], ]
-          }
+          timeseries.sub <- timeseries.sub
         }
-      } else {
-        timeseries.sub <- timeseries.sub
-      }
-      
-      if (!is.null(input$netFlt)) {
-        if (length(input$netFlt) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id %in% input$netFlt, "location_id"], ]
+        
+        if (!is.null(input$projFlt)) {
+          if (length(input$projFlt) > 1) {
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id %in% input$projFlt, "location_id"], ]
+          } else {
+            if (input$projFlt == "All") {
+              timeseries.sub <- timeseries.sub
+            } else {
+              timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id == input$projFlt, "location_id"], ]
+            }
+          }
         } else {
-          if (input$netFlt == "All") {
-            timeseries.sub <- timeseries.sub
-          } else {
-            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id == input$netFlt, "location_id"], ]
-          }
+          timeseries.sub <- timeseries.sub
         }
-      } else {
-        timeseries.sub <- timeseries.sub
-      }
-      
-      timeseries.sub <- timeseries.sub[timeseries.sub$start_datetime <= as.POSIXct(paste0(input$yrFlt[2], "-12-31 23:59:59"), tz = "UTC") & timeseries.sub$end_datetime >= as.POSIXct(paste0(input$yrFlt[1], "-01-01 00:00"), tz = "UTC"),]
-
-      loc.sub <- locations[locations$location_id %in% timeseries.sub$location_id, ]
-      
-      leaflet::leafletProxy("map", session = session) %>%
-        leaflet::clearMarkers() %>%
-        leaflet::clearMarkerClusters() %>%
-        leaflet::addMarkers(data = loc.sub, lng = ~longitude, lat = ~latitude, popup = ~titleCase(loc.sub[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev), clusterOptions = leaflet::markerClusterOptions())
+        
+        if (!is.null(input$netFlt)) {
+          if (length(input$netFlt) > 1) {
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id %in% input$netFlt, "location_id"], ]
+          } else {
+            if (input$netFlt == "All") {
+              timeseries.sub <- timeseries.sub
+            } else {
+              timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id == input$netFlt, "location_id"], ]
+            }
+          }
+        } else {
+          timeseries.sub <- timeseries.sub
+        }
+        
+        timeseries.sub <- timeseries.sub[timeseries.sub$start_datetime <= as.POSIXct(paste0(input$yrFlt[2], "-12-31 23:59:59"), tz = "UTC") & timeseries.sub$end_datetime >= as.POSIXct(paste0(input$yrFlt[1], "-01-01 00:00"), tz = "UTC"),]
+        
+        loc.sub <- locations[locations$location_id %in% timeseries.sub$location_id, ]
+        
+        leaflet::leafletProxy("map", session = session) %>%
+          leaflet::clearMarkers() %>%
+          leaflet::clearMarkerClusters() %>%
+          leaflet::addMarkers(data = loc.sub, lng = ~longitude, lat = ~latitude, popup = ~titleCase(loc.sub[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev), clusterOptions = leaflet::markerClusterOptions())
     })
     
     

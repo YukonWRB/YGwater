@@ -85,21 +85,95 @@ console.log(language);")
     input$langSelect
   })
   
-  # Home View Module ##########################################################
-  home("home", language = languageSelection)
-  
-  # Map View Module ###########################################################
-  map("map", con = pool, language = languageSelection)
-  
-  # Data view module ##########################################################
-  data("data", con = pool, language = languageSelection)
-  
-  # Plot view module ##########################################################
-  plot("plot", con = pool, language = languageSelection)
-  
-  # Image view module #########################################################
-  img("img", con = pool, language = languageSelection)
-  
-  # Document view module ######################################################
-  doc("doc", con = pool, language = languageSelection)
+  # Load specific modules based on input$navbar ################################
+  lastWorkingTab <- reactiveVal("home")  # Initial or safe tab
+  observeEvent(input$navbar, {
+    newLang <- input$langSelect
+    if (input$navbar == "home") {
+      tryCatch({
+        home("home", language = languageSelection)
+      }, error = function(e) {
+          showModal(modalDialog(
+            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+            translations[translations$id == "errorModalMsg", ..newLang][[1]],
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          # Optionally reset to a safe state or tab
+          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+        })
+    }
+    if (input$navbar == "map") {
+      tryCatch({
+        map("map", con = pool, language = languageSelection)
+        }, error = function(e) {
+          showModal(modalDialog(
+            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+            translations[translations$id == "errorModalMsg", ..newLang][[1]],
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          # Optionally reset to a safe state or tab
+          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+        })
+    }
+    if (input$navbar == "data") {
+      tryCatch({
+        data("data", con = pool, language = languageSelection)      
+        }, error = function(e) {
+        showModal(modalDialog(
+          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        # Optionally reset to a safe state or tab
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
+    }
+    if (input$navbar == "plot") {
+      tryCatch({
+        plot("plot", con = pool, language = languageSelection)
+      }, error = function(e) {
+          showModal(modalDialog(
+            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+            translations[translations$id == "errorModalMsg", ..newLang][[1]],
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          # Optionally reset to a safe state or tab
+          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
+    }
+    if (input$navbar == "img") {
+      tryCatch({
+        img("img", con = pool, language = languageSelection)
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        # Optionally reset to a safe state or tab
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
+    }
+    if (input$navbar == "doc") {
+      tryCatch({
+        doc("doc", con = pool, language = languageSelection)
+        }, error = function(e) {
+        showModal(modalDialog(
+          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        # Optionally reset to a safe state or tab
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
+    }
+    # Update last working tab on successful tab switch
+    lastWorkingTab(input$navbar)
+  }, ignoreNULL = TRUE, ignoreInit = TRUE)
 }

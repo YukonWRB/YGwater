@@ -17,7 +17,7 @@ ui <- function(request) {
     .logo-container img {
       height: 100px; /* Increase height as needed */
       width: auto; /* Maintain aspect ratio */
-      margin-top: -15px; /* Adjust if necessary */
+      margin-top: -22px; /* Adjust if necessary */
       position: absolute; /* Position logo absolutely within its container */
       top: 0; /* Align top edge with container */
       left: 0px; /* Maintain some spacing from the screen edge */
@@ -130,7 +130,7 @@ ui <- function(request) {
     }
     #feedback_btn:hover {
       background-color: #0056b3; /* Darker on hover */
-    }
-  "))
+    }"
+    ))
   )
 }

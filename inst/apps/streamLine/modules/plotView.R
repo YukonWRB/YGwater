@@ -10,6 +10,7 @@ plot <- function(id, con, language) {
       
       setBookmarkExclude(c())
       ns <- session$ns
+      stop("This is here to test error catching.")
       
       output$placeholder <- renderText({
         paste0("This is a placeholder for the plot module.")
