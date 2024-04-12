@@ -46,18 +46,6 @@ map <- function(id, con, language) {
     setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout"))
     ns <- session$ns
     
-    # Javascript code to lock/unlock selectize inputs depending on selection of "All"
-    resetAll <- "
-      var selectize = $('#paramFlt')[0].selectize;
-      if ($.inArray('All', selectize.items) !== -1) {
-        selectize.clear(true);  // Clear selections without triggering change event
-        selectize.addItem('All', true);  // Add 'All' without triggering change event
-        selectize.lock();  // Lock the control to prevent further selections
-      } else {
-        selectize.unlock();  // Unlock the control to allow selections
-      }
-    "
-    
     # Get data from database ##################################################
     locations <- DBI::dbGetQuery(con, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;")
     timeseries <- DBI::dbGetQuery(con, "SELECT timeseries_id, location_id, parameter, param_type, period_type, category, start_datetime, end_datetime FROM timeseries;")
@@ -69,92 +57,39 @@ map <- function(id, con, language) {
     networks <-  DBI::dbGetQuery(con, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);")
     
     # Lock/unlock multiple selection based on user's first choice ################
-    observeEvent(input$typeFlt, {
-      # Check if 'All' is selected and adjust accordingly
-      if ("All" %in% input$typeFlt)  {
-        if (length(input$typeFlt) == 1) {
-          shinyjs::runjs(resetAll)
-        } else {
-          updateSelectizeInput(session,
-                               "typeFlt",
-                               selected = "All"
-          )
-          shinyjs::runjs(resetAll)
-        }
+    # Javascript code to lock/unlock selectize inputs depending on selection of "All"
+    resetAll <- "
+      var selectize = $('#paramFlt')[0].selectize;
+      if ($.inArray('All', selectize.items) !== -1) {
+        selectize.clear(true);  // Clear selections without triggering change event
+        selectize.addItem('All', true);  // Add 'All' without triggering change event
+        selectize.lock();  // Lock the control to prevent further selections
       } else {
-        # If 'All' is not selected ensure it's unlocked
-        shinyjs::runjs("$('#typeFlt')[0].selectize.unlock();")
+        selectize.unlock();  // Unlock the control to allow selections
       }
-    })
-    observeEvent(input$paramTypeFlt, {
-      # Check if 'All' is selected and adjust accordingly
-      if ("All" %in% input$paramTypeFlt)  {
-        if (length(input$paramTypeFlt) == 1) {
-          shinyjs::runjs(resetAll)
+    "
+    # function to observe changes and update inputs
+    observeFilterInput <- function(inputId) {
+      observeEvent(input[[inputId]], {
+        # Check if 'All' is selected and adjust accordingly
+        if ("All" %in% input[[inputId]]) {
+          if (length(input[[inputId]]) == 1) {
+            shinyjs::runjs(resetAll)
+          } else {
+            updateSelectizeInput(session, inputId, selected = "All")
+            shinyjs::runjs(resetAll)
+          }
         } else {
-          updateSelectizeInput(session,
-                               "paramTypeFlt",
-                               selected = "All"
-          )
-          shinyjs::runjs(resetAll)
+          # If 'All' is not selected ensure it's unlocked
+          shinyjs::runjs(sprintf("$('#%s')[0].selectize.unlock();", inputId))
         }
-      } else {
-        # If 'All' is not selected ensure it's unlocked
-        shinyjs::runjs("$('#paramTypeFlt')[0].selectize.unlock();")
-      }
-    })
-    observeEvent(input$paramFlt, {
-      # Check if 'All' is selected and adjust accordingly
-      if ("All" %in% input$paramFlt)  {
-        if (length(input$paramFlt) == 1) {
-          shinyjs::runjs(resetAll)
-        } else {
-          updateSelectizeInput(session,
-                               "paramFlt",
-                               selected = "All"
-          )
-          shinyjs::runjs(resetAll)
-        }
-      } else {
-        # If 'All' is not selected ensure it's unlocked
-        shinyjs::runjs("$('#paramFlt')[0].selectize.unlock();")
-      }
-    })
-    observeEvent(input$projFlt, {
-      # Check if 'All' is selected and adjust accordingly
-      if ("All" %in% input$projFlt)  {
-        if (length(input$projFlt) == 1) {
-          shinyjs::runjs(resetAll)
-        } else {
-          updateSelectizeInput(session,
-                               "projFlt",
-                               selected = "All"
-          )
-          shinyjs::runjs(resetAll)
-        }
-      } else {
-        # If 'All' is not selected ensure it's unlocked
-        shinyjs::runjs("$('#projFlt')[0].selectize.unlock();")
-      }
-    })
-    observeEvent(input$netFlt, {
-      # Check if 'All' is selected and adjust accordingly
-      if ("All" %in% input$netFlt)  {
-        if (length(input$netFlt) == 1) {
-          shinyjs::runjs(resetAll)
-        } else {
-          updateSelectizeInput(session,
-                               "netFlt",
-                               selected = "All"
-          )
-          shinyjs::runjs(resetAll)
-        }
-      } else {
-        # If 'All' is not selected ensure it's unlocked
-        shinyjs::runjs("$('#netFlt')[0].selectize.unlock();")
-      }
-    })
-    
+      })
+    }
+    observeFilterInput("typeFlt")
+    observeFilterInput("paramTypeFlt")
+    observeFilterInput("paramFlt")
+    observeFilterInput("projFlt")
+    observeFilterInput("netFlt")
     
     # Create reactives to filter based on selections ############################
     filteredYears <- reactive({

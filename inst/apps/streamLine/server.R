@@ -63,6 +63,15 @@ console.log(language);")
     output$data_title <- renderText({
      translations[translations$id == "data_view_title", ..newLang][[1]]
     })
+    output$plot_title <- renderText({
+      translations[translations$id == "plot_view_title", ..newLang][[1]]
+    })
+    output$img_title <- renderText({
+      translations[translations$id == "img_view_title", ..newLang][[1]]
+    })
+    output$doc_title <- renderText({
+      translations[translations$id == "doc_view_title", ..newLang][[1]]
+    })
     
     # Update the mailto link with the correct language
     subject <- translations[translations$id == "feedback", ..newLang][[1]]
@@ -84,4 +93,13 @@ console.log(language);")
   
   # Data view module ##########################################################
   data("data", con = pool, language = languageSelection)
+  
+  # Plot view module ##########################################################
+  plot("plot", con = pool, language = languageSelection)
+  
+  # Image view module #########################################################
+  img("img", con = pool, language = languageSelection)
+  
+  # Document view module ######################################################
+  doc("doc", con = pool, language = languageSelection)
 }

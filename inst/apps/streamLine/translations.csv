@@ -13,7 +13,7 @@ map_view_title,tab panel title,Map,Carte
 data_view_title,tab panel title,Data,Données
 doc_view_title,tab panel title,Documents,Documents
 img_view_title,tab panel title,Images,Images
-visualize_title,tab panel title,Visualize/Plot Data,Visualiser/tracer les données
+plot_view_title,tab panel title,Visualize/Plot Data,Visualiser/tracer les données
 data_type,direct translation,Data Type,Types de données
 continuous,direct translation,Continuous,Continues
 discrete,direct translation,Discrete,Discrets

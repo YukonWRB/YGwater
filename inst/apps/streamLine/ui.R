@@ -78,11 +78,10 @@ ui <- function(request) {
     ),
     
     # Language selector and logo positioned above navbarPage
-    fluidRow( class = "top-bar-container",
+    fluidRow(class = "top-bar-container",
               column(2,
                      div(class = "logo-container",
-                         # Replace the src attribute with the path to your logo image
-                         img(src = "imgs/YG_Aurora_resized.png", .noWS = "outside", alt = "Your Logo")),
+                         htmltools::img(src = "imgs/YG_Aurora_resized.png", .noWS = "outside", alt = "Aurora")),
                      class = "left-aligned-logo"),
               column(2, offset = 9, 
                      div(class = "lang-select-container",
@@ -100,7 +99,13 @@ ui <- function(request) {
                tabPanel(title = uiOutput("map_title"), value = "map", 
                         mapUI("map")),
                tabPanel(title = uiOutput("data_title"), value = "data",
-                        dataUI("data"))
+                        dataUI("data")),
+               tabPanel(title = uiOutput("plot_title"), value = "plot",
+                        plotUI("plot")),
+               tabPanel(title = uiOutput("img_title"), value = "img",
+                        imgUI("img")),
+               tabPanel(title = uiOutput("doc_title"), value = "doc",
+                        docUI("doc")),
                
     ),
     tags$a(id = "feedback_btn", href = "mailto:waterlevels@yukon.ca?subject=Placeholder&body=Placeholder", 

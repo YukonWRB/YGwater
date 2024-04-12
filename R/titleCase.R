@@ -19,7 +19,7 @@ titleCase <- function(text, language = "en") {
   }
   
   lowercase_words <- c("the", "and", "but", "or", "for", "nor", "on", "at", "to", "from", "by", "de", "d'", "et", "\u00E0", "la", "le", "les", "un", "une", "des")
-  uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Stewart", "Johnson's", "Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines", "Junction", "Ross", " River", "Rancheria", "Nisutlin", "Laberge", "Old", "Crow", "C.-B.", "Colombie", "Britanique", "Nord-Ouest", "King", "Solomon", "Midnight", "North", "\u00C9tats-Unis", "(\u00C9tats-Unis)", "Burwash", "Landing", "Wellgreen", "Kluane", "Quill", "Duke", "Silver", "City", "Christmas", "Summit", "Dezadeash", "Pine", "Profile", "Felsite", "Alder", "Dalton", "Post", "Million", "Dollar", "South", "Canol", "Stevens")
+  uppercase_words <- c("Yukon", "Klondike", "Alsek", "Takhini", "Alaska", "Canada", "Pelly", "Dawson", "Whitehorse", "Carmacks", "Stewart", "Johnson's", "Crossing", "Mayo", "Keno", "Eagle", "Plains", "Watson", "Teslin", "Carcross", "Haines", "Junction", "Ross", " River", "Rancheria", "Nisutlin", "Laberge", "Old", "Crow", "C.-B.", "Colombie", "Britanique", "Nord-Ouest", "King", "Solomon", "Midnight", "North", "\u00C9tats-Unis", "(\u00C9tats-Unis)", "Burwash", "Landing", "Wellgreen", "Kluane", "Quill", "Duke", "Silver", "City", "Christmas", "Summit", "Dezadeash", "Pine", "Profile", "Felsite", "Alder", "Dalton", "Post", "Million", "Dollar", "South", "Canol", "Stevens", "Plume")
   all_uppercase_words <- c("SWE", "EEN", "ECCC", "d'ECCC", "(US)", "SWDF")
   
   french_keywords <- c("rivi\u00E8re", "ruisseau", "montagne", "sommet", "lac", "pont", "route", "autoroute")
