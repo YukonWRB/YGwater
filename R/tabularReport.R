@@ -23,50 +23,61 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
 
   on.exit(DBI::dbDisconnect(con))
 
-  if (level_locations[1] == "default") {
-    level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
-    level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
-  } else if (level_locations[1] == "all") {
-    level_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' ORDER BY location;")
-  } else {
-    level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
+  if (!is.null(level_locations)) {
+    if (level_locations[1] == "default") {
+      level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
+      level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
+    } else if (level_locations[1] == "all") {
+      level_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' ORDER BY location;")
+    } else {
+      level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
+    }
   }
 
-  if (flow_locations[1] == "default") {
-    flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
-    flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
-  } else if (flow_locations[1] == "all") {
-    flow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' ORDER BY location;")
-  } else {
-    flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
+  if (!is.null(flow_locations)) {
+    if (flow_locations[1] == "default") {
+      flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
+      flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
+    } else if (flow_locations[1] == "all") {
+      flow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' ORDER BY location;")
+    } else {
+      flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
+    }
   }
 
-  if (snow_locations[1] == "default") {
-    snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
-    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
-  } else if (snow_locations[1] == "all") {
-    snow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' ORDER BY location;")
-  } else {
-    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+  if (!is.null(snow_locations)) {
+    if (snow_locations[1] == "default") {
+      snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
+      snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+    } else if (snow_locations[1] == "all") {
+      snow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' ORDER BY location;")
+    } else {
+      snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+    }
   }
-
-  if (bridge_locations[1] == "default") {
-    bridge_locations <- c("09AH005", "29AB010", "29AB011", "29AE007", "29AH001")
-    bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' AND t.location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
-  } else if (bridge_locations[1] == "all") {
-    bridge_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' ORDER BY location;")
-  } else {
-    bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' AND t.location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
+  
+  if (!is.null(bridge_locations)) {
+    if (bridge_locations[1] == "default") {
+      bridge_locations <- c("09AH005", "29AB010", "29AB011", "29AE007", "29AH001")
+      bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' AND t.location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
+    } else if (bridge_locations[1] == "all") {
+      bridge_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' ORDER BY location;")
+    } else {
+      bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' AND t.location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
+    }
   }
-
-  if (precip_locations[1] == "default") {
-    precip_locations <- c("08AA003", "08AA010", "08AB001", "09AA001", "09AA004", "09AA013", "09AB001", "09AB010", "09AC001", "09AE002", "09AH001", "09AH004", "09BC001", "09BC002", "09CA002", "09DC005", "09DC006", "09EA003", "09EB001", "09FC001", "09FD002", "10AA001", "10AD002", "10MA002", "10BE001")
-    precip_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name IN ('water level', 'water flow') AND t.category = 'continuous' AND t.location IN ('", paste(precip_locations, collapse = "', '"), "') ORDER BY location;"))[,1]
-    precip_locations <- unique(precip_locations)
-  } else if (precip_locations[1] == "all") {
-    precip_locations <- DBI::dbGetQuery(con, "SELECT t.location FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name IN ('water level', 'water flow') AND t.category = 'continuous' ORDER BY location;")[,1]
-    precip_locations <- unique(precip_locations)
+  
+  if (!is.null(precip_locations)) {
+    if (precip_locations[1] == "default") {
+      precip_locations <- c("08AA003", "08AA010", "08AB001", "09AA001", "09AA004", "09AA013", "09AB001", "09AB010", "09AC001", "09AE002", "09AH001", "09AH004", "09BC001", "09BC002", "09CA002", "09DC005", "09DC006", "09EA003", "09EB001", "09FC001", "09FD002", "10AA001", "10AD002", "10MA002", "10BE001")
+      precip_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name IN ('water level', 'water flow') AND t.category = 'continuous' AND t.location IN ('", paste(precip_locations, collapse = "', '"), "') ORDER BY location;"))[,1]
+      precip_locations <- unique(precip_locations)
+    } else if (precip_locations[1] == "all") {
+      precip_locations <- DBI::dbGetQuery(con, "SELECT t.location FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name IN ('water level', 'water flow') AND t.category = 'continuous' ORDER BY location;")[,1]
+      precip_locations <- unique(precip_locations)
+    }
   }
+  
 
   if (save_path == "choose") {
     if (!interactive()) {
@@ -101,19 +112,20 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   }
 
   #Load yesterday's workbook -----------------
-  yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL)
+  yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL, yesterday_public_comments = NULL)
   if (!is.null(archive_path)) {
     tryCatch({
       yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
       for (i in names(yesterday_workbook)) {
-        if (i != "precipitation") {
+        if (!(i %in% c("precipitation", "general"))) {
           yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
           yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6)
-        } else {
+        } else if (i == "precipitation") {
           yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
           yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8)
+        } else if (i == "general") {
+          yesterday[["yesterday_public_comments"]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(12,13), cols = 2, colNames = FALSE)
         }
-
       }
       yesterday_comments <- TRUE
     }, error = function(e) {
@@ -137,10 +149,10 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       tryCatch({
         #TODO: Update code below to get polygons direct from the DB once basinPrecip is updated.
-        lastWeek <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastThree <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastTwo <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastOne <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastWeek <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastThree <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastTwo <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastOne <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE)
         next24 <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE)
         next48 <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE)
         yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
@@ -820,6 +832,8 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   generalCommentStyle2 <- openxlsx::createStyle(border = "TopBottomLeftRight", textDecoration = "bold", fgFill = "lightsteelblue", wrapText = TRUE)
   yesterdayGeneralCommentStyle <- openxlsx::createStyle(border = "TopBottomLeftRight", fgFill = "lightyellow", wrapText = TRUE, textDecoration = "italic")
   yesterdayGeneralCommentStyle2 <- openxlsx::createStyle(border = "TopBottomLeftRight", textDecoration = c("bold", "italic"), fgFill = "lightyellow", wrapText = TRUE)
+  publicCommentStyle <- openxlsx::createStyle(border = "TopBottomLeftRight", fgFill = "orange", wrapText = TRUE)
+  publicCommentStyle2 <- openxlsx::createStyle(border = "TopBottomLeftRight", textDecoration = "bold", fgFill = "orange", wrapText = TRUE)
   increasingStyle <- openxlsx::createStyle(fontColour = "red3", textDecoration = "bold")
   decreasingStyle <- openxlsx::createStyle(fontColour = "forestgreen", textDecoration = "bold")
   missingDataStyle <- openxlsx::createStyle(bgFill = "grey")
@@ -829,11 +843,86 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   percMeanComment <- openxlsx::createComment("Current level / hist. mean (excl. current yr). 100 = historic mean. Yellow: >125%, Red: >150%.", author = "Ghislain", visible = FALSE)
   percMeanAdjComment <- openxlsx::createComment("Adjusted to historic min due to arbitrary 0 point. 100 = historic mean, 0 = historic min. Yellow: >150%, Red: >200%.", author = "Ghislain", visible = FALSE)
 
+  
+  # Create the first tab with general internal + external comments
+  openxlsx::addWorksheet(wb, "comments")
+  openxlsx::writeData(wb, "comments", head, startCol = 1, startRow = 1, colNames = FALSE)
+  openxlsx::mergeCells(wb, "comments", cols = c(1:2), rows = 1)
+  openxlsx::mergeCells(wb, "comments", cols = c(3:4), rows = 1)
+  openxlsx::mergeCells(wb, "comments", cols = c(5:6), rows = 1)
+  openxlsx::mergeCells(wb, "comments", cols = c(7:9), rows = 1)
+  openxlsx::addStyle(wb, "comments", style = fodNameStyle, rows = 1, cols = c(5:6))
+  openxlsx::writeData(wb, "comments", NA, startCol = 1, startRow = 2, colNames = FALSE) # Empty row
+  
+  openxlsx::writeData(wb, "comments", "Yesterday's Public Current Conditions", startCol = 1, startRow = 3, colNames = FALSE)
+  openxlsx::writeData(wb, "comments", yesterday[["yesterday_public_comments"]][1,1], startCol = 2, startRow = 3, colNames = FALSE)
+  openxlsx::addStyle(wb, "comments", style = yesterdayGeneralCommentStyle2, cols = 1, rows = 3)
+  openxlsx::addStyle(wb, "comments", style = yesterdayGeneralCommentStyle, cols = c(2:7), rows = 3, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 3)
+  openxlsx::writeData(wb, "comments", "Yesterday's Public Forecast Conditions", startCol = 1, startRow = 4, colNames = FALSE)
+  openxlsx::writeData(wb, "comments", yesterday[["yesterday_public_comments"]][2,1], startCol = 2, startRow = 4, colNames = FALSE)
+  openxlsx::addStyle(wb, "comments", style = yesterdayGeneralCommentStyle2, cols = 1, rows = 4)
+  openxlsx::addStyle(wb, "comments", style = yesterdayGeneralCommentStyle, cols = c(2:7), rows = 4, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 4)
+  openxlsx::writeData(wb, "comments", NA, startCol = 1, startRow = 5, colNames = FALSE)
+  
+  openxlsx::writeData(wb, "comments", "Levels comment", startCol = 1, startRow = 6, colNames = FALSE)
+  openxlsx::writeFormula(wb, "comments", "=levels!B3", startCol = 2, startRow = 6)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 6)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 6, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 6)
+  openxlsx::writeData(wb, "comments", "Flows comment", startCol = 1, startRow = 7, colNames = FALSE)
+  openxlsx::writeFormula(wb, "comments", "=flows!B3", startCol = 2, startRow = 7)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 7)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 7, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 7)
+  openxlsx::writeData(wb, "comments", "Snow comment", startCol = 1, startRow = 8, colNames = FALSE)
+  openxlsx::writeFormula(wb, "comments", "=snow!B3", startCol = 2, startRow = 8)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 8)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 8, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 8)
+  openxlsx::writeData(wb, "comments", "Bridges comment", startCol = 1, startRow = 9, colNames = FALSE)
+  openxlsx::writeFormula(wb, "comments", "=bridges!B3", startCol = 2, startRow = 9)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 9)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 9, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 9)
+  if ("precipitation" %in% names(tables)) {
+    openxlsx::writeData(wb, "comments", "Precipitation comment", startCol = 1, startRow = 10, colNames = FALSE)
+    openxlsx::writeFormula(wb, "comments", "=precipitation!B3", startCol = 2, startRow = 10)
+    openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 10)
+    openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 10, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 10)
+    openxlsx::writeData(wb, "comments", NA, startCol = 1, startRow = 11, colNames = FALSE)
+    
+    openxlsx::writeData(wb, "comments", "Public Current Conditions", startCol = 1, startRow = 12, colNames = FALSE)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle2, cols = 1, rows = 12)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle, cols = c(2:7), rows = 12, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 12)
+    openxlsx::writeData(wb, "comments", "Public Forecast Conditions", startCol = 1, startRow = 13, colNames = FALSE)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle2, cols = 1, rows = 13)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle, cols = c(2:7), rows = 13, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 13)
+    openxlsx::setRowHeights(wb, "comments", rows = c(1:13), heights = c(15,15,55,55,15,35,35,35,35,35,15,55,55))
+  } else {
+    openxlsx::writeData(wb, "comments", "Public Current Conditions", startCol = 1, startRow = 11, colNames = FALSE)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle2, cols = 1, rows = 11)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle, cols = c(2:7), rows = 11, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 11)
+    openxlsx::writeData(wb, "comments", "Public Forecast Conditions", startCol = 1, startRow = 12, colNames = FALSE)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle2, cols = 1, rows = 12)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle, cols = c(2:7), rows = 12, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 12)
+    openxlsx::setRowHeights(wb, "comments", rows = c(1:12), heights = c(15,15,55,55,15,35,35,35,35,15,55,55))
+  }
+  
+  openxlsx::setColWidths(wb, "comments", cols = c(1:7), widths = c(15, 25, 14, 14, 14, 14, 100))
+  
   for (i in names(tables)[!(names(tables) %in% "precipitation")]) {
     openxlsx::addWorksheet(wb, i)
     #Create/format the header
     openxlsx::writeData(wb, i, head, startCol = 1, startRow = 1, colNames = FALSE)
     openxlsx::writeData(wb, i, NA, startCol = 1, startRow = 2, colNames = FALSE)
+    
     openxlsx::mergeCells(wb, i, cols = c(1:2), rows = 1)
     openxlsx::mergeCells(wb, i, cols = c(3:4), rows = 1)
     openxlsx::mergeCells(wb, i, cols = c(5:6), rows = 1)
