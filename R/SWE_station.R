@@ -73,19 +73,19 @@ SWE_station <-
                       INNER JOIN parameters ON timeseries.parameter = parameters.param_code
                       INNER JOIN datum_conversions ON locations.location_id = datum_conversions.location_id
                       WHERE (parameters.param_name = 'snow water equivalent' OR parameters.param_name = 'snow depth') AND
-                              locations.location IN ('", paste0(stations, collapse="', '"), "')")
+                              locations.location IN ('", paste0(stations, collapse = "', '"), "')")
       )
       
       DBI::dbDisconnect(con)
       # Rename columns:
       colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "note")
       # Change 'snow water equivalent' to SWE
-      Meas[Meas$parameter=='snow water equivalent',]$parameter <- "SWE"
+      Meas[Meas$parameter == 'snow water equivalent',]$parameter <- "SWE"
       # Where note = estimated, make estimate_flag = TRUE
       Meas$estimate_flag <- NA
       Meas[grep("estimated", Meas$note), ]$estimate_flag <- TRUE
       # Remove note
-      Meas <- subset(Meas, select = -c(note))
+      Meas <- Meas[, -c("note")]
       
       # Calculate density
       # Spread the data into separate columns for swe and snow_depth
@@ -108,11 +108,11 @@ SWE_station <-
                          means.survey_date, locations.elevation, means.estimate_flag
                          FROM means
                          INNER JOIN locations ON means.location = locations.location
-                         WHERE means.location IN ('", paste0(stations, collapse="', '"), "')"))
+                         WHERE means.location IN ('", paste0(stations, collapse = "', '"), "')"))
       DBI::dbDisconnect(con)
       
       # Calculate density
-      Meas$density <- round((Meas$swe / Meas$depth) *10, 2)
+      Meas$density <- round((Meas$swe / Meas$depth) * 10, 2)
       
       # Reformat table
       Meas <- reshape2::melt(Meas, id.vars = c("name", "location", "target_date", "survey_date", 
@@ -199,7 +199,7 @@ SWE_station <-
         density <- round(tab[tab$yr == year & tab$parameter == "density",]$value, 0)
         if (length(density) == 0) {density <- NA}
         # Get median % density not including year of interest
-        density_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "density",]$value, na.rm=TRUE), 0)
+        density_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "density",]$value, na.rm = TRUE), 0)
         if (length(density_med) == 0) {density_med <- NA}
         # Record flag
         if (is.na(swe) | is.na(swe_max)) {
@@ -216,7 +216,7 @@ SWE_station <-
           date_flag <- TRUE
         } else {date_flag <- FALSE}
         # estimate_flag
-        estimate_flag <- tab[tab$yr==year & tab$parameter=="SWE",]$estimate_flag
+        estimate_flag <- tab[tab$yr == year & tab$parameter == "SWE",]$estimate_flag
         if (length(estimate_flag) == 0) {
           estimate_flag <- FALSE
         } else if (is.na(estimate_flag)) {
@@ -290,7 +290,7 @@ SWE_station <-
     } else {tabl <- tabl}
     
     # remove active column
-    tabl <- subset(tabl, select = -active)
+    tabl <- tabl[, -c("active")]
     
     # Write csv if csv = TRUE
     if (csv == TRUE) {

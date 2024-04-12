@@ -17,7 +17,7 @@ ui <- function(request) {
     .logo-container img {
       height: 100px; /* Increase height as needed */
       width: auto; /* Maintain aspect ratio */
-      margin-top: -15px; /* Adjust if necessary */
+      margin-top: -22px; /* Adjust if necessary */
       position: absolute; /* Position logo absolutely within its container */
       top: 0; /* Align top edge with container */
       left: 0px; /* Maintain some spacing from the screen edge */
@@ -50,13 +50,13 @@ ui <- function(request) {
     }
     @font-face {
       font-family: 'Nunito Sans';
-      src: url('www/fonts/NunitoSans/NunitoSans-VariableFont_YTLC,opsz,wdth,wght.woff2') format('woff2-variations');
+      src: url('www/fonts/NunitoSans/NunitoSans-Variable_YTLC.woff2') format('woff2-variations');
       font-weight: 100 900;
       font-style: normal;
     }
     @font-face {
       font-family: 'Nunito Sans';
-      src: url('www/fonts/NunitoSans/NunitoSans-Italic-VariableFont_YTLC,opsz,wdth,wght.woff2') format('woff2-variations');
+      src: url('www/fonts/NunitoSans/NunitoSans-Italic-Variable_YTLC.woff2') format('woff2-variations');
       font-weight: 100 900;
       font-style: italic;
     }
@@ -77,12 +77,11 @@ ui <- function(request) {
   "))
     ),
     
-    # Language selector positioned above navbarPage but styled to appear integrated
-    fluidRow( class = "top-bar-container",
+    # Language selector and logo positioned above navbarPage
+    fluidRow(class = "top-bar-container",
               column(2,
                      div(class = "logo-container",
-                         # Replace the src attribute with the path to your logo image
-                         img(src = "imgs/YG_Aurora_resized.png", .noWS = "outside", alt = "Your Logo")),
+                         htmltools::img(src = "imgs/YG_Aurora_resized.png", .noWS = "outside", alt = "Aurora")),
                      class = "left-aligned-logo"),
               column(2, offset = 9, 
                      div(class = "lang-select-container",
@@ -100,7 +99,13 @@ ui <- function(request) {
                tabPanel(title = uiOutput("map_title"), value = "map", 
                         mapUI("map")),
                tabPanel(title = uiOutput("data_title"), value = "data",
-                        dataUI("data"))
+                        dataUI("data")),
+               tabPanel(title = uiOutput("plot_title"), value = "plot",
+                        plotUI("plot")),
+               tabPanel(title = uiOutput("img_title"), value = "img",
+                        imgUI("img")),
+               tabPanel(title = uiOutput("doc_title"), value = "doc",
+                        docUI("doc")),
                
     ),
     tags$a(id = "feedback_btn", href = "mailto:waterlevels@yukon.ca?subject=Placeholder&body=Placeholder", 
@@ -125,7 +130,7 @@ ui <- function(request) {
     }
     #feedback_btn:hover {
       background-color: #0056b3; /* Darker on hover */
-    }
-  "))
+    }"
+    ))
   )
 }

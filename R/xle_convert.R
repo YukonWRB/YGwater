@@ -18,21 +18,21 @@ xle_convert <- function(xle_file = "choose",
                         location,
                         save_path = "choose"){
 
+  rlang::check_installed("fuzzyjoin", reason = "necessary for approximate string matching in this function")
 
-
-  if (xle_file == "choose"){
+  if (xle_file == "choose") {
     message("Select the path to the logger file.")
-    xle_file <- as.character(utils::choose.files(caption="Select logger file"))
+    xle_file <- as.character(utils::choose.files(caption = "Select logger file"))
   }
-  if (save_path == "choose"){
+  if (save_path == "choose") {
     message("Select the path to the folder where you want this data saved.")
-    save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+    save_path <- as.character(utils::choose.dir(caption = "Select Save Folder"))
   }
 
 
   # NAME CHECK AND CORRECTION AGAINST MASTER SPREADSHEET
   # The user could have specified a YOWN-xxxx code, a location name, or both. First check for a YOWN code, then the location name.
-  if (grepl("YOWN", location)){
+  if (grepl("YOWN", location)) {
     user_code <- substr(sub(".*YOWN-", "", location), 1, 5) #Gets the 5 characters after YOWN-
     user_code <- sub("_", "", user_code) #removes characters that can't indicate D or S
     user_code <- sub("-", "", user_code)
@@ -46,7 +46,7 @@ xle_convert <- function(xle_file = "choose",
   }
 
   user_name <- stringr::str_remove(location, user_code) #Subtract the YOWN code from the user-specified location srting
-  if (nchar(user_name) == 0){ #if there is nothing other than a YOWN code, user_name is "no match"
+  if (nchar(user_name) == 0) { #if there is nothing other than a YOWN code, user_name is "no match"
     user_name <- "no match"
   }
   # Read in master sheet
@@ -62,7 +62,7 @@ xle_convert <- function(xle_file = "choose",
   }
 
   # Now correct_name is a list (with 0, 1, or more elements) which corresponds to the different entries in the master spreadsheet that resembled the location you inputted. Here, either select the position of the element in correct_name that matches with the location you desire, or take this time to input the correct location (format: YOWN-XXXX STATIONNAME).
-  if (length(possible_names) > 1){
+  if (length(possible_names) > 1) {
     message("Stations in the YOWN Master sheet that matched your input:")
     for (i in 1:length(possible_names)) {
       cat("Position ", i, " :", possible_names[i], "\n")
@@ -84,14 +84,14 @@ xle_convert <- function(xle_file = "choose",
       location <- choice
       message("New name has been inputted by user")
     }
-  } else if (length(possible_names) == 0){
+  } else if (length(possible_names) == 0) {
     stop("It was impossible to find a match for any YOWN wells using the YOWN codes or well names in the YOWN master spreadsheet. Please correct the location you specified or ammend the YOWN master sheet.")
   }
 
   # CONVERT XLE TO XML
   # Encoding of .xle files are either UTF-8 or Windows-1252 (Where Windows-1252 is the same as ANSI)
   tryCatch( {result <- XML::xmlParse(file = xle_file, encoding = "UTF-8") },
-            error=function(e) {suppressWarnings(rm(result))})
+            error = function(e) {suppressWarnings(rm(result))})
   if (!exists("result")) {# If UTF-8 encoding works, running the ANSI encoding will give bad output. Only try ANSI encoding if UTF-8 cannot be applied. Note that ANSI encoding still yields ÂµS/cm rather than µS/cm
     tryCatch( {result <- XML::xmlParse(file = xle_file, encoding = "Windows-1252") },
               error = function(e) {stop("Encoding not Windows-1252/ANSI or UTF-8 and this script will not work.")})

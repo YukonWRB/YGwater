@@ -56,6 +56,7 @@ snowBulletin <-
 
     # Make sure knitr is installed
     rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
+    rlang::check_installed("HydroMetDB", reason = "necessary to synchronize data with source.")
 
     ## Synchronize time series of interest
     # Check for credentials with read/write authority

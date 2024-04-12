@@ -1,7 +1,7 @@
 Package: YGwater
 Title: Utility functions for the Yukon Water Science and Stewardship
     Branch
-Version: 1.1.5
+Version: 1.1.6
 Authors@R: c(
     person("Ghislain", "de Laplante", , "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -23,7 +23,6 @@ Imports:
     DBI,
     dplyr,
     fasstr,
-    fuzzyjoin,
     ggnewscale,
     ggplot2,
     graphics,
@@ -36,7 +35,6 @@ Imports:
     lubridate,
     magrittr,
     methods,
-    odbc,
     openxlsx,
     plyr,
     remotes,
@@ -44,24 +42,23 @@ Imports:
     rlang,
     rmarkdown,
     RPostgres,
-    RSQLite,
     rstudioapi,
     rvest,
     scales,
     sf,
-    shinyalert,
     stats,
     stringr,
     terra,
     tidyr,
     tidyselect,
-    trend,
     utils,
     XML,
     xml2,
     zoo
-Suggests: 
-    gmailr,
+Suggests:
+    trend,
+    HydroMetDB,
+    odbc,
     imager,
     knitr,
     plotly,
@@ -72,6 +69,7 @@ Suggests:
     R.utils,
     shiny,
     shinyjs,
+    shinyalert,
     shinythemes,
     DT,
     shinyWidgets,
@@ -84,6 +82,7 @@ VignetteBuilder:
     knitr
 Remotes:
     github::ropensci/weathercan
+    github::YukonWRB/HydroMetDB
 Config/testthat/edition: 3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
