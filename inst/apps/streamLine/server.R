@@ -55,23 +55,34 @@ console.log(language);")
     newLang <- input$langSelect
     session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(newLang == "Français", "fr", "en")))  # Updates the language in the web page html head.
     output$home_title <- renderText({
-     translations[translations$id == "home", ..newLang][[1]]
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[translations$id == "home", ..newLang][[1]],
+                  '</div>'))
     })
     output$map_title <- renderText({
-      translations[translations$id == "map_view_title", ..newLang][[1]]
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[translations$id == "map_view_title", ..newLang][[1]],
+                  '</div>'))
     })
     output$data_title <- renderText({
-     translations[translations$id == "data_view_title", ..newLang][[1]]
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[translations$id == "data_view_title", ..newLang][[1]],
+                  '</div>'))
     })
     output$plot_title <- renderText({
-      translations[translations$id == "plot_view_title", ..newLang][[1]]
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[translations$id == "plot_view_title", ..newLang][[1]],
+                  '</div>'))
     })
     output$img_title <- renderText({
-      translations[translations$id == "img_view_title", ..newLang][[1]]
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[translations$id == "img_view_title", ..newLang][[1]],
+                  '</div>'))
     })
     output$doc_title <- renderText({
-      translations[translations$id == "doc_view_title", ..newLang][[1]]
-    })
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[translations$id == "doc_view_title", ..newLang][[1]],
+                  '</div>'))    })
     
     # Update the mailto link with the correct language
     subject <- translations[translations$id == "feedback", ..newLang][[1]]
@@ -175,5 +186,5 @@ console.log(language);")
     }
     # Update last working tab on successful tab switch
     lastWorkingTab(input$navbar)
-  }, ignoreNULL = TRUE, ignoreInit = TRUE)
+  }, ignoreNULL = TRUE)
 }

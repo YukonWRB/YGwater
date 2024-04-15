@@ -11,11 +11,13 @@ mapUI <- function(id) {
         ))
     ),
     tags$script(
-      HTML(
-        "$(function () { 
-        $('[data-toggle=tooltip]').tooltip();   
-      });"
-      )
+      HTML("
+            Shiny.addCustomMessageHandler('update-tooltip', function(message) {
+                var selector = '#' + message.id;
+                $(selector).attr('title', message.title)
+                .tooltip('fixTitle').tooltip('hide');
+            });
+        ")
     ),
     leaflet::leafletOutput(ns("map"), height = '80vh'),
     absolutePanel(id = ns("controls"), class = "panel panel-default", fixed = TRUE,
@@ -56,32 +58,14 @@ map <- function(id, con, language) {
     projects <- DBI::dbGetQuery(con, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);")
     networks <-  DBI::dbGetQuery(con, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);")
     
-    # Lock/unlock multiple selection based on user's first choice ################
-    # Javascript code to lock/unlock selectize inputs depending on selection of "All"
-    resetAll <- "
-      var selectize = $('#paramFlt')[0].selectize;
-      if ($.inArray('All', selectize.items) !== -1) {
-        selectize.clear(true);  // Clear selections without triggering change event
-        selectize.addItem('All', true);  // Add 'All' without triggering change event
-        selectize.lock();  // Lock the control to prevent further selections
-      } else {
-        selectize.unlock();  // Unlock the control to allow selections
-      }
-    "
-    # function to observe changes and update inputs
+    # Adjust multiple selection based on if 'All' is selected ################
     observeFilterInput <- function(inputId) {
       observeEvent(input[[inputId]], {
         # Check if 'All' is selected and adjust accordingly
-        if ("All" %in% input[[inputId]]) {
-          if (length(input[[inputId]]) == 1) {
-            shinyjs::runjs(resetAll)
-          } else {
-            updateSelectizeInput(session, inputId, selected = "All")
-            shinyjs::runjs(resetAll)
+          if (length(input[[inputId]]) > 1) {
+            if ("All" %in% input[[inputId]]) {
+              updateSelectizeInput(session, inputId, selected = "All")
           }
-        } else {
-          # If 'All' is not selected ensure it's unlocked
-          shinyjs::runjs(sprintf("$('#%s')[0].selectize.unlock();", inputId))
         }
       })
     }
@@ -138,8 +122,9 @@ map <- function(id, con, language) {
       
       # Update the tooltip's text
       tooltipText <- translations[translations$id == "map_tooltip", ..lang][[1]]
-      runjs(sprintf('$("#%s").attr("data-original-title", "%s").tooltip("dispose").tooltip();', ns("infoIcon"), tooltipText))
+      session$sendCustomMessage(type = 'update-tooltip', message = list(id = ns("infoIcon"), title = tooltipText))
       
+      #
       # Update selectizeInputs
       updateSelectizeInput(session, 
                            "typeFlt",

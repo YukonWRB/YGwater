@@ -1,17 +1,21 @@
 #' Tabular output of hydrometric data
 #'
+#' @description
+#' lifeCycle::badge("stable")
+#' 
 #' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect by default and MUST connect to a database created and maintained by the package HydroMetDB.
+#' 
 #' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::getNewContinuous first.
 #'
-#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
+#' @param con A connection to the database. Default uses function [hydrometConnect()].
 #' @param level_locations List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.
 #' @param flow_locations List of flow locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory. "all" fetches all flow reporting locations in the DB. NULL will not create the table.
 #' @param snow_locations List of snow pillow locations to include in the report, as a character vector. "default" includes all of the WRB snow pillows as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
 #' @param bridge_locations List of bridge freeboard radar locations to include in the report, as a character vector. "default" includes all of the radars as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
 #' @param precip_locations List of flow/level locations for which to report precipitation. "default" is a pre-determined list of locations, "all" is all locations for which there is a drainage polygon (which may be more or less than the number of stations reporting level or flow information). NULL will not create the table. WARNING: this portion of the script is slow. Setting this parameter to "all" could take about an hour to get all information together.
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
-#' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
-#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
+#' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
+#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose'.
 #'
 #' @return An Excel workbook containing the report with one tab per timeseries type.
 #' @export
@@ -23,50 +27,61 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
 
   on.exit(DBI::dbDisconnect(con))
 
-  if (level_locations[1] == "default") {
-    level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
-    level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
-  } else if (level_locations[1] == "all") {
-    level_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' ORDER BY location;")
-  } else {
-    level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
+  if (!is.null(level_locations)) {
+    if (level_locations[1] == "default") {
+      level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
+      level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
+    } else if (level_locations[1] == "all") {
+      level_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' ORDER BY location;")
+    } else {
+      level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water level' AND t.category = 'continuous' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
+    }
   }
 
-  if (flow_locations[1] == "default") {
-    flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
-    flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
-  } else if (flow_locations[1] == "all") {
-    flow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' ORDER BY location;")
-  } else {
-    flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
+  if (!is.null(flow_locations)) {
+    if (flow_locations[1] == "default") {
+      flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
+      flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
+    } else if (flow_locations[1] == "all") {
+      flow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' ORDER BY location;")
+    } else {
+      flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'water flow' AND t.category = 'continuous' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
+    }
   }
 
-  if (snow_locations[1] == "default") {
-    snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
-    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
-  } else if (snow_locations[1] == "all") {
-    snow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' ORDER BY location;")
-  } else {
-    snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+  if (!is.null(snow_locations)) {
+    if (snow_locations[1] == "default") {
+      snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
+      snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+    } else if (snow_locations[1] == "all") {
+      snow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' ORDER BY location;")
+    } else {
+      snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+    }
   }
-
-  if (bridge_locations[1] == "default") {
-    bridge_locations <- c("09AH005", "29AB010", "29AB011", "29AE007", "29AH001")
-    bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' AND t.location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
-  } else if (bridge_locations[1] == "all") {
-    bridge_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' ORDER BY location;")
-  } else {
-    bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' AND t.location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
+  
+  if (!is.null(bridge_locations)) {
+    if (bridge_locations[1] == "default") {
+      bridge_locations <- c("09AH005", "29AB010", "29AB011", "29AE007", "29AH001")
+      bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' AND t.location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
+    } else if (bridge_locations[1] == "all") {
+      bridge_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' ORDER BY location;")
+    } else {
+      bridge_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name = 'distance' AND t.category = 'continuous' AND t.location IN ('", paste(bridge_locations, collapse = "', '"), "') ORDER BY location;"))
+    }
   }
-
-  if (precip_locations[1] == "default") {
-    precip_locations <- c("08AA003", "08AA010", "08AB001", "09AA001", "09AA004", "09AA013", "09AB001", "09AB010", "09AC001", "09AE002", "09AH001", "09AH004", "09BC001", "09BC002", "09CA002", "09DC005", "09DC006", "09EA003", "09EB001", "09FC001", "09FD002", "10AA001", "10AD002", "10MA002", "10BE001")
-    precip_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name IN ('water level', 'water flow') AND t.category = 'continuous' AND t.location IN ('", paste(precip_locations, collapse = "', '"), "') ORDER BY location;"))[,1]
-    precip_locations <- unique(precip_locations)
-  } else if (precip_locations[1] == "all") {
-    precip_locations <- DBI::dbGetQuery(con, "SELECT t.location FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name IN ('water level', 'water flow') AND t.category = 'continuous' ORDER BY location;")[,1]
-    precip_locations <- unique(precip_locations)
+  
+  if (!is.null(precip_locations)) {
+    if (precip_locations[1] == "default") {
+      precip_locations <- c("08AA003", "08AA010", "08AB001", "09AA001", "09AA004", "09AA013", "09AB001", "09AB010", "09AC001", "09AE002", "09AH001", "09AH004", "09BC001", "09BC002", "09CA002", "09DC005", "09DC006", "09EA003", "09EB001", "09FC001", "09FD002", "10AA001", "10AD002", "10MA002", "10BE001")
+      precip_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name IN ('water level', 'water flow') AND t.category = 'continuous' AND t.location IN ('", paste(precip_locations, collapse = "', '"), "') ORDER BY location;"))[,1]
+      precip_locations <- unique(precip_locations)
+    } else if (precip_locations[1] == "all") {
+      precip_locations <- DBI::dbGetQuery(con, "SELECT t.location FROM timeseries AS t JOIN parameter AS p ON t.parameter = p.param_code WHERE p.param_name IN ('water level', 'water flow') AND t.category = 'continuous' ORDER BY location;")[,1]
+      precip_locations <- unique(precip_locations)
+    }
   }
+  
 
   if (save_path == "choose") {
     if (!interactive()) {
@@ -101,19 +116,20 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   }
 
   #Load yesterday's workbook -----------------
-  yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL)
+  yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL, yesterday_public_comments = NULL)
   if (!is.null(archive_path)) {
     tryCatch({
       yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
       for (i in names(yesterday_workbook)) {
-        if (i != "precipitation") {
+        if (!(i %in% c("precipitation", "general"))) {
           yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
           yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6)
-        } else {
+        } else if (i == "precipitation") {
           yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
           yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8)
+        } else if (i == "general") {
+          yesterday[["yesterday_public_comments"]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(12,13), cols = 2, colNames = FALSE)
         }
-
       }
       yesterday_comments <- TRUE
     }, error = function(e) {
@@ -137,10 +153,10 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       tryCatch({
         #TODO: Update code below to get polygons direct from the DB once basinPrecip is updated.
-        lastWeek <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastThree <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastTwo <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastOne <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time()-60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastWeek <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastThree <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastTwo <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)
+        lastOne <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE)
         next24 <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE)
         next48 <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE)
         yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
@@ -206,16 +222,16 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     for (i in 1:nrow(flow_locations)) {
       daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         flow_daily[[flow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         flow_rt[[flow_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) >0) {
+      if (nrow(rt) > 0 | nrow(daily) > 0) {
         names_flow[flow_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", flow_locations[i, "location"], "'"))))
       }
     }
@@ -227,16 +243,16 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     for (i in 1:nrow(snow_locations)) {
       daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         snow_daily[[snow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         snow_rt[[snow_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) >0) {
+      if (nrow(rt) > 0 | nrow(daily) > 0) {
         names_snow[snow_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", snow_locations[i, "location"], "'"))))
       }
     }
@@ -248,16 +264,16 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     for (i in 1:nrow(bridge_locations)) {
       daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         bridges_daily[[bridge_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         bridges_rt[[bridge_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) >0) {
+      if (nrow(rt) > 0 | nrow(daily) > 0) {
         names_bridges[bridge_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", bridge_locations[i, "location"], "'"))))
       }
     }
@@ -282,7 +298,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       if (is.na(week)) { #expand the range if no data within the 2 hour timespan
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
-      yesterday_comment_levels <- if(yesterday_comments) yesterday$yesterday_locs$levels[yesterday$yesterday_locs$levels$Location == i, "Location.specific.comments"] else NA
+      yesterday_comment_levels <- if (yesterday_comments) yesterday$yesterday_locs$levels[yesterday$yesterday_locs$levels$Location == i, "Location.specific.comments"] else NA
 
       if (past <= 7) {
         levels <- rbind(levels,
@@ -549,7 +565,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       if (is.na(week)) { #expand the range if no data within the 2 hour timespan
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
-      yesterday_comment_snow <- if(yesterday_comments) yesterday$yesterday_locs$snow[yesterday$yesterday_locs$snow$Location == i, "Location.specific.comments"] else NA
+      yesterday_comment_snow <- if (yesterday_comments) yesterday$yesterday_locs$snow[yesterday$yesterday_locs$snow$Location == i, "Location.specific.comments"] else NA
 
       if (past <= 7) {
         snow <- rbind(snow,
@@ -666,7 +682,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     tables$snow <- snow
   }
 
-  if (length(bridges_rt) >0) { #generate bridges table
+  if (length(bridges_rt) > 0) { #generate bridges table
     bridges <- data.frame()
     for (i in names(bridges_rt)) {
       rt <- bridges_rt[[i]]
@@ -682,7 +698,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       if (is.na(week)) { #expand the range if no data within the 2 hour timespan
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
-      yesterday_comment_bridges <- if(yesterday_comments) yesterday$yesterday_locs$bridges[yesterday$yesterday_locs$bridges$Location == i, "Location.specific.comments"] else NA
+      yesterday_comment_bridges <- if (yesterday_comments) yesterday$yesterday_locs$bridges[yesterday$yesterday_locs$bridges$Location == i, "Location.specific.comments"] else NA
 
 
       if (past <= 7) {
@@ -820,6 +836,8 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   generalCommentStyle2 <- openxlsx::createStyle(border = "TopBottomLeftRight", textDecoration = "bold", fgFill = "lightsteelblue", wrapText = TRUE)
   yesterdayGeneralCommentStyle <- openxlsx::createStyle(border = "TopBottomLeftRight", fgFill = "lightyellow", wrapText = TRUE, textDecoration = "italic")
   yesterdayGeneralCommentStyle2 <- openxlsx::createStyle(border = "TopBottomLeftRight", textDecoration = c("bold", "italic"), fgFill = "lightyellow", wrapText = TRUE)
+  publicCommentStyle <- openxlsx::createStyle(border = "TopBottomLeftRight", fgFill = "orange", wrapText = TRUE)
+  publicCommentStyle2 <- openxlsx::createStyle(border = "TopBottomLeftRight", textDecoration = "bold", fgFill = "orange", wrapText = TRUE)
   increasingStyle <- openxlsx::createStyle(fontColour = "red3", textDecoration = "bold")
   decreasingStyle <- openxlsx::createStyle(fontColour = "forestgreen", textDecoration = "bold")
   missingDataStyle <- openxlsx::createStyle(bgFill = "grey")
@@ -829,11 +847,86 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   percMeanComment <- openxlsx::createComment("Current level / hist. mean (excl. current yr). 100 = historic mean. Yellow: >125%, Red: >150%.", author = "Ghislain", visible = FALSE)
   percMeanAdjComment <- openxlsx::createComment("Adjusted to historic min due to arbitrary 0 point. 100 = historic mean, 0 = historic min. Yellow: >150%, Red: >200%.", author = "Ghislain", visible = FALSE)
 
+  
+  # Create the first tab with general internal + external comments
+  openxlsx::addWorksheet(wb, "comments")
+  openxlsx::writeData(wb, "comments", head, startCol = 1, startRow = 1, colNames = FALSE)
+  openxlsx::mergeCells(wb, "comments", cols = c(1:2), rows = 1)
+  openxlsx::mergeCells(wb, "comments", cols = c(3:4), rows = 1)
+  openxlsx::mergeCells(wb, "comments", cols = c(5:6), rows = 1)
+  openxlsx::mergeCells(wb, "comments", cols = c(7:9), rows = 1)
+  openxlsx::addStyle(wb, "comments", style = fodNameStyle, rows = 1, cols = c(5:6))
+  openxlsx::writeData(wb, "comments", NA, startCol = 1, startRow = 2, colNames = FALSE) # Empty row
+  
+  openxlsx::writeData(wb, "comments", "Yesterday's Public Current Conditions", startCol = 1, startRow = 3, colNames = FALSE)
+  openxlsx::writeData(wb, "comments", yesterday[["yesterday_public_comments"]][1,1], startCol = 2, startRow = 3, colNames = FALSE)
+  openxlsx::addStyle(wb, "comments", style = yesterdayGeneralCommentStyle2, cols = 1, rows = 3)
+  openxlsx::addStyle(wb, "comments", style = yesterdayGeneralCommentStyle, cols = c(2:7), rows = 3, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 3)
+  openxlsx::writeData(wb, "comments", "Yesterday's Public Forecast Conditions", startCol = 1, startRow = 4, colNames = FALSE)
+  openxlsx::writeData(wb, "comments", yesterday[["yesterday_public_comments"]][2,1], startCol = 2, startRow = 4, colNames = FALSE)
+  openxlsx::addStyle(wb, "comments", style = yesterdayGeneralCommentStyle2, cols = 1, rows = 4)
+  openxlsx::addStyle(wb, "comments", style = yesterdayGeneralCommentStyle, cols = c(2:7), rows = 4, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 4)
+  openxlsx::writeData(wb, "comments", NA, startCol = 1, startRow = 5, colNames = FALSE)
+  
+  openxlsx::writeData(wb, "comments", "Levels comment", startCol = 1, startRow = 6, colNames = FALSE)
+  openxlsx::writeFormula(wb, "comments", "=levels!B3", startCol = 2, startRow = 6)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 6)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 6, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 6)
+  openxlsx::writeData(wb, "comments", "Flows comment", startCol = 1, startRow = 7, colNames = FALSE)
+  openxlsx::writeFormula(wb, "comments", "=flows!B3", startCol = 2, startRow = 7)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 7)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 7, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 7)
+  openxlsx::writeData(wb, "comments", "Snow comment", startCol = 1, startRow = 8, colNames = FALSE)
+  openxlsx::writeFormula(wb, "comments", "=snow!B3", startCol = 2, startRow = 8)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 8)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 8, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 8)
+  openxlsx::writeData(wb, "comments", "Bridges comment", startCol = 1, startRow = 9, colNames = FALSE)
+  openxlsx::writeFormula(wb, "comments", "=bridges!B3", startCol = 2, startRow = 9)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 9)
+  openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 9, gridExpand = TRUE)
+  openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 9)
+  if ("precipitation" %in% names(tables)) {
+    openxlsx::writeData(wb, "comments", "Precipitation comment", startCol = 1, startRow = 10, colNames = FALSE)
+    openxlsx::writeFormula(wb, "comments", "=precipitation!B3", startCol = 2, startRow = 10)
+    openxlsx::addStyle(wb, "comments", style = generalCommentStyle2, cols = 1, rows = 10)
+    openxlsx::addStyle(wb, "comments", style = generalCommentStyle, cols = c(2:7), rows = 10, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 10)
+    openxlsx::writeData(wb, "comments", NA, startCol = 1, startRow = 11, colNames = FALSE)
+    
+    openxlsx::writeData(wb, "comments", "Public Current Conditions", startCol = 1, startRow = 12, colNames = FALSE)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle2, cols = 1, rows = 12)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle, cols = c(2:7), rows = 12, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 12)
+    openxlsx::writeData(wb, "comments", "Public Forecast Conditions", startCol = 1, startRow = 13, colNames = FALSE)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle2, cols = 1, rows = 13)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle, cols = c(2:7), rows = 13, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 13)
+    openxlsx::setRowHeights(wb, "comments", rows = c(1:13), heights = c(15,15,55,55,15,35,35,35,35,35,15,55,55))
+  } else {
+    openxlsx::writeData(wb, "comments", "Public Current Conditions", startCol = 1, startRow = 11, colNames = FALSE)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle2, cols = 1, rows = 11)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle, cols = c(2:7), rows = 11, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 11)
+    openxlsx::writeData(wb, "comments", "Public Forecast Conditions", startCol = 1, startRow = 12, colNames = FALSE)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle2, cols = 1, rows = 12)
+    openxlsx::addStyle(wb, "comments", style = publicCommentStyle, cols = c(2:7), rows = 12, gridExpand = TRUE)
+    openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 12)
+    openxlsx::setRowHeights(wb, "comments", rows = c(1:12), heights = c(15,15,55,55,15,35,35,35,35,15,55,55))
+  }
+  
+  openxlsx::setColWidths(wb, "comments", cols = c(1:7), widths = c(15, 25, 14, 14, 14, 14, 100))
+  
   for (i in names(tables)[!(names(tables) %in% "precipitation")]) {
     openxlsx::addWorksheet(wb, i)
     #Create/format the header
     openxlsx::writeData(wb, i, head, startCol = 1, startRow = 1, colNames = FALSE)
     openxlsx::writeData(wb, i, NA, startCol = 1, startRow = 2, colNames = FALSE)
+    
     openxlsx::mergeCells(wb, i, cols = c(1:2), rows = 1)
     openxlsx::mergeCells(wb, i, cols = c(3:4), rows = 1)
     openxlsx::mergeCells(wb, i, cols = c(5:6), rows = 1)
@@ -857,24 +950,24 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     openxlsx::freezePane(wb, sheet = i, firstActiveRow = 7, firstActiveCol = 3)
     openxlsx::setColWidths(wb, i, cols = if (past == 7) c(1:13) else if (past == 14) c(1:14) else if (past == 21) c(1:15) else if (past == 28) c(1:16), widths = if (past == 7) c(10, 30, 10, 10, 10, 12, 12, 12, 12, 15, 4, 60, 60) else if (past == 14) c(10, 30, 10, 10, 10, 12, 12, 12, 12, 12, 15, 4, 60, 60) else if (past == 21) c(10, 30, 10, 10, 10, 12, 12, 12, 12, 12, 12, 15, 4, 60, 60) else if (past == 28) c(10, 30, 10, 10, 10, 12, 12, 12, 12, 12, 12, 12, 15, 4, 60, 60))
     openxlsx::addStyle(wb, i, headStyle, rows = 6, cols = if (past == 7) c(1:13) else if (past == 14) c(1:14) else if (past == 21) c(1:15) else if (past == 28) c(1:16))
-    openxlsx::addStyle(wb, i, fodCommentStyle, rows = 1:nrow(tables[[i]])+6, cols = if (past == 7) 12 else if (past == 14) 13 else if (past == 21) 14 else if (past == 28) 15)
-    openxlsx::addStyle(wb, i, yesterdayFodCommentStyle, rows = 1:nrow(tables[[i]])+6, cols = if (past == 7) 13 else if (past == 14) 14 else if (past == 21) 15 else if (past == 28) 16)
+    openxlsx::addStyle(wb, i, fodCommentStyle, rows = 1:nrow(tables[[i]]) + 6, cols = if (past == 7) 12 else if (past == 14) 13 else if (past == 21) 14 else if (past == 28) 15)
+    openxlsx::addStyle(wb, i, yesterdayFodCommentStyle, rows = 1:nrow(tables[[i]]) + 6, cols = if (past == 7) 13 else if (past == 14) 14 else if (past == 21) 15 else if (past == 28) 16)
     #Add comments
     openxlsx::writeComment(wb, sheet = i, col = 4, row = 6, comment = percHistComment)
     openxlsx::writeComment(wb, sheet = i, col = 5, row = 6, comment = if (i == "levels") percMeanAdjComment else percMeanComment)
     openxlsx::writeComment(wb, sheet = i, col = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, row = 6, comment = delayComment)
     #Conditional format
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">75", cols = 4, rows = 1:nrow(tables[[i]])+6, style = colStyleYellow)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">100", cols = 4, rows = 1:nrow(tables[[i]])+6, style = colStyleRed)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "levels") ">150" else ">125", cols = 5, rows = 1:nrow(tables[[i]])+6, style = colStyleYellow)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "levels") ">200" else ">150", cols = 5, rows = 1:nrow(tables[[i]])+6, style = colStyleRed)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">75", cols = 4, rows = 1:nrow(tables[[i]]) + 6, style = colStyleYellow)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">100", cols = 4, rows = 1:nrow(tables[[i]]) + 6, style = colStyleRed)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "levels") ">150" else ">125", cols = 5, rows = 1:nrow(tables[[i]]) + 6, style = colStyleYellow)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "levels") ">200" else ">150", cols = 5, rows = 1:nrow(tables[[i]]) + 6, style = colStyleRed)
     #conditional format for age of last data
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">2", cols = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, rows = 1:nrow(tables[[i]])+6, style = colStyleYellow)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">4", cols = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, rows = 1:nrow(tables[[i]])+6, style = colStyleRed)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">2", cols = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, rows = 1:nrow(tables[[i]]) + 6, style = colStyleYellow)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">4", cols = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, rows = 1:nrow(tables[[i]]) + 6, style = colStyleRed)
     #Conditional format for increasing/decreasing (!bridge radars are inverse)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") "<0" else ">0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]])+6, style = increasingStyle)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") ">0" else "<0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]])+6, style = decreasingStyle)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = '=""', cols = if (past == 7) c(3, 6:9) else if (past == 14) c(3, 6:10) else if (past == 21) c(3, 6:11) else if (past == 28) c(3, 6:12), rows = 1:nrow(tables[[i]])+6, style = missingDataStyle)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") "<0" else ">0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]]) + 6, style = increasingStyle)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") ">0" else "<0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]]) + 6, style = decreasingStyle)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = '=""', cols = if (past == 7) c(3, 6:9) else if (past == 14) c(3, 6:10) else if (past == 21) c(3, 6:11) else if (past == 28) c(3, 6:12), rows = 1:nrow(tables[[i]]) + 6, style = missingDataStyle)
   }
 
   if ("precipitation" %in% names(tables)) {
@@ -908,8 +1001,8 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     openxlsx::freezePane(wb, sheet = "precipitation", firstActiveRow = 9, firstActiveCol = 3)
     openxlsx::setColWidths(wb, "precipitation", cols = c(1:10), widths = c(10, 30, 14, 14, 14, 14, 14, 14, 60, 60))
     openxlsx::addStyle(wb, "precipitation", headStyle, rows = 8, cols = c(1:10))
-    openxlsx::addStyle(wb, "precipitation", fodCommentStyle, rows = 1:nrow(tables[["precipitation"]])+8, cols = 9)
-    openxlsx::addStyle(wb, "precipitation", yesterdayFodCommentStyle, rows = 1:nrow(tables[["precipitation"]])+8, cols = 10)
+    openxlsx::addStyle(wb, "precipitation", fodCommentStyle, rows = 1:nrow(tables[["precipitation"]]) + 8, cols = 9)
+    openxlsx::addStyle(wb, "precipitation", yesterdayFodCommentStyle, rows = 1:nrow(tables[["precipitation"]]) + 8, cols = 10)
     #Conditional format
     precipYellowStyle <- openxlsx::createStyle(fontColour = "black", textDecoration = "bold", border = "TopBottomLeftRight", borderColour = "goldenrod1", borderStyle = "thick")
     precipRedStyle <- openxlsx::createStyle(fontColour = "black", textDecoration = "bold", border = "TopBottomLeftRight", borderColour = "red2", borderStyle = "thick")
