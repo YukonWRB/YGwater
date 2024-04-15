@@ -1,17 +1,21 @@
 #' Tabular output of hydrometric data
 #'
+#' @description
+#' lifeCycle::badge("stable")
+#' 
 #' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect by default and MUST connect to a database created and maintained by the package HydroMetDB.
+#' 
 #' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::getNewContinuous first.
 #'
-#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
+#' @param con A connection to the database. Default uses function [hydrometConnect()].
 #' @param level_locations List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.
 #' @param flow_locations List of flow locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory. "all" fetches all flow reporting locations in the DB. NULL will not create the table.
 #' @param snow_locations List of snow pillow locations to include in the report, as a character vector. "default" includes all of the WRB snow pillows as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
 #' @param bridge_locations List of bridge freeboard radar locations to include in the report, as a character vector. "default" includes all of the radars as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
 #' @param precip_locations List of flow/level locations for which to report precipitation. "default" is a pre-determined list of locations, "all" is all locations for which there is a drainage polygon (which may be more or less than the number of stations reporting level or flow information). NULL will not create the table. WARNING: this portion of the script is slow. Setting this parameter to "all" could take about an hour to get all information together.
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
-#' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
-#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
+#' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
+#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose'.
 #'
 #' @return An Excel workbook containing the report with one tab per timeseries type.
 #' @export
@@ -218,16 +222,16 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     for (i in 1:nrow(flow_locations)) {
       daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         flow_daily[[flow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         flow_rt[[flow_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) >0) {
+      if (nrow(rt) > 0 | nrow(daily) > 0) {
         names_flow[flow_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", flow_locations[i, "location"], "'"))))
       }
     }
@@ -239,16 +243,16 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     for (i in 1:nrow(snow_locations)) {
       daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         snow_daily[[snow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         snow_rt[[snow_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) >0) {
+      if (nrow(rt) > 0 | nrow(daily) > 0) {
         names_snow[snow_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", snow_locations[i, "location"], "'"))))
       }
     }
@@ -260,16 +264,16 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     for (i in 1:nrow(bridge_locations)) {
       daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date()-1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         bridges_daily[[bridge_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-(past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         bridges_rt[[bridge_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) >0) {
+      if (nrow(rt) > 0 | nrow(daily) > 0) {
         names_bridges[bridge_locations[i, "location"]] <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", bridge_locations[i, "location"], "'"))))
       }
     }
@@ -294,7 +298,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       if (is.na(week)) { #expand the range if no data within the 2 hour timespan
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
-      yesterday_comment_levels <- if(yesterday_comments) yesterday$yesterday_locs$levels[yesterday$yesterday_locs$levels$Location == i, "Location.specific.comments"] else NA
+      yesterday_comment_levels <- if (yesterday_comments) yesterday$yesterday_locs$levels[yesterday$yesterday_locs$levels$Location == i, "Location.specific.comments"] else NA
 
       if (past <= 7) {
         levels <- rbind(levels,
@@ -561,7 +565,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       if (is.na(week)) { #expand the range if no data within the 2 hour timespan
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
-      yesterday_comment_snow <- if(yesterday_comments) yesterday$yesterday_locs$snow[yesterday$yesterday_locs$snow$Location == i, "Location.specific.comments"] else NA
+      yesterday_comment_snow <- if (yesterday_comments) yesterday$yesterday_locs$snow[yesterday$yesterday_locs$snow$Location == i, "Location.specific.comments"] else NA
 
       if (past <= 7) {
         snow <- rbind(snow,
@@ -678,7 +682,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     tables$snow <- snow
   }
 
-  if (length(bridges_rt) >0) { #generate bridges table
+  if (length(bridges_rt) > 0) { #generate bridges table
     bridges <- data.frame()
     for (i in names(bridges_rt)) {
       rt <- bridges_rt[[i]]
@@ -694,7 +698,7 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       if (is.na(week)) { #expand the range if no data within the 2 hour timespan
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
-      yesterday_comment_bridges <- if(yesterday_comments) yesterday$yesterday_locs$bridges[yesterday$yesterday_locs$bridges$Location == i, "Location.specific.comments"] else NA
+      yesterday_comment_bridges <- if (yesterday_comments) yesterday$yesterday_locs$bridges[yesterday$yesterday_locs$bridges$Location == i, "Location.specific.comments"] else NA
 
 
       if (past <= 7) {
@@ -946,24 +950,24 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     openxlsx::freezePane(wb, sheet = i, firstActiveRow = 7, firstActiveCol = 3)
     openxlsx::setColWidths(wb, i, cols = if (past == 7) c(1:13) else if (past == 14) c(1:14) else if (past == 21) c(1:15) else if (past == 28) c(1:16), widths = if (past == 7) c(10, 30, 10, 10, 10, 12, 12, 12, 12, 15, 4, 60, 60) else if (past == 14) c(10, 30, 10, 10, 10, 12, 12, 12, 12, 12, 15, 4, 60, 60) else if (past == 21) c(10, 30, 10, 10, 10, 12, 12, 12, 12, 12, 12, 15, 4, 60, 60) else if (past == 28) c(10, 30, 10, 10, 10, 12, 12, 12, 12, 12, 12, 12, 15, 4, 60, 60))
     openxlsx::addStyle(wb, i, headStyle, rows = 6, cols = if (past == 7) c(1:13) else if (past == 14) c(1:14) else if (past == 21) c(1:15) else if (past == 28) c(1:16))
-    openxlsx::addStyle(wb, i, fodCommentStyle, rows = 1:nrow(tables[[i]])+6, cols = if (past == 7) 12 else if (past == 14) 13 else if (past == 21) 14 else if (past == 28) 15)
-    openxlsx::addStyle(wb, i, yesterdayFodCommentStyle, rows = 1:nrow(tables[[i]])+6, cols = if (past == 7) 13 else if (past == 14) 14 else if (past == 21) 15 else if (past == 28) 16)
+    openxlsx::addStyle(wb, i, fodCommentStyle, rows = 1:nrow(tables[[i]]) + 6, cols = if (past == 7) 12 else if (past == 14) 13 else if (past == 21) 14 else if (past == 28) 15)
+    openxlsx::addStyle(wb, i, yesterdayFodCommentStyle, rows = 1:nrow(tables[[i]]) + 6, cols = if (past == 7) 13 else if (past == 14) 14 else if (past == 21) 15 else if (past == 28) 16)
     #Add comments
     openxlsx::writeComment(wb, sheet = i, col = 4, row = 6, comment = percHistComment)
     openxlsx::writeComment(wb, sheet = i, col = 5, row = 6, comment = if (i == "levels") percMeanAdjComment else percMeanComment)
     openxlsx::writeComment(wb, sheet = i, col = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, row = 6, comment = delayComment)
     #Conditional format
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">75", cols = 4, rows = 1:nrow(tables[[i]])+6, style = colStyleYellow)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">100", cols = 4, rows = 1:nrow(tables[[i]])+6, style = colStyleRed)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "levels") ">150" else ">125", cols = 5, rows = 1:nrow(tables[[i]])+6, style = colStyleYellow)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "levels") ">200" else ">150", cols = 5, rows = 1:nrow(tables[[i]])+6, style = colStyleRed)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">75", cols = 4, rows = 1:nrow(tables[[i]]) + 6, style = colStyleYellow)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">100", cols = 4, rows = 1:nrow(tables[[i]]) + 6, style = colStyleRed)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "levels") ">150" else ">125", cols = 5, rows = 1:nrow(tables[[i]]) + 6, style = colStyleYellow)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "levels") ">200" else ">150", cols = 5, rows = 1:nrow(tables[[i]]) + 6, style = colStyleRed)
     #conditional format for age of last data
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">2", cols = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, rows = 1:nrow(tables[[i]])+6, style = colStyleYellow)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">4", cols = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, rows = 1:nrow(tables[[i]])+6, style = colStyleRed)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">2", cols = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, rows = 1:nrow(tables[[i]]) + 6, style = colStyleYellow)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = ">4", cols = if (past == 7) 11 else if (past == 14) 12 else if (past == 21) 13 else if (past == 28) 14, rows = 1:nrow(tables[[i]]) + 6, style = colStyleRed)
     #Conditional format for increasing/decreasing (!bridge radars are inverse)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") "<0" else ">0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]])+6, style = increasingStyle)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") ">0" else "<0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]])+6, style = decreasingStyle)
-    openxlsx::conditionalFormatting(wb, sheet = i, rule = '=""', cols = if (past == 7) c(3, 6:9) else if (past == 14) c(3, 6:10) else if (past == 21) c(3, 6:11) else if (past == 28) c(3, 6:12), rows = 1:nrow(tables[[i]])+6, style = missingDataStyle)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") "<0" else ">0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]]) + 6, style = increasingStyle)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") ">0" else "<0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]]) + 6, style = decreasingStyle)
+    openxlsx::conditionalFormatting(wb, sheet = i, rule = '=""', cols = if (past == 7) c(3, 6:9) else if (past == 14) c(3, 6:10) else if (past == 21) c(3, 6:11) else if (past == 28) c(3, 6:12), rows = 1:nrow(tables[[i]]) + 6, style = missingDataStyle)
   }
 
   if ("precipitation" %in% names(tables)) {
@@ -997,8 +1001,8 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     openxlsx::freezePane(wb, sheet = "precipitation", firstActiveRow = 9, firstActiveCol = 3)
     openxlsx::setColWidths(wb, "precipitation", cols = c(1:10), widths = c(10, 30, 14, 14, 14, 14, 14, 14, 60, 60))
     openxlsx::addStyle(wb, "precipitation", headStyle, rows = 8, cols = c(1:10))
-    openxlsx::addStyle(wb, "precipitation", fodCommentStyle, rows = 1:nrow(tables[["precipitation"]])+8, cols = 9)
-    openxlsx::addStyle(wb, "precipitation", yesterdayFodCommentStyle, rows = 1:nrow(tables[["precipitation"]])+8, cols = 10)
+    openxlsx::addStyle(wb, "precipitation", fodCommentStyle, rows = 1:nrow(tables[["precipitation"]]) + 8, cols = 9)
+    openxlsx::addStyle(wb, "precipitation", yesterdayFodCommentStyle, rows = 1:nrow(tables[["precipitation"]]) + 8, cols = 10)
     #Conditional format
     precipYellowStyle <- openxlsx::createStyle(fontColour = "black", textDecoration = "bold", border = "TopBottomLeftRight", borderColour = "goldenrod1", borderStyle = "thick")
     precipRedStyle <- openxlsx::createStyle(fontColour = "black", textDecoration = "bold", border = "TopBottomLeftRight", borderColour = "red2", borderStyle = "thick")
