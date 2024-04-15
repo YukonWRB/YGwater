@@ -56,28 +56,30 @@ Imports:
     xml2,
     zoo
 Suggests:
-    trend,
+    DT,
+    fuzzyjoin,
     HydroMetDB,
-    odbc,
     imager,
     knitr,
+    leaflet,
+    odbc,
+    officer,
     plotly,
     purrr,
-    leaflet,
-    reticulate,
-    withr,
     R.utils,
+    reticulate,
+    rpostgis,
+    trend,
     shiny,
-    shinyjs,
     shinyalert,
+    shinyjs,
     shinythemes,
-    DT,
     shinyWidgets,
     testthat (>= 3.0.0),
     tidyhydat,
     vdiffr,
     weathercan,
-    officer
+    withr
 VignetteBuilder: 
     knitr
 Remotes:
