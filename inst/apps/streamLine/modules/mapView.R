@@ -42,7 +42,7 @@ mapUI <- function(id) {
 }
 
 
-map <- function(id, con, language) {
+map <- function(id, con, language, restoring) {
   moduleServer(id, function(input, output, session) {
     
     setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout"))
@@ -124,7 +124,6 @@ map <- function(id, con, language) {
       tooltipText <- translations[translations$id == "map_tooltip", ..lang][[1]]
       session$sendCustomMessage(type = 'update-tooltip', message = list(id = ns("infoIcon"), title = tooltipText))
       
-      #
       # Update selectizeInputs
       updateSelectizeInput(session, 
                            "typeFlt",

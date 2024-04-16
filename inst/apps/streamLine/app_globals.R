@@ -8,7 +8,7 @@ source(system.file("apps/streamLine/modules/plotView.R", package = "YGwater"))
 source(system.file("apps/streamLine/modules/docView.R", package = "YGwater"))
 source(system.file("apps/streamLine/modules/imgView.R", package = "YGwater"))
 
-translations <- data.table::fread(system.file("apps/streamLine/translations.csv", package = "YGwater"), encoding = "UTF-8")
+translations <- data.table::setDT(openxlsx::read.xlsx(system.file("apps/streamLine/translations.xlsx", package = "YGwater"), sheet = 1))
 
 # Establish database connection
 if (!exists("pool")) {

@@ -18,6 +18,8 @@ streamLine <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
   rlang::check_installed("shinyjs", reason = "required to use streamLine application.")
   rlang::check_installed("shinythemes", reason = "required to use streamLine application.")
   rlang::check_installed("leaflet", reason = "required to use streamLine application.")
+  rlang::check_installed("pool", reason = "required to use streamLine application.")
+  rlang::check_installed("htmlwidgets", reason = "required to use streamLine application.")
   
   
   appDir <- system.file("apps/streamLine", package = "YGwater")

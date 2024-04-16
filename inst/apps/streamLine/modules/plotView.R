@@ -5,7 +5,7 @@ plotUI <- function(id) {
   )
 }
 
-plot <- function(id, con, language) {
+plot <- function(id, con, language, restoring) {
     moduleServer(id, function(input, output, session) {
       
       setBookmarkExclude(c())

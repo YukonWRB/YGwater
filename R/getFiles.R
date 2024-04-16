@@ -74,8 +74,6 @@ getDocument <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NUL
 
 getFile <- function(id, id_col, ext, table, con = hydrometConnect(silent = TRUE), save_dir = NULL, save_name = NULL) {
   
-  on.exit(DBI::dbDisconnect(con))
-  
   res <- DBI::dbGetQuery(con, paste0("SELECT * FROM ", table, " WHERE ", id_col, " = '", id, "';"))
   if (nrow(res) > 1) {
     warning("The id you specified returned more than one record. If you specified a save directory and name they will be ignored. You can save the results yourself using function writeBin() on the returned objects.")

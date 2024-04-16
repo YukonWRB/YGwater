@@ -12,8 +12,21 @@ server <- function(input, output, session) {
   onBookmarked(updateQueryString)
   
   isRestoring <- reactiveVal(FALSE)
+  isRestoring_home <- reactiveVal(FALSE)
+  isRestoring_map <- reactiveVal(FALSE)
+  isRestoring_data <- reactiveVal(FALSE)
+  isRestoring_plot <- reactiveVal(FALSE)
+  isRestoring_img <- reactiveVal(FALSE)
+  isRestoring_doc <- reactiveVal(FALSE)
+  
   onRestore(function(state) {
     isRestoring(TRUE)
+    isRestoring_home(TRUE)
+    isRestoring_map(TRUE)
+    isRestoring_data(TRUE)
+    isRestoring_plot(TRUE)
+    isRestoring_img(TRUE)
+    isRestoring_doc(TRUE)
   })
   
   # Language selection ########################################################
@@ -102,7 +115,7 @@ console.log(language);")
     newLang <- input$langSelect
     if (input$navbar == "home") {
       tryCatch({
-        home("home", language = languageSelection)
+        home("home", language = languageSelection, restoring = isRestoring_home)
       }, error = function(e) {
           showModal(modalDialog(
             title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
@@ -116,7 +129,7 @@ console.log(language);")
     }
     if (input$navbar == "map") {
       tryCatch({
-        map("map", con = pool, language = languageSelection)
+        map("map", con = pool, language = languageSelection, restoring = isRestoring_map)
         }, error = function(e) {
           showModal(modalDialog(
             title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
@@ -124,13 +137,12 @@ console.log(language);")
             easyClose = TRUE,
             footer = modalButton("Close")
           ))
-          # Optionally reset to a safe state or tab
           updateNavbarPage(session, "navbar", selected = lastWorkingTab())
         })
     }
     if (input$navbar == "data") {
       tryCatch({
-        data("data", con = pool, language = languageSelection)      
+        data("data", con = pool, language = languageSelection, restoring = isRestoring_data)      
         }, error = function(e) {
         showModal(modalDialog(
           title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
@@ -138,13 +150,12 @@ console.log(language);")
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
-        # Optionally reset to a safe state or tab
         updateNavbarPage(session, "navbar", selected = lastWorkingTab())
       })
     }
     if (input$navbar == "plot") {
       tryCatch({
-        plot("plot", con = pool, language = languageSelection)
+        plot("plot", con = pool, language = languageSelection, restoring = isRestoring_plot)
       }, error = function(e) {
           showModal(modalDialog(
             title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
@@ -152,13 +163,12 @@ console.log(language);")
             easyClose = TRUE,
             footer = modalButton("Close")
           ))
-          # Optionally reset to a safe state or tab
           updateNavbarPage(session, "navbar", selected = lastWorkingTab())
       })
     }
     if (input$navbar == "img") {
       tryCatch({
-        img("img", con = pool, language = languageSelection)
+        img("img", con = pool, language = languageSelection, restoring = isRestoring_img)
       }, error = function(e) {
         showModal(modalDialog(
           title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
@@ -166,13 +176,12 @@ console.log(language);")
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
-        # Optionally reset to a safe state or tab
         updateNavbarPage(session, "navbar", selected = lastWorkingTab())
       })
     }
     if (input$navbar == "doc") {
       tryCatch({
-        doc("doc", con = pool, language = languageSelection)
+        doc("doc", con = pool, language = languageSelection, restoring = isRestoring_doc)
         }, error = function(e) {
         showModal(modalDialog(
           title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
@@ -180,7 +189,6 @@ console.log(language);")
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
-        # Optionally reset to a safe state or tab
         updateNavbarPage(session, "navbar", selected = lastWorkingTab())
       })
     }
