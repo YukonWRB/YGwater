@@ -35,6 +35,8 @@ getRaster <- function() {
 
 getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, geom_type = NULL, return_cols = c("geom_id", "geom_type", "layer_name", "feature_name", "description"), table = "vectors", geom_col = "geom", con = hydrometConnect()) {
   
+  on.exit(DBI::dbDisconnect(con))
+  
   rlang::check_installed("rpostgis", reason = "required to use function getVector.")
   
   if (is.null(geom_id) & is.null(layer_name) & is.null(feature_name) & is.null(geom_type)) {
@@ -48,8 +50,7 @@ getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, ge
     }
   }
   
-  
-  #build the query
+  # build the query to see if data exists in the table
   query <- paste0("SELECT geom_id, layer_name, feature_name, geom_type FROM ", table, " WHERE")
   if (!is.null(geom_id)) {
     query <- paste0(query,  " geom_id IN (", paste(geom_id, collapse = ", "), ") AND")
@@ -76,8 +77,23 @@ getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, ge
     return(tbl)
   }
   
-  return <- rpostgis::pgGetGeom(con, query = paste0("SELECT  ", paste(return_cols, collapse = ", "), ", ", geom_col, " AS geom FROM ", table, " WHERE geom_id IN (", paste(tbl$geom_id, collapse = ", "), ");"))
-  return <- terra::vect(return)
+  subquery <- paste0("WHERE")
+  if (!is.null(geom_id)) {
+    subquery <- paste0(subquery,  " geom_id IN (", paste(geom_id, collapse = ", "), ") AND")
+  }
+  if (!is.null(layer_name)) {
+    subquery <- paste0(subquery,  " layer_name IN ('", paste(layer_name, collapse = "', '"), "') AND")
+  }
+  if (!is.null(feature_name)) {
+    subquery <- paste0(subquery,  " feature_name IN ('", paste(feature_name, collapse = "', '"), "') AND")
+  }
+  if (!is.null(geom_type)) {
+    subquery <- paste0(subquery,  " geom_type IN ('", paste(geom_type, collapse = "', '"), "') AND")
+  }
+  subquery <- gsub("\\s+AND$", "", subquery)
   
-  return(return)
+  res <- rpostgis::pgGetGeom(con, name = "vectors", geom = "geom", gid = "geom_id", other.cols = TRUE, clauses = subquery, returnclass = "terra")
+  res <- res[, -which(names(res) == "tgid")]
+  
+  return(res)
 }
