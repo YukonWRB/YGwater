@@ -30,5 +30,5 @@ streamLine <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
   }
   
   shiny::enableBookmarking(store = "url")
-  shiny::runApp(appDir, display.mode = "normal", host = host, port = port)
+  shiny::runApp(appDir, display.mode = "normal", host = host, port = port, launch.browser = TRUE, quiet = FALSE)
 }

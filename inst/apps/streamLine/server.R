@@ -1,6 +1,21 @@
+# StreamLine application main server
+
 server <- function(input, output, session) {
   
-  # Initial setup #
+  # Begin logging
+  log_event("INFO", "Session started")
+  onUnhandledError(function(err) {
+    # log the unhandled error
+    level <- if (inherits(err, "shiny.error.fatal")) "FATAL" else "ERROR"
+    log_event(level, conditionMessage(err))
+  })
+  
+  onStop(function() {
+    log_event("INFO", "Session ended")
+  })
+  
+  # Initial setup #############################################################
+  
   # Automatically update URL every time an input changes
   observe({
     reactiveValuesToList(input)
@@ -39,7 +54,6 @@ Shiny.onInputChange('userLang', language);
 console.log(language);")
     }
   })
-  
   
   # Some elements lack attributes that screen readers use to identify them. This adds an aria-label to the language selector.
   observe({

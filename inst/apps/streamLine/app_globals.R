@@ -22,3 +22,8 @@ if (!exists("pool")) {
   )
 }
 
+# Define a function for error logging
+log_event <- function(level, ...) {
+  ts <- strftime(Sys.time(), " [%F %T] ")
+  message(level, ts, ...)
+}

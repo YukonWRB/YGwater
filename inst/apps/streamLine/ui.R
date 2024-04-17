@@ -1,3 +1,5 @@
+# StreamLine application main UI
+
 ui <- function(request) {
   fluidPage(
     shinyjs::useShinyjs(),
