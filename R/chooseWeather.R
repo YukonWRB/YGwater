@@ -3,19 +3,21 @@
 #' @description
 #' `r lifecycle::badge('experimental')`
 #'
-#' Gives information on the coverage of chosen climate variables for chosen climate stations in proximity. Outputs station descriptions and plots to help with choosing the climate station(s) to use.
+#' Provides information on the coverage of chosen climate variables for chosen climate stations in proximity. Outputs station descriptions and plots to help you choose the most appropriate climate station(s) to use.
 #'
-#' chooses station based on given name, coordinates and period of interest, and displays in plot the availability of the months of interest for the variables of interest.
+#' chooses station based on given name, coordinates, and period of interest, and displays in a plot the availability of the months of interest for the variables of interest.
+#' 
+#' @seealso [getWeather()] to download climate data from ECCC (called by this function); [combineWeather()] to combine data from multiple stations.
 #'
 #'
 #' @param location A key word to search for station names. A location does not need to be given if coords are supplied.
 #' @param coords 	Numeric. A vector of length 2 with latitude and longitude of a place to match against.
-#' @param dist Numeric. Match all stations within this many kilometres of the coords.
+#' @param dist Numeric. Match all stations within this many kilometres of the `coords` argument. If `coords` is not given, this argument is ignored.
 #' @param interval The interval at which the climate data is aggregated by ECCC. Currently, only the 'day' and 'month' options are available, 'hour' could eventually be added.
 #' @param start The earliest year of data to be searched.
-#' @param end The latest year of data to be searched
-#' @param variable The variables of interest given in a character vector. The names must correspond to the variable names found in the downloaded csv files from ECCC, retrived using [getWeather()]. Common variables are 'mean_temp', 'snow_grnd', 'total_precip', 'total_rain', 'total_snow', 'spd_max_gust'...
-#' @param months The months of data to be searched. Given as a vector of number(s) from 1 to 12.
+#' @param end The latest year of data to be searched.
+#' @param variable The variables of interest given in a character vector. The names must correspond to the variable names found in the downloaded csv files from ECCC, retrieved using [getWeather()]. Common variables are 'mean_temp', 'snow_grnd', 'total_precip', 'total_rain', 'total_snow', 'spd_max_gust'...
+#' @param months The months of data to be searched, given as a numeric vector from 1 to 12.
 #' @param return_data Whether to return the data pulled from ECCC (TRUE) or not (FALSE). Data is returned as a list of dataframes, with one for each station.
 #'
 #' @return A table printed to the console describing the stations and a plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
@@ -43,6 +45,18 @@ chooseWeather <-
     # variable=c("mean_temp")
     # months=c('01', '02', '03', '04', '05', '06', '07', '08', '09', 10, 11, 12)
     # return_data = TRUE
+    
+    #initial checks
+    rlang::check_installed("remotes", reason = "to update dependencies for this function.")
+    if (!rlang::is_installed("weathercan")) { #This is here because getWeather is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
+      message("Installing dependency 'weathercan'...")
+      remotes::install_github("ropensci/weathercan")
+      if (rlang::is_installed("weathercan")) {
+        message("Package weathercan successfully installed.")
+      } else {
+        stop("Failed to install package weathercan. You could troubleshoot by running 'remotes::install_github('ropensci/weathercan')' by itself.")
+      }
+    }
 
     if (is.null(months)) {
       months <- c('01', '02', '03', '04', '05', '06', '07', '08', '09', 10, 11, 12)

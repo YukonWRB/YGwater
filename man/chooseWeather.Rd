@@ -21,17 +21,17 @@ chooseWeather(
 
 \item{coords}{Numeric. A vector of length 2 with latitude and longitude of a place to match against.}
 
-\item{dist}{Numeric. Match all stations within this many kilometres of the coords.}
+\item{dist}{Numeric. Match all stations within this many kilometres of the \code{coords} argument. If \code{coords} is not given, this argument is ignored.}
 
 \item{interval}{The interval at which the climate data is aggregated by ECCC. Currently, only the 'day' and 'month' options are available, 'hour' could eventually be added.}
 
 \item{start}{The earliest year of data to be searched.}
 
-\item{end}{The latest year of data to be searched}
+\item{end}{The latest year of data to be searched.}
 
-\item{variable}{The variables of interest given in a character vector. The names must correspond to the variable names found in the downloaded csv files from ECCC, retrived using \code{\link[=getWeather]{getWeather()}}. Common variables are 'mean_temp', 'snow_grnd', 'total_precip', 'total_rain', 'total_snow', 'spd_max_gust'...}
+\item{variable}{The variables of interest given in a character vector. The names must correspond to the variable names found in the downloaded csv files from ECCC, retrieved using \code{\link[=getWeather]{getWeather()}}. Common variables are 'mean_temp', 'snow_grnd', 'total_precip', 'total_rain', 'total_snow', 'spd_max_gust'...}
 
-\item{months}{The months of data to be searched. Given as a vector of number(s) from 1 to 12.}
+\item{months}{The months of data to be searched, given as a numeric vector from 1 to 12.}
 
 \item{return_data}{Whether to return the data pulled from ECCC (TRUE) or not (FALSE). Data is returned as a list of dataframes, with one for each station.}
 }
@@ -41,7 +41,10 @@ A table printed to the console describing the stations and a plot displayed in R
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
 
-Gives information on the coverage of chosen climate variables for chosen climate stations in proximity. Outputs station descriptions and plots to help with choosing the climate station(s) to use.
+Provides information on the coverage of chosen climate variables for chosen climate stations in proximity. Outputs station descriptions and plots to help you choose the most appropriate climate station(s) to use.
 
-chooses station based on given name, coordinates and period of interest, and displays in plot the availability of the months of interest for the variables of interest.
+chooses station based on given name, coordinates, and period of interest, and displays in a plot the availability of the months of interest for the variables of interest.
+}
+\seealso{
+\code{\link[=getWeather]{getWeather()}} to download climate data from ECCC (called by this function); \code{\link[=combineWeather]{combineWeather()}} to combine data from multiple stations.
 }
