@@ -278,11 +278,11 @@ SWE_station <-
       
       tabl <- swe_station_summary
     }
+   
+#### ----------------------------- Last bits ------------------------------ ####
     
     # Add column for sub_basin
     tabl <- merge(tabl, loc_basin, by = "location_id")
-   
-#### ----------------------------- Last bits ------------------------------ ####
     
     # Remove those that are inactive or not
     if (active == TRUE) {
@@ -290,7 +290,7 @@ SWE_station <-
     } else {tabl <- tabl}
     
     # remove active column
-    tabl <- tabl[, -c("active")]
+    tabl <- tabl[, -c(which(names(tabl)=="active"))]
     
     # Write csv if csv = TRUE
     if (csv == TRUE) {
