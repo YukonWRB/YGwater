@@ -15,7 +15,6 @@ server <- function(input, output, session) {
   })
   
   # Initial setup #############################################################
-  
   # Automatically update URL every time an input changes
   observe({
     reactiveValuesToList(input)
@@ -33,6 +32,7 @@ server <- function(input, output, session) {
   isRestoring_plot <- reactiveVal(FALSE)
   isRestoring_img <- reactiveVal(FALSE)
   isRestoring_doc <- reactiveVal(FALSE)
+  isRestoring_about <- reactiveVal(FALSE)
   
   onRestore(function(state) {
     isRestoring(TRUE)
@@ -42,6 +42,7 @@ server <- function(input, output, session) {
     isRestoring_plot(TRUE)
     isRestoring_img(TRUE)
     isRestoring_doc(TRUE)
+    isRestoring_about(TRUE)
   })
   
   # Language selection ########################################################
@@ -109,7 +110,13 @@ console.log(language);")
     output$doc_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
                   translations[translations$id == "doc_view_title", ..newLang][[1]],
-                  '</div>'))    })
+                  '</div>'))    
+      })
+    output$about_title <- renderText({
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[translations$id == "about_view_title", ..newLang][[1]],
+                  '</div>'))
+    })
     
     # Update the mailto link with the correct language
     subject <- translations[translations$id == "feedback", ..newLang][[1]]
@@ -197,6 +204,19 @@ console.log(language);")
       tryCatch({
         doc("doc", con = pool, language = languageSelection, restoring = isRestoring_doc)
         }, error = function(e) {
+        showModal(modalDialog(
+          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
+    }
+    if (input$navbar == "about") {
+      tryCatch({
+        about("about", con = pool, language = languageSelection, restoring = isRestoring_about)
+      }, error = function(e) {
         showModal(modalDialog(
           title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
           translations[translations$id == "errorModalMsg", ..newLang][[1]],
