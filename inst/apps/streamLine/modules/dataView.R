@@ -13,7 +13,7 @@ dataUI <- function(id) {
 }
 
 
-data <- function(id, con, language) {
+data <- function(id, con, language, restoring) {
   moduleServer(id, function(input, output, session) {
     
     setBookmarkExclude(c("reset", "view"))

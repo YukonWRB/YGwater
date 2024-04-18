@@ -4,8 +4,10 @@
 #' `r lifecycle::badge("stable")`
 #'
 #' This script downloads data from an ECCC station for a given date range, calling [weathercan::weather_dl()] to download the data. This function facilitates interaction with that package by modifying start and end dates if your request is out of range, and allows you to interactively search for locations by name. Note that this function may take a long time to complete if you are requesting multiple years of data!
+#' 
+#' @seealso [chooseWeather()], [combineWeather()].
 #'
-#' @param station The station for which you want data. You can specify the 7-digit/letter Climate ID, the 4 or 5 digit ECCC station ID, the 5-digit WMO ID (starts with a 7), or the three-letter Transport Canada ID (i.e YDA and not CYDA). If working interactively you can also specify the station name or part thereof (as character vector) and select from a list.
+#' @param station The station for which you want data. You can specify the 7-digit/letter Climate ID, the 4 or 5 digit ECCC station ID, the 5-digit WMO ID (starts with a 7), or the three-letter Transport Canada ID (i.e YDA and not CYDA). If working interactively you can also specify the station name or part thereof (as character vector) and select from a list. If you're unsure of the ID of the station you're looking for you can run weathercan::stations() to get a list of all stations or, for more advanced functionality, run [chooseWeather()]
 #' @param start The start date for which you want data. Input either a character vector of form "2022-12-30" or a Date formatted object.
 #' @param end The end date for which you want data. Input either a character vector of form "2022-12-30" or a Date formatted object.
 #' @param save_path The path where you wish to save the resultant .csv file. Defaults to NULL, in which case you should assign the function to an R object. Set to "choose" to interactively select the location.

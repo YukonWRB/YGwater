@@ -18,6 +18,9 @@
 #'
 
 getImage <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NULL, save_name = NULL) {
+  
+  on.exit(DBI::dbDisconnect(con))
+  
   res <- getFile(id = id, id_col = "image_id", ext = "format", table = "images", con = con, save_dir = save_dir, save_name = save_name)
   return(res)
 }
@@ -42,6 +45,9 @@ getImage <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NULL, 
 #'
 
 getDocument <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NULL, save_name = NULL) {
+  
+  on.exit(DBI::dbDisconnect(con))
+  
   res <- getFile(id = id, id_col = "document_id", ext = "format", table = "documents", con = con, save_dir = save_dir, save_name = save_name)
   return(res)
 }
@@ -67,8 +73,6 @@ getDocument <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NUL
 #' @export
 
 getFile <- function(id, id_col, ext, table, con = hydrometConnect(silent = TRUE), save_dir = NULL, save_name = NULL) {
-  
-  on.exit(DBI::dbDisconnect(con))
   
   res <- DBI::dbGetQuery(con, paste0("SELECT * FROM ", table, " WHERE ", id_col, " = '", id, "';"))
   if (nrow(res) > 1) {

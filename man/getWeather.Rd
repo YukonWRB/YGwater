@@ -14,7 +14,7 @@ getWeather(
 )
 }
 \arguments{
-\item{station}{The station for which you want data. You can specify the 7-digit/letter Climate ID, the 4 or 5 digit ECCC station ID, the 5-digit WMO ID (starts with a 7), or the three-letter Transport Canada ID (i.e YDA and not CYDA). If working interactively you can also specify the station name or part thereof (as character vector) and select from a list.}
+\item{station}{The station for which you want data. You can specify the 7-digit/letter Climate ID, the 4 or 5 digit ECCC station ID, the 5-digit WMO ID (starts with a 7), or the three-letter Transport Canada ID (i.e YDA and not CYDA). If working interactively you can also specify the station name or part thereof (as character vector) and select from a list. If you're unsure of the ID of the station you're looking for you can run weathercan::stations() to get a list of all stations or, for more advanced functionality, run \code{\link[=chooseWeather]{chooseWeather()}}}
 
 \item{start}{The start date for which you want data. Input either a character vector of form "2022-12-30" or a Date formatted object.}
 
@@ -35,5 +35,7 @@ A data.frame of weather data and, if save_path is specified, a csv of this same 
 This script downloads data from an ECCC station for a given date range, calling \code{\link[weathercan:weather_dl]{weathercan::weather_dl()}} to download the data. This function facilitates interaction with that package by modifying start and end dates if your request is out of range, and allows you to interactively search for locations by name. Note that this function may take a long time to complete if you are requesting multiple years of data!
 }
 \seealso{
+\code{\link[=chooseWeather]{chooseWeather()}}, \code{\link[=combineWeather]{combineWeather()}}.
+
 \code{\link[weathercan:weather_dl]{weathercan::weather_dl()}} for a simpler, pared-down means of downloading ECCC weather data. For nice precipitation maps and tabular reports of precipitation (past or future), try \code{\link[=basinPrecip]{basinPrecip()}}.
 }

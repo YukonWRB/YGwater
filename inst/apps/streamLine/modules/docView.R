@@ -5,7 +5,7 @@ docUI <- function(id) {
   )
 }
 
-doc <- function(id, con, language) {
+doc <- function(id, con, language, restoring) {
   moduleServer(id, function(input, output, session) {
     
     setBookmarkExclude(c())

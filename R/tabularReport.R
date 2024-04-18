@@ -121,14 +121,18 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
     tryCatch({
       yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
       for (i in names(yesterday_workbook)) {
-        if (!(i %in% c("precipitation", "general"))) {
+        if (!(i %in% c("precipitation", "comments"))) {
           yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
           yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6)
         } else if (i == "precipitation") {
           yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
           yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8)
-        } else if (i == "general") {
-          yesterday[["yesterday_public_comments"]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(12,13), cols = 2, colNames = FALSE)
+        } else if (i == "comments") {
+          if ("precipitation" %in% names(yesterday_workbook)) {
+            yesterday[["yesterday_public_comments"]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(12,13), cols = 2, colNames = FALSE)
+          } else {
+            yesterday[["yesterday_public_comments"]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(11,12), cols = 2, colNames = FALSE)
+          }
         }
       }
       yesterday_comments <- TRUE

@@ -1,20 +1,32 @@
 #' Combine continuous ECCC climate station data
 #'
-#' stations, start, end, variable, months=NULL
 #' @description
 #' `r lifecycle::badge('stable')`
 #'
-#' Retrieves climate station data from two stations in proximity and combines them to make continuous dataset.
+#' Retrieves climate station data from two stations, ideally in close proximity (but that's up to you) and with different temporal coverage and combines them to make a continuous dataset. You can use this to fill gaps in a timeseries or to combine two timeseries. Since the two locations likely have offset measurements at the exact same moment even if they are quite close (for example, station 1 might be slightly warmer than station 2), an offset is calculated if possible and applied to the second station to make the two datasets more comparable. Statistics about this offset are printed to the console for each variable. If the stations do not have temporal overlap no offset is calculated and the two are joined as is.
 #'
+#' @seealso [getWeather()], [chooseWeather()].
 #'
 #' @details
+#' ## Choosing which station to list first
+#' Since the two stations likely have offset measurements at the same moment in time, an offset value is calculated and applied to correct the values of the **second** station. In addition, all values from the *first* station are kept, while overlaping values in the *second* station are discarded after the offset is calculated.
+#' 
+#' ## Calculation of offset and offset statistics.
+#' The offset is calculated using the following formula:
+#' 
+#' `offset = mean(overlap_station1) - mean(overlap_station2)`
+#' 
+#' The root mean square error of the offset is also calculated:
+#' 
+#' `RMSE = sqrt(mean((overlap_station1 - overlap_station2)^2))`
+#' 
+#' NA values are ignored in the calculation of the offset and RMSE.
 #'
-#' @param stations The two stations you want to combine, given as a list with two elements. Can either be a dataframe as outputted by getWeather or a station id. The station listed first is filled in with the 2nd dataset when possible.
+#' @param stations The two stations you want to combine, given as a list with two elements. Can either be a dataframe as output by [getWeather()] or a vector passed to the `station` argument of [getWeather()]. The station listed first is filled in with the 2nd dataset when possible.
 #' @param start The start date of the dataset to create. Is specified as a character string of form "yyyy-mm-dd".
 #' @param end The end date of the dataset to create.
 #' @param variables The variable or variables to combine in the station datasets, given as a character string. Ex: c("mean_temp", "total_precip").
-#' @param months The months to plot, given as a vector. Must be given as a character, where the January is "01" and October is "10".
-#'
+#' @param months The months to plot, given as a vector. Must be given as a character, where the January is "01" and October is "10". Leave as NULL for all 12 months.
 #'
 #' @return A list of dataframes, one for each variable. The dataframe has a date column and a variable column. All dates between start and end are included, whether or not data is available for those dates.
 #' @export
@@ -62,8 +74,6 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
 
     # Check if data exists for this time frame
     if (nrow(station) == 0) {
-      # NOTE: line below doesn't actually do anything. 
-      station <- station
       warning(paste0("Station ", station, " does not have data for this time frame"))
     } else {
       # Subset to variables of interest and months of interest
@@ -82,8 +92,6 @@ combineWeather <- function(stations, start, end, variables, months=NULL) {
 
     # Replace in stations list
     stations[[s]] <- station
-
-
   }
 
 #--------------------- Run for loop over every station ------------------------#

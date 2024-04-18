@@ -7,7 +7,7 @@
 combineWeather(stations, start, end, variables, months = NULL)
 }
 \arguments{
-\item{stations}{The two stations you want to combine, given as a list with two elements. Can either be a dataframe as outputted by getWeather or a station id. The station listed first is filled in with the 2nd dataset when possible.}
+\item{stations}{The two stations you want to combine, given as a list with two elements. Can either be a dataframe as output by \code{\link[=getWeather]{getWeather()}} or a vector passed to the \code{station} argument of \code{\link[=getWeather]{getWeather()}}. The station listed first is filled in with the 2nd dataset when possible.}
 
 \item{start}{The start date of the dataset to create. Is specified as a character string of form "yyyy-mm-dd".}
 
@@ -15,7 +15,7 @@ combineWeather(stations, start, end, variables, months = NULL)
 
 \item{variables}{The variable or variables to combine in the station datasets, given as a character string. Ex: c("mean_temp", "total_precip").}
 
-\item{months}{The months to plot, given as a vector. Must be given as a character, where the January is "01" and October is "10".}
+\item{months}{The months to plot, given as a vector. Must be given as a character, where the January is "01" and October is "10". Leave as NULL for all 12 months.}
 }
 \value{
 A list of dataframes, one for each variable. The dataframe has a date column and a variable column. All dates between start and end are included, whether or not data is available for those dates.
@@ -23,8 +23,27 @@ A list of dataframes, one for each variable. The dataframe has a date column and
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Retrieves climate station data from two stations in proximity and combines them to make continuous dataset.
+Retrieves climate station data from two stations, ideally in close proximity (but that's up to you) and with different temporal coverage and combines them to make a continuous dataset. You can use this to fill gaps in a timeseries or to combine two timeseries. Since the two locations likely have offset measurements at the exact same moment even if they are quite close (for example, station 1 might be slightly warmer than station 2), an offset is calculated if possible and applied to the second station to make the two datasets more comparable. Statistics about this offset are printed to the console for each variable. If the stations do not have temporal overlap no offset is calculated and the two are joined as is.
 }
 \details{
-stations, start, end, variable, months=NULL
+\subsection{Choosing which station to list first}{
+
+Since the two stations likely have offset measurements at the same moment in time, an offset value is calculated and applied to correct the values of the \strong{second} station. In addition, all values from the \emph{first} station are kept, while overlaping values in the \emph{second} station are discarded after the offset is calculated.
+}
+
+\subsection{Calculation of offset and offset statistics.}{
+
+The offset is calculated using the following formula:
+
+\code{offset = mean(overlap_station1) - mean(overlap_station2)}
+
+The root mean square error of the offset is also calculated:
+
+\code{RMSE = sqrt(mean((overlap_station1 - overlap_station2)^2))}
+
+NA values are ignored in the calculation of the offset and RMSE.
+}
+}
+\seealso{
+\code{\link[=getWeather]{getWeather()}}, \code{\link[=chooseWeather]{chooseWeather()}}.
 }
