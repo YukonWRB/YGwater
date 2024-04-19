@@ -1,3 +1,16 @@
+js_select_dt <-   "var dt = table.table().node();
+  var tblID = $(dt).closest('.datatables').attr('id');
+  var inputName = tblID + '_rows_selected'
+  var incrementName = tblID + '_rows_selected2_increment'
+  table.on('key-focus', function(e, datatable, cell, originalEvent){
+    if (originalEvent.type === 'keydown'){
+      table.rows().deselect();
+      table.row(cell[0][0].row).select();
+      row = table.rows({selected: true})
+      Shiny.setInputValue(inputName, [parseInt(row[0]) + 1]);
+}
+  });"
+
 imgUI <- function(id) {
   ns <- NS(id)
   tagList(
@@ -24,16 +37,6 @@ img <- function(id, con, language, restoring) {
                            img_min = Sys.Date() - 14,
                            img_meta = DBI::dbGetQuery(con, "SELECT a.img_meta_id, a.img_type, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM images_index AS a JOIN locations AS l ON a.location_id = l.location_id;"))
     tables <- reactiveValues()
-    
-    # Initialize reactive value for managing selected row state
-    selected_row <- reactiveVal()
-    
-    # Update selected row only when necessary
-    observe({
-      if (!identical(selected_row(), input$tbl_rows_selected)) {
-        selected_row(input$tbl_rows_selected)
-      }
-    })
     
     # Update text based on language ###########################################
     observeEvent(language(), {
@@ -66,11 +69,9 @@ img <- function(id, con, language, restoring) {
     }, ignoreInit = TRUE)
     
     
-    # Give user a data table of images matching inputs #########################
-    observe({
-      if (is.null(input$type) || is.null(input$dates) || is.null(input$loc)) {
-        return()
-      }
+    # Create a data table of images matching filter inputs #########################
+    table_data <- reactive({
+      req(input$type, input$dates, input$loc)  # Ensure all inputs are available
       lang <- language()
       
       img_ids <- imgs$img_meta[imgs$img_meta$img_type == input$type, "img_meta_id"]
@@ -80,12 +81,27 @@ img <- function(id, con, language, restoring) {
       } else {
         tbl <- imgs$imgs[imgs$imgs$datetime >= input$dates[1] & imgs$imgs$datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & imgs$imgs$location_id == input$loc & imgs$imgs$img_meta_id %in% img_ids, c("datetime", translations[translations$id == "generic_name_col", ..lang][[1]], "image_id")]
       }
-      
+    })
+    
+    # Initialize reactive value for managing selected row state. This prevents an endless loop triggering the image rendering when the user clicks on a row.
+    selected_row <- reactiveVal()
+    
+    # Update selected row only when necessary
+    observe({
+      if (!identical(selected_row(), input$tbl_rows_selected)) {
+        selected_row(input$tbl_rows_selected)
+      }
+    })
+    
+    # Render the data table ########################################################
+    observe({
+      lang <- language()
+      tbl <- table_data()
       names(tbl) <- c(translations[translations$id == "datetime", ..lang][[1]], translations[translations$id == "loc", ..lang][[1]], "image_id")
       
       tables$tbl <- tbl
       
-      out_tbl <- DT::datatable(tbl, rownames = FALSE, selection = list(mode = "single", selected = selected_row()),
+      out_tbl <- DT::datatable(tbl, rownames = FALSE, selection = list(mode = "single", selected = isolate(selected_row())),
                                filter = "none",
                                options = list(initComplete = htmlwidgets::JS(
                                  "function(settings, json) {",
@@ -111,13 +127,16 @@ img <- function(id, con, language, restoring) {
                                    infoFiltered = translations[translations$id == "tbl_filtered", ..lang][[1]],
                                    zeroRecords = translations[translations$id == "tbl_zero", ..lang][[1]]
                                  ),
-                                 layout = list(topEnd = "paging")
-                               )
+                                 keys = list(keys = c(38,40))
+                               ),
+                               extensions = c("KeyTable", "Select"),
+                               callback = htmlwidgets::JS(js_select_dt)
       ) %>% 
         DT::formatDate(1, method = "toLocaleString", params = list('fr-FR'))
-      output$tbl <- DT::renderDataTable(out_tbl)
+      output$tbl <- DT::renderDataTable(out_tbl, server = FALSE)
     })
     
+    # Render the image based on selected_row() ############################################################
     observeEvent(selected_row(), {
       if (selected_row() == 0) {
         return()

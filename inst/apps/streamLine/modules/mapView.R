@@ -31,7 +31,8 @@ mapUI <- function(id) {
                     title = "Placeholder",
                     icon("info-circle", style = "font-size: 150%;")),
                   selectizeInput(ns("typeFlt"), "Data Type", choices = c("All" = "All"), multiple = TRUE), # choices and labels are updated in the server module
-                  selectizeInput(ns("paramTypeFlt"), "Parameter Type", choices = c("All" = "All"), multiple = TRUE), # choices and labels are updated in the server module
+                  selectizeInput(ns("paramTypeFlt"), "Parameter Type", choices = c("All" = "All"), multiple = TRUE),
+                  selectizeInput(ns("paramGrpFlt"), "Parameter Group", choices = c("All" = "All"), multiple = TRUE),
                   selectizeInput(ns("paramFlt"), "Parameter", choices = c("All" = "All"), multiple = TRUE),
                   selectizeInput(ns("projFlt"), "Project", choices = c("All" = "All"), multiple = TRUE),
                   selectizeInput(ns("netFlt"), "Network", choices = c("All" = "All"), multiple = TRUE),
@@ -54,9 +55,12 @@ map <- function(id, con, language, restoring) {
     locations_projects <- DBI::dbGetQuery(con, "SELECT * FROM locations_projects;")
     locations_networks <- DBI::dbGetQuery(con, "SELECT * FROM locations_networks;")
     param_types <- DBI::dbGetQuery(con, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);")
-    parameters <- DBI::dbGetQuery(con, "SELECT p.* FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
+    param_groups <- DBI::dbGetQuery(con, "SELECT DISTINCT p.group, p.group_fr FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
+    parameters <- DBI::dbGetQuery(con, "SELECT p.param_code, p.param_name, p.param_name_fr, p.group FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
     projects <- DBI::dbGetQuery(con, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);")
     networks <-  DBI::dbGetQuery(con, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);")
+    has_images <- DBI::dbGetQuery(con, "SELECT DISTINCT location_id FROM images_index;")
+    has_documents <- DBI::dbGetQuery(con, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
     
     # Adjust multiple selection based on if 'All' is selected ################
     observeFilterInput <- function(inputId) {
@@ -71,11 +75,13 @@ map <- function(id, con, language, restoring) {
     }
     observeFilterInput("typeFlt")
     observeFilterInput("paramTypeFlt")
+    observeFilterInput("paramGrpFlt")
     observeFilterInput("paramFlt")
     observeFilterInput("projFlt")
     observeFilterInput("netFlt")
     
     # Create reactives to filter based on selections ############################
+    #TODO: This portion is not functional yet
     filteredYears <- reactive({
       timeseries[timeseries$start_datetime >= as.POSIXct(paste0(input$yrFlt[1], "-01-01 00:00"), tz = "UTC") & timeseries$end_datetime <= as.POSIXct(paste0(input$yrFlt[2], "-12-31 23:59:59"), tz = "UTC"), ]
     })
@@ -97,21 +103,28 @@ map <- function(id, con, language, restoring) {
       if (input$netFlt == "All") {
         networks
       } else {
-        networks[networks[translations[translations$id == "generic_name_col", ..lang][[1]]] %in% tolower(input$netFlt),  ]
+        networks[networks[translations[translations$id == "generic_name_col", ..lang][[1]]] %in% tolower(input$netFlt), ]
       }
     })
     filteredParamTypes <- reactive({
       if (input$paramTypeFlt == "All") {
         param_types
       } else {
-        param_types[param_types[translations[translations$id == "param_type_col", ..lang][[1]]] %in% tolower(input$paramTypeFlt),  ]
+        param_types[param_types[translations[translations$id == "param_type_col", ..lang][[1]]] %in% tolower(input$paramTypeFlt), ]
+      }
+    })
+    filteredParamGroup <- reactive({
+      if (input$paramGrpFlt == "All") {
+        param_groups
+      } else {
+        param_groups[param_groups[translations[translations$id == "param_group_col", ..lang][[1]]] %in% tolower(input$paramGrpFlt),  ]
       }
     })
     filteredParameters <- reactive({
       if (input$paramFlt == "All") {
         parameters
       } else {
-        parameters[parameters[translations[translations$id == "param_name_col", ..lang][[1]]] %in% tolower(input$paramFlt),  ]
+        parameters[parameters[translations[translations$id == "param_name_col", ..lang][[1]]] %in% tolower(input$paramFlt), ]
       }
     })
     
@@ -138,6 +151,14 @@ map <- function(id, con, language, restoring) {
                            label = translations[translations$id == "param_type", ..lang][[1]],
                            choices = stats::setNames(c("All", param_types$param_type_code),
                                                      c(translations[translations$id == "all", ..lang][[1]], titleCase(param_types[[translations[translations$id == "param_type_col", ..lang][[1]]]], abbrev)
+                                                     )
+                           )
+      )
+      updateSelectizeInput(session, 
+                           "paramGrpFlt",
+                           label = translations[translations$id == "param_group", ..lang][[1]],
+                           choices = stats::setNames(c("All", param_groups$group),
+                                                     c(translations[translations$id == "all", ..lang][[1]], titleCase(param_groups[[translations[translations$id == "param_group_col", ..lang][[1]]]], abbrev)
                                                      )
                            )
       )
@@ -239,6 +260,22 @@ map <- function(id, con, language, restoring) {
           timeseries.sub <- timeseries.sub
         }
         
+        if (!is.null(input$paramGrpFlt)) {
+          if (length(input$paramGrpFlt) > 1) {
+            select.params <- parameters[parameters$group %in% input$paramGrpFlt, "param_code"]
+            timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% select.params, ]
+          } else {
+            if (input$paramGrpFlt == "All") {
+              timeseries.sub <- timeseries.sub
+            } else {
+              select.params <- parameters[parameters$group == input$paramGrpFlt, "param_code"]
+              timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% select.params, ]
+            }
+          }
+        } else {
+          timeseries.sub <- timeseries.sub
+        }
+        
         if (!is.null(input$projFlt)) {
           if (length(input$projFlt) > 1) {
             timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id %in% input$projFlt, "location_id"], ]
@@ -255,12 +292,12 @@ map <- function(id, con, language, restoring) {
         
         if (!is.null(input$netFlt)) {
           if (length(input$netFlt) > 1) {
-            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id %in% input$netFlt, "location_id"], ]
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_networks[locations_networks$network_id %in% input$netFlt, "location_id"], ]
           } else {
             if (input$netFlt == "All") {
               timeseries.sub <- timeseries.sub
             } else {
-              timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id == input$netFlt, "location_id"], ]
+              timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_networks[locations_networks$network_id == input$netFlt, "location_id"], ]
             }
           }
         } else {
@@ -271,10 +308,40 @@ map <- function(id, con, language, restoring) {
         
         loc.sub <- locations[locations$location_id %in% timeseries.sub$location_id, ]
         
+        # Function to create the popup
+        createPopup <- function(data) {
+          html <- tags$div(
+            h3(titleCase(data[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev)),
+              tags$a(href = paste0("#dataTab/", data$id), "View Data", target = "_blank"),
+              tags$a(href = paste0("#plotTab/", data$id), "View Plots", target = "_blank"),
+            if (data$location_id %in% has_images$location_id) {
+              tags$a(href = paste0("#imgTab/", data$id), "View Images", target = "_blank")
+            },
+            if (data$location_id %in% has_documents$location_id) {
+              tags$a(href = paste0("#docTab/", data$id), "View Documents", target = "_blank")
+            }
+          )
+          as.character(html)
+        }
+        
         leaflet::leafletProxy("map", session = session) %>%
           leaflet::clearMarkers() %>%
           leaflet::clearMarkerClusters() %>%
-          leaflet::addMarkers(data = loc.sub, lng = ~longitude, lat = ~latitude, popup = ~titleCase(loc.sub[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev), clusterOptions = leaflet::markerClusterOptions())
+          leaflet::addMarkers(data = loc.sub, 
+                              lng = ~longitude, 
+                              lat = ~latitude, 
+                              popup = as.character(tags$div(
+                                h3(titleCase(loc.sub[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev)),
+                                tags$a(href = paste0("#dataTab/", loc.sub$location_id), "View Data", target = "_blank"),
+                                tags$a(href = paste0("#plotTab/", loc.sub$location_id), "View Plots", target = "_blank"),
+                                # if (loc.sub$location_id %in% has_images$location_id) {
+                                #   tags$a(href = paste0("#imgTab/", loc.sub$location_id), "View Images", target = "_blank")
+                                # },
+                                # if (loc.sub$location_id %in% has_documents$location_id) {
+                                #   tags$a(href = paste0("#docTab/", loc.sub$location_id), "View Documents", target = "_blank")
+                                # }
+                              )), 
+                              clusterOptions = leaflet::markerClusterOptions())
     })
     
     
@@ -298,9 +365,9 @@ map <- function(id, con, language, restoring) {
                            )
       )
       updateSelectizeInput(session, 
-                           "paramTypeFlt",
-                           choices = stats::setNames(c("All", param_types$param_type_code),
-                                                     c(translations[translations$id == "all", ..lang][[1]], titleCase(param_types[[translations[translations$id == "param_type_col", ..lang][[1]]]], abbrev)
+                           "paramGrpFlt",
+                           choices = stats::setNames(c("All", param_groups$group),
+                                                     c(translations[translations$id == "all", ..lang][[1]], titleCase(param_groups[[translations[translations$id == "param_group_col", ..lang][[1]]]], abbrev)
                                                      )
                            )
       )
@@ -331,7 +398,6 @@ map <- function(id, con, language, restoring) {
                         value = lubridate::year(c(min(timeseries$start_datetime), max(timeseries$end_datetime)))
       )
     })
-    
     
   })
 }
