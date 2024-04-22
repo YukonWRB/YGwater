@@ -85,7 +85,7 @@ SWE_station <-
       Meas$estimate_flag <- NA
       Meas[grep("estimated", Meas$note), ]$estimate_flag <- TRUE
       # Remove note
-      Meas <- Meas[, -c("note")]
+      Meas <- Meas[, -c(which(names(Meas)=="note"))]
       
       # Calculate density
       # Spread the data into separate columns for swe and snow_depth
