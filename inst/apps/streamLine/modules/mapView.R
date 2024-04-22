@@ -200,7 +200,7 @@ map <- function(id, con, language, restoring) {
     })
     
     
-    # Create the map ###########################################################
+    # Create the basic map ###########################################################
     
     output$map <- leaflet::renderLeaflet({
       leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 12)) %>%
@@ -213,135 +213,141 @@ map <- function(id, con, language, restoring) {
         }")
     })
     
-    # Filter the map data based on user's selection ############################
+    # Filter the map data based on user's selection and add points ############################
+    # Function to create popups dynamically
+    popupContent <- function(loc) {
+      # Start with the name
+      popup_html <- paste0("<strong>", loc$name, "</strong><br/>")
+      
+      # Conditionally add extra details
+      if (!is.na(loc$parameters)) {
+        popup_html <- paste0(popup_html, "Parameters: ", loc$parameters, "<br/>")
+      }
+      
+      if (!is.na(loc$projects)) {
+        popup_html <- paste0(popup_html, "Project: ", loc$projects, "<br/>")
+      }
+      
+      # Link to a tab if the location has associated timeseries data
+      # if (loc$has_timeseries) {
+      #   popup_html <- paste0(popup_html, "<a href='#someTab'>View Data</a>")
+      # }
+      return(HTML(popup_html))
+    }
+    
     observe({
-        lang <- language()
-        abbrev <- translations[translations$id == "titleCase", ..lang][[1]]
-        
-        if (!is.null(input$typeFlt)) {
-          if (length(input$typeFlt) > 1) {
-            timeseries.sub <- timeseries[timeseries$category %in% input$typeFlt, ]
-          } else {
-            if (input$typeFlt == "All") {
-              timeseries.sub <- timeseries
-            } else {
-              timeseries.sub <- timeseries[timeseries$category == input$typeFlt, ]
-            }
-          }
+      lang <- language()
+      abbrev <- translations[translations$id == "titleCase", ..lang][[1]]
+      
+      if (!is.null(input$typeFlt)) {
+        if (length(input$typeFlt) > 1) {
+          timeseries.sub <- timeseries[timeseries$category %in% input$typeFlt, ]
         } else {
-          timeseries.sub <- timeseries
-        }
-        
-        if (!is.null(input$paramFlt)) {
-          if (length(input$paramFlt) > 1) {
-            timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% input$paramFlt, ]
+          if (input$typeFlt == "All") {
+            timeseries.sub <- timeseries
           } else {
-            if (input$paramFlt == "All") {
-              timeseries.sub <- timeseries.sub
-            } else {
-              timeseries.sub <- timeseries.sub[timeseries.sub$parameter == input$paramFlt, ]
-            }
+            timeseries.sub <- timeseries[timeseries$category == input$typeFlt, ]
           }
-        } else {
-          timeseries.sub <- timeseries.sub
         }
-        
-        if (!is.null(input$paramTypeFlt)) {
-          if (length(input$paramTypeFlt) > 1) {
-            timeseries.sub <- timeseries.sub[timeseries.sub$param_type %in% input$paramTypeFlt, ]
+      } else {
+        timeseries.sub <- timeseries
+      }
+      
+      if (!is.null(input$paramFlt)) {
+        if (length(input$paramFlt) > 1) {
+          timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% input$paramFlt, ]
+        } else {
+          if (input$paramFlt == "All") {
+            timeseries.sub <- timeseries.sub
           } else {
-            if (input$paramTypeFlt == "All") {
-              timeseries.sub <- timeseries.sub
-            } else {
-              timeseries.sub <- timeseries.sub[timeseries.sub$param_type == input$paramTypeFlt, ]
-            }
+            timeseries.sub <- timeseries.sub[timeseries.sub$parameter == input$paramFlt, ]
           }
-        } else {
-          timeseries.sub <- timeseries.sub
         }
-        
-        if (!is.null(input$paramGrpFlt)) {
-          if (length(input$paramGrpFlt) > 1) {
-            select.params <- parameters[parameters$group %in% input$paramGrpFlt, "param_code"]
+      } else {
+        timeseries.sub <- timeseries.sub
+      }
+      
+      if (!is.null(input$paramTypeFlt)) {
+        if (length(input$paramTypeFlt) > 1) {
+          timeseries.sub <- timeseries.sub[timeseries.sub$param_type %in% input$paramTypeFlt, ]
+        } else {
+          if (input$paramTypeFlt == "All") {
+            timeseries.sub <- timeseries.sub
+          } else {
+            timeseries.sub <- timeseries.sub[timeseries.sub$param_type == input$paramTypeFlt, ]
+          }
+        }
+      } else {
+        timeseries.sub <- timeseries.sub
+      }
+      
+      if (!is.null(input$paramGrpFlt)) {
+        if (length(input$paramGrpFlt) > 1) {
+          select.params <- parameters[parameters$group %in% input$paramGrpFlt, "param_code"]
+          timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% select.params, ]
+        } else {
+          if (input$paramGrpFlt == "All") {
+            timeseries.sub <- timeseries.sub
+          } else {
+            select.params <- parameters[parameters$group == input$paramGrpFlt, "param_code"]
             timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% select.params, ]
-          } else {
-            if (input$paramGrpFlt == "All") {
-              timeseries.sub <- timeseries.sub
-            } else {
-              select.params <- parameters[parameters$group == input$paramGrpFlt, "param_code"]
-              timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% select.params, ]
-            }
           }
-        } else {
-          timeseries.sub <- timeseries.sub
         }
-        
-        if (!is.null(input$projFlt)) {
-          if (length(input$projFlt) > 1) {
-            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id %in% input$projFlt, "location_id"], ]
+      } else {
+        timeseries.sub <- timeseries.sub
+      }
+      
+      if (!is.null(input$projFlt)) {
+        if (length(input$projFlt) > 1) {
+          timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id %in% input$projFlt, "location_id"], ]
+        } else {
+          if (input$projFlt == "All") {
+            timeseries.sub <- timeseries.sub
           } else {
-            if (input$projFlt == "All") {
-              timeseries.sub <- timeseries.sub
-            } else {
-              timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id == input$projFlt, "location_id"], ]
-            }
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_projects[locations_projects$project_id == input$projFlt, "location_id"], ]
           }
-        } else {
-          timeseries.sub <- timeseries.sub
         }
-        
-        if (!is.null(input$netFlt)) {
-          if (length(input$netFlt) > 1) {
-            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_networks[locations_networks$network_id %in% input$netFlt, "location_id"], ]
+      } else {
+        timeseries.sub <- timeseries.sub
+      }
+      
+      if (!is.null(input$netFlt)) {
+        if (length(input$netFlt) > 1) {
+          timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_networks[locations_networks$network_id %in% input$netFlt, "location_id"], ]
+        } else {
+          if (input$netFlt == "All") {
+            timeseries.sub <- timeseries.sub
           } else {
-            if (input$netFlt == "All") {
-              timeseries.sub <- timeseries.sub
-            } else {
-              timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_networks[locations_networks$network_id == input$netFlt, "location_id"], ]
-            }
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% locations_networks[locations_networks$network_id == input$netFlt, "location_id"], ]
           }
-        } else {
-          timeseries.sub <- timeseries.sub
         }
-        
-        timeseries.sub <- timeseries.sub[timeseries.sub$start_datetime <= as.POSIXct(paste0(input$yrFlt[2], "-12-31 23:59:59"), tz = "UTC") & timeseries.sub$end_datetime >= as.POSIXct(paste0(input$yrFlt[1], "-01-01 00:00"), tz = "UTC"),]
-        
-        loc.sub <- locations[locations$location_id %in% timeseries.sub$location_id, ]
-        
-        # Function to create the popup
-        createPopup <- function(data) {
-          html <- tags$div(
-            h3(titleCase(data[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev)),
-              tags$a(href = paste0("#dataTab/", data$id), "View Data", target = "_blank"),
-              tags$a(href = paste0("#plotTab/", data$id), "View Plots", target = "_blank"),
-            if (data$location_id %in% has_images$location_id) {
-              tags$a(href = paste0("#imgTab/", data$id), "View Images", target = "_blank")
-            },
-            if (data$location_id %in% has_documents$location_id) {
-              tags$a(href = paste0("#docTab/", data$id), "View Documents", target = "_blank")
-            }
-          )
-          as.character(html)
-        }
-        
-        leaflet::leafletProxy("map", session = session) %>%
-          leaflet::clearMarkers() %>%
-          leaflet::clearMarkerClusters() %>%
-          leaflet::addMarkers(data = loc.sub, 
-                              lng = ~longitude, 
-                              lat = ~latitude, 
-                              popup = as.character(tags$div(
-                                h3(titleCase(loc.sub[, translations[translations$id == "generic_name_col", ..lang][[1]]], abbrev)),
-                                tags$a(href = paste0("#dataTab/", loc.sub$location_id), "View Data", target = "_blank"),
-                                tags$a(href = paste0("#plotTab/", loc.sub$location_id), "View Plots", target = "_blank"),
-                                # if (loc.sub$location_id %in% has_images$location_id) {
-                                #   tags$a(href = paste0("#imgTab/", loc.sub$location_id), "View Images", target = "_blank")
-                                # },
-                                # if (loc.sub$location_id %in% has_documents$location_id) {
-                                #   tags$a(href = paste0("#docTab/", loc.sub$location_id), "View Documents", target = "_blank")
-                                # }
-                              )), 
-                              clusterOptions = leaflet::markerClusterOptions())
+      } else {
+        timeseries.sub <- timeseries.sub
+      }
+      
+      timeseries.sub <- timeseries.sub[timeseries.sub$start_datetime <= as.POSIXct(paste0(input$yrFlt[2], "-12-31 23:59:59"), tz = "UTC") & timeseries.sub$end_datetime >= as.POSIXct(paste0(input$yrFlt[1], "-01-01 00:00"), tz = "UTC"),]
+      
+      loc.sub <- locations[locations$location_id %in% timeseries.sub$location_id, ]
+      
+      # Here, add columns to loc.sub that will be used in the popups. These can include:
+      loc.sub$date_range  <- "date_range" #character
+      loc.sub$parameters <- "parameters" #character of first ?? parameters. Beyond that, a popup table of parameters
+      loc.sub$projects  <- "projects" #character 
+      loc.sub$networks <- "networks" #character
+      loc.sub$plot <- "View plots" #boolean, link to plots
+      loc.sub$data <- "View data" #boolean, link to data
+      # loc.sub$images  #boolean, link to images if exists
+      # loc.sub$documents #boolean, link to documents if exists
+      
+      
+      leaflet::leafletProxy("map", session = session) %>%
+        leaflet::clearMarkers() %>%
+        leaflet::clearMarkerClusters() %>%
+        leaflet::addMarkers(data = loc.sub, 
+                            lng = ~longitude, 
+                            lat = ~latitude,
+                            popup = unname(sapply(split(loc.sub, seq(nrow(loc.sub))), popupContent)),
+                            clusterOptions = leaflet::markerClusterOptions())
     })
     
     
@@ -390,7 +396,7 @@ map <- function(id, con, language, restoring) {
                                                      c(translations[translations$id == "all", ..lang][[1]], titleCase(networks[[translations[translations$id == "generic_name_col", ..lang][[1]]]], abbrev))
                            )
       )
-       updateSliderInput(session,
+      updateSliderInput(session,
                         "yrFlt",
                         label = translations[translations$id == "year_filter", ..lang][[1]],
                         min = lubridate::year(min(timeseries$start_datetime)),

@@ -7,11 +7,11 @@ ui <- function(request) {
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar
       tags$link(rel = "stylesheet", type = "text/css", href = "css/feedback-btn.css"), # Feedback button
-      tags$script(src = "js/mailto-update.js"), # Mailto update script
+      tags$script(src = "js/mailto-update.js"), # Mailto language update script
       tags$script(src = "js/lang-update.js") # Language update script"))
     ),
     
-    # Language selector and logo positioned above navbarPage
+    # Create language selector and logo positioned above navbarPage
     fluidRow(class = "top-bar-container",
              column(2,
                     div(class = "logo-container",
