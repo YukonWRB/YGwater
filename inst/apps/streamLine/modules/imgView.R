@@ -33,9 +33,9 @@ img <- function(id, con, language, restoring) {
     setBookmarkExclude(c("tbl_columns_selected", "tbl_cells_selected", "tbl_rows_current", "tbl_rows_all", "tbl_state", "tbl_search", "tbl_cell_clicked", "tbl_row_last_clicked"))
     
     # Load info about last two weeks of images for speed
-    imgs <- reactiveValues(imgs = DBI::dbGetQuery(con, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN images_index AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
+    imgs <- reactiveValues(imgs = dbGetQueryDT(con, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN images_index AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
                            img_min = Sys.Date() - 14,
-                           img_meta = DBI::dbGetQuery(con, "SELECT a.img_meta_id, a.img_type, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM images_index AS a JOIN locations AS l ON a.location_id = l.location_id;"))
+                           img_meta = dbGetQueryDT(con, "SELECT a.img_meta_id, a.img_type, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM images_index AS a JOIN locations AS l ON a.location_id = l.location_id;"))
     tables <- reactiveValues()
     
     # Update text based on language ###########################################
@@ -52,8 +52,11 @@ img <- function(id, con, language, restoring) {
       output$dates <- renderUI({
         dateRangeInput(ns("dates"), label = translations[translations$id == "date_range_lab", ..lang][[1]], start = if (restoring()) input$dates[1] else Sys.Date() - 2, end = if (restoring()) input$dates[2] else Sys.Date(), language = abbrev, separator = translations[translations$id == "date_sep", ..lang][[1]])
       })
+      
+      loc_choices <- stats::setNames(c("All", imgs$img_meta$location_id), c(translations[translations$id == "all", ..lang][[1]], titleCase(imgs$img_meta[[translations[translations$id == "generic_name_col", ..lang][[1]]]], abbrev)))
+      loc_choices <- c(loc_choices[1], loc_choices[-1][order(names(loc_choices)[-1])]) # Order but keep "All" at the top
       output$loc <- renderUI({
-        selectizeInput(ns("loc"), label = titleCase(translations[translations$id == "loc", ..lang][[1]], abbrev), choices = stats::setNames(c("All", imgs$img_meta$location_id), c(translations[translations$id == "all", ..lang][[1]], titleCase(imgs$img_meta[[translations[translations$id == "generic_name_col", ..lang][[1]]]], abbrev))), selected = input$loc)
+        selectizeInput(ns("loc"), label = titleCase(translations[translations$id == "loc", ..lang][[1]], abbrev), choices = loc_choices, selected = input$loc)
       })
       
     })
@@ -61,10 +64,10 @@ img <- function(id, con, language, restoring) {
     # Get images further back in time if the date range is changed to something beyond 2 weeks ago ############################
     observeEvent(input$dates, {
       if (input$dates[1] < imgs$img_min) {
-        extra <- DBI::dbGetQuery(con, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN images_index AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime), "';"))
+        extra <- dbGetQueryDT(con, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN images_index AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime), "';"))
         imgs$img_min <- min(extra$datetime)
         imgs$imgs <- rbind(imgs$imgs, extra)
-        imgs$imgs <- imgs$imgs[order(imgs$imgs$datetime, decreasing = TRUE), ]
+        data.table::setorder(imgs$imgs, -datetime)
       }
     }, ignoreInit = TRUE)
     
@@ -75,11 +78,16 @@ img <- function(id, con, language, restoring) {
       lang <- language()
       
       img_ids <- imgs$img_meta[imgs$img_meta$img_type == input$type, "img_meta_id"]
+
+      generic_name_col <- translations[id == "generic_name_col", ..lang][[1]]
       
+      # Use data.table syntax properly
       if (input$loc == "All") {
-        tbl <- imgs$imgs[imgs$imgs$datetime >= input$dates[1] & imgs$imgs$datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & imgs$imgs$img_meta_id %in% img_ids, c("datetime", translations[translations$id == "generic_name_col", ..lang][[1]], "image_id")]
+        tbl <- imgs$imgs[datetime >= input$dates[1] & datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & img_meta_id %in% img_ids$img_meta_id, 
+                         .(datetime, get(generic_name_col), image_id)]
       } else {
-        tbl <- imgs$imgs[imgs$imgs$datetime >= input$dates[1] & imgs$imgs$datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & imgs$imgs$location_id == input$loc & imgs$imgs$img_meta_id %in% img_ids, c("datetime", translations[translations$id == "generic_name_col", ..lang][[1]], "image_id")]
+        tbl <- imgs$imgs[datetime >= input$dates[1] & datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & location_id == input$loc & img_meta_id %in% img_ids$img_meta_id, 
+                         .(datetime, get(generic_name_col), image_id)]
       }
     })
     
@@ -97,9 +105,9 @@ img <- function(id, con, language, restoring) {
     observe({
       lang <- language()
       tbl <- table_data()
-      names(tbl) <- c(translations[translations$id == "datetime", ..lang][[1]], translations[translations$id == "loc", ..lang][[1]], "image_id")
+      data.table::setnames(tbl, c(translations[translations$id == "datetime", ..lang][[1]], translations[translations$id == "loc", ..lang][[1]], "image_id"))
       
-      tables$tbl <- tbl
+      tables$tbl <- tbl # User for image rendering later
       
       out_tbl <- DT::datatable(tbl, rownames = FALSE, selection = list(mode = "single", selected = isolate(selected_row())),
                                filter = "none",
