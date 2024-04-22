@@ -13,16 +13,21 @@ ui <- function(request) {
     
     # Create language selector and logo positioned above navbarPage
     fluidRow(class = "top-bar-container",
-             column(2,
+             column(3,
                     div(class = "logo-container",
                         htmltools::img(src = "imgs/YG_Aurora_resized.png", .noWS = "outside", alt = "Aurora")),
                     class = "left-aligned-logo"),
-             column(2, offset = 9, 
+             column(2, offset = 6, 
                     div(class = "lang-select-container",
                         selectizeInput(inputId = "langSelect", label = NULL, 
                                        choices = names(translations)[-c(1,2)], 
                                        selected = "English")),
-                    class = "right-aligned-lang-select")
+                    class = "right-aligned-lang-select"),
+             column(1, offset = 0,
+                    div(class = "login-btn-container",
+                        actionButton("loginBtn", "Login", class = "btn btn-primary")),
+                    class = "right-aligned-login-btn")
+             
     ),
     navbarPage("StreamLine",
                id = "navbar",

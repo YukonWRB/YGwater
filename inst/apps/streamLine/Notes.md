@@ -15,7 +15,6 @@
 
 ## Improvements
 - Modal map for location selection
-- Sort location names alphabetically
 
 # Documents view
 ## Issues

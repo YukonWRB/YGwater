@@ -2,17 +2,50 @@
 
 server <- function(input, output, session) {
   
-  # Begin logging
-  log_event("INFO", "Session started")
-  onUnhandledError(function(err) {
-    # log the unhandled error
-    level <- if (inherits(err, "shiny.error.fatal")) "FATAL" else "ERROR"
-    log_event(level, conditionMessage(err))
+  observeEvent(input$loginBtn, {
+    showModal(modalDialog(
+      title = "This doesn't work yet",
+      renderUI(HTML("Login is reserved for Yukon Government users and partner organizations. Contact us if you think you should have access (access doesn't do anything special yet, so hold off until this message changes). <br> <br>")),
+      textInput("username", "Username", "Nope, not working"),
+      passwordInput("password", "Password", "Nope, not working"),
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("confirmLogin", "Log in", class = "btn-primary")
+      )
+    ))
   })
-  
-  onStop(function() {
-    log_event("INFO", "Session ended")
-  })
+  # login <- reactiveVal(FALSE)
+  # observeEvent(input$loginBtn, {
+  #   if (!login) {
+  #     showModal(modalDialog(
+  #       title = "Login",
+  #       textInput("username", "Username"),
+  #       passwordInput("password", "Password"),
+  #       footer = tagList(
+  #         modalButton("Cancel"),
+  #         actionButton("confirmLogin", "Log in", class = "btn-primary")
+  #       )
+  #     ))
+  #   } else {
+  #     login <- TRUE
+  #     shinyjs::removeClass(selector = "body", class = "logged-in")
+  #   }
+  # })
+  # 
+  # observeEvent(input$confirmLogin, {
+  #   if (input$username == "admin" && input$password == "pass") {  # Simplified check
+  #     login <- TRUE
+  #     shinyjs::addClass(selector = "body", class = "logged-in")
+  #     removeModal()
+  #   } else {
+  #     showModal(modalDialog(
+  #       title = "Error",
+  #       "Incorrect username or password!",
+  #       easyClose = TRUE,
+  #       footer = modalButton("Close")
+  #     ))
+  #   }
+  # })
   
   # Initial setup #############################################################
   # Automatically update URL every time an input changes
@@ -20,7 +53,7 @@ server <- function(input, output, session) {
     reactiveValuesToList(input)
     session$doBookmark()
   })
-  setBookmarkExclude("userLang")
+  setBookmarkExclude(c("userLang", "loginBtn"))
   
   # Update the query string
   onBookmarked(updateQueryString)

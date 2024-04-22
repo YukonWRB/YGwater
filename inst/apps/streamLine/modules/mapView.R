@@ -215,24 +215,15 @@ map <- function(id, con, language, restoring) {
     
     # Filter the map data based on user's selection and add points ############################
     # Function to create popups dynamically
-    popupContent <- function(loc) {
-      # Start with the name
-      popup_html <- paste0("<strong>", loc$name, "</strong><br/>")
-      
-      # Conditionally add extra details
-      if (!is.na(loc$parameters)) {
-        popup_html <- paste0(popup_html, "Parameters: ", loc$parameters, "<br/>")
-      }
-      
-      if (!is.na(loc$projects)) {
-        popup_html <- paste0(popup_html, "Project: ", loc$projects, "<br/>")
-      }
-      
-      # Link to a tab if the location has associated timeseries data
-      # if (loc$has_timeseries) {
-      #   popup_html <- paste0(popup_html, "<a href='#someTab'>View Data</a>")
-      # }
-      return(HTML(popup_html))
+    popupContent <- function(loc, language, abbreviation) {
+      paste0(
+        "<strong>", loc$name, "</strong><br/>",
+        substr(loc$start_time, 1, 10), " to ", substr(loc$end_time, 1, 10), "<br/><br/>",
+        "<strong>", translations[translations$id == "parameter(s)", ..language][[1]], ":</strong><br/><i>", loc$parameters, "</i><br/>",
+        "<strong>", translations[translations$id == "network(s)", ..language][[1]], ":</strong><br/><i>", loc$networks, "</i><br/>",
+        "<strong>", translations[translations$id == "project(s)", ..language][[1]], ":</strong><br/><i>", ifelse(is.na(loc$projects), "N/A", paste(loc$projects, collapse = "<br/>")), "</i><br/>",
+        "<a href='#' onclick='changeTabAndSetInput(\"", loc$location_id, "\"); return false;'>View Data</a>"
+      )
     }
     
     observe({
@@ -329,24 +320,54 @@ map <- function(id, con, language, restoring) {
       
       loc.sub <- locations[locations$location_id %in% timeseries.sub$location_id, ]
       
-      # Here, add columns to loc.sub that will be used in the popups. These can include:
-      loc.sub$date_range  <- "date_range" #character
-      loc.sub$parameters <- "parameters" #character of first ?? parameters. Beyond that, a popup table of parameters
-      loc.sub$projects  <- "projects" #character 
-      loc.sub$networks <- "networks" #character
-      loc.sub$plot <- "View plots" #boolean, link to plots
-      loc.sub$data <- "View data" #boolean, link to data
-      # loc.sub$images  #boolean, link to images if exists
-      # loc.sub$documents #boolean, link to documents if exists
+      # Create popup text
+      # Aggregating time range for each location
+      time_range <- timeseries.sub %>%
+        dplyr::group_by(location_id) %>%
+        dplyr::summarize(
+          start_time = min(start_datetime),
+          end_time = max(end_datetime)
+        )
+      # Get parameters per location
+      param_name_col <- translations[translations$id == "param_name_col", ..lang][[1]]
+      location_parameters <- timeseries.sub %>%
+        dplyr::left_join(parameters, by = c("parameter" = "param_code")) %>%
+        dplyr::group_by(location_id) %>%
+        dplyr::summarize(parameters = paste(titleCase(get(param_name_col), abbrev), " (", substr(start_datetime, 1, 10), " to ", substr(end_datetime, 1, 10), ") ", collapse = "<br/>", sep = ""), .groups = 'drop')
+      # Get networks per location
+      network_col <- translations[translations$id == "generic_name_col", ..lang][[1]]
+      location_networks <- locations_networks %>%
+        dplyr::left_join(networks, by = "network_id") %>%
+        dplyr::group_by(location_id) %>%
+        dplyr::summarize(networks = paste(titleCase(get(network_col), abbrev), collapse = "<br/>"), .groups = 'drop')
+      
+      # If you have project data, repeat a similar process for projects
+      projects_col <- translations[translations$id == "generic_name_col", ..lang][[1]]
+      location_projects <- locations_projects %>%
+        dplyr::left_join(projects, by = "project_id") %>%
+        dplyr::group_by(location_id) %>%
+        dplyr::summarize(projects = paste(titleCase(get(projects_col), abbrev), collapse = "<br/>"), .groups = 'drop')
+      
+      # Combine all the data
+      location_info <- loc.sub %>%
+        dplyr::left_join(time_range, by = "location_id") %>%
+        dplyr::left_join(location_parameters, by = "location_id") %>%
+        dplyr::left_join(location_networks, by = "location_id") %>%
+        dplyr::left_join(location_projects, by = "location_id")
+      
+        location_info$popup_html <- unname(sapply(
+        split(location_info, seq(nrow(location_info))),
+        function(x) popupContent(x, language = lang, abbreviation = abbrev)
+      ))
       
       
       leaflet::leafletProxy("map", session = session) %>%
         leaflet::clearMarkers() %>%
         leaflet::clearMarkerClusters() %>%
-        leaflet::addMarkers(data = loc.sub, 
+        leaflet::addMarkers(data = location_info, 
                             lng = ~longitude, 
                             lat = ~latitude,
-                            popup = unname(sapply(split(loc.sub, seq(nrow(loc.sub))), popupContent)),
+                            popup = ~popup_html,
                             clusterOptions = leaflet::markerClusterOptions())
     })
     
