@@ -110,6 +110,8 @@ snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily 
                             " AND date >= '", year-1, "-09-01' ", #year_param
                             "AND date <= '", year, "-0", month, "-01' ")) #year_param
 snow_p$date <- as.POSIXct(snow_p$date)
+snow_p[snow_p$date > paste0(format(Sys.Date(), "%Y-%m"), "-01"),]$value <- NA
+
 # Get historical snow survey data
 snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measurements_discrete ",
                             "WHERE timeseries_id = ", location_surv))
