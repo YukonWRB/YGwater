@@ -1,4 +1,11 @@
 # General notes
+## Notes
+Sending values to the main server from modules:
+1. Assign a variable name to the module server function, e.g. `server <- function(input, output, session) { ... }`
+2. return() something from the server. AFAIK, this needs to be a reactiveVal or reactiveValues object.
+3. observe() the variable name you assigned to the module.
+
+
 ## Issues
 - Reduce or eliminate all browser "inspect" errors and warnings
 ## Improvements

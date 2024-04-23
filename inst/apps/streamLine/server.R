@@ -144,7 +144,7 @@ console.log(language);")
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
                   translations[translations$id == "doc_view_title", ..newLang][[1]],
                   '</div>'))    
-      })
+    })
     output$about_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
                   translations[translations$id == "about_view_title", ..newLang][[1]],
@@ -171,33 +171,38 @@ console.log(language);")
       tryCatch({
         home("home", language = languageSelection, restoring = isRestoring_home)
       }, error = function(e) {
-          showModal(modalDialog(
-            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-            translations[translations$id == "errorModalMsg", ..newLang][[1]],
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          ))
-          # Optionally reset to a safe state or tab
-          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
-        })
+        showModal(modalDialog(
+          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        # Reset to last good tab
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
     }
     if (input$navbar == "map") {
       tryCatch({
-        map("map", con = pool, language = languageSelection, restoring = isRestoring_map)
-        }, error = function(e) {
-          showModal(modalDialog(
-            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-            translations[translations$id == "errorModalMsg", ..newLang][[1]],
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          ))
-          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+        map_outputs <- map("map", con = pool, language = languageSelection, restoring = isRestoring_map)
+        observe({
+          if (!is.null(map_outputs$change_tab)) {
+            updateNavbarPage(session, "navbar", selected = map_outputs$change_tab)
+          }
         })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
     }
     if (input$navbar == "data") {
       tryCatch({
         data("data", con = pool, language = languageSelection, restoring = isRestoring_data)      
-        }, error = function(e) {
+      }, error = function(e) {
         showModal(modalDialog(
           title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
           translations[translations$id == "errorModalMsg", ..newLang][[1]],
@@ -211,13 +216,13 @@ console.log(language);")
       tryCatch({
         plot("plot", con = pool, language = languageSelection, restoring = isRestoring_plot)
       }, error = function(e) {
-          showModal(modalDialog(
-            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-            translations[translations$id == "errorModalMsg", ..newLang][[1]],
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          ))
-          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+        showModal(modalDialog(
+          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
+          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
       })
     }
     if (input$navbar == "img") {
@@ -236,7 +241,7 @@ console.log(language);")
     if (input$navbar == "doc") {
       tryCatch({
         doc("doc", con = pool, language = languageSelection, restoring = isRestoring_doc)
-        }, error = function(e) {
+      }, error = function(e) {
         showModal(modalDialog(
           title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
           translations[translations$id == "errorModalMsg", ..newLang][[1]],
@@ -262,4 +267,5 @@ console.log(language);")
     # Update last working tab on successful tab switch
     lastWorkingTab(input$navbar)
   }, ignoreNULL = TRUE)
+  
 }
