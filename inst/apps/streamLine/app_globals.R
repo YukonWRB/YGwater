@@ -22,9 +22,3 @@ if (!exists("pool")) {
     password = Sys.getenv("hydrometPass")
   )
 }
-
-# Define a function for error logging
-log_event <- function(level, ...) {
-  ts <- strftime(Sys.time(), " [%F %T] ")
-  message(level, ts, ...)
-}
