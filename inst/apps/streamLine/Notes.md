@@ -35,3 +35,5 @@
 -   Other options: <https://stackoverflow.com/questions/29173336/how-to-display-advanced-customed-popups-for-leaflet-in-shiny> This seems to be a quite functional example with no additional package dependencies.
 ## Improvements
 - Sort filter options alphabetically
+- Create HTML popups for map markers only once, at beginning of session.
+- Explore loading data for the app, shared between all sessions, and updating every hour at half past.

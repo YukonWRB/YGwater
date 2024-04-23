@@ -55,6 +55,12 @@ test_that("continuous flow plot is as expected for full year with numeric startD
   unlink(dir, recursive = TRUE)
 })
 
+test_that("overlaping year plot throws no error when years is NULL", {
+  skip_on_cran()
+  skip_on_ci()
+  expect_no_error(suppressWarnings(plotOverlap("09AA-M1", "snow water equivalent", startDay = "2023-09-01", endDay = "2023-05-31", return_months = c(4,5), historic_range = "last")))
+})
+
 test_that("SWE plot works when overlaping new year, dates as character", {
   skip_on_cran()
   skip_on_ci()
@@ -98,7 +104,7 @@ test_that("continuous level plot is as expected for multiple years when output t
 })
 
 test_that("too big year error message happens", {
-  expect_error(plotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = lubridate::year(Sys.Date()) + 2))
+  expect_error(suppressWarnings(plotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = lubridate::year(Sys.Date()) + 2)))
 })
 
 #Test for historical range and return periods able to flex.

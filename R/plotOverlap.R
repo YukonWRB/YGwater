@@ -90,11 +90,11 @@ plotOverlap <- function(location = NULL,
 
   if (language == "fr") {
     lc <- Sys.getlocale("LC_ALL")
-    Sys.setlocale("LC_ALL", "French")
+    Sys.setlocale("LC_ALL", "French_Canada.1252")
     on.exit(Sys.setlocale("LC_ALL", lc), add = TRUE)
   } else if (language == "en") {
     lc <- Sys.getlocale("LC_ALL")
-    Sys.setlocale("LC_ALL", "English")
+    Sys.setlocale("LC_ALL", "English_Canada.1252")
     on.exit(Sys.setlocale("LC_ALL", lc), add = TRUE)
   }
 
@@ -113,7 +113,9 @@ plotOverlap <- function(location = NULL,
 
   if (is.null(years)) {
     years <- lubridate::year(Sys.Date())
+    null_years <- TRUE
   } else {
+    null_years <- FALSE
     years <- as.numeric(years)
     years <- sort(years)
     if (length(years) > 10) {
@@ -137,19 +139,6 @@ plotOverlap <- function(location = NULL,
   if (!(historic_range %in% c("all", "last"))) {
     warning("Parameter `historic_range` can only be 'all' or 'last'. Resetting it to the default 'all'.")
     historic_range <- "all"
-  }
-
-  if (is.null(return_max_year)) {
-    if (historic_range == "last") {
-      return_max_year <- max(years)
-    } else {
-      return_max_year <- lubridate::year(Sys.Date())
-    }
-  } else {
-    if (return_max_year > max(years) & historic_range == "last") {
-      return_max_year <- max(years)
-      message("Your parameter entry for 'return_max_year' is invalid (greater than the last year to plot). It has been adjusted to the last year to plot. See the help file for other options.")
-    }
   }
 
 
@@ -189,10 +178,30 @@ plotOverlap <- function(location = NULL,
     endDay <<- lubridate::force_tz(endDay, tzone)
   })
   if (startDay > endDay) { #if the user is wanting a range overlapping the new year
-    lubridate::year(endDay) <- lubridate::year(endDay) + 1
     overlaps <- TRUE
+    if (null_years) {
+      years <- lubridate::year(Sys.Date()) - 1
+      max_year <- lubridate::year(Sys.Date()) - 1
+      lubridate::year(startDay) <- lubridate::year(Sys.Date()) - 1
+      lubridate::year(endDay) <- lubridate::year(endDay)
+    } else {
+      lubridate::year(endDay) <- lubridate::year(endDay) + 1
+    }
   } else {
     overlaps <- FALSE
+  }
+  
+  if (is.null(return_max_year)) {
+    if (historic_range == "last") {
+      return_max_year <- max(years)
+    } else {
+      return_max_year <- lubridate::year(Sys.Date())
+    }
+  } else {
+    if (return_max_year > max(years) & historic_range == "last") {
+      return_max_year <- max(years)
+      message("Your parameter entry for 'return_max_year' is invalid (greater than the last year to plot). It has been adjusted to the last year to plot. See the help file for other options.")
+    }
   }
 
   if (startDay > Sys.Date()) { #If left like this it results in wonky ribbon plotting and extra 'ghost' timeseries. Since there would be no data anyways change the year, endDay can stay in the future to enable plotting graphs with only the ribbon beyond the last day.
