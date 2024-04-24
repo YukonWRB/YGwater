@@ -24,10 +24,10 @@
 #' @export
 #'
 
-# test <- snowBulletinStats(year=2024, month=4, excel_output=TRUE)
+# test <- snowBulletinStats(year=2024, month=4, excel_output=FALSE)
 # year <- 2024
 # month <- 3
-# excel_output <- TRUE
+# excel_output <- FALSE
 # save_path = "choose"
 
 snowBulletinStats <-
