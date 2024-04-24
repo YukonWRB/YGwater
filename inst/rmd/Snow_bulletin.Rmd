@@ -19,10 +19,8 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 ---
 
 ```{r setup, include=FALSE}
-# snowBulletin(year = 2024, month = 4, scale = 1, basins = c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"), save_path = "C:/Users/estewart/Documents/R/Projects/YGwater", synchronize=FALSE, language="english")
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi=300)
 con <- YGwater::hydrometConnect()
-#on.exit(DBI::dbDisconnect(con))
 knitr::include_graphics
 fig.height_half <- 2.9
 fig.height_full <- 2.7
@@ -30,6 +28,58 @@ language_param <- params$language
 year_param <- params$year
 month_param <- params$month
 scale_param <- params$scale
+
+# Define titles
+titles <- list(
+  english = list(
+    PREFACE = "Preface",
+    ACKNOWLEDGEMENTS = "Acknowledgements",
+    DISCLAIMER = "Disclaimer and Limitation of Liability",
+    WEATHER_SNOWPACK = "Yukon Territory Weather and Snowpack Conditions",
+    FLOW_CONDITIONS = "Yukon Territory Flow Conditions and Outlook",
+    MAP1 = "Map 1. Temperature Anomalies",
+    MAP2 = "Map 2. Precipitation",
+    MAP3 = "Map 3. Snow Water Equivalent",
+    UPPER_YUKON = "Upper Yukon River Basin (Southern Lakes/Whitehorse)",
+    TESLIN = "Teslin River Basin",
+    CENTRAL_YUKON = "Central Yukon River Basin (Carmacks Area)",
+    PELLY = "Pelly River Basin",
+    STEWART = "Stewart River Basin",
+    WHITE = "White River Basin",
+    LOWER_YUKON = "Lower Yukon River Basin (Dawson/Klondike Area)",
+    PORCUPINE = "Porcupine River Basin",
+    PEEL = "Peel River Basin",
+    LIARD = "Liard River Basin",
+    ALSEK = "Alesk River Basin",
+    TABLE = "Drainage Basin and Snow Course",
+    MAP4 = "Map 4. Location of Water Resources Snow Courses"
+  ),
+  french = list(
+    PREFACE = "Préface",
+    ACKNOWLEDGEMENTS = "Remerciements",
+    DISCLAIMER = "Avis de non-responsabilité",
+    WEATHER_SNOWPACK = "Conditions météorologiques et nivologiques",
+    FLOW_CONDITIONS = "Conditions d'écoulement et perspective",
+    MAP1 = "Carte 1. Anomalies des températures",
+    MAP2 = "Carte 2. Précipitations",
+    MAP3 = "Carte 3. Équivalent en eau de la neige",
+    UPPER_YUKON = "Bassin supérieur du fleuve Yukon (Lacs du Sud / Whitehorse)",
+    TESLIN = "Bassin de la rivière Teslin",
+    CENTRAL_YUKON = "Bassin centrale du fleuve Yukon (région de Carmacks)",
+    PELLY = "Bassin de la rivière Pelly",
+    STEWART = "Bassin de la rivière Stewart",
+    WHITE = "Bassin de la rivière White",
+    LOWER_YUKON = "Bassin inférieur du fleuve Yukon (région de Dawson)",
+    PORCUPINE = "Bassin de la rivière Porcupine",
+    PEEL = "Bassin de la rivière Peel",
+    LIARD = "Bassin de le rivière Liard",
+    ALSEK = "Bassin de la rivière Alsek",
+    TABLE = "Bassins hydrographiques et relevés nivométriques",
+    MAP4 = "Carte 4. Emplacement des stations nivométriques"
+  )
+)
+
+titles <- titles[[params$language]]
 
 ```
 
@@ -441,7 +491,7 @@ swe_basins <- YGwater::SWE_basin(year = year_param,
 
 <br>
 
-# Preface
+# `r titles$PREFACE`
 
 The Department of Environment's Water Resources Branch issues the Yukon
 Snow Survey Bulletin and Water Supply Forecast three times annually --
@@ -484,6 +534,7 @@ all basins contain the instrumentation to support all five figure types.
     level, compared with historical data, representing an overview of
     the watershed hydrological conditions. The flood level refers to the
     lowest elevation at which flood impacts are estimated to occur.
+
 
 ```{r legend, echo=FALSE, eval=TRUE, out.width="40%"}
 
@@ -551,7 +602,7 @@ Department of Environment\
 Government of Yukon\
 Box 2703, Whitehorse, Yukon Y1A 2C6
 
-# Acknowledgements
+# `r titles$ACKNOWLEDGEMENTS`
 
 The Yukon Snow Survey Bulletin forms part of the Yukon Snow Survey
 Program administered by the Water Resources Branch, Department of
@@ -592,7 +643,7 @@ are:
     Solutions*
 -   *Vuntut Gwitchin First Nation*
 
-# Disclaimer and Limitation of Liability
+# `r titles$DISCLAIMER`
 
 The User understands and acknowledges that the use of the data is solely
 at their own risk. The User is solely responsible for confirming the
@@ -615,7 +666,7 @@ any loss of revenue or profit, or for direct, indirect, special,
 incidental, or consequential damages arising from or related to the
 data.
 
-# Yukon Territory Weather and Snowpack Conditions
+# `r titles$WEATHER_SNOWPACK`
 
 **October**
 
@@ -633,11 +684,11 @@ data.
 
 **Snowpack**
 
-# Yukon Territory Flow Conditions and Outlook
-# `r officer::ftext("Map 1. Temperature Anomalies", officer::fp_text_lite(color = "white", font.size=1))`
-# `r officer::ftext("Map 2. Precipitation", officer::fp_text_lite(color = "white", font.size=1))` 
-# `r officer::ftext("Map 3. Snow Water Equivalent", officer::fp_text_lite(color = "white", font.size=1))` 
-# Upper Yukon River Basin (Southern Lakes/Whitehorse)
+# `r titles$FLOW_CONDITIONS`
+# `r titles$MAP1`
+# `r titles$MAP2`
+# `r titles$MAP3`
+# `r titles$UPPER_YUKON`
 
 The Upper Yukon River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Upper_Yukon",]$description,
@@ -678,7 +729,7 @@ par(mfrow = c(1, 2))
 station_id <- "09AA-M1"
 # Plot SWE
 if (language=="french") {
-  snowbullpillow(location = station_id, custom_title = "A1: Équivalent en eau de la neige - Tagish", year = year_param, language="fr")
+  snowbullpillow(location = station_id, custom_title = "A1 : Équivalent en eau de la neige - Tagish", year = year_param, language="fr")
 } else {
   snowbullpillow(location = station_id, custom_title = "A1: Tagish Snow Water Equivalent", year = year_param, language="en")
 }
@@ -689,7 +740,7 @@ if (language=="french") {
 station_id <- "29AB-M3"
 # Plot SWE
 if (language=="french") {
-  snowbullpillow(location = station_id, custom_title = "A2: Équivalent en eau de la neige - Wolf Creek", year = year_param, language="fr")
+  snowbullpillow(location = station_id, custom_title = "A2 : Équivalent en eau de la neige - Wolf Creek", year = year_param, language="fr")
 } else {
   snowbullpillow(location = station_id, custom_title = "A2: Wolf Creek Subalpine Snow Water Equivalent", year = year_param)
 }
@@ -702,7 +753,7 @@ par(mfrow = c(1, 2))
 
 ## A3: Log Cabin
 if (language_param == "french") {
-  snowbullpillow2(location_pil=649, location_surv=217, custom_title="A3 : Équivalent en eau de la neige - Log Cabin (C-B)" , year=year_param, scale=scale_param)
+  snowbullpillow2(location_pil=649, location_surv=217, custom_title="A3 : Équivalent en eau de la neige - Log Cabin (C.-B.)" , year=year_param, scale=scale_param)
 } else {
   snowbullpillow2(location_pil=649, location_surv=217, custom_title="A3: Log Cabin (B.C) Snow Water Equivalent" , year=year_param, scale=scale_param)
 }
@@ -765,7 +816,7 @@ experience \-\-\-\-- average water levels this summer.
 # Set station ID
 station_id <- "09AB004"
 if (language_param == "french") {
-  custom_title <- "E1: Niveau d'eau du lac Marsh"
+  custom_title <- "E1 : Niveau d'eau du lac Marsh"
 } else {
   custom_title <- "E1: Marsh Lake Water Surface Elevation"
 }
@@ -785,7 +836,7 @@ if (language_param == "french") {
 # Set station ID
 station_id <- "09AB010"
 if (language_param == "french") {
-  custom_title  <- "E2: Niveau d'eau du lac Laberge"
+  custom_title  <- "E2 : Niveau d'eau du lac Laberge"
 } else {
   custom_title <- "E2: Lake Laberge Water Surface Elevation"
 }
@@ -800,7 +851,7 @@ if (language_param == "french") {
 
 ```
 
-# Teslin River Basin
+# `r titles$TESLIN`
 
 ```{r Teslin, echo=FALSE}
 if ("Teslin" %in% params$basins) {
@@ -883,7 +934,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Central Yukon River Basin (Carmacks Area)
+# `r titles$CENTRAL_YUKON`
 
 ```{r Central Yukon, echo=FALSE}
 if ("Central Yukon" %in% params$basins) {
@@ -971,7 +1022,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Pelly River Basin
+# `r titles$PELLY`
 
 ```{r Pelly, echo=FALSE}
 if ("Pelly" %in% params$basins) {
@@ -1067,7 +1118,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Stewart River Basin
+# `r titles$STEWART`
 
 ```{r Stewart, echo=FALSE}
 if ("Stewart" %in% params$basins) {
@@ -1170,7 +1221,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# White River Basin
+# `r titles$WHITE`
 
 ```{r White, echo=FALSE}
 if ("White" %in% params$basins) {
@@ -1236,7 +1287,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Lower Yukon River Basin (Dawson/Klondike Area)
+# `r titles$LOWER_YUKON`
 
 ```{r Lower Yukon, echo=FALSE}
 if ("Lower Yukon" %in% params$basins) {
@@ -1359,7 +1410,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Porcupine River Basin
+# `r titles$PORCUPINE`
 
 ```{r Porcupine, echo=FALSE}
 if ("Porcupine" %in% params$basins) {
@@ -1444,7 +1495,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Peel River Basin
+# `r titles$PEEL`
 
 ```{r Peel, echo=FALSE}
 if ("Peel" %in% params$basins) {
@@ -1505,7 +1556,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Liard River Basin
+# `r titles$LIARD`
 
 ```{r Liard, echo=FALSE}
 if ("Liard" %in% params$basins) {
@@ -1610,7 +1661,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Alsek River Basin
+# `r titles$ALSEK`
 
 ```{r Alsek, echo=FALSE}
 if ("Alsek" %in% params$basins) {
@@ -1672,7 +1723,7 @@ snowbullWater(location = station_id,
               language = substr(language_param, 1, 2))
 ```
 
-# Drainage Basin and Snow Course
+# `r titles$TABLE`
 
 ```{r table, fig.width=10, results='asis', echo=FALSE}
 
@@ -1690,16 +1741,44 @@ if (length(tabl[tabl$estimate_flag==TRUE,]$swe) > 0) {
 if (length(tabl[tabl$date_flag==TRUE,]$swe) > 0) {
   tabl[tabl$date_flag==TRUE,]$swe <- paste0(tabl[tabl$date_flag==TRUE,]$swe, " B")
 }
-# Not N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
-tabl$sample_date <- as.character(tabl$sample_date)
-tabl$sample_date[is.na(tabl$sample_date)] <- "N.S."
-tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "N.S."
 
-# Subset to columns of interest
-tabl <- tabl[, c("location_name", "location_id", "elevation", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
+#### French version versus English version of table ####
+if (language == "french") {
+  # Not N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
+  tabl$sample_date <- as.character(tabl$sample_date)
+  tabl$sample_date[is.na(tabl$sample_date)] <- "A.R."
+  tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "A.R."
+  # Subset to columns of interest
+  tabl <- tabl[, c("name_fr", "location_id", "elevation", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
+  # Rename columns
+  colnames(tabl) <- c("Nom", "Identifiant", "Élévation (m)", "Date du relevé", "Épaisseur de neige (cm)", "Équivalent en eau de la neige  (EEN) (mm)", "Année dernière (EEN) (mm)", "Médiane historique (EEN) (mm)", "Nombre d'années avec données", "sub_basin")
+  size <- 9
+  wdth <- c(1.3, 1.0, 0.8, 1.0, 0.8, 0.8, 0.7)
+  # Remove 'Parcours nivométrique' from name
+  tabl[,1] <- sub("Parcours nivométrique du ", "", tabl[,1])
+  tabl[,1] <- sub("Parcours nivométrique de la ", "", tabl[,1])
+  tabl[,1] <- sub("Parcours nivométrique de l'", "", tabl[,1])
+  tabl[,1] <- sub("Parcours nivométrique de ", "", tabl[,1])
+  tabl[,1] <- sub("Parcours nivométrique d'", "", tabl[,1])
+  tabl[,1] <- sub("Parcours nivométrique ", "", tabl[,1])
+  # Capitalize first letter of location name
+  tabl[,1] <- paste0(toupper(substr(tabl$Nom, 1, 1)), substr(tabl$Nom, 2, nchar(tabl$Nom)))
+  
+} else {
+  # Not N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
+  tabl$sample_date <- as.character(tabl$sample_date)
+  tabl$sample_date[is.na(tabl$sample_date)] <- "N.S."
+  tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "N.S."
+  # Subset to columns of interest
+  tabl <- tabl[, c("location_name", "location_id", "elevation", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
+  colnames(tabl) <- c("Name", "Number", "Elevation (m)", "Date of Survey", "Snow depth (cm)", "Water content (SWE) (mm)", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
+  size <- 10
+  wdth <- c(1.5, 1.1, 0.8, 1.1, 0.7, 0.8, 0.6)
+  # Remove 'Snow Course' from name
+  tabl[,1] <- sub(" Snow Course", "", tabl[,1])
+}
 
-colnames(tabl) <- c("Name", "Number", "Elevation (m)", "Date of Survey", "Snow depth (cm)", "Water content (SWE) (mm)", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
-
+#### Set up basin names ####
 # Order rows
 target <- c("Upper_Yukon", "Teslin_Big_Salmon", "Central_Yukon", "Pelly", "Stewart", "White", "Lower_Yukon", "Porcupine", "Peel", "Liard", "Alsek", "Alaska")
 tabl <- tabl %>% dplyr::arrange(factor(sub_basin, levels = target))
@@ -1710,9 +1789,30 @@ tabl$sub_basin <- paste0(tabl$sub_basin, " River Basin")
 # Replace all _ with space
 tabl$sub_basin <- gsub("_", " ", tabl$sub_basin)
 tabl$sub_basin <- gsub("Alaska River Basin", "Alaska Snow Courses", tabl$sub_basin)
-# Remove 'Snow Course' from name
-tabl$Name <- sub(" Snow Course", "", tabl$Name)
-# Single table using flextable 
+
+# Manually replace french names 
+if (language == "french") {
+  tabl <- tabl %>%
+  dplyr::mutate(sub_basin = dplyr::case_when(
+    sub_basin == "Upper Yukon River Basin" ~ "Bassin supérieur du fleuve Yukon",
+    sub_basin == "Teslin Big Salmon River Basin" ~ "Bassin des rivières Teslin et Big Salmon",  # Example replacement
+    sub_basin == "Central Yukon River Basin" ~ "Bassin central du fleuve Yukon",                        # Example replacement
+    sub_basin == "Pelly River Basin" ~ "Bassin de la rivière Pelly",    
+    sub_basin == "Stewart River Basin" ~ "Bassin de la rivière Stewart", 
+    sub_basin == "White River Basin" ~ "Bassin de la rivière White", 
+    sub_basin == "Lower Yukon River Basin" ~ "Bassin inférieur du fleuve Yukon", 
+    sub_basin == "Porcupine River Basin" ~ "Bassin de la rivière Porcupine", 
+    sub_basin == "Peel River Basin" ~ "Bassin de la rivière Peel", 
+    sub_basin == "Liard River Basin" ~ "Bassin de la rivière Liard", 
+    sub_basin == "Alsek River Basin" ~ "Bassin de la rivière Alsek", 
+    sub_basin == "Alaska Snow Courses" ~ "Stations nivométriques en Alaska", # Example replacement
+    TRUE ~ sub_basin  # Default case to keep original names if not listed
+  ))
+}
+
+
+
+##### Create flextable ####
 
 flextable::as_grouped_data(tabl, groups = "sub_basin") %>% 
   flextable::as_flextable(hide_grouplabel = TRUE) %>% 
@@ -1729,19 +1829,19 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   flextable::vline(part="body") %>% 
   flextable::border_outer() %>% 
   flextable::autofit() %>%
-  flextable::width(j="Name", width = 1.5) %>%
-  flextable::width(j="Number", width=1.1) %>%
-  flextable::width(j=3, width=0.8) %>%
-  flextable::width(j="Date of Survey", width=1.1) %>%
-  flextable::width(j=c(5,6,7), width = 0.7) %>%
-  flextable::width(j=8, width=0.8) %>%
-  flextable::width(j=9, width=0.6) %>%
+  flextable::width(j=1, width = wdth[1]) %>%
+  flextable::width(j=2, width = wdth[2]) %>%
+  flextable::width(j=3, width = wdth[3]) %>%
+  flextable::width(j=4, width = wdth[4]) %>%
+  flextable::width(j=c(5,6,7), width = wdth[5]) %>%
+  flextable::width(j=8, width = wdth[6]) %>%
+  flextable::width(j=9, width = wdth[7]) %>%
   flextable::font(fontname="Nunito Sans", part="all") %>%
-  flextable::fontsize(size=10, part="all") %>%
+  flextable::fontsize(size=size, part="all") %>%
   flextable::line_spacing(space=1) %>%
   flextable::padding(padding.top = 0.8, padding.bottom = 0.8)
 
 
 ```
 
-# `r officer::ftext("Map 4. Location of Water Resources Snow Courses", officer::fp_text_lite(color = "white", font.size=1))` 
+# `r titles$MAP4`

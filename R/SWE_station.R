@@ -66,7 +66,7 @@ SWE_station <-
       
       # Get measurements
       Meas <- DBI::dbGetQuery(con,
-                              paste0("SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name, datum_conversions.conversion_m, measurements_discrete.note
+                              paste0("SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name, datum_conversions.conversion_m, measurements_discrete.note, locations.name_fr
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
                       INNER JOIN locations ON timeseries.location=locations.location
@@ -78,7 +78,7 @@ SWE_station <-
       
       DBI::dbDisconnect(con)
       # Rename columns:
-      colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "note")
+      colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "note", "name_fr")
       # Change 'snow water equivalent' to SWE
       Meas[Meas$parameter == 'snow water equivalent',]$parameter <- "SWE"
       # Where note = estimated, make estimate_flag = TRUE
@@ -96,7 +96,6 @@ SWE_station <-
       # Reformat into long format
       Meas <- wider_data %>%
         tidyr::pivot_longer(cols = c("SWE", "snow depth", "density"), names_to = "parameter", values_to = "value")
-      
       
       ## From snow db ##
     } else if (source == "snow") {
@@ -277,6 +276,11 @@ SWE_station <-
       swe_station_summary$swe_rat[swe_station_summary$swe_rat == "NaN"] <- NA
       
       tabl <- swe_station_summary
+      
+      # Add column for french name
+      if (source == "hydromet") {
+        tabl <- merge(tabl, unique(Meas[, c("location_id", "name_fr")]), by = "location_id", all.x = TRUE)
+      }
     }
    
 #### ----------------------------- Last bits ------------------------------ ####

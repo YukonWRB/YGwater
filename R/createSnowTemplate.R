@@ -68,7 +68,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     } else if (circuit == "mayo") {
       courses <- c("Calumet", "Mayo Airport A", "Mayo Airport B", "Mayo Airport C") #
     } else if (circuit == "northslope") {
-      courses <- c("AK Border", "Herschel Island", "Komakuk", "NWT/YK Border", "Stakes", "Shingle Point")
+      courses <- c("AK Border", "Herschel Island", "Komakuk Beach", "NWT/YK Border", "Stokes Point", "Shingle Point")
     } else if (circuit == "oldcrow") {
       courses <- c("Old Crow")
     } else if (circuit == "pellyfarm") {
