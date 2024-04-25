@@ -30,17 +30,17 @@ eq_std_calc <- function(sampledata = sampledatafilt,
   } else {pH <- NA}
 
   # Calculate hardness with calculation order preference
-  if(!all(is.na(sampledata$`Hard-D (mg/L)`))) {
+  if (!all(is.na(sampledata$`Hard-D (mg/L)`))) {
     vec <- sampledata$`Hard-D (mg/L)`
     hard <- mean(vec[vec != 0 & !is.na(vec)])
-  } else if(!is.na(mean(na.omit(sampledata$`Ca-D (mg/L)`))*mean(na.omit(sampledata$`Mg-D (mg/L)`)))) {
+  } else if (!is.na(mean(stats::na.omit(sampledata$`Ca-D (mg/L)`))*mean(stats::na.omit(sampledata$`Mg-D (mg/L)`)))) {
     Ca <- sampledata$`Ca-D (mg/L)`
     Mg <- sampledata$`Mg-D (mg/L)`
     hard <- 2.497*mean(Ca[Ca != 0 & !is.na(Ca)]) + 4.118*mean(Mg[Mg != 0 & !is.na(Mg)])
-  } else if(!all(is.na(sampledata$`Hard-T (mg/L)`))){
+  } else if (!all(is.na(sampledata$`Hard-T (mg/L)`))) {
     vec <- sampledata$`Hard-T (mg/L)`
     hard <- mean(vec[vec != 0 & !is.na(vec)])
-  } else if(!is.na(mean(na.omit(sampledata$`Ca-T (mg/L)`))*mean(na.omit(sampledata$`Mg-T (mg/L)`)))) {
+  } else if (!is.na(mean(stats::na.omit(sampledata$`Ca-T (mg/L)`))*mean(stats::na.omit(sampledata$`Mg-T (mg/L)`)))) {
     Ca <- sampledata$`Ca-T (mg/L)`
     Mg <- sampledata$`Mg-T (mg/L)`
     hard <- 2.497*mean(Ca[Ca != 0 & !is.na(Ca)]) + 4.118*mean(Mg[Mg != 0 & !is.na(Mg)])
@@ -48,7 +48,7 @@ eq_std_calc <- function(sampledata = sampledatafilt,
     hard <- NA}
 
   # Calculate DOC
-  if(!all(is.na(sampledata$`C-DOC (mg/L)`))){
+  if (!all(is.na(sampledata$`C-DOC (mg/L)`))) {
     vec <- sampledata$`C-DOC (mg/L)`
     DOC <- mean(vec[vec != 0 & !is.na(vec)])
   } else {
@@ -56,14 +56,14 @@ eq_std_calc <- function(sampledata = sampledatafilt,
   }
 
   # Calculate temp
-  if(!all(is.na(sampledata$`Temp-F (C)`))) {
-    temp <- plyr::round_any(mean(na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
+  if (!all(is.na(sampledata$`Temp-F (C)`))) {
+    temp <- plyr::round_any(mean(stats::na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
   } else {
     temp <- NA
   }
 
   # Calculate Cl
-  if(!all(is.na(sampledata$`Chlord (mg/L)`))) {
+  if (!all(is.na(sampledata$`Chlord (mg/L)`))) {
     vec <- sampledata$`Chlord (mg/L)`
     Cl <- mean(vec[vec != 0 & !is.na(vec)])
   } else {Cl <- NA}
@@ -71,22 +71,22 @@ eq_std_calc <- function(sampledata = sampledatafilt,
   #### CCME_LT (T/D) ####
 
   # CCME_Al_lt
-  if(!is.na(pH)){
-    if(pH < 6.5){
+  if (!is.na(pH)) {
+    if (pH < 6.5) {
       CCME_Al_lt <- 0.005}
-    else if (pH >= 6.5){
+    else if (pH >= 6.5) {
       CCME_Al_lt <- 0.1}
   } else {
     CCME_Al_lt <- NA
   }
-  if(is.element("CCME_Al_lt", calcs$MaxVal)){
+  if (is.element("CCME_Al_lt", calcs$MaxVal)) {
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Al_lt")] <- CCME_Al_lt
   }
 
   # CCME_Cd_lt
-  if(hard < 17 | is.na(hard)){
+  if (hard < 17 | is.na(hard)) {
     CCME_Cd_lt <- 0.04/1000
-  } else if(hard >=17 & hard <=280){
+  } else if(hard >= 17 & hard <= 280) {
     CCME_Cd_lt <- 10^(0.83*(log10(hard))-2.46)/1000
   } else if(hard > 280){
     CCME_Cd_lt <- 0.37/1000

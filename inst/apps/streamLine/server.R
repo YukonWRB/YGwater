@@ -78,8 +78,24 @@ server <- function(input, output, session) {
     isRestoring_about(TRUE)
   })
   
-  # Language selection ########################################################
+  # Get data from database (passed to multiple modules)
   
+  data <- reactiveValues(
+    locations = dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;"),
+    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, category, start_datetime, end_datetime FROM timeseries;"),
+    locations_projects = dbGetQueryDT(pool, "SELECT * FROM locations_projects;"),
+    locations_networks = dbGetQueryDT(pool, "SELECT * FROM locations_networks;"),
+    param_types = dbGetQueryDT(pool, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);"),
+    param_groups = dbGetQueryDT(pool, "SELECT DISTINCT p.group, p.group_fr FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
+    parameters = dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.group, p.group_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
+    projects = dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
+    networks =  dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
+    has_images = dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;"),
+    has_documents = dbGetQueryDT(pool, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
+  )
+  
+  
+  # Language selection ########################################################
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
     if (!isRestoring()) {
@@ -111,96 +127,104 @@ console.log(language);")
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
+  # Language selection reactive based on the user's selected language (which is automatically set to the browser's language on load)
+  languageSelection <- reactiveValues()
+  observe({
+    languageSelection$language <- input$langSelect
+    languageSelection$abbrev <- translations[id == "titleCase", get(input$langSelect)][[1]]
+  })
+  
+  
   # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
-  observeEvent(input$langSelect, {
-    newLang <- input$langSelect
-    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(newLang == "Français", "fr", "en")))  # Updates the language in the web page html head.
+  observe({
+    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(languageSelection$language == "Français", "fr", "en")))  # Updates the language in the web page html head.
     output$home_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[translations$id == "home", ..newLang][[1]],
+                  translations[id == "home", get(languageSelection$language)][[1]],
                   '</div>'))
     })
     output$map_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[translations$id == "map_view_title", ..newLang][[1]],
+                  translations[id == "map_view_title", get(languageSelection$language)][[1]],
                   '</div>'))
     })
     output$data_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[translations$id == "data_view_title", ..newLang][[1]],
+                  translations[id == "data_view_title", get(languageSelection$language)][[1]],
                   '</div>'))
     })
     output$plot_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[translations$id == "plot_view_title", ..newLang][[1]],
+                  translations[id == "plot_view_title", get(languageSelection$language)][[1]],
                   '</div>'))
     })
     output$img_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[translations$id == "img_view_title", ..newLang][[1]],
+                  translations[id == "img_view_title", get(languageSelection$language)][[1]],
                   '</div>'))
     })
     output$doc_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[translations$id == "doc_view_title", ..newLang][[1]],
+                  translations[id == "doc_view_title", get(languageSelection$language)][[1]],
                   '</div>'))    
-      })
+    })
     output$about_title <- renderText({
       HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[translations$id == "about_view_title", ..newLang][[1]],
+                  translations[id == "about_view_title", get(languageSelection$language)][[1]],
                   '</div>'))
     })
     
     # Update the mailto link with the correct language
-    subject <- translations[translations$id == "feedback", ..newLang][[1]]
-    body <- translations[translations$id == "feedback_text", ..newLang][[1]]
+    subject <- translations[id == "feedback", get(languageSelection$language)][[1]]
+    body <- translations[id == "feedback_text", get(languageSelection$language)][[1]]
     mailtoLink <- sprintf("mailto:waterlevels@yukon.ca?subject=%s&body=%s", URLencode(subject), URLencode(body))
     session$sendCustomMessage("updateMailtoLink", mailtoLink) #Update using custom JS handler defined in the UI
   })
   
-  # Language selection reactive based on the user's selected language (which is automatically set to the browser's language on load)
-  languageSelection <- reactive({
-    input$langSelect
-  })
-  
+
   # Load specific modules based on input$navbar ################################
   lastWorkingTab <- reactiveVal("home")  # Initial or safe tab
   observeEvent(input$navbar, {
-    newLang <- input$langSelect
     if (input$navbar == "home") {
       tryCatch({
         home("home", language = languageSelection, restoring = isRestoring_home)
       }, error = function(e) {
-          showModal(modalDialog(
-            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-            translations[translations$id == "errorModalMsg", ..newLang][[1]],
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          ))
-          # Optionally reset to a safe state or tab
-          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
-        })
+        showModal(modalDialog(
+          title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
+          translations[id == "errorModalMsg", get(languageSelection$language)][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        # Reset to last good tab
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
     }
     if (input$navbar == "map") {
       tryCatch({
-        map("map", con = pool, language = languageSelection, restoring = isRestoring_map)
-        }, error = function(e) {
-          showModal(modalDialog(
-            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-            translations[translations$id == "errorModalMsg", ..newLang][[1]],
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          ))
-          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+        map_outputs <- map("map", language = languageSelection, restoring = isRestoring_map, data = data)  # Assigning the module to a variable enables it to send values back to the server.
+        observe({  # Observe the map_outputs reactive to see if the tab should be changed
+          if (!is.null(map_outputs$change_tab)) {
+            updateNavbarPage(session, "navbar", selected = map_outputs$change_tab)
+            map_outputs$change_tab <- NULL
+          }
         })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
+          translations[id == "errorModalMsg", get(languageSelection$language)][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+      })
     }
     if (input$navbar == "data") {
       tryCatch({
-        data("data", con = pool, language = languageSelection, restoring = isRestoring_data)      
-        }, error = function(e) {
+        data("data", con = pool, language = languageSelection, restoring = isRestoring_data, data = data)      
+      }, error = function(e) {
         showModal(modalDialog(
-          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
+          translations[id == "errorModalMsg", get(languageSelection$language)][[1]],
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
@@ -209,24 +233,24 @@ console.log(language);")
     }
     if (input$navbar == "plot") {
       tryCatch({
-        plot("plot", con = pool, language = languageSelection, restoring = isRestoring_plot)
+        plot("plot", con = pool, language = languageSelection, restoring = isRestoring_plot, data = data)
       }, error = function(e) {
-          showModal(modalDialog(
-            title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-            translations[translations$id == "errorModalMsg", ..newLang][[1]],
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          ))
-          updateNavbarPage(session, "navbar", selected = lastWorkingTab())
+        showModal(modalDialog(
+          title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
+          translations[id == "errorModalMsg", get(languageSelection$language)][[1]],
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        updateNavbarPage(session, "navbar", selected = lastWorkingTab())
       })
     }
     if (input$navbar == "img") {
       tryCatch({
-        img("img", con = pool, language = languageSelection, restoring = isRestoring_img)
+        img("img", con = pool, language = languageSelection, restoring = isRestoring_img)  # Images module fetches its own data as it has to be very up to date.
       }, error = function(e) {
         showModal(modalDialog(
-          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
+          translations[id == "errorModalMsg", get(languageSelection$language)][[1]],
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
@@ -235,11 +259,11 @@ console.log(language);")
     }
     if (input$navbar == "doc") {
       tryCatch({
-        doc("doc", con = pool, language = languageSelection, restoring = isRestoring_doc)
-        }, error = function(e) {
+        doc("doc", con = pool, language = languageSelection, restoring = isRestoring_doc, data = data)
+      }, error = function(e) {
         showModal(modalDialog(
-          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
+          translations[id == "errorModalMsg", get(languageSelection$language)][[1]],
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
@@ -251,8 +275,8 @@ console.log(language);")
         about("about", con = pool, language = languageSelection, restoring = isRestoring_about)
       }, error = function(e) {
         showModal(modalDialog(
-          title = translations[translations$id == "errorModalTitle", ..newLang][[1]],
-          translations[translations$id == "errorModalMsg", ..newLang][[1]],
+          title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
+          translations[id == "errorModalMsg", get(languageSelection$language)][[1]],
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
@@ -262,4 +286,5 @@ console.log(language);")
     # Update last working tab on successful tab switch
     lastWorkingTab(input$navbar)
   }, ignoreNULL = TRUE)
+  
 }

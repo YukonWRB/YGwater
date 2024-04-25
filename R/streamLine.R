@@ -23,15 +23,16 @@ streamLine <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
   rlang::check_installed("pool", reason = "required to use streamLine application.")
   rlang::check_installed("htmlwidgets", reason = "required to use streamLine application.")
   
-  
   appDir <- system.file("apps/streamLine", package = "YGwater")
+  
+  # Load the global variables. Contains modules as well as call to pool::pool() for connection to WRB database, library calls, and loads the translations data.table.
   source(system.file("apps/streamLine/app_globals.R", package = "YGwater"))
   
   if (appDir == "") {
     stop("StreamLine app not found.")
   }
   
-  shiny::enableBookmarking(store = "url")
+  shiny::enableBookmarking(store = "url")  # Enable bookmarking
   shiny::runApp(appDir, display.mode = display.mode, host = host, port = port, launch.browser = browser, quiet = FALSE)
 
 }
