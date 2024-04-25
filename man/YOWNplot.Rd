@@ -12,6 +12,7 @@ YOWNplot(
   stats = FALSE,
   smooth = FALSE,
   saveTo = "desktop",
+  format = "png",
   login = Sys.getenv(c("AQUSER", "AQPASS")),
   server = "https://yukon.aquaticinformatics.net/AQUARIUS"
 )
@@ -29,7 +30,9 @@ YOWNplot(
 
 \item{smooth}{Can be FALSE or a numeric day value (ie. 14) for plotting rolling average.}
 
-\item{saveTo}{Directory in which the plot will be saved. Can specify "desktop" to automatically create YOWN ID folder on desktop as save directory.}
+\item{saveTo}{Optional directory in which the plot will be saved. Can specify "desktop" to automatically create YOWN ID folder on your desktop as save directory. Default NULL only outputs the plot to the console.}
+
+\item{format}{If \code{saveTo} is not NULL, this parameter specifies the format of the saved plot. Default is "png", other option is "png".}
 
 \item{login}{Your Aquarius login credentials as a character vector of two (eg. c("cmfische", "password") Default pulls information from your .renviron profile; see details. Passed to \code{\link[=aq_download]{aq_download()}}.}
 
