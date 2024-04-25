@@ -19,31 +19,28 @@ home <- function(id, language, restoring) {
     ns <- session$ns
     
     observe({
-      lang <- language()
-      abbrev <- translations[translations$id == "titleCase", ..lang][[1]]
-      
       output$title <- renderUI({
         HTML(paste0('<div class="montserrat" style="font-size: 24px; font-weight: 600; font-style: normal">',
-                    translations[translations$id == "homeTitle", ..lang][[1]],
+                    translations[id == "homeTitle", get(language$language)][[1]],
                     '</div>'
         ))
       })
       
       output$text <- renderUI({
         HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
-                    translations[translations$id == "homeText", ..lang][[1]],
+                    translations[id == "homeText", get(language$language)][[1]],
                     '</div>'
         ))
       })
       output$discTitle <- renderUI({
         HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
-                    titleCase(translations[translations$id == "disclaimer_title", ..lang][[1]], abbrev),
+                    titleCase(translations[id == "disclaimer_title", get(language$language)][[1]], language$abbrev),
                     '</div>'
         ))
       })
       output$discBody <- renderUI({
         HTML(paste0('<div class="nunito-sans" style="font-size: 14px; font-weight: 500; font-style: normal">',
-                    translations[translations$id == "disclaimer_body", ..lang][[1]],
+                    translations[id == "disclaimer_body", get(language$language)][[1]],
                     '</div>'
         ))
       })

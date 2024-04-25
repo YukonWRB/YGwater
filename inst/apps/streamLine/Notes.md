@@ -37,10 +37,5 @@ Sending values to the main server from modules:
 # Map view
 ## Issues
 1. Map filters do not cross-update, i.e. selecting a filter that makes other filter options irrelevant does not remove those options from the other filters.
-2. Add comprehensive popup labels to map markers. 
--   Permafrost database app: <https://github.com/YukonGeologicalSurvey/PermafrostDB/blob/master/TempDataApp/app.R> Uses package leafpop, but leafpop seems to be dormant (not updated in 2 years). At least there are few imports and suggests, though with sp as a suggests it's a bit risky.
--   Other options: <https://stackoverflow.com/questions/29173336/how-to-display-advanced-customed-popups-for-leaflet-in-shiny> This seems to be a quite functional example with no additional package dependencies.
 ## Improvements
 - Sort filter options alphabetically
-- Create HTML popups for map markers only once, at beginning of session.
-- Explore loading data for the app, shared between all sessions, and updating every hour at half past.

@@ -1,3 +1,4 @@
+# js code to select a row in a datatable with the arrow keys
 js_select_dt <-   "var dt = table.table().node();
   var tblID = $(dt).closest('.datatables').attr('id');
   var inputName = tblID + '_rows_selected'
@@ -32,33 +33,31 @@ img <- function(id, con, language, restoring) {
     ns <- session$ns
     setBookmarkExclude(c("tbl_columns_selected", "tbl_cells_selected", "tbl_rows_current", "tbl_rows_all", "tbl_state", "tbl_search", "tbl_cell_clicked", "tbl_row_last_clicked"))
     
-    # Load info about last two weeks of images for speed
+    # Load info about last two weeks of images. More is loaded later if the user goes back further.
     imgs <- reactiveValues(imgs = dbGetQueryDT(con, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN images_index AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
                            img_min = Sys.Date() - 14,
                            img_meta = dbGetQueryDT(con, "SELECT a.img_meta_id, a.img_type, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM images_index AS a JOIN locations AS l ON a.location_id = l.location_id;"))
+    
     tables <- reactiveValues()
     
     # Update text based on language ###########################################
-    observeEvent(language(), {
-      lang <- language()
-      abbrev <- translations[translations$id == "titleCase", ..lang][[1]]
-      
-      auto <- titleCase(translations[translations$id == "img_type_auto", ..lang][[1]], abbrev)
-      man <- titleCase(translations[translations$id == "img_type_man", ..lang][[1]], abbrev)
+    observeEvent(language$language, {
+
+      auto <- titleCase(translations[id == "img_type_auto", get(language$language)][[1]], language$abbrev)
+      man <- titleCase(translations[id == "img_type_man", get(language$language)][[1]], language$abbrev)
       choices <- c("auto", "man")
       choices <- stats::setNames(choices, c(auto, man))
       
-      updateSelectizeInput(session, "type", label = titleCase(translations[translations$id == "img_type_lab", ..lang][[1]], abbrev), choices = choices, selected = input$type)
+      updateSelectizeInput(session, "type", label = titleCase(translations[id == "img_type_lab", get(language$language)][[1]], language$abbrev), choices = choices, selected = input$type)
       output$dates <- renderUI({
-        dateRangeInput(ns("dates"), label = translations[translations$id == "date_range_lab", ..lang][[1]], start = if (restoring()) input$dates[1] else Sys.Date() - 2, end = if (restoring()) input$dates[2] else Sys.Date(), language = abbrev, separator = translations[translations$id == "date_sep", ..lang][[1]])
+        dateRangeInput(ns("dates"), label = translations[id == "date_range_lab", get(language$language)][[1]], start = if (restoring()) input$dates[1] else Sys.Date() - 2, end = if (restoring()) input$dates[2] else Sys.Date(), language = language$abbrev, separator = translations[id == "date_sep", get(language$language)][[1]])
       })
       
-      loc_choices <- stats::setNames(c("All", imgs$img_meta$location_id), c(translations[translations$id == "all", ..lang][[1]], titleCase(imgs$img_meta[[translations[translations$id == "generic_name_col", ..lang][[1]]]], abbrev)))
+      loc_choices <- stats::setNames(c("All", imgs$img_meta$location_id), c(translations[id == "all", get(language$language)][[1]], titleCase(imgs$img_meta[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev)))
       loc_choices <- c(loc_choices[1], loc_choices[-1][order(names(loc_choices)[-1])]) # Order but keep "All" at the top
       output$loc <- renderUI({
-        selectizeInput(ns("loc"), label = titleCase(translations[translations$id == "loc", ..lang][[1]], abbrev), choices = loc_choices, selected = input$loc)
+        selectizeInput(ns("loc"), label = titleCase(translations[id == "loc", get(language$language)][[1]], language$abbrev), choices = loc_choices, selected = input$loc)
       })
-      
     })
     
     # Get images further back in time if the date range is changed to something beyond 2 weeks ago ############################
@@ -75,13 +74,11 @@ img <- function(id, con, language, restoring) {
     # Create a data table of images matching filter inputs #########################
     table_data <- reactive({
       req(input$type, input$dates, input$loc)  # Ensure all inputs are available
-      lang <- language()
-      
-      img_ids <- imgs$img_meta[imgs$img_meta$img_type == input$type, "img_meta_id"]
 
-      generic_name_col <- translations[id == "generic_name_col", ..lang][[1]]
+      img_ids <- imgs$img_meta[img_type == input$type, "img_meta_id"]
+
+      generic_name_col <- translations[id == "generic_name_col", get(language$language)][[1]]
       
-      # Use data.table syntax properly
       if (input$loc == "All") {
         tbl <- imgs$imgs[datetime >= input$dates[1] & datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & img_meta_id %in% img_ids$img_meta_id, 
                          .(datetime, get(generic_name_col), image_id)]
@@ -103,9 +100,8 @@ img <- function(id, con, language, restoring) {
     
     # Render the data table ########################################################
     observe({
-      lang <- language()
       tbl <- table_data()
-      data.table::setnames(tbl, c(translations[translations$id == "datetime", ..lang][[1]], translations[translations$id == "loc", ..lang][[1]], "image_id"))
+      data.table::setnames(tbl, c(translations[id == "datetime", get(language$language)][[1]], translations[id == "loc", get(language$language)][[1]], "image_id"))
       
       tables$tbl <- tbl # User for image rendering later
       
@@ -127,13 +123,13 @@ img <- function(id, con, language, restoring) {
                                    )
                                  ),
                                  language = list(
-                                   info = translations[translations$id == "tbl_info", ..lang][[1]],
-                                   infoEmpty = translations[translations$id == "tbl_info_empty", ..lang][[1]],
+                                   info = translations[id == "tbl_info", get(language$language)][[1]],
+                                   infoEmpty = translations[id == "tbl_info_empty", get(language$language)][[1]],
                                    paginate = list(previous = "", `next` = ""),
-                                   search = translations[translations$id == "tbl_search", ..lang][[1]],
-                                   lengthMenu = translations[translations$id == "tbl_length", ..lang][[1]],
-                                   infoFiltered = translations[translations$id == "tbl_filtered", ..lang][[1]],
-                                   zeroRecords = translations[translations$id == "tbl_zero", ..lang][[1]]
+                                   search = translations[id == "tbl_search", get(language$language)][[1]],
+                                   lengthMenu = translations[id == "tbl_length", get(language$language)][[1]],
+                                   infoFiltered = translations[id == "tbl_filtered", get(language$language)][[1]],
+                                   zeroRecords = translations[id == "tbl_zero", get(language$language)][[1]]
                                  ),
                                  keys = list(keys = c(38,40))
                                ),
@@ -149,7 +145,6 @@ img <- function(id, con, language, restoring) {
       if (selected_row() == 0) {
         return()
       }
-      lang <- language()
       img_id <- tables$tbl[selected_row(), "image_id"]
       
       output$img <- renderImage({
