@@ -1,9 +1,14 @@
-# General notes
-## Notes
-Sending values to the main server from modules:
-1. Assign a variable name to the module server function, e.g. `server <- function(input, output, session) { ... }`
-2. return() something from the server. AFAIK, this needs to be a reactiveVal or reactiveValues object.
-3. observe() the variable name you assigned to the module.
+# General notes and todos
+- Normalize database further. Things like document types need their own table to enable more languages instead of CHECK() constraints.
+- Add audit document type
+- Explore combining DB queries instead of doing joins via data.table.
+- Consider making VIEW table for app required info
+- Implement use of hourly data views table for plots
+- continuous/discrete/FORECAST?? or forecast points its own drop-down??? (it would not appear until at least one forecast location is created)
+  - Forecasts table needs additional model information, possibly new cols for 95% CI, min/max of ensemble, ensemble or not, number of members, ....Ski
+- Create workflow for importing HDRPS/RDPS direct to DB
+  - If implementing a ML model for flow prediction, import other parameters: temp, solrad, wind??, 
+- Add HRDPA stored in files to the DB
 
 
 ## Issues
@@ -19,20 +24,20 @@ Sending values to the main server from modules:
 # Image view
 ## Issues
 - Keyboard arrow use conflicts with DT running on server. Troubleshoot and determine if this should be kept.
-
 ## Improvements
 - Modal map for location selection
 
 # Documents view
 ## Issues
-
 ## Improvements
 - Modal map for location selection
 
 # Data view
 ## Improvements
 - Export as .csv: use datatable extensions instead of separate workflow. See item 2 here: <https://rstudio.github.io/DT/extensions.html>
-
+## Issues
+column period_type is currently being dropped. It might need to get its own table in the DB, or get a direct translation
+Column(s) might need an explanation as a hover button! 
 
 # Map view
 ## Issues

@@ -78,9 +78,9 @@ server <- function(input, output, session) {
     isRestoring_about(TRUE)
   })
   
-  # Get data from database (passed to multiple modules)
+  # Get info from database (passed to multiple modules)
   
-  data <- reactiveValues(
+  DBdata <- reactiveValues(
     locations = dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;"),
     timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, category, start_datetime, end_datetime FROM timeseries;"),
     locations_projects = dbGetQueryDT(pool, "SELECT * FROM locations_projects;"),
@@ -93,6 +93,9 @@ server <- function(input, output, session) {
     has_images = dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;"),
     has_documents = dbGetQueryDT(pool, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
   )
+  
+  # Store information to pass between modules
+  moduleOutputs <- reactiveValues()
   
   
   # Language selection ########################################################
@@ -201,11 +204,11 @@ console.log(language);")
     }
     if (input$navbar == "map") {
       tryCatch({
-        map_outputs <- map("map", language = languageSelection, restoring = isRestoring_map, data = data)  # Assigning the module to a variable enables it to send values back to the server.
+        moduleOutputs$map_outputs <- map("map", language = languageSelection, restoring = isRestoring_map, data = DBdata)  # Assigning the module to a variable enables it to send values back to the server.
         observe({  # Observe the map_outputs reactive to see if the tab should be changed
-          if (!is.null(map_outputs$change_tab)) {
-            updateNavbarPage(session, "navbar", selected = map_outputs$change_tab)
-            map_outputs$change_tab <- NULL
+          if (!is.null(moduleOutputs$map_outputs$change_tab)) {
+            updateNavbarPage(session, "navbar", selected = moduleOutputs$map_outputs$change_tab)
+            moduleOutputs$map_outputs$change_tab <- NULL
           }
         })
       }, error = function(e) {
@@ -220,7 +223,7 @@ console.log(language);")
     }
     if (input$navbar == "data") {
       tryCatch({
-        data("data", con = pool, language = languageSelection, restoring = isRestoring_data, data = data)      
+        data("data", con = pool, language = languageSelection, restoring = isRestoring_data, data = DBdata, inputs = moduleOutputs$map_outputs$location_id)
       }, error = function(e) {
         showModal(modalDialog(
           title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
@@ -233,7 +236,7 @@ console.log(language);")
     }
     if (input$navbar == "plot") {
       tryCatch({
-        plot("plot", con = pool, language = languageSelection, restoring = isRestoring_plot, data = data)
+        plot("plot", con = pool, language = languageSelection, restoring = isRestoring_plot, data = DBdata)
       }, error = function(e) {
         showModal(modalDialog(
           title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
@@ -259,7 +262,7 @@ console.log(language);")
     }
     if (input$navbar == "doc") {
       tryCatch({
-        doc("doc", con = pool, language = languageSelection, restoring = isRestoring_doc, data = data)
+        doc("doc", con = pool, language = languageSelection, restoring = isRestoring_doc, data = DBdata)
       }, error = function(e) {
         showModal(modalDialog(
           title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
@@ -285,6 +288,6 @@ console.log(language);")
     }
     # Update last working tab on successful tab switch
     lastWorkingTab(input$navbar)
-  }, ignoreNULL = TRUE)
+  }, ignoreNULL = TRUE) # End of observeEvent that loads modules based on navbar actions (or input$navbar changes passed from modules)
   
 }

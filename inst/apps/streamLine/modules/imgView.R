@@ -27,7 +27,6 @@ imgUI <- function(id) {
   )
 }
 
-
 img <- function(id, con, language, restoring) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -86,7 +85,17 @@ img <- function(id, con, language, restoring) {
         tbl <- imgs$imgs[datetime >= input$dates[1] & datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & location_id == input$loc & img_meta_id %in% img_ids$img_meta_id, 
                          .(datetime, get(generic_name_col), image_id)]
       }
-    })
+      # create sorting column for datetimes
+      tbl[, sort.dt := datetime]
+      # Nicely format datetimes (makes them a character object)
+      attr(tbl$datetime, "tzone") <- "MST"
+      tbl[, datetime := format(datetime, format = "%Y-%m-%d %H:%M")]
+      
+      # Rename columns
+      data.table::setnames(tbl, c(translations[id == "datetime_utc_offset", get(language$language)][[1]], translations[id == "loc", get(language$language)][[1]], "image_id", "sort.dt"))
+      
+      return(tbl)
+    }) # End of reactive creating table
     
     # Initialize reactive value for managing selected row state. This prevents an endless loop triggering the image rendering when the user clicks on a row.
     selected_row <- reactiveVal()
@@ -101,18 +110,31 @@ img <- function(id, con, language, restoring) {
     # Render the data table ########################################################
     observe({
       tbl <- table_data()
-      data.table::setnames(tbl, c(translations[id == "datetime", get(language$language)][[1]], translations[id == "loc", get(language$language)][[1]], "image_id"))
       
-      tables$tbl <- tbl # User for image rendering later
+      tables$tbl <- tbl # Used for image rendering later
       
       out_tbl <- DT::datatable(tbl, rownames = FALSE, selection = list(mode = "single", selected = isolate(selected_row())),
                                filter = "none",
-                               options = list(initComplete = htmlwidgets::JS(
-                                 "function(settings, json) {",
-                                 "$(this.api().table().header()).css({'background-color': '#079', 'color': '#fff'});",
-                                 "}"),
+                               options = list(
+                                 initComplete = htmlwidgets::JS(
+                                   "function(settings, json) {",
+                                   "$(this.api().table().header()).css({",
+                                   "  'background-color': '#079',",
+                                   "  'color': '#fff',",
+                                   "  'font-size': '100%',",
+                                   # "  'font-family': 'montserrat'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
+                                   "});",
+                                   "$(this.api().table().body()).css({",
+                                   "  'font-size': '90%',",
+                                   # "  'font-family': 'nunito-sans'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
+                                   "});",
+                                   "}"
+                                   ),
                                  columnDefs = list(
-                                   list(visible = FALSE, targets = 2), #Hides the image_id column
+                                   list(targets = c(2,3),
+                                        visible = FALSE), #Hides the image_id and sort.dt columns
+                                   list(targets = 1,
+                                        orderData = 4),
                                    list(
                                      targets = 1,
                                      render = htmlwidgets::JS( # Truncate long strings in the table
@@ -131,12 +153,11 @@ img <- function(id, con, language, restoring) {
                                    infoFiltered = translations[id == "tbl_filtered", get(language$language)][[1]],
                                    zeroRecords = translations[id == "tbl_zero", get(language$language)][[1]]
                                  ),
-                                 keys = list(keys = c(38,40))
+                                 keys = list(keys = c(38,40)) # specific keys used to navigate the table with up/down arrows
                                ),
                                extensions = c("KeyTable", "Select"),
                                callback = htmlwidgets::JS(js_select_dt)
-      ) %>% 
-        DT::formatDate(1, method = "toLocaleString", params = list('fr-FR'))
+      )
       output$tbl <- DT::renderDataTable(out_tbl, server = FALSE)
     })
     

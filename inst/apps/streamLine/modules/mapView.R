@@ -4,6 +4,7 @@ mapUI <- function(id) {
   tagList(
     tags$head(
       tags$style(
+        # Remove the regular leaflet zoom control as the map filters are in that location, add it in another location when rendering the map
         HTML("
       .leaflet-left .leaflet-control{
         visibility: hidden;
@@ -179,7 +180,6 @@ map <- function(id, language, restoring, data) {
         "<br/><a href='#' onclick='changeTab(\"map-\", \"clicked_view_data\", \"", tmp$location_id, "\"); return false;'>View Data</a><br/>",
         "<a href='#' onclick='changeTab(\"map-\", \"clicked_view_plots\", \"", tmp$location_id, "\"); return false;'>View Plots</a>"
       )
-
       
       # Update the tooltip's text
       tooltipText <- translations[id == "tooltip_reset", get(language$language)][[1]]
@@ -261,7 +261,7 @@ map <- function(id, language, restoring, data) {
         }")
     })
     
-    # Filter the map data based on user's selection and add points ############################
+    # Filter the map data based on user's selection and add points to map ############################
     observe({
       
       if (!is.null(input$type)) {
@@ -362,11 +362,10 @@ map <- function(id, language, restoring, data) {
                             lat = ~latitude,
                             popup = ~popup_html,
                             clusterOptions = leaflet::markerClusterOptions())
-    })
+    }) # End of observe for map filters and rendering location points
     
     # Reset all filters when button pressed ##################################
     observeEvent(input$reset, {
-      
       updateSelectizeInput(session, 
                            "type",
                            choices = stats::setNames(c("All", "discrete", "continuous"),
@@ -376,48 +375,47 @@ map <- function(id, language, restoring, data) {
       )
       updateSelectizeInput(session, 
                            "pType",
-                           choices = stats::setNames(c("All", param_types$param_type_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(param_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                           choices = stats::setNames(c("All", data$param_types$param_type_code),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
       updateSelectizeInput(session, 
                            "pGrp",
-                           choices = stats::setNames(c("All", param_groups$group),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
+                           choices = stats::setNames(c("All", data$param_groups$group),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
       updateSelectizeInput(session,
                            "param",
-                           choices = stats::setNames(c("All", parameters$param_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+                           choices = stats::setNames(c("All", data$parameters$param_code),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
       updateSelectizeInput(session,
                            "proj",
-                           choices = stats::setNames(c("All", projects$project_id),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(projects[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
+                           choices = stats::setNames(c("All", data$projects$project_id),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$projects[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
                            )
       )
       updateSelectizeInput(session,
                            "net",
-                           choices = stats::setNames(c("All", networks$network_id),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(networks[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
+                           choices = stats::setNames(c("All", data$networks$network_id),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$networks[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
                            )
       )
       updateSliderInput(session,
                         "yrs",
-                        label = translations[id == "year_filter", get(language$language)][[1]],
-                        min = lubridate::year(min(timeseries$start_datetime)),
-                        max = lubridate::year(max(timeseries$end_datetime)),
-                        value = lubridate::year(c(min(timeseries$start_datetime), max(timeseries$end_datetime)))
+                        min = lubridate::year(min(data$timeseries$start_datetime)),
+                        max = lubridate::year(max(data$timeseries$end_datetime)),
+                        value = lubridate::year(c(min(data$timeseries$start_datetime), max(data$timeseries$end_datetime)))
       )
-    })
+    }) # End of observeEvent for reset filters button
     
-    # Update the navbar when a location is clicked ############################
-    # Listen for a click int he popup
+    # Pass a message to the main server when a location is clicked ############################
+    # Listen for a click in the popup
     observeEvent(input$clicked_view_data, {
       if (!is.null(input$clicked_view_data)) {
         outputs$change_tab <- "data"

@@ -38,7 +38,7 @@ dataUI <- function(id) {
 } # end dataUI
 
 
-data <- function(id, con, language, restoring, data) {
+data <- function(id, con, language, restoring, data, inputs) {
   moduleServer(id, function(input, output, session) {
     
     setBookmarkExclude(c("reset"))
@@ -134,53 +134,175 @@ data <- function(id, con, language, restoring, data) {
                            choices = stats::setNames(c("All", data$locations$location_id),
                                                      c(translations[id == "all", get(language$language)][[1]], titleCase(data$locations[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
-                           )
+                           ),
+                           selected = if (!is.null(inputs)) inputs else NULL
       )
       updateActionButton(session,
                          "reset",
                          label = translations[id == "reset", get(language$language)][[1]]
       )
-    })
+    }) # End of text updates based on language selection
     
-    table_data <- reactive({
-      req(input$type, input$pType, input$pGrp, input$param, input$proj, input$net, input$yrs, input$loc)
-      # apply the filters one by one to get the timeseries remaining.
-      if (!is.null(input$loc) & input$loc != "All") {
+    # Reset all filters when button pressed ##################################
+    observeEvent(input$reset, {
+      updateSelectizeInput(session, 
+                           "type",
+                           choices = stats::setNames(c("All", "discrete", "continuous"),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(c(translations[id == "discrete", get(language$language)][[1]], translations[id == "continuous", get(language$language)][[1]]), language$abbrev)
+                                                     )
+                           )
+      )
+      updateSelectizeInput(session, 
+                           "pType",
+                           choices = stats::setNames(c("All", data$param_types$param_type_code),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                                                     )
+                           )
+      )
+      updateSelectizeInput(session, 
+                           "pGrp",
+                           choices = stats::setNames(c("All", data$param_groups$group),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
+                                                     )
+                           )
+      )
+      updateSelectizeInput(session,
+                           "param",
+                           choices = stats::setNames(c("All", data$parameters$param_code),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+                                                     )
+                           )
+      )
+      updateSelectizeInput(session,
+                           "proj",
+                           choices = stats::setNames(c("All", data$projects$project_id),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$projects[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
+                           )
+      )
+      updateSelectizeInput(session,
+                           "net",
+                           choices = stats::setNames(c("All", data$networks$network_id),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$networks[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
+                           )
+      )
+      updateSliderInput(session,
+                        "yrs",
+                        min = lubridate::year(min(data$timeseries$start_datetime)),
+                        max = lubridate::year(max(data$timeseries$end_datetime)),
+                        value = lubridate::year(c(min(data$timeseries$start_datetime), max(data$timeseries$end_datetime)))
+      )
+      updateSelectizeInput(session, "loc", choices = stats::setNames(c("All", data$locations$location_id),
+                                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$locations[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev)
+                                                                     )
+      ))
+    }) # End of observeEvent for reset filters button
+    
+    # Create the table and render it ###################################
+    table_data <- reactive({ # Create the table
+      # apply the location filter (locations are already filtered by other filters or directly selected)
+      if (!is.null(input$loc) & !("All" %in% input$loc)) {
         tbl <- data.table::copy(data$timeseries)[location_id %in% input$loc]
-        
+      } else {
+        tbl <- data.table::copy(data$timeseries)
+      }
+      
+      # TODO: period_type needs to be part of the table!!!
+      
+      
+        # Drop period_type
+        tbl[, period_type := NULL]
         # Attach location
         tbl[data$locations, on = c(location_id = "location_id"), translations[id == "loc", get(language$language)] := .(get(translations[id == "generic_name_col", get(language$language)]))]
         tbl[, location_id := NULL]
-        
         # Attach parameter type
         tbl[data$param_types, on = c(param_type = "param_type_code"), 
             translations[id == "param_type", get(language$language)] := get(translations[id == "param_type_col", get(language$language)])]
         tbl[, param_type := NULL]
-        
         # Attach parameter descriptions
         tbl[data$parameters, on = c(parameter = "param_code"), 
             c(translations[id == "group", get(language$language)], translations[id == "parameter", get(language$language)], translations[id == "units", get(language$language)]) 
             := 
-              .(get(translations[id == "param_group_col", get(language$language)]), get(translations[id == "param_name_col", get(language$language)]), unit)]
+              .(get(translations[id == "param_group_col", get(language$language)]), get(translations[id == "param_name_col", get(language$language)]), unit)] # data in column names "unit" is unchanging based on language
         tbl[, parameter := NULL]
         
-        # Modify category to Category and change text
+        # Create sort.start, sort.end for sorting only
+        tbl[, sort.start := start_datetime]
+        tbl[, sort.end := end_datetime]
         
-        # apply titleCase to all char columns
+        # Nicely format datetimes (makes them a character object)
+        attr(tbl$start_datetime, "tzone") <- "MST"
+        attr(tbl$end_datetime, "tzone") <- "MST"
+        tbl[, start_datetime := format(start_datetime, format = "%Y-%m-%d %H:%M")]
+        tbl[, end_datetime := format(end_datetime, format = "%Y-%m-%d %H:%M")]
         
-        # Drop period_type
-        tbl[, period_type := NULL]
+        # Modify Category depending on language
+        tbl[translations, on = .(category = id), category := get(language$language)]
         
-        tbl
+        # Rename start_datetime, end_datetime, category
+        data.table::setnames(tbl, old = c("start_datetime", "end_datetime", "category"), new = c(translations[id == "from_utc_offset", get(language$language)], translations[id == "to_utc_offset", get(language$language)], translations[id == "category", get(language$language)]))
 
-      } else {
+        # titleCase column names
+        data.table::setnames(tbl, old = names(tbl)[-c(1,3,4)], new = titleCase(names(tbl)[-c(1,3,4)], language$abbrev))
         
-      }
-    })
+        # titleCase columns
+        for (j in c(2L,5L:8L)) data.table::set(tbl, j = j, value = titleCase(tbl[[j]], language$abbrev))
+        
+        # Order by location name, parameter name
+        data.table::setorderv(tbl, c(translations[id == "loc", get(language$language)], translations[id == "parameter", get(language$language)]))
+        
+        return(tbl)
+    }) # End of reactive creating table
     
-    observe({
+    observe({ # Render the table
       tbl <- table_data()
-    })
+      
+      out_tbl <- DT::datatable(tbl, 
+                               rownames = FALSE,
+                               selection = "multiple",
+                               filter  = "none",
+                               options = list(
+                                 initComplete = htmlwidgets::JS(
+                                   "function(settings, json) {",
+                                   "$(this.api().table().header()).css({",
+                                   "  'background-color': '#079',",
+                                   "  'color': '#fff',",
+                                   "  'font-size': '100%',",
+                                   # "  'font-family': 'montserrat'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
+                                   "});",
+                                   "$(this.api().table().body()).css({",
+                                   "  'font-size': '90%',",
+                                   # "  'font-family': 'nunito-sans'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
+                                   "});",
+                                   "}"
+                                 ),
+                                 columnDefs = list(
+                                   list(targets = 3, orderData = 10), # Order the character datetime column using the hidden true datetime. Column numbers are true.
+                                   list(targets = 4, orderData = 11), # Order the character datetime column using the hidden true datetime. Column numbers are true.
+                                   list(targets = c(0,9,10), visible = FALSE), #Hides the timeseries_id and datetime sorting columns. Column index numbers start at 0 here!!!
+                                   list(
+                                     targets = c(4:7), # Column index numbers start at 0 here again!!!
+                                     render = htmlwidgets::JS( # Truncate long strings in the table
+                                       "function(data, type, row, meta) {",
+                                       "return type === 'display' && data.length > 20 ?",
+                                       "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
+                                       "}")
+                                   )
+                                 ),
+                                 language = list(
+                                   info = translations[id == "tbl_info", get(language$language)][[1]],
+                                   infoEmpty = translations[id == "tbl_info_empty", get(language$language)][[1]],
+                                   paginate = list(previous = "", `next` = ""),
+                                   search = translations[id == "tbl_search", get(language$language)][[1]],
+                                   lengthMenu = translations[id == "tbl_length", get(language$language)][[1]],
+                                   infoFiltered = translations[id == "tbl_filtered", get(language$language)][[1]],
+                                   zeroRecords = translations[id == "tbl_zero", get(language$language)][[1]]
+                                 ),
+                                 pageLength = 25
+                               )
+      )
+      output$tbl <- DT::renderDataTable(out_tbl, server = FALSE)
+    }) # End of table render
+    # End of creating and rendering table section 
     
   })
 }
