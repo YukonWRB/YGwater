@@ -2,15 +2,37 @@
 dataUI <- function(id) {
   ns <- NS(id)
   tagList(
+    tags$head(
+      # Load the little "i" button for the tooltip
+      tags$link(rel = "stylesheet", href = "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css")
+    ),
     tags$script(
-      HTML("
-       // Handles custom tooltips updates, binds tooltip properties to elements
+      HTML(" // Handles tooltip updates outside of the datatable, binds tooltip properties to elements
+       
             Shiny.addCustomMessageHandler('update-tooltip', function(message) {
                 var selector = '#' + message.id;
                 $(selector).attr('title', message.title)
                 .tooltip('fixTitle').tooltip('hide');
             });
-    ")
+    "),
+      HTML(" // Handles tootip creation and update for the datatable headers
+    $(document).ready(function() {
+      // Initialize tooltips
+      $('body').tooltip({
+        selector: '[data-toggle=\"tooltip\"]',
+        container: 'body'
+      });
+      
+      // Reinitialize tooltips on table redraw
+      $('#tbl').on('draw.dt', function() {
+        $('.tooltip').remove();
+        $('body').tooltip({
+          selector: '[data-toggle=\"tooltip\"]',
+          container: 'body'
+        });
+      });
+    });
+  ")
     ),
     sidebarPanel(
       span(
@@ -206,17 +228,21 @@ data <- function(id, con, language, restoring, data, inputs) {
         tbl <- data.table::copy(data$timeseries)
       }
       
-      # TODO: period_type needs to be part of the table!!!
+      # TODO: period_type and record_rate needs to be part of the table!!!
+      # Could be combined: sum (monthly), sum (daily), mean (daily), (min + max) / 2 (daily), min (monthly)
       
       
         # Drop period_type
         tbl[, period_type := NULL]
+        tbl[, record_rate := NULL]
+        
+        
         # Attach location
         tbl[data$locations, on = c(location_id = "location_id"), translations[id == "loc", get(language$language)] := .(get(translations[id == "generic_name_col", get(language$language)]))]
         tbl[, location_id := NULL]
         # Attach parameter type
         tbl[data$param_types, on = c(param_type = "param_type_code"), 
-            translations[id == "param_type", get(language$language)] := get(translations[id == "param_type_col", get(language$language)])]
+            translations[id == "type", get(language$language)] := get(translations[id == "param_type_col", get(language$language)])]
         tbl[, param_type := NULL]
         # Attach parameter descriptions
         tbl[data$parameters, on = c(parameter = "param_code"), 
@@ -239,7 +265,7 @@ data <- function(id, con, language, restoring, data, inputs) {
         tbl[translations, on = .(category = id), category := get(language$language)]
         
         # Rename start_datetime, end_datetime, category
-        data.table::setnames(tbl, old = c("start_datetime", "end_datetime", "category"), new = c(translations[id == "from_utc_offset", get(language$language)], translations[id == "to_utc_offset", get(language$language)], translations[id == "category", get(language$language)]))
+        data.table::setnames(tbl, old = c("start_datetime", "end_datetime", "category"), new = c(translations[id == "start", get(language$language)], translations[id == "end", get(language$language)], translations[id == "category", get(language$language)]))
 
         # titleCase column names
         data.table::setnames(tbl, old = names(tbl)[-c(1,3,4)], new = titleCase(names(tbl)[-c(1,3,4)], language$abbrev))
@@ -275,6 +301,16 @@ data <- function(id, con, language, restoring, data, inputs) {
                                    "});",
                                    "}"
                                  ),
+                                 headerCallback = htmlwidgets::JS(  # This creates the tooltips!
+                                   paste0("function(thead, data, start, end, display) {
+                               var tooltips = ['", translations[id == "tooltip1", get(language$language)],"', '", translations[id == "tooltip2", get(language$language)], "', '", translations[id == "tooltip2", get(language$language)], "', 'fourth column tooltip', 'fifth column tooltip']; // Define tooltips for each column
+                               $(thead).find('th').each(function(i) {
+                                 var title = $(this).text();
+                                 var tooltip = tooltips[i] ? tooltips[i] : title; // Use custom tooltip if available
+                                 $(this).html('<span title=\"' + tooltip + '\" data-toggle=\"tooltip\" data-placement=\"top\">' + title + ' <i class=\"fa fa-info-circle\"></i></span>');
+                               });
+                             }")
+                                 ),
                                  columnDefs = list(
                                    list(targets = 3, orderData = 10), # Order the character datetime column using the hidden true datetime. Column numbers are true.
                                    list(targets = 4, orderData = 11), # Order the character datetime column using the hidden true datetime. Column numbers are true.
@@ -298,7 +334,7 @@ data <- function(id, con, language, restoring, data, inputs) {
                                    zeroRecords = translations[id == "tbl_zero", get(language$language)][[1]]
                                  ),
                                  pageLength = 25
-                               )
+                               ),
       )
       output$tbl <- DT::renderDataTable(out_tbl, server = FALSE)
     }) # End of table render

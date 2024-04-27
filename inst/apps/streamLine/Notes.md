@@ -33,11 +33,13 @@
 - Modal map for location selection
 
 # Data view
+## TODO
+- Create popup modal to view sample data from selected rows. Popup should then allow user to download within a given time range.
+  - Questions: limit this to a few timeseries, just one, just one location, only n number of timeseries for continuous but no limit on discrete, or ???
 ## Improvements
-- Export as .csv: use datatable extensions instead of separate workflow. See item 2 here: <https://rstudio.github.io/DT/extensions.html>
 ## Issues
-column period_type is currently being dropped. It might need to get its own table in the DB, or get a direct translation
-Column(s) might need an explanation as a hover button! 
+- column period_type is currently being dropped. It might need to get its own table in the DB, or get a direct translation
+- Column(s) might need an explanation as a hover button! 
 
 # Map view
 ## Issues

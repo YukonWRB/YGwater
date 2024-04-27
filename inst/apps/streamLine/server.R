@@ -82,7 +82,7 @@ server <- function(input, output, session) {
   
   DBdata <- reactiveValues(
     locations = dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;"),
-    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, category, start_datetime, end_datetime FROM timeseries;"),
+    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;"),
     locations_projects = dbGetQueryDT(pool, "SELECT * FROM locations_projects;"),
     locations_networks = dbGetQueryDT(pool, "SELECT * FROM locations_networks;"),
     param_types = dbGetQueryDT(pool, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);"),

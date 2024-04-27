@@ -36,7 +36,7 @@ mapUI <- function(id) {
                   draggable = TRUE, top = 135, left = "auto", width = "250px",
                   # Panel content
                   span(
-                    id = ns("infoIcon"),
+                    id = ns("info"),
                     `data-toggle` = "tooltip",
                     `data-placement` = "right",
                     `data-trigger` = "click hover",
@@ -183,7 +183,7 @@ map <- function(id, language, restoring, data) {
       
       # Update the tooltip's text
       tooltipText <- translations[id == "tooltip_reset", get(language$language)][[1]]
-      session$sendCustomMessage(type = 'update-tooltip', message = list(id = ns("infoIcon"), title = tooltipText))
+      session$sendCustomMessage(type = 'update-tooltip', message = list(id = ns("info"), title = tooltipText))
       
       # Update selectizeInputs
       updateSelectizeInput(session, 
