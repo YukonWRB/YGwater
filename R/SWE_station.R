@@ -18,15 +18,14 @@
 #TODO: (1) Add units and parameter to table (2) Create tests (2) query more than 1 month
 
 # # For testing
-# test1 <- SWE_station(stations = "08AA-SC01",
-#                      year=2024,
-#            month=c(3),
-#            csv = FALSE,
+# test1 <- SWE_station(year = 2024,
+#            month = c(3),
+#            csv = TRUE,
 #            return_missing = TRUE,
 #            active = TRUE,
 #            source = "snow",
-#            summarise = TRUE)
-# # 
+#            summarise = FALSE)
+#
 # stations = "08AA-SC01"
 # year <- 2024
 # month <- 3
@@ -36,6 +35,7 @@
 # source <- "snow"
 # summarise = TRUE
 
+#TODO: (1) Add check for snow db credentials
 
 SWE_station <-
   function(stations = "all",
@@ -45,7 +45,23 @@ SWE_station <-
            return_missing = FALSE,
            active = TRUE,
            source = "hydromet",
-           summarise = TRUE) {
+           summarise = TRUE, 
+           save_path = "choose") {
+    
+    if (csv == TRUE) {
+      if (save_path == "choose") {
+        if (!interactive()) {
+          stop("You must specify a save path when running in non-interactive mode.")
+        }
+        message("Select the path to the folder where you want the workbook(s) saved.")
+        save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
+      } else {
+        if (!dir.exists(save_path)) {
+          stop("The save path you specified does not exist.")
+        }
+      }
+      
+    }
     
     # First retrieve location-basin info from snow db
     con <- snowConnect(silent = TRUE)
@@ -298,9 +314,9 @@ SWE_station <-
     
     # Write csv if csv = TRUE
     if (csv == TRUE) {
-      utils::write.csv(tabl, file = paste0("SweSationSummary_", year, "-0", month, ".csv"), row.names = FALSE)
+      utils::write.csv(tabl, file = paste0(save_path, "/SweSationSummary_", year, "-0", month, ".csv"), row.names = FALSE)
+    } else {
+      return(tabl)
     }
-    
-    return(tabl)
     
   }
