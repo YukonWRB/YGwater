@@ -12,7 +12,8 @@ SWE_station(
   return_missing = FALSE,
   active = TRUE,
   source = "hydromet",
-  summarise = TRUE
+  summarise = TRUE,
+  save_path = "choose"
 )
 }
 \arguments{

@@ -26,7 +26,7 @@
 
 #TODO:
 
-# snowBulletin(year=2023,month=3, scale = 1, basins = NULL, save_path = "Choose", synchronize=FALSE) 
+# snowBulletin(year=2024,month=5, scale = 1, basins = NULL, save_path = "Choose", synchronize=FALSE) 
 
 snowBulletin <-
   function(year,

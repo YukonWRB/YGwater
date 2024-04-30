@@ -456,7 +456,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
 
 ```
 
-```{r SWEbasins, include=FALSE, eval=TRUE}
+```{r SWEbasins, include=FALSE, eval=FALSE}
 # Get SWE data for basins 
 swe_basins <- YGwater::SWE_basin(year = year_param,
                                    month = c(3, 4, 5), # c(3)
@@ -550,11 +550,12 @@ if (language_param == "french") {
  plot <- ggplot2::ggplot() +
   ggplot2::theme_void() + 
   ggplot2::theme(legend.position = c(0.5,0.5), 
-                 legend.text=ggplot2::element_text(size=12), 
+                 legend.text=ggplot2::element_text(size=12, margin = ggplot2::margin(b=0.2, t=0.2, unit = "cm")), 
                  legend.title=ggplot2::element_text(size=12),
                  legend.spacing.x = ggplot2::unit(0.5, 'cm'),
-                 legend.spacing.y = ggplot2::unit(0.6, 'cm'),
+                 #legend.spacing.y = ggplot2::unit(5, 'cm'),
                  legend.key.width= ggplot2::unit(2, "cm"),
+                 legend.key.height= ggplot2::unit(1, "cm"),
                  aspect.ratio = 1,
                  legend.background = ggplot2::element_blank(),
                  legend.box.background = ggplot2::element_rect(colour = "black"),
