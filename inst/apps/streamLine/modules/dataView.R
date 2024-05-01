@@ -53,7 +53,10 @@ dataUI <- function(id) {
       actionButton(ns("reset"), "Reset Filters")
     ),
     mainPanel(
-      DT::dataTableOutput(ns("tbl")) # Table with timeseries, filtered by the sidebar inputs
+      htmlOutput(ns("instructions")),
+      tags$div(style = "height: 10px;"),
+      DT::dataTableOutput(ns("tbl")), # Table with timeseries, filtered by the sidebar inputs
+      actionButton(ns("view_data"), "View Data")  # Button will be hidden until a row is selected
     )
     
   ) # end tagList
@@ -63,7 +66,7 @@ dataUI <- function(id) {
 data <- function(id, con, language, restoring, data, inputs) {
   moduleServer(id, function(input, output, session) {
     
-    setBookmarkExclude(c("reset"))
+    setBookmarkExclude(c("reset", "view_data"))
     ns <- session$ns
     
     outputs <- reactiveValues()  # This allows the module to pass values back to the main server
@@ -163,6 +166,10 @@ data <- function(id, con, language, restoring, data, inputs) {
                          "reset",
                          label = translations[id == "reset", get(language$language)][[1]]
       )
+      output$instructions <- renderUI(translations[id == "view_data_instructions", get(language$language)][[1]])
+      updateActionButton(session,
+                         "view_data",
+                         label = translations[id == "view_data", get(language$language)])
     }) # End of text updates based on language selection
     
     # Reset all filters when button pressed ##################################

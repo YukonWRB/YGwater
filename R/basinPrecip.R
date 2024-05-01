@@ -10,17 +10,16 @@
 #'
 #' Drainage polygons pointed to by `drainage_loc` are best created with [WSC_drainages()] and must be named drainage_polygons.xxx. The drainage polygon IDs (in WSC format, i.e. 10EA001) must be listed in the attribute table under column StationNum and the name under column NameNom. To deal with non-WSC data sources it is possible to have non-WSC polygons here as well. In order for this function to recognize these as non-WSC drainages please respect the following: a) strings should be made of two digits, two letters, and three digits (same as WSC); b) The starting digits must NOT be in the sequence from 01 to 12 as these are taken by the WSC; c) duplicate entries are not allowed.
 #'
-#' Additional spatial data pointed to by `spatial_loc` must be in shapefiles with the following names recognized: waterbodies, watercourses, roads, communities, borders, coastlines. Keep in mind that large shapefiles can be lengthy for R to graphically represent. To ease this limitation, the watercourses file is left out when the drainage extent is greater than 30 000 km2; by that size, major water courses are expected to be represented by polygons in the waterbodies layer.
+#' Additional spatial data is added to the maps when possible, Keeping in mind that large vector files can be lengthy for R to graphically represent. To ease this limitation, the watercourses file is left out when the drainage extent is greater than 30 000 km2; by that size, major water courses are expected to be represented by polygons in the waterbodies layer anyways.
 #'
 #' @param location The location above which you wish to calculate precipitation. Specify either a WSC or WSC-like station ID (e.g. `"09AB004"`) for which there is a corresponding entry in the shapefile pointed to by drainage_loc, or coordinates in signed decimal degrees in form latitude, longitude (`"60.1234 -139.1234"`; note the space, negative sign, and lack of comma). See details for more info if specifying coordinates.
 #' @param start The start of the time period over which to accumulate precipitation. Use format `"yyyy-mm-dd hh:mm"` (character vector) in UTC time, or a POSIXct object (e.g. `Sys.time()-60*60*24` for one day in the past). In the case of a POSIXct object, the timezone is converted to UTC without modifying the time. See details if requesting earlier than 30 days prior to now.
 #' @param end The end of the time period over which to accumulate precipitation. Other details as per `start`
 #' @param map Should a map be output to the console? See details for more info.
-#' @param org_defaults This parameter can override the default file locations for rasters, drainages, and spatial files. As of now, only available for "YWRB" (Yukon Water Resources Branch) or NULL. Specifying any of hrdpa_loc, hrdps_loc, drainage_loc, and/or spatial_loc directories will override the organization default for that/those parameters.
+#' @param org_defaults This parameter can override the default file locations for rasters, drainages, and spatial files. As of now, only available for "YWRB" (Yukon Water Resources Branch) or NULL. Specifying any of hrdpa_loc, hrdps_loc, drainage_loc directories will override the organization default for that/those parameters.
 #' @param hrdpa_loc The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.
 #' @param hrdps_loc The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.
 #' @param drainage_loc The shapefile drainage polygons. See Notes for more info.
-#' @param spatial_loc The directory in which spatial data (as shapefiles) is kept for making maps nicer. Will recognize the following shapefile names (case sensitive): waterbodies, watercourses, roads, communities, borders (provincial/territorial/international), coastlines. See additional notes.
 #' @param silent If TRUE, no output is printed to the console.
 #'
 #' @return The accumulated precipitation in mm of water within the drainage specified or immediately surrounding the point specified in `location` printed to the console and (optionally) a map of precipitation printed to the console. A list is also generated containing statistics and the optional plot; to save this plot to disc use either png() or dev.print(), or use the graphical device export functionality.
@@ -40,7 +39,6 @@ basinPrecip <- function(location,
                         hrdpa_loc = NULL,
                         hrdps_loc = NULL,
                         drainage_loc = NULL,
-                        spatial_loc = NULL,
                         silent = FALSE
                         )
 {
@@ -55,9 +53,6 @@ basinPrecip <- function(location,
     }
     if (is.null(drainage_loc)){
       drainage_loc <- "//env-fs/env-data/corp/water/Common_GW_SW/Data/basins/drainage_polygons.shp"
-    }
-    if (is.null(spatial_loc)){
-      spatial_loc <- "//env-fs/env-data/corp/water/Common_GW_SW/Data/r_map_layers"
     }
   }
 
@@ -91,15 +86,15 @@ basinPrecip <- function(location,
     }, error = function(e) {
       stop("Please check your input for `location`. It looks like you're trying to input decimal degrees, so please ensure that the latitude and longitude are only numbers separated by a comma. If you're trying to input a WSC station please use a standard WSC or WSC-like ID.")
     })
-  } else if (grepl("[0-9]{2}[A-Za-z]{2}[0-9]{3}", location)){
+  } else if (grepl("[0-9]{2}[A-Za-z]{2}[0-9]{3}", location)) {
     type <- "WSC"
   } else {crayon::red(stop("Your input for `location` could not be coerced to decimal degrees or to a standard WSC or WSC-like station ID. Please review the help file for proper format and try again."))}
 
   #Load the drainages
-  drainages <- terra::vect(drainage_loc)
-  if (type == "WSC"){
+  drainages <- getVector(layer_name = "Drainage basins")
+  if (type == "WSC") {
       station_check_polygon <- location %in% drainages$StationNum
-      if (!station_check_polygon){
+      if (!station_check_polygon) {
         stop(crayon::red(paste0("You've stumbled upon a station for which there is no corresponding polygon in the shapefile specified in drainage_loc. Try a different station, or use the latitude/longitude of a point just upstream of your station of interest. If this is a WSC station and you know it should have a defined watershed you could use the function WSC_drainages to create the polygons and update the shapefile in drainage_loc. If this is not a WSC station you could use GIS software or function drainageBasin() to define the watershed and add the polygon to the shapefile.")))
       }
     }
@@ -542,23 +537,23 @@ basinPrecip <- function(location,
     cropped_precip_rast <- terra::trim(cropped_precip_rast)
 
     #Load supporting layers and crop
-    roads <- terra::vect(paste0(spatial_loc, "/roads.shp"))
+    roads <- getVector(layer_name = "Roads")
     roads <- terra::project(roads, "+proj=longlat +EPSG:3347")
 
-    if (terra::expanse(watershed) < 30000000000){
-      streams <- terra::vect(paste0(spatial_loc, "/watercourses.shp"))
+    if (terra::expanse(watershed) < 30000000000) {
+      streams <- getVector(layer_name = "Watercourses", feature_name = "Yukon watercourses")
       streams <- terra::project(streams, "+proj=longlat +EPSG:3347")
       streams <- terra::mask(streams, watershed)
     }
 
-    waterbodies <- terra::vect(paste0(spatial_loc, "/waterbodies.shp"))
+    waterbodies <- getVector(layer_name = "Waterbodies", feature_name = "Yukon waterbodies")
     waterbodies <- terra::project(waterbodies, "+proj=longlat +EPSG:3347")
     waterbodies <- terra::mask(waterbodies, watershed) #even though masked, waterbody features that are even a little within the watershed polygon will be retained. This is nice as it brings out the major rivers for context.
 
-    communities <- terra::vect(paste0(spatial_loc, "/communities.shp"))
+    communities <- getVector(layer_name = "Communities")
     communities <- terra::project(communities, "+proj=longlat +EPSG:3347")
 
-    borders <- terra::vect(paste0(spatial_loc, "/borders.shp"))
+    borders <- getVector(layer_name = "Provincial/Territorial Boundaries", feature_name = "Yukon")
     borders <- terra::project(borders, "+proj=longlat +EPSG:3347")
 
     #And finally plot it all!

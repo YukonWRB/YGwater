@@ -13,7 +13,6 @@ basinPrecip(
   hrdpa_loc = NULL,
   hrdps_loc = NULL,
   drainage_loc = NULL,
-  spatial_loc = NULL,
   silent = FALSE
 )
 }
@@ -26,15 +25,13 @@ basinPrecip(
 
 \item{map}{Should a map be output to the console? See details for more info.}
 
-\item{org_defaults}{This parameter can override the default file locations for rasters, drainages, and spatial files. As of now, only available for "YWRB" (Yukon Water Resources Branch) or NULL. Specifying any of hrdpa_loc, hrdps_loc, drainage_loc, and/or spatial_loc directories will override the organization default for that/those parameters.}
+\item{org_defaults}{This parameter can override the default file locations for rasters, drainages, and spatial files. As of now, only available for "YWRB" (Yukon Water Resources Branch) or NULL. Specifying any of hrdpa_loc, hrdps_loc, drainage_loc directories will override the organization default for that/those parameters.}
 
 \item{hrdpa_loc}{The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.}
 
 \item{hrdps_loc}{The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.}
 
 \item{drainage_loc}{The shapefile drainage polygons. See Notes for more info.}
-
-\item{spatial_loc}{The directory in which spatial data (as shapefiles) is kept for making maps nicer. Will recognize the following shapefile names (case sensitive): waterbodies, watercourses, roads, communities, borders (provincial/territorial/international), coastlines. See additional notes.}
 
 \item{silent}{If TRUE, no output is printed to the console.}
 }
@@ -53,5 +50,5 @@ Rasters must be downloaded for each 6-hour period between \code{start} and \code
 
 Drainage polygons pointed to by \code{drainage_loc} are best created with \code{\link[=WSC_drainages]{WSC_drainages()}} and must be named drainage_polygons.xxx. The drainage polygon IDs (in WSC format, i.e. 10EA001) must be listed in the attribute table under column StationNum and the name under column NameNom. To deal with non-WSC data sources it is possible to have non-WSC polygons here as well. In order for this function to recognize these as non-WSC drainages please respect the following: a) strings should be made of two digits, two letters, and three digits (same as WSC); b) The starting digits must NOT be in the sequence from 01 to 12 as these are taken by the WSC; c) duplicate entries are not allowed.
 
-Additional spatial data pointed to by \code{spatial_loc} must be in shapefiles with the following names recognized: waterbodies, watercourses, roads, communities, borders, coastlines. Keep in mind that large shapefiles can be lengthy for R to graphically represent. To ease this limitation, the watercourses file is left out when the drainage extent is greater than 30 000 km2; by that size, major water courses are expected to be represented by polygons in the waterbodies layer.
+Additional spatial data is added to the maps when possible, Keeping in mind that large vector files can be lengthy for R to graphically represent. To ease this limitation, the watercourses file is left out when the drainage extent is greater than 30 000 km2; by that size, major water courses are expected to be represented by polygons in the waterbodies layer anyways.
 }
