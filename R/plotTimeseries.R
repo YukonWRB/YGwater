@@ -1,9 +1,9 @@
 #' Plot a continous timeseries from the hydromet database
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
+#' `r lifecycle::badge('stable')`
 #' 
-#' This function will plot a continuous timeseries from the hydromet database. The plot is zoomable, and hovering over the historical ranges or the measured values brings up additional information. The function will also plot the historic range and returns if requested.
+#' This function plots continuous timeseries from the hydromet/AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
 #' 
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
