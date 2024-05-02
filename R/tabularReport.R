@@ -15,6 +15,7 @@
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
 #' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
 #' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.
+
 #' @param con A connection to the AquaCache/hydromet database. NULL uses [hydrometConnect()] and automatically disconnects.
 #'
 #' @return An Excel workbook containing the report with one tab per timeseries type.
@@ -24,6 +25,7 @@
 # TODO: Adapt to use new DB
 
 tabularReport <- function(level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose", con = NULL) {
+
 
   if (is.null(con)) {
     con <- hydrometConnect(silent = TRUE)
