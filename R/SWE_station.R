@@ -25,10 +25,10 @@
 #            active = TRUE,
 #            source = "snow",
 #            summarise = FALSE)
-#
+# #
 # stations = "08AA-SC01"
 # year <- 2024
-# month <- 3
+# month <- 5
 # csv = FALSE
 # return_missing = TRUE
 # active = TRUE

@@ -16,7 +16,7 @@
 #' @param basins The name of the sub_basin you wish to generate stats for. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
 #' @param excel_output If TRUE, calculated stats will be outputted in multiple excel tables. 
 #' @param save_path The path to the directory (folder) where the excel files should be saved. Enter the path as a character string.
-#' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. 
+#' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. Currently is a placeholder and does not work.
 #' @param source Should the SWE statistics for stations (station_stats) be calculated from the hydro database or the snow database. Default is hydro database.
 #'
 #' @return A snow bulletin in Microsoft Word format.
