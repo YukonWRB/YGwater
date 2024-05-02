@@ -42,7 +42,7 @@
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param legend Should a legend (including text for min/max range and return periods) be added to the plot?
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
-#' @param con A connection to the database. Default uses function [hydrometConnect()].
+#' @param con A connection to the target database. NULL uses hydrometConnect from this package and automatically disconnects.
 #' @param continuous_data A data.frame with the data to be plotted. Must contain the following columns: datetime, value.
 #' @param snowbulletin If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
@@ -70,11 +70,16 @@ plotOverlap <- function(location = NULL,
                         plot_scale = 1,
                         legend = TRUE,
                         save_path = NULL,
-                        con = hydrometConnect(silent = TRUE),
+                        con = NULL,
                         continuous_data = NULL,
                         snowbulletin = FALSE,
                         language = "en")
 {
+  
+  if (is.null(con)) {
+    con <- hydrometConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
   
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
   old_warn <- getOption("warn")

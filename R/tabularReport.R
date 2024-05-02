@@ -7,7 +7,6 @@
 #' 
 #' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::getNewContinuous first.
 #'
-#' @param con A connection to the database. Default uses function [hydrometConnect()].
 #' @param level_locations List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.
 #' @param flow_locations List of flow locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory. "all" fetches all flow reporting locations in the DB. NULL will not create the table.
 #' @param snow_locations List of snow pillow locations to include in the report, as a character vector. "default" includes all of the WRB snow pillows as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
@@ -15,7 +14,8 @@
 #' @param precip_locations List of flow/level locations for which to report precipitation. "default" is a pre-determined list of locations, "all" is all locations for which there is a drainage polygon (which may be more or less than the number of stations reporting level or flow information). NULL will not create the table. WARNING: this portion of the script is slow. Setting this parameter to "all" could take about an hour to get all information together.
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
 #' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
-#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose'.
+#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.
+#' @param con A connection to the AquaCache/hydromet database. NULL uses [hydrometConnect()] and automatically disconnects.
 #'
 #' @return An Excel workbook containing the report with one tab per timeseries type.
 #' @export
@@ -23,9 +23,12 @@
 
 # TODO: Adapt to use new DB
 
-tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose") {
+tabularReport <- function(level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose", con = NULL) {
 
-  on.exit(DBI::dbDisconnect(con))
+  if (is.null(con)) {
+    con <- hydrometConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
 
   if (!is.null(level_locations)) {
     if (level_locations[1] == "default") {
@@ -157,12 +160,12 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       tryCatch({
         #TODO: Update code below to get polygons direct from the DB once basinPrecip is updated.
-        lastWeek <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastThree <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastTwo <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE)
-        lastOne <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time() - 60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE)
-        next24 <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE)
-        next48 <- basinPrecip(location = i, drainage_loc = "\\\\env-fs/env-data/corp/water/Common_GW_SW/Data/database/polygons/watersheds/all_basins.shp", start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE)
+        lastWeek <- basinPrecip(location = i, start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
+        lastThree <- basinPrecip(location = i, start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
+        lastTwo <- basinPrecip(location = i, start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
+        lastOne <- basinPrecip(location = i, start = Sys.time() - 60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
+        next24 <- basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE, con = con)
+        next48 <- basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE, con = con)
         yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
 
         precip <- rbind(precip,
@@ -1032,3 +1035,4 @@ tabularReport <- function(con = hydrometConnect(silent = TRUE), level_locations 
   }
   openxlsx::saveWorkbook(wb, paste0(save_path, "/HydrometricReport_", Sys.Date(), ".xlsx"), overwrite = TRUE)
 }
+
