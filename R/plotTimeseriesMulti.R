@@ -19,7 +19,7 @@
 #' @param language The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
-#' @param con A connection to the database. Default uses function [hydrometConnect()].
+#' @param con A connection to the AquaCache/hydromet database. NULL uses hydrometConnect from this package and automatically disconnects.
 #'
 #' @return A plotly object 
 #' 
@@ -39,9 +39,15 @@ plotTimeseriesMulti <- function(location,
                            language = "en",
                            rate = NULL,
                            tzone = "auto",
-                           con = hydrometConnect(silent = TRUE)) {
+                           con = NULL) {
   
   # Checks and initial work ##########################################
+  
+  if (is.null(con)) {
+    con <- hydrometConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
+  
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
   old_warn <- getOption("warn")
   options(warn = -1)

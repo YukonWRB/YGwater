@@ -12,7 +12,8 @@ getVector(
   return_cols = c("geom_id", "geom_type", "layer_name", "feature_name", "description"),
   table = "vectors",
   geom_col = "geom",
-  con = hydrometConnect()
+  silent = FALSE,
+  con = NULL
 )
 }
 \arguments{
@@ -30,7 +31,9 @@ getVector(
 
 \item{geom_col}{The name of the database table column in which to insert the geometry object.}
 
-\item{con}{A connection to the target database.}
+\item{silent}{Should the function suppress all messages?}
+
+\item{con}{A connection to the target database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
 }
 \value{
 If successful, a terra object. If unsuccessful because the query targets more than 1 geometry types, a table showing you the result of the query.

@@ -19,7 +19,7 @@ plotTimeseries(
   language = "en",
   rate = NULL,
   tzone = "auto",
-  con = hydrometConnect(silent = TRUE)
+  con = NULL
 )
 }
 \arguments{
@@ -51,7 +51,7 @@ plotTimeseries(
 
 \item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
 
-\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}}.}
+\item{con}{A connection to the target database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
 }
 \value{
 A plotly object

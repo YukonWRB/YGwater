@@ -21,8 +21,9 @@
 #' @param plot_type Choose from "violin" , "boxplot" or "linedbox".
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
-#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings. Not used if discrete_data is not left as default NULL.
+#' @param con A connection to the target database. NULL uses [hydrometConnect()] and automatically disconnects.
 #' @param discrete_data A dataframe with the data to be plotted. Must contain the following columns: year, month, value and units.
+#' 
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
 #' @export
 
@@ -38,16 +39,21 @@ hydrometDiscrete <- function(location = NULL,
                              plot_type = "violin",
                              plot_scale = 1,
                              save_path = NULL,
-                             con = hydrometConnect(silent = TRUE),
+                             con = NULL,
                              discrete_data = NULL)
 {
 
   # TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
 
+  if (is.null(con)) {
+    con <- hydrometConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
+  
   # Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
   old_warn <- getOption("warn")
   options(warn = -1)
-  on.exit(options(warn = old_warn))
+  on.exit(options(warn = old_warn), add = TRUE)
 
 
 #### ------- Checks on input parameters  and other start-up bits ---------- ####

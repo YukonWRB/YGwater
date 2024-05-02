@@ -5,7 +5,6 @@
 \title{Tabular output of hydrometric data}
 \usage{
 tabularReport(
-  con = hydrometConnect(silent = TRUE),
   level_locations = "all",
   flow_locations = "all",
   snow_locations = "all",
@@ -13,12 +12,11 @@ tabularReport(
   precip_locations = "default",
   past = 28,
   save_path = "choose",
-  archive_path = "choose"
+  archive_path = "choose",
+  con = NULL
 )
 }
 \arguments{
-\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}}.}
-
 \item{level_locations}{List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.}
 
 \item{flow_locations}{List of flow locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory. "all" fetches all flow reporting locations in the DB. NULL will not create the table.}
@@ -33,7 +31,9 @@ tabularReport(
 
 \item{save_path}{The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.}
 
-\item{archive_path}{The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose'.}
+\item{archive_path}{The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.}
+
+\item{con}{A connection to the AquaCache/hydromet database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
 }
 \value{
 An Excel workbook containing the report with one tab per timeseries type.

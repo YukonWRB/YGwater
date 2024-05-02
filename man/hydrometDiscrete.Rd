@@ -17,7 +17,7 @@ hydrometDiscrete(
   plot_type = "violin",
   plot_scale = 1,
   save_path = NULL,
-  con = hydrometConnect(silent = TRUE),
+  con = NULL,
   discrete_data = NULL
 )
 }
@@ -46,7 +46,7 @@ hydrometDiscrete(
 
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
-\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings. Not used if discrete_data is not left as default NULL.}
+\item{con}{A connection to the target database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
 
 \item{discrete_data}{A dataframe with the data to be plotted. Must contain the following columns: year, month, value and units.}
 }
