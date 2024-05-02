@@ -26,7 +26,7 @@ plotOverlap(
   plot_scale = 1,
   legend = TRUE,
   save_path = NULL,
-  con = hydrometConnect(silent = TRUE),
+  con = NULL,
   continuous_data = NULL,
   snowbulletin = FALSE,
   language = "en"
@@ -53,7 +53,7 @@ hydrometContinuous(
   plot_scale = 1,
   legend = TRUE,
   save_path = NULL,
-  con = hydrometConnect(silent = TRUE),
+  con = NULL,
   continuous_data = NULL,
   snowbulletin = FALSE,
   language = "en"
@@ -100,7 +100,7 @@ hydrometContinuous(
 
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
-\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}}.}
+\item{con}{A connection to the target database. NULL uses hydrometConnect from this package and automatically disconnects.}
 
 \item{continuous_data}{A data.frame with the data to be plotted. Must contain the following columns: datetime, value.}
 

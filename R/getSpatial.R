@@ -27,15 +27,19 @@ getRaster <- function() {
 #' @param return_cols The names of columns to return.
 #' @param table The target table in the database (as character string). If not under the public schema, use format c("schema", "table").
 #' @param geom_col The name of the database table column in which to insert the geometry object.
-#' @param con A connection to the target database.
+#' @param silent Should the function suppress all messages?
+#' @param con A connection to the target database. NULL uses [hydrometConnect()] and automatically disconnects.
 #'
 #' @return If successful, a terra object. If unsuccessful because the query targets more than 1 geometry types, a table showing you the result of the query.
 #' @export
 #'
 
-getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, geom_type = NULL, return_cols = c("geom_id", "geom_type", "layer_name", "feature_name", "description"), table = "vectors", geom_col = "geom", con = hydrometConnect()) {
+getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, geom_type = NULL, return_cols = c("geom_id", "geom_type", "layer_name", "feature_name", "description"), table = "vectors", geom_col = "geom", silent = FALSE, con = NULL) {
   
-  on.exit(DBI::dbDisconnect(con))
+  if (is.null(con)) {
+    con <- hydrometConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
   
   rlang::check_installed("rpostgis", reason = "required to use function getVector.")
   
@@ -71,10 +75,11 @@ getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, ge
     stop("Your query returned no results.")
   }
   
-  #Check if query resulted in multiple geom_types
+  # Check if query resulted in multiple geom_types
   if (length(unique(tbl$geom_type)) > 1) {
-    warning("Your query resulted in more than one geometry type: ", paste(unique(tbl$geom_type), collapse = ", AND "), " were returned. Refer to the returned table and refine your search")
-    return(tbl)
+    if (!silent) {
+      message("Your query resulted in more than one geometry type: ", paste(unique(tbl$geom_type), collapse = ", AND "), " were returned. This may result in a non-functional terra object if, for example, lines and polygons are returned together.")
+    }
   }
   
   subquery <- paste0("WHERE")
@@ -92,8 +97,10 @@ getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, ge
   }
   subquery <- gsub("\\s+AND$", "", subquery)
   
-  res <- rpostgis::pgGetGeom(con, name = "vectors", geom = "geom", gid = "geom_id", other.cols = TRUE, clauses = subquery, returnclass = "terra")
-  res <- res[, -which(names(res) == "tgid")]
-  
+  if (silent) {
+    res <- suppressMessages(rpostgis::pgGetGeom(con, name = "vectors", geom = "geom", gid = "geom_id", other.cols = TRUE, clauses = subquery, returnclass = "terra"))
+  } else {
+    res <- rpostgis::pgGetGeom(con, name = "vectors", geom = "geom", gid = "geom_id", other.cols = TRUE, clauses = subquery, returnclass = "terra")
+  }
   return(res)
 }
