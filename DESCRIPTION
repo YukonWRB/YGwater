@@ -57,6 +57,7 @@ Imports:
     zoo
 Suggests:
     DT,
+    flextable,
     fuzzyjoin,
     HydroMetDB,
     imager,
@@ -64,6 +65,7 @@ Suggests:
     leaflet,
     odbc,
     officer,
+    officedown,
     plotly,
     pool,
     purrr,

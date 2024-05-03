@@ -25,7 +25,7 @@ snowBulletin(
 
 \item{save_path}{The path to the directory (folder) where the report should be saved. Enter the path as a character string.}
 
-\item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized.}
+\item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the HydroMetDB package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.}
 
 \item{language}{The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".}
 }
@@ -33,13 +33,14 @@ snowBulletin(
 A snow bulletin in Microsoft Word format.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function generates the snow bulletin for a specified date. The output is a Microsoft Word document on a Yukon Government template.
+This function generates the snow bulletin for a specified date as a Microsoft Word document on a Yukon Government template.
 
-This function fetches data from the local postgresql hydrometric database created/maintained by the HydroMetDB package.
+This function fetches data from the local postgresql hydrometric database created/maintained by the HydroMetDB package; see details for more info on database connections.
 }
 \details{
-To download data, you MUST have your hydromet credentials loaded
-into your .Renviron profile as values pairs of hydrometHost="10.250.12.154", hydrometPort="5433", hydrometUser="hydromet_read", hydrometPass="hydromet".
+To download data, you MUST have the database credentials loaded into your .Renviron profile as values pairs of hydrometHost="10.250.12.154", hydrometPort="5433", hydrometUser="hydromet_read", hydrometPass="hydromet". Note that this is valid as of spring 2024 and that values are subject to change.
+
+If you also wish to synchronize timeseries on our database with new data provided by others (such as when the WSC adjusts or publishes flow values) you must also have write credentials to the database. Please talk to the Data Scientist to get these credntials.
 }
