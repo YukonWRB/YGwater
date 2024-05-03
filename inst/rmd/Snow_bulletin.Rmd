@@ -157,10 +157,12 @@ snowbullpillow2 <- function(location_pil, location_surv, custom_title, language=
 #                             "AND date <= '", year, "-07-01' ")) #year_param
 snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily ",
                             "WHERE timeseries_id = ", location_pil,
-                            " AND date >= '", year-1, "-09-01' ", #year_param
+                            " AND date >= '", year - 1, "-09-01' ", #year_param
                             "AND date <= '", year, "-0", month, "-01' ")) #year_param
 snow_p$date <- as.POSIXct(snow_p$date)
-snow_p[snow_p$date > paste0(format(Sys.Date(), "%Y-%m"), "-01"),]$value <- NA
+if (max(snow_p$date) > paste0(format(Sys.Date(), "%Y-%m"), "-01")) {
+  snow_p[snow_p$date > paste0(format(Sys.Date(), "%Y-%m"), "-01"),]$value <- NA
+}
 
 # Get historical snow survey data
 snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measurements_discrete ",
@@ -189,13 +191,13 @@ snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measur
 
 plot <- ggplot2::ggplot() +
   ggplot2::theme_classic() +
-  ggplot2::geom_line(data=snow_p, ggplot2::aes(y=value, x=date), linewidth = plot_scale *1) +
-  ggplot2::geom_point(dat=snow_s, ggplot2::aes(y=value, x=fake_date, colour=type), size=plot_scale*2) +
+  ggplot2::geom_line(data = snow_p, ggplot2::aes(y = value, x = date), linewidth = plot_scale * 1) +
+  ggplot2::geom_point(dat = snow_s, ggplot2::aes(y = value, x = fake_date, colour = type), size = plot_scale * 2) +
   ggplot2::scale_x_datetime(date_breaks = "2 months", date_labels = labs, expand = c(0,0), 
-                            limits=c(as.POSIXct(paste0(year-1, "-09-01")), as.POSIXct(paste0(year, "-06-30")))) + 
-  ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values=c("#0097A9", "#7A9A01", "#834333")) +
+                            limits = c(as.POSIXct(paste0(year - 1, "-09-01")), as.POSIXct(paste0(year, "-06-30")))) + 
+  ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
   ggplot2::theme(legend.position = "none") +
-  ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale), plot.title=ggplot2::element_text(hjust=0.05, size=12*plot_scale, face="bold")) +
+  ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale), plot.title = ggplot2::element_text(hjust = 0.05, size = 12*plot_scale, face = "bold")) +
     if (language == "french") {
     ggplot2::labs(x = NULL, y = "EEN (mm)", title = custom_title)
   } else {
@@ -456,7 +458,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
 
 ```
 
-```{r SWEbasins, include=FALSE, eval=FALSE}
+```{r SWEbasins, include=FALSE, eval=TRUE}
 # Get SWE data for basins 
 swe_basins <- YGwater::SWE_basin(year = year_param,
                                    month = c(3, 4, 5), # c(3)
@@ -468,7 +470,7 @@ swe_basins <- YGwater::SWE_basin(year = year_param,
   swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
   swe_basins <<- swe_basins
 # Get stats for text
-  stats <- snowBulletinStats(year=year_param, month=month_param, excel_output=FALSE)
+  stats <- snowBulletinStats(year = year_param, month = month_param, excel_output = FALSE)
   stats <<- stats
 
 ```
@@ -572,7 +574,7 @@ if (language_param == "french") {
                                                 #,title.vjust=-1
                                                 ))
  
- ggplot2::ggsave("legend_plot.png", plot=plot, width=3.3, height=5.8)
+ ggplot2::ggsave("legend_plot.png", plot = plot, width = 3.3, height = 5.8)
  
  knitr::include_graphics("legend_plot.png")
 
@@ -729,10 +731,10 @@ par(mfrow = c(1, 2))
 # Set station ID
 station_id <- "09AA-M1"
 # Plot SWE
-if (language=="french") {
-  snowbullpillow(location = station_id, custom_title = "A1 : Équivalent en eau de la neige - Tagish", year = year_param, language="fr")
+if (language == "french") {
+  snowbullpillow(location = station_id, custom_title = "A1 : Équivalent en eau de la neige - Tagish", year = year_param, language = "fr")
 } else {
-  snowbullpillow(location = station_id, custom_title = "A1: Tagish Snow Water Equivalent", year = year_param, language="en")
+  snowbullpillow(location = station_id, custom_title = "A1: Tagish Snow Water Equivalent", year = year_param, language = "en")
 }
   
 
@@ -740,8 +742,8 @@ if (language=="french") {
 # Set station ID
 station_id <- "29AB-M3"
 # Plot SWE
-if (language=="french") {
-  snowbullpillow(location = station_id, custom_title = "A2 : Équivalent en eau de la neige - Wolf Creek", year = year_param, language="fr")
+if (language == "french") {
+  snowbullpillow(location = station_id, custom_title = "A2 : Équivalent en eau de la neige - Wolf Creek", year = year_param, language = "fr")
 } else {
   snowbullpillow(location = station_id, custom_title = "A2: Wolf Creek Subalpine Snow Water Equivalent", year = year_param)
 }
