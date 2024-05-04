@@ -177,8 +177,8 @@ map <- function(id, language, restoring, data) {
         "<strong>", translations[id == "parameter(s)", get(language$language)][[1]], ":</strong><br/><i>", tmp$parameters, "</i><br/>",
         "<strong>", translations[id == "network(s)", get(language$language)][[1]], ":</strong><br/><i>", tmp$networks, "</i><br/>",
         "<strong>", translations[id == "project(s)", get(language$language)][[1]], ":</strong><br/><i>", ifelse(is.na(tmp$projects), "N/A", paste(tmp$projects, collapse = "<br/>")), "</i><br/>",
-        "<br/><a href='#' onclick='changeTab(\"map-\", \"clicked_view_data\", \"", tmp$location_id, "\"); return false;'>View Data</a><br/>",
-        "<a href='#' onclick='changeTab(\"map-\", \"clicked_view_plots\", \"", tmp$location_id, "\"); return false;'>View Plots</a>"
+        "<br/><a href='#' onclick='changeTab(\"map-\", \"clicked_view_data\", \"", tmp$location_id, "\"); return false;'>", translations[id == "view_data", get(language$language)][[1]], "</a><br/>",
+        "<a href='#' onclick='changeTab(\"map-\", \"clicked_view_plots\", \"", tmp$location_id, "\"); return false;'>", translations[id == "view_plots", get(language$language)][[1]], "</a>"
       )
       
       # Update the tooltip's text
@@ -263,7 +263,6 @@ map <- function(id, language, restoring, data) {
     
     # Filter the map data based on user's selection and add points to map ############################
     observe({
-      
       if (!is.null(input$type)) {
         if (length(input$type) > 1) {
           timeseries.sub <- data$timeseries[data$timeseries$category %in% input$type, ]
