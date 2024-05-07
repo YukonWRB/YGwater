@@ -120,6 +120,7 @@ img <- function(id, con, language, restoring) {
                                  selected = isolate(selected_row())),
                                filter = "none",
                                options = list(
+                                 scrollX = TRUE,
                                  initComplete = htmlwidgets::JS(
                                    "function(settings, json) {",
                                    "$(this.api().table().header()).css({",

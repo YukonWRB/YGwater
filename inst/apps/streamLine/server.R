@@ -97,7 +97,6 @@ server <- function(input, output, session) {
   # Store information to pass between modules
   moduleOutputs <- reactiveValues()
   
-  
   # Language selection ########################################################
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({

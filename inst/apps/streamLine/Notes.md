@@ -1,8 +1,6 @@
 # General notes and todos
 - Normalize database further. Things like document types need their own table to enable more languages instead of CHECK() constraints.
 - Add audit document type
-- Explore combining DB queries instead of doing joins via data.table.
-- Consider making VIEW table for app required info
 - Implement use of hourly data views table for plots
 - continuous/discrete/FORECAST?? or forecast points its own drop-down??? (it would not appear until at least one forecast location is created)
   - Forecasts table needs additional model information, possibly new cols for 95% CI, min/max of ensemble, ensemble or not, number of members, ....Ski
@@ -38,8 +36,8 @@
   - Questions: limit this to a few timeseries, just one, just one location, only n number of timeseries for continuous but no limit on discrete, or ???
 ## Improvements
 ## Issues
-- column period_type is currently being dropped. It might need to get its own table in the DB, or get a direct translation
-- Column(s) might need an explanation as a hover button! 
+- Hover buttons conflict with language selection dropdown. Troubleshoot and determine if this should be kept. (Is it a problem with running on server?)
+## Navigating away from data tab when a modal is open causes a crash. Automaticaly close the modal when navigating away.
 
 # Map view
 ## Issues
