@@ -72,6 +72,7 @@ Suggests:
     R.utils,
     reticulate,
     rpostgis,
+    RSQLite,
     trend,
     shiny,
     shinyalert,
