@@ -9,7 +9,7 @@ snowBulletin(
   month,
   scale = 1,
   basins = NULL,
-  save_path,
+  save_path = "choose",
   synchronize = FALSE,
   language = "english"
 )
