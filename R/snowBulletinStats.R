@@ -497,7 +497,15 @@ snowBulletinStats <-
           colnames(swe_basin_summary) <- c("SWE_Basin", "RELATIVE_SWE", "Bulletin_Edition")
         }
         
-        swe_compiled <- station_stats[, c("location_name", "swe_rat")]
+        swe_compiled <- station_stats
+        # If swe = 0, swe_med = 0 ---> no snow where median zero
+        swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
+        # If swe !=0, swe_med = 0  ---> snow where median zero
+        swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
+        # If swe = 0, swe_med != 0 ---> no snow
+        swe_compiled$swe_rat[swe_compiled$swe == 0 & swe_compiled$swe_med != 0] <- "no snow present"
+        
+        swe_compiled <- swe_compiled[, c("location_name", "swe_rat")]
         swe_compiled$Bulletin_Edition <- paste0(year, "-", month.name[month])
         colnames(swe_compiled) <- c("Snow Course Name", "RATIO", "Bulletin_Edition")
         
