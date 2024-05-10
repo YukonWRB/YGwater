@@ -49,7 +49,7 @@ snowBulletin <-
     
     # Make sure officer is installed
     rlang::check_installed("officer", reason = "necessary to create word document with special formatting using Rmarkdown.")
-    # Make sure officer is installed
+    # Make sure officedown is installed
     rlang::check_installed("officedown", reason = "necessary to create word document with special formatting using Rmarkdown.")
     # Make sure knitr is installed
     rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")

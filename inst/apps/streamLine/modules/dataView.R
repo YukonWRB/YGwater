@@ -7,37 +7,41 @@ dataUI <- function(id) {
       tags$link(rel = "stylesheet", href = "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css")
     ),
     
-    tags$style(HTML( # Make the ...preparing download... notification stand out more
-      ".shiny-notification {
-  font-size: 24px;
-  font-weight: bold;
-  background-color: #f9f9f9;  /* Light grey background */
-  color: #333;  /* Dark grey text */
-  padding: 15px;  /* Larger padding for more space */
-  border-left: 5px solid #007BFF;  /* Blue left border */
-  border-right: 5px solid #007BFF;  /* Blue right border */
-  border-top: 5px solid #007BFF;  /* Blue top border */
-  border-bottom: 5px solid #007BFF;  /* Blue bottom border */
-  border-radius: 10px;  /* Rounded corners */
-}"
-    )),
+    tags$style(
+      HTML(
+        "// Make the ...preparing download... notification stand out more
+        .shiny-notification {
+          font-size: 24px;
+          font-weight: bold;
+          background-color: #f9f9f9;  /* Light grey background */
+          color: #333;  /* Dark grey text */
+          padding: 15px;  /* Larger padding for more space */
+          border-left: 5px solid #007BFF;  /* Blue left border */
+          border-right: 5px solid #007BFF;  /* Blue right border */
+          border-top: 5px solid #007BFF;  /* Blue top border */
+          border-bottom: 5px solid #007BFF;  /* Blue bottom border */
+          border-radius: 10px;  /* Rounded corners */
+        }"
+      )
+    ),
     tags$script(
-      HTML("// Handles tooltip updates outside of the datatable, binds tooltip properties to elements
-       
-            Shiny.addCustomMessageHandler('update-tooltip', function(message) {
-                var selector = '#' + message.id;
-                $(selector).attr('title', message.title)
-                .tooltip('fixTitle').tooltip('hide');
-            });"
+      HTML(""
       ),
-      HTML(" // Handles tootip creation and update for the datatable headers
-    $(document).ready(function() {
+      HTML("
+      // Handles tooltip updates outside of the datatable, binds tooltip properties to elements
+      Shiny.addCustomMessageHandler('update-tooltip', function(message) {
+        var selector = '#' + message.id;
+        $(selector).attr('title', message.title)
+        .tooltip('fixTitle').tooltip('hide');
+      });
+      
+      // Handles tootip creation and update for the datatable headers
+      $(document).ready(function() {
       // Initialize tooltips
       $('body').tooltip({
         selector: '[data-toggle=\"tooltip\"]',
         container: 'body'
       });
-      
       // Reinitialize tooltips on table redraw
       $('#tbl').on('draw.dt', function() {
         $('.tooltip').remove();
@@ -649,30 +653,30 @@ data <- function(id, con, language, restoring, data, inputs) {
       content = function(file) {
         
         showNotification(translations[id == "dl_prep", get(language$language)][[1]], id = "download_notification", duration = NULL, type = "message")
-
+        
         # Get the data together
         selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
         selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
-        if (input$type == "discrete") {
-          data <- list(location_metadata = dbGetQueryDT(con, paste0("SELECT * FROM ", if (language$language == "Français") "location_metadata_fr" else "location_metadata_en", " WHERE location_id ", if (length(selected_loc_ids) == 1) paste0("= ", selected_loc_ids) else paste0("IN (", paste(selected_loc_ids, collapse = ", "), ")"), ";")),
-                       timeseries_metadata = dbGetQueryDT(con, paste0("SELECT * FROM ", if (language$language == "Français") "timeseries_metadata_fr" else "timeseries_metadata_en", " WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), ";")),
-                       measurements = dbGetQueryDT(con, paste0("SELECT * FROM measurements_discrete WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
-          )
-        } else if (input$type == "continuous") {
-          data <- list(location_metadata = dbGetQueryDT(con, paste0("SELECT * FROM ", if (language$language == "Français") "location_metadata_fr" else "location_metadata_en", " WHERE location_id ", if (length(selected_loc_ids) == 1) paste0("= ", selected_loc_ids) else paste0("IN (", paste(selected_loc_ids, collapse = ", "), ")"), ";")),
-                       timeseries_metadata = dbGetQueryDT(con, paste0("SELECT * FROM ", if (language$language == "Français") "timeseries_metadata_fr" else "timeseries_metadata_en", " WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), ";")),
-                       measurements_daily = dbGetQueryDT(con, paste0("SELECT * FROM calculated_daily WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date < '", input$modal_date_range[2], "';"))
-          )
-          # Now add hourly or max resolution data if selected
-          if (input$modal_frequency == "hourly") {
-            data$measurements_hourly <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_hourly WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
-          } else if (input$modal_frequency == "max") {
-            data$measurements_max <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_continuous WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
-          }
-        }
+        
+        data <- list()
+        data$location_metadata <- dbGetQueryDT(con, paste0("SELECT * FROM ", if (language$language == "Français") "location_metadata_fr" else "location_metadata_en", " WHERE location_id ", if (length(selected_loc_ids) == 1) paste0("= ", selected_loc_ids) else paste0("IN (", paste(selected_loc_ids, collapse = ", "), ")"), ";"))
+        data$timeseries_metadata <- dbGetQueryDT(con, paste0("SELECT * FROM ", if (language$language == "Français") "timeseries_metadata_fr" else "timeseries_metadata_en", " WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), ";"))
         data$grades <- dbGetQueryDT(con, "SELECT * FROM grades;")
         data$approvals <- dbGetQueryDT(con, "SELECT * FROM approvals;")
         
+        if (input$type == "discrete") {
+          data$measurements <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_discrete WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
+          
+        } else if (input$type == "continuous") {
+          data$measurements_daily <- dbGetQueryDT(con, paste0("SELECT * FROM calculated_daily WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date < '", input$modal_date_range[2], "';"))
+          
+          # Now add hourly or max resolution data if selected
+          if (input$modal_frequency == "hourly") {
+            data$measurements_hourly <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_hourly WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
+          } else if (input$modal_frequency == "max") {
+            data$measurements_max <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_continuous WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
+          }
+        }
         
         if (input$modal_format == "xlsx") {
           openxlsx::write.xlsx(data, file)

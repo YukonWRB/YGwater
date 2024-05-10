@@ -132,7 +132,6 @@ map <- function(id, language, restoring, data) {
     
     # Update text (including map popup) based on language ###########################################
     observe({
-      
       # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
       # Get location names
       popup_names <- data$locations[, .(location_id, popup_name = get(translations[id == "generic_name_col", get(language$language)][[1]]))]
@@ -251,9 +250,12 @@ map <- function(id, language, restoring, data) {
     # Create the basic map ###########################################################
     
     output$map <- leaflet::renderLeaflet({
-      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 12)) %>%
+      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 18)) %>%
         leaflet::addTiles() %>% 
-        leaflet::addProviderTiles("Esri.WorldTopoMap") %>%
+        leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topo map") %>%
+        leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite imagery") %>%
+        leaflet::addLayersControl(baseGroups = c("Topo map", "Satellite imagery")) %>%
+        leaflet::addScaleBar(position = "bottomleft", options = leaflet::scaleBarOptions(imperial = FALSE)) %>%
         leaflet::setView(lng = -135.05, lat = 65.00, zoom = 5)  %>% # Center on Yukon
         htmlwidgets::onRender(
           "function(el, x) {

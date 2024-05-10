@@ -2,20 +2,21 @@
 % Please edit documentation in R/plotTimeseriesMulti.R
 \name{plotTimeseriesMulti}
 \alias{plotTimeseriesMulti}
-\title{Plot a continous timeseries from the hydromet database}
+\title{Plot a more than one continuous timeseries from the hydromet database}
 \usage{
 plotTimeseriesMulti(
-  location,
-  parameter,
-  record_rate = NULL,
+  locations,
+  parameters,
+  record_rates = NULL,
   start_date = "1970-01-01",
   end_date = Sys.Date(),
+  log = FALSE,
   slider = TRUE,
   datum = TRUE,
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
-  historic_range = TRUE,
+  historic_range = NULL,
   language = "en",
   rate = NULL,
   tzone = "auto",
@@ -23,27 +24,29 @@ plotTimeseriesMulti(
 )
 }
 \arguments{
-\item{location}{The location for which you want a plot.}
+\item{locations}{The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.}
 
-\item{parameter}{The parameter you wish to plot. The location:parameter combo must be in the local database.}
+\item{parameters}{The parameter or parameters you wish to plot. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.}
 
-\item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.}
+\item{record_rates}{The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as NULL or length one.}
 
-\item{start_date}{The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01 but the plot is zoomable.}
+\item{start_date}{The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01.}
 
 \item{end_date}{The day on which to end the plot as character, Date, or POSIXct. Default is today.}
+
+\item{log}{Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.}
 
 \item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.}
 
 \item{datum}{Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.}
 
-\item{title}{Should a title be included?}
+\item{title}{Should a title be included? TRUE/FALSE.}
 
 \item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.}
 
 \item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "water flow" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
-\item{historic_range}{Should the historic range be plotted? Default is TRUE.}
+\item{historic_range}{Default NULL will plot historic ranges for up to two traces and no historical ranges at all if more than two traces; TRUE will plot historic ranges for all traces; FALSE will not plot historic ranges.}
 
 \item{language}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
 
@@ -51,13 +54,13 @@ plotTimeseriesMulti(
 
 \item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
 
-\item{con}{A connection to the AquaCache/hydromet database. NULL uses hydrometConnect from this package and automatically disconnects.}
+\item{con}{A connection to the target database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
 }
 \value{
 A plotly object
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function will plot a continuous timeseries from the hydromet database. The plot is zoomable, and hovering over the historical ranges or the measured values brings up additional information. The function will also plot the historic range and returns if requested.
+This function plots continuous timeseries from the hydromet/AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
 }
