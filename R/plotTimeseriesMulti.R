@@ -359,7 +359,8 @@ plotTimeseriesMulti <- function(locations,
       }
       if (language == "en") {
         for (i in 1:nrow(timeseries)) {
-          timeseries[i, "name"] <- titleCase(DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1], language)
+          name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
+          timeseries[i, "name"] <- titleCase(name, language)
         }      
       }
       
@@ -443,6 +444,7 @@ plotTimeseriesMulti <- function(locations,
       parameter_name <- timeseries[i, "parameter_name"]
     }
     timeseries[i, "trace_title"] <- paste0(name, " (", parameter_name, ", ", timeseries[i, "units"], ")")
+    timeseries[i, "tooltip_title"] <- paste0(name, " (", parameter_name, ")")
     timeseries[i, "range_title"] <- paste0(name, " (", parameter_name, ", ", timeseries[i, "units"], ")")
     
     tmp <- list(
@@ -452,7 +454,6 @@ plotTimeseriesMulti <- function(locations,
       ticks = "outside",
       overlaying = if (i > 1) "y" else NULL,
       side = if (i %% 2 == 0) "right" else "left",  # Check if even or odd
-      anchor = NULL,
       title = list(
         text = timeseries[i, "trace_title"],
         standoff = ((i - 1) %/% 2) * 22
@@ -473,9 +474,11 @@ plotTimeseriesMulti <- function(locations,
   
   if (historic_range) {
     for (i in 1:n_axes) {
+      data.sub <- data[[i]][["range_data"]][!is.na(data[[i]][["range_data"]]$min) & !is.na(data[[i]][["range_data"]]$max), ]
+      data.sub$tooltip <- paste0(timeseries[i, "tooltip_title"], ": Min: ", round(data.sub$min, 2), " Max: ", round(data.sub$max, 2), ", ", as.Date(data.sub$datetime))
       plot <- plot %>%
         plotly::add_ribbons(
-          data = data[[i]][["range_data"]][!is.na(data[[i]][["range_data"]]$min) & !is.na(data[[i]][["range_data"]]$max), ], 
+          data = data.sub,
           x = ~datetime, 
           ymin = ~min,
           ymax = ~max, 
@@ -484,15 +487,17 @@ plotTimeseriesMulti <- function(locations,
           yaxis = timeseries[i, "axis"],
           line = list(width = 0.3),
           hoverinfo = "text",
-          text = ~paste(timeseries[i, "trace_title"], ": Min:", round(min, 2), " Max:", round(max, 2))
+          text = ~tooltip
         )
     }
   }
   # Add the traces
   for (i in 1:n_axes) {
+    data.sub <- data[[i]][["trace_data"]]
+    data.sub$tooltip <- paste0(timeseries[i, "tooltip_title"], ": ", round(data.sub$value, 4), ", ", as.Date(data.sub$datetime))
     plot <- plot %>%
       plotly::add_lines(
-        data = data[[i]][["trace_data"]], 
+        data = data.sub, 
         x = ~datetime, 
         y = ~value, 
         type = "scatter", 
@@ -501,8 +506,7 @@ plotTimeseriesMulti <- function(locations,
         yaxis = timeseries[i, "axis"],
         color = I(colors[i]), 
         hoverinfo = "text",
-        text = ~paste(timeseries[i, "trace_title"], ":", round(value, 4))
-      )
+        text = ~tooltip)
   }
   
   
@@ -553,6 +557,7 @@ plotTimeseriesMulti <- function(locations,
   plot <- do.call(plotly::layout, c(list(plot), total_layout_settings))
   
   plot <- plotly::config(plot, locale = language)
+  plot
   
 
   return(plot)

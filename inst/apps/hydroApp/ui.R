@@ -94,6 +94,23 @@ app_ui <- function(request) {
           textInput("return_months", "Months for return calculation (comma delimited)", value = "5,6,7,8,9"),
           checkboxInput("apply_datum", "Apply vertical datum?"),
           checkboxInput("plot_filter", "Filter extreme values?"),
+          actionButton("add_trace2", "Add a trace"), # Only used for plotMulti, turned on/off by shinyjs
+          selectizeInput("plot_param2", label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_loc_code2", "Select location by code", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_loc_name2", "Select location by name", choices = "placeholder"), #Choices are selected in the server
+          actionButton("remove_trace2", "Remove this trace"),
+          actionButton("add_trace3", "Add a trace"), # Only used for plotMulti, turned on/off by shinyjs
+          selectizeInput("plot_param3", label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_loc_code3", "Select location by code", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_loc_name3", "Select location by name", choices = "placeholder"), #Choices are selected in the server
+          actionButton("remove_trace3", "Remove this trace"),
+          actionButton("add_trace4", "Add a trace"), # Only used for plotMulti, turned on/off by shinyjs
+          
+          selectizeInput("plot_param4", label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_loc_code4", "Select location by code", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_loc_name4", "Select location by name", choices = "placeholder"), #Choices are selected in the server
+          
+          actionButton("remove_trace4", "Remove this trace"),
           actionButton("plot_go", "Render plot")
         ),
         mainPanel(
