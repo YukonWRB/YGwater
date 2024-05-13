@@ -113,9 +113,14 @@ img <- function(id, con, language, restoring) {
       
       tables$tbl <- tbl # Used for image rendering later
       
-      out_tbl <- DT::datatable(tbl, rownames = FALSE, selection = list(mode = "single", selected = isolate(selected_row())),
+      out_tbl <- DT::datatable(tbl, 
+                               rownames = FALSE, 
+                               selection = list(
+                                 mode = "single", 
+                                 selected = isolate(selected_row())),
                                filter = "none",
                                options = list(
+                                 scrollX = TRUE,
                                  initComplete = htmlwidgets::JS(
                                    "function(settings, json) {",
                                    "$(this.api().table().header()).css({",
@@ -139,7 +144,7 @@ img <- function(id, con, language, restoring) {
                                      targets = 1,
                                      render = htmlwidgets::JS( # Truncate long strings in the table
                                        "function(data, type, row, meta) {",
-                                       "return type === 'display' && data.length > 30 ?",
+                                       "return type === 'display' && data !== null && data.length > 30 ?",
                                        "'<span title=\"' + data + '\">' + data.substr(0, 30) + '...</span>' : data;",
                                        "}")
                                    )

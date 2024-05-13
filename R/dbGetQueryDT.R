@@ -14,6 +14,7 @@
 #'
 
 dbGetQueryDT <- function(con, statement, ...) {
+  .datatable.aware <- TRUE
   res <- DBI::dbGetQuery(con, statement, ...)
   data.table::setDT(res)
   return(res)

@@ -49,8 +49,11 @@ app_server <- function(input, output, session) {
     } else if (input$first_selection == "View hydromet plots + data") {
       if (!runCheck$plots) {
         plotContainer$all_ts <- DBI::dbGetQuery(con, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.param_type, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
+        plotContainer$all_ts <- plotContainer$all_ts[order(plotContainer$all_ts$name), ]
         plotContainer$parameters_discrete <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
+        plotContainer$parameters_discrete <- plotContainer$parameters_discrete[order(plotContainer$parameters_discrete$param_name), ]
         plotContainer$parameters_continuous <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'continuous';")
+        plotContainer$parameters_continuous <- plotContainer$parameters_continuous[order(plotContainer$parameters_continuous$param_name), ]
         datums <- DBI::dbGetQuery(con, "SELECT dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
         
         datums$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", datums$datum_name_en)
@@ -222,7 +225,7 @@ app_server <- function(input, output, session) {
   # observe and observeEvents related to plotting data --------------------
   observeEvent(input$plot_data_type, {
     if (input$plot_data_type == "Discrete") {
-      updateSelectizeInput(session, "plot_param", choices = titleCase(plotContainer$parameters_discrete$param_name))
+      updateSelectizeInput(session, "plot_param", choices = titleCase(plotContainer$parameters_discrete$param_name), selected = "Snow Water Equivalent")
       shinyjs::hide("return_periods")
       shinyjs::hide("return_type")
       shinyjs::hide("return_months")
@@ -236,7 +239,7 @@ app_server <- function(input, output, session) {
       shinyjs::show("plot_sub_type")
       updateSelectizeInput(session, "plot_type", choices = c("Binned", "Scatter"), selected = "Binned")
     } else if (input$plot_data_type == "Continuous") {
-      updateSelectizeInput(session, "plot_param", choices = titleCase(plotContainer$parameters_continuous$param_name))
+      updateSelectizeInput(session, "plot_param", choices = titleCase(plotContainer$parameters_continuous$param_name), selected = "Water Level")
       shinyjs::show("return_periods")
       shinyjs::show("return_type")
       shinyjs::show("return_months")
@@ -276,6 +279,24 @@ app_server <- function(input, output, session) {
     }
   }) #Do not ignoreInit = TRUE
   
+  observeEvent(input$plot_param2, {
+    plotContainer$param_code2 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param2), "param_code"]
+    updateSelectizeInput(session, "plot_loc_name2", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code2 & plotContainer$all_ts$category == "continuous", "name"]))
+    updateSelectizeInput(session, "plot_loc_code2", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code2 & plotContainer$all_ts$category == "continuous", "location"]))
+  })
+  
+  observeEvent(input$plot_param3, {
+    plotContainer$param_code3 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param3), "param_code"]
+    updateSelectizeInput(session, "plot_loc_name3", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code3 & plotContainer$all_ts$category == "continuous", "name"]))
+    updateSelectizeInput(session, "plot_loc_code3", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code3 & plotContainer$all_ts$category == "continuous", "location"]))
+  })
+  
+  observeEvent(input$plot_param4, {
+    plotContainer$param_code4 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param4), "param_code"]
+    updateSelectizeInput(session, "plot_loc_name4", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code4 & plotContainer$all_ts$category == "continuous", "name"]))
+    updateSelectizeInput(session, "plot_loc_code4", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code4 & plotContainer$all_ts$category == "continuous", "location"]))
+  })
+  
   observeEvent(input$plot_type, {
     if (input$plot_type == "Overlapping years") {
       shinyjs::show("return_periods")
@@ -290,6 +311,21 @@ app_server <- function(input, output, session) {
       shinyjs::hide("return_yrs")
       shinyjs::hide("start_date")
       shinyjs::hide("end_date")
+      shinyjs::hide("add_trace2")
+      shinyjs::hide("add_trace3")
+      shinyjs::hide("add_trace4")
+      shinyjs::hide("remove_trace2")
+      shinyjs::hide("remove_trace3")
+      shinyjs::hide("remove_trace4")
+      shinyjs::hide("plot_param2")
+      shinyjs::hide("plot_loc_code2")
+      shinyjs::hide("plot_loc_name2")
+      shinyjs::hide("plot_param3")
+      shinyjs::hide("plot_loc_code3")
+      shinyjs::hide("plot_loc_name3")
+      shinyjs::hide("plot_param4")
+      shinyjs::hide("plot_loc_code4")
+      shinyjs::hide("plot_loc_name4")
     } else if (input$plot_type == "Long timeseries") {
       shinyjs::hide("return_periods")
       shinyjs::hide("return_type")
@@ -300,6 +336,21 @@ app_server <- function(input, output, session) {
       shinyjs::hide("plot_years")
       shinyjs::hide("return_yrs")
       shinyjs::hide("historic_range_overlap")
+      shinyjs::hide("add_trace2")
+      shinyjs::hide("add_trace3")
+      shinyjs::hide("add_trace4")
+      shinyjs::hide("remove_trace2")
+      shinyjs::hide("remove_trace3")
+      shinyjs::hide("remove_trace4")
+      shinyjs::hide("plot_param2")
+      shinyjs::hide("plot_loc_code2")
+      shinyjs::hide("plot_loc_name2")
+      shinyjs::hide("plot_param3")
+      shinyjs::hide("plot_loc_code3")
+      shinyjs::hide("plot_loc_name3")
+      shinyjs::hide("plot_param4")
+      shinyjs::hide("plot_loc_code4")
+      shinyjs::hide("plot_loc_name4")
       shinyjs::show("historic_range")
       shinyjs::show("start_date")
       shinyjs::show("end_date")
@@ -312,16 +363,82 @@ app_server <- function(input, output, session) {
       shinyjs::hide("plot_years_note")
       shinyjs::hide("plot_years")
       shinyjs::hide("return_yrs")
-      shinyjs::hide("historic_range")
       shinyjs::hide("historic_range_overlap")
+      shinyjs::show("historic_range")
       shinyjs::show("start_date")
       shinyjs::show("end_date")
+      shinyjs::show("add_trace2")
+      shinyjs::hide("add_trace3")
+      shinyjs::hide("add_trace4")
+      shinyjs::hide("remove_trace2")
+      shinyjs::hide("remove_trace3")
+      shinyjs::hide("remove_trace4")
     } else if (input$plot_type == "Binned") {
       shinyjs::show("plot_sub_type")
     } else if (input$plot_type == "Scatter") {
       shinyjs::hide("plot_sub_type")
     }
   })
+  
+  observeEvent(input$add_trace2, {
+    print(input$plot_loc_name)
+    locs <<- plotContainer$all_ts
+    print(input$plot_loc_code)
+    shinyjs::hide("add_trace2")
+    shinyjs::show("add_trace3")
+    shinyjs::show("remove_trace2")
+    shinyjs::show("plot_param2")
+    shinyjs::show("plot_loc_code2")
+    shinyjs::show("plot_loc_name2")
+    updateSelectizeInput(session, "plot_loc_name2", choices = unique(plotContainer$all_ts[ , "name"]), selected = input$plot_loc_name)
+    updateSelectizeInput(session, "plot_loc_code2", choices = unique(plotContainer$all_ts[ , "location"]), selected = input$plot_loc_code)
+    updateSelectizeInput(session, "plot_param2", choices = titleCase(plotContainer$parameters_continuous$param_name), selected = "")
+  })
+  observeEvent(input$add_trace3, {
+    shinyjs::hide("add_trace3")
+    shinyjs::show("add_trace4")
+    shinyjs::show("remove_trace3")
+    shinyjs::show("plot_param3")
+    shinyjs::show("plot_loc_code3")
+    shinyjs::show("plot_loc_name3")
+    updateSelectizeInput(session, "plot_loc_name3", choices = unique(plotContainer$all_ts[, "name"]), selected = input$plot_loc_name2)
+    updateSelectizeInput(session, "plot_loc_code3", choices = unique(plotContainer$all_ts[ , "location"]), selected = input$plot_loc_code2)
+    updateSelectizeInput(session, "plot_param3", choices = titleCase(plotContainer$parameters_continuous$param_name), selected = "")
+  })
+  observeEvent(input$add_trace4, {
+    shinyjs::hide("add_trace4")
+    shinyjs::show("remove_trace4")
+    shinyjs::show("plot_param4")
+    shinyjs::show("plot_loc_code4")
+    shinyjs::show("plot_loc_name4")
+    updateSelectizeInput(session, "plot_loc_name4", choices = unique(plotContainer$all_ts[ , "name"]), selected = input$plot_loc_name3)
+    updateSelectizeInput(session, "plot_loc_code4", choices = unique(plotContainer$all_ts[ , "location"]), selected = input$plot_loc_code3)   
+    updateSelectizeInput(session, "plot_param4", choices = titleCase(plotContainer$parameters_continuous$param_name), selected = "")
+  })
+  observeEvent(input$remove_trace2, {
+    shinyjs::show("add_trace2")
+    shinyjs::hide("add_trace3")
+    shinyjs::hide("remove_trace2")
+    shinyjs::hide("plot_param2")
+    shinyjs::hide("plot_loc_code2")
+    shinyjs::hide("plot_loc_name2")
+  })
+  observeEvent(input$remove_trace3, {
+    shinyjs::show("add_trace3")
+    shinyjs::hide("add_trace4")
+    shinyjs::hide("remove_trace3")
+    shinyjs::hide("plot_param3")
+    shinyjs::hide("plot_loc_code3")
+    shinyjs::hide("plot_loc_name3")
+  })
+  observeEvent(input$remove_trace4, {
+    shinyjs::show("add_trace4")
+    shinyjs::hide("remove_trace4")
+    shinyjs::hide("plot_param4")
+    shinyjs::hide("plot_loc_code4")
+    shinyjs::hide("plot_loc_name4")
+  })
+  
   
   #Cross-updating of plot selection location name or code
   observeEvent(input$plot_loc_code, {
@@ -345,6 +462,36 @@ app_server <- function(input, output, session) {
   observeEvent(input$plot_loc_name, {
     updateSelectizeInput(session, "plot_loc_code", selected = unique(plotContainer$all_ts[plotContainer$all_ts$name == input$plot_loc_name, "location"]))
   }, ignoreInit = TRUE)
+  
+  # Update location name or code for traces 2 to 4
+  observeEvent(input$plot_loc_code2, {
+    if (input$plot_loc_code2 %in% plotContainer$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
+      updateSelectizeInput(session, "plot_loc_name2", selected = unique(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code2, "name"]))
+    }
+  })
+  observeEvent(input$plot_loc_code3, {
+    if (input$plot_loc_code3 %in% plotContainer$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
+      updateSelectizeInput(session, "plot_loc_name3", selected = unique(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code3, "name"]))
+    }
+  })
+  observeEvent(input$plot_loc_code4, {
+    if (input$plot_loc_code4 %in% plotContainer$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
+      updateSelectizeInput(session, "plot_loc_name4", selected = unique(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code4, "name"]))
+    }
+  })
+  
+  observeEvent(input$plot_loc_name2, {
+    updateSelectizeInput(session, "plot_loc_code2", selected = unique(plotContainer$all_ts[plotContainer$all_ts$name == input$plot_loc_name2, "location"]))
+  }, ignoreInit = TRUE)
+  
+  observeEvent(input$plot_loc_name3, {
+    updateSelectizeInput(session, "plot_loc_code3", selected = unique(plotContainer$all_ts[plotContainer$all_ts$name == input$plot_loc_name3, "location"]))
+  }, ignoreInit = TRUE)
+  
+  observeEvent(input$plot_loc_name4, {
+    updateSelectizeInput(session, "plot_loc_code4", selected = unique(plotContainer$all_ts[plotContainer$all_ts$name == input$plot_loc_name4, "location"]))
+  }, ignoreInit = TRUE)
+  
   
   observeEvent(input$return_periods, {
     if (input$return_periods == "none") {
@@ -404,10 +551,7 @@ app_server <- function(input, output, session) {
       } else if (plotContainer$plot_type == "plotTimeseries") {
         plotContainer$plot <- plotTimeseries(location = input$plot_loc_code, parameter = tolower(input$plot_param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, con = con)
       } else if (plotContainer$plot_type == "plotTimeseriesMulti") {
-        #TODO: add multi timeseries plot
-        # This one doesn't exist yet so show a warning the user.
-        shinyjs::alert("This plot type is not yet implemented.")
-        return()
+        plotContainer$plot <- plotTimeseriesMulti(locations = c(input$plot_loc_code, input$plot_loc_code2, input$plot_loc_code3, input$plot_loc_code4), parameters = c(tolower(input$plot_param), tolower(input$plot_param2), tolower(input$plot_param3), tolower(input$plot_param4)), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, con = con, slider = FALSE)
       } else if (plotContainer$plot_type == "hydrometDiscrete") {
         if (!input$plot_param %in% c("Snow Water Equivalent", "Snow Depth")) {
           shinyjs::alert("This plot type is only available for SWE and Snow Depth at this time. Please select one of these parameters.")
