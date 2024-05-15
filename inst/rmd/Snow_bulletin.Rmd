@@ -42,11 +42,11 @@ titles <- list(
     MAP3 = "Map 3. Snow Water Equivalent",
     UPPER_YUKON = "Upper Yukon River Basin (Southern Lakes/Whitehorse)",
     TESLIN = "Teslin River Basin",
-    CENTRAL_YUKON = "Central Yukon River Basin (Carmacks Area)",
+    CENTRAL_YUKON = "Central Yukon River Basin (Carmacks)",
     PELLY = "Pelly River Basin",
     STEWART = "Stewart River Basin",
     WHITE = "White River Basin",
-    LOWER_YUKON = "Lower Yukon River Basin (Dawson/Klondike Area)",
+    LOWER_YUKON = "Lower Yukon River Basin (Dawson/Klondike)",
     PORCUPINE = "Porcupine River Basin",
     PEEL = "Peel River Basin",
     LIARD = "Liard River Basin",
@@ -388,14 +388,6 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
       language = language
     )
   
-  # if (params$language == "french") {
-  #   plot <- plot + 
-  #   ggplot2::scale_x_datetime(date_breaks = waiver(), labels = labs, expand = c(0,0))
-  # }
-  
-  #plot <- plot + ggplot2::geom_line(ggplot2::aes(y=zoo::rollmean(max,5, fill=NA)), colour = "#0097A9", size=1) +
-   # ggplot2::geom_line(ggplot2::aes(y=zoo::rollmean(min,5, fill=NA)), colour = "#834333", size=1)
-  
   if (exists('flood') &
       !is.null(flood) & parameter %in% c("water level", "water flow")) {
     if (parameter == "water level") {
@@ -510,8 +502,8 @@ Weather conditions for the Yukon are presented in two maps, one showing
 temperature anomalies (deviation from climate normals), and another
 showing precipitation anomalies. Territory-wide snowpack data are
 presented in a third map showing Snow Water Equivalent (SWE) as a
-percent of historical median for each station, as well as the basin
-averaged estimated SWE for 11 watersheds (or river basins). Where
+percent of historical median for each station, as well as the basin-averaged 
+estimated SWE for 11 watersheds (or river basins). Where
 available, complementary meteorological and hydrological data are
 presented for each basin through a series of plots, detailed below. Not
 all basins contain the instrumentation to support all five figure types.
@@ -519,7 +511,7 @@ all basins contain the instrumentation to support all five figure types.
 -   **Figure A:** Daily Snow Water Equivalent (SWE) data starting in
     September at one specific location in the watershed, showing an
     overview of winter snowpack evolution.
--   **Figure B:** Current, basin-averaged, estimated Snow Water
+-   **Figure B:** Current, basin-averaged estimated Snow Water
     Equivalent (SWE) from snow survey data, compared with historical
     data, serving as an indicator of potential runoff volumes in the
     spring (acknowledging that snow sublimation, evapotranspiration,
@@ -619,7 +611,7 @@ fourteen Yukon First Nations and to work in partnership with many First
 Nations in different aspects of our work. Though the findings expressed
 in this report are based primarily on field observations and relevant
 scientific data, we acknowledge the deep and longstanding connection to,
-and knowledge of snow and water held by, Yukon First Nations.
+and knowledge of, snow and water held by Yukon First Nations.
 
 Gathering snow measurements and data from across our vast territory
 requires working together with a number of partners. We'd like to
@@ -1137,8 +1129,7 @@ The Stewart River Basin snowpack is
 At Withers Lake Meteorological Station, Snow Water Equivalent
 (SWE) is estimated to be
 **`r stats$pillow_stats[stats$pillow_stats$location_id=='09DB-M1',]$perc_hist_med`%**
-of the historical median (Figure`r knitr::asis_output("\U00A0")`A). The
-The Stewart River basin-averaged SWE is estimated to be
+of the historical median (Figure`r knitr::asis_output("\U00A0")`A). The Stewart River basin-averaged SWE is estimated to be
 **`r stats$basin_stats[stats$basin_stats$basin=='Stewart',]$perc_hist_med`%**
 of the historical median, with
 **`r stats$basin_stats[stats$basin_stats$basin=='Stewart',]$swe`**
@@ -1260,7 +1251,7 @@ if (language_param == "french") {
 The estimated White River discharge at the Alaska Highway is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09CB001",]$description,
 " average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CB001",]$description))` 
-(Figure`r knitr::asis_output("\U00A0")`E1). 
+(Figure`r knitr::asis_output("\U00A0")`E). 
 In this watershed, high flows are dominated by mountain snowmelt and glacial
 melt that are largely influenced by summer temperatures and
 precipitation. The \-\-\-\-- average snowpack combined with \-\-\-\--
@@ -1361,7 +1352,7 @@ snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = substr(lan
 
 ```
 
-The estimated Yukon River discharge at the White River is currently
+The estimated Yukon River discharge above White River is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description,
 " average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description))` 
 (Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average
@@ -1381,9 +1372,9 @@ These statements also apply to the Klondike River.
 station_id <- "09CD001"
 
 if (language_param == "french") {
-  custom_title  <- "E1 : Débit du fleuve Yukon à la rivière White"
+  custom_title  <- "E1 : Débit du fleuve Yukon en amont de la rivière White"
 } else {
-  custom_title <- "E1: Yukon River Discharge at White River"
+  custom_title <- "E1: Yukon River Discharge above White River"
 }
 
 # Plotting
