@@ -30,8 +30,8 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   
   DBI::dbDisconnect(con)
   
-  ## Get areas for stations 
-  areas <- YGwater::getVector(layer_name = "Drainage basins", feature_name = gauged_stations)
+  ## Get areas for stations
+  areas <- getVector(layer_name = "Drainage basins", feature_name = gauged_stations)
   area <- terra::expanse(areas, unit = "km")
   areas <- as.data.frame(areas)
   areas$area <- area

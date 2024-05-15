@@ -12,7 +12,7 @@
 #' @param end_date The day on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
-#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
+#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists, only for water level and distance. Default is TRUE.
 #' @param title Should a title be included? TRUE/FALSE.
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "water flow" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
@@ -26,31 +26,34 @@
 #' 
 #' @export
 
-plotTimeseriesMulti <- function(locations,
-                           parameters,
-                           record_rates = NULL,
-                           start_date = "1970-01-01",
-                           end_date = Sys.Date(),
-                           log = FALSE,
-                           slider = TRUE,
-                           datum = TRUE,
-                           title = TRUE,
-                           custom_title = NULL,
-                           filter = NULL,
-                           historic_range = NULL,
-                           language = "en",
-                           rate = NULL,
-                           tzone = "auto",
-                           con = NULL) {
+plotMultiTimeseries <- function(locations,
+                                parameters,
+                                record_rates = NULL,
+                                start_date = "1970-01-01",
+                                end_date = Sys.Date(),
+                                log = FALSE,
+                                slider = FALSE,
+                                datum = TRUE,
+                                title = TRUE,
+                                custom_title = NULL,
+                                filter = NULL,
+                                historic_range = NULL,
+                                language = "en",
+                                rate = NULL,
+                                tzone = "auto",
+                                con = NULL) {
   
   # Checks and initial work ##########################################
+  
+  # Deal with non-standard evaluations from data.table to silence check() notes
+  period_secs <- period <- expected <- datetime <- gap_exists <- NULL
   
   rlang::check_installed("plotly", "necessary for interactive plots")
   
   if (!(language %in% c("en", "fr"))) {
     stop("Your entry for the parameter 'language' is invalid. Please review the function documentation and try again.")
   }
-
+  
   
   if (length(log) != 1) {
     if (length(log) != length(locations)) {
@@ -85,7 +88,7 @@ plotTimeseriesMulti <- function(locations,
       record_rates <- rep(record_rates, length(locations))
     }
   }
-
+  
   if (length(locations) != length(parameters)) {
     stop("The number of locations and parameters must be the same, or one must be a vector of length 1.")
   }
@@ -138,10 +141,14 @@ plotTimeseriesMulti <- function(locations,
       historic_range <- TRUE
     }
   }
-    
+  
   # Get the data for each location:parameter:record_rate combo
   # Make a list with one element per location:parameter:record_rate combo
   timeseries <- data.frame(location = locations, parameter = parameters, record_rate = record_rates)
+  if (nrow(unique(timeseries)) != nrow(timeseries)) {
+    stop("You have duplicate entries in your locations and/or parameters and/or record_rates. Please review the function documentation and try again.")
+  }
+  
   data <- list()
   remove <- numeric()
   for (i in 1:nrow(timeseries)) {
@@ -152,6 +159,11 @@ plotTimeseriesMulti <- function(locations,
     
     # Determine the timeseries and adjust the date range #################
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    if (is.na(location_id)) {
+      warning("The location you entered, ", location, ", does not exist in the database. Moving on to the next entry.")
+      remove <- c(remove, i)
+      next
+    }
     #Confirm parameter and location exist in the database and that there is only one entry
     escaped_parameter <- gsub("'", "''", parameter)
     parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
@@ -174,11 +186,11 @@ plotTimeseriesMulti <- function(locations,
     }
     if (nrow(exist_check) == 0) {
       if (is.null(record_rate)) {
-        warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data.")
+        warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Moving on to the next entry.")
         remove <- c(remove, i)
         next
       } else {
-        warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", record_rate, " and continuous category data You could try leaving the record rate to the default 'null'.")
+        warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", record_rate, " and continuous category data. Moving on to the next entry. You could try leaving the record rate to the default 'null'.")
         remove <- c(remove, i)
         next
       }
@@ -207,6 +219,17 @@ plotTimeseriesMulti <- function(locations,
     }
     timeseries[i, "record_rate"] <- exist_check[exist_check$timeseries_id == tsid, "record_rate"]
     
+    if  (start_date > exist_check$end_datetime) {
+      warning("The start date you entered is after the end date of the data in the database for location ", location, ", parameter ", parameter, ". Moving on to the next entry.")
+      remove <- c(remove, i)
+      next
+    }
+    if (end_date < exist_check$start_datetime) {
+      warning("The end date you entered is before the start date of the data in the database for location ", location, ", parameter ", parameter, ". Moving on to the next entry.")
+      remove <- c(remove, i)
+      next
+    }
+    
     #adjust start and end datetimes
     sub.start_date <- start_date
     if (sub.start_date < exist_check$start_datetime) {
@@ -221,9 +244,9 @@ plotTimeseriesMulti <- function(locations,
     
     # Find the necessary datum (latest datum)
     if (datum & parameter %in% c("water level", "distance")) {
-      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+      datum.conv <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
     } else {
-      datum <- data.frame(conversion_m = 0)
+      datum.conv <- data.frame(conversion_m = 0)
     }
     
     # Find the ts units
@@ -244,56 +267,84 @@ plotTimeseriesMulti <- function(locations,
     if (historic_range) { # get data from the calculated_daily table for historic ranges plus values from measurements_continuous. Where there isn't any data in measurements_continuous fill in with the value from the daily table.
       range_end <- sub.end_date + 1*24*60*60
       range_start <- sub.start_date - 1*24*60*60
-      range_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, min, max, q75, q25  FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", range_start, "' AND '", range_end, "' ORDER BY date ASC;"))
+      range_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, min, max, q75, q25  FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", range_start, "' AND '", range_end, "' ORDER BY date ASC;"))
       range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
       attr(range_data$datetime, "tzone") <- tzone
       if (rate == "day") {
-        trace_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY date DESC;"))
+        trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY date DESC;"))
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
       } else if (rate == "hour") {
-        trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC;"))
       } else if (rate == "max") {
-        trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        if (nrow(trace_data) > 0) {
+          if (min(trace_data$datetime) > sub.start_date) {
+            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
+            trace_data <- rbind(infill, trace_data)
+          }
+        }
+        
       }
       attr(trace_data$datetime, "tzone") <- tzone
     } else { #No historic range requested
       if (rate == "day") {
-        trace_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY date DESC;"))
+        trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY date DESC;"))
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
       } else if (rate == "hour") {
-        trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC;"))
       } else if (rate == "max") {
-        trace_data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        if (nrow(trace_data) > 0) {
+          if (min(trace_data$datetime) > sub.start_date) {
+            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
+            trace_data <- rbind(infill, trace_data)
+          }
+        }
+        
       }
       attr(trace_data$datetime, "tzone") <- tzone
     }
     
-    # Find the most common interval between points in trace_data and fill gaps with NA values
-    min_trace <- min(trace_data$datetime, na.rm = TRUE)
+    # fill gaps with NA values
+    # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
+    min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
     if (!is.infinite(min_trace)) {
-      interval <- abs(stats::median(diff(as.numeric(trace_data$datetime))))
-      all_times <- seq.POSIXt(from = min_trace, to = max(trace_data$datetime), by = interval)
-      trace_data <- merge(trace_data, data.frame(datetime = all_times), by = "datetime", all = TRUE)
+      # Assume calculate_period correctly sets up the 'period_secs' and 'expected' columns
+      trace_data <- calculate_period(trace_data, tsid)
+      trace_data[, period_secs := as.numeric(lubridate::period(period))]
+      # Shift datetime and add period_secs to compute the 'expected' next datetime
+      trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+      # Create 'gap_exists' column to identify where gaps are
+      trace_data[, gap_exists := datetime > expected & !is.na(expected)]
+      # Find indices where gaps exist
+      gap_indices <- which(trace_data$gap_exists)
+      # Create a data.table of NA rows to be inserted
+      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime] - 1,  # Subtract 1 second (or any small time unit) to place it just before the gap
+                                        value = NA)
+      # Combine with NA rows
+      trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
+      # order by datetime
+      data.table::setorder(trace_data, datetime) 
       
-      # Find out where trace_data values need to be filled in with daily means
+      # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
       if (min_trace > sub.start_date) {
-        extra <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date < '", min(trace_data$datetime), "' AND date >= '", sub.start_date, "';"))
+        extra <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date < '", min(trace_data$datetime), "' AND date >= '", sub.start_date, "';"))
         extra$datetime <- as.POSIXct(extra$datetime, tz = "UTC")
         attr(extra$datetime, "tzone") <- tzone
         trace_data <- rbind(trace_data, extra)
       }
     } else { #this means that no trace data could be had because there are no measurements in measurements_continuous or the hourly views table
-      trace_data <- DBI::dbGetQuery(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date >= '", sub.start_date, "' AND date <= '", sub.end_date, "';"))
+      trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date >= '", sub.start_date, "' AND date <= '", sub.end_date, "';"))
       trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
       attr(trace_data$datetime, "tzone") <- tzone
       trace_data <- rbind(trace_data, trace_data)
     }
-    if (datum != 0) {
+    if (datum.conv$conversion_m != 0) {
       if (historic_range) {
-        range_data$min <- range_data$min + datum$conversion_m
-        range_data$max <- range_data$max + datum$conversion_m
-        range_data$q25 <- range_data$q25 + datum$conversion_m
-        range_data$q75 <- range_data$q75 + datum$conversion_m
+        range_data$min <- range_data$min + datum.conv$conversion_m
+        range_data$max <- range_data$max + datum.conv$conversion_m
+        range_data$q25 <- range_data$q25 + datum.conv$conversion_m
+        range_data$q75 <- range_data$q75 + datum.conv$conversion_m
       }
     }
     if (historic_range) {
@@ -311,8 +362,8 @@ plotTimeseriesMulti <- function(locations,
         remove <- c(remove, i)
       }
     } else {
-      if (datum != 0) {
-        trace_data$value <- trace_data$value + datum$conversion_m
+      if (datum.conv != 0) {
+        trace_data$value <- trace_data$value + datum.conv$conversion_m
       }
       trace_data <- trace_data[order(trace_data$datetime),]
       
@@ -342,28 +393,29 @@ plotTimeseriesMulti <- function(locations,
   }
   
   if (nrow(timeseries) == 0) {
-    stop("Couldn't find data for any of the locations and parameters you specified.")
+    stop("Couldn't find data for any of the location and parameter combinations within the time range you specified.")
+  }
+  
+  
+  if (language == "fr") {
+    for (i in 1:nrow(timeseries)) {
+      name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
+      if (is.na(name)) {
+        name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
+      }
+      timeseries[i, "name"] <- titleCase(name, language)
+    }
+  }
+  if (language == "en") {
+    for (i in 1:nrow(timeseries)) {
+      name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
+      timeseries[i, "name"] <- titleCase(name, language)
+    }      
   }
   
   # Make the title ###################################
   if (title == TRUE) {
     if (is.null(custom_title)) {
-      if (language == "fr") {
-        for (i in 1:nrow(timeseries)) {
-          name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
-          if (is.na(name)) {
-            name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
-          }
-          timeseries[i, "name"] <- titleCase(name, language)
-        }
-      }
-      if (language == "en") {
-        for (i in 1:nrow(timeseries)) {
-          name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
-          timeseries[i, "name"] <- titleCase(name, language)
-        }      
-      }
-      
       generate_plot_title <- function(tbl) {
         # Group by location to handle different parameters per location
         title <- tbl %>%
@@ -371,8 +423,8 @@ plotTimeseriesMulti <- function(locations,
           dplyr::summarise(parameter_names = paste(parameter_name, collapse = ", "), .groups = "drop") %>%
           # Truncate long location names
           dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
-                 # Format title line by line
-                 title = paste(name, " (", .data$parameter_names, ")", sep = "")) %>%
+                        # Format title line by line
+                        title = paste(name, " (", .data$parameter_names, ")", sep = "")) %>%
           # Combine all lines into a single title
           dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
           dplyr::pull("plot_title") # Extract the plot title as a string
@@ -387,6 +439,7 @@ plotTimeseriesMulti <- function(locations,
   }
   
   
+  ### Code below could be used if wanting to automatically send traces to one or the other axis
   # Determine the appropriate axis to send each trace to   ############################
   # ranges <- sapply(data, function(x) range(x[["trace_data"]]$value, na.rm = TRUE))
   # timeseries$min <- ranges[1,]
@@ -421,10 +474,10 @@ plotTimeseriesMulti <- function(locations,
   # Make the plot ###################################
   
   colors <- grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(data))
-
+  
   # Function to add an opacity value to a hex color
   add_opacity_to_color <- function(hex_color, opacity) {
-    rgb_vals <- col2rgb(hex_color)
+    rgb_vals <- grDevices::col2rgb(hex_color)
     sprintf("rgba(%d, %d, %d, %.2f)", rgb_vals[1,], rgb_vals[2,], rgb_vals[3,], opacity)
   }
   
@@ -457,7 +510,7 @@ plotTimeseriesMulti <- function(locations,
       title = list(
         text = timeseries[i, "trace_title"],
         standoff = ((i - 1) %/% 2) * 22
-        ),
+      ),
       type = if (log[i]) "log" else "linear",
       zeroline = FALSE,
       showline = TRUE,
@@ -494,7 +547,7 @@ plotTimeseriesMulti <- function(locations,
   # Add the traces
   for (i in 1:n_axes) {
     data.sub <- data[[i]][["trace_data"]]
-    data.sub$tooltip <- paste0(timeseries[i, "tooltip_title"], ": ", round(data.sub$value, 4), ", ", as.Date(data.sub$datetime))
+    data.sub$tooltip <- paste0(timeseries[i, "tooltip_title"], ": ", round(data.sub$value, 4), ", ", data.sub$datetime)
     plot <- plot %>%
       plotly::add_lines(
         data = data.sub, 
@@ -526,7 +579,7 @@ plotTimeseriesMulti <- function(locations,
   # Collect the axis variables dynamically
   axis_layouts <- lapply(seq(n_axes), function(i) {
     axis_var_name <- paste0("y", i)
-    get(axis_var_name, envir = .GlobalEnv)
+    get(axis_var_name)
   })
   
   # Names for the layout list based on number of axes
@@ -538,7 +591,8 @@ plotTimeseriesMulti <- function(locations,
     margin = list(
       l = 60 + (20 * ((n_axes - 1) %/% 2)),
       r = 60 + (20 * ((n_axes - 1) %/% 2)),
-      b = 0
+      b = 0,
+      t = 30 * length(unique(locations))
     ),
     xaxis = list(
       title = list(standoff = 0, font = list(size = 1)),
@@ -557,8 +611,7 @@ plotTimeseriesMulti <- function(locations,
   plot <- do.call(plotly::layout, c(list(plot), total_layout_settings))
   
   plot <- plotly::config(plot, locale = language)
-  plot
   
-
   return(plot)
 }
+

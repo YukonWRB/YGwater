@@ -19,7 +19,7 @@ Up to 48 rasters (one per hour) representing the HRDPS modeled output for the pa
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Utility function to retrieve gridded predictions output from the \href{https://weather.gc.ca/grib/grib2_HRDPS_HR_e.html}{HRDPS model}. In current form will delete all old files in the save directory.
+Utility function to retrieve gridded predictions output from the \href{https://collaboration.cmc.ec.gc.ca/cmc/cmoi/product_guide/docs/tech_notes/technote_hrdps_e.pdf}{HRDPS model}. In current form will delete all old files in the save directory.
 }
 \seealso{
 \code{\link[=getHRDPA]{getHRDPA()}} if looking for precipitation reanalysis rasters instead. For nice precipitation maps and tabular reports of precipitation (past or future), try \code{\link[=basinPrecip]{basinPrecip()}}.

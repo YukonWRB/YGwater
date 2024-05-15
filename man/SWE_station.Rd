@@ -31,7 +31,9 @@ SWE_station(
 
 \item{source}{Database from which to fetch this data. Options are: hydromet or snow.}
 
-\item{summarise}{TRUE or FALSE. If TRUE, the output table is summarised by sub-basin. If FALSE, the output table is not summarised.}
+\item{summarise}{TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.}
+
+\item{save_path}{The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.}
 }
 \value{
 A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.

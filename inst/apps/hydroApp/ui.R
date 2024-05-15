@@ -87,30 +87,29 @@ app_ui <- function(request) {
           textOutput("plot_years_note"),
           shinyWidgets::pickerInput("plot_years", "Select years to plot", choices = "", multiple = TRUE, options = list("max-options" = 10, "max-options-text" = "Cannot plot more than 10 lines")), # Only used for plotTimeseries, turned on/off by shinyjs
           selectizeInput("historic_range_overlap", "Historic range includes all years of record or up to last year plotted?", choices = c("all", "last"), selected = "all"), # Only used for plotOverlap, turned on/off by shinyjs
-          checkboxInput("historic_range", "Plot historic range?"), # Only used for plotTimeseries, turned on/off by shinyjs")
           selectizeInput("return_periods", "Plot return periods?", choices = c("none", "auto select", "calculate", "from table"), selected = "auto select"),
           shinyWidgets::pickerInput("return_type", "Select return type", choices = c("Min", "Max"), selected = "Max"),
           numericInput("return_yrs", "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),
           textInput("return_months", "Months for return calculation (comma delimited)", value = "5,6,7,8,9"),
-          checkboxInput("apply_datum", "Apply vertical datum?"),
-          checkboxInput("plot_filter", "Filter extreme values?"),
           actionButton("add_trace2", "Add a trace"), # Only used for plotMulti, turned on/off by shinyjs
-          selectizeInput("plot_param2", label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
-          selectizeInput("plot_loc_code2", "Select location by code", choices = "placeholder"), #Choices are selected in the server
-          selectizeInput("plot_loc_name2", "Select location by name", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_param2", label = "Plotting parameter", choices = ""), #Choices are selected in the server
+          selectizeInput("plot_loc_code2", "Select location by code", choices = ""), #Choices are selected in the server
+          selectizeInput("plot_loc_name2", "Select location by name", choices = ""), #Choices are selected in the server
           actionButton("remove_trace2", "Remove this trace"),
           actionButton("add_trace3", "Add a trace"), # Only used for plotMulti, turned on/off by shinyjs
-          selectizeInput("plot_param3", label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
-          selectizeInput("plot_loc_code3", "Select location by code", choices = "placeholder"), #Choices are selected in the server
-          selectizeInput("plot_loc_name3", "Select location by name", choices = "placeholder"), #Choices are selected in the server
+          selectizeInput("plot_param3", label = "Plotting parameter", choices = ""), #Choices are selected in the server
+          selectizeInput("plot_loc_code3", "Select location by code", choices = ""), #Choices are selected in the server
+          selectizeInput("plot_loc_name3", "Select location by name", choices = ""), #Choices are selected in the server
           actionButton("remove_trace3", "Remove this trace"),
           actionButton("add_trace4", "Add a trace"), # Only used for plotMulti, turned on/off by shinyjs
-          
-          selectizeInput("plot_param4", label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
-          selectizeInput("plot_loc_code4", "Select location by code", choices = "placeholder"), #Choices are selected in the server
-          selectizeInput("plot_loc_name4", "Select location by name", choices = "placeholder"), #Choices are selected in the server
-          
+          selectizeInput("plot_param4", label = "Plotting parameter", choices = ""), # Choices are selected in the server
+          selectizeInput("plot_loc_code4", "Select location by code", choices = ""), # Choices are selected in the server
+          selectizeInput("plot_loc_name4", "Select location by name", choices = ""), # Choices are selected in the server
           actionButton("remove_trace4", "Remove this trace"),
+          checkboxGroupInput("log_y", "Log scale y-axis?", c("Trace 1" = 1)),
+          checkboxInput("historic_range", "Plot historic range?"), # Only used for plotTimeseries and plotMultiTimeseries, turned on/off by shinyjs"
+          checkboxInput("apply_datum", "Apply vertical datum?"),
+          checkboxInput("plot_filter", "Filter extreme values?"),
           actionButton("plot_go", "Render plot")
         ),
         mainPanel(
