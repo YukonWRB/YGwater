@@ -11,7 +11,8 @@
 #' @param return_missing TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.
 #' @param active TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.
 #' @param source Database from which to fetch this data. Options are: hydromet or snow.
-#' @param summarise TRUE or FALSE. If TRUE, the output table is summarised by sub-basin. If FALSE, the output table is not summarised.
+#' @param summarise TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.
+#' @param save_path The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.
 #' @return A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.
 #' @export
 
@@ -101,7 +102,7 @@ SWE_station <-
       Meas$estimate_flag <- NA
       Meas[grep("estimated", Meas$note), ]$estimate_flag <- TRUE
       # Remove note
-      Meas <- Meas[, -c(which(names(Meas)=="note"))]
+      Meas <- Meas[, -c(which(names(Meas) == "note"))]
       
       # Calculate density
       # Spread the data into separate columns for swe and snow_depth
@@ -310,10 +311,10 @@ SWE_station <-
     } else {tabl <- tabl}
     
     # remove active column
-    tabl <- tabl[, -c(which(names(tabl)=="active"))]
+    tabl <- tabl[, -c(which(names(tabl) == "active"))]
     
     # Write csv if csv = TRUE
-    if (csv == TRUE) {
+    if (csv) {
       utils::write.csv(tabl, file = paste0(save_path, "/SweSationSummary_", year, "-0", month, ".csv"), row.names = FALSE)
     } else {
       return(tabl)

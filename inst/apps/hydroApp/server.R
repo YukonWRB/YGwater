@@ -326,6 +326,7 @@ app_server <- function(input, output, session) {
       shinyjs::hide("plot_param4")
       shinyjs::hide("plot_loc_code4")
       shinyjs::hide("plot_loc_name4")
+      shinyjs::hide("log_y")
     } else if (input$plot_type == "Long timeseries") {
       shinyjs::hide("return_periods")
       shinyjs::hide("return_type")
@@ -354,6 +355,7 @@ app_server <- function(input, output, session) {
       shinyjs::show("historic_range")
       shinyjs::show("start_date")
       shinyjs::show("end_date")
+      shinyjs::hide("log_y")
     } else if (input$plot_type == "Multi timeseries") {
       shinyjs::hide("return_periods")
       shinyjs::hide("return_type")
@@ -373,6 +375,7 @@ app_server <- function(input, output, session) {
       shinyjs::hide("remove_trace2")
       shinyjs::hide("remove_trace3")
       shinyjs::hide("remove_trace4")
+      shinyjs::show("log_y")
     } else if (input$plot_type == "Binned") {
       shinyjs::show("plot_sub_type")
     } else if (input$plot_type == "Scatter") {
@@ -381,9 +384,6 @@ app_server <- function(input, output, session) {
   })
   
   observeEvent(input$add_trace2, {
-    print(input$plot_loc_name)
-    locs <<- plotContainer$all_ts
-    print(input$plot_loc_code)
     shinyjs::hide("add_trace2")
     shinyjs::show("add_trace3")
     shinyjs::show("remove_trace2")
@@ -393,6 +393,7 @@ app_server <- function(input, output, session) {
     updateSelectizeInput(session, "plot_loc_name2", choices = unique(plotContainer$all_ts[ , "name"]), selected = input$plot_loc_name)
     updateSelectizeInput(session, "plot_loc_code2", choices = unique(plotContainer$all_ts[ , "location"]), selected = input$plot_loc_code)
     updateSelectizeInput(session, "plot_param2", choices = titleCase(plotContainer$parameters_continuous$param_name), selected = "")
+    updateCheckboxGroupInput(session = session, "log_y", choices = c("Trace 1" = 1, "Trace 2" = 2))  
   })
   observeEvent(input$add_trace3, {
     shinyjs::hide("add_trace3")
@@ -404,6 +405,8 @@ app_server <- function(input, output, session) {
     updateSelectizeInput(session, "plot_loc_name3", choices = unique(plotContainer$all_ts[, "name"]), selected = input$plot_loc_name2)
     updateSelectizeInput(session, "plot_loc_code3", choices = unique(plotContainer$all_ts[ , "location"]), selected = input$plot_loc_code2)
     updateSelectizeInput(session, "plot_param3", choices = titleCase(plotContainer$parameters_continuous$param_name), selected = "")
+    updateCheckboxGroupInput(session = session, "log_y", choices = c("Trace 1" = 1, "Trace 2" = 2, "Trace 3" = 3))  
+    
   })
   observeEvent(input$add_trace4, {
     shinyjs::hide("add_trace4")
@@ -414,6 +417,7 @@ app_server <- function(input, output, session) {
     updateSelectizeInput(session, "plot_loc_name4", choices = unique(plotContainer$all_ts[ , "name"]), selected = input$plot_loc_name3)
     updateSelectizeInput(session, "plot_loc_code4", choices = unique(plotContainer$all_ts[ , "location"]), selected = input$plot_loc_code3)   
     updateSelectizeInput(session, "plot_param4", choices = titleCase(plotContainer$parameters_continuous$param_name), selected = "")
+    updateCheckboxGroupInput(session = session, "log_y", choices = c("Trace 1" = 1, "Trace 2" = 2, "Trace 3" = 3, "Trace 4" = 4))
   })
   observeEvent(input$remove_trace2, {
     shinyjs::show("add_trace2")
@@ -422,6 +426,9 @@ app_server <- function(input, output, session) {
     shinyjs::hide("plot_param2")
     shinyjs::hide("plot_loc_code2")
     shinyjs::hide("plot_loc_name2")
+    updateSelectizeInput(session, "plot_loc_name2", choices = "")
+    updateSelectizeInput(session, "plot_loc_code2", choices = "") 
+    updateCheckboxGroupInput(session = session, "log_y", choices = c("Trace 1" = 1))  
   })
   observeEvent(input$remove_trace3, {
     shinyjs::show("add_trace3")
@@ -430,6 +437,9 @@ app_server <- function(input, output, session) {
     shinyjs::hide("plot_param3")
     shinyjs::hide("plot_loc_code3")
     shinyjs::hide("plot_loc_name3")
+    updateSelectizeInput(session, "plot_loc_name3", choices = "")
+    updateSelectizeInput(session, "plot_loc_code3", choices = "") 
+    updateCheckboxGroupInput(session = session, "log_y", choices = c("Trace 1" = 1, "Trace 2" = 2))
   })
   observeEvent(input$remove_trace4, {
     shinyjs::show("add_trace4")
@@ -437,6 +447,9 @@ app_server <- function(input, output, session) {
     shinyjs::hide("plot_param4")
     shinyjs::hide("plot_loc_code4")
     shinyjs::hide("plot_loc_name4")
+    updateSelectizeInput(session, "plot_loc_name4", choices = "")
+    updateSelectizeInput(session, "plot_loc_code4", choices = "") 
+    updateCheckboxGroupInput(session = session, "log_y", choices = c("Trace 1" = 1, "Trace 2" = 2, "Trace 3" = 3))
   })
   
   
@@ -551,7 +564,14 @@ app_server <- function(input, output, session) {
       } else if (plotContainer$plot_type == "plotTimeseries") {
         plotContainer$plot <- plotTimeseries(location = input$plot_loc_code, parameter = tolower(input$plot_param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, con = con)
       } else if (plotContainer$plot_type == "plotTimeseriesMulti") {
-        plotContainer$plot <- plotTimeseriesMulti(locations = c(input$plot_loc_code, input$plot_loc_code2, input$plot_loc_code3, input$plot_loc_code4), parameters = c(tolower(input$plot_param), tolower(input$plot_param2), tolower(input$plot_param3), tolower(input$plot_param4)), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, con = con, slider = FALSE)
+        locations <- c(input$plot_loc_code, input$plot_loc_code2, input$plot_loc_code3, input$plot_loc_code4)
+        locations <- locations[nchar(locations) > 0]
+        parameters <- c(tolower(input$plot_param), tolower(input$plot_param2), tolower(input$plot_param3), tolower(input$plot_param4))
+        parameters <- parameters[nchar(parameters) > 0]
+        log <- logical(length(locations))
+        indices <- as.numeric(input$log_y)
+        log[indices] <- TRUE
+        plotContainer$plot <- plotMultiTimeseries(locations = locations, parameters = parameters, log = log, record_rates = NULL, start_date = input$start_date, end_date = input$end_date, con = con, datum = input$apply_datum, historic_range = input$historic_range)
       } else if (plotContainer$plot_type == "hydrometDiscrete") {
         if (!input$plot_param %in% c("Snow Water Equivalent", "Snow Depth")) {
           shinyjs::alert("This plot type is only available for SWE and Snow Depth at this time. Please select one of these parameters.")
@@ -597,7 +617,8 @@ app_server <- function(input, output, session) {
         )
       }
     }, error = function(e) {
-      shinyalert::shinyalert("Error in rendering plot", "Try again with a different set of input parameters.", type = "error")
+      shinyalert::shinyalert("Error in rendering plot: ", e$message, " Try again with a different set of input parameters.", type = "error")
+      
     })
 
   }, ignoreInit = TRUE)

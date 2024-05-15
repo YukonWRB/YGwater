@@ -42,7 +42,7 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, perc = 95, record_
   DBI::dbDisconnect(con)
   
   ## Get areas for stations 
-  areas <- HydroMetDB::fetchVector(layer_name = "Drainage basins", feature_name = gauged_stations)
+  areas <- getVector(layer_name = "Drainage basins", feature_name = gauged_stations)
   area <- terra::expanse(areas, unit = "km")
   areas <- as.data.frame(areas)
   areas$area <- area
