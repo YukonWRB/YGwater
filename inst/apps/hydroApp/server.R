@@ -571,7 +571,7 @@ app_server <- function(input, output, session) {
         log <- logical(length(locations))
         indices <- as.numeric(input$log_y)
         log[indices] <- TRUE
-        plotContainer$plot <- plotMultiTimeseries(locations = locations, parameters = parameters, log = log, record_rates = NULL, start_date = input$start_date, end_date = input$end_date, con = con, datum = input$apply_datum, historic_range = input$historic_range)
+        plotContainer$plot <- plotMultiTimeseries(locations = locations, parameters = parameters, log = log, record_rates = NULL, start_date = input$start_date, end_date = input$end_date, con = con, datum = input$apply_datum, historic_range = input$historic_range, filter = plotContainer$plot_filter)
       } else if (plotContainer$plot_type == "hydrometDiscrete") {
         if (!input$plot_param %in% c("Snow Water Equivalent", "Snow Depth")) {
           shinyjs::alert("This plot type is only available for SWE and Snow Depth at this time. Please select one of these parameters.")

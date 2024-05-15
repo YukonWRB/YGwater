@@ -362,7 +362,7 @@ plotMultiTimeseries <- function(locations,
         remove <- c(remove, i)
       }
     } else {
-      if (datum.conv != 0) {
+      if (datum.conv$conversion_m != 0) {
         trace_data$value <- trace_data$value + datum.conv$conversion_m
       }
       trace_data <- trace_data[order(trace_data$datetime),]
