@@ -11,6 +11,7 @@
 #' @param start_date The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01.
 #' @param end_date The day on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
+#' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists, only for water level and distance. Default is TRUE.
 #' @param title Should a title be included? TRUE/FALSE.
@@ -32,6 +33,7 @@ plotMultiTimeseries <- function(locations,
                                 start_date = "1970-01-01",
                                 end_date = Sys.Date(),
                                 log = FALSE,
+                                invert = NULL,
                                 slider = FALSE,
                                 datum = TRUE,
                                 title = TRUE,
@@ -58,6 +60,16 @@ plotMultiTimeseries <- function(locations,
   if (length(log) != 1) {
     if (length(log) != length(locations)) {
       stop("Your entry for the parameter 'log' is invalid. Please review the function documentation and try again.")
+    }
+  }
+  
+  if (!is.null(invert)) {
+    if (length(invert) != 1) {
+      if (length(invert) != length(locations)) {
+        stop("Your entry for the parameter 'invert' is invalid. Please review the function documentation and try again.")
+      }
+    } else {
+      invert <- rep(invert, length(locations))
     }
   }
   
@@ -166,13 +178,14 @@ plotMultiTimeseries <- function(locations,
     }
     #Confirm parameter and location exist in the database and that there is only one entry
     escaped_parameter <- gsub("'", "''", parameter)
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
     parameter_code <- parameter_tbl$param_code[1]
     if (is.na(parameter_code)) {
       warning("The parameter you entered for location ", location, ", parameter ", parameter, " does not exist in the database. Moving on to the next entry.")
       remove <- c(remove, i)
       next
     }
+    timeseries[i, "axis_orientation"] <- if (is.null(invert[i])) {if (parameter_tbl$plot_default_y_orientation[1] == "inverted") TRUE else FALSE} else invert[i]
     if (language == "fr") {
       timeseries[i, "parameter_name"] <- titleCase(parameter_tbl$param_name_fr[1], "fr")
     } else if (language == "en" || is.na(timeseries[i, "parameter_name"])) {
@@ -250,7 +263,7 @@ plotMultiTimeseries <- function(locations,
     }
     
     # Find the ts units
-    timeseries[i, "units"] <- DBI::dbGetQuery(con, paste0("SELECT unit FROM parameters WHERE param_code = ", parameter_code, ";"))[1,1]
+    timeseries[i, "units"] <- parameter_tbl$unit[1]
     
     range <- seq.POSIXt(sub.start_date, sub.end_date, by = "day")
     if (is.null(rate)) {
@@ -309,8 +322,7 @@ plotMultiTimeseries <- function(locations,
     # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
     min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
     if (!is.infinite(min_trace)) {
-      # Assume calculate_period correctly sets up the 'period_secs' and 'expected' columns
-      trace_data <- calculate_period(trace_data, tsid)
+      trace_data <- calculate_period(trace_data, timeseries_id = tsid)
       trace_data[, period_secs := as.numeric(lubridate::period(period))]
       # Shift datetime and add period_secs to compute the 'expected' next datetime
       trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
@@ -362,7 +374,7 @@ plotMultiTimeseries <- function(locations,
         remove <- c(remove, i)
       }
     } else {
-      if (datum.conv != 0) {
+      if (datum.conv$conversion_m != 0) {
         trace_data$value <- trace_data$value + datum.conv$conversion_m
       }
       trace_data <- trace_data[order(trace_data$datetime),]
@@ -516,7 +528,8 @@ plotMultiTimeseries <- function(locations,
       showline = TRUE,
       showgrid = FALSE,
       showspikes = TRUE,
-      spikethickness = 2
+      spikethickness = 2,
+      autorange = if (timeseries[i, "axis_orientation"]) "reversed" else NULL
     )
     axis <- timeseries$axis[i]
     assign(axis, tmp)
@@ -560,20 +573,6 @@ plotMultiTimeseries <- function(locations,
         color = I(colors[i]), 
         hoverinfo = "text",
         text = ~tooltip)
-  }
-  
-  
-  # Dynamically create axis titles and other settings
-  axis_list <- list()
-  for (i in 1:n_axes) {
-    axis_name <- paste0("yaxis", ifelse(i == 1, "", i))  # yaxis for the first, yaxis2, yaxis3, ...
-    axis_list[[axis_name]] <- list(
-      title = paste("Axis", i),
-      title_standoff = 10,
-      overlaying = if (i > 1) "y" else NA,
-      side = ifelse(i %% 2 == 0, "right", "left"),
-      showgrid = FALSE
-    )
   }
   
   # Collect the axis variables dynamically

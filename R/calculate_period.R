@@ -1,20 +1,21 @@
 #' Calculate periodicity of data and add a column
 #'
-#' Utility function to calculate periodicity of continuous-type temporal data and prepate a column named 'period' with ISO8601 formatted periods. Will identify changes to periodicity within data, for example moving from 1-hour intervals to 6-hour intervals.
+#' Utility function to calculate periodicity of continuous-type temporal data and prepare a column named 'period' with ISO8601 formatted periods. Will identify changes to periodicity within data, for example moving from 1-hour intervals to 6-hour intervals.
 #'
 #' @param data The data.frame or data.table for which to calculate periodicity. Must contain at minimum a column named 'datetime' (in POSIXct format) with no missing values.
-#' @param timeseries_id The ID of the timeseries for which to calculate periodicity. Used to fetch any data points lacking a period, as well as to search for additional data points if there are too few to calculate a period in the provided `data`.
-#' @param con A connection to the database, created with [DBI::dbConnect()] or using the utility function [hydrometConnect()].
+#' @param datetime_col The name of the column in `data` containing the datetime values. Default is 'datetime'.
+#' @param timeseries_id The ID of the timeseries for which to calculate periodicity. Used to fetch any data points lacking a period, as well as to search for additional data points if there are too few to calculate a period in the provided `data`. Leave NULL if there is no database entry for this.
+#' @param con A connection to the database, created with [DBI::dbConnect()] or using the utility function [hydrometConnect()]. Not used if timeseries_id is left NULL.
 #'
 #' @return A data.frame or data.table with calculated periods as ISO8601 formatted strings in a column named 'period'.
 #' @export
 
-calculate_period <- function(data, timeseries_id, con = hydrometConnect(silent = TRUE))
+calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NULL, con = hydrometConnect(silent = TRUE))
 {
-  # Get datetimes from the earliest missing period to calculate necessary values, as some might be missing
   names <- names(data)
-  data <- data[order(data$datetime) ,] #Sort ascending
-  diffs <- as.numeric(diff(data$datetime), units = "hours")
+  data <- data[!is.na(data[[datetime_col]]),] #Remove rows with missing datetime values
+  data <- data[order(data[[datetime_col]]) ,] #Sort ascending
+  diffs <- as.numeric(diff(data[[datetime_col]]), units = "hours")
   smoothed_diffs <- zoo::rollmedian(diffs, k = 3, fill = NA, align = "center")
   # Initialize variables to track changes
   consecutive_count <- 0
@@ -26,7 +27,7 @@ calculate_period <- function(data, timeseries_id, con = hydrometConnect(silent =
         consecutive_count <- consecutive_count + 1
         if (consecutive_count == 3) { # At three consecutive new measurements it's starting to look like a pattern
           last_diff <- smoothed_diffs[j]
-          change <- data.frame(datetime = data$datetime[j - 3],
+          change <- data.frame(datetime = data[[datetime_col]][j - 3],
                                period = last_diff)
           changes <- rbind(changes, change)
           consecutive_count <- 0
@@ -44,17 +45,20 @@ calculate_period <- function(data, timeseries_id, con = hydrometConnect(silent =
       remaining_hours <- changes$period[j] %% 24
       minutes <- floor((remaining_hours - floor(remaining_hours)) * 60)
       seconds <- round(((remaining_hours - floor(remaining_hours)) * 60 - minutes) * 60)
-      data[data$datetime == changes$datetime[j], "period"] <- paste("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S", sep = "")
+      data[data[[datetime_col]] == changes$datetime[j], "period"] <- paste("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S", sep = "")
     }
     #carry non-na's forward and backwards, if applicable
     data$period <- zoo::na.locf(zoo::na.locf(data$period, na.rm = FALSE), fromLast = TRUE)
     
   } else { #In this case there were too few measurements to conclusively determine a period so pull a few from the DB and redo the calculation
+    if (is.null(timeseries_id)) {
+      stop("There are too few measurements to conclusively determine a period, and no timeseries_id was provided to fetch more data.")
+    }
     no_period <- dbGetQueryDT(con, paste0("SELECT ", paste(names, collapse = ', '), " FROM measurements_continuous WHERE timeseries_id = ", timeseries_id, " ORDER BY datetime DESC LIMIT 10;"))
     no_period$period <- NA
     data <- rbind(data, no_period)
-    data <- data[order(data$datetime), ]
-    diffs <- as.numeric(diff(data$datetime), units = "hours")
+    data <- data[order(data[[datetime_col]]), ]
+    diffs <- as.numeric(diff(data[[datetime_col]]), units = "hours")
     smoothed_diffs <- zoo::rollmedian(diffs, k = 3, fill = NA, align = "center")
     consecutive_count <- 0
     changes <- data.frame()
@@ -65,7 +69,7 @@ calculate_period <- function(data, timeseries_id, con = hydrometConnect(silent =
           consecutive_count <- consecutive_count + 1
           if (consecutive_count == 3) {
             last_diff <- smoothed_diffs[j]
-            change <- data.frame(datetime = data$datetime[j - 3],
+            change <- data.frame(datetime = data[[datetime_col]][j - 3],
                                  period = last_diff)
             changes <- rbind(changes, change)
             consecutive_count <- 0
@@ -81,7 +85,7 @@ calculate_period <- function(data, timeseries_id, con = hydrometConnect(silent =
         remaining_hours <- changes$period[k] %% 24
         minutes <- floor((remaining_hours - floor(remaining_hours)) * 60)
         seconds <- round(((remaining_hours - floor(remaining_hours)) * 60 - minutes) * 60)
-        data[data$datetime == changes$datetime[k], "period"] <- paste("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S", sep = "")
+        data[data[[datetime_col]] == changes[[datetime_col]][k], "period"] <- paste("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S", sep = "")
       }
       #carry non-na's forward and backwards, if applicable
       data$period <- zoo::na.locf(zoo::na.locf(data$period, na.rm = FALSE), fromLast = TRUE)
