@@ -8,7 +8,7 @@ plotMultiTimeseries(
   locations,
   parameters,
   record_rates = NULL,
-  start_date = "1970-01-01",
+  start_date = Sys.Date() - 1,
   end_date = Sys.Date(),
   log = FALSE,
   slider = FALSE,
@@ -30,9 +30,9 @@ plotMultiTimeseries(
 
 \item{record_rates}{The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as NULL or length one.}
 
-\item{start_date}{The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01.}
+\item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.}
 
-\item{end_date}{The day on which to end the plot as character, Date, or POSIXct. Default is today.}
+\item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.}
 
 \item{log}{Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.}
 

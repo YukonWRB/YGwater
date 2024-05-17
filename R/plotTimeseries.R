@@ -8,8 +8,8 @@
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
-#' @param start_date The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01 but the plot is zoomable.
-#' @param end_date The day on which to end the plot as character, Date, or POSIXct. Default is today.
+#' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
+#' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
 #' @param title Should a title be included?
@@ -28,7 +28,7 @@
 plotTimeseries <- function(location,
                            parameter,
                            record_rate = NULL,
-                           start_date = "1970-01-01",
+                           start_date = Sys.Date() - 365,
                            end_date = Sys.Date(),
                            slider = TRUE,
                            datum = TRUE,
@@ -69,12 +69,14 @@ plotTimeseries <- function(location,
   }
   if (inherits(start_date, "Date")) {
     start_date <- as.POSIXct(start_date, tz = tzone)
+    start_date <- start_date + 24*60*60
   }
   if (inherits(end_date, "character")) {
     end_date <- as.Date(end_date)
   }
   if (inherits(end_date, "Date")) {
     end_date <- as.POSIXct(end_date, tz = tzone)
+    end_date <- end_date + 24*60*60
   }
   
   parameter <- tolower(parameter)
@@ -171,8 +173,11 @@ plotTimeseries <- function(location,
   }
   
   # Find the necessary datum (latest datum)
-  if (datum & parameter %in% c("water level", "distance")) {
+  if (datum) {
     datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+    if (is.na(datum$conversion_m)) {
+      datum <- data.frame(conversion_m = 0)
+    }
   } else {
     datum <- data.frame(conversion_m = 0)
   }
@@ -241,11 +246,11 @@ plotTimeseries <- function(location,
     # Shift datetime and add period_secs to compute the 'expected' next datetime
     trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
     # Create 'gap_exists' column to identify where gaps are
-    trace_data[, gap_exists := datetime > expected & !is.na(expected)]
+    trace_data[, gap_exists := datetime < expected & !is.na(expected)]
     # Find indices where gaps exist
     gap_indices <- which(trace_data$gap_exists)
     # Create a data.table of NA rows to be inserted
-    na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime] - 1,  # Subtract 1 second (or any small time unit) to place it just before the gap
+    na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime]  + 1,  # Add 1 second to place it at the start of the gap
                                       value = NA)
     # Combine with NA rows
     trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
@@ -302,12 +307,12 @@ plotTimeseries <- function(location,
   plot <- plotly::plot_ly()
   if (historic_range) {
     plot <- plot %>%
-      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (language == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2), hoverinfo = "text", text = ~paste("q25:", round(q25, 2), " q75:", round(q75, 2))) %>%
-      plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2), hoverinfo = "text", text = ~paste("Min:", round(min, 2), " Max:", round(max, 2))) 
+      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (language == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), " q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
+      plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), " Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
   plot <- plot %>%
     plotly::layout(title = list(text = stn_name, x = 0.05, xref = "container"), xaxis = list(title = list(standoff = 0, font = list(size = 1)), showgrid = FALSE, showline = TRUE, tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", rangeslider = list(visible = if (slider) TRUE else FALSE)), yaxis = list(title = paste0(parameter_name, " (", units, ")"), showgrid = FALSE, showline = TRUE), margin = list(b = 0), hovermode = "x unified") %>%
-    plotly::add_lines(data = trace_data, x = ~datetime, y = ~value, type = "scatter", mode = "lines", name = parameter_name, color = I("#0097A9"), hoverinfo = "text", text = ~paste(parameter_name, ":", round(value, 4))) %>%
+    plotly::add_lines(data = trace_data, x = ~datetime, y = ~value, type = "scatter", mode = "lines", name = parameter_name, color = I("#0097A9"), hoverinfo = "text", text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
     plotly::config(locale = language)
   
   return(plot)
