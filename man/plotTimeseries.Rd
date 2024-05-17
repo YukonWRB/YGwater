@@ -8,7 +8,7 @@ plotTimeseries(
   location,
   parameter,
   record_rate = NULL,
-  start_date = "1970-01-01",
+  start_date = Sys.Date() - 365,
   end_date = Sys.Date(),
   invert = NULL,
   slider = TRUE,
@@ -30,9 +30,9 @@ plotTimeseries(
 
 \item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.}
 
-\item{start_date}{The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01 but the plot is zoomable.}
+\item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.}
 
-\item{end_date}{The day on which to end the plot as character, Date, or POSIXct. Default is today.}
+\item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.}
 
 \item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.}
 

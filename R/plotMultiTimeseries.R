@@ -8,8 +8,8 @@
 #' @param locations The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param parameters The parameter or parameters you wish to plot. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as NULL or length one.
-#' @param start_date The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01.
-#' @param end_date The day on which to end the plot as character, Date, or POSIXct. Default is today.
+#' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
+#' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
@@ -30,7 +30,7 @@
 plotMultiTimeseries <- function(locations,
                                 parameters,
                                 record_rates = NULL,
-                                start_date = "1970-01-01",
+                                start_date = Sys.Date() - 1,
                                 end_date = Sys.Date(),
                                 log = FALSE,
                                 invert = NULL,
@@ -129,12 +129,14 @@ plotMultiTimeseries <- function(locations,
   }
   if (inherits(start_date, "Date")) {
     start_date <- as.POSIXct(start_date, tz = tzone)
+    start_date <- start_date + 24*60*60
   }
   if (inherits(end_date, "character")) {
     end_date <- as.Date(end_date)
   }
   if (inherits(end_date, "Date")) {
     end_date <- as.POSIXct(end_date, tz = tzone)
+    end_date <- end_date + 24*60*60
   }
   
   #back to UTC because DB queries are in UTC
@@ -256,8 +258,11 @@ plotMultiTimeseries <- function(locations,
     timeseries[i, "end"] <- sub.end_date
     
     # Find the necessary datum (latest datum)
-    if (datum & parameter %in% c("water level", "distance")) {
+    if (datum) {
       datum.conv <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+      if (is.na(datum.conv$conversion_m)) {
+        datum.conv <- data.frame(conversion_m = 0)
+      }
     } else {
       datum.conv <- data.frame(conversion_m = 0)
     }
@@ -327,11 +332,11 @@ plotMultiTimeseries <- function(locations,
       # Shift datetime and add period_secs to compute the 'expected' next datetime
       trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
       # Create 'gap_exists' column to identify where gaps are
-      trace_data[, gap_exists := datetime > expected & !is.na(expected)]
+      trace_data[, gap_exists := datetime < expected & !is.na(expected)]
       # Find indices where gaps exist
       gap_indices <- which(trace_data$gap_exists)
       # Create a data.table of NA rows to be inserted
-      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime] - 1,  # Subtract 1 second (or any small time unit) to place it just before the gap
+      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime] + 1,  # Add 1 second to place it at the start of the gap
                                         value = NA)
       # Combine with NA rows
       trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
