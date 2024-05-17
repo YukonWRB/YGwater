@@ -54,7 +54,7 @@ app_server <- function(input, output, session) {
         plotContainer$parameters_discrete <- plotContainer$parameters_discrete[order(plotContainer$parameters_discrete$param_name), ]
         plotContainer$parameters_continuous <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'continuous';")
         plotContainer$parameters_continuous <- plotContainer$parameters_continuous[order(plotContainer$parameters_continuous$param_name), ]
-        datums <- DBI::dbGetQuery(con, "SELECT dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
+        datums <- DBI::dbGetQuery(con, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
         
         datums$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", datums$datum_name_en)
         datums$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", datums$datum_name_en)
@@ -453,7 +453,7 @@ app_server <- function(input, output, session) {
   })
   
   
-  #Cross-updating of plot selection location name or code
+  #Cross-updating of plot selection location name or code, and toggle apply_datum visible/invisible
   observeEvent(input$plot_loc_code, {
     if (input$plot_loc_code %in% plotContainer$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
       updateSelectizeInput(session, "plot_loc_name", selected = unique(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code, "name"]))
@@ -462,7 +462,7 @@ app_server <- function(input, output, session) {
       shinyWidgets::updatePickerInput(session, "plot_years", choices = possible_years)
       })
       
-      plotContainer$possible_datums <- plotContainer$datums[plotContainer$datums$location == input$plot_loc_code & plotContainer$datums$conversion_m != 0, ]
+      plotContainer$possible_datums <- plotContainer$datums[plotContainer$datums$location %in% c(input$plot_loc_code, input$plot_loc_code2, input$plot_loc_code3, input$plot_loc_code4) & plotContainer$datums$conversion_m != 0, ]
       if (nrow(plotContainer$possible_datums) < 1) {
         shinyjs::hide("apply_datum")
         updateCheckboxInput(session, "apply_datum", value = FALSE)
