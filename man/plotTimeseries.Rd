@@ -10,6 +10,7 @@ plotTimeseries(
   record_rate = NULL,
   start_date = "1970-01-01",
   end_date = Sys.Date(),
+  invert = NULL,
   slider = TRUE,
   datum = TRUE,
   title = TRUE,
@@ -32,6 +33,8 @@ plotTimeseries(
 \item{start_date}{The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01 but the plot is zoomable.}
 
 \item{end_date}{The day on which to end the plot as character, Date, or POSIXct. Default is today.}
+
+\item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.}
 
 \item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.}
 

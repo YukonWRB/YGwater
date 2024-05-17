@@ -11,6 +11,7 @@ plotMultiTimeseries(
   start_date = "1970-01-01",
   end_date = Sys.Date(),
   log = FALSE,
+  invert = NULL,
   slider = FALSE,
   datum = TRUE,
   title = TRUE,
@@ -35,6 +36,8 @@ plotMultiTimeseries(
 \item{end_date}{The day on which to end the plot as character, Date, or POSIXct. Default is today.}
 
 \item{log}{Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.}
+
+\item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.}
 
 \item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.}
 

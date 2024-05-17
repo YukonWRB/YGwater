@@ -10,6 +10,7 @@
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
 #' @param start_date The day on which to start the plot as character, Date, or POSIXct. Default is 1970-01-01 but the plot is zoomable.
 #' @param end_date The day on which to end the plot as character, Date, or POSIXct. Default is today.
+#' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
 #' @param title Should a title be included?
@@ -30,6 +31,7 @@ plotTimeseries <- function(location,
                            record_rate = NULL,
                            start_date = "1970-01-01",
                            end_date = Sys.Date(),
+                           invert = NULL,
                            slider = TRUE,
                            datum = TRUE,
                            title = TRUE,
@@ -55,6 +57,12 @@ plotTimeseries <- function(location,
   
   if (tzone == "auto") {
     tzone <- Sys.timezone()
+  }
+  
+  if (!is.null(invert)) {
+    if (!inherits(invert, "logical")) {
+      stop("Your entry for the parameter 'invert' is invalid. Leave it as NULL or TRUE/FALSE.")
+    }
   }
   
   if (!is.null(rate)) {
@@ -103,7 +111,7 @@ plotTimeseries <- function(location,
   location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
   #Confirm parameter and location exist in the database and that there is only one entry
   escaped_parameter <- gsub("'", "''", parameter)
-  parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+  parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
   parameter_code <- parameter_tbl$param_code[1]
   if (language == "fr") {
     parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
@@ -178,7 +186,7 @@ plotTimeseries <- function(location,
   }
   
   # Find the ts units
-  units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM parameters WHERE param_code = ", parameter_code, ";"))[1,1]
+  units <- parameter_tbl$unit[1]
   
   range <- seq.POSIXt(start_date, end_date, by = "day")
   if (is.null(rate)) {
@@ -235,8 +243,7 @@ plotTimeseries <- function(location,
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
   if (!is.infinite(min_trace)) {
-    # Assume calculate_period correctly sets up the 'period_secs' and 'expected' columns
-    trace_data <- calculate_period(trace_data, tsid)
+    trace_data <- calculate_period(trace_data, timeseries_id = tsid)
     trace_data[, period_secs := as.numeric(lubridate::period(period))]
     # Shift datetime and add period_secs to compute the 'expected' next datetime
     trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
@@ -299,6 +306,14 @@ plotTimeseries <- function(location,
   }
   
   # Make the plot ###################################
+  if (is.null(invert)){
+    if (parameter_tbl$plot_default_y_orientation[1] == "inverted") {
+      invert <- TRUE
+    } else {
+      invert <- FALSE
+    }
+  }
+  
   plot <- plotly::plot_ly()
   if (historic_range) {
     plot <- plot %>%
@@ -306,7 +321,7 @@ plotTimeseries <- function(location,
       plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2), hoverinfo = "text", text = ~paste("Min:", round(min, 2), " Max:", round(max, 2))) 
   }
   plot <- plot %>%
-    plotly::layout(title = list(text = stn_name, x = 0.05, xref = "container"), xaxis = list(title = list(standoff = 0, font = list(size = 1)), showgrid = FALSE, showline = TRUE, tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", rangeslider = list(visible = if (slider) TRUE else FALSE)), yaxis = list(title = paste0(parameter_name, " (", units, ")"), showgrid = FALSE, showline = TRUE), margin = list(b = 0), hovermode = "x unified") %>%
+    plotly::layout(title = list(text = stn_name, x = 0.05, xref = "container"), xaxis = list(title = list(standoff = 0, font = list(size = 1)), showgrid = FALSE, showline = TRUE, tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", rangeslider = list(visible = if (slider) TRUE else FALSE)), yaxis = list(title = paste0(parameter_name, " (", units, ")"), showgrid = FALSE, showline = TRUE, autorange = if (invert) "reversed" else NULL), margin = list(b = 0), hovermode = "x unified") %>%
     plotly::add_lines(data = trace_data, x = ~datetime, y = ~value, type = "scatter", mode = "lines", name = parameter_name, color = I("#0097A9"), hoverinfo = "text", text = ~paste(parameter_name, ":", round(value, 4))) %>%
     plotly::config(locale = language)
   
