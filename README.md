@@ -1,6 +1,6 @@
 #### Welcome to the Yukon Water Resources Branch's YGwater GitHub repository!
 
-This public repository hold many of the R functions that we use on a day-to-day basis at the Water Resources Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application that will soon be published (we'll put the URL here once it is).
+This public repository holds many of the R functions that we use on a day-to-day basis at the Water Resources Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application that will soon be published (we'll put the URL here once it is).
 
 You'll also find a host of other interesting R functions, some more hydrology/climate specific than others:
 
@@ -14,4 +14,4 @@ You'll also find a host of other interesting R functions, some more hydrology/cl
 
 -   Plotting functions, which are mostly designed to work directly with our internal database. That said, some have ways of bypassing the database connection by passing a data.frame as an argument.
 
-Other functions are more specific to our work here at the Water Resources Branch and will mostly not work without direct access to our network. That said, you can access the same information using the Shiny application described above!
+Other functions are more specific to our work here at the Water Resources Branch and will mostly not work without direct access to our network and database. That said, you can access the same information using the Shiny application described above!
