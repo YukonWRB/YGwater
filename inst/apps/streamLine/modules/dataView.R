@@ -419,7 +419,6 @@ data <- function(id, con, language, restoring, data, inputs) {
     
     
     # Show a modal with the data when the view button is clicked ################
-    
     observeEvent(input$view_data, {
       # Get the timeseries_ids of the selected rows
       selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
@@ -629,7 +628,6 @@ data <- function(id, con, language, restoring, data, inputs) {
                         )
           )
         }) # End of function re-creating data subset datatable
-        
       } else { # type is discrete
         rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM measurements_discrete WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
       }
