@@ -5,14 +5,20 @@
 \title{Calculates snow survey stats for stations}
 \usage{
 SWE_station(
+  stations = "all",
   year,
   month,
   csv = FALSE,
   return_missing = FALSE,
-  source = "hyromet"
+  active = TRUE,
+  source = "hydromet",
+  summarise = TRUE,
+  save_path = "choose"
 )
 }
 \arguments{
+\item{stations}{A vector of snow course stations, identified with their location ID. Default is "all", where all stations in the snow db are taken.}
+
 \item{year}{The year of interest. The stats will be calculated based on all years prior to 'year'.}
 
 \item{month}{The month of interest. Options are 3, 4 and 5 for March, April and May, respectively. Historical stats are given for the first day of this month.}
@@ -21,7 +27,13 @@ SWE_station(
 
 \item{return_missing}{TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.}
 
+\item{active}{TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.}
+
 \item{source}{Database from which to fetch this data. Options are: hydromet or snow.}
+
+\item{summarise}{TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.}
+
+\item{save_path}{The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.}
 }
 \value{
 A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.

@@ -5,7 +5,6 @@
 \title{Tabular output of hydrometric data}
 \usage{
 tabularReport(
-  con = hydrometConnect(silent = TRUE),
   level_locations = "all",
   flow_locations = "all",
   snow_locations = "all",
@@ -13,12 +12,11 @@ tabularReport(
   precip_locations = "default",
   past = 28,
   save_path = "choose",
-  archive_path = "choose"
+  archive_path = "choose",
+  con = NULL
 )
 }
 \arguments{
-\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
-
 \item{level_locations}{List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.}
 
 \item{flow_locations}{List of flow locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory. "all" fetches all flow reporting locations in the DB. NULL will not create the table.}
@@ -31,14 +29,19 @@ tabularReport(
 
 \item{past}{The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.}
 
-\item{save_path}{The path where you wish to save the Excel workbook. A folder will be created for each day's report. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.}
+\item{save_path}{The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.}
 
-\item{archive_path}{The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.}
+\item{archive_path}{The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.}
+
+\item{con}{A connection to the AquaCache/hydromet database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
 }
 \value{
 An Excel workbook containing the report with one tab per timeseries type.
 }
 \description{
+lifeCycle::badge("stable")
+
 Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect by default and MUST connect to a database created and maintained by the package HydroMetDB.
+
 Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::getNewContinuous first.
 }

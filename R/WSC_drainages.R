@@ -13,7 +13,7 @@
 #'
 #' @return Two ESRI shapefiles (points + polygons) saved in the directory you specified.
 #'
-#' @seealso [drainageBasins()] to generate drainage polygons for any user-specified pour point.
+#' @seealso SAiVE::drainageBasins() to generate drainage polygons for any user-specified pour point.
 #' @export
 #'
 
@@ -28,35 +28,41 @@ WSC_drainages <- function(inputs_folder = "choose",
   rlang::check_installed("sf", reason = "Package sf is required to use function drainageBasins") #This is here because sf is not a 'depends' of this package; it is only necessary for this function.
 
   if (inputs_folder == "choose") {
+    if (!interactive()) {
+      stop("You must specify a save path when running in non-interactive mode.")
+    }
     message("Select the inputs folder.")
-    inputs_folder <- as.character(utils::choose.dir(caption="Select Inputs Folder"))
+    inputs_folder <-  rstudioapi::selectDirectory(caption = "Select Inputs Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
   }
   if (save_path == "choose") {
+    if (!interactive()) {
+      stop("You must specify a save path when running in non-interactive mode.")
+    }
     message("Select the folder where you want the watershed shapefiles saved.")
-    save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+    save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
   }
-  temp <- tempdir(check=TRUE)
+  temp <- tempdir(check = TRUE)
   suppressWarnings(dir.create(paste0(temp, "/files")))
   temp <- paste0(temp, "/files")
 
 
   #Get all the files in a single folder
-  for (i in list.dirs(inputs_folder, full.names = FALSE, recursive=FALSE)){
-    if (TRUE %in% stringr::str_detect(names(limit_stns),i)){
+  for (i in list.dirs(inputs_folder, full.names = FALSE, recursive=FALSE)) {
+    if (TRUE %in% stringr::str_detect(names(limit_stns),i)) {
       stations <- unname(unlist(limit_stns[stringr::str_detect(names(limit_stns),i)]))
-      for (j in stations){
+      for (j in stations) {
         files <- list.files(paste0(inputs_folder, "/", i, "/", j))
         files <- files[grep("Station", files, invert=TRUE)]
-        for (k in files){
+        for (k in files) {
           file.copy(from = paste0(inputs_folder, "/", i, "/", j, "/", k), to = temp)
         }
       }
     } else {
       folders <- list.dirs(paste0(inputs_folder, "/", i), recursive=FALSE)
-      for (j in folders){
+      for (j in folders) {
         files <- list.files(j)
         files <- files[grep("Station", files, invert=TRUE)]
-        for (k in files){
+        for (k in files) {
           file.copy(from = paste0(j, "/", k), to = temp)
         }
       }
@@ -73,11 +79,11 @@ WSC_drainages <- function(inputs_folder = "choose",
   #rbind polygons together
   tryCatch({
     poly <- sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[1], 1, 7),"_DrainageBasin_BassinDeDrainage"))) #st_zm is there because doing rbind on many polygons sometimes causes an error where it is looking for a z-dimension. No idea why.
-    for (i in 2:length(shapefiles)){
+    for (i in 2:length(shapefiles)) {
       poly <- rbind(poly, sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[i], 1, 7),"_DrainageBasin_BassinDeDrainage"))))
     }
     poly <- poly[!duplicated(data.frame(poly)),] #root out duplicates
-    if (active_only == TRUE){#Retain only active stations
+    if (active_only == TRUE) {#Retain only active stations
       poly <- poly[poly$Status =="active", ]
     }
     #Write to file
@@ -90,11 +96,11 @@ WSC_drainages <- function(inputs_folder = "choose",
   #rbind points together
   tryCatch({
     points <- sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[1], 1, 7),"_PourPoint_PointExutoire")))
-    for (i in 2:length(shapefiles)){
+    for (i in 2:length(shapefiles)) {
       points <- rbind(points, sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[i], 1, 7),"_PourPoint_PointExutoire"))))
     }
     points <- points[!duplicated(data.frame(points)),] #root out duplicates
-    if (active_only == TRUE){#Retain only active stations
+    if (active_only == TRUE) {#Retain only active stations
       points <- points[points$Status == "active", ]
     }
     #Write to file

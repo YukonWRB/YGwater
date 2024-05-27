@@ -24,32 +24,37 @@
 
 snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, save_path = "choose", stats = TRUE, complete_yrs = TRUE, plots = TRUE, plot_type = "combined", quiet = FALSE) {
 
-  if (!is.null(save_path)){
+  rlang::check_installed("trend", reason = "necessary to calculate trends.")
+  if (plots) {
+    rlang::check_installed("gridExtra", reason = "necessary to create plots.")
+  }
+  
+  if (!is.null(save_path)) {
     if (save_path %in% c("Choose", "choose")) {
       message("Select the path to the folder where you want this report saved.")
-      save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+      save_path <- as.character(utils::choose.dir(caption = "Select Save Folder"))
     }
     dir.create(paste0(save_path, "/SnowInfo_", Sys.Date()))
-    if (plots){
+    if (plots) {
       dir.create(paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots"))
     }
   }
 
 
-  if (!(plot_type %in% c("separate", "combined"))){
+  if (!(plot_type %in% c("separate", "combined"))) {
     stop("The parameter 'plot_type' must be set to either 'separate' or 'combined'.")
   }
 
-  snowCon <- snowConnect_access(path = db_path, silent=TRUE)
+  snowCon <- snowConnect_access(path = db_path, silent = TRUE)
   on.exit(DBI::dbDisconnect(snowCon))
 
   location_table <- DBI::dbReadTable(snowCon, "SNOW_COURSE")
-  if (locations[1] == "all"){
+  if (locations[1] == "all") {
     locations <- location_table
     all <- TRUE
   } else {
     check_locs <- locations[!(locations %in% location_table$SNOW_COURSE_ID)]
-    if (length(check_locs) > 0){
+    if (length(check_locs) > 0) {
       message("Could not find a record for location ", check_locs, ". Other locations will be returned.")
     }
     locations <- location_table[location_table$SNOW_COURSE_ID %in% locations , ]
@@ -60,13 +65,13 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
   meas <- DBI::dbGetQuery(snowCon, paste0("SELECT * FROM SNOW_SAMPLE WHERE SNOW_COURSE_ID IN ('", paste(locations$SNOW_COURSE_ID, collapse = "', '"), "')"))
 
   #Manipulate/preprocess things a bit
-  meas <- meas[which(meas$EXCLUDE_FLG==0),] # OMIT VALUES OF EXCLUDEFLG=1, aka TRUE
+  meas <- meas[which(meas$EXCLUDE_FLG == 0),] # OMIT VALUES OF EXCLUDEFLG1, aka TRUE
   meas$SAMPLE_DATE <- as.Date(meas$SAMPLE_DATE)
   meas$year <- lubridate::year(meas$SAMPLE_DATE)
   meas$month <- lubridate::month(meas$SAMPLE_DATE)
 
   #Deal with special cases
-  if ("09BA-SC02A" %in% locations$SNOW_COURSE_ID & "09BA-SC02B" %in% locations$SNOW_COURSE_ID){
+  if ("09BA-SC02A" %in% locations$SNOW_COURSE_ID & "09BA-SC02B" %in% locations$SNOW_COURSE_ID) {
     # Special case (i) Twin Creeks: 09BA-SC02B will take precedence over A from 2016 onwards.
     # Calculate correction factors:
     subset <- meas[meas$SNOW_COURSE_ID %in% c("09BA-SC02A", "09BA-SC02B"),]
@@ -74,34 +79,34 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     duplicated <- duplicated[duplicated$Freq > 1 , ]
     duplicated <- as.Date(as.vector(duplicated$Var1))
     swe_factor <- NULL
-    for (i in 1:length(duplicated)){
+    for (i in 1:length(duplicated)) {
       a <- subset[subset$SNOW_COURSE_ID == "09BA-SC02A" & subset$SAMPLE_DATE == duplicated[i], "SNOW_WATER_EQUIV"]
       b <- subset[subset$SNOW_COURSE_ID == "09BA-SC02B" & subset$SAMPLE_DATE == duplicated[i], "SNOW_WATER_EQUIV"]
-      swe_factor[i] <- 1 + (b-a)/a
+      swe_factor[i] <- 1 + (b - a)/a
     }
     depth_factor <- NULL
-    for (i in 1:length(duplicated)){
+    for (i in 1:length(duplicated)) {
       a <- subset[subset$SNOW_COURSE_ID == "09BA-SC02A" & subset$SAMPLE_DATE == duplicated[i], "DEPTH"]
       b <- subset[subset$SNOW_COURSE_ID == "09BA-SC02B" & subset$SAMPLE_DATE == duplicated[i], "DEPTH"]
-      depth_factor[i] <- 1 + (b-a)/a
+      depth_factor[i] <- 1 + (b - a)/a
     }
     swe_correction <- mean(swe_factor)
     depth_correction <- mean(depth_factor)
 
     # Remove 09BA-SC02A values in 2016 and later.
-    meas <- meas[!(meas$SNOW_COURSE_ID=="09BA-SC02A" & meas$year >= 2016),]
+    meas <- meas[!(meas$SNOW_COURSE_ID == "09BA-SC02A" & meas$year >= 2016),]
     # Multiply all 09BA-SC02A values by correction factors:
-    meas$SNOW_WATER_EQUIV[meas$SNOW_COURSE_ID=="09BA-SC02A"] <- swe_correction*(meas[meas$SNOW_COURSE_ID=="09BA-SC02A", "SNOW_WATER_EQUIV"])
-    meas$DEPTH[meas$SNOW_COURSE_ID=="09BA-SC02A"] <- depth_correction*(meas[meas$SNOW_COURSE_ID=="09BA-SC02A", "DEPTH"])
+    meas$SNOW_WATER_EQUIV[meas$SNOW_COURSE_ID == "09BA-SC02A"] <- swe_correction*(meas[meas$SNOW_COURSE_ID == "09BA-SC02A", "SNOW_WATER_EQUIV"])
+    meas$DEPTH[meas$SNOW_COURSE_ID == "09BA-SC02A"] <- depth_correction*(meas[meas$SNOW_COURSE_ID == "09BA-SC02A", "DEPTH"])
     # Rename as 09BA-SC02B (A will no longer exist here)
-    meas$SNOW_COURSE_ID[meas$SNOW_COURSE_ID=="09BA-SC02A"] <- "09BA-SC02B"
+    meas$SNOW_COURSE_ID[meas$SNOW_COURSE_ID == "09BA-SC02A"] <- "09BA-SC02B"
     locations <- locations[!(locations$SNOW_COURSE_ID == "09BA-SC02A") , ]
     corrected <- TRUE
   } else if (("09BA-SC02A" %in% locations$SNOW_COURSE_ID | "09BA-SC02B" %in% locations$SNOW_COURSE_ID ) & !quiet) {
     message("Be careful with stations 09BA-SC02A and B. A is no longer active. When requesting data from both, a correction factor determined by operating the stations in parallel over several years is applied to A, and the result reported as 09BA-SC02B. Since you requested only data from A or B, no correction was applied.")
   }
 
-  if ("10AD-SC01" %in% locations$SNOW_COURSE_ID & "10AD-SC01B" %in% locations$SNOW_COURSE_ID){
+  if ("10AD-SC01" %in% locations$SNOW_COURSE_ID & "10AD-SC01B" %in% locations$SNOW_COURSE_ID) {
     # Special case (ii) Hyland 10AD-SC01 and 10AD-SC01B. B will take precedence over (no letter) from 2018 onwards.
     # Calculate correction factors:
     subset <- meas[meas$SNOW_COURSE_ID %in% c("10AD-SC01", "10AD-SC01B"),]
@@ -109,16 +114,16 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     duplicated <- duplicated[duplicated$Freq > 1 , ]
     duplicated <- as.Date(as.vector(duplicated$Var1))
     swe_factor <- NULL
-    for (i in 1:length(duplicated)){
+    for (i in 1:length(duplicated)) {
       a <- subset[subset$SNOW_COURSE_ID == "10AD-SC01" & subset$SAMPLE_DATE == duplicated[i], "SNOW_WATER_EQUIV"]
       b <- subset[subset$SNOW_COURSE_ID == "10AD-SC01B" & subset$SAMPLE_DATE == duplicated[i], "SNOW_WATER_EQUIV"]
-      swe_factor[i] <- 1 + (b-a)/a
+      swe_factor[i] <- 1 + (b - a)/a
     }
     depth_factor <- NULL
-    for (i in 1:length(duplicated)){
+    for (i in 1:length(duplicated)) {
       a <- subset[subset$SNOW_COURSE_ID == "10AD-SC01" & subset$SAMPLE_DATE == duplicated[i], "DEPTH"]
       b <- subset[subset$SNOW_COURSE_ID == "10AD-SC01B" & subset$SAMPLE_DATE == duplicated[i], "DEPTH"]
-      depth_factor[i] <- 1 + (b-a)/a
+      depth_factor[i] <- 1 + (b - a)/a
     }
     swe_correction <- mean(swe_factor)
     depth_correction <- mean(depth_factor)
@@ -126,48 +131,48 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     #Step 1: Remove SC01 blank values in 2018 and later.
     meas <- meas[!(meas$SNOW_COURSE_ID == "10AD-SC01" & meas$year >= 2018),]
     #Step 2: Multiply all remaining SC01 values by correction factors:
-    meas$SNOW_WATER_EQUIV[meas$SNOW_COURSE_ID == "10AD-SC01"] <- swe_correction*(meas[meas$SNOW_COURSE_ID=="10AD-SC01", "SNOW_WATER_EQUIV"])
-    meas$DEPTH[meas$SNOW_COURSE_ID=="10AD-SC01"] <- depth_correction*(meas[meas$SNOW_COURSE_ID=="10AD-SC01", "DEPTH"])
+    meas$SNOW_WATER_EQUIV[meas$SNOW_COURSE_ID == "10AD-SC01"] <- swe_correction*(meas[meas$SNOW_COURSE_ID == "10AD-SC01", "SNOW_WATER_EQUIV"])
+    meas$DEPTH[meas$SNOW_COURSE_ID == "10AD-SC01"] <- depth_correction*(meas[meas$SNOW_COURSE_ID == "10AD-SC01", "DEPTH"])
     # Step 3: Rename as 010AD-SC01B (blank will no longer exist)
-    meas$SNOW_COURSE_ID[meas$SNOW_COURSE_ID=="10AD-SC01"] <- "10AD-SC01B"
+    meas$SNOW_COURSE_ID[meas$SNOW_COURSE_ID == "10AD-SC01"] <- "10AD-SC01B"
     corrected <- TRUE
     locations <- locations[!(locations$SNOW_COURSE_ID == "10AD-SC01") , ]
   } else if (("10AD-SC01" %in% locations$SNOW_COURSE_ID | "10AD-SC01B" %in% locations$SNOW_COURSE_ID) & !quiet) {
     message("Be careful with stations 10AD-SC01 (no letter) and 10AD-SC01B. The first is no longer active. When requesting data from both, a correction factor determined by operating the stations in parallel over several years is applied to the first, and the result reported as 10AD-SC01B. Since you requested only data from (no letter) or B, no correction was applied.")
   }
 
-  if (!inactive){ #Filter out the inactive stations if inactive is FALSE
-    remove <- locations[locations$ACTIVE_FLG==TRUE,]$SNOW_COURSE_ID
+  if (!inactive) { #Filter out the inactive stations if inactive is FALSE
+    remove <- locations[locations$ACTIVE_FLG == TRUE,]$SNOW_COURSE_ID
     meas <- meas[meas$SNOW_COURSE_ID %in% remove , ]
     locations <- locations[locations$ACTIVE_FLG == TRUE ,]
   }
-  if (corrected & !quiet){
-    message("Warning: locations 09BA-SC02B and/or 10AD-SC01B are in fact composites of defunct locations 09BA-SC02A and/or 10AD-SC01. A correction factor (determined by operating locations in parallel over several years) was applied to defunct location data to make it comparable to the new locations.")
+  if (corrected & !quiet) {
+    warning("locations 09BA-SC02B and/or 10AD-SC01B are in fact composites of defunct locations 09BA-SC02A and/or 10AD-SC01. A correction factor (determined by operating locations in parallel over several years) was applied to defunct location data to make it comparable to the new locations.")
   }
 
 
-  if (stats){
+  if (stats) {
     #Calculate station basic stats: min, max, mean, median, total yrs, gaps
     stats_df <- data.frame()
-    for (i in 1:nrow(locations)){
+    for (i in 1:nrow(locations)) {
       yrs <- lubridate::year(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] , ]$SAMPLE_DATE)
-      if (lubridate::month(Sys.Date()) %in% c(1:5) & complete_yrs){
+      if (lubridate::month(Sys.Date()) %in% c(1:5) & complete_yrs) {
         yrs <- yrs[!yrs == lubridate::year(Sys.Date())]
       }
       total_yrs <- max(yrs) - min(yrs)
       gaps <- seq(min(yrs), max(yrs))[!(seq(min(yrs), max(yrs)) %in% yrs)]
       sample_months <- sort(unique(lubridate::month(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] , ]$SAMPLE_DATE, label = TRUE, abbr = TRUE)))
-      allMaxSWE <- max(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] , ]$SNOW_WATER_EQUIV, na.rm=TRUE)
-      allMaxDepth <- max(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] , ]$DEPTH, na.rm=TRUE)
+      allMaxSWE <- max(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] , ]$SNOW_WATER_EQUIV, na.rm = TRUE)
+      allMaxDepth <- max(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] , ]$DEPTH, na.rm = TRUE)
 
       depthMaxes <- NULL
       SWEMaxes <- NULL
-      for (j in unique(yrs)){
+      for (j in unique(yrs)) {
         subset <- meas[meas$year == j & meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i], ]
         months <- unique(subset$month)
-        if (3 %in% months & 4 %in% months){
-          subsetDepth <- max(subset$DEPTH, na.rm=TRUE)
-          subsetSWE <- max(subset$SNOW_WATER_EQUIV, na.rm=TRUE)
+        if (3 %in% months & 4 %in% months) {
+          subsetDepth <- max(subset$DEPTH, na.rm = TRUE)
+          subsetSWE <- max(subset$SNOW_WATER_EQUIV, na.rm = TRUE)
           depthMaxes <- c(depthMaxes, subsetDepth)
           SWEMaxes <- c(SWEMaxes, subsetSWE)
         }
@@ -183,7 +188,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
                                 "total_record_yrs" = total_yrs,
                                 "start" = min(yrs),
                                 "end" = max(yrs),
-                                "missing_yrs" = paste(gaps, collapse=", ", sep = ", "),
+                                "missing_yrs" = paste(gaps, collapse = ", ", sep = ", "),
                                 "sample_months" = paste(sample_months, collapse = ", "),
                                 "max_SWE" = allMaxSWE,
                                 "mean_max_SWE" = round(meanMaxSWE, 1),
@@ -197,17 +202,17 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
 
     trends <- data.frame()
     #Calculate trends for all locations
-    for (i in 1:nrow(locations)){
+    for (i in 1:nrow(locations)) {
       yrs <- unique(lubridate::year(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] , ]$SAMPLE_DATE))
-      if (lubridate::month(Sys.Date()) %in% c(1:5) & complete_yrs){
+      if (lubridate::month(Sys.Date()) %in% c(1:5) & complete_yrs) {
         yrs <- yrs[!yrs == lubridate::year(Sys.Date())]
       }
       AllSWEMax <- numeric(0)
-      for (j in yrs){
+      for (j in yrs) {
         AllSWEMax <- c(AllSWEMax, max(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] & lubridate::year(meas$SAMPLE_DATE) == j, ]$SNOW_WATER_EQUIV))
       }
       AllSWEMax <- stats::na.omit(hablar::rationalize(AllSWEMax))
-      if (length(AllSWEMax) > 6){
+      if (length(AllSWEMax) > 6) {
         AllSWESensMax <- trend::sens.slope(AllSWEMax)
       } else {
         AllSWESensMax$estimates <- NA
@@ -215,11 +220,11 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
       }
 
       AllDepthMax <- numeric(0)
-      for (j in yrs){
+      for (j in yrs) {
         AllDepthMax <- c(AllDepthMax, max(meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] & lubridate::year(meas$SAMPLE_DATE) == j, ]$DEPTH))
       }
       AllDepthMax <- stats::na.omit(hablar::rationalize(AllDepthMax))
-      if(length(AllDepthMax) > 6) {
+      if (length(AllDepthMax) > 6) {
         AllDepthSensMax <- trend::sens.slope(AllDepthMax)
       } else {
         AllDepthSensMax$estimates <- NA
@@ -237,7 +242,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
                       ))
     }
 
-    for (i in 1:nrow(trends)){
+    for (i in 1:nrow(trends)) {
       subset <- meas[meas$SNOW_COURSE_ID == trends$location_ID[i] & meas$SNOW_WATER_EQUIV > 0,]
       intercept_yr <- min(subset$year)
       intercept_value_SWE <- unname(stats::lm(formula = subset$SNOW_WATER_EQUIV ~ subset$SAMPLE_DATE)$coefficients[1])
@@ -247,7 +252,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
       trends$note[i] <- paste0("Prct chg based on linear model intercepts of ", round(intercept_value_SWE, 1), " and ", round(intercept_value_depth,1), " for SWE and depth at the start year.")
     }
 
-    if (all){
+    if (all) {
       #Calculate the territory trend and add it to trends
       terr_prct_chg_SWE <- mean(trends$annual_prct_chg_SWE)
       terr_prct_chg_depth <- mean(trends$annual_prct_chg_DEPTH)
@@ -261,36 +266,36 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
       meanMaxDepth <- NULL
       meanApr1SWE <- NULL
       meanApr1Depth <- NULL
-      for (i in yrs){
+      for (i in yrs) {
         yearMaxSWE <- NULL
         yearMaxDepth <- NULL
         yearApr1SWE <- NULL
         yearApr1Depth <- NULL
-        for (j in 1:nrow(locations)){
+        for (j in 1:nrow(locations)) {
           subset <- meas[meas$year == i & meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[j] , ]
           months <- unique(subset$month)
           add <- FALSE
-          if (3 %in% months & 4 %in% months){
-            locationSWE <- max(subset$SNOW_WATER_EQUIV, na.rm=TRUE)
-            locationDepth <- max(subset$DEPTH, na.rm=TRUE)
+          if (3 %in% months & 4 %in% months) {
+            locationSWE <- max(subset$SNOW_WATER_EQUIV, na.rm = TRUE)
+            locationDepth <- max(subset$DEPTH, na.rm = TRUE)
             add <- TRUE
           }
-          if (add){
+          if (add) {
             yearMaxSWE <- c(yearMaxSWE, locationSWE)
             yearMaxDepth <- c(yearMaxDepth, locationDepth)
           }
-          if (4 %in% months){
+          if (4 %in% months) {
             locApr1SWE <- subset[subset$SAMPLE_DATE == paste0(i, "-04-01") ,"SNOW_WATER_EQUIV"]
             locApr1Depth <- subset[subset$SAMPLE_DATE == paste0(i, "-04-01") ,"DEPTH"]
             yearApr1SWE <- c(yearApr1SWE, locApr1SWE)
             yearApr1Depth <- c(yearApr1Depth, locApr1Depth)
           }
         }
-        if (!is.null(yearMaxSWE) & !is.null(yearMaxDepth) & length(yearMaxSWE) > nrow(locations)/2){
+        if (!is.null(yearMaxSWE) & !is.null(yearMaxDepth) & length(yearMaxSWE) > nrow(locations)/2) {
           meanMaxSWE <- c(meanMaxSWE, mean(yearMaxSWE))
           meanMaxDepth <- c(meanMaxDepth, mean(yearMaxDepth))
         }
-        if (!is.null(yearApr1SWE) & !is.null(yearApr1Depth)){
+        if (!is.null(yearApr1SWE) & !is.null(yearApr1Depth)) {
           meanApr1SWE <- c(meanApr1SWE, mean(yearApr1SWE))
           meanApr1Depth <- c(meanApr1Depth, mean(yearApr1Depth))
         }
@@ -345,13 +350,13 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
     }
   } #End of stats loop
 
-  if (plots){
+  if (plots) {
     plotsSWE <- list()
     plotsDepth <- list()
     plotsDensity <- list()
     plotsCombined <- list()
 
-    for (i in 1:nrow(locations)){
+    for (i in 1:nrow(locations)) {
       name <- locations$SNOW_COURSE_ID[i]
       if (name == "all_locs_max") {
         name <- "Territory mean maximum"
@@ -362,12 +367,12 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
       plot_meas <- meas[meas$SNOW_COURSE_ID == locations$SNOW_COURSE_ID[i] , ]
       plot_meas$density <- (plot_meas$SNOW_WATER_EQUIV / 10) / plot_meas$DEPTH
 
-      plotSWE <- ggplot2::ggplot(data=plot_meas[plot_meas$SNOW_WATER_EQUIV > 0 , ], ggplot2::aes(x = .data$SAMPLE_DATE, y = .data$SNOW_WATER_EQUIV, group = .data$year)) +
+      plotSWE <- ggplot2::ggplot(data = plot_meas[plot_meas$SNOW_WATER_EQUIV > 0 , ], ggplot2::aes(x = .data$SAMPLE_DATE, y = .data$SNOW_WATER_EQUIV, group = .data$year)) +
         ggplot2::scale_x_date() +
         ggplot2::geom_point() +
         ggplot2::geom_line(linewidth = 0.1) +
         ggplot2::theme_classic()
-      if (plot_type == "separate"){
+      if (plot_type == "separate") {
         plotSWE <- plotSWE +
           ggplot2::labs(x = "Sample date", y = "SWE (mm)", title = paste0(locations$SNOW_COURSE_ID[i], ": " , locations$SNOW_COURSE_NAME[i]))
       } else {
@@ -378,12 +383,12 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
                          axis.ticks.x = ggplot2::element_blank())
       }
 
-      plotDepth <- ggplot2::ggplot(data=plot_meas[plot_meas$DEPTH > 0 , ], ggplot2::aes(x = .data$SAMPLE_DATE, y = .data$DEPTH, group = .data$year)) +
+      plotDepth <- ggplot2::ggplot(data = plot_meas[plot_meas$DEPTH > 0 , ], ggplot2::aes(x = .data$SAMPLE_DATE, y = .data$DEPTH, group = .data$year)) +
         ggplot2::scale_x_date() +
         ggplot2::geom_point(size = 1.75) +
-        ggplot2::geom_line(linewidth = 0.1)+
+        ggplot2::geom_line(linewidth = 0.1) +
         ggplot2::theme_classic()
-      if (plot_type == "separate"){
+      if (plot_type == "separate") {
         plotDepth <- plotDepth +
           ggplot2::labs(x = "Sample date", y = "Snow depth (cm)", title = paste0(locations$SNOW_COURSE_ID[i], ": " , locations$SNOW_COURSE_NAME[i]))
       } else {
@@ -394,12 +399,12 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
                          axis.ticks.x = ggplot2::element_blank())
       }
 
-      plotDensity <- ggplot2::ggplot(data=plot_meas[plot_meas$DEPTH > 0 , ], ggplot2::aes(x = .data$SAMPLE_DATE, y = .data$density, group = .data$year)) +
+      plotDensity <- ggplot2::ggplot(data = plot_meas[plot_meas$DEPTH > 0 , ], ggplot2::aes(x = .data$SAMPLE_DATE, y = .data$density, group = .data$year)) +
         ggplot2::scale_x_date() +
         ggplot2::geom_point(size = 1.75) +
-        ggplot2::geom_line(linewidth = 0.1)+
+        ggplot2::geom_line(linewidth = 0.1) +
         ggplot2::theme_classic()
-      if (plot_type == "separate"){
+      if (plot_type == "separate") {
         plotDensity <- plotDensity +
           ggplot2::labs(x = "Sample date", y = bquote('Density (g/' ~cm^{"3"} *')'), title = paste0(locations$SNOW_COURSE_ID[i], ": " , locations$SNOW_COURSE_NAME[i]))
       } else {
@@ -407,7 +412,7 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
           ggplot2::labs(x = "Sample date", y = bquote('Density (g/' ~cm^{"3"} *')'))
       }
 
-      if (plot_type == "combined"){
+      if (plot_type == "combined") {
         plots_combined <- gridExtra::arrangeGrob(plotSWE, plotDepth, plotDensity)
         plotsCombined[[name]] <- plots_combined
       } else {
@@ -415,18 +420,18 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
         plotsDepth[[name]] <- plotDepth
         plotsDensity[[name]] <- plotDensity
       }
-      if (!is.null(save_path)){
-        if (plot_type == "combined"){
-          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_combined.png"), plot=plots_combined, height=10, width=10, units="in", device="png", dpi=500)
+      if (!is.null(save_path)) {
+        if (plot_type == "combined") {
+          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_combined.png"), plot = plots_combined, height = 10, width = 10, units = "in", device = "png", dpi = 500)
         } else {
-          ggplot2::ggsave(filename=paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_SWE.png"), plot=plotSWE, height=8, width=12, units="in", device="png", dpi=500)
-          ggplot2::ggsave(filename=paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DEPTH.png"), plot=plotDepth, height=8, width=12, units="in", device="png", dpi=500)
-          ggplot2::ggsave(filename=paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DENSITY.png"), plot=plotDensity, height=8, width=12, units="in", device="png", dpi=500)
+          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_SWE.png"), plot = plotSWE, height = 8, width = 12, units = "in", device = "png", dpi = 500)
+          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DEPTH.png"), plot = plotDepth, height = 8, width = 12, units = "in", device = "png", dpi = 500)
+          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DENSITY.png"), plot = plotDensity, height = 8, width = 12, units = "in", device = "png", dpi = 500)
         }
       }
     }
 
-    if (plot_type == "combined"){
+    if (plot_type == "combined") {
       message("Combined SWE, depth, density plots were returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
     }
   } #End of plots loop
@@ -446,8 +451,8 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
   names(locations) <- c("location_ID", "location_name", "active", "elevation_m", "latitude", "longitude")
 
   #Concatenate the various products into a list to return.
-  if (stats){
-    if (all){
+  if (stats) {
+    if (all) {
       results <- list("locations" = locations, "stats" = stats_df, "trends" = trends, "territory_stats_trends" = territory, "measurements" = meas)
     } else {
       results <- list("locations" = locations, "stats" = stats_df, "trends" = trends, "measurements" = meas)
@@ -455,15 +460,15 @@ snowInfo <- function(db_path ="default", locations = "all", inactive = FALSE, sa
   } else {
     results <- list("locations" = locations, "measurements" = meas)
   }
-  if (!is.null(save_path)){
+  if (!is.null(save_path)) {
     openxlsx::write.xlsx(results, paste0(save_path, "/SnowInfo_", Sys.Date(), "/measurements+stats.xlsx"))
   }
 
-  if (plots){
-    if (plot_type == "combined"){
+  if (plots) {
+    if (plot_type == "combined") {
       results[[plots]] <- plots_combined
 
-    } else if (plot_type == "separate"){
+    } else if (plot_type == "separate") {
       results[[plots]] <- list("SWE" = plotsSWE,
                                "Depth" = plotsDepth,
                                "Density" = plotsDensity)

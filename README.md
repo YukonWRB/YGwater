@@ -1,35 +1,17 @@
----
-editor_options: 
-  markdown
----
+#### Welcome to the Yukon Water Resources Branch's YGwater GitHub repository!
 
-## Function naming convention:
+This public repository holds many of the R functions that we use on a day-to-day basis at the Water Resources Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application that will soon be published (we'll put the URL here once it is).
 
-first letter NOT caps, first letter of subsequent words CAPS, acronyms in CAPS
+You'll also find a host of other interesting R functions, some more hydrology/climate specific than others:
 
-Exceptions: 
-1. Utility function: they get utils_xxx.R style naming 
-2. Plotting functions: plotXxxxx.R 
-3. Functions that GET data from somewhere: getXxxxx.R 
-4. Functions that create a product, perform a task: no specific scheme, but follow regular naming convention.
+-   Functions for checking and installing python dependencies. We use these here for automating the installation of dependencies necessary for testing {plotly} objects, but they've been generalized due to their clear applicability for other tasks;
 
-## Other
+-   A function to automate the proper capitalization of strings in French or English while respecting Yukon place names;
 
--   1 file per function, 1 function per file!
--   Development files (or just files to keep in case they're useful) should go in the /Dev folder. /Dev is included in .buildignore.
+-   Functions to fetch data from Environment and Climate Change Canada and process it, for example by combining timeseries of different monitoring locations when stations have been relocated over the years;
 
-## Migration steps left to do
+-   Hydrology-specific functions to check and install the Water Survey of Canada's (WSC) HYDAT database and extract watershed polygons for WSC stations.
 
-4.  Everyone seeks out bugs!
-5.  Run devtools::check() often!!!
-6.  G will re-run vignettes once everything is together.
+-   Plotting functions, which are mostly designed to work directly with our internal database. That said, some have ways of bypassing the database connection by passing a data.frame as an argument.
 
-## Extra things to do at the same time
-
-1.  Think about writing TESTS!!!!
-2.  Minimize as many dependencies as possible; if it's used already, stick to it!
-3.  If using external function for very specific purpose (narrow scope of the function's full use) just write the code directly in your fx
-
-## Post migration:
-
-1.  Update virtual machine
+Other functions are more specific to our work here at the Water Resources Branch and will mostly not work without direct access to our network and database. That said, you can access the same information using the Shiny application described above!

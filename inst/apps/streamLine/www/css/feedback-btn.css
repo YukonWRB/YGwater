@@ -1,0 +1,15 @@
+/* Feedback button styles */
+#feedback_btn {
+  position: fixed;
+  right: 7px;
+  bottom: 7px;
+  z-index: 1000;
+  padding: 10px;
+  background-color: #007bff; /* Bootstrap primary color */
+  color: white; /* Text color */
+  border-radius: 5px; /* Rounded corners */
+  text-decoration: none; /* No underline */
+}
+#feedback_btn:hover {
+  background-color: #0056b3; /* Darker on hover */
+}

@@ -13,16 +13,6 @@
 #' @return A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
 #' @export
 
-#TODO:
-
-# For testing
-# test <- SWE_basin(year=2023,
-#            month=3,
-#            threshold = 7,
-#            csv = FALSE,
-#            summarise = TRUE,
-#            source = 'snow')
-
 SWE_basin <-
   function(year,
            month,
@@ -33,20 +23,22 @@ SWE_basin <-
 
     ### Retrieve data from hydromet db
     if (source == "hydromet") {
-      con <- hydrometConnect()
+      con <- hydrometConnect(silent = TRUE)
       Meas <-
         DBI::dbGetQuery(con,
-                        "SELECT timeseries.location, measurements_discrete.value, measurements_discrete.target_datetime
+                        "SELECT locations.location, measurements_discrete.value, measurements_discrete.target_datetime
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id = timeseries.timeseries_id
-                      WHERE parameter = 'SWE'")
+                      INNER JOIN locations ON timeseries.location_id = locations.location_id
+                      INNER JOIN parameters ON timeseries.parameter = parameters.param_code
+                      WHERE parameters.param_name = 'snow water equivalent'")
       DBI::dbDisconnect(con)
       # Rename columns:
       colnames(Meas) <- c("location_id", "SWE", "target_date")
     } else if (source == "snow") {
       ### Retrieve data from snow db
-      con <- snowConnect()
-      test <- DBI::dbGetQuery(con, "SELECT location, swe, target_date
+      con <- snowConnect(silent = TRUE)
+      Meas <- DBI::dbGetQuery(con, "SELECT location, swe, target_date
                             FROM means")
       DBI::dbDisconnect(con)
       # Rename columns:
@@ -93,20 +85,21 @@ SWE_basin <-
       # Go through each basin one by one
       for (b in basins) {
         # subset factors to only what we need
-        fact <- Factors %>% dplyr::select(tidyselect::all_of(c(b, "location_id"))) %>%
-          dplyr::rename(val = b) %>%
-          dplyr::filter(.data$val != 0)
+        fact <- Factors[, c(b, "location_id")]
+        names(fact) <- c("val", "location_id")
+        fact <- fact[fact$val != 0,]
+      
         # Go through each location one by one
-        sweb <- stats::setNames(data.frame(matrix(ncol = 3, nrow = 0)),
-                         c("location_id", "swe", "perc"))
+        # Initialize empty dataframe
+        sweb <- data.frame("location_id" = numeric(),
+                           "swe" = numeric(),
+                           "perc" = numeric())
         for (l in fact$location_id) {
           # Check if location has measurement in tab
           if (length(tab[tab$location_id == l,]$SWE) == 0 |
               is.null(tab[tab$location_id == l,]$SWE)) {
             # Create vector with location, swe, percentage of basin that it represents. 0 if value is missing
-            swe <- c(l,
-                     NA,
-                     0)
+            swe <- c(l, NA, 0)
           } else if (!is.null(tab[tab$location_id == l,]$SWE &
                               length(tab[tab$location_id == l,]$SWE) == 1)) {
             # Create vector with location, swe, percentage of basin that it represents
@@ -119,33 +112,15 @@ SWE_basin <-
           sweb[nrow(sweb) + 1, ] = swe
         }
         # calculate total percent of available numbers
-        perc <- sum(as.numeric(sweb$perc))
-        if (perc > 10) {
-          swe <- sum(sweb$swe)
-          warning(paste0(
-            "Factors for location ",
-            l,
-            " add up to ",
-            perc,
-            " for the year ",
-            ym
-          ))
-        } else if (perc == 10) {
-          swe <- sum(as.numeric(sweb$swe), na.rm = TRUE)
+        perc <- sum(as.numeric(sweb$perc), na.rm = TRUE)
+        if (perc >= 10) {
+          swe <- hablar::rationalize(sum(as.numeric(sweb$swe), na.rm = TRUE))
         } else {
-          swe <- sum(as.numeric(sweb$swe), na.rm = TRUE) * 10 / perc
-          warning(paste0(
-            "Factors for location ",
-            l,
-            " add up to ",
-            perc,
-            " for the year ",
-            ym
-          ))
+          swe <- hablar::rationalize(sum(as.numeric(sweb$swe), na.rm = TRUE) * 10 / perc)
         }
-        swe_basin_year[nrow(swe_basin_year) + 1, ] = c(b, yr_mon[ym,1], yr_mon[ym,2], swe, perc)
+        swe_basin_year[nrow(swe_basin_year) + 1, ]  <- c(b, yr_mon[ym,1], yr_mon[ym,2], swe, perc)
       }
-      swe_basin_year[nrow(swe_basin_year) + 1, ] = swe_basin_year
+      # swe_basin_year[nrow(swe_basin_year) + 1, ]  <- swe_basin_year
     }
 
     # Set column classes
@@ -153,31 +128,33 @@ SWE_basin <-
     swe_basin_year$swe <- as.numeric(swe_basin_year$swe)
     swe_basin_year$perc <- as.numeric(swe_basin_year$perc)
 
+    # Add units and parameter
+    swe_basin_year$parameter <- rep("SWE", length(swe_basin_year$basin))
+    swe_basin_year$units <- rep("mm", length(swe_basin_year$basin))
+    
+    # Get current year values
+    swe_basin_current <- swe_basin_year %>%
+      dplyr::filter(.data$yr == year)
+    
     # Remove years based on percentage of basin stations with measurements
     swe_basin_year <- swe_basin_year %>% dplyr::filter(perc >= threshold)
     swe_basin <- swe_basin_year
 
-    # Add units and parameter
-    swe_basin$parameter <- rep("SWE", length(swe_basin$basin))
-    swe_basin$units <- rep("mm", length(swe_basin$basin))
     # rename columns
     colnames(swe_basin) <- c("location", "year", "month", "value", "perc", "parameter", "units")
 
     ## Calculate max, min and median historical SWE for each basin if summarise = TRUE
     if (summarise == TRUE) {
-      # Get current year values
-      swe_basin_current <- swe_basin_year %>%
-        dplyr::filter(.data$yr == year)
       # calculate stats excluding current year
       swe_basin_summary <- swe_basin_year %>%
         dplyr::filter(.data$yr != year) %>%
         dplyr::group_by(.data$basin, .data$mon) %>%
         dplyr::summarize(
-          swe_max = max(swe),
+          swe_max = max(swe, na.rm = TRUE),
           year_max = .data$yr[which.max(swe)],
-          swe_min = min(swe),
+          swe_min = min(swe, na.rm = TRUE),
           year_min = .data$yr[which.min(swe)],
-          swe_median = stats::median(swe)
+          swe_median = stats::median(swe, na.rm = TRUE)
         )
       # combine tables
       swe_basin_summary <-
@@ -189,7 +166,7 @@ SWE_basin <-
       swe_basin_summary <- swe_basin_summary %>%
         dplyr::mutate(dplyr::across(
           c("swe_max", "swe_min", "swe_median", "swe", "swe_relative"),
-          \(x) round (x, 2)
+          \(x) round(x, 2)
         ))
       swe_basin <- swe_basin_summary
     }

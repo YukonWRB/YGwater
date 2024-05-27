@@ -4,27 +4,58 @@
 \alias{combineWeather}
 \title{Combine continuous ECCC climate station data}
 \usage{
-combineWeather(stations, start, end, variables, months = NULL)
+combineWeather(
+  stations,
+  interval = NULL,
+  start = NULL,
+  end = NULL,
+  datetime_col = NULL,
+  variables,
+  months = NULL
+)
 }
 \arguments{
-\item{stations}{The two stations you want to combine, given as a list with two elements. Can either be a dataframe as outputted by getWeather or a station id. The station listed first is filled in with the 2nd dataset when possible.}
+\item{stations}{The two or more stations you want to combine, given as a list. Can either be a data.frame, data.table, or tibble as output by \code{\link[=getWeather]{getWeather()}} or a vector passed to the \code{station} argument of \code{\link[=getWeather]{getWeather()}}. The station listed first is filled in with the 2nd dataset when possible and so on.}
 
-\item{start}{The start date of the dataset to create. Is specified as a character string of form "yyyy-mm-dd".}
+\item{interval}{Select from 'hour', 'day', or 'month'. Passed to \code{\link[=getWeather]{getWeather()}} if the list elements of parameter \code{stations} are character vectors, ignored if passing data.frames instead.}
 
-\item{end}{The end date of the dataset to create.}
+\item{start}{The start date of the dataset to fetch if \code{stations} is specified as a character vector (otherwise leave as NULL). Specified as a character vector of form "yyyy-mm-dd".}
 
-\item{variables}{The variable or variables to combine in the station datasets, given as a character string. Ex: c("mean_temp", "total_precip").}
+\item{end}{The end date of the dataset to fetch if \code{stations} is specified as a character vector (otherwise leave as NULL). Specified as a character vector of form "yyyy-mm-dd".}
 
-\item{months}{The months to plot, given as a vector. Must be given as a character, where the January is "01" and October is "10".}
+\item{datetime_col}{The name of the column in the data.frames that contains the datetime information. If relying on getWeather() to get the data this is automatically set, otherwise please specify a column name common to the data.frames passed in \code{stations}.}
+
+\item{variables}{The variable or variables to combine in the station datasets, given as the column names common in the data.frames. Ex: c("mean_temp", "total_precip").}
+
+\item{months}{The months to plot, given as a vector. Must be given as a character, where the January is "01" and October is "10". Leave as NULL for all 12 months.}
 }
 \value{
-A list of dataframes, one for each variable. The dataframe has a date column and a variable column. All dates between start and end are included, whether or not data is available for those dates.
+A list of data.frames, one for each variable. The data.frame has a date column and a variable column. All dates between start and end are included, whether or not data is available for those dates.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Retrieves climate station data from two stations in proximity and combines them to make continuous dataset.
+Retrieves climate station data from two stations, ideally in close proximity (but that's up to you) and with different temporal coverage and combines them to make a continuous dataset. You can use this to fill gaps in a timeseries or to combine two timeseries. Since the two locations likely have offset measurements at the exact same moment even if they are quite close (for example, station 1 might be slightly warmer than station 2), an offset is calculated if possible and applied to the \emph{second} or subsequent station to make the datasets comparable. Put another way, data from the first listed station takes precedence where an overlap exists; see details for more information. Statistics about this offset are printed to the console for each variable. If the stations do not have temporal overlap no offset is calculated and the two are joined as is.
 }
 \details{
-stations, start, end, variable, months=NULL
+\subsection{Choosing which station to list first}{
+
+Since the two stations likely have offset measurements at the same moment in time, an offset value is calculated and applied to correct the values of the \strong{second} station. In addition, all values from the \emph{first} station are kept, while overlapping values in the \emph{second} station are discarded after the offset is calculated. Choose the station you list first carefully! If the stations do not have temporal overlap, no offset is calculated and the two are joined as is.
+}
+
+\subsection{Calculation of offset and offset statistics.}{
+
+The offset is calculated using the following formula:
+
+\code{offset = mean(overlap_station1) - mean(overlap_station2)}
+
+The root mean square error of the offset is also calculated:
+
+\code{RMSE = sqrt(mean((overlap_station1 - overlap_station2)^2))}
+
+NA values are ignored in the calculation of the offset and RMSE.
+}
+}
+\seealso{
+\code{\link[=getWeather]{getWeather()}}, \code{\link[=chooseWeather]{chooseWeather()}}.
 }

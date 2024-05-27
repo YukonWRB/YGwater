@@ -4,26 +4,43 @@
 \alias{snowBulletin}
 \title{Function for creating snow bulletin (Rmarkdown)- internal}
 \usage{
-snowBulletin(sub_basin_name = NULL, year = NULL, save_path = "choose")
+snowBulletin(
+  year,
+  month,
+  scale = 1,
+  basins = NULL,
+  save_path = "choose",
+  synchronize = FALSE,
+  language = "english"
+)
 }
 \arguments{
-\item{sub_basin_name}{The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.}
-
 \item{year}{Year for which the snow bulletin is to be created.}
 
-\item{save_path}{The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.}
+\item{month}{Month for which the snow bulletin is to be created. Options are 3, 4 or 5.}
+
+\item{scale}{Scale of the snow bulletin plots. Default is 1. Enter a scale number above or below 1 to get larger or smaller titles and axis labels.}
+
+\item{basins}{The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.}
+
+\item{save_path}{The path to the directory (folder) where the report should be saved. Enter the path as a character string.}
+
+\item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the HydroMetDB package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.}
+
+\item{language}{The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".}
 }
 \value{
 A snow bulletin in Microsoft Word format.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function generates the snow bulletin for a specified date. The output is a Microsoft Word document on a Yukon Government template.
+This function generates the snow bulletin for a specified date as a Microsoft Word document on a Yukon Government template.
 
-This function fetches data from the local postgresql hydrometric database created/maintained by the HydroMetDB package.
+This function fetches data from the local postgresql hydrometric database created/maintained by the HydroMetDB package; see details for more info on database connections.
 }
 \details{
-To download data, you MUST have your hydromet credentials loaded
-into your .Renviron profile as values pairs of hydrometHost="10.250.12.154", hydrometPort="5433", hydrometUser="hydromet_read", hydrometPass="hydromet".
+To download data, you MUST have the database credentials loaded into your .Renviron profile as values pairs of hydrometHost="10.250.12.154", hydrometPort="5433", hydrometUser="hydromet_read", hydrometPass="hydromet". Note that this is valid as of spring 2024 and that values are subject to change.
+
+If you also wish to synchronize timeseries on our database with new data provided by others (such as when the WSC adjusts or publishes flow values) you must also have write credentials to the database. Please talk to the Data Scientist to get these credntials.
 }

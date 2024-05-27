@@ -27,6 +27,8 @@ eq_fetch <- function(EQcode,
 # dates = "all"
 # BD <- 0
 # apply_standards = TRUE
+  
+  rlang::check_installed("odbc", reason = "required to connect to EQWin Access DB") #This is here because odbc is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
 
   # Set a few options (I'll probs remove these)
 

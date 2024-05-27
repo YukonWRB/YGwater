@@ -9,6 +9,7 @@ hydrometDiscrete(
   parameter,
   startDay = 1,
   endDay = 365,
+  binwidth = "1 month",
   tzone = "MST",
   years = NULL,
   title = TRUE,
@@ -16,18 +17,20 @@ hydrometDiscrete(
   plot_type = "violin",
   plot_scale = 1,
   save_path = NULL,
-  con = hydrometConnect(silent = TRUE),
+  con = NULL,
   discrete_data = NULL
 )
 }
 \arguments{
-\item{location}{The location for which you want a plot.}
+\item{location}{The location for which you want a plot. Can be left NULL if \code{discrete_data} is provided.}
 
-\item{parameter}{The parameter you wish to plot. The location:parameter combo must be in the local database.}
+\item{parameter}{The parameter you wish to plot. The location:parameter combo must be in the local database unless \code{discrete_data} is provided. In this later case, the parameter must still be specified to label the y-axis.}
 
-\item{startDay}{NOT CURRENTLY IN USE The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
+\item{startDay}{Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
 
-\item{endDay}{NOT CURRENTLY IN USE The end day of year for the plot x-axis. As per \code{startDay}.}
+\item{endDay}{The end day of year for the plot x-axis. As per \code{startDay}.}
+
+\item{binwidth}{The width of the bins in the violin/boxplot in days, specified as an integer of \strong{n} days or as "1 day", "1 week", "1 month", etc. Default is one month.}
 
 \item{tzone}{The timezone to use for fetching data. Datetimes are stored in the database in UTC offset, so this parameter could make a difference to what day a particular sample is considered to be on. In most cases you can ignore this parameter.}
 
@@ -43,7 +46,7 @@ hydrometDiscrete(
 
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
-\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings. Not used if discrete_data is not left as default NULL.}
+\item{con}{A connection to the target database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
 
 \item{discrete_data}{A dataframe with the data to be plotted. Must contain the following columns: year, month, value and units.}
 }
@@ -53,9 +56,9 @@ A .png file of the plot requested (if a save path has been selected), plus the p
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Generate plots of snow survey data (SWE and depth) or other variables sampled at regular intervals (weekly or monthly).
+Generate plots of snow survey data (snow water equivalent and snow depth) or other variables sampled at regular intervals (weekly or monthly).
 
 Notice: in many cases, you're better off using the Shiny app at \code{\link[=hydroApp]{hydroApp()}} to generate and export your plot. Read on if you need additional control over the final product.
 
-This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database, use the function \code{\link[=DB_browse_ts]{DB_browse_ts()}} to see what's in there first. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
+This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
 }

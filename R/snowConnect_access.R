@@ -14,23 +14,19 @@
 
 snowConnect_access <- function(path = "default", silent=FALSE){
 
-  if (path == "default"){
+  if (path == "default") {
     path <- "//carver/infosys/Snow/DB/SnowDB.mdb"
   }
 
   #Check the paths and make a connection
-  if(!file.exists(path)){
+  if (!file.exists(path)) {
     stop("The path you specified either does not exist or this computer does not have access to that drive.")
   }
-  if(stringr::str_detect(path, ".mdb")){
+  if (stringr::str_detect(path, ".mdb")) {
+    rlang::check_installed("odbc", reason = "required to use function snowConnect_access with an .mdb database") #This is here because odbc is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
     snowCon <- DBI::dbConnect(drv = odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", path))
-    if (!silent){
+    if (!silent) {
       message("Remember to disconnect using DBI::dbDisconnect() when finished.")
-    }
-  } else if (stringr::str_detect(path, ".sqlite")){
-    snowCon <- DBI::dbConnect(RSQLite::SQLite(), path)
-    if (!silent){
-      message("Be careful! The database is now an SQLite database, and the tables and their columns may have changed.")
     }
   } else {
     stop("This script is not designed to work with a database having that file extension. Currently supporting .mdb and .sqlite databases.")

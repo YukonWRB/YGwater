@@ -14,7 +14,8 @@
 #' @param dateRange X axis limits, can be "all" for all data, "1yr" for most recent year of data, or vector of 2 in format c("2020/01/01", "2023/01/01"). Defaults to "all". Does not apply to stats = "line", which always plots the most current year of data.
 #' @param stats Can be "line", "ribbon", or FALSE. Line shows years plotted in separate lines, ribbon shows max/min ribbon geom, and FALSE excludes stats. If set to "line", dateRange ignored as most current year of data will be plotted alongside historical data.
 #' @param smooth Can be FALSE or a numeric day value (ie. 14) for plotting rolling average.
-#' @param saveTo Directory in which the plot will be saved. Can specify "desktop" to automatically create YOWN ID folder on desktop as save directory.
+#' @param saveTo Optional directory in which the plot will be saved. Can specify "desktop" to automatically create YOWN ID folder on your desktop as save directory. Default NULL only outputs the plot to the console.
+#' @param format If `saveTo` is not NULL, this parameter specifies the format of the saved plot. Default is "png", other option is "png".
 #' @param login Your Aquarius login credentials as a character vector of two (eg. c("cmfische", "password") Default pulls information from your .renviron profile; see details. Passed to [aq_download()].
 #' @param server The URL for your organization's Aquarius web server. Default is for the Yukon Water Resources Branch. Passed to [aq_download()].
 #'
@@ -30,8 +31,9 @@ YOWNplot <- function(AQID,
                      stats = FALSE,
                      smooth = FALSE,
                      saveTo = "desktop",
+                     format = "png",
                      login = Sys.getenv(c("AQUSER", "AQPASS")),
-                     server ="https://yukon.aquaticinformatics.net/AQUARIUS"){
+                     server ="https://yukon.aquaticinformatics.net/AQUARIUS") {
 
   # Debug and development params. Leave as comments.
   # AQID = "YOWN-0101"
@@ -42,19 +44,28 @@ YOWNplot <- function(AQID,
   # smooth = FALSE
   # saveTo = "desktop"
   # login = Sys.getenv(c("AQUSER", "AQPASS"))
-  # server ="https://yukon.aquaticinformatics.net/AQUARIUS"
-
+  # server = "https://yukon.aquaticinformatics.net/AQUARIUS"
+  
   #### Setup ####
   # Sort out save location
-  if(tolower(saveTo) == "desktop") {
-    saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
-  } else if (dir.exists(saveTo) == FALSE) {
-    stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
+  if (!is.null(saveTo)) {
+    if (tolower(saveTo) == "desktop") {
+      saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
+      format <- tolower(format)
+      if (!format %in% c("png", "pdf")) {
+        stop("Specify format as 'png' or 'pdf', or set 'saveTo' to NULL to only get a console output.")
+      }
+    } else if (saveTo == "choose") {
+      # Select save path using GUI
+      saveTo <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"), "Desktop"))
+    } else if (dir.exists(saveTo) == FALSE) {
+      stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
+    }
   }
 
   #### Download time series data from Aquarius, preliminary formatting ####
   # Download data from Aquarius
-  print("Downloading data from Aquarius")
+  message("Downloading data from Aquarius")
   datalist <- suppressMessages(YGwater::aq_download(loc_id = AQID,
                                            ts_name = timeSeriesID,
                                            login = login,
@@ -84,9 +95,9 @@ YOWNplot <- function(AQID,
   gapdf$lag_val <- as.numeric(gapdf$lag_val) # convert to numeric
 
   # Create a list of data frames for each identified data gap, fill in time stamps with NA in "value" column
-  if(nrow(gapdf != 0)){
+  if (nrow(gapdf != 0)) {
     gaplist <- list()
-    for(i in 1:nrow(gapdf)) {
+    for (i in 1:nrow(gapdf)) {
       df <- data.frame(seq.POSIXt(from = as.POSIXct(gapdf[i, 1]), by = "-1 hour", length.out = gapdf[i, "lag_val"]), NA, as.character(-5), "MISSING DATA", gapdf$approval_level[i], gapdf$approval_description[i], NA, NA)
       colnames(df) <- colnames(gapdf)
       gaplist[[i]] <- df
@@ -122,15 +133,15 @@ YOWNplot <- function(AQID,
 
   #### Plot-specific data formatting ####
   # Format and calculate x axis limits
-  if(paste(tolower(dateRange), collapse = ",") == "all"){
+  if (paste(tolower(dateRange), collapse = ",") == "all") {
     dateRange <- c(min(stats::na.omit(fulldf$timestamp_MST)), max(stats::na.omit(fulldf$timestamp_MST)))
-  } else if(paste(tolower(dateRange), collapse = ",") == "1yr"){
+  } else if (paste(tolower(dateRange), collapse = ",") == "1yr") {
     dateRange <- c((max(stats::na.omit(fulldf$timestamp_MST)) - lubridate::years(1)), max(stats::na.omit(fulldf$timestamp_MST)))
-  } else if(length(dateRange) != 2){
-    print("Chart X limits in incorrect format")
+  } else if (length(dateRange) != 2) {
+    message("Chart X limits in incorrect format")
   } else {
     dateRange <- as.POSIXct(x = dateRange, tz = "MST", format = "%Y/%m/%d")
-    if(dateRange[2] > max(stats::na.omit(fulldf$timestamp_MST))){
+    if (dateRange[2] > max(stats::na.omit(fulldf$timestamp_MST))) {
       dateRange[2] <- max(stats::na.omit(fulldf$timestamp_MST))
     }
   }
@@ -140,7 +151,7 @@ YOWNplot <- function(AQID,
   plotdf$year <- as.Date(plotdf$year, format = "%Y")
 
   # Calculate chart X interval if "auto" specified
-  if(chartXinterval == "auto"){
+  if (chartXinterval == "auto") {
     diff <- as.numeric(difftime(max(plotdf$timestamp), min(plotdf$timestamp), units = "days"))
     chartXinterval <- dplyr::case_when(
       diff < 180 ~ "1 week",
@@ -151,14 +162,14 @@ YOWNplot <- function(AQID,
   }
 
   # Apply smoothing function if specified
-  if(is.numeric(smooth)){
+  if (is.numeric(smooth)) {
     plotdf <- plotdf %>%
       dplyr::mutate(datemean = zoo::rollapply(data = plotdf$datemean, FUN = mean, width = smooth, partial = TRUE)) %>%
       dplyr::mutate(daymean = zoo::rollapply(data = plotdf$daymean,  FUN = mean, width = smooth, partial = TRUE)) %>%
       dplyr::mutate(daymin = zoo::rollapply(data = plotdf$daymin,  FUN = mean, width = smooth, partial = TRUE)) %>%
       dplyr::mutate(daymax = zoo::rollapply(data = plotdf$daymax,  FUN = mean, width = smooth, partial = TRUE))
-  } else if(smooth == TRUE){
-    print("ERROR: Specify smoothing value as a number")
+  } else if (smooth == TRUE) {
+    stop("ERROR: Specify smoothing value as a number")
   }
 
   #### Create and format extra metadata blocks for pdf plot ####
@@ -195,14 +206,14 @@ YOWNplot <- function(AQID,
                    plot.margin = ggplot2::unit(c(-2.39, 0, 0, 0.6), "cm"))
 
   #### Check for sufficient data for ribbon stat plot generation ####
-  if(tolower(stats) == "ribbon" & (max(fulldf$timestamp_MST, na.rm = TRUE) - min(fulldf$timestamp_MST, na.rm = TRUE) < 730)){
-    print("Insufficient data for ribbon stats calculation, plot produced with no stats instead")
+  if (tolower(stats) == "ribbon" & (max(fulldf$timestamp_MST, na.rm = TRUE) - min(fulldf$timestamp_MST, na.rm = TRUE) < 730)) {
+    warning("Insufficient data for ribbon stats calculation, plot produced with no stats instead")
     stats <- FALSE
   }
 
   #### Plot generation ####
   # Generate ribbon plot if specified
-  if(tolower(stats) == "ribbon"){
+  if (tolower(stats) == "ribbon") {
 
     # Generate vector of TRUE/FALSE to stop GGplot from filling in gaps when NA values exist
     NAcomp <- rle(!is.na(plotdf$datemean))
@@ -272,21 +283,21 @@ YOWNplot <- function(AQID,
                                                       Sys.Date(),
                                                       "; Yukon Observation Well Network"))
 
-  } else if(tolower(stats) == "line"){
+  } else if (tolower(stats) == "line") {
     # Plotdf formatting
     plotdf <- fulldf
     plotdf$monthday <- as.POSIXct(plotdf$monthday, format = "%m-%d")
     plotdf$year <- as.Date(plotdf$year, format = "%Y")
 
     # Apply smoothing function if specified
-    if(is.numeric(smooth)){
+    if (is.numeric(smooth)) {
       plotdf <- plotdf %>%
         dplyr::mutate(datemean = zoo::rollapply(data = plotdf$datemean, FUN = mean, width = smooth, partial = TRUE)) %>%
         dplyr::mutate(daymean = zoo::rollapply(data = plotdf$daymean,  FUN = mean, width = smooth, partial = TRUE)) %>%
         dplyr::mutate(daymin = zoo::rollapply(data = plotdf$daymin,  FUN = mean, width = smooth, partial = TRUE)) %>%
         dplyr::mutate(daymax = zoo::rollapply(data = plotdf$daymax,  FUN = mean, width = smooth, partial = TRUE))
-    } else if(smooth == TRUE){
-      print("ERROR: Specify smoothing value as a number")
+    } else if (smooth == TRUE) {
+      stop("ERROR: Specify smoothing value as a number")
     }
 
     # Separate current year from historical
@@ -372,7 +383,7 @@ YOWNplot <- function(AQID,
                                                       "\nPlot generated: ",
                                                       Sys.Date(),
                                                       "; Yukon Observation Well Network"))
-  } else if(stats == FALSE){
+  } else if (stats == FALSE) {
     # Generate vector of TRUE/FALSE to stop GGplot from filling in gaps when NA values exist
     NAcomp <- rle(!is.na(plotdf$datemean))
     NAcomp$values[which(NAcomp$lengths>1 & !NAcomp$values)] <- TRUE
@@ -432,20 +443,20 @@ YOWNplot <- function(AQID,
 
   #### Final formatting of X and Y axes and adding grade colour lines ####
   # Set y axis title and name
-  if(timeSeriesID == "Wlevel_btoc.Calculated"){
+  if (timeSeriesID == "Wlevel_btoc.Calculated") {
     ytitle <- "Water Level (m below top of casing)"
     name <- "mbtoc"
-  } else if(timeSeriesID == "Wlevel_bgs.Calculated"){
+  } else if (timeSeriesID == "Wlevel_bgs.Calculated") {
     ytitle <- "Water Level (m below ground surface)"
     name <- "mbgs"
-  } else if(timeSeriesID == "Wlevel_masl.Calculated"){
+  } else if (timeSeriesID == "Wlevel_masl.Calculated") {
     ytitle <- "Water Level (m above sea level)"
     name <- "masl"
   }
 
   # If time series is bgs or btoc, check for stats and place grade colour line accordingly
-  if(timeSeriesID == "Wlevel_bgs.Calculated" | timeSeriesID == "Wlevel_btoc.Calculated"){
-    if(stats != FALSE){
+  if (timeSeriesID == "Wlevel_bgs.Calculated" | timeSeriesID == "Wlevel_btoc.Calculated") {
+    if (stats != FALSE) {
       plot <- plot + ggplot2::scale_y_reverse(name = ytitle,
                                               limits = c(plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
                                                          plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor)),
@@ -453,7 +464,7 @@ YOWNplot <- function(AQID,
                                                            plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor), by = -0.25),
                                               expand = c(0, 0))
 
-      if(tolower(stats) == "ribbon"){
+      if (tolower(stats) == "ribbon") {
         plot <- plot +
           ggnewscale::new_scale_colour() +
           ggplot2::geom_path(data = plotdf,
@@ -468,7 +479,7 @@ YOWNplot <- function(AQID,
                                                                    "REDACTED" = "#DC4405",
                                                                    "MISSING DATA" = "black"))
 
-      } else if(tolower(stats) == "line"){
+      } else if (tolower(stats) == "line") {
         plot <- plot +
           ggnewscale::new_scale_colour() +
           ggplot2::geom_path(data = plotdf_current,
@@ -483,7 +494,7 @@ YOWNplot <- function(AQID,
                                                                    "REDACTED" = "#DC4405",
                                                                    "MISSING DATA" = "black"))
       }
-    } else if(stats == FALSE){
+    } else if (stats == FALSE) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf,
@@ -506,9 +517,9 @@ YOWNplot <- function(AQID,
                                  expand = c(0, 0))
     }
 
-  } else if(timeSeriesID == "Wlevel_masl.Calculated") {
+  } else if (timeSeriesID == "Wlevel_masl.Calculated") {
     # If time series is masl, check for stats and place grade colour line accordingly
-    if(stats != FALSE){
+    if (stats != FALSE) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf_current, ggplot2::aes(x = timestamp_MST, y = plyr::round_any(min(stats::na.omit(daymin)), 0.25, f = floor), colour = factor(grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
@@ -517,7 +528,7 @@ YOWNplot <- function(AQID,
                                     limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling)),
                                     breaks = seq(floor(min(stats::na.omit(plotdf$daymin))), ceiling(max(stats::na.omit(plotdf$daymax))), by = 0.25),
                                     expand = c(0, 0))
-    } else if(stats == FALSE){
+    } else if (stats == FALSE) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf, ggplot2::aes(x = timestamp_MST, y = plyr::round_any(min(stats::na.omit(daymean)), 0.25, f = floor), colour = factor(grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
@@ -529,7 +540,7 @@ YOWNplot <- function(AQID,
     }
   }
   # Set stats to numeric value of false for saving plot title
-  if(smooth == FALSE){
+  if (smooth == FALSE) {
     smooth <- 0
   }
   #### Final combination of plot, title, subtitle, caption blocks, format and save plot ####
@@ -542,12 +553,15 @@ YOWNplot <- function(AQID,
     cowplot::draw_image("G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/4_YOWN_DATA_ANALYSIS/1_WATER LEVEL/00_AUTOMATED_REPORTING/01_MARKUP_IMAGES/Template_grades.jpg") +
     cowplot::draw_plot(final)
 
-  # Create save folder in specified directory
-  dir.create(paste0(saveTo, "\\", AQID), showWarnings = FALSE)
-
-  # Final plot saving
-  ggplot2::ggsave(plot = final_plot, filename = paste0(saveTo, "\\", AQID, "\\", AQID, "_", name, "_", "stats", stats, "_smooth", smooth, ".pdf"),  height = 8.5, width = 11, units = "in")
-
-  print(paste0("Plot written to ", saveTo, "/", AQID))
+  # Save plot to specified directory
+  if (!is.null(saveTo)) {
+    # Create save folder in specified directory
+    dir.create(paste0(saveTo, "/", AQID), showWarnings = FALSE)
+    # Final plot saving
+    ggplot2::ggsave(plot = final_plot, filename = paste0(saveTo, "/", AQID, "/", AQID, "_", name, "_", "stats", stats, "_smooth", smooth, ".", format),  height = 8.5, width = 11, units = "in")
+    
+    message(paste0("Plot written to ", saveTo, "/", AQID))
+  }
+  return(plot)
 }
 

@@ -34,6 +34,3 @@ A connection to the database.
 
 This function exists to facilitate connecting to the hydrology database, especially if the database type and connection method changes in the future.
 }
-\seealso{
-\code{\link[=DB_browse_ts]{DB_browse_ts()}}, \code{\link[=DB_browse_spatial]{DB_browse_spatial()}}to browse the database contents; \code{\link[=DB_get_meta]{DB_get_meta()}} to extract metadata; \code{\link[=DB_get_ts]{DB_get_ts()}} to extract timeseries information; and \code{\link[=DB_get_spatial]{DB_get_spatial()}} to extract spatial content.
-}
