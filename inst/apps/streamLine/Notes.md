@@ -8,12 +8,21 @@
   - If implementing a ML model for flow prediction, import other parameters: temp, solrad, wind??, 
 - Add HRDPA stored in files to the DB
 
+## Feedback from Sean Boots
+- Change title to something like "Yukon Water Data", only visible on the tab or browser title. No need for a title on the page itself as it should be obvious to the user.
+- YG logo replaces aurora, aurora under login/lang side
+- Remove login option entirely, make a separate URL for partners (that has a login on page initial access)
+- If only doing two languages, make language drop-down a click to the other language
+- Remove email link, put in About tab
+- Add link to general YG disclaimer in footer, plus other footer items like privacy policy, etc. as in the Flood Atlas that links to the YG website
+- Add notes about data licences, i.e from ECCC, USGS, etc. (Talk to Sean about what these licences actually are)
+
 
 ## Issues
 - Reduce or eliminate all browser "inspect" errors and warnings
 ## Improvements
 - Add a "loading" message when the app is loading data
-- Add a partner login option, which will open up public = FALSE timeseries and possibly tabs like the images tab.
+- Allow user to extend the time range of plotly plots by panning.
 ## TODOs
 - Make sure URL only gets necessary input parameters
 - Make sure restoration from URL works
