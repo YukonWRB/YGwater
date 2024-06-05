@@ -16,13 +16,13 @@ hydrometConnect(
 \arguments{
 \item{name}{Database name.}
 
-\item{host}{Database host address. By default searches the .Renviron file for parameter:value pair of form hydrometHost:"hostname".}
+\item{host}{Database host address. By default searches the .Renviron file for parameter:value pair of form hydrometHost="hostname".}
 
-\item{port}{Connection port. By default searches the .Renviron file for parameter:value pair of form hydrometPort:"1234".}
+\item{port}{Connection port. By default searches the .Renviron file for parameter=value pair of form hydrometPort="1234".}
 
-\item{username}{Username. By default searches the .Renviron file for parameter:value pair of form hydrometUser:"username". Refrain from using username with write privileges unless you absolutely know what you're doing.}
+\item{username}{Username. By default searches the .Renviron file for parameter=value pair of form hydrometUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.}
 
-\item{password}{Password. By default searches the .Renviron file for parameter:value pair of form hydrometPass:"password".}
+\item{password}{Password. By default searches the .Renviron file for parameter=value pair of form hydrometPass="password".}
 
 \item{silent}{TRUE suppresses messages except for errors.}
 }
@@ -32,5 +32,5 @@ A connection to the database.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function exists to facilitate connecting to the hydrology database, especially if the database type and connection method changes in the future.
+This function exists to facilitate connecting to the hydrology database.
 }

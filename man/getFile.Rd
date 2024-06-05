@@ -4,15 +4,7 @@
 \alias{getFile}
 \title{Extract document stored as BYTEA from postgreSQL DB}
 \usage{
-getFile(
-  id,
-  id_col,
-  ext,
-  table,
-  con = hydrometConnect(silent = TRUE),
-  save_dir = NULL,
-  save_name = NULL
-)
+getFile(id, id_col, ext, table, con = NULL, save_dir = NULL, save_name = NULL)
 }
 \arguments{
 \item{id}{The unique ID from the column specified in \code{id_col} with which to identify the individual record containing the binary object.}
@@ -23,7 +15,7 @@ getFile(
 
 \item{table}{The table to look in for the document.}
 
-\item{con}{A connection to the database.}
+\item{con}{A connection to the database. NULL will use \code{\link[=hydrometConnect]{hydrometConnect()}} and disconnect automatically when done.}
 
 \item{save_dir}{A directory in which to write the file.}
 
