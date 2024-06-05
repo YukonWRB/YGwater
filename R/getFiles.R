@@ -9,7 +9,7 @@
 #' If you need additional flexibility use function [getFile()] instead. This should not normally be needed with a database created by the HydroMetDB package but is made available for use with other databases.
 #' 
 #' @param id The ID number from column 'image_id' of table 'images'.
-#' @param con A connection to the database.
+#' @param con A connection to the database. NULL will use [hydrometConnect()] and disconnect automatically when done.
 #' @param save_dir A directory in which to write the file.
 #' @param save_name The name to give the file, *without* extension.
 #'
@@ -17,10 +17,13 @@
 #' @export
 #'
 
-getImage <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NULL, save_name = NULL) {
+getImage <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
   
-  on.exit(DBI::dbDisconnect(con))
-  
+  if (is.null(con)) {
+    con <- hydrometConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
+
   res <- getFile(id = id, id_col = "image_id", ext = "format", table = "images", con = con, save_dir = save_dir, save_name = save_name)
   return(res)
 }
@@ -36,7 +39,7 @@ getImage <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NULL, 
 #' If you need additional flexibility use function [getFile()] instead. This should not normally be needed with a database created by the HydroMetDB package but is made available for use with other databases.
 #' 
 #' @param id The ID number from column 'document_id' of table 'documents'.
-#' @param con A connection to the database.
+#' @param con A connection to the database. NULL will use [hydrometConnect()] and disconnect automatically when done.
 #' @param save_dir A directory in which to write the file.
 #' @param save_name The name to give the file, *without* extension.
 #'
@@ -44,9 +47,12 @@ getImage <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NULL, 
 #' @export
 #'
 
-getDocument <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NULL, save_name = NULL) {
+getDocument <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
   
-  on.exit(DBI::dbDisconnect(con))
+  if (is.null(con)) {
+    con <- hydrometConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
   
   res <- getFile(id = id, id_col = "document_id", ext = "format", table = "documents", con = con, save_dir = save_dir, save_name = save_name)
   return(res)
@@ -65,14 +71,19 @@ getDocument <- function(id, con = hydrometConnect(silent = TRUE), save_dir = NUL
 #' @param id_col The column in which to look for the `id`
 #' @param ext The column in which to look for the file extension, or a file extension (must be preceded by a period). Only used if save_path is not NULL
 #' @param table The table to look in for the document.
-#' @param con A connection to the database.
+#' @param con A connection to the database. NULL will use [hydrometConnect()] and disconnect automatically when done.
 #' @param save_dir A directory in which to write the file.
 #' @param save_name The name to give the file, *without* extension (specify the extension in `ext`).
 #'
 #' @return A data.frame containing the row(s) identified by the specified ID. One of the columns will contain the binary object (file). The document will be saved to file if requested and possible.
 #' @export
 
-getFile <- function(id, id_col, ext, table, con = hydrometConnect(silent = TRUE), save_dir = NULL, save_name = NULL) {
+getFile <- function(id, id_col, ext, table, con = NULL, save_dir = NULL, save_name = NULL) {
+  
+  if (is.null(con)) {
+    con <- hydrometConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
   
   res <- DBI::dbGetQuery(con, paste0("SELECT * FROM ", table, " WHERE ", id_col, " = '", id, "';"))
   if (nrow(res) > 1) {

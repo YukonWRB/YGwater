@@ -4,17 +4,12 @@
 \alias{getImage}
 \title{Extract image from postgreSQL DB}
 \usage{
-getImage(
-  id,
-  con = hydrometConnect(silent = TRUE),
-  save_dir = NULL,
-  save_name = NULL
-)
+getImage(id, con = NULL, save_dir = NULL, save_name = NULL)
 }
 \arguments{
 \item{id}{The ID number from column 'image_id' of table 'images'.}
 
-\item{con}{A connection to the database.}
+\item{con}{A connection to the database. NULL will use \code{\link[=hydrometConnect]{hydrometConnect()}} and disconnect automatically when done.}
 
 \item{save_dir}{A directory in which to write the file.}
 
