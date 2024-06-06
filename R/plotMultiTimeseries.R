@@ -7,7 +7,10 @@
 #' 
 #' @param locations The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param parameters The parameter or parameters you wish to plot. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
-#' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as NULL or length one.
+#' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.
+#' @param period_types The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
+#'  @param z Elevation (depth/height) in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo, the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
+#' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
@@ -30,6 +33,9 @@
 plotMultiTimeseries <- function(locations,
                                 parameters,
                                 record_rates = NULL,
+                                period_types = NULL,
+                                z = NULL,
+                                z_approx = NULL,
                                 start_date = Sys.Date() - 1,
                                 end_date = Sys.Date(),
                                 log = FALSE,
@@ -84,6 +90,17 @@ plotMultiTimeseries <- function(locations,
     }
   }
   
+  if (!is.null(z)) {
+    if (!is.numeric(z)) {
+      stop("Your entry for the parameter 'z' is invalid. Please review the function documentation and try again.")
+    }
+    if (!is.null(z_approx)) {
+      if (!is.numeric(z_approx)) {
+        stop("Your entry for the parameter 'z_approx' is invalid. Please review the function documentation and try again.")
+      }
+    }
+  }
+  
   if (is.null(con)) {
     con <- hydrometConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
@@ -98,6 +115,21 @@ plotMultiTimeseries <- function(locations,
   if (!is.null(record_rates)) {
     if (length(record_rates) == 1 & length(locations) > 1) {
       record_rates <- rep(record_rates, length(locations))
+    }
+  }
+  if (!is.null(z)) {
+    if (length(z) == 1 & length(locations) > 1) {
+      z <- rep(z, length(locations))
+    }
+  }
+  if (!is.null(z_approx)) {
+    if (length(z_approx) == 1 & length(locations) > 1) {
+      z_approx <- rep(z_approx, length(locations))
+    }
+  }
+  if (!is.null(period_types)) {
+    if (length(period_types) == 1 & length(locations) > 1) {
+      period_types <- rep(period_types, length(locations))
     }
   }
   
@@ -118,6 +150,28 @@ plotMultiTimeseries <- function(locations,
     }
   } else {
     record_rates <- NA
+  }
+  
+  if (!is.null(z)) {
+    if (length(z) != length(locations)) {
+      stop("The number of locations and z elements must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    }
+  } else {
+    z <- NA
+  }
+
+  if (!is.null(period_types)) {
+    if (length(period_types) != length(locations)) {
+      stop("The number of locations and record rates must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    }
+    for (i in 1:length(period_types)) {
+      if (!(period_types %in% c('instantaneous', 'sum', 'min', 'max', '(min+max)/2'))) {
+        warning("Your entry ", i, " for parameter period_types is invalid. It's been reset to the default NULL.")
+        period_types[i] <- NA
+      }
+    }
+  } else {
+    period_types <- NA
   }
   
   if (tzone == "auto") {
@@ -158,7 +212,7 @@ plotMultiTimeseries <- function(locations,
   
   # Get the data for each location:parameter:record_rate combo
   # Make a list with one element per location:parameter:record_rate combo
-  timeseries <- data.frame(location = locations, parameter = parameters, record_rate = record_rates)
+  timeseries <- data.frame(location = locations, parameter = parameters, record_rate = record_rates, period_type = period_types, z = z, z_approx = z_approx)
   if (nrow(unique(timeseries)) != nrow(timeseries)) {
     stop("You have duplicate entries in your locations and/or parameters and/or record_rates. Please review the function documentation and try again.")
   }
@@ -170,6 +224,9 @@ plotMultiTimeseries <- function(locations,
     location <- timeseries$location[i]
     parameter <- timeseries$parameter[i]
     record_rate <- if (is.na(timeseries$record_rate[i])) NULL else timeseries$record_rate[i]
+    period_type <- if (is.na(timeseries$period_type[i])) NULL else timeseries$period_type[i]
+    z <- if (is.na(timeseries$z[i])) NULL else timeseries$z[i]
+    z_approx <- if (is.na(timeseries$z_approx[i])) NULL else timeseries$z_approx[i]
     
     # Determine the timeseries and adjust the date range #################
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
@@ -194,47 +251,90 @@ plotMultiTimeseries <- function(locations,
       timeseries[i, "parameter_name"] <- titleCase(parameter_tbl$param_name[1], "en")
     }
     
-    if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous';"))
-    } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+    if (is.null(record_rate)) { # period_type may or may not be NULL
+      if (is.null(period_type)) { #both record_rate and period_type are NULL
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous';"))
+      } else { #period_type is not NULL but record_rate is
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = '", period_type, "';"))
+      }
+    } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "';"))
+    } else { #both record_rate and period_type are not NULL
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
     }
+    
+    # Narrow down by z if necessary
+    if (!is.null(z)) {
+      if (is.null(z_approx)) {
+        exist_check <- exist_check[exist_check$z == z, ]
+      } else {
+        exist_check <- exist_check[abs(exist_check$z - z) < z_approx, ]
+      }
+    }
+    
     if (nrow(exist_check) == 0) {
-      if (is.null(record_rate)) {
+      if (is.null(record_rate) & is.null(period_type) & is.null(z)) {
         warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Moving on to the next entry.")
         remove <- c(remove, i)
         next
       } else {
-        warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", record_rate, " and continuous category data. Moving on to the next entry. You could try leaving the record rate to the default 'null'.")
+        warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", if (is.null(record_rate)) "(not specified)" else record_rate, ", period type ", if (is.null(period_type)) "(not specified)" else period_type, ", z of ", if (is.null(z)) "(not specified)" else z, " and continuous category data. You could try leaving the record rate and/or period_type to the default 'NULL', or explore different z or z_approx values. Moving on to the next entry.")
         remove <- c(remove, i)
         next
       }
     } else if (nrow(exist_check) > 1) {
       if (is.null(record_rate)) {
-        warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one with the most frequent recording rate.")
-        tsid <- exist_check[exist_check$record_rate == "< 1 day", "timeseries_id"]
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "1 day", "timeseries_id"]
+        warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate.")
+        temp <- exist_check[exist_check$record_rate == "< 1 day", ]
+        if (nrow(temp) == 0) {
+          temp <- exist_check[exist_check$record_rate == "1 day", ]
         }
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "1 week", "timeseries_id"]
+        if (nrow(temp) == 0) {
+          temp <- exist_check[exist_check$record_rate == "1 week", ]
         }
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "4 weeks", "timeseries_id"]
+        if (nrow(temp) == 0) {
+          temp <- exist_check[exist_check$record_rate == "4 weeks", ]
         }
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "1 month", "timeseries_id"]
+        if (nrow(temp) == 0) {
+          temp <- exist_check[exist_check$record_rate == "1 month", ]
         }
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "year", "timeseries_id"]
+        if (nrow(temp) == 0) {
+          temp <- exist_check[exist_check$record_rate == "year", ]
         }
       }
-    } else if (nrow(exist_check) == 1) {
-      tsid <- exist_check$timeseries_id
+      if (nrow(temp) > 1) {
+        exist_check <- temp
+        if (is.null(period_type)) {
+          warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the period_type as NULL, selecting the one(s) with the most frequent period type.")
+          exist_check <- exist_check[exist_check$period_type == "instantaneous", ]
+          if (nrow(exist_check) == 0) {
+            exist_check <- exist_check[exist_check$period_type == "mean", ]
+          }
+          if (nrow(exist_check) == 0) {
+            exist_check <- exist_check[exist_check$period_type == "(min+max)/2", ]
+          }
+          if (nrow(exist_check) == 0) {
+            exist_check <- exist_check[exist_check$period_type == "min", ]
+          }
+          if (nrow(exist_check) == 0) {
+            exist_check <- exist_check[exist_check$period_type == "max", ]
+          }
+        }
+      } else if (nrow(temp) == 1) {
+        exist_check <- temp
+      }
     }
-    timeseries[i, "record_rate"] <- exist_check[exist_check$timeseries_id == tsid, "record_rate"]
     
-    if  (start_date > exist_check$end_datetime) {
+    # If there are multiple z values after all that, select the one closest to ground
+    if (nrow(exist_check) > 1) {
+      exist_check <- exist_check[which.min(abs(exist_check$z)), ]
+    }
+    
+    timeseries[i, "record_rate"] <- exist_check$record_rate
+    timeseries[i, "period_type"] <- exist_check$period_type
+    timeseries[i, "z"] <- exist_check$z
+    
+    if (start_date > exist_check$end_datetime) {
       warning("The start date you entered is after the end date of the data in the database for location ", location, ", parameter ", parameter, ". Moving on to the next entry.")
       remove <- c(remove, i)
       next
@@ -282,6 +382,8 @@ plotMultiTimeseries <- function(locations,
     }
     
     # Get the data ####################################
+    tsid <- exist_check$timeseries_id
+    
     if (historic_range) { # get data from the calculated_daily table for historic ranges plus values from measurements_continuous. Where there isn't any data in measurements_continuous fill in with the value from the daily table.
       range_end <- sub.end_date + 1*24*60*60
       range_start <- sub.start_date - 1*24*60*60
@@ -513,9 +615,10 @@ plotMultiTimeseries <- function(locations,
     } else {
       parameter_name <- timeseries[i, "parameter_name"]
     }
-    timeseries[i, "trace_title"] <- paste0(name, " (", parameter_name, ", ", timeseries[i, "units"], ")")
-    timeseries[i, "tooltip_title"] <- paste0(name, " (", parameter_name, ")")
-    timeseries[i, "range_title"] <- paste0(name, " (", parameter_name, ", ", timeseries[i, "units"], ")")
+    
+    timeseries[i, "trace_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")")
+    timeseries[i, "tooltip_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ")")
+    timeseries[i, "range_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")")
     
     tmp <- list(
       titlefont = list(color = colors[i], size = 14),
