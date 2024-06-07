@@ -9,10 +9,11 @@
 #' @param parameters The parameter or parameters you wish to plot. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param period_types The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
-#'  @param z Elevation (depth/height) in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo, the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
+#'  @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
+#' @param lead_lag The number of **hours** to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
@@ -38,6 +39,7 @@ plotMultiTimeseries <- function(locations,
                                 z_approx = NULL,
                                 start_date = Sys.Date() - 1,
                                 end_date = Sys.Date(),
+                                lead_lag = NULL,
                                 log = FALSE,
                                 invert = NULL,
                                 slider = FALSE,
@@ -77,6 +79,17 @@ plotMultiTimeseries <- function(locations,
     } else {
       invert <- rep(invert, length(locations))
     }
+  }
+  
+  if (!is.null(lead_lag)) {
+    if (!inherits(lead_lag, "numeric")) {
+      stop("Your entry for the parameter 'lead_lag' is invalid; it must be numeric.")
+    }
+    if (length(lead_lag) != length(locations)) {
+      stop("Your entry for the parameter 'lead_lag' is invalid; there must be one value per location.")
+    }
+  } else {
+    lead_lag <- NA
   }
   
   if (length(log) == 1) {
@@ -159,6 +172,14 @@ plotMultiTimeseries <- function(locations,
   } else {
     z <- NA
   }
+  
+  if (!is.null(z_approx)) {
+    if (length(z_approx) != length(locations)) {
+      stop("The number of locations and z elements must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    }
+  } else {
+    z_approx <- NA
+  }
 
   if (!is.null(period_types)) {
     if (length(period_types) != length(locations)) {
@@ -212,9 +233,9 @@ plotMultiTimeseries <- function(locations,
   
   # Get the data for each location:parameter:record_rate combo
   # Make a list with one element per location:parameter:record_rate combo
-  timeseries <- data.frame(location = locations, parameter = parameters, record_rate = record_rates, period_type = period_types, z = z, z_approx = z_approx)
+  timeseries <- data.frame(location = locations, parameter = parameters, record_rate = record_rates, period_type = period_types, z = z, z_approx = z_approx, lead_lag = lead_lag)
   if (nrow(unique(timeseries)) != nrow(timeseries)) {
-    stop("You have duplicate entries in your locations and/or parameters and/or record_rates. Please review the function documentation and try again.")
+    stop("You have duplicate entries in your locations and/or parameters and/or record_rates and/or period_types. Please review the function documentation and try again.")
   }
   
   data <- list()
@@ -227,6 +248,7 @@ plotMultiTimeseries <- function(locations,
     period_type <- if (is.na(timeseries$period_type[i])) NULL else timeseries$period_type[i]
     z <- if (is.na(timeseries$z[i])) NULL else timeseries$z[i]
     z_approx <- if (is.na(timeseries$z_approx[i])) NULL else timeseries$z_approx[i]
+    lead_lag <- if (is.na(timeseries$lead_lag[i])) 0 else timeseries$lead_lag[i]
     
     # Determine the timeseries and adjust the date range #################
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
@@ -458,15 +480,17 @@ plotMultiTimeseries <- function(locations,
       attr(trace_data$datetime, "tzone") <- tzone
       trace_data <- rbind(trace_data, trace_data)
     }
-    if (datum.conv$conversion_m != 0) {
-      if (historic_range) {
+
+    if (historic_range) {
+      if (datum.conv$conversion_m != 0) {
         range_data$min <- range_data$min + datum.conv$conversion_m
         range_data$max <- range_data$max + datum.conv$conversion_m
         range_data$q25 <- range_data$q25 + datum.conv$conversion_m
         range_data$q75 <- range_data$q75 + datum.conv$conversion_m
       }
-    }
-    if (historic_range) {
+      if (lead_lag != 0) {
+        range_data$datetime <- range_data$datetime + lead_lag*60*60
+      }
       data[[paste0(location, "_", parameter_code)]][["range_data"]] <- range_data
     }
     
@@ -483,6 +507,9 @@ plotMultiTimeseries <- function(locations,
     } else {
       if (datum.conv$conversion_m != 0) {
         trace_data$value <- trace_data$value + datum.conv$conversion_m
+      }
+      if (lead_lag != 0) {
+        trace_data$datetime <- trace_data$datetime + lead_lag*60*60
       }
       trace_data <- trace_data[order(trace_data$datetime),]
       
@@ -539,11 +566,17 @@ plotMultiTimeseries <- function(locations,
         # Group by location to handle different parameters per location
         title <- tbl %>%
           dplyr::group_by(location, name) %>%
-          dplyr::summarise(parameter_names = paste(parameter_name, collapse = ", "), .groups = "drop") %>%
-          # Truncate long location names
+          # dplyr::summarise(parameter_names = paste(parameter_name, collapse = ", "), .groups = "drop") %>%
           dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
                         # Format title line by line
-                        title = paste(name, " (", .data$parameter_names, ")", sep = "")) %>%
+                        lead_lag_text = ifelse(lead_lag > 0, paste0(" [+ ", lead_lag, " hours]"), 
+                                               ifelse(lead_lag < 0, paste0(" [", lead_lag, " hours]"), "")),
+                        title = paste0(name, 
+                                      " (", 
+                                      .data$parameter_name, ")",
+                                      .data$lead_lag_text
+                        )
+          ) %>%
           # Combine all lines into a single title
           dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
           dplyr::pull("plot_title") # Extract the plot title as a string
@@ -605,8 +638,8 @@ plotMultiTimeseries <- function(locations,
   for (i in 1:n_axes) {
     # Make axis titles
     # Truncate long strings
-    if (nchar(timeseries[i, "name"]) > 20) {
-      name <- paste0(substr(timeseries[i, "name"], 1, 17), "...")
+    if (nchar(timeseries[i, "name"]) > 25) {
+      name <- paste0(substr(timeseries[i, "name"], 1, 22), "...")
     } else {
       name <- timeseries[i, "name"]
     }
@@ -616,9 +649,10 @@ plotMultiTimeseries <- function(locations,
       parameter_name <- timeseries[i, "parameter_name"]
     }
     
-    timeseries[i, "trace_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")")
-    timeseries[i, "tooltip_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ")")
-    timeseries[i, "range_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")")
+    
+    timeseries[i, "trace_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
+    timeseries[i, "tooltip_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
+    timeseries[i, "range_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
     
     tmp <- list(
       titlefont = list(color = colors[i], size = 14),
