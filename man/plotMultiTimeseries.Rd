@@ -8,8 +8,12 @@ plotMultiTimeseries(
   locations,
   parameters,
   record_rates = NULL,
+  period_types = NULL,
+  z = NULL,
+  z_approx = NULL,
   start_date = Sys.Date() - 1,
   end_date = Sys.Date(),
+  lead_lag = NULL,
   log = FALSE,
   invert = NULL,
   slider = FALSE,
@@ -29,11 +33,18 @@ plotMultiTimeseries(
 
 \item{parameters}{The parameter or parameters you wish to plot. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.}
 
-\item{record_rates}{The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as NULL or length one.}
+\item{record_rates}{The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.}
+
+\item{period_types}{The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
+@param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.}
+
+\item{z_approx}{Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.}
 
 \item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.}
 
 \item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.}
+
+\item{lead_lag}{The number of \strong{hours} to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters}
 
 \item{log}{Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.}
 
