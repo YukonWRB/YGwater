@@ -603,7 +603,9 @@ app_server <- function(input, output, session) {
         updateNumericInput(session, "lead_lag2", value = 0)
         updateNumericInput(session, "lead_lag3", value = 0)
         updateNumericInput(session, "lead_lag4", value = 0)
-        shinyjs::alert("Note: lead/lag values have been reset to 0 for all traces.")
+        if (any(lead_lags != 0)) {
+          shinyjs::alert("Note: lead/lag values have been reset to 0 for all traces.")
+        }
       } else if (plotContainer$plot_type == "hydrometDiscrete") {
         if (!input$plot_param %in% c("Snow Water Equivalent", "Snow Depth")) {
           shinyjs::alert("This plot type is only available for SWE and Snow Depth at this time. Please select one of these parameters.")
