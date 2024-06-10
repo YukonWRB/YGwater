@@ -599,6 +599,11 @@ app_server <- function(input, output, session) {
         indices <- as.numeric(input$log_y)
         log[indices] <- TRUE
         plotContainer$plot <- plotMultiTimeseries(locations = locations, parameters = parameters, log = log, record_rates = NULL, lead_lag = lead_lags, start_date = input$start_date, end_date = input$end_date, con = con, datum = input$apply_datum, historic_range = input$historic_range, filter = plotContainer$plot_filter)
+        updateNumericInput(session, "lead_lag", value = 0)
+        updateNumericInput(session, "lead_lag2", value = 0)
+        updateNumericInput(session, "lead_lag3", value = 0)
+        updateNumericInput(session, "lead_lag4", value = 0)
+        shinyjs::alert("Note: lead/lag values have been reset to 0 for all traces.")
       } else if (plotContainer$plot_type == "hydrometDiscrete") {
         if (!input$plot_param %in% c("Snow Water Equivalent", "Snow Depth")) {
           shinyjs::alert("This plot type is only available for SWE and Snow Depth at this time. Please select one of these parameters.")
