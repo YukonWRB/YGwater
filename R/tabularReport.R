@@ -160,6 +160,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     }
     for (i in precip_locations) {
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
+      yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
       tryCatch({
         #TODO: Update code below to get polygons direct from the DB once basinPrecip is updated.
         lastWeek <- basinPrecip(location = i, start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
@@ -200,8 +201,11 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     if (nrow(precip) > 0) {
       tables$precipitation <- precip
     }
-  } #End of precip fetch loop
-
+    #End of precip fetch loop
+  } else {
+    yesterday_comment_precip <- NA
+  }
+  
   if (!is.null(level_locations)) {
     level_daily <- list()
     level_rt <- list()
