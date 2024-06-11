@@ -21,6 +21,9 @@ hydroApp <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOpti
 
   appDir <- system.file("apps/hydroApp", package = "YGwater")
 
+  # Load the global variables. Contains modules as well as call to pool::pool() for connection to WRB database, library calls, and loads the translations data.table.
+  source(system.file("apps/hydroApp/app_globals.R", package = "YGwater"))
+  
   
   if (appDir == "") {
     stop("hydroApp app not found.")

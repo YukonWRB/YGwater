@@ -6,11 +6,6 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-
-  #Initial tasks ----------------
-  con <- hydrometConnect(silent = TRUE)
-  onStop(function() {DBI::dbDisconnect(con)}
-    )
   
   #Render some text
   output$plot_years_note <- renderText("For ranges covering December-January, select the December year(s)")
@@ -39,7 +34,7 @@ app_server <- function(input, output, session) {
   observeEvent(input$first_selection, {
     if (input$first_selection == "View precipitation maps + data") {
       if (!runCheck$precip) {
-        temp <- DBI::dbGetQuery(con, "SELECT feature_name, description FROM vectors WHERE layer_name = 'Drainage basins';")
+        temp <- DBI::dbGetQuery(pool, "SELECT feature_name, description FROM vectors WHERE layer_name = 'Drainage basins';")
         names(temp) <- c("code", "name")
         precip$poly_names_codes <- temp
         updateSelectizeInput(session, "precip_loc_code", choices = c("", precip$poly_names_codes$code))
@@ -48,13 +43,13 @@ app_server <- function(input, output, session) {
       }
     } else if (input$first_selection == "View hydromet plots + data") {
       if (!runCheck$plots) {
-        plotContainer$all_ts <- DBI::dbGetQuery(con, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.param_type, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
+        plotContainer$all_ts <- DBI::dbGetQuery(pool, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.param_type, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         plotContainer$all_ts <- plotContainer$all_ts[order(plotContainer$all_ts$name), ]
-        plotContainer$parameters_discrete <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
+        plotContainer$parameters_discrete <- DBI::dbGetQuery(pool, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
         plotContainer$parameters_discrete <- plotContainer$parameters_discrete[order(plotContainer$parameters_discrete$param_name), ]
-        plotContainer$parameters_continuous <- DBI::dbGetQuery(con, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'continuous';")
+        plotContainer$parameters_continuous <- DBI::dbGetQuery(pool, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'continuous';")
         plotContainer$parameters_continuous <- plotContainer$parameters_continuous[order(plotContainer$parameters_continuous$param_name), ]
-        datums <- DBI::dbGetQuery(con, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
+        datums <- DBI::dbGetQuery(pool, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
         
         datums$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", datums$datum_name_en)
         datums$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", datums$datum_name_en)
@@ -586,9 +581,9 @@ app_server <- function(input, output, session) {
   observeEvent(input$plot_go, {
     tryCatch({
       if (plotContainer$plot_type == "plotOverlap") {
-        plotContainer$plot <- plotOverlap(location = input$plot_loc_code, parameter = tolower(input$plot_param), startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, historic_range = input$historic_range_overlap, datum = input$apply_datum, filter = plotContainer$plot_filter, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, return_max_year = input$return_yrs, plot_scale = 1.4, con = con)
+        plotContainer$plot <- plotOverlap(location = input$plot_loc_code, parameter = tolower(input$plot_param), startDay = input$start_doy, endDay = input$end_doy, years = input$plot_years, historic_range = input$historic_range_overlap, datum = input$apply_datum, filter = plotContainer$plot_filter, returns = plotContainer$returns, return_type = input$return_type, return_months = plotContainer$return_months, return_max_year = input$return_yrs, plot_scale = 1.4, con = pool)
       } else if (plotContainer$plot_type == "plotTimeseries") {
-        plotContainer$plot <- plotTimeseries(location = input$plot_loc_code, parameter = tolower(input$plot_param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, con = con)
+        plotContainer$plot <- plotTimeseries(location = input$plot_loc_code, parameter = tolower(input$plot_param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, datum = input$apply_datum, filter = plotContainer$plot_filter, con = pool)
       } else if (plotContainer$plot_type == "plotTimeseriesMulti") {
         locations <- c(input$plot_loc_code, input$plot_loc_code2, input$plot_loc_code3, input$plot_loc_code4)
         locations <- locations[nchar(locations) > 0]
@@ -598,23 +593,25 @@ app_server <- function(input, output, session) {
         log <- logical(length(locations))
         indices <- as.numeric(input$log_y)
         log[indices] <- TRUE
-        plotContainer$plot <- plotMultiTimeseries(locations = locations, parameters = parameters, log = log, record_rates = NULL, lead_lag = lead_lags, start_date = input$start_date, end_date = input$end_date, con = con, datum = input$apply_datum, historic_range = input$historic_range, filter = plotContainer$plot_filter)
+        plotContainer$plot <- plotMultiTimeseries(locations = locations, parameters = parameters, log = log, record_rates = NULL, lead_lag = lead_lags, start_date = input$start_date, end_date = input$end_date, con = pool, datum = input$apply_datum, historic_range = input$historic_range, filter = plotContainer$plot_filter)
         updateNumericInput(session, "lead_lag", value = 0)
         updateNumericInput(session, "lead_lag2", value = 0)
         updateNumericInput(session, "lead_lag3", value = 0)
         updateNumericInput(session, "lead_lag4", value = 0)
-        shinyjs::alert("Note: lead/lag values have been reset to 0 for all traces.")
+        if (any(lead_lags != 0)) {
+          shinyjs::alert("Note: lead/lag values have been reset to 0 for all traces.")
+        }
       } else if (plotContainer$plot_type == "hydrometDiscrete") {
         if (!input$plot_param %in% c("Snow Water Equivalent", "Snow Depth")) {
           shinyjs::alert("This plot type is only available for SWE and Snow Depth at this time. Please select one of these parameters.")
           return()
         }
         if (input$plot_sub_type == "Violin plot") {
-          plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = input$plot_param, years = input$plot_years, startDay = input$start_doy, endDay = input$end_doy, plot_type = "violin", plot_scale = 1.4, con = con)
+          plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = input$plot_param, years = input$plot_years, startDay = input$start_doy, endDay = input$end_doy, plot_type = "violin", plot_scale = 1.4, con = pool)
         } else if (input$plot_sub_type == "Box plot") {
-          plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = input$plot_param, years = input$plot_years, startDay = input$start_doy, endDay = input$end_doy, plot_type = "boxplot", plot_scale = 1.4, con = con)
+          plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = input$plot_param, years = input$plot_years, startDay = input$start_doy, endDay = input$end_doy, plot_type = "boxplot", plot_scale = 1.4, con = pool)
         } else if (input$plot_sub_type == "Line-box plot") {
-          plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = input$plot_param, years = input$plot_years, startDay = input$start_doy, endDay = input$end_doy, plot_type = "linedbox", plot_scale = 1.4, con = con)
+          plotContainer$plot <- hydrometDiscrete(location = input$plot_loc_code, parameter = input$plot_param, years = input$plot_years, startDay = input$start_doy, endDay = input$end_doy, plot_type = "linedbox", plot_scale = 1.4, con = pool)
         }
       } else if (plotContainer$plot_type == "plotScatter") {
         #TODO: add scatter plot
