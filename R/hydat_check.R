@@ -25,10 +25,10 @@ hydat_check <- function(silent = FALSE, path = NULL){
     }
     )
   } else {
-    if (file.exists(path)) {
-      hydat_path <- path
-    } else if (dir.exists(path)) {
+    if (dir.exists(path)) {
       hydat_path <- paste0(path, "/Hydat.sqlite3")
+    } else if (file.exists(path)) {
+      hydat_path <- path
     } else {
       if (!silent) {
         stop("The path you specified does not exist.")
