@@ -38,7 +38,7 @@ hydat_check <- function(silent = FALSE, path = NULL){
       }
     }
   }
-
+  
   new_hydat <- FALSE # Initialize a flag to indicate if the HYDAT was updated
   if (!is.null(hydat_path)) { #If hydat already exists, compare version numbers
     local_hydat <- as.Date(tidyhydat::hy_version(hydat_path)$Date)
@@ -71,7 +71,8 @@ hydat_check <- function(silent = FALSE, path = NULL){
     }
   }
 
-  if (!silent){
+  if (!silent) {
     message("hydat_check completed.")
   }
+  return(new_hydat)
 }
