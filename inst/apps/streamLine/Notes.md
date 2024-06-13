@@ -1,5 +1,6 @@
 # General notes and todos
-- Normalize database further. Things like document types need their own table to enable more languages instead of CHECK() constraints.
+- Normalize database further.
+  - timeseries.period_type, timeseries.category (maybe? It's just two options)
 - Add audit document type
 - Implement use of hourly data views table for plots
 - continuous/discrete/FORECAST?? or forecast points its own drop-down??? (it would not appear until at least one forecast location is created)

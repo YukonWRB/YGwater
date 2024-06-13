@@ -47,27 +47,9 @@ plotTimeseries <- function(location,
                            language = "en",
                            rate = NULL,
                            tzone = "auto",
-                           con = NULL) {
-  # 
-  # location <- "10194"
-  # parameter <- "air temp"
-  # record_rate <- "1 day"
-  # period_type <- "(min+max)/2"
-  # z <- NULL
-  # z_approx <- NULL
-  # start_date <- "1897-01-01"
-  # end_date <- "2024-06-05"
-  # invert <- NULL
-  # slider <- TRUE
-  # datum <- FALSE
-  # title <- TRUE
-  # custom_title <- NULL
-  # filter <- NULL
-  # historic_range <- TRUE
-  # language <- "en"
-  # rate <- NULL
-  # tzone <- "auto"
-  # con <- hydrometConnect()
+                           con = NULL) 
+{
+
   
   # Checks and initial work ##########################################
   
@@ -417,9 +399,19 @@ plotTimeseries <- function(location,
       plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (language == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), " q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
       plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), " Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
+  
   plot <- plot %>%
-
-    plotly::layout(title = list(text = stn_name, x = 0.05, xref = "container"), xaxis = list(title = list(standoff = 0, font = list(size = 1)), showgrid = FALSE, showline = TRUE, tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", rangeslider = list(visible = if (slider) TRUE else FALSE)), yaxis = list(title = y_title, showgrid = FALSE, showline = TRUE), margin = list(b = 0), hovermode = "x unified") %>%
+    plotly::layout(
+      title = list(text = stn_name, x = 0.05, xref = "container"), 
+      xaxis = list(title = list(standoff = 0, font = list(size = 1)), 
+                   showgrid = FALSE, 
+                   showline = TRUE, 
+                   tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", 
+                   rangeslider = list(visible = if (slider) TRUE else FALSE)), 
+      yaxis = list(title = y_title, showgrid = FALSE, showline = TRUE), 
+      margin = list(b = 0), 
+      hovermode = "x unified"
+    ) %>%
     plotly::add_lines(data = trace_data, x = ~datetime, y = ~value, type = "scatter", mode = "lines", name = parameter_name, color = I("#0097A9"), hoverinfo = "text", text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
 
     plotly::config(locale = language)
