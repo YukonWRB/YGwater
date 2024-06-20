@@ -12,8 +12,9 @@
 #' @param ungauged_name The name of the stations of interest, given as a character vector. The name is only used to differentiate between ungauged location stats in the outputted table. Note: ungauged_name must be the same length as ungauged_area.
 #' @param perc The percent of data (days) required to include a year or season in the statistics. Default is 95.
 #' @param record_length The length of record (# of years/seasons) at a station required to be included in the statistics. Default is 15.
-#' @return A list containing two objects: a table and a list of plots. The table contains the estimated stats for the river/stream/creek of interest. The table contains 4 columns: location, season, stat and value. The location column is the name/names given in the 'ungauged_name' parameter. The season column refers to the season for which the stat was calculated, where annual is the entire year, fall is Sept. 1st - Oct 31st, freshet is April 20 - June 30, summer is July 1st - August 31st, and winter is Nov. 1st - April 19. The stat column column refers to the type of statistic. The difference between max and max_all is that max is the average maximum for that season and the max_all is the all-time maximum for that season. The list of plots contains 5 ggplots that display the range of station flows normalized by area for the statistics of interest. They are useful for identifying outliers. The first contains the normalized flows separated into seasons and statistic. The following 4 display the normalized flows for the maximum statistic, the minimum statistic, the mean statistic and the max_all statistic.
+#' @return A list containing three objects: two table and a list of plots. The first table contains the estimated stats for the river/stream/creek of interest. The table contains 4 columns: location, season, stat and value. The location column is the name/names given in the 'ungauged_name' parameter. The season column refers to the season for which the stat was calculated, where annual is the entire year, fall is Sept. 1st - Oct 31st, freshet is April 20 - June 30, summer is July 1st - August 31st, and winter is Nov. 1st - April 19. The stat column column refers to the type of statistic. The difference between max and max_all is that max is the average maximum for that season and the max_all is the all-time maximum for that season. The second table is of all the statistics for the gauges water courses by km. The list of plots contains 5 ggplots that display the range of station flows normalized by area for the statistics of interest. They are useful for identifying outliers. The first contains the normalized flows separated into seasons and statistic. The following 4 display the normalized flows for the maximum statistic, the minimum statistic, the mean statistic and the max_all statistic.
 #' @export
+
 
 estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, perc = 95, record_length = 15) {
   
@@ -31,7 +32,7 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   DBI::dbDisconnect(con)
   
   ## Get areas for stations
-  areas <- getVector(layer_name = "Drainage basins", feature_name = gauged_stations)
+  areas <- YGwater::getVector(layer_name = "Drainage basins", feature_name = gauged_stations)
   area <- terra::expanse(areas, unit = "km")
   areas <- as.data.frame(areas)
   areas$area <- area
@@ -180,17 +181,27 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   
   
   ## Plot
+  # Reformat 
+  flow_stats_km$stat <- sub("min", "minimum", flow_stats_km$stat)
+  flow_stats_km$stat <- sub("max", "maximum", flow_stats_km$stat)
+  flow_stats_km$stat <- sub("maximum_all", "all-time maximum", flow_stats_km$stat)
+  flow_stats_km <<- flow_stats_km
+  
+  colours <- c("black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#41763B", "#0097A9", "#7A9A01", "#CD7F32", "#912D2D", "#0729B1", "#E0082F", "#CF08E0", "#E0CF08", "#08E0AF", "#DCB005", "#DC5C05", "#5C05DC")
+  text_size <- 12
+    
   plot_all <- ggplot2::ggplot(flow_stats_km, ggplot2::aes(stat, value, colour=.data$location)) + 
     ggplot2::geom_point() + 
-    ggplot2::facet_grid(rows=dplyr::vars(season))
+    ggplot2::facet_grid(rows=dplyr::vars(season)) +
+    ggplot2::scale_color_manual(values=colours)
   # For maximum
-  plot_max <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="max",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station")
+  plot_max <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="maximum",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station") + ggplot2::theme(text = ggplot2::element_text(size = text_size)) + ggplot2::scale_color_manual(values=colours)
   # For minimum
-  plot_min <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="min",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station")
+  plot_min <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="minimum",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station") + ggplot2::scale_color_manual(values=colours)
   # For mean
-  plot_mean <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="mean",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station")
+  plot_mean <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="mean",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station") + ggplot2::scale_color_manual(values=colours)
   # For max_all
-  plot_max_all <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="max_all",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station")
+  plot_max_all <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="all-time maximum",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station") + ggplot2::scale_color_manual(values=colours)
   
   # Calculate average of all stations
   flow_stats_km_agg <- flow_stats_km %>%
@@ -213,7 +224,7 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   }
 
   
-  return(list(predicted, list(plot_all, plot_max, plot_min, plot_mean, plot_max_all)))
+  return(list(predicted, flow_stats, flow_stats_km, list(plot_all, plot_max, plot_min, plot_mean, plot_max_all)))
   #return(list(predicted, plot))
 }
 
