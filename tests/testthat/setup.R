@@ -2,7 +2,7 @@
 
 warning("tests on plotly objects weren't working in R 4.3.3 and up. These tests and the associated setup file have been disabled.")
 
-
+# 
 # check_miniconda_installed()
 # 
 # reticulate::use_condaenv("r-reticulate", required = TRUE)
@@ -18,4 +18,4 @@ warning("tests on plotly objects weren't working in R 4.3.3 and up. These tests 
 # }
 # 
 # reticulate::use_miniconda('r-reticulate')
-# reticulate::py_run_string("import sys") 
+# reticulate::py_run_string("import sys")

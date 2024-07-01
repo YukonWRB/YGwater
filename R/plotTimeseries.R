@@ -1,9 +1,9 @@
-#' Plot a continous timeseries from the hydromet database
+#' Plot a continous timeseries from the AquaCache database
 #'
 #' @description
 #' `r lifecycle::badge('stable')`
 #' 
-#' This function plots continuous timeseries from the hydromet/AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
+#' This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
 #' 
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
@@ -23,7 +23,7 @@
 #' @param language The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
-#' @param con A connection to the target database. NULL uses [hydrometConnect()] and automatically disconnects.
+#' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return A plotly object 
 #' 
@@ -57,7 +57,7 @@ plotTimeseries <- function(location,
   period_secs <- period <- expected <- datetime <- gap_exists <- NULL
   
   if (is.null(con)) {
-    con <- hydrometConnect(silent = TRUE)
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
   

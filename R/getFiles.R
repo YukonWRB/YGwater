@@ -3,13 +3,13 @@
 #' @description
 #' lifecycle::badge("stable")
 #' 
-#' Extracts an image stored in the hydromet database as BYTEA type. For extracting documents see [getDocument()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
+#' Extracts an image stored in the AquaCache database as BYTEA type. For extracting documents see [getDocument()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
 #' 
 #' @details
-#' If you need additional flexibility use function [getFile()] instead. This should not normally be needed with a database created by the HydroMetDB package but is made available for use with other databases.
+#' If you need additional flexibility use function [getFile()] instead. This should not normally be needed with a database created by the AquaCache package but is made available for use with other databases.
 #' 
 #' @param id The ID number from column 'image_id' of table 'images'.
-#' @param con A connection to the database. NULL will use [hydrometConnect()] and disconnect automatically when done.
+#' @param con A connection to the database. NULL will use [AquaConnect()] and disconnect automatically when done.
 #' @param save_dir A directory in which to write the file.
 #' @param save_name The name to give the file, *without* extension.
 #'
@@ -20,7 +20,7 @@
 getImage <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
   
   if (is.null(con)) {
-    con <- hydrometConnect(silent = TRUE)
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
 
@@ -33,13 +33,13 @@ getImage <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
 #' @description
 #' lifecycle::badge("stable")
 
-#' Extracts a document stored in the hydromet database as BYTEA type. For extracting images see [getImage()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
+#' Extracts a document stored in the AquaCache database as BYTEA type. For extracting images see [getImage()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
 #'
 #'@details
-#' If you need additional flexibility use function [getFile()] instead. This should not normally be needed with a database created by the HydroMetDB package but is made available for use with other databases.
+#' If you need additional flexibility use function [getFile()] instead. This should not normally be needed with a database created by the AquaCache package but is made available for use with other databases.
 #' 
 #' @param id The ID number from column 'document_id' of table 'documents'.
-#' @param con A connection to the database. NULL will use [hydrometConnect()] and disconnect automatically when done.
+#' @param con A connection to the database. NULL will use [AquaConnect()] and disconnect automatically when done.
 #' @param save_dir A directory in which to write the file.
 #' @param save_name The name to give the file, *without* extension.
 #'
@@ -50,7 +50,7 @@ getImage <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
 getDocument <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
   
   if (is.null(con)) {
-    con <- hydrometConnect(silent = TRUE)
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
   
@@ -65,13 +65,13 @@ getDocument <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
 #' *NOTE* Unless you really need the additional flexibility use functions [getDocument()] or [getImage()].
 #' lifecycle::badge("stable")
 #'
-#' Extracts a document/file stored in a postgreSQL database as BYTEA type. Should be flexible enough to work with most schemas, but was designed around the 'documents' and 'images' tables created with this package and with files uploaded to the database with functions from package HydroMetDB. For extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
+#' Extracts a document/file stored in a postgreSQL database as BYTEA type. Should be flexible enough to work with most schemas, but was designed around the 'documents' and 'images' tables created with this package and with files uploaded to the database with functions from package AquaCache. For extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
 #'
 #' @param id The unique ID from the column specified in `id_col` with which to identify the individual record containing the binary object.
 #' @param id_col The column in which to look for the `id`
 #' @param ext The column in which to look for the file extension, or a file extension (must be preceded by a period). Only used if save_path is not NULL
 #' @param table The table to look in for the document.
-#' @param con A connection to the database. NULL will use [hydrometConnect()] and disconnect automatically when done.
+#' @param con A connection to the database. NULL will use [AquaConnect()] and disconnect automatically when done.
 #' @param save_dir A directory in which to write the file.
 #' @param save_name The name to give the file, *without* extension (specify the extension in `ext`).
 #'
@@ -81,7 +81,7 @@ getDocument <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
 getFile <- function(id, id_col, ext, table, con = NULL, save_dir = NULL, save_name = NULL) {
   
   if (is.null(con)) {
-    con <- hydrometConnect(silent = TRUE)
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
   

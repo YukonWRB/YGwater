@@ -15,10 +15,11 @@
 #' @param start The start of the time period over which to accumulate precipitation. Use format `"yyyy-mm-dd hh:mm"` (character vector) in UTC time, or a POSIXct object (e.g. `Sys.time()-60*60*24` for one day in the past). In the case of a POSIXct object, the timezone is converted to UTC without modifying the time. See details if requesting earlier than 30 days prior to now.
 #' @param end The end of the time period over which to accumulate precipitation. Other details as per `start`
 #' @param map Should a map be output to the console? See details for more info.
+#' @param raster_col The colour palette to use for the raster plot. Default is terra::map.pal("haxby", 100) (**not** the terra::plot default). Refer to [terra::map.pal()] for options.
+#' @param silent If TRUE, no output is printed to the console.
+#' @param con A connection to the AquaCache/hydromet database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param hrdpa_loc The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.
 #' @param hrdps_loc The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.
-#' @param silent If TRUE, no output is printed to the console.
-#' @param con A connection to the AquaCache/hydromet database. NULL uses [hydrometConnect()] and automatically disconnects.
 #'
 #' @return The accumulated precipitation in mm of water within the drainage specified or immediately surrounding the point specified in `location` printed to the console and (optionally) a map of precipitation printed to the console. A list is also generated containing statistics and the optional plot; to save this plot to disc use either png() or dev.print(), or use the graphical device export functionality.
 #' @export
@@ -33,19 +34,20 @@ basinPrecip <- function(location,
                         start = Sys.time() - 60*60*24,
                         end = Sys.time(),
                         map = FALSE,
-                        hrdpa_loc = NULL,
-                        hrdps_loc = NULL,
+                        raster_col = terra::map.pal("haxby", 100),
                         silent = FALSE,
-                        con = NULL
+                        con = NULL,
+                        hrdpa_loc = NULL,
+                        hrdps_loc = NULL
 )
 {
   
   if (is.null(con)) {
-    con <- hydrometConnect(silent = TRUE)
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
   
-  #Set organization defaults
+  #Set defaults
   if (is.null(hrdpa_loc)) {
     hrdpa_loc = "//env-fs/env-data/corp/water/Common_GW_SW/Data/precip_HRDPA"
   }
@@ -522,81 +524,83 @@ basinPrecip <- function(location,
 
   ###Map the output if requested
   if (map) {
-    if (type == "longlat") { #Special treatment so we can try to return a watershed with the point for context
-      if (nrow(basin) == 1) {
+    tryCatch({
+      if (type == "longlat") { #Special treatment so we can try to return a watershed with the point for context
+        if (nrow(basin) == 1) {
+          buff_size <- terra::expanse(basin)*0.0000006
+          if (buff_size < 2500) {
+            buff_size <- 2500
+          }
+          watershed_buff <- terra::buffer(basin, buff_size)
+        } else { #The watershed cannot be found, so make a big buffer
+          watershed_buff <- terra::buffer(basin, 50000) #50km radius buffer
+          #TODO: make this a rectangular/square extent instead to better use the display
+          basin <- watershed_buff
+          basin$feature_name <- "No watershed number"
+          basin$description <- "Not a watershed"
+        }
+      } else { #"type" == DB
         buff_size <- terra::expanse(basin)*0.0000006
         if (buff_size < 2500) {
           buff_size <- 2500
         }
         watershed_buff <- terra::buffer(basin, buff_size)
-      } else { #The watershed cannot be found, so make a big buffer
-        watershed_buff <- terra::buffer(basin, 50000) #50km radius buffer
-        #TODO: make this a rectangular/square extent instead to better use the display
-        basin <- watershed_buff
-        basin$feature_name <- "No watershed number"
-        basin$description <- "Not a watershed"
       }
-    } else { #"type" == WSC
-      buff_size <- terra::expanse(basin)*0.0000006
-      if (buff_size < 2500) {
-        buff_size <- 2500
+      
+      cropped_precip_rast <- terra::mask(total, watershed_buff)
+      cropped_precip_rast <- terra::trim(cropped_precip_rast)
+      
+      #Load supporting layers and crop
+      roads <- getVector(layer_name = "Roads", con = con, silent = TRUE)
+      roads <- terra::project(roads, "+proj=longlat +EPSG:3347")
+      
+      if (terra::expanse(basin) < 30000000000) {
+        streams <- getVector(layer_name = "Watercourses", feature_name = "Yukon watercourses", con = con, silent = TRUE)
+        streams <- terra::project(streams, "+proj=longlat +EPSG:3347")
+        streams <- terra::crop(streams, basin)
       }
-      watershed_buff <- terra::buffer(basin, buff_size)
-    }
-
-    cropped_precip_rast <- terra::mask(total, watershed_buff)
-    cropped_precip_rast <- terra::trim(cropped_precip_rast)
-
-    #Load supporting layers and crop
-    roads <- getVector(layer_name = "Roads", con = con, silent = TRUE)
-    roads <- terra::project(roads, "+proj=longlat +EPSG:3347")
-
-    if (terra::expanse(basin) < 30000000000) {
-      streams <- getVector(layer_name = "Watercourses", feature_name = "Yukon watercourses", con = con, silent = TRUE)
-      streams <- terra::project(streams, "+proj=longlat +EPSG:3347")
-      streams <- terra::crop(streams, basin)
-    }
-
-    waterbodies <- getVector(layer_name = "Waterbodies", feature_name = "Yukon waterbodies", con = con, silent = TRUE)
-    waterbodies <- terra::project(waterbodies, "+proj=longlat +EPSG:3347")
-    waterbodies <- terra::crop(waterbodies, basin) #even though masked, water body features that are even a little within the watershed polygon will be retained. This is nice as it brings out the major rivers for context.
-
-    communities <- getVector(layer_name = "Communities", con = con, silent = TRUE)
-    communities <- terra::project(communities, "+proj=longlat +EPSG:3347")
-
-    borders <- getVector(layer_name = "Provincial/Territorial Boundaries", feature_name = "Yukon", con = con, silent = TRUE)
-    borders <- terra::project(borders, "+proj=longlat +EPSG:3347")
-
-    #And finally plot it all!
-    terra::plot(cropped_precip_rast)
-    terra::polys(basin, border = "darkred")
-    if (type == "longlat") {
-      terra::points(location, pch = 17, col = "darkorchid1", cex = 2)
-    }
-    terra::plot(roads, lwd = 1.5, alpha = 0.7, add = T)
-    if (terra::expanse(basin) < 30000000000) {
-      terra::plot(streams, lwd = 0.08, col = "blue", border = NULL, alpha = 0.5, add = T)
-    }
-    terra::plot(waterbodies, col = "blue", border = "blue", alpha = 0.1, lwd = 0.001, add = T)
-    terra::points(communities, cex = 1.5)
-    terra::lines(borders, lwd = 2, lty = "twodash")
-    terra::text(communities, labels = communities$PLACE_NAME, pos = 4, offset = 1, font = 2, cex = 0.9)
-    if (type == "longlat") {
-      terra::text(location, labels = paste0(requested_point[1], ", ", requested_point[2]), col = "black", pos = 4, offset = 1, font = 2)
-    }
-    graphics::mtext(paste0("Precipitation as mm of water equivalent from ", actual_times[1], " to ", actual_times[2], " UTC  \nWatershed: ", basin$StationNum, ", ", stringr::str_to_title(basin$NameNom), " "), side = 3, adj = 0.5)
-
-    plot <- grDevices::recordPlot()
-
-    # Code save to turn this into a leaflet app (much more rapid, zoomable, etc)
-    # terra::plet(cropped_precip_rast, tiles = "Streets") %>%
-    #   lines(waterbodies, alpha = 0.5, fill = "blue", col = "blue") %>%
-    #   lines(streams, col = "blue", alpha = 0.5) %>%
-    #   lines(watershed, col = "darkred")
-    #   ...and what about a ggplotly object instead? Would require switching vectors to sf objects and the raster to a stars object.
-
-  } else {
-    
+      
+      waterbodies <- getVector(layer_name = "Waterbodies", feature_name = "Yukon waterbodies", con = con, silent = TRUE)
+      waterbodies <- terra::project(waterbodies, "+proj=longlat +EPSG:3347")
+      waterbodies <- terra::crop(waterbodies, basin) #even though masked, water body features that are even a little within the watershed polygon will be retained. This is nice as it brings out the major rivers for context.
+      
+      communities <- getVector(layer_name = "Communities", con = con, silent = TRUE)
+      communities <- terra::project(communities, "+proj=longlat +EPSG:3347")
+      
+      borders <- getVector(layer_name = "Provincial/Territorial Boundaries", feature_name = "Yukon", con = con, silent = TRUE)
+      borders <- terra::project(borders, "+proj=longlat +EPSG:3347")
+      
+      #And finally plot it all!
+      terra::plot(cropped_precip_rast, col = raster_col)
+      terra::polys(basin, border = "darkred")
+      if (type == "longlat") {
+        terra::points(location, pch = 17, col = "darkorchid1", cex = 2)
+      }
+      terra::plot(roads, lwd = 1.5, alpha = 0.7, add = T)
+      if (terra::expanse(basin) < 30000000000) {
+        terra::plot(streams, lwd = 0.08, col = "blue", border = NULL, alpha = 0.5, add = T)
+      }
+      terra::plot(waterbodies, col = "blue", border = "blue", alpha = 0.1, lwd = 0.001, add = T)
+      terra::points(communities, cex = 1.5)
+      terra::lines(borders, lwd = 2, lty = "twodash")
+      terra::text(communities, labels = communities$PLACE_NAME, pos = 4, offset = 1, font = 2, cex = 0.9)
+      if (type == "longlat") {
+        terra::text(location, labels = paste0(requested_point[1], ", ", requested_point[2]), col = "black", pos = 4, offset = 1, font = 2)
+      }
+      graphics::mtext(paste0("Precipitation as mm of water equivalent from ", actual_times[1], " to ", actual_times[2], " UTC  \nWatershed: ", basin$StationNum, ", ", stringr::str_to_title(basin$NameNom), " "), side = 3, adj = 0.5)
+      
+      plot <- grDevices::recordPlot()
+      
+      # Code save to turn this into a leaflet app (much more rapid, zoomable, etc)
+      # terra::plet(cropped_precip_rast, tiles = "Streets") %>%
+      #   lines(waterbodies, alpha = 0.5, fill = "blue", col = "blue") %>%
+      #   lines(streams, col = "blue", alpha = 0.5) %>%
+      #   lines(watershed, col = "darkred")
+      #   ...and what about a ggplotly object instead? Would require switching vectors to sf objects and the raster to a stars object.
+      
+    }, error = function(e) {
+      warning(crayon::red("The map could not be generated."))
+    })
   }
 
   if (type == "longlat") {

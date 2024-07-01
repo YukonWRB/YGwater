@@ -1,27 +1,27 @@
-test_that("Outputted table (summarise=TRUE) has proper dimensions when reading from hydromet db", {
-  test <- suppressWarnings(SWE_station(year=2022,
-                       month=3,
-                       csv = FALSE,
-                       return_missing = FALSE,
-                       source = 'hydromet'))
-  expect_equal(ncol(test), 21)
-  expect_true(nrow(test) >= 1)
-})
-
-test_that("Outputted table (summarise=FALSE) has proper dimensions when reading from hydromet db", {
+test_that("Outputted table (summarise=TRUE) has proper dimensions when reading from AquaCache db", {
   test <- suppressWarnings(SWE_station(year = 2022,
                                        month = 3,
                                        csv = FALSE,
                                        return_missing = FALSE,
-                                       source = 'hydromet',
+                                       source = 'AquaCache'))
+  expect_equal(ncol(test), 21)
+  expect_true(nrow(test) >= 1)
+})
+
+test_that("Output table (summarise=FALSE) has proper dimensions when reading from AquaCache db", {
+  test <- suppressWarnings(SWE_station(year = 2022,
+                                       month = 3,
+                                       csv = FALSE,
+                                       return_missing = FALSE,
+                                       source = 'AquaCache',
                                        summarise = FALSE))
   expect_equal(ncol(test), 13)
   expect_true(nrow(test) >= 1)
 })
 
-test_that("Outputted table (summarise=TRUE) has proper dimensions when reading from snow db", {
-  test <- suppressWarnings(SWE_station(year=2022,
-                                       month=3,
+test_that("Output table (summarise = TRUE) has proper dimensions when reading from snow db", {
+  test <- suppressWarnings(SWE_station(year = 2022,
+                                       month = 3,
                                        csv = FALSE,
                                        return_missing = FALSE,
                                        source = 'snow'))
@@ -29,7 +29,7 @@ test_that("Outputted table (summarise=TRUE) has proper dimensions when reading f
   expect_true(nrow(test) >= 1)
 })
 
-test_that("Outputted table (summarise=FALSE) has proper dimensions when reading from snow db", {
+test_that("Output table (summarise = FALSE) has proper dimensions when reading from snow db", {
   test <- suppressWarnings(SWE_station(year = 2022,
                                        month = 3,
                                        csv = FALSE,

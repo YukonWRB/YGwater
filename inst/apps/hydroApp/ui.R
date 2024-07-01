@@ -32,7 +32,7 @@ app_ui <- function(request) {
       # Title
       titlePanel("Yukon Water Science and Stewardship Branch Hydro App"),
       # Broad category selection
-      selectInput("first_selection", "Choose a task", choices = c("View hydromet plots + data", "View precipitation maps + data", "Browse FOD comments")),
+      selectInput("first_selection", "Choose a task", choices = c("View hydrometric plots + data", "View precipitation maps + data", "Browse FOD comments")),
       conditionalPanel(
         condition = "input.first_selection == 'Browse FOD comments'",
         sidebarPanel(
@@ -72,7 +72,7 @@ app_ui <- function(request) {
         )
       ),
       conditionalPanel(
-        condition = "input.first_selection == 'View hydromet plots + data'",
+        condition = "input.first_selection == 'View hydrometric plots + data'",
         sidebarPanel(
           shinyWidgets::radioGroupButtons("plot_data_type", "Data type", choices = c("Continuous", "Discrete"), selected = "Continuous"),
           selectizeInput("plot_type", label = "Plot type", choices = c("Overlapping years", "Long timeseries", "Multi timeseries", "Binned", "Scatter")), #Discrete plot types are selected in the server

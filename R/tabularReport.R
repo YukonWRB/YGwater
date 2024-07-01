@@ -3,9 +3,9 @@
 #' @description
 #' lifeCycle::badge("stable")
 #' 
-#' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect by default and MUST connect to a database created and maintained by the package HydroMetDB.
+#' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using AquaConnect by default and MUST connect to a database created and maintained by the package AquaCache.
 #' 
-#' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::getNewContinuous first.
+#' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run AquaCache::getNewContinuous first.
 #'
 #' @param level_locations List of water level locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory, "all" fetches all level reporting locations in the DB. NULL will not create the table.
 #' @param flow_locations List of flow locations to include in the report, as a character vector. "default" is a pre-determined list of locations across the territory. "all" fetches all flow reporting locations in the DB. NULL will not create the table.
@@ -14,9 +14,9 @@
 #' @param precip_locations List of flow/level locations for which to report precipitation. "default" is a pre-determined list of locations, "all" is all locations for which there is a drainage polygon (which may be more or less than the number of stations reporting level or flow information). NULL will not create the table. WARNING: this portion of the script is slow. Setting this parameter to "all" could take about an hour to get all information together.
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
 #' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
-#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.
+#' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including extension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.
 
-#' @param con A connection to the AquaCache/hydromet database. NULL uses [hydrometConnect()] and automatically disconnects.
+#' @param con A connection to the AquaCache/hydromet database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return An Excel workbook containing the report with one tab per timeseries type.
 #' @export
@@ -28,7 +28,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
 
 
   if (is.null(con)) {
-    con <- hydrometConnect(silent = TRUE)
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
 
@@ -156,7 +156,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   if (!is.null(precip_locations)) { #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
     precip <- data.frame()
     if (!yesterday_comments) {
-      yesterday_comment_precip <- NULL
+      yesterday_comment_precip <- NA
     }
     for (i in precip_locations) {
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))

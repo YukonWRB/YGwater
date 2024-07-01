@@ -139,7 +139,7 @@ test_that("linedbox plot that starts and ends in different years is as expected 
   unlink(dir, recursive = TRUE)
   dir.create(dir)
   # Get precipitation data from measurements_continuous
-  con <- hydrometConnect(silent = TRUE)
+  con <- AquaConnect(silent = TRUE)
   discrete_data <- DBI::dbGetQuery(con, "SELECT * FROM measurements_continuous WHERE timeseries_id = 663")
   attr(discrete_data$datetime, "tzone") <- "MST"
   discrete_data$month <- format(discrete_data$datetime, "%m")
