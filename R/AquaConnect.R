@@ -3,7 +3,7 @@
 #' @description
 #' `r lifecycle::badge("stable")`
 #'
-#' This function exists to facilitate connecting to the hydrology database.
+#' This function exists to facilitate connecting to the production version AquaCache database. For the development version see [hydrometConnect()].
 #'
 #' @param name Database name.
 #' @param host Database host address. By default searches the .Renviron file for parameter:value pair of form AquaCacheHost="hostname".
