@@ -2,7 +2,7 @@
 % Please edit documentation in R/plotTimeseries.R
 \name{plotTimeseries}
 \alias{plotTimeseries}
-\title{Plot a continous timeseries from the hydromet database}
+\title{Plot a continous timeseries from the AquaCache database}
 \usage{
 plotTimeseries(
   location,
@@ -63,7 +63,7 @@ plotTimeseries(
 
 \item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
 
-\item{con}{A connection to the target database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
+\item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }
 \value{
 A plotly object
@@ -71,5 +71,5 @@ A plotly object
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function plots continuous timeseries from the hydromet/AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
+This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
 }

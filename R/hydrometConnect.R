@@ -1,9 +1,9 @@
 #' Connect to the hydromet database
 #'
 #' @description
-#' `r lifecycle::badge("stable")`
+#' `r lifecycle::badge("superseded")`
 #'
-#' This function exists to facilitate connecting to the hydrology database.
+#' Superseded by function [AquaConnect()]. Still exported by this package for backwards compatibility, as old database 'hydromet' is now a development environment.
 #'
 #' @param name Database name.
 #' @param host Database host address. By default searches the .Renviron file for parameter:value pair of form hydrometHost="hostname".
@@ -19,6 +19,8 @@
 
 hydrometConnect <- function(name = "hydromet", host = Sys.getenv("hydrometHost"), port = Sys.getenv("hydrometPort"), username = Sys.getenv("hydrometUser"), password = Sys.getenv("hydrometPass"), silent = FALSE){
 
+  warning("Function hydrometConnect() is superseded by function AquaConnect(). Please use AquaConnect() instead unless you need to access the dev database.")
+  
   tryCatch({
     hydro <- DBI::dbConnect(drv = RPostgres::Postgres(),
                             dbname = name,

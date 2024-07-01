@@ -8,7 +8,7 @@ calculate_period(
   data,
   datetime_col = "datetime",
   timeseries_id = NULL,
-  con = hydrometConnect(silent = TRUE)
+  con = AquaConnect(silent = TRUE)
 )
 }
 \arguments{
@@ -18,7 +18,7 @@ calculate_period(
 
 \item{timeseries_id}{The ID of the timeseries for which to calculate periodicity. Used to fetch any data points lacking a period, as well as to search for additional data points if there are too few to calculate a period in the provided \code{data}. Leave NULL if there is no database entry for this.}
 
-\item{con}{A connection to the database, created with \code{\link[DBI:dbConnect]{DBI::dbConnect()}} or using the utility function \code{\link[=hydrometConnect]{hydrometConnect()}}. Not used if timeseries_id is left NULL.}
+\item{con}{A connection to the database, created with \code{\link[DBI:dbConnect]{DBI::dbConnect()}} or using the utility function \code{\link[=AquaConnect]{AquaConnect()}}. Not used if timeseries_id is left NULL.}
 }
 \value{
 A data.frame or data.table with calculated periods as ISO8601 formatted strings in a column named 'period'.

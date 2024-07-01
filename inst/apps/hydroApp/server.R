@@ -41,7 +41,7 @@ app_server <- function(input, output, session) {
         updateSelectizeInput(session, "precip_loc_name", choices = c("", precip$poly_names_codes$name))
         runCheck$precip <- TRUE
       }
-    } else if (input$first_selection == "View hydromet plots + data") {
+    } else if (input$first_selection == "View hydrometric plots + data") {
       if (!runCheck$plots) {
         plotContainer$all_ts <- DBI::dbGetQuery(pool, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.param_type, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         plotContainer$all_ts <- plotContainer$all_ts[order(plotContainer$all_ts$name), ]

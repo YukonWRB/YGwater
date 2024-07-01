@@ -31,9 +31,9 @@ tabularReport(
 
 \item{save_path}{The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.}
 
-\item{archive_path}{The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including exetnsion .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.}
+\item{archive_path}{The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including extension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.}
 
-\item{con}{A connection to the AquaCache/hydromet database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
+\item{con}{A connection to the AquaCache/hydromet database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }
 \value{
 An Excel workbook containing the report with one tab per timeseries type.
@@ -41,7 +41,7 @@ An Excel workbook containing the report with one tab per timeseries type.
 \description{
 lifeCycle::badge("stable")
 
-Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using hydrometConnect by default and MUST connect to a database created and maintained by the package HydroMetDB.
+Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using AquaConnect by default and MUST connect to a database created and maintained by the package AquaCache.
 
-Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run HydroMetDB::getNewContinuous first.
+Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run AquaCache::getNewContinuous first.
 }

@@ -30,7 +30,7 @@ hydrometConnect(
 A connection to the database.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
 
-This function exists to facilitate connecting to the hydrology database.
+Superseded by function \code{\link[=AquaConnect]{AquaConnect()}}. Still exported by this package for backwards compatibility, as old database 'hydromet' is now a development environment.
 }

@@ -1,3 +1,7 @@
+old_warn <- getOption("warn")
+options(warn = -1)
+on.exit(options(warn = old_warn), add = TRUE)
+
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file", {
   skip_on_cran()
   skip_on_ci()

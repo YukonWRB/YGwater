@@ -5,7 +5,7 @@
 #'
 #' This function generates condition reports for preset or user-specified Water Survey of Canada stations. In addition to water level and flow, precipitation data, still images, and weather forecasts are incorporated. The output is a Microsoft Word document on a Yukon Government template.
 #'
-#' This function fetches data directly from the Water Survey of Canada and does not use the local hydrometric database created/maintained by the HydroMetDB package.
+#' This function fetches data directly from the Water Survey of Canada and does not use the local hydrometric database created/maintained by the AquaCache package.
 #'
 #' @details
 #' To download real-time WSC data, you MUST have your hydat credentials loaded

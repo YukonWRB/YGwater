@@ -11,7 +11,7 @@ snowBulletinStats(
   excel_output = FALSE,
   save_path = "choose",
   synchronize = FALSE,
-  source = "hydromet"
+  source = "AquaCache"
 )
 }
 \arguments{
@@ -19,7 +19,7 @@ snowBulletinStats(
 
 \item{month}{Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5.}
 
-\item{basins}{The name of the sub_basin you wish to generate stats for. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.}
+\item{basins}{The name of the sub_basin you wish to generate stats for. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when AquaCache is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.}
 
 \item{excel_output}{If TRUE, calculated stats will be outputted in multiple excel tables.}
 
@@ -37,9 +37,8 @@ A snow bulletin in Microsoft Word format.
 
 This function generates the statistics associated with the snow bulletin for a specified date. The output is list of tables (in R), or a number of excel workbooks.
 
-This function fetches data from the local postgresql hydrometric database created/maintained by the HydroMetDB package.
+This function fetches data from the local postgresql AquaCache database created/maintained by the AquaCache package.
 }
 \details{
-To download data, you MUST have your hydromet credentials loaded
-into your .Renviron profile as values pairs of hydrometHost="10.250.12.154", hydrometPort="5433", hydrometUser="hydromet_read", hydrometPass="hydromet".
+To download data, you MUST have your AquaCache credentials added to your .Renviron file. See function \code{\link[=AquaConnect]{AquaConnect()}} or talk to the database administrator/data scientist for help.
 }

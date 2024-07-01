@@ -9,7 +9,7 @@ getImage(id, con = NULL, save_dir = NULL, save_name = NULL)
 \arguments{
 \item{id}{The ID number from column 'image_id' of table 'images'.}
 
-\item{con}{A connection to the database. NULL will use \code{\link[=hydrometConnect]{hydrometConnect()}} and disconnect automatically when done.}
+\item{con}{A connection to the database. NULL will use \code{\link[=AquaConnect]{AquaConnect()}} and disconnect automatically when done.}
 
 \item{save_dir}{A directory in which to write the file.}
 
@@ -21,8 +21,8 @@ A data.frame containing the row(s) identified by the specified ID. One of the co
 \description{
 lifecycle::badge("stable")
 
-Extracts an image stored in the hydromet database as BYTEA type. For extracting documents see \code{\link[=getDocument]{getDocument()}}, for extracting vector files as \emph{terra} rasters (points, lines polygons) see \code{\link[=getVector]{getVector()}}, and for extracting rasters to R as \emph{terra} objects see \code{\link[=getRaster]{getRaster()}}.
+Extracts an image stored in the AquaCache database as BYTEA type. For extracting documents see \code{\link[=getDocument]{getDocument()}}, for extracting vector files as \emph{terra} rasters (points, lines polygons) see \code{\link[=getVector]{getVector()}}, and for extracting rasters to R as \emph{terra} objects see \code{\link[=getRaster]{getRaster()}}.
 }
 \details{
-If you need additional flexibility use function \code{\link[=getFile]{getFile()}} instead. This should not normally be needed with a database created by the HydroMetDB package but is made available for use with other databases.
+If you need additional flexibility use function \code{\link[=getFile]{getFile()}} instead. This should not normally be needed with a database created by the AquaCache package but is made available for use with other databases.
 }

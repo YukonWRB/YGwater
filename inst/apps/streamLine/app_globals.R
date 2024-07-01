@@ -15,10 +15,10 @@ translations <- data.table::setDT(openxlsx::read.xlsx(system.file("apps/streamLi
 if (!exists("pool")) {
   pool <- pool::dbPool(
     drv = RPostgres::Postgres(),
-    dbname = "hydromet",
-    host = Sys.getenv("hydrometHost"),
-    port = Sys.getenv("hydrometPort"),
-    user = Sys.getenv("hydrometUser"),
-    password = Sys.getenv("hydrometPass")
+    dbname = "AquaCache",
+    host = Sys.getenv("AquaCacheHost"),
+    port = Sys.getenv("AquaCachePort"),
+    user = Sys.getenv("AquaCacheUser"),
+    password = Sys.getenv("AquaCachePass")
   )
 }

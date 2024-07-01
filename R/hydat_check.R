@@ -6,7 +6,7 @@
 #' Checks and, if necessary, updates the local version of the WSC HYDAT database. Intended for use on a schedule to ensure the user always has the latest version.
 #'
 #' @param silent Should messages be output to the console?
-#' @param path The path to the folder where the HYDAT database is stored. If NULL, the function will attempt to find the database in the default location. Don't use this parameter unless you have a good reason to.
+#' @param path The path to the folder where the HYDAT database is stored or to be stored, or the path to the Hydat.sqlite3 file itself. If NULL, the function will attempt to find the database in the default location. Don't use this parameter unless you have a good reason to.
 #'
 #' @return An updated local copy of hydat, if indicated by the age of the remote HYDAT.
 #' @export
@@ -26,6 +26,8 @@ hydat_check <- function(silent = FALSE, path = NULL){
     )
   } else {
     if (dir.exists(path)) {
+      hydat_path <- paste0(path, "/Hydat.sqlite3")
+    } else if (file.exists(path)) {
       hydat_path <- path
     } else {
       if (!silent) {
@@ -36,7 +38,7 @@ hydat_check <- function(silent = FALSE, path = NULL){
       }
     }
   }
-
+  
   new_hydat <- FALSE # Initialize a flag to indicate if the HYDAT was updated
   if (!is.null(hydat_path)) { #If hydat already exists, compare version numbers
     local_hydat <- as.Date(tidyhydat::hy_version(hydat_path)$Date)
@@ -69,7 +71,8 @@ hydat_check <- function(silent = FALSE, path = NULL){
     }
   }
 
-  if (!silent){
+  if (!silent) {
     message("hydat_check completed.")
   }
+  return(new_hydat)
 }

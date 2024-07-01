@@ -9,7 +9,7 @@ hydat_check(silent = FALSE, path = NULL)
 \arguments{
 \item{silent}{Should messages be output to the console?}
 
-\item{path}{The path to the folder where the HYDAT database is stored. If NULL, the function will attempt to find the database in the default location. Don't use this parameter unless you have a good reason to.}
+\item{path}{The path to the folder where the HYDAT database is stored or to be stored, or the path to the Hydat.sqlite3 file itself. If NULL, the function will attempt to find the database in the default location. Don't use this parameter unless you have a good reason to.}
 }
 \value{
 An updated local copy of hydat, if indicated by the age of the remote HYDAT.

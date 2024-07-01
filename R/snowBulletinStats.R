@@ -5,15 +5,14 @@
 #'
 #' This function generates the statistics associated with the snow bulletin for a specified date. The output is list of tables (in R), or a number of excel workbooks.
 #'
-#' This function fetches data from the local postgresql hydrometric database created/maintained by the HydroMetDB package.
+#' This function fetches data from the local postgresql AquaCache database created/maintained by the AquaCache package.
 #'
 #' @details
-#' To download data, you MUST have your hydromet credentials loaded
-#' into your .Renviron profile as values pairs of hydrometHost="10.250.12.154", hydrometPort="5433", hydrometUser="hydromet_read", hydrometPass="hydromet".
+#' To download data, you MUST have your AquaCache credentials added to your .Renviron file. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
 #'
 #' @param year Year for which the snow bulletin stats are calculated.
 #' @param month Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5.
-#' @param basins The name of the sub_basin you wish to generate stats for. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when hydromet is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
+#' @param basins The name of the sub_basin you wish to generate stats for. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when AquaCache is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
 #' @param excel_output If TRUE, calculated stats will be outputted in multiple excel tables. 
 #' @param save_path The path to the directory (folder) where the excel files should be saved. Enter the path as a character string.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. Currently is a placeholder and does not work.
@@ -37,9 +36,9 @@ snowBulletinStats <-
            excel_output = FALSE,
            save_path = "choose",
            synchronize = FALSE,
-           source = "hydromet") {
+           source = "AquaCache") {
     
-    con <- hydrometConnect()
+    con <- AquaConnect()
     on.exit(DBI::dbDisconnect(con))
     
     # Set up save_path
@@ -434,7 +433,7 @@ snowBulletinStats <-
                                  threshold = 6,
                                  csv = FALSE,
                                  summarise = TRUE,
-                                 source = "hydromet")
+                                 source = "AquaCache")
         basin_stats$perc_hist_med <- basin_stats$swe_relative *100
         basin_stats$swe <- round(basin_stats$swe)
         # Add description of % median

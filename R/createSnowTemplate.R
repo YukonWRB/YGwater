@@ -7,7 +7,7 @@
 #' 
 #' You should be running this function from a computer with access to the Snow database for full functionality: 
 #'
-#' @param target_date The target date of the snow survey, given in the form yyyy-mm-dd as a text string. Example: for the march snow survey of 2024, target_date = '2024-03-01'
+#' @param target_date The target date of the snow survey, given in the form yyyy-mm-dd as a text string or Date object. Example: for the march snow survey of 2024, target_date = '2024-03-01'
 #' @param circuit The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, NorthSlope, OldCrow, PellyFarm, Ross, SLakes, Teslin, Watson, Whitehorse, and YEC. "all" will create a workbook for all circuits.
 #' @param save_path The path where you want the circuit workbook(s) saved. Default "choose" lets you pick your folder.
 #' 
@@ -17,8 +17,6 @@
 #'
 
 createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose") {
-  
-  template <- openxlsx::loadWorkbook(system.file("snow_survey/SnowSurveyTemplate.xlsx", package = "YGwater"))
   
   if (save_path == "choose") {
     if (!interactive()) {
@@ -32,14 +30,14 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     }
   }
   
-  if (!inherits(target_date, "Date")) {
+  if (inherits(target_date, "Date")) {
     target_date <- as.character(target_date)
   } else if (!inherits(target_date, "character")) {
-    stop("target_date must be a character string")
+    stop("target_date must be a character string or Date object")
   }
   
   if (length(circuit) != 1) {
-    stop("parameter circuit must be a single string, one of 'all' or a specific circuit name.")
+    stop("parameter circuit must be a character vector of length 1, one of 'all' or a specific circuit name.")
   }
   
   circuit <- tolower(circuit)
@@ -50,7 +48,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     circuits <- circuit
   }
   
-  snowCon_flag <- TRUE # sets flag so that snow DB connection is attempted at start. If fails, flag is set to FALSE and function continues without DB connection.
+  snowCon_flag <- TRUE # sets flag so that snow DB connection is attempted at start. If fails, flag is set to FALSE and function continues without DB connection for subsequent circuits
   for (circuit in circuits) {
     
     template <- openxlsx::loadWorkbook(system.file("snow_survey/SnowSurveyTemplate.xlsx", package = "YGwater")) # reloaded each time to start from original
@@ -73,14 +71,14 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
       courses <- c("Old Crow")
     } else if (circuit == "pellyfarm") {
       courses <- c("Pelly Farm")
-    } else if (circuit == "ross") { # Snow scale/pillow locations not in  snow db. Twin Creeks A not in hydromet, but is in snow db
+    } else if (circuit == "ross") { # Snow scale/pillow locations not in  snow db. Twin Creeks A not in AquaCache, but is in snow db
       courses <- c("Bonnet Plume Lake", "Burns Lake", "Edwards Lake", "Finlayson Airstrip", "Ford Lake", "Fuller Lake", "Hoole River", "Jordan Lake", "Plata Airstrip", "Rackla Lake", "Rose Creek", "Russell Lake", "Tintina Airstrip", "Twin Creeks A", "Twin Creeks B", "Withers Lake", "Twin Creeks B Snow Scale", "Withers Pillow", "Withers Scale") #
     } else if (circuit == "slakes") { # Snow scale/pillow locations not in db.
       courses <- c("Atlin (B.C.)", "Log Cabin (B.C.)", "Log Cabin Pillow (B.C.)", "Montana Mountain", "Montana Mountain Pillow", "Tagish", "Tagish Snow Scale", "Tagish Snow Pillow")
     } else if (circuit == "teslin") {
       courses <- c("Meadow Creek", "Morley Lake", "Pine Lake Airstrip")
     } else if (circuit == "watson") {
-      courses <- c("Frances River", "Hyland River B", "Hyland Snow Scale", "Watson Lake Airport") # Hyland River does not exist in hydromet db, but is in snow db
+      courses <- c("Frances River", "Hyland River B", "Hyland Snow Scale", "Watson Lake Airport") # Hyland River does not exist in AquaCache db, but is in snow db
     } else if (circuit == "whitehorse") { # Buckbrush snow scales is not in snow db. Whitehorse Airport is actually Whitehorse Airport A
       courses <- c("Buckbrush Snow Pillow", "Mt McIntyre B", "Whitehorse Airport", "Whitehorse Airport B")
     } else if (circuit == "yec") {
@@ -109,14 +107,13 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     # Put courses in alphabetical order
     courses <- sort(courses)
     # Add _ to worksheet names and remove '
-    courses2 <- gsub(" ", "_", courses)
-    courses2 <- gsub("'", "", courses2)
-    courses2 <- gsub("/", ".", courses2)
-    sheet_names <- courses2
+    sheet_names <- gsub(" ", "_", courses)
+    sheet_names <- gsub("'", "", sheet_names)
+    sheet_names <- gsub("/", ".", sheet_names)
     # Clone worksheets and fill in
-    for (c in 1:length(courses2)) {
+    for (c in 1:length(sheet_names)) {
       # Set template depending on if it is a BC site or not
-      if (grepl("(B.C.)", courses2[c])) {
+      if (grepl("(B.C.)", sheet_names[c])) {
         sheet_name <- "Sheet1_bc"
       } else {sheet_name <- "Sheet1"}
       
@@ -149,7 +146,8 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     if (snowCon_flag) {
       summary <- SWE_station(year = as.numeric(substr(target_date, start = 1, stop = 4)),
                              month = as.numeric(substr(target_date, start = 7, stop = 7)),
-                             return_missing = TRUE, source = "snow")
+                             return_missing = TRUE, 
+                             source = "snow")
       # Subset to locations of interest and columns of interest
       summary <- summary[summary$location_name %in% courses, c("location_name", "location_id", "swe_prevyear", "swe_med")]
       # Add locations to summary that are not in database
@@ -171,19 +169,19 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     # Add formula to get values from other sheets
     # Sample date
     for (s in 1:length(courses)) {
-      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF(ISBLANK('", courses2[s], "'!D7), ", '"", ', "'", courses2[s], "'!D7)"), startCol = 3, startRow = 2 + s)
+      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF(ISBLANK('", sheet_names[s], "'!D7), ", '"", ', "'", sheet_names[s], "'!D7)"), startCol = 3, startRow = 2 + s)
     }
     # Depth
     for (s in 1:length(courses)) {
-      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("='", courses2[s], "'!C25"), startCol = 4, startRow = 2 + s)
+      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("='", sheet_names[s], "'!C25"), startCol = 4, startRow = 2 + s)
     }
     # Density
     for (s in 1:length(courses)) {
-      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF('", courses2[s], "'!D9=", '"bulk", ', "'", courses2[s], "'!H23, '", courses2[s], "'!H25)"), startCol = 5, startRow = 2 + s)
+      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF('", sheet_names[s], "'!D9=", '"bulk", ', "'", sheet_names[s], "'!H23, '", sheet_names[s], "'!H25)"), startCol = 5, startRow = 2 + s)
     }
     # SWE
     for (s in 1:length(courses)) {
-      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IFERROR('", courses2[s], "'!G25*10, \"\")"), startCol = 6, startRow = 2 + s)
+      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IFERROR('", sheet_names[s], "'!G25*10, \"\")"), startCol = 6, startRow = 2 + s)
     }
     # SWE ratio
     for (s in 1:length(courses)) {
@@ -192,7 +190,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     # Create hyperlink
     for (s in 1:length(courses)) {
       openxlsx::writeFormula(template, sheet = "Summary",
-                             x = paste0("=HYPERLINK(", '"#', "'", courses2[s], "'", '!D4", "', courses[s], '")'),
+                             x = paste0("=HYPERLINK(", '"#', "'", sheet_names[s], "'", '!D4", "', courses[s], '")'),
                              startCol = 10, startRow = 2 + s)
     }
     # Add hyperlink to each page
@@ -203,15 +201,15 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     }
     # Add QAQC yes/no
     for (s in 1:length(courses)) {
-      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF(ISBLANK('", courses2[s], "'!L25), ",'"no", "yes")'), startCol = 11, startRow = 2 + s)
+      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF(ISBLANK('", sheet_names[s], "'!L25), ",'"no", "yes")'), startCol = 11, startRow = 2 + s)
     }
     # Add maintenance required yes/no
     for (s in 1:length(courses)) {
-      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF(OR('", courses2[s], "'!I49<>\"\", '", courses2[s], "'!I50<>\"\", '", courses2[s], "'!I51<>\"\"), ",'"yes", "no")'), startCol = 12, startRow = 2 + s)
+      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF(OR('", sheet_names[s], "'!I49<>\"\", '", sheet_names[s], "'!I50<>\"\", '", sheet_names[s], "'!I51<>\"\"), ",'"yes", "no")'), startCol = 12, startRow = 2 + s)
     }
     # Add ice yes/no
     for (s in 1:length(courses)) {
-      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF(OR('", courses2[s], "'!E38<>\"\", '", courses2[s], "'!I38<>\"\", '", courses2[s], "'!B40<>\"\"), ",'"yes", "no")'), startCol = 13, startRow = 2 + s)
+      openxlsx::writeFormula(template, sheet = "Summary", x = paste0("=IF(OR('", sheet_names[s], "'!E38<>\"\", '", sheet_names[s], "'!I38<>\"\", '", sheet_names[s], "'!B40<>\"\"), ",'"yes", "no")'), startCol = 13, startRow = 2 + s)
     }
     
     #### -------------------------- Write new template ------------------------ ####

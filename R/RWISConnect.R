@@ -12,7 +12,7 @@
 #' @param password Password.
 #' @return A connection to the database
 #'
-#' @seealso [hydrometConnect()] for establishing a connection to the WRB's hydrometric database.
+#' @seealso [AquaConnect()] for establishing a connection to the WRB's hydrometric database.
 #'
 #' @export
 #'

@@ -20,7 +20,7 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   
   #### ------------------------------ Get data -----------------------------####
   ## Get predictor data
-  con <- YGwater::hydrometConnect()
+  con <- YGwater::AquaConnect()
   
   flow_all <- DBI::dbGetQuery(con, 
                               paste0("SELECT locations.name, timeseries.location, calculated_daily.date, calculated_daily.value, locations.geom_id ",

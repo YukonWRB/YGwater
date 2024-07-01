@@ -7,7 +7,7 @@
 createSnowTemplate(target_date, circuit = "all", save_path = "choose")
 }
 \arguments{
-\item{target_date}{The target date of the snow survey, given in the form yyyy-mm-dd as a text string. Example: for the march snow survey of 2024, target_date = '2024-03-01'}
+\item{target_date}{The target date of the snow survey, given in the form yyyy-mm-dd as a text string or Date object. Example: for the march snow survey of 2024, target_date = '2024-03-01'}
 
 \item{circuit}{The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, NorthSlope, OldCrow, PellyFarm, Ross, SLakes, Teslin, Watson, Whitehorse, and YEC. "all" will create a workbook for all circuits.}
 
