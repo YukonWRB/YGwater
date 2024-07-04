@@ -32,5 +32,5 @@ A connection to the database.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function exists to facilitate connecting to the hydrology database.
+This function exists to facilitate connecting to the production version AquaCache database. For the development version see \code{\link[=hydrometConnect]{hydrometConnect()}}.
 }
