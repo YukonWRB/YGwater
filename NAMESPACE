@@ -2,6 +2,7 @@
 
 export("%>%")
 export(AquaConnect)
+export(EQ_crosstab)
 export(RWISConnect)
 export(SWE_basin)
 export(SWE_station)
