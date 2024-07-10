@@ -8,7 +8,8 @@ streamLine(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
   browser = TRUE,
-  display.mode = "normal"
+  display.mode = "normal",
+  dev = FALSE
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ streamLine(
 \item{browser}{Open the application in a browser window right away (TRUE), or in a R window (FALSE). Default is TRUE.}
 
 \item{display.mode}{The display mode for the application. Default is "normal". See \code{shiny::runApp()} for more information.}
+
+\item{dev}{Set to TRUE to run with the dev database. Default is FALSE.}
 }
 \value{
 Opens a Shiny application.
