@@ -2,13 +2,16 @@
 
 server <- function(input, output, session) {
   
+  # Log in to the database (optional) ##########################################
+  log_attempts <- reactiveVal(0)
+  
   # Log in as public user by default
   DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
   
   observeEvent(input$loginBtn, {
     showModal(modalDialog(
-      title = "This doesn't work yet",
-      renderUI(HTML("Login is reserved for Yukon Government users and partner organizations/individuals. Contact us if you think you should have access. <br> <br>")),
+      title = "Login",
+      renderUI(HTML("Reserved for Yukon Government users and partner organizations/individuals. Contact us if you think you should have access. <br> <br>")),
       textInput("username", "Username"),
       passwordInput("password", "Password"),
       footer = tagList(
@@ -19,25 +22,57 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$confirmLogin, {
-    res <- validateACUser(input$username, input$password, pool)
-    if (res) {
-      DBI::dbExecute(pool, paste0("SET logged_in_user.username = '", input$username, "';"))
-      # Show a pop-up message to the user that they are logged in
-      showModal(modalDialog(
-        title = "Login successful",
-        "You are now logged in as '", input$username, "'.",
-        easyClose = TRUE,
-        footer = modalButton("Close")
-      ))
-    } else {
-      DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
-      # Show a pop-up message to the user that the login failed
+    log_attempts(log_attempts() + 1)
+    if (log_attempts() > 5) {
       showModal(modalDialog(
         title = "Login failed",
-        "Username or password failed.",
+        "Too many login attempts. Please try again later.",
         easyClose = TRUE,
         footer = modalButton("Close")
       ))
+      return()
+    } else {
+      res <- validateACUser(input$username, input$password, pool)
+      if (res) {
+        # Using parametrization to prevent injection attacks
+        safe_username <- DBI::dbQuoteIdentifier(pool, input$username)
+        query <- glue::glue_sql("SET logged_in_user.username = {safe_username}", .con = pool)
+        DBI::dbExecute(pool, query)
+        
+        # Show a pop-up message to the user that they are logged in
+        showModal(modalDialog(
+          title = "Login successful",
+          paste0("You are now logged in as '", input$username, "'."),
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        
+        # Re-fetch data from the database after successful login
+        DBdata$locations <- dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;")
+        DBdata$timeseries <- dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;")
+        DBdata$locations_projects <- dbGetQueryDT(pool, "SELECT * FROM locations_projects;")
+        DBdata$locations_networks <- dbGetQueryDT(pool, "SELECT * FROM locations_networks;")
+        DBdata$param_types <- dbGetQueryDT(pool, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);")
+        DBdata$param_groups <- dbGetQueryDT(pool, "SELECT DISTINCT p.group, p.group_fr FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
+        DBdata$parameters <- dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.group, p.group_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
+        DBdata$projects <- dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);")
+        DBdata$networks <- dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);")
+        DBdata$has_images <- dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;")
+        DBdata$has_documents <- dbGetQueryDT(pool, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
+        
+        # Reload the tab the user is on to incorporate the new data
+        updateNavbarPage(session, "navbar", selected = input$navbar)
+        
+      } else {
+        DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
+        # Show a pop-up message to the user that the login failed
+        showModal(modalDialog(
+          title = "Login failed",
+          "Username or password failed.",
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+      } 
     }
   })
   
@@ -72,8 +107,7 @@ server <- function(input, output, session) {
     isRestoring_about(TRUE)
   })
   
-  # Get info from database (passed to multiple modules)
-  
+  # Get info from database (passed to multiple modules). Data is re-fetched after successful login.
   DBdata <- reactiveValues(
     locations = dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;"),
     timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;"),
@@ -198,7 +232,7 @@ console.log(language);")
     if (input$navbar == "map") {
       tryCatch({
         moduleOutputs$map_outputs <- map("map", language = languageSelection, restoring = isRestoring_map, data = DBdata)  # Assigning the module to a variable enables it to send values back to the server.
-        observe({  # Observe the map_outputs reactive to see if the tab should be changed
+        observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
           if (!is.null(moduleOutputs$map_outputs$change_tab)) {
             updateNavbarPage(session, "navbar", selected = moduleOutputs$map_outputs$change_tab)
             moduleOutputs$map_outputs$change_tab <- NULL
