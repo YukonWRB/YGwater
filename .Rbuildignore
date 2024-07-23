@@ -8,3 +8,4 @@ $cran-comments\.md$
 ^dev$
 ^data-raw$
 ^.Rprof\.out$
+^\.secret$
