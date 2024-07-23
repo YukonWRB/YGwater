@@ -29,10 +29,10 @@ YOWNplot_RawData <- function(AQID,
 
   # Sort out save location
   saveTo <- tolower(saveTo)
-  if (save_path %in% c("Choose", "choose")) {
+  if (saveTo %in% c("Choose", "choose")) {
     print("Select the folder where you want this graph saved.")
-    save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
-  } else if(saveTo == "desktop") {
+    saveTo <- as.character(utils::choose.dir(caption = "Select Save Folder"))
+  } else if (saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
   } else if (dir.exists(saveTo) == FALSE) {
     stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
@@ -62,14 +62,14 @@ YOWNplot_RawData <- function(AQID,
   timeseries$ts_lag <- dplyr::lag(timeseries$timestamp_MST)
   timeseries$lag_val <- difftime(timeseries$timestamp_MST, timeseries$ts_lag, units = "hours")
   gapdf <- timeseries %>%
-    dplyr::filter(lag_val > 6)
+    dplyr::filter(.data$lag_val > 6)
   gapdf$lag_val <- as.numeric(gapdf$lag_val)
 
   # If there are gaps present, fill in gaps with hourly timestamps, with NA values in the "value" column
-  if(nrow(gapdf != 0)){
+  if (nrow(gapdf != 0)) {
     # Create a list of data frames for each identified data gap, fill in hourly time stamps
     gaplist <- list()
-    for(i in 1:nrow(gapdf)) {
+    for (i in 1:nrow(gapdf)) {
       df <- data.frame(seq.POSIXt(from = gapdf[i, 1], by = "-1 hour", length.out = gapdf[i, 8]), NA, as.character(-5), "MISSING DATA", gapdf$approval_level[i], gapdf$approval_description[i], NA, NA)
       colnames(df) <- colnames(gapdf)
       gaplist[[i]] <- df
@@ -85,9 +85,9 @@ YOWNplot_RawData <- function(AQID,
   rawdf <- rawdf[order(rawdf$timestamp_MST),] # Order by timestamp
   rawdf <- rawdf[!duplicated(rawdf["timestamp_MST"]),] #Remove second entry for duplicated timestamps
   rawdf <- rawdf %>%
-    dplyr::select(timestamp_MST,
-                   value,
-                   grade_description)
+    dplyr::select(.data$timestamp_MST,
+                   .data$value,
+                   .data$grade_description)
   rawdf$value <- round(rawdf$value, 3)
 
 

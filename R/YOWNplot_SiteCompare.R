@@ -24,26 +24,26 @@
 #TODO: pass login and server parameters to the aq_download function
 
 YOWNplot_SiteCompare <- function(YOWNindex,
-                                 tsunit,
+                                 tsunit = "bgs",
                                  chartRange = "all",
-                                 chartXInterval ="1 month",
+                                 chartXInterval ="6 month",
                                  saveTo = "desktop",
                                  login = Sys.getenv(c("AQUSER", "AQPASS")),
                                  server ="https://yukon.aquaticinformatics.net/AQUARIUS") {
 
-  # YOWNindex = c("YOWN-2210", "YOWN-2211", "YOWN-2212S", "YOWN-2212D", "YOWN-2213", "YOWN-2214", "YOWN-2215S", "YOWN-2215D")
-  # tsunit = "asl"
-  # chartRange = "all"
-  # chartXInterval ="1 month"
-  # saveTo = "desktop"
-  # login = Sys.getenv(c("AQUSER", "AQPASS"))
-  # server ="https://yukon.aquaticinformatics.net/AQUARIUS"
+  YOWNindex = c("YOWN-1930S", "YOWN-1930D")
+  tsunit = "bgs"
+  chartRange = "all"
+  chartXInterval ="6 month"
+  saveTo = "desktop"
+  login = Sys.getenv(c("AQUSER", "AQPASS"))
+  server ="https://yukon.aquaticinformatics.net/AQUARIUS"
 
   # Sort out save location
   saveTo <- tolower(saveTo)
-  if (save_path %in% c("Choose", "choose")) {
+  if (saveTo %in% c("Choose", "choose")) {
     print("Select the folder where you want this graph saved.")
-    save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+    saveTo <- as.character(utils::choose.dir(caption="Select Save Folder"))
   } else if(saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
   } else if (dir.exists(saveTo) == FALSE) {
@@ -76,10 +76,10 @@ YOWNplot_SiteCompare <- function(YOWNindex,
 
     # Download data from Aquarius
     #TODO: pass the aqts server ID, username, password to this function in case they ever change
-    datalist <- aq_download(loc_id = i,
+    datalist <- YGwater::aq_download(loc_id = i,
                                       ts_name = ts_name,
-                                      login = login,
-                                      server = server)
+                                     login = Sys.getenv(c("AQUSER", "AQPASS")),
+                                     server ="https://yukon.aquaticinformatics.net/AQUARIUS")
 
     # Unlist time series data
     timeseries <- datalist$timeseries
@@ -91,14 +91,14 @@ YOWNplot_SiteCompare <- function(YOWNindex,
     timeseries$value[timeseries$grade_description != "A" & timeseries$grade_description != "B" & timeseries$grade_description != "C" & timeseries$grade_description != "Missing Data"] <- NA
 
     # Change timestamps from UTC to MST
-    attr(timeseries$timestamp_UTC , "tzone") <- "MST"
-    names(timeseries)[names(timeseries) == "timestamp_UTC"] <- "timestamp_MST"
+    attr(timeseries$datetime , "tzone") <- "MST"
+    names(timeseries)[names(timeseries) == "datetime"] <- "timestamp_MST"
 
     #Find data gaps of greater than 6 hours (indicative of logger failure) and generate value NA data sets to fill in gaps
     timeseries$ts_lag <- dplyr::lag(timeseries$timestamp_MST)
     timeseries$lag_val <- difftime(timeseries$timestamp_MST, timeseries$ts_lag, units = "hours")
     gapdf <- timeseries %>%
-      dplyr::filter(lag_val > 6)
+      dplyr::filter(.data$lag_val > 6)
     gapdf$lag_val <- as.numeric(gapdf$lag_val)
 
     # If there are gaps present, fill in gaps with hourly timestamps
@@ -119,7 +119,7 @@ YOWNplot_SiteCompare <- function(YOWNindex,
     }
     df$YOWNID <- i
     df <- df %>%
-      dplyr::select(YOWNID, tidyselect::everything())
+      dplyr::select(.data$YOWNID, tidyselect::everything())
     sitelist[[i]] <- df
   }
 
@@ -129,7 +129,7 @@ YOWNplot_SiteCompare <- function(YOWNindex,
 
   # Plot data, format and export
   plot <- ggplot2::ggplot() +
-    ggplot2::geom_line(data = plotdf, ggplot2::aes(x = timestamp_MST, y = value, group = YOWNID, colour = YOWNID),
+    ggplot2::geom_line(data = plotdf, ggplot2::aes(x = .data$timestamp_MST, y = .data$value, group = .data$YOWNID, colour = .data$YOWNID),
                        na.rm = TRUE) +
     ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 1.5), nrow = 1)) +
     cowplot::theme_cowplot() +
@@ -164,9 +164,9 @@ YOWNplot_SiteCompare <- function(YOWNindex,
                                        limits = limits,
                                        breaks = breaks,
                                        expand = c(0, 0))
-  } else if(tsunit == "btoc | bgs") {
+  } else if(tsunit == "bgs" | tsunit == "btoc") {
     limits <- c(plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling), plyr::round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor))
-    breaks <- seq(ceiling(max(stats::na.omit(plotdf$value))), floor(min(stats::na.omit(plotdf$value))), by = 0.25)
+    breaks <- seq(ceiling(max(stats::na.omit(plotdf$value))), floor(min(stats::na.omit(plotdf$value))), by = -0.25)
     plot <- plot + ggplot2::scale_y_reverse(name = paste0("Groundwater level (m ", tsunit, " )"),
                                        limits = limits,
                                        breaks = breaks,
@@ -176,14 +176,14 @@ YOWNplot_SiteCompare <- function(YOWNindex,
   plot <- plot + ggplot2::scale_x_datetime(name = "",
                                    limits = c(min(plotdf$timestamp_MST), max(plotdf$timestamp_MST)),
                                    date_breaks = chartXInterval,
-                                   date_labels = "%b-%y",
+                                   date_labels = "%Y-%b",
                                    expand = c(0, 0))
 
 
   title <- ggplot2::ggplot() +
     ggplot2::geom_blank() +
     ggplot2::theme_minimal() +
-    ggplot2::labs(title = "Groundwater Level Record: Site Comparison") +
+    ggplot2::labs(title = "Groundwater Level Record: Site Comparison - Cowley Creek YOWN-1930") +
     ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0,
                                                       vjust = 0,
                                                       size = 14,
@@ -194,7 +194,7 @@ YOWNplot_SiteCompare <- function(YOWNindex,
   caption <- ggplot2::ggplot() +
     ggplot2::geom_blank() +
     ggplot2::theme_minimal() +
-    ggplot2::labs(title = paste0("Period of Record: ", strftime(as.POSIXct(min(stats::na.omit(timeseries$timestamp_MST))), format = "%Y-%m-%d"), " to ", strftime(as.POSIXct(max(stats::na.omit(timeseries$timestamp_MST))), format = "%Y-%m-%d"), " (Date of last data entry)",  "\nPlot generated: ", Sys.Date(), "\nYukon Observation Well Network")) +
+    ggplot2::labs(title = paste0("Period of Record: ", strftime(as.POSIXct(min(stats::na.omit(timeseries$datetime))), format = "%Y-%m-%d"), " to ", strftime(as.POSIXct(max(stats::na.omit(timeseries$timestamp_MST))), format = "%Y-%m-%d"), " (Date of last data entry)",  "\nPlot generated: ", Sys.Date(), "\nYukon Observation Well Network")) +
     ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0,
                                                       vjust = 0,
                                                       size = 9,

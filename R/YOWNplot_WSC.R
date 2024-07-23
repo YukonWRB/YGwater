@@ -31,19 +31,20 @@ YOWNplot_WSC <- function(YOWNindex,
                          server ="https://yukon.aquaticinformatics.net/AQUARIUS") {
 
 
-  # YOWNindex = c("YOWN-2201S", "YOWN-2201D", "YOWN-2202", "YOWN-2203", "YOWN-2204", "YOWN-2205")
-  # WSCindex = c("09AB004")
+  YOWNindex = c("YOWN-2201S", "YOWN-2201D", "YOWN-2202", "YOWN-2203", "YOWN-2204", "YOWN-2205")
+  WSCindex = c("09AB004")
   # saveTo = "desktop"
   # title = "YOWN wells vs. WSC Sites"
   # chartXInterval = "1 month"
   # login = Sys.getenv(c("AQUSER", "AQPASS"))
+  # server = "https://yukon.aquaticinformatics.net/AQUARIUS"
 
   # Sort out save location
   saveTo <- tolower(saveTo)
-  if (save_path %in% c("Choose", "choose")) {
+  if (saveTo %in% c("Choose", "choose")) {
     print("Select the folder where you want this graph saved.")
-    save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
-  } else if(saveTo == "desktop") {
+    saveTo <- as.character(utils::choose.dir(caption = "Select Save Folder"))
+  } else if (saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
   } else if (dir.exists(saveTo) == FALSE) {
     stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
@@ -51,13 +52,13 @@ YOWNplot_WSC <- function(YOWNindex,
 
   # Download all YOWN data
   YOWNlist <- list()
-  for(i in YOWNindex) {
+  for (i in YOWNindex) {
 
     #TODO confirm that this print is needed
     print(i)
 
     # Download data from Aquarius
-    datalist <- suppressMessages(aq_download(loc_id = i,
+    datalist <- suppressMessages(YGwater::aq_download(loc_id = i,
                                                        ts_name = "Wlevel_masl.Calculated",
                                                        login = login,
                                                        server = server))
@@ -72,21 +73,21 @@ YOWNplot_WSC <- function(YOWNindex,
     timeseries$value[timeseries$grade_description != "A" & timeseries$grade_description != "B" & timeseries$grade_description != "C" & timeseries$grade_description != "Missing Data"] <- NA
 
     # Change timestamps from UTC to MST
-    attr(timeseries$timestamp_UTC , "tzone") <- "MST"
-    names(timeseries)[names(timeseries) == "timestamp_UTC"] <- "timestamp_MST"
+    attr(timeseries$datetime , "tzone") <- "MST"
+    names(timeseries)[names(timeseries) == "datetime"] <- "timestamp_MST"
 
     #Find data gaps of greater than 6 hours (indicative of logger failure) and generate value NA data sets to fill in gaps
     timeseries$ts_lag <- dplyr::lag(timeseries$timestamp_MST)
     timeseries$lag_val <- difftime(timeseries$timestamp_MST, timeseries$ts_lag, units = "hours")
     gapdf <- timeseries %>%
-      dplyr::filter(lag_val > 6)
+      dplyr::filter(.data$lag_val > 6)
     gapdf$lag_val <- as.numeric(gapdf$lag_val)
 
     # If there are gaps present, fill in gaps with hourly timestamps
-    if(nrow(gapdf != 0)){
+    if (nrow(gapdf != 0)) {
       # Create a list of data frames for each identified data gap, fill in hourly time stamps
       gaplist <- list()
-      for(j in 1:nrow(gapdf)) {
+      for (j in 1:nrow(gapdf)) {
         df <- data.frame(seq.POSIXt(from = gapdf[j, 1], by = "-1 hour", length.out = gapdf[j, 8]), NA, as.character(-5), "MISSING DATA", gapdf$approval_level[j], gapdf$approval_description[j], NA, NA)
         colnames(df) <- colnames(gapdf)
         gaplist[[j]] <- df
@@ -102,7 +103,7 @@ YOWNplot_WSC <- function(YOWNindex,
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select(ID, timestamp_MST, value)
+      dplyr::select(.data$ID, .data$timestamp_MST, .data$value)
     YOWNlist[[i]] <- df
   }
 
@@ -112,25 +113,27 @@ YOWNplot_WSC <- function(YOWNindex,
 
   # Download all WSC data
   WSClist <- list()
-  for(i in WSCindex) {
+  for (i in WSCindex) {
 
     print(i)
 
     # Download data from Aquarius
-    datalist <- suppressMessages(aq_download(loc_id = i,
-                                      ts_name = "Stage.Preliminary"))
+    datalist <- suppressMessages(YGwater::aq_download(loc_id = i,
+                                      ts_name = "Stage.Preliminary",
+                                      login = login,
+                                      server = server))
 
     # Unlist time series data
     timeseries <- datalist$timeseries
 
     # Change timestamps from UTC to MST
-    attr(timeseries$timestamp_UTC , "tzone") <- "MST"
-    names(timeseries)[names(timeseries) == "timestamp_UTC"] <- "timestamp_MST"
+    attr(timeseries$datetime , "tzone") <- "MST"
+    names(timeseries)[names(timeseries) == "datetime"] <- "timestamp_MST"
 
     #Filter out all observations not taken on the hour
     df <- timeseries
     df <- df %>%
-      dplyr::filter(lubridate::minute(timestamp_MST) == 00)
+      dplyr::filter(lubridate::minute(.data$timestamp_MST) == 00)
 
     # Add station elevation to convert to m asl
     df$value <- df$value + as.numeric(datalist[["metadata"]][7, 2])
@@ -138,7 +141,7 @@ YOWNplot_WSC <- function(YOWNindex,
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select(ID, timestamp_MST, value)
+      dplyr::select(.data$ID, .data$timestamp_MST, .data$value)
     WSClist[[i]] <- df
   }
 
@@ -148,7 +151,7 @@ YOWNplot_WSC <- function(YOWNindex,
 
   # Trim WSC data frame to time period of longest well record, as WSC records tend to be much longer
   plotdf_WSC <- plotdf_WSC %>%
-    dplyr::filter(timestamp_MST >= min(stats::na.omit(plotdf_YOWN$timestamp_MST)))
+    dplyr::filter(.data$timestamp_MST >= min(stats::na.omit(plotdf_YOWN$timestamp_MST)))
 
   # Create one massive data frame for chart parameter calculation
   fulldf <- dplyr::full_join(plotdf_YOWN, plotdf_WSC, by = c("ID", "timestamp_MST", "value"))
@@ -163,9 +166,9 @@ YOWNplot_WSC <- function(YOWNindex,
   # Plot data
   plot <- ggplot2::ggplot() +
     ggplot2::geom_line(data = plotdf_YOWN,
-                       ggplot2::aes(x = timestamp_MST, y = value, group = ID, colour = ID)) +
+                       ggplot2::aes(x = .data$timestamp_MST, y = .data$value, group = .data$ID, colour = .data$ID)) +
     ggplot2::geom_line(data = plotdf_WSC,
-                       ggplot2::aes(x = timestamp_MST, y = value, group = ID, colour = ID)) +
+                       ggplot2::aes(x = .data$timestamp_MST, y = .data$value, group = .data$ID, colour = .data$ID)) +
     cowplot::theme_cowplot() +
     ggplot2::theme(plot.margin = ggplot2::unit(c(4.2, 1.6, 3.1, 1.2), "cm"),
           panel.border = ggplot2::element_rect(color = "grey",
@@ -243,5 +246,4 @@ YOWNplot_WSC <- function(YOWNindex,
   print("Plot Generated")
 
 }
-
 

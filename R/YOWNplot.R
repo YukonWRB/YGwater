@@ -36,13 +36,14 @@ YOWNplot <- function(AQID,
                      server ="https://yukon.aquaticinformatics.net/AQUARIUS") {
 
   # Debug and development params. Leave as comments.
-  # AQID = "YOWN-0101"
+  # AQID = "YOWN-1925"
   # timeSeriesID = "Wlevel_bgs.Calculated"
   # chartXinterval = "auto"
   # dateRange = "all"
   # stats = FALSE
   # smooth = FALSE
   # saveTo = "desktop"
+  # format = "png"
   # login = Sys.getenv(c("AQUSER", "AQPASS"))
   # server = "https://yukon.aquaticinformatics.net/AQUARIUS"
   
@@ -91,7 +92,7 @@ YOWNplot <- function(AQID,
   fulldf$ts_lag <- dplyr::lag(fulldf$timestamp_MST) # Calculate lag time between each timestamp
   fulldf$lag_val <- difftime(fulldf$timestamp_MST, fulldf$ts_lag, units = "hours") # format lag as hours
   gapdf <- fulldf %>% # filter gap df to gaps of more than 6 hours
-    dplyr::filter(lag_val > 6)
+    dplyr::filter(.data$lag_val > 6)
   gapdf$lag_val <- as.numeric(gapdf$lag_val) # convert to numeric
 
   # Create a list of data frames for each identified data gap, fill in time stamps with NA in "value" column
@@ -110,16 +111,16 @@ YOWNplot <- function(AQID,
 
   #### Advanced data processing and stat calculations ####
   fulldf <- fulldf %>%
-    dplyr::mutate(date = format(fulldf$timestamp_MST, "%Y-%m-%d"), # Add date column (YMD)
-                  year = format(fulldf$timestamp_MST, "%Y"), # Add year column
-                  month = format(fulldf$timestamp_MST, "%m"), # Add month column
-                  day = format(fulldf$timestamp_MST, "%d"), # Add day column
-                  monthday = format(fulldf$timestamp_MST, "%m-%d")) # Add month-day column
+    dplyr::mutate("date" = format(fulldf$timestamp_MST, "%Y-%m-%d"), # Add date column (YMD)
+                  "year" = format(fulldf$timestamp_MST, "%Y"), # Add year column
+                  "month" = format(fulldf$timestamp_MST, "%m"), # Add month column
+                  "day" = format(fulldf$timestamp_MST, "%d"), # Add day column
+                  "monthday" = format(fulldf$timestamp_MST, "%m-%d")) # Add month-day column
   datestats <- suppressWarnings(dplyr::group_by(fulldf, date) %>% # Calculate statistics by date (ie. Jan. 1, 2000)
-                                  dplyr::summarize(datemin = min(value, na.rm = TRUE), datemax = max(value, na.rm = TRUE), datemean = mean(value, na.rm = TRUE)))
+                                  dplyr::summarize("datemin" = min(value, na.rm = TRUE), "datemax" = max(value, na.rm = TRUE), "datemean" = mean(value, na.rm = TRUE)))
   fulldf <- suppressMessages(dplyr::full_join(fulldf, datestats)) # Join full df to datestats
-  daystats <- suppressWarnings(dplyr::group_by(fulldf, monthday) %>% # Calculate year-over-year daily statistics (ie. Jan. 1)
-                                 dplyr::summarize(daymin = min(datemin, na.rm = TRUE), daymax = max(datemax, na.rm = TRUE), daymean = mean(datemean, na.rm = TRUE), N = dplyr::n()))
+  daystats <- suppressWarnings(dplyr::group_by(fulldf, .data$monthday) %>% # Calculate year-over-year daily statistics (ie. Jan. 1)
+                                 dplyr::summarize("daymin" = min(.data$datemin, na.rm = TRUE), "daymax" = max(.data$datemax, na.rm = TRUE), daymean = mean(.data$datemean, na.rm = TRUE), N = dplyr::n()))
   dayavg <- stats::na.omit(daystats)
   fulldf <- suppressMessages(dplyr::full_join(fulldf, daystats)) # Join fulldf to daystats
 
@@ -164,10 +165,10 @@ YOWNplot <- function(AQID,
   # Apply smoothing function if specified
   if (is.numeric(smooth)) {
     plotdf <- plotdf %>%
-      dplyr::mutate(datemean = zoo::rollapply(data = plotdf$datemean, FUN = mean, width = smooth, partial = TRUE)) %>%
-      dplyr::mutate(daymean = zoo::rollapply(data = plotdf$daymean,  FUN = mean, width = smooth, partial = TRUE)) %>%
-      dplyr::mutate(daymin = zoo::rollapply(data = plotdf$daymin,  FUN = mean, width = smooth, partial = TRUE)) %>%
-      dplyr::mutate(daymax = zoo::rollapply(data = plotdf$daymax,  FUN = mean, width = smooth, partial = TRUE))
+      dplyr::mutate("datemean" = zoo::rollapply(data = plotdf$datemean, FUN = mean, width = smooth, partial = TRUE)) %>%
+      dplyr::mutate("daymean" = zoo::rollapply(data = plotdf$daymean,  FUN = mean, width = smooth, partial = TRUE)) %>%
+      dplyr::mutate("daymin" = zoo::rollapply(data = plotdf$daymin,  FUN = mean, width = smooth, partial = TRUE)) %>%
+      dplyr::mutate("daymax" = zoo::rollapply(data = plotdf$daymax,  FUN = mean, width = smooth, partial = TRUE))
   } else if (smooth == TRUE) {
     stop("ERROR: Specify smoothing value as a number")
   }
@@ -217,7 +218,7 @@ YOWNplot <- function(AQID,
 
     # Generate vector of TRUE/FALSE to stop GGplot from filling in gaps when NA values exist
     NAcomp <- rle(!is.na(plotdf$datemean))
-    NAcomp$values[which(NAcomp$lengths>1 & !NAcomp$values)] <- TRUE
+    NAcomp$values[which(NAcomp$lengths > 1 & !NAcomp$values)] <- TRUE
     NAadd <- inverse.rle(NAcomp)
 
     # Assign year as factor variable
@@ -226,16 +227,16 @@ YOWNplot <- function(AQID,
     # Create  base plot, add aesthetic tweaks
     plot <- ggplot2::ggplot() +
       ggplot2::geom_ribbon(data = plotdf,
-                           ggplot2::aes(ymin = daymin, ymax = daymax, x = timestamp_MST, fill = "Range of Historical Max & Min Daily Groundwater Levels")) +
+                           ggplot2::aes(ymin = .data$daymin, ymax = .data$daymax, x = .data$timestamp_MST, fill = "Range of Historical Max & Min Daily Groundwater Levels")) +
       ggplot2::scale_fill_manual(name = "", values = c("Range of Historical Max & Min Daily Groundwater Levels" = "#B8BDC3")) +
       ggplot2::geom_line(data = plotdf,
-                         ggplot2::aes(x = timestamp_MST, y = daymean, colour = "Historical Mean Daily Groundwater Level"),
+                         ggplot2::aes(x = .data$timestamp_MST, y = .data$daymean, colour = "Historical Mean Daily Groundwater Level"),
                          linewidth = 0.3,
                          na.rm = TRUE) +
       ggplot2::scale_colour_manual(name = "", values = c("Historical Mean Daily Groundwater Level" = "#0097A9")) +
       ggnewscale::new_scale_colour() +
       ggplot2::geom_line(data = plotdf[NAadd,],
-                         ggplot2::aes(x = timestamp_MST, y = datemean, colour = "Daily Average Groundwater Level"),
+                         ggplot2::aes(x = .data$timestamp_MST, y = .data$datemean, colour = "Daily Average Groundwater Level"),
                          linewidth = 0.5,
                          na.rm = TRUE) +
       ggplot2::scale_colour_manual(name = "", values = c("Daily Average Groundwater Level" = "#244C5A")) +
@@ -292,20 +293,20 @@ YOWNplot <- function(AQID,
     # Apply smoothing function if specified
     if (is.numeric(smooth)) {
       plotdf <- plotdf %>%
-        dplyr::mutate(datemean = zoo::rollapply(data = plotdf$datemean, FUN = mean, width = smooth, partial = TRUE)) %>%
-        dplyr::mutate(daymean = zoo::rollapply(data = plotdf$daymean,  FUN = mean, width = smooth, partial = TRUE)) %>%
-        dplyr::mutate(daymin = zoo::rollapply(data = plotdf$daymin,  FUN = mean, width = smooth, partial = TRUE)) %>%
-        dplyr::mutate(daymax = zoo::rollapply(data = plotdf$daymax,  FUN = mean, width = smooth, partial = TRUE))
+        dplyr::mutate("datemean" = zoo::rollapply(data = plotdf$datemean, FUN = mean, width = smooth, partial = TRUE)) %>%
+        dplyr::mutate("daymean" = zoo::rollapply(data = plotdf$daymean,  FUN = mean, width = smooth, partial = TRUE)) %>%
+        dplyr::mutate("daymin" = zoo::rollapply(data = plotdf$daymin,  FUN = mean, width = smooth, partial = TRUE)) %>%
+        dplyr::mutate("daymax" = zoo::rollapply(data = plotdf$daymax,  FUN = mean, width = smooth, partial = TRUE))
     } else if (smooth == TRUE) {
       stop("ERROR: Specify smoothing value as a number")
     }
 
     # Separate current year from historical
     plotdf_hist <- plotdf %>%
-      dplyr::filter(year != max(plotdf$year))
+      dplyr::filter(.data$year != max(plotdf$year))
 
     plotdf_current <- plotdf %>%
-      dplyr::filter(year == max(plotdf$year))
+      dplyr::filter(.data$year == max(plotdf$year))
 
     # Generate vector of TRUE/FALSE to stop GGplot from filling in gaps when NA values exist
     NAcompc <- rle(!is.na(plotdf_current$datemean))
@@ -320,10 +321,10 @@ YOWNplot <- function(AQID,
     # Create plot, add aesthetic tweaks
     plot <- ggplot2::ggplot() +
       ggplot2::geom_line(data = plotdf_hist[NAaddh,],
-                         ggplot2::aes(x = monthday,
-                                      y = datemean,
-                                      group = year,
-                                      colour = year),
+                         ggplot2::aes(x = .data$monthday,
+                                      y = .data$datemean,
+                                      group = .data$year,
+                                      colour = .data$year),
                          linewidth = 0.2) +
       ggplot2::scale_colour_gradient(trans = "date",
                                      low = "#7A9A01",
@@ -334,8 +335,8 @@ YOWNplot <- function(AQID,
                                      expand = 0) +
       ggnewscale::new_scale_color() +
       ggplot2::geom_line(data = plotdf_current[NAaddc,],
-                         ggplot2::aes(x = monthday,
-                                      y = datemean,
+                         ggplot2::aes(x = .data$monthday,
+                                      y = .data$datemean,
                                       group = 1,
                                       colour = "Water Level (title year)"),
                          linewidth = 1) +
@@ -392,7 +393,7 @@ YOWNplot <- function(AQID,
     # Generate plot
     plot <- ggplot2::ggplot() +
       ggplot2::geom_line(data = plotdf[NAadd,],
-                         ggplot2::aes(x = timestamp_MST,
+                         ggplot2::aes(x = .data$timestamp_MST,
                                       y = value,
                                       colour = "Daily Average Water Level"),
                          linewidth = 1) +
@@ -468,9 +469,9 @@ YOWNplot <- function(AQID,
         plot <- plot +
           ggnewscale::new_scale_colour() +
           ggplot2::geom_path(data = plotdf,
-                             ggplot2::aes(x = timestamp_MST,
-                                          y = plyr::round_any(max(stats::na.omit(daymax)), 0.5, f = ceiling),
-                                          colour = factor(grade_description), group = 1),
+                             ggplot2::aes(x = .data$timestamp_MST,
+                                          y = plyr::round_any(max(stats::na.omit(.data$daymax)), 0.5, f = ceiling),
+                                          colour = factor(.data$grade_description), group = 1),
                              linewidth = 2.5,
                              show.legend = FALSE) +
           ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
@@ -483,9 +484,9 @@ YOWNplot <- function(AQID,
         plot <- plot +
           ggnewscale::new_scale_colour() +
           ggplot2::geom_path(data = plotdf_current,
-                             ggplot2::aes(x = monthday,
+                             ggplot2::aes(x = .data$monthday,
                                           y = plyr::round_any(max(stats::na.omit(plotdf$datemax)), 0.5, f = ceiling),
-                                          colour = factor(grade_description), group = 1),
+                                          colour = factor(.data$grade_description), group = 1),
                              linewidth = 2.5,
                              show.legend = FALSE) +
           ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
@@ -498,9 +499,9 @@ YOWNplot <- function(AQID,
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf,
-                           ggplot2::aes(x = timestamp_MST,
+                           ggplot2::aes(x = .data$timestamp_MST,
                                         y = plyr::round_any(max(stats::na.omit(value)), 0.5, f = ceiling),
-                                        colour = factor(grade_description), group = 1),
+                                        colour = factor(.data$grade_description), group = 1),
                            linewidth = 2.5,
                            show.legend = FALSE) +
         ggplot2::scale_colour_manual(name = "Grades",
@@ -522,7 +523,7 @@ YOWNplot <- function(AQID,
     if (stats != FALSE) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
-        ggplot2::geom_path(data = plotdf_current, ggplot2::aes(x = timestamp_MST, y = plyr::round_any(min(stats::na.omit(daymin)), 0.25, f = floor), colour = factor(grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
+        ggplot2::geom_path(data = plotdf_current, ggplot2::aes(x = .data$timestamp_MST, y = plyr::round_any(min(stats::na.omit(.data$daymin)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
         ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01", "B" = "#0097A9", "C" = "#F2A900", "REDACTED" = "#DC4405", "MISSING DATA" = "black")) +
         ggplot2::scale_y_continuous(name = ytitle,
                                     limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling)),
@@ -531,7 +532,7 @@ YOWNplot <- function(AQID,
     } else if (stats == FALSE) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
-        ggplot2::geom_path(data = plotdf, ggplot2::aes(x = timestamp_MST, y = plyr::round_any(min(stats::na.omit(daymean)), 0.25, f = floor), colour = factor(grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
+        ggplot2::geom_path(data = plotdf, ggplot2::aes(x = .data$timestamp_MST, y = plyr::round_any(min(stats::na.omit(.data$daymean)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
         ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01", "B" = "#0097A9", "C" = "#F2A900", "REDACTED" = "#DC4405", "MISSING DATA" = "black")) +
         ggplot2::scale_y_continuous(name = ytitle,
                                     limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymean)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymean)), 0.5, f = ceiling)),
