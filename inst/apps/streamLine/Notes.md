@@ -7,6 +7,8 @@
   - Forecasts table needs additional model information, possibly new cols for 95% CI, min/max of ensemble, ensemble or not, number of members, ....
 - Add HRDPA stored in files to the DB
 
+- Look into moving from fluidPage to bslib::fluid_page and navbarPage to bslib::page_navbar
+
 ## Feedback from Sean Boots
 - YG logo replaces aurora, aurora under login/lang side
 - Remove login option entirely, make a separate URL for partners (that has a login on page initial access)

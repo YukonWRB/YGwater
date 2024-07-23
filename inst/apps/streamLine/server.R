@@ -3,7 +3,6 @@
 server <- function(input, output, session) {
   
   # Log in to the database (optional) ##########################################
-  log_attempts <- reactiveVal(0)
   
   # Log in as public user by default
   DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
@@ -11,24 +10,26 @@ server <- function(input, output, session) {
   observeEvent(input$loginBtn, {
     showModal(modalDialog(
       title = "Login",
-      renderUI(HTML("Reserved for Yukon Government users and partner organizations/individuals. Contact us if you think you should have access. <br> <br>")),
-      textInput("username", "Username"),
-      passwordInput("password", "Password"),
+      renderUI(HTML(translations[id == "login_txt", get(languageSelection$language)][[1]], "<br> <br>")),
+      
+      textInput("username", translations[id == "un", get(languageSelection$language)][[1]]),
+      passwordInput("password", translations[id == "pwd", get(languageSelection$language)][[1]]),
       footer = tagList(
-        modalButton("Cancel"),
-        actionButton("confirmLogin", "Log in", class = "btn-primary")
+        modalButton(translations[id == "login_close", get(languageSelection$language)][[1]]),
+        actionButton("confirmLogin", translations[id == "login_confirm", get(languageSelection$language)][[1]], class = "btn-primary")
       )
     ))
   })
 
+  log_attempts <- reactiveVal(0) # counter for login attempts
   observeEvent(input$confirmLogin, {
     log_attempts(log_attempts() + 1)
-    if (log_attempts() > 5) {
+    if (log_attempts() > 3) {
       showModal(modalDialog(
-        title = "Login failed",
-        "Too many login attempts. Please try again later.",
+        title = translations[id == "login_fail", get(languageSelection$language)][[1]],
+        translations[id == "login_fail_attempts", get(languageSelection$language)][[1]],
         easyClose = TRUE,
-        footer = modalButton("Close")
+        footer = modalButton(translations[id == "login_close", get(languageSelection$language)][[1]])
       ))
       return()
     } else {
@@ -41,10 +42,10 @@ server <- function(input, output, session) {
         
         # Show a pop-up message to the user that they are logged in
         showModal(modalDialog(
-          title = "Login successful",
-          paste0("You are now logged in as '", input$username, "'."),
+          title = translations[id == "login_success", get(languageSelection$language)][[1]],
+          paste0(translations[id == "login_success_msg", get(languageSelection$language)][[1]], " '", input$username, "'."),
           easyClose = TRUE,
-          footer = modalButton("Close")
+          footer = modalButton(translations[id == "login_close", get(languageSelection$language)][[1]])
         ))
         
         # Re-fetch data from the database after successful login
@@ -67,10 +68,10 @@ server <- function(input, output, session) {
         DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
         # Show a pop-up message to the user that the login failed
         showModal(modalDialog(
-          title = "Login failed",
-          "Username or password failed.",
+          title = translations[id == "login_fail", get(languageSelection$language)][[1]],
+          translations[id == "login_fail_msg", get(languageSelection$language)][[1]],
           easyClose = TRUE,
-          footer = modalButton("Close")
+          footer = modalButton(translations[id == "login_close", get(languageSelection$language)][[1]])
         ))
       } 
     }
@@ -157,15 +158,21 @@ console.log(language);")
     }
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
-  # Language selection reactive based on the user's selected language (which is automatically set to the browser's language on load)
-  languageSelection <- reactiveValues()
+  # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
+  languageSelection <- reactiveValues() # holds language and abbreviation
+  
+  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
+  observeEvent(input$langSelect, {
+    if (input$langSelect %in% names(translations)[-c(1,2)]) {
+      languageSelection$language <- input$langSelect
+    }
+  })
+  
   observe({
-    languageSelection$language <- input$langSelect
-    languageSelection$abbrev <- translations[id == "titleCase", get(input$langSelect)][[1]]
+    languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
   })
   
   
-  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
   observe({
     session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(languageSelection$language == "Français", "fr", "en")))  # Updates the language in the web page html head.
     output$home_title <- renderText({
