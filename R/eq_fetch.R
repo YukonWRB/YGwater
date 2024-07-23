@@ -21,16 +21,16 @@ eq_fetch <- function(EQcode,
                      BD = 2,
                      apply_standards = TRUE){
   
-  EQcode <- "EG"
-  stationIDs = c("DG1", "DG2", "ISH", "LSDP-UND", "W22", "W23", "W27", "W29", "W4", "W49", "W8", "W99")
-  paramIDs = "all"
-  dates = c("1990-01-01", "2016-06-01")
-  BD <- 2
-  apply_standards = FALSE
+  # EQcode <- "EG"
+  # stationIDs = c("DG1", "DG2", "ISH", "LSDP-UND", "W22", "W23", "W27", "W29", "W4", "W49", "W8", "W99")
+  # paramIDs = "all"
+  # dates = c("1990-01-01", "2016-06-01")
+  # BD <- 2
+  # apply_standards = FALSE
   
   rlang::check_installed("odbc", reason = "required to connect to EQWin Access DB") #This is here because odbc is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
   
-  # Set a few options (I'll probs remove these)
+  # Set a few options
   
   old_scipen <- getOption("scipen")
   old_dplyr <- getOption("dplyr.summarise.inform")
