@@ -9,10 +9,11 @@ basinPrecip(
   start = Sys.time() - 60 * 60 * 24,
   end = Sys.time(),
   map = FALSE,
-  hrdpa_loc = NULL,
-  hrdps_loc = NULL,
+  raster_col = terra::map.pal("haxby", 100),
   silent = FALSE,
-  con = NULL
+  con = NULL,
+  hrdpa_loc = NULL,
+  hrdps_loc = NULL
 )
 }
 \arguments{
@@ -24,13 +25,15 @@ basinPrecip(
 
 \item{map}{Should a map be output to the console? See details for more info.}
 
-\item{hrdpa_loc}{The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.}
-
-\item{hrdps_loc}{The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.}
+\item{raster_col}{The colour palette to use for the raster plot. Default is terra::map.pal("haxby", 100) (\strong{not} the terra::plot default). Refer to \code{\link[terra:mappal]{terra::map.pal()}} for options.}
 
 \item{silent}{If TRUE, no output is printed to the console.}
 
-\item{con}{A connection to the AquaCache/hydromet database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
+\item{con}{A connection to the AquaCache/hydromet database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
+
+\item{hrdpa_loc}{The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.}
+
+\item{hrdps_loc}{The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.}
 }
 \value{
 The accumulated precipitation in mm of water within the drainage specified or immediately surrounding the point specified in \code{location} printed to the console and (optionally) a map of precipitation printed to the console. A list is also generated containing statistics and the optional plot; to save this plot to disc use either png() or dev.print(), or use the graphical device export functionality.

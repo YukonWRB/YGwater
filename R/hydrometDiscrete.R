@@ -1,4 +1,4 @@
-#' Discrete hydromet data plotting
+#' Discrete hydrometric data plotting
 #'
 #' @description
 #' `r lifecycle::badge('stable')`
@@ -7,7 +7,7 @@
 #'
 #' Notice: in many cases, you're better off using the Shiny app at [hydroApp()] to generate and export your plot. Read on if you need additional control over the final product.
 #'
-#' This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
+#' This function plots data from the local hydrometric database (maintained by the AquaCache package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
 #'
 #' @param location The location for which you want a plot. Can be left NULL if `discrete_data` is provided.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database unless `discrete_data` is provided. In this later case, the parameter must still be specified to label the y-axis.
@@ -21,7 +21,7 @@
 #' @param plot_type Choose from "violin" , "boxplot" or "linedbox".
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
-#' @param con A connection to the target database. NULL uses [hydrometConnect()] and automatically disconnects.
+#' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param discrete_data A dataframe with the data to be plotted. Must contain the following columns: year, month, value and units.
 #' 
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
@@ -46,7 +46,7 @@ hydrometDiscrete <- function(location = NULL,
   # TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
 
   if (is.null(con)) {
-    con <- hydrometConnect(silent = TRUE)
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
   

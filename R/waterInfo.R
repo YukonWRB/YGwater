@@ -9,7 +9,7 @@
 #'@details
 #' Sites that routinely see 0 values for flow or level in mid-winter may report a negative annual percent change *even if* the sens's slope is positive. This is due to the intercept of a linear model calculated using minimum flows and years being below 0 at the first year of record. Unfortunately there is no fix, but the Sen's value is still valid.
 #'
-#' @param con A connection to the database. Default uses function [hydrometConnect()] with default settings.
+#' @param con A connection to the database. Default uses function [AquaConnect()] with default settings.
 #' @param locations The list of locations requested, as either a vector of location IDs or one of "WRB" (only WRB stations selected), "WSC" (only), or "all". Default "all" fetches all stations.
 #' @param level_flow Default 'both' will get and calculate level and flow information wherever possible. 'one' will pick flow where it exists, otherwise level. Exception to this is if there is no flow on the end_date requested AND most recent flow is > 1 month older than level ; in this case flow is assumed to be discontinued and level is used.
 #' @param end_date The most recent day to include in calculations. Defaults to today.
@@ -26,7 +26,7 @@
 #' @seealso [snowInfo()] for a similar function dealing with snowpack data.
 #' @export
 
-waterInfo <- function(con = hydrometConnect(), locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
+waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
   {
   
   rlang::check_installed("trend", reason = "necessary to calculate trends.")

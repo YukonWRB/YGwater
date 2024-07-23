@@ -1,13 +1,16 @@
-#' Plot a continous timeseries from the hydromet database
+#' Plot a continous timeseries from the AquaCache database
 #'
 #' @description
 #' `r lifecycle::badge('stable')`
 #' 
-#' This function plots continuous timeseries from the hydromet/AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
+#' This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
 #' 
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
-#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
+#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
+#' @param period_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order.
+#' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.
+#' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.
 #' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
@@ -20,7 +23,7 @@
 #' @param language The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
-#' @param con A connection to the target database. NULL uses [hydrometConnect()] and automatically disconnects.
+#' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return A plotly object 
 #' 
@@ -29,6 +32,9 @@
 plotTimeseries <- function(location,
                            parameter,
                            record_rate = NULL,
+                           period_type = NULL,
+                           z = NULL,
+                           z_approx = NULL,
                            start_date = Sys.Date() - 365,
                            end_date = Sys.Date(),
                            invert = NULL,
@@ -41,7 +47,9 @@ plotTimeseries <- function(location,
                            language = "en",
                            rate = NULL,
                            tzone = "auto",
-                           con = NULL) {
+                           con = NULL) 
+{
+
   
   # Checks and initial work ##########################################
   
@@ -49,7 +57,7 @@ plotTimeseries <- function(location,
   period_secs <- period <- expected <- datetime <- gap_exists <- NULL
   
   if (is.null(con)) {
-    con <- hydrometConnect(silent = TRUE)
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
   
@@ -69,6 +77,17 @@ plotTimeseries <- function(location,
     tolower(rate)
     if (!(rate %in% c("max", "hour", "day"))) {
       stop("Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again.")
+    }
+  }
+  
+  if (!is.null(z)) {
+    if (!is.numeric(z)) {
+      stop("Your entry for the parameter 'z' is invalid. Please review the function documentation and try again.")
+    }
+    if (!is.null(z_approx)) {
+      if (!is.numeric(z_approx)) {
+        stop("Your entry for the parameter 'z_approx' is invalid. Please review the function documentation and try again.")
+      }
     }
   }
   
@@ -104,16 +123,25 @@ plotTimeseries <- function(location,
     }
   }
   
+  if (!is.null(period_type)) {
+    if (!(period_type %in% c('instantaneous', 'sum', 'min', 'max', '(min+max)/2'))) {
+      warning("Your entry for parameter period_type is invalid. It's been reset to the default NULL.")
+      period_type <- NULL
+    }
+  }
+  
   if (!inherits(historic_range, "logical")) {
     warning("Parameter `historic_range` must be TRUE or FALSE. Resetting it to FALSE.")
     historic_range <- FALSE
   }
   
-  # Determine the timseries and adjust the date range #################
+  # Determine the timeseries and adjust the date range #################
   location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
   #Confirm parameter and location exist in the database and that there is only one entry
   escaped_parameter <- gsub("'", "''", parameter)
-  parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+  parameter_tbl <- DBI::dbGetQuery(con, 
+                                   paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
+                                   )
   parameter_code <- parameter_tbl$param_code[1]
   if (language == "fr") {
     parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
@@ -123,39 +151,80 @@ plotTimeseries <- function(location,
   if (is.na(parameter_code)) {
     stop("The parameter you entered does not exist in the database.")
   }
-  if (is.null(record_rate)) {
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous';"))
-  } else {
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+  
+  if (is.null(record_rate)) { # period_type may or may not be NULL
+    if (is.null(period_type)) { #both record_rate and period_type are NULL
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous';"))
+    } else { #period_type is not NULL but record_rate is
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = '", period_type, "';"))
+    }
+  } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "';"))
+  } else { #both record_rate and period_type are not NULL
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
   }
+  
+  # Narrow down by z if necessary
+  if (!is.null(z)) {
+    if (is.null(z_approx)) {
+      exist_check <- exist_check[exist_check$z == z, ]
+    } else {
+      exist_check <- exist_check[abs(exist_check$z - z) < z_approx, ]
+    }
+  }
+  
   if (nrow(exist_check) == 0) {
-    if (is.null(record_rate)) {
+    if (is.null(record_rate) & is.null(period_type) & is.null(z)) {
       stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data.")
     } else {
-      stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", record_rate, " and continuous category data You could try leaving the record rate to the default 'null'.")
+      stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", if (is.null(record_rate)) "(not specified)" else record_rate, ", period type ", if (is.null(period_type)) "(not specified)" else period_type, ", z of ", if (is.null(z)) "(not specified)" else z, " and continuous category data. You could try leaving the record rate and/or period_type to the default 'NULL', or explore different z or z_approx values.")
     }
   } else if (nrow(exist_check) > 1) {
     if (is.null(record_rate)) {
-      warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one with the most frequent recording rate.")
-      tsid <- exist_check[exist_check$record_rate == "< 1 day", "timeseries_id"]
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "1 day", "timeseries_id"]
+      warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate.")
+      temp <- exist_check[exist_check$record_rate == "< 1 day", ]
+      if (nrow(temp) == 0) {
+        temp <- exist_check[exist_check$record_rate == "1 day", ]
       }
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "1 week", "timeseries_id"]
+      if (nrow(temp) == 0) {
+        temp <- exist_check[exist_check$record_rate == "1 week", ]
       }
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "4 weeks", "timeseries_id"]
+      if (nrow(temp) == 0) {
+        temp <- exist_check[exist_check$record_rate == "4 weeks", ]
       }
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "1 month", "timeseries_id"]
+      if (nrow(temp) == 0) {
+        temp <- exist_check[exist_check$record_rate == "1 month", ]
       }
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "year", "timeseries_id"]
+      if (nrow(temp) == 0) {
+        temp <- exist_check[exist_check$record_rate == "year", ]
       }
     }
-  } else if (nrow(exist_check) == 1) {
-    tsid <- exist_check$timeseries_id
+    if (nrow(temp) > 0) {
+      exist_check <- temp
+      if (is.null(period_type)) {
+        warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the period_type as NULL, selecting the one(s) with the most frequent period type.")
+        exist_check <- exist_check[exist_check$period_type == "instantaneous", ]
+        if (nrow(exist_check) == 0) {
+          exist_check <- exist_check[exist_check$period_type == "mean", ]
+        }
+        if (nrow(exist_check) == 0) {
+          exist_check <- exist_check[exist_check$period_type == "(min+max)/2", ]
+        }
+        if (nrow(exist_check) == 0) {
+          exist_check <- exist_check[exist_check$period_type == "min", ]
+        }
+        if (nrow(exist_check) == 0) {
+          exist_check <- exist_check[exist_check$period_type == "max", ]
+        }
+      }
+    } else if (nrow(temp) == 1) {
+      exist_check <- temp
+    }
+  }
+  
+  # If there are multiple z values after all that, select the one closest to ground
+  if (nrow(exist_check) > 1) {
+    exist_check <- exist_check[which.min(abs(exist_check$z)), ]
   }
   
   if (title == TRUE) {
@@ -205,6 +274,9 @@ plotTimeseries <- function(location,
   }
   
   # Get the data ####################################
+  
+  tsid <- exist_check$timeseries_id
+  
   if (historic_range) { # get data from the calculated_daily table for historic ranges plus values from measurements_continuous. Where there isn't any data in measurements_continuous fill in with the value from the daily table.
     range_end <- end_date + 1*24*60*60
     range_start <- start_date - 1*24*60*60
@@ -311,7 +383,7 @@ plotTimeseries <- function(location,
   }
   
   # Make the plot ###################################
-  if (is.null(invert)){
+  if (is.null(invert)) {
     if (parameter_tbl$plot_default_y_orientation[1] == "inverted") {
       invert <- TRUE
     } else {
@@ -319,15 +391,27 @@ plotTimeseries <- function(location,
     }
   }
   
+  y_title <- paste0(parameter_name, if (!is.na(exist_check$z)) paste0(" ", exist_check$z, " meters") else "", " (", units, ")")
+  
   plot <- plotly::plot_ly()
   if (historic_range) {
     plot <- plot %>%
       plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (language == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), " q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
       plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), " Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
+  
   plot <- plot %>%
-
-    plotly::layout(title = list(text = stn_name, x = 0.05, xref = "container"), xaxis = list(title = list(standoff = 0, font = list(size = 1)), showgrid = FALSE, showline = TRUE, tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", rangeslider = list(visible = if (slider) TRUE else FALSE)), yaxis = list(title = paste0(parameter_name, " (", units, ")"), showgrid = FALSE, showline = TRUE), margin = list(b = 0), hovermode = "x unified") %>%
+    plotly::layout(
+      title = list(text = stn_name, x = 0.05, xref = "container"), 
+      xaxis = list(title = list(standoff = 0, font = list(size = 1)), 
+                   showgrid = FALSE, 
+                   showline = TRUE, 
+                   tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", 
+                   rangeslider = list(visible = if (slider) TRUE else FALSE)), 
+      yaxis = list(title = y_title, showgrid = FALSE, showline = TRUE), 
+      margin = list(b = 0), 
+      hovermode = "x unified"
+    ) %>%
     plotly::add_lines(data = trace_data, x = ~datetime, y = ~value, type = "scatter", mode = "lines", name = parameter_name, color = I("#0097A9"), hoverinfo = "text", text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
 
     plotly::config(locale = language)

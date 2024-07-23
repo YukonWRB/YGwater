@@ -4,15 +4,7 @@
 \alias{getFile}
 \title{Extract document stored as BYTEA from postgreSQL DB}
 \usage{
-getFile(
-  id,
-  id_col,
-  ext,
-  table,
-  con = hydrometConnect(silent = TRUE),
-  save_dir = NULL,
-  save_name = NULL
-)
+getFile(id, id_col, ext, table, con = NULL, save_dir = NULL, save_name = NULL)
 }
 \arguments{
 \item{id}{The unique ID from the column specified in \code{id_col} with which to identify the individual record containing the binary object.}
@@ -23,7 +15,7 @@ getFile(
 
 \item{table}{The table to look in for the document.}
 
-\item{con}{A connection to the database.}
+\item{con}{A connection to the database. NULL will use \code{\link[=AquaConnect]{AquaConnect()}} and disconnect automatically when done.}
 
 \item{save_dir}{A directory in which to write the file.}
 
@@ -36,5 +28,5 @@ A data.frame containing the row(s) identified by the specified ID. One of the co
 \emph{NOTE} Unless you really need the additional flexibility use functions \code{\link[=getDocument]{getDocument()}} or \code{\link[=getImage]{getImage()}}.
 lifecycle::badge("stable")
 
-Extracts a document/file stored in a postgreSQL database as BYTEA type. Should be flexible enough to work with most schemas, but was designed around the 'documents' and 'images' tables created with this package and with files uploaded to the database with functions from package HydroMetDB. For extracting vector files as \emph{terra} rasters (points, lines polygons) see \code{\link[=getVector]{getVector()}}, and for extracting rasters to R as \emph{terra} objects see \code{\link[=getRaster]{getRaster()}}.
+Extracts a document/file stored in a postgreSQL database as BYTEA type. Should be flexible enough to work with most schemas, but was designed around the 'documents' and 'images' tables created with this package and with files uploaded to the database with functions from package AquaCache. For extracting vector files as \emph{terra} rasters (points, lines polygons) see \code{\link[=getVector]{getVector()}}, and for extracting rasters to R as \emph{terra} objects see \code{\link[=getRaster]{getRaster()}}.
 }

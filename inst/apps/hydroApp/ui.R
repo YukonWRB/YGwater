@@ -32,7 +32,7 @@ app_ui <- function(request) {
       # Title
       titlePanel("Yukon Water Science and Stewardship Branch Hydro App"),
       # Broad category selection
-      selectInput("first_selection", "Choose a task", choices = c("View hydromet plots + data", "View precipitation maps + data", "Browse FOD comments")),
+      selectInput("first_selection", "Choose a task", choices = c("View hydrometric plots + data", "View precipitation maps + data", "Browse FOD comments")),
       conditionalPanel(
         condition = "input.first_selection == 'Browse FOD comments'",
         sidebarPanel(
@@ -72,7 +72,7 @@ app_ui <- function(request) {
         )
       ),
       conditionalPanel(
-        condition = "input.first_selection == 'View hydromet plots + data'",
+        condition = "input.first_selection == 'View hydrometric plots + data'",
         sidebarPanel(
           shinyWidgets::radioGroupButtons("plot_data_type", "Data type", choices = c("Continuous", "Discrete"), selected = "Continuous"),
           selectizeInput("plot_type", label = "Plot type", choices = c("Overlapping years", "Long timeseries", "Multi timeseries", "Binned", "Scatter")), #Discrete plot types are selected in the server
@@ -80,6 +80,7 @@ app_ui <- function(request) {
           selectizeInput("plot_param", label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
           selectizeInput("plot_loc_code", "Select location by code", choices = "placeholder"), #Choices are selected in the server
           selectizeInput("plot_loc_name", "Select location by name", choices = "placeholder"), #Choices are selected in the server
+          numericInput("lead_lag", "Lead/lag in hours", value = 0),
           dateInput("start_doy", "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")), # Only used for plotOverlap, turned on/off by shinyjs
           dateInput("end_doy", "End day-of-year", value = paste0(lubridate::year(Sys.Date()), "-12-31")), # Only used for plotOverlap, turned on/off by shinyjs
           dateInput("start_date", "Start date", value = Sys.Date() - 365, max = Sys.Date() - 1), # Only used for plotTimeseries, turned on/off by shinyjs
@@ -95,16 +96,19 @@ app_ui <- function(request) {
           selectizeInput("plot_param2", label = "Plotting parameter", choices = ""), #Choices are selected in the server
           selectizeInput("plot_loc_code2", "Select location by code", choices = ""), #Choices are selected in the server
           selectizeInput("plot_loc_name2", "Select location by name", choices = ""), #Choices are selected in the server
+          numericInput("lead_lag2", "Lead/lag in hours", value = 0),
           actionButton("remove_trace2", "Remove this trace"),
           actionButton("add_trace3", "Add a trace"), # Only used for plotMulti, turned on/off by shinyjs
           selectizeInput("plot_param3", label = "Plotting parameter", choices = ""), #Choices are selected in the server
           selectizeInput("plot_loc_code3", "Select location by code", choices = ""), #Choices are selected in the server
           selectizeInput("plot_loc_name3", "Select location by name", choices = ""), #Choices are selected in the server
+          numericInput("lead_lag3", "Lead/lag in hours", value = 0),
           actionButton("remove_trace3", "Remove this trace"),
           actionButton("add_trace4", "Add a trace"), # Only used for plotMulti, turned on/off by shinyjs
           selectizeInput("plot_param4", label = "Plotting parameter", choices = ""), # Choices are selected in the server
           selectizeInput("plot_loc_code4", "Select location by code", choices = ""), # Choices are selected in the server
           selectizeInput("plot_loc_name4", "Select location by name", choices = ""), # Choices are selected in the server
+          numericInput("lead_lag4", "Lead/lag in hours", value = 0),
           actionButton("remove_trace4", "Remove this trace"),
           checkboxGroupInput("log_y", "Log scale y-axis?", c("Trace 1" = 1)),
           checkboxInput("historic_range", "Plot historic range?"), # Only used for plotTimeseries and plotMultiTimeseries, turned on/off by shinyjs"

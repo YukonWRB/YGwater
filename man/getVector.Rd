@@ -10,6 +10,7 @@ getVector(
   feature_name = NULL,
   geom_type = NULL,
   return_cols = c("geom_id", "geom_type", "layer_name", "feature_name", "description"),
+  bounds = NULL,
   table = "vectors",
   geom_col = "geom",
   silent = FALSE,
@@ -27,13 +28,15 @@ getVector(
 
 \item{return_cols}{The names of columns to return.}
 
+\item{bounds}{Optional bounds by which to limit the spatial extent returned. Currently returns the full extent of every feature intersecting the bounds. Refer to parameter 'boundary' of \code{\link[rpostgis:pgGetGeom]{rpostgis::pgGetGeom()}} for details of how to specify this parameter.}
+
 \item{table}{The target table in the database (as character string). If not under the public schema, use format c("schema", "table").}
 
 \item{geom_col}{The name of the database table column in which to insert the geometry object.}
 
 \item{silent}{Should the function suppress all messages?}
 
-\item{con}{A connection to the target database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
+\item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }
 \value{
 If successful, a terra object. If unsuccessful because the query targets more than 1 geometry types, a table showing you the result of the query.

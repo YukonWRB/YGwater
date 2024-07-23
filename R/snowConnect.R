@@ -28,7 +28,7 @@ snowConnect <- function(name = "snowDB", host = Sys.getenv("snowHost"), port = S
                             port = port,
                             user = username,
                             password = password)
-    if (!silent){
+    if (!silent) {
       message("Remember to disconnect using DBI::dbDisconnect() when finished.")
     }
     return(hydro)

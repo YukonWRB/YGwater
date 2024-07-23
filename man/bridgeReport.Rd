@@ -5,7 +5,7 @@
 \title{Bridge radar reporting utility - internal}
 \usage{
 bridgeReport(
-  con = hydrometConnect(silent = TRUE),
+  con = AquaConnect(silent = TRUE),
   locations = "all",
   zoom = TRUE,
   zoom_days = 30,
@@ -13,7 +13,7 @@ bridgeReport(
 )
 }
 \arguments{
-\item{con}{A connection to the database. Default uses function \code{\link[=hydrometConnect]{hydrometConnect()}} with default settings.}
+\item{con}{A connection to the database. Default uses function \code{\link[=AquaConnect]{AquaConnect()}} with default settings.}
 
 \item{locations}{The list of locations for which you want a distance measurement, or default "all" to get every one in the database. These must be reporting radar distance in the WRB database as parameter 'distance'. Default "all" will only fetch locations where the network is listed as 'highways' in the timeseries table of the database.}
 

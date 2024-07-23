@@ -2,7 +2,7 @@
 % Please edit documentation in R/hydrometDiscrete.R
 \name{hydrometDiscrete}
 \alias{hydrometDiscrete}
-\title{Discrete hydromet data plotting}
+\title{Discrete hydrometric data plotting}
 \usage{
 hydrometDiscrete(
   location = NULL,
@@ -46,7 +46,7 @@ hydrometDiscrete(
 
 \item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
 
-\item{con}{A connection to the target database. NULL uses \code{\link[=hydrometConnect]{hydrometConnect()}} and automatically disconnects.}
+\item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 
 \item{discrete_data}{A dataframe with the data to be plotted. Must contain the following columns: year, month, value and units.}
 }
@@ -60,5 +60,5 @@ Generate plots of snow survey data (snow water equivalent and snow depth) or oth
 
 Notice: in many cases, you're better off using the Shiny app at \code{\link[=hydroApp]{hydroApp()}} to generate and export your plot. Read on if you need additional control over the final product.
 
-This function plots data from the local hydrometric database (maintained by the HydroMetDB package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
+This function plots data from the local hydrometric database (maintained by the AquaCache package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
 }

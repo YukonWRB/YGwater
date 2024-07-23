@@ -11,7 +11,7 @@ SWE_station(
   csv = FALSE,
   return_missing = FALSE,
   active = TRUE,
-  source = "hydromet",
+  source = "AquaCache",
   summarise = TRUE,
   save_path = "choose"
 )
@@ -29,7 +29,7 @@ SWE_station(
 
 \item{active}{TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.}
 
-\item{source}{Database from which to fetch this data. Options are: hydromet or snow.}
+\item{source}{Database from which to fetch this data. Options are: AquaCache or snow.}
 
 \item{summarise}{TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.}
 
@@ -40,5 +40,6 @@ A table and a csv file (if csv = TRUE) with the current snow depth and swe, the 
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
+
 The purpose of this script is to summarise the SWE data of each station for a particular year and month and compare to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course" summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
 }

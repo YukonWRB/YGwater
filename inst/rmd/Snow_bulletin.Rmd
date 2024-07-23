@@ -20,7 +20,7 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi=300)
-con <- YGwater::hydrometConnect()
+con <- YGwater::AquaConnect()
 knitr::include_graphics
 fig.height_half <- 2.9
 fig.height_full <- 2.7
@@ -457,7 +457,7 @@ swe_basins <- YGwater::SWE_basin(year = year_param,
                                    threshold = 6,
                                    csv = FALSE,
                                    summarise = FALSE,
-                                   source = "hydromet")
+                                   source = "AquaCache")
   # Add datetime to data
   swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
   swe_basins <<- swe_basins

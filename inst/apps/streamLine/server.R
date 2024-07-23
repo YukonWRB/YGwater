@@ -2,50 +2,44 @@
 
 server <- function(input, output, session) {
   
+  # Log in as public user by default
+  DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
+  
   observeEvent(input$loginBtn, {
     showModal(modalDialog(
       title = "This doesn't work yet",
-      renderUI(HTML("Login is reserved for Yukon Government users and partner organizations. Contact us if you think you should have access (access doesn't do anything special yet, so hold off until this message changes). <br> <br>")),
-      textInput("username", "Username", "Nope, not working"),
-      passwordInput("password", "Password", "Nope, not working"),
+      renderUI(HTML("Login is reserved for Yukon Government users and partner organizations/individuals. Contact us if you think you should have access. <br> <br>")),
+      textInput("username", "Username"),
+      passwordInput("password", "Password"),
       footer = tagList(
         modalButton("Cancel"),
         actionButton("confirmLogin", "Log in", class = "btn-primary")
       )
     ))
   })
-  # login <- reactiveVal(FALSE)
-  # observeEvent(input$loginBtn, {
-  #   if (!login) {
-  #     showModal(modalDialog(
-  #       title = "Login",
-  #       textInput("username", "Username"),
-  #       passwordInput("password", "Password"),
-  #       footer = tagList(
-  #         modalButton("Cancel"),
-  #         actionButton("confirmLogin", "Log in", class = "btn-primary")
-  #       )
-  #     ))
-  #   } else {
-  #     login <- TRUE
-  #     shinyjs::removeClass(selector = "body", class = "logged-in")
-  #   }
-  # })
-  # 
-  # observeEvent(input$confirmLogin, {
-  #   if (input$username == "admin" && input$password == "pass") {  # Simplified check
-  #     login <- TRUE
-  #     shinyjs::addClass(selector = "body", class = "logged-in")
-  #     removeModal()
-  #   } else {
-  #     showModal(modalDialog(
-  #       title = "Error",
-  #       "Incorrect username or password!",
-  #       easyClose = TRUE,
-  #       footer = modalButton("Close")
-  #     ))
-  #   }
-  # })
+
+  observeEvent(input$confirmLogin, {
+    res <- validateACUser(input$username, input$password, pool)
+    if (res) {
+      DBI::dbExecute(pool, paste0("SET logged_in_user.username = '", input$username, "';"))
+      # Show a pop-up message to the user that they are logged in
+      showModal(modalDialog(
+        title = "Login successful",
+        "You are now logged in as '", input$username, "'.",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+    } else {
+      DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
+      # Show a pop-up message to the user that the login failed
+      showModal(modalDialog(
+        title = "Login failed",
+        "Username or password failed.",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+    }
+  })
   
   # Initial setup #############################################################
   # Automatically update URL every time an input changes

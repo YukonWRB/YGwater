@@ -5,7 +5,6 @@
 \title{Plots and tabular data for snow survey locations}
 \usage{
 snowInfo(
-  db_path = "default",
   locations = "all",
   inactive = FALSE,
   save_path = "choose",
@@ -13,15 +12,14 @@ snowInfo(
   complete_yrs = TRUE,
   plots = TRUE,
   plot_type = "combined",
-  quiet = FALSE
+  quiet = FALSE,
+  con = NULL
 )
 }
 \arguments{
-\item{db_path}{The path to the local Snow Survey database including extension, passed to \code{\link[=snowConnect]{snowConnect()}}.}
-
 \item{locations}{The list of locations requested, as a character vector of length n. Default "all" fetches all stations.}
 
-\item{inactive}{Boolean specifying whether to include inactive stations. For 10AD-SC01 and 09BA-SC02 which require conversion factors due to moved measurement locations, this filter is applied after conversion. Therefore, if set to TRUE while 10AD-SC01B or 09BA-SC02B are active then the returned data will include measurements taken at 10AD-SC01 and 09BA-SC02A under their respective current "sister" locations, with conversion factors applied.}
+\item{inactive}{Boolean specifying whether to include inactive stations. In this case, a station with no measurements for 5 or more years is considered inactive. Default is FALSE, i.e. no inactive stations.}
 
 \item{save_path}{The path where the .csv(s) and plots should be saved. Set to NULL for data only as an R object. Plots are not created if there is no save path.}
 
@@ -34,6 +32,8 @@ snowInfo(
 \item{plot_type}{Set to "separate" for 3 plots per location, or "combined" for a single compound plot per location.}
 
 \item{quiet}{Suppresses most messages and warnings.}
+
+\item{con}{A connection to the snow database. Leave as NULL to use \code{\link[=AquaConnect]{AquaConnect()}} to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.}
 }
 \value{
 A list with four data.frames: location metadata, basic statistics, trend information, and snow course measurements is returned to the R environment. In addition, an Excel workbook is saved to the save_path with the four data.frames, and a new folder created to hold SWE and depth plots for each station requested.
