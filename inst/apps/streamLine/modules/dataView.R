@@ -2,10 +2,10 @@
 dataUI <- function(id) {
   ns <- NS(id)
   tagList(
-    tags$head(
-      # Load the little "i" button for the tooltip
-      tags$link(rel = "stylesheet", href = "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css")
-    ),
+    # tags$head(
+    #   # Load the little "i" button for the tooltip
+    #   # tags$link(rel = "stylesheet", href = "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css")
+    # ),
     
     tags$style(
       HTML(
@@ -61,7 +61,7 @@ dataUI <- function(id) {
         `data-trigger` = "click hover",
         title = "Placeholder",
         icon("info-circle", style = "font-size: 150%;")),
-      selectizeInput(ns("type"), "Data Type", choices = c("discrete" = "Discrete"), multiple = FALSE), # choices and labels are updated in the server module
+      selectizeInput(ns("type"), "Data Type", choices = c("Discrete" = "discrete"), multiple = FALSE), # choices and labels are updated in the server module
       selectizeInput(ns("pType"), "Parameter Type", choices = c("All" = "All"), multiple = TRUE),
       selectizeInput(ns("pGrp"), "Parameter Group", choices = c("All" = "All"), multiple = TRUE),
       selectizeInput(ns("param"), "Parameter", choices = c("All" = "All"), multiple = TRUE),
@@ -146,8 +146,7 @@ data <- function(id, con, language, restoring, data, inputs) {
     observeFilterInput("loc")
     
     
-    # Update text (including map popup) based on language ###########################################
-    
+    # Update text based on language ###########################################
     observe({
       # Update the tooltip's text
       tooltipText <- translations[id == "tooltip_reset", get(language$language)][[1]]
@@ -285,17 +284,109 @@ data <- function(id, con, language, restoring, data, inputs) {
       ))
     }) # End of observeEvent for reset filters button
     
+    
     # Create the table and render it ###################################
     table_data <- reactive({ # Create the table
-      # apply the location filter (locations are already filtered by other filters or directly selected)
+      
+      # apply the location filter first, since it's the most restrictive and since the map page click through uses it as the only filter
       if (!is.null(input$loc) & !("All" %in% input$loc)) {
-        tbl <- data.table::copy(data$timeseries)[location_id %in% input$loc]
+        tbl <- data$timeseries[location_id %in% input$loc]
       } else {
-        tbl <- data.table::copy(data$timeseries)
+        tbl <- data$timeseries
       }
       
-      # TODO: period_type and record_rate needs to be part of the table!!!
-      # Could be combined: sum (monthly), sum (daily), mean (daily), (min + max) / 2 (daily), min (monthly)
+      # Apply filters for type, pType, pGrp, param, proj, net, yrs in succession
+      if (!is.null(input$type)) {
+        if (length(input$type) > 1) {
+          tbl <- tbl[tbl$category %in% input$type, ]
+        } else {
+          if (input$type != "All") {
+            tbl <- tbl[tbl$category == input$type, ]
+          }
+        }
+      }
+      
+      if (!is.null(input$pType)) {
+        if (length(input$pType) > 1) {
+          tbl <- tbl[tbl$param_type %in% input$pType, ]
+        } else {
+          if (input$pType != "All") {
+            tbl <- tbl[tbl$param_type == input$pType, ]
+          }
+        }
+      }
+      
+      if (!is.null(input$pGrp)) {
+        if (length(input$pGrp) > 1) {
+          select.params <- data$parameters[data$parameters$group %in% input$pGrp, "param_code"]$param_code
+          tbl <- tbl[parameter %in% select.params, ]
+        } else {
+          if (input$pGrp != "All") {
+            select.params <- data$parameters[data$parameters$group == input$pGrp, "param_code"]$param_code
+            if (length(select.params) > 1) {
+               tbl <- tbl[parameter %in% select.params, ]
+            } else {
+              tbl <- tbl[parameter == select.params, ]
+            }
+          }
+        }
+      }
+      
+      if (!is.null(input$param)) {
+        if (length(input$param) > 1) {
+          tbl <- tbl[parameter %in% input$param, ]
+        } else {
+          if (input$param != "All") {
+            tbl <- tbl[parameter == input$param, ]
+          }
+        }
+      }
+      
+      if (!is.null(input$proj)) {
+        if (length(input$proj) > 1) {
+          ids <- data$locations_projects[data$locations_projects$project_id %in% input$proj, "location_id"]$location_id
+          if (length(ids) > 1) {
+            tbl <- tbl[location_id %in% ids, ]
+          } else {
+            tbl <- tbl[location_id == ids, ]
+          }
+        } else {
+          if (input$proj != "All") {
+            ids <- data$locations_projects[data$locations_projects$project_id == input$proj, "location_id"]$location_id
+            if (length(ids) > 1) {
+              tbl <- tbl[location_id %in% ids, ]
+            } else {
+              tbl <- tbl[location_id == ids, ]
+            }
+          }
+        }
+      }
+      
+      if (!is.null(input$net)) {
+        if (length(input$net) > 1) {
+          ids <- data$locations_networks[data$locations_networks$network_id %in% input$net, "location_id"]$location_id
+          if (length(ids) > 1) {
+            tbl <- tbl[location_id %in% ids, ]
+          } else {
+            tbl <- tbl[location_id == ids, ]
+          }
+        } else {
+          if (input$net != "All") {
+            ids <- data$locations_networks[data$locations_networks$network_id == input$net, "location_id"]$location_id
+            if (length(ids) > 1) {
+              tbl <- tbl[location_id %in% ids, ]
+            } else {
+              tbl <- tbl[location_id == ids, ]
+            }
+          }
+        }
+      }
+      
+      tbl <- tbl[tbl$start_datetime <= as.POSIXct(paste0(input$yrs[2], "-12-31 23:59:59"), tz = "UTC") & tbl$end_datetime >= as.POSIXct(paste0(input$yrs[1], "-01-01 00:00"), tz = "UTC"), ]
+      
+      
+      
+      # Combine period type and record rate for ease of viewing
       tbl[, measurement_type := paste0(period_type, " (", record_rate, ")")]
       
         # Drop period_type
@@ -424,14 +515,14 @@ data <- function(id, con, language, restoring, data, inputs) {
       selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
       selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
       
-      # Query will be for discrete of continuous data, depending on input$type
+      # Query will be for discrete or continuous data, depending on input$type
       # Show a modal with a subset (first 3 rows per timeseries_id) of the data. Below this, show a date range picker (with min/max preset based on the selected data), the number of rows that would be returned, and download and close buttons. The download button will give the user the entire dataset within the date range selected
       
       # Get the timeseries and location data
       if (input$type == "discrete") {
         subset_list <- vector("list", length(selected_tsids)) 
         for (i in seq_along(selected_tsids)) {
-          query <- sprintf("SELECT * FROM measurements_discrete WHERE timeseries_id = %d ORDER BY datetime LIMIT 3;", selected_tsids[i])
+          query <- sprintf("SELECT timeseries_id, target_datetime, datetime, value, sample_class, note FROM measurements_discrete WHERE timeseries_id = %d ORDER BY datetime LIMIT 3;", selected_tsids[i])
           subset_list[[i]] <- dbGetQueryDT(con, query)
         }
         subset <- data.table::rbindlist(subset_list)
@@ -442,7 +533,7 @@ data <- function(id, con, language, restoring, data, inputs) {
       } else if (input$type == "continuous") {
         subset_list <- vector("list", length(selected_tsids))
         for (i in seq_along(selected_tsids)) {
-          query <- sprintf("SELECT * FROM calculated_daily WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
+          query <- sprintf("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM calculated_daily WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
           subset_list[[i]] <- dbGetQueryDT(con, query)
         }
         subset <- data.table::rbindlist(subset_list)
@@ -571,7 +662,7 @@ data <- function(id, con, language, restoring, data, inputs) {
           
           subset_list <- vector("list", length(selected_tsids))
           for (i in seq_along(selected_tsids)) {
-            query <- sprintf("SELECT * FROM calculated_daily WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
+            query <- sprintf("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM calculated_daily WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
             subset_list[[i]] <- dbGetQueryDT(con, query)
           }
           subset <- data.table::rbindlist(subset_list)
@@ -663,16 +754,16 @@ data <- function(id, con, language, restoring, data, inputs) {
         data$approvals <- dbGetQueryDT(con, "SELECT * FROM approvals;")
         
         if (input$type == "discrete") {
-          data$measurements <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_discrete WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
+          data$measurements <- dbGetQueryDT(con, paste0("SELECT timeseries_id, target_datetime, datetime, value, sample_class, note FROM measurements_discrete WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
           
         } else if (input$type == "continuous") {
-          data$measurements_daily <- dbGetQueryDT(con, paste0("SELECT * FROM calculated_daily WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date < '", input$modal_date_range[2], "';"))
+          data$measurements_daily <- dbGetQueryDT(con, paste0("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM calculated_daily WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date < '", input$modal_date_range[2], "';"))
           
           # Now add hourly or max resolution data if selected
           if (input$modal_frequency == "hourly") {
             data$measurements_hourly <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_hourly WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
           } else if (input$modal_frequency == "max") {
-            data$measurements_max <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_continuous WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
+            data$measurements_max <- dbGetQueryDT(con, paste0("SELECT timeseries_id, datetime, value, grade, approval, period, imputed FROM measurements_continuous WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
           }
         }
         

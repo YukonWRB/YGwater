@@ -337,7 +337,6 @@ map <- function(id, language, restoring, data) {
     # Filter the map data based on user's selection and add points to map ############################
     observe({
       popup_data <- popupData()
-      
       if (!is.null(input$type)) {
         if (length(input$type) > 1) {
           timeseries.sub <- data$timeseries[data$timeseries$category %in% input$type, ]
@@ -352,76 +351,80 @@ map <- function(id, language, restoring, data) {
         timeseries.sub <- data$timeseries
       }
       
-      if (!is.null(input$param)) {
-        if (length(input$param) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% input$param, ]
-        } else {
-          if (input$param == "All") {
-            timeseries.sub <- timeseries.sub
-          } else {
-            timeseries.sub <- timeseries.sub[timeseries.sub$parameter == input$param, ]
-          }
-        }
-      } else {
-        timeseries.sub <- timeseries.sub
-      }
-      
       if (!is.null(input$pType)) {
         if (length(input$pType) > 1) {
           timeseries.sub <- timeseries.sub[timeseries.sub$param_type %in% input$pType, ]
         } else {
-          if (input$pType == "All") {
-            timeseries.sub <- timeseries.sub
-          } else {
+          if (input$pType != "All") {
             timeseries.sub <- timeseries.sub[timeseries.sub$param_type == input$pType, ]
           }
         }
-      } else {
-        timeseries.sub <- timeseries.sub
       }
       
       if (!is.null(input$pGrp)) {
         if (length(input$pGrp) > 1) {
-          select.params <- data$parameters[data$parameters$group %in% input$pGrp, "param_code"]
-          timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% select.params, ]
+          select.params <- data$parameters[data$parameters$group %in% input$pGrp, "param_code"]$param_code
+          timeseries.sub <- timeseries.sub[parameter %in% select.params, ]
         } else {
-          if (input$pGrp == "All") {
-            timeseries.sub <- timeseries.sub
-          } else {
-            select.params <- data$parameters[data$parameters$group == input$pGrp, "param_code"]
-            timeseries.sub <- timeseries.sub[timeseries.sub$parameter %in% select.params, ]
+          if (input$pGrp != "All") {
+            select.params <- data$parameters[data$parameters$group == input$pGrp, "param_code"]$param_code
+            if (length(select.params) > 1) {
+              timeseries.sub <- timeseries.sub[parameter %in% select.params, ]
+            } else {
+              timeseries.sub <- timeseries.sub[parameter == select.params, ] 
+            }
           }
         }
-      } else {
-        timeseries.sub <- timeseries.sub
+      }
+      
+      if (!is.null(input$param)) {
+        if (length(input$param) > 1) {
+          timeseries.sub <- timeseries.sub[parameter %in% input$param, ]
+        } else {
+          if (input$param != "All") {
+            timeseries.sub <- timeseries.sub[parameter == input$param, ]
+          }
+        }
       }
       
       if (!is.null(input$proj)) {
         if (length(input$proj) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% data$locations_projects[data$locations_projects$project_id %in% input$proj, "location_id"], ]
-        } else {
-          if (input$proj == "All") {
-            timeseries.sub <- timeseries.sub
+          ids <- data$locations_projects[data$locations_projects$project_id %in% input$proj, "location_id"]$location_id
+          if (length(ids) > 1) {
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% ids, ]
           } else {
-            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% data$locations_projects[data$locations_projects$project_id == input$proj, "location_id"], ]
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id == ids, ]
+          }
+        } else {
+          if (input$proj != "All") {
+            ids <- data$locations_projects[data$locations_projects$project_id == input$proj, "location_id"]$location_id
+            if (length(ids) > 1) {
+              timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% ids, ]
+            } else {
+              timeseries.sub <- timeseries.sub[timeseries.sub$location_id == ids, ]
+            }
           }
         }
-      } else {
-        timeseries.sub <- timeseries.sub
       }
       
       if (!is.null(input$net)) {
         if (length(input$net) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% data$locations_networks[data$locations_networks$network_id %in% input$net, "location_id"], ]
-        } else {
-          if (input$net == "All") {
-            timeseries.sub <- timeseries.sub
+          ids <- data$locations_networks[data$locations_networks$network_id %in% input$net, "location_id"]$location_id
+          if (length(ids) > 1) {
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% ids, ] 
           } else {
-            timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% data$locations_networks[data$locations_networks$network_id == input$net, "location_id"], ]
+            timeseries.sub <- timeseries.sub[timeseries.sub$location_id == ids, ]
+          }
+        } else {
+          if (input$net != "All") {
+            ids <- data$locations_networks[data$locations_networks$network_id == input$net, "location_id"]$location_id
+            if (length(ids) > 1) {
+              timeseries.sub <- timeseries.sub[timeseries.sub$location_id %in% ids, ]
+            } else {
+              timeseries.sub <- timeseries.sub[timeseries.sub$location_id == ids, ] 
+            }
           }
         }
-      } else {
-        timeseries.sub <- timeseries.sub
       }
       
       timeseries.sub <- timeseries.sub[timeseries.sub$start_datetime <= as.POSIXct(paste0(input$yrs[2], "-12-31 23:59:59"), tz = "UTC") & timeseries.sub$end_datetime >= as.POSIXct(paste0(input$yrs[1], "-01-01 00:00"), tz = "UTC"),]

@@ -26,7 +26,7 @@ ui <- function(request) {
                                            choices = names(translations)[-c(1,2)], 
                                            selected = "English")),
                         div(class = "login-btn-container",
-                            actionButton("loginBtn", translations[id == "login_confirm", get(languageSelection$language)][[1]], class = "btn btn-primary"))
+                            actionButton("loginBtn", "Login", class = "btn btn-primary"))
                     ),
                     class = "right-aligned-aurora")
     ),

@@ -2,11 +2,150 @@
 
 server <- function(input, output, session) {
   
-  # Log in to the database (optional) ##########################################
+  # Initial setup #############################################################
+  # Automatically update URL every time an input changes
+  observe({
+    reactiveValuesToList(input)
+    session$doBookmark()
+  })
+  setBookmarkExclude(c("userLang", "loginBtn"))
   
-  # Log in as public user by default
+  # Update the query string
+  onBookmarked(updateQueryString)
+  
+  isRestoring <- reactiveVal(FALSE)
+  isRestoring_home <- reactiveVal(FALSE)
+  isRestoring_map <- reactiveVal(FALSE)
+  isRestoring_data <- reactiveVal(FALSE)
+  isRestoring_plot <- reactiveVal(FALSE)
+  isRestoring_img <- reactiveVal(FALSE)
+  isRestoring_doc <- reactiveVal(FALSE)
+  isRestoring_about <- reactiveVal(FALSE)
+  
+  onRestore(function(state) {
+    isRestoring(TRUE)
+    isRestoring_home(TRUE)
+    isRestoring_map(TRUE)
+    isRestoring_data(TRUE)
+    isRestoring_plot(TRUE)
+    isRestoring_img(TRUE)
+    isRestoring_doc(TRUE)
+    isRestoring_about(TRUE)
+  })
+  
+  # Language selection ########################################################
+  # Determine user's browser language. This should only run once when the app is loaded.
+  observe({
+    if (!isRestoring()) {
+      shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
+Shiny.onInputChange('userLang', language);
+console.log(language);")
+    }
+  })
+  # Check if userLang contains en or fr in the string and set the language accordingly
+  observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
+    if (substr(input$userLang , 1, 2) == "en") {
+      updateSelectizeInput(session, "langSelect", selected = "English")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
+    } else if (substr(input$userLang , 1, 2) == "fr") {
+      updateSelectizeInput(session, "langSelect", selected = "Français")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "fr"))  # Updates the language in the web page html head.
+      
+    } else {
+      updateSelectizeInput(session, "langSelect", selected = "English")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
+      
+    }
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
+  languageSelection <- reactiveValues() # holds language and abbreviation
+  
+  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
+  observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
+    if (input$langSelect %in% names(translations)[-c(1,2)]) {
+      languageSelection$language <- input$langSelect
+    }
+  })
+  
+  observe({ # Find the abbreciation for use in the 'titleCase' function
+    languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
+  })
+  
+  # Update bits of text based on the selected language
+  observe({
+    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(languageSelection$language == "Français", "fr", "en")))  # Updates the language in the web page html head.
+    output$home_title <- renderText({
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[id == "home", get(languageSelection$language)][[1]],
+                  '</div>'))
+    })
+    output$map_title <- renderText({
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[id == "map_view_title", get(languageSelection$language)][[1]],
+                  '</div>'))
+    })
+    output$data_title <- renderText({
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[id == "data_view_title", get(languageSelection$language)][[1]],
+                  '</div>'))
+    })
+    output$plot_title <- renderText({
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[id == "plot_view_title", get(languageSelection$language)][[1]],
+                  '</div>'))
+    })
+    output$img_title <- renderText({
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[id == "img_view_title", get(languageSelection$language)][[1]],
+                  '</div>'))
+    })
+    output$doc_title <- renderText({
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[id == "doc_view_title", get(languageSelection$language)][[1]],
+                  '</div>'))    
+    })
+    output$about_title <- renderText({
+      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
+                  translations[id == "about_view_title", get(languageSelection$language)][[1]],
+                  '</div>'))
+    })
+    
+    # Update the mailto link with the correct language
+    subject <- translations[id == "feedback", get(languageSelection$language)][[1]]
+    body <- translations[id == "feedback_text", get(languageSelection$language)][[1]]
+    mailtoLink <- sprintf("mailto:waterlevels@yukon.ca?subject=%s&body=%s", URLencode(subject), URLencode(body))
+    session$sendCustomMessage("updateMailtoLink", mailtoLink) #Update using custom JS handler defined in the UI
+  })
+  
+  # Some elements lack attributes that screen readers use to identify them. This adds an aria-label to the language selector.
+  observe({
+    shinyjs::runjs('$("#langSelect-selectized").attr("aria-label", "Language Selector");')
+    shinyjs::runjs('$("#langSelect").attr("title", "Language Selector");')
+  })
+  
+  
+  # Log in as public user by default #################################################
+  # has to happen before any data is fetched
   DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
   
+  # Get data from the database #################################################
+  # Get info from database (passed to multiple modules). Data is re-fetched after successful login via an observeEvent.
+  DBdata <- reactiveValues(
+    locations = dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;"),
+    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;"),
+    locations_projects = dbGetQueryDT(pool, "SELECT * FROM locations_projects;"),
+    locations_networks = dbGetQueryDT(pool, "SELECT * FROM locations_networks;"),
+    param_types = dbGetQueryDT(pool, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);"),
+    param_groups = dbGetQueryDT(pool, "SELECT DISTINCT p.group, p.group_fr FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
+    parameters = dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.group, p.group_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
+    projects = dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
+    networks =  dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
+    has_images = dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;"),
+    has_documents = dbGetQueryDT(pool, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
+  )
+  
+  # Log in to the database (optional) ##########################################
   observeEvent(input$loginBtn, {
     showModal(modalDialog(
       title = "Login",
@@ -20,7 +159,7 @@ server <- function(input, output, session) {
       )
     ))
   })
-
+  # Log in attempt if the button is clicked
   log_attempts <- reactiveVal(0) # counter for login attempts
   observeEvent(input$confirmLogin, {
     log_attempts(log_attempts() + 1)
@@ -77,149 +216,10 @@ server <- function(input, output, session) {
     }
   })
   
-  # Initial setup #############################################################
-  # Automatically update URL every time an input changes
-  observe({
-    reactiveValuesToList(input)
-    session$doBookmark()
-  })
-  setBookmarkExclude(c("userLang", "loginBtn"))
-  
-  # Update the query string
-  onBookmarked(updateQueryString)
-  
-  isRestoring <- reactiveVal(FALSE)
-  isRestoring_home <- reactiveVal(FALSE)
-  isRestoring_map <- reactiveVal(FALSE)
-  isRestoring_data <- reactiveVal(FALSE)
-  isRestoring_plot <- reactiveVal(FALSE)
-  isRestoring_img <- reactiveVal(FALSE)
-  isRestoring_doc <- reactiveVal(FALSE)
-  isRestoring_about <- reactiveVal(FALSE)
-  
-  onRestore(function(state) {
-    isRestoring(TRUE)
-    isRestoring_home(TRUE)
-    isRestoring_map(TRUE)
-    isRestoring_data(TRUE)
-    isRestoring_plot(TRUE)
-    isRestoring_img(TRUE)
-    isRestoring_doc(TRUE)
-    isRestoring_about(TRUE)
-  })
-  
-  # Get info from database (passed to multiple modules). Data is re-fetched after successful login.
-  DBdata <- reactiveValues(
-    locations = dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;"),
-    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;"),
-    locations_projects = dbGetQueryDT(pool, "SELECT * FROM locations_projects;"),
-    locations_networks = dbGetQueryDT(pool, "SELECT * FROM locations_networks;"),
-    param_types = dbGetQueryDT(pool, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);"),
-    param_groups = dbGetQueryDT(pool, "SELECT DISTINCT p.group, p.group_fr FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
-    parameters = dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.group, p.group_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
-    projects = dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
-    networks =  dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
-    has_images = dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;"),
-    has_documents = dbGetQueryDT(pool, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
-  )
-  
-  # Store information to pass between modules
-  moduleOutputs <- reactiveValues()
-  
-  # Language selection ########################################################
-  # Determine user's browser language. This should only run once when the app is loaded.
-  observe({
-    if (!isRestoring()) {
-      shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
-Shiny.onInputChange('userLang', language);
-console.log(language);")
-    }
-  })
-  
-  # Some elements lack attributes that screen readers use to identify them. This adds an aria-label to the language selector.
-  observe({
-    shinyjs::runjs('$("#langSelect-selectized").attr("aria-label", "Language Selector");')
-    shinyjs::runjs('$("#langSelect").attr("title", "Language Selector");')
-  })
-  
-  # Check if userLang contains en or fr in the string and set the language accordingly
-  observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
-    if (substr(input$userLang , 1, 2) == "en") {
-      updateSelectizeInput(session, "langSelect", selected = "English")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
-    } else if (substr(input$userLang , 1, 2) == "fr") {
-      updateSelectizeInput(session, "langSelect", selected = "Français")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "fr"))  # Updates the language in the web page html head.
-      
-    } else {
-      updateSelectizeInput(session, "langSelect", selected = "English")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
-      
-    }
-  }, ignoreInit = TRUE, ignoreNULL = TRUE)
-  
-  # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
-  languageSelection <- reactiveValues() # holds language and abbreviation
-  
-  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
-  observeEvent(input$langSelect, {
-    if (input$langSelect %in% names(translations)[-c(1,2)]) {
-      languageSelection$language <- input$langSelect
-    }
-  })
-  
-  observe({
-    languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
-  })
-  
-  
-  observe({
-    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(languageSelection$language == "Français", "fr", "en")))  # Updates the language in the web page html head.
-    output$home_title <- renderText({
-      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[id == "home", get(languageSelection$language)][[1]],
-                  '</div>'))
-    })
-    output$map_title <- renderText({
-      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[id == "map_view_title", get(languageSelection$language)][[1]],
-                  '</div>'))
-    })
-    output$data_title <- renderText({
-      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[id == "data_view_title", get(languageSelection$language)][[1]],
-                  '</div>'))
-    })
-    output$plot_title <- renderText({
-      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[id == "plot_view_title", get(languageSelection$language)][[1]],
-                  '</div>'))
-    })
-    output$img_title <- renderText({
-      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[id == "img_view_title", get(languageSelection$language)][[1]],
-                  '</div>'))
-    })
-    output$doc_title <- renderText({
-      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[id == "doc_view_title", get(languageSelection$language)][[1]],
-                  '</div>'))    
-    })
-    output$about_title <- renderText({
-      HTML(paste0('<div class="nunito-sans" style="font-size: 17px; font-weight: 500; font-style: normal;">',
-                  translations[id == "about_view_title", get(languageSelection$language)][[1]],
-                  '</div>'))
-    })
-    
-    # Update the mailto link with the correct language
-    subject <- translations[id == "feedback", get(languageSelection$language)][[1]]
-    body <- translations[id == "feedback_text", get(languageSelection$language)][[1]]
-    mailtoLink <- sprintf("mailto:waterlevels@yukon.ca?subject=%s&body=%s", URLencode(subject), URLencode(body))
-    session$sendCustomMessage("updateMailtoLink", mailtoLink) #Update using custom JS handler defined in the UI
-  })
-  
 
   # Load specific modules based on input$navbar ################################
+  # Store information to pass between modules
+  moduleOutputs <- reactiveValues()
   lastWorkingTab <- reactiveVal("home")  # Initial or safe tab
   observeEvent(input$navbar, {
     if (input$navbar == "home") {
@@ -270,7 +270,7 @@ console.log(language);")
     }
     if (input$navbar == "plot") {
       tryCatch({
-        plot("plot", con = pool, language = languageSelection, restoring = isRestoring_plot, data = DBdata)
+        plot("plot", con = pool, language = languageSelection, restoring = isRestoring_plot, data = DBdata, inputs = moduleOutputs$map_outputs$location_id)
       }, error = function(e) {
         showModal(modalDialog(
           title = translations[id == "errorModalTitle", get(languageSelection$language)][[1]],
