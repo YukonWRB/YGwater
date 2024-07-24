@@ -1,8 +1,8 @@
 #' Data retrieval from EQWin
 #'
-#' Fetches sample data from the WRB database and returns a list of data frames suitable for modification for plot generation and other comparisons
+#' Fetches sample data from the WRB database and returns a list of data frames suitable for modification for plot generation and other comparisons. Connection to the EQWin database is made via function [AccessConnect()].
 #'
-#' @details Insert here what happens to values > DL, where the standards are taken from,
+#' @details Insert here what happens to values > DL, where the standards are taken from, etc
 #'
 #' @param EQcode Site code as it appears in EQWin eg. "(LOB)" or "(KNO)". Function only works for stations with  designated project code in brackets
 #' @param stationIDs "all" for all stations (default) OR character vector of selected stations as they appear in the EQWin database WITHOUT the EQcode c("MW-01", "MW-02)
@@ -10,6 +10,8 @@
 #' @param dates "all" for all dates (default) OR character vector of length 2 of start and end date in format c("YYYY-MM-DD", "YYYY-MM-DD")
 #' @param BD Treatment of values below detection limits (0 = Set to zero; 1 = Set to NA; 2 = Set to 0.5*(LOD); 3 = Set to sqrt(2)LOD). Above detection values are set to the upper limit of detection.
 #' @param apply_standards TRUE or FALSE, include standards with data. Provides a pop-up list for selection.
+#' @param path The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".
+
 #' @return A list with one sub-list per station, each one containing 2 data frames with sample data and calculated standards
 #'
 #' @export
@@ -19,7 +21,8 @@ eq_fetch <- function(EQcode,
                      paramIDs = "all",
                      dates = "all",
                      BD = 2,
-                     apply_standards = TRUE){
+                     apply_standards = TRUE,
+                     path = "X:/EQWin/WR/DB/Water Resources.mdb"){
   
   # EQcode <- "EG"
   # stationIDs = c("DG1", "DG2", "ISH", "LSDP-UND", "W22", "W23", "W27", "W29", "W4", "W49", "W8", "W99")
@@ -39,11 +42,8 @@ eq_fetch <- function(EQcode,
   on.exit(options(scipen = old_scipen), add = TRUE)
   on.exit(options(dplyr.summarise.inform = old_dplyr), add = TRUE)
   
-  # Set path to access database
-  dbpath <- "X:/EQWin/WR/DB/Water Resources.mdb"
-  
-  #### Begin EQWin fetch ####
-  EQWin <- DBI::dbConnect(drv = odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", dbpath))
+  # Connect to EQWin
+  EQWin <- AccessConnect(path, silent = TRUE)
   on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
   
   # Download stations and filter to user input
