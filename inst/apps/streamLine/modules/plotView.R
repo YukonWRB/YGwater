@@ -25,7 +25,8 @@ plotUI <- function(id) {
             title = "Placeholder",
             icon("info-circle", style = "font-size: 150%;")),
           # All inputs below are actualized in the server module
-          selectizeInput(ns("type"), "Data Type", choices = c("All" = "All"), multiple = TRUE), # choices and labels are updated in the server module
+          
+          # selectizeInput(ns("type"), "Data Type", choices = c("All" = "All"), multiple = TRUE), # choices and labels are updated in the server module
           selectizeInput(ns("pType"), "Parameter Type", choices = c("All" = "All"), multiple = TRUE),
           selectizeInput(ns("pGrp"), "Parameter Group", choices = c("All" = "All"), multiple = TRUE),
           selectizeInput(ns("proj"), "Project", choices = c("All" = "All"), multiple = TRUE),
@@ -107,16 +108,16 @@ plot <- function(id, con, language, restoring, data, inputs) {
       session$sendCustomMessage(type = 'update-tooltip', message = list(id = ns("infoIcon"), title = tooltipText))
       
       # Update selectizeInputs
-      updateSelectizeInput(session, 
-                           "type",
-                           label = translations[id == "data_type", get(language$language)][[1]],
-                           choices = stats::setNames(c("discrete", "continuous"),
-                                                     c(titleCase(c(translations[id == "discrete", get(language$language)][[1]], translations[id == "continuous", get(language$language)][[1]]), language$abbrev)
-                                                     )
-                           ),
-                           options = list(placeholder = translations[id == "optional_placeholder", get(language$language)][[1]]),
-                           selected = NULL
-      )
+      # updateSelectizeInput(session, 
+      #                      "type",
+      #                      label = translations[id == "data_type", get(language$language)][[1]],
+      #                      choices = stats::setNames(c("discrete", "continuous"),
+      #                                                c(titleCase(c(translations[id == "discrete", get(language$language)][[1]], translations[id == "continuous", get(language$language)][[1]]), language$abbrev)
+      #                                                )
+      #                      ),
+      #                      options = list(placeholder = translations[id == "optional_placeholder", get(language$language)][[1]]),
+      #                      selected = NULL
+      # )
       updateSelectizeInput(session, 
                            "pType",
                            label = translations[id == "param_type", get(language$language)][[1]],
@@ -206,13 +207,13 @@ plot <- function(id, con, language, restoring, data, inputs) {
     
     # Reset all filters when button pressed ##################################
     observeEvent(input$reset, {
-      updateSelectizeInput(session, 
-                           "type",
-                           choices = stats::setNames(c("discrete", "continuous"),
-                                                     c(titleCase(c(translations[id == "discrete", get(language$language)][[1]], translations[id == "continuous", get(language$language)][[1]]), language$abbrev)
-                                                     )
-                           )
-      )
+      # updateSelectizeInput(session, 
+      #                      "type",
+      #                      choices = stats::setNames(c("discrete", "continuous"),
+      #                                                c(titleCase(c(translations[id == "discrete", get(language$language)][[1]], translations[id == "continuous", get(language$language)][[1]]), language$abbrev)
+      #                                                )
+      #                      )
+      # )
       updateSelectizeInput(session, 
                            "pType",
                            choices = stats::setNames(c("All", data$param_types$param_type_code),
@@ -270,7 +271,29 @@ plot <- function(id, con, language, restoring, data, inputs) {
     
     # Create map #############################################################
     observeEvent(input$render_map, {
-      
+      # Initial checks on parameter selection
+      if (nchar(input$param) == 0) {
+        modalDialog(
+          title = "Error",
+          "Please select a parameter to visualize.",
+          easyClose = TRUE
+        )
+        return()
+      }
+      if (!input$param %in%  data$parameters$param_code) {
+        modalDialog(
+          title = "Error",
+          "Selected parameter does not exist in the database. Make sure you're selecting a menu option.",
+          easyClose = TRUE
+        )
+        return()
+      }
+      # Now check if there actually is data to map for the selected parameter on the selected date and date approximation
+      # If there is no data, return a modal dialog
+      ts_query
+      timeseries <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE parameter = ", input$param")
+      continuous_data <- DBI::dbGetQuery(con, "SELECT ")
+      discrete_data <- DBI::dbGetQuery(con, )
     }) # End of observeEvent for map creation
     
   }) # End of moduleServer
