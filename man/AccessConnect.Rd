@@ -15,5 +15,5 @@ AccessConnect(path, silent = FALSE)
 A connection to the database.
 }
 \description{
-First checks that the proper driver exists, then attempts to connect to the database. A missing driver could trigger a crash of R, so it is important to check for it first.
+First checks that the proper driver exists, then attempts to connect to the database. A missing driver could trigger a crash of R, so it is important to check for it first. Can be used for all sorts of Access database connections, including EQWin.
 }

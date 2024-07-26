@@ -3,6 +3,7 @@
 export("%>%")
 export(AccessConnect)
 export(AquaConnect)
+export(EQWinStd)
 export(EQ_crosstab)
 export(RWISConnect)
 export(SWE_basin)

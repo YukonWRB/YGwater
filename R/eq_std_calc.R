@@ -1,5 +1,3 @@
-# REVIEW make sure that all packages called are in the DESCRIPTION file (devtools::check() will tell you if any are missing). readxl is definitely not, but see note below about that problematic package.
-
 #' Calculated standard processing sub-function required by EQ_fetch function
 #'
 #' Utility function to populate the std_calc_tmp table (product of EQ_fetch function) with calculated values, using averaged or calculated station parameters (pH, hardness, DOC, temp)
@@ -182,8 +180,8 @@ eq_std_calc <- function(sampledata, calcs) {
     CCME_Pb_lt <- 1/1000
   } else if (hard <= 60) {
     CCME_Pb_lt <- 1/1000
-  } else if (hard > 60 & hard <=180) {
-    CCME_Pb_lt <- exp((1.273*log(hard)-4.705))/1000
+  } else if (hard > 60 & hard <= 180) {
+    CCME_Pb_lt <- exp((1.273*log(hard) - 4.705))/1000
   } else if (hard > 180) {
     CCME_Pb_lt <- 7/1000
   }
