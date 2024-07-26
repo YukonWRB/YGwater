@@ -1,21 +1,12 @@
-# Problem statement:
-# Need to compile parameter data from multiple, changing stations for n days in the past and stick it into a single Excel table
-
-# Current state:
-# Data comes in from consultant and gets sent to EQWin. As data comes in as varying formats, best to pull directly from EQWin.
-
-# Approach:
-# Create function that has pre-set stations while allowing user to specify extra/different stations, a start date, and an end date.
-# EQWin data can be fetched via EQ_fetch
-# Function should take a variable set of stations or a station group, and a variable set of parameters or a parameter group. These are held in table eqgroups.
-# Should create an xlsx file with the data organized similarly to Tyler's report, and conditional formatting applied to guideline exceedances
-# 
-
-
-#' Create a tabular report of water quality data from the EQWin database
+#' Create an Excel workbook report of water quality data from the EQWin database
 #' 
 #' @description
-#' Connection to EQWin is made using function [AccessConnect()]
+#' 
+#' NOTE: support for calculated standards is not yet implemented.
+#' Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name. Exceedances are noted using conditional formation, with a note added to explain which standard(s) are exceeded.
+#' 
+#' @details
+#' Connection to EQWin is made using function [AccessConnect()].
 #' 
 #' @param date The date for which to fetch results as a Date object or character vector that can be coerced to a date.
 #' @param stations A vector of station names as listed in the EQWiN eqstns table, column StnCode. Leave NULL to use stnGrp instead.
@@ -24,7 +15,7 @@
 #' @param paramGrp A parameter group as listed in the EQWin eqgroups table, column groupname. Leave NULL to use parameters instead.
 #' @param stds A vector of standard names as listed in the EQWin eqstds table. Leave NULL to exclude standards. As these can apply to all stations standard values will be listed in a column to the left of the results.
 #' @param stnStds TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.
-#' @param date_approx An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date.
+#' @param date_approx An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date. If a station is found to not have any samples on the given 'date', the function will look for samples on the date + 1 day, - 1 day, + 2 days, etc. up to 'date_approx' days in the past and future and stop searching for a station once a sample is found. Default is 0.
 #' @param save_path The path to save the Excel file. Default is "choose" to allow user to select a folder interactively.
 #' @param dbPath The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".
 #' 
@@ -41,7 +32,7 @@
 # stnStds = TRUE
 # save_path = "C:/Users/gtdelapl/Desktop"
 # dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
-# date_approx = 0
+# date_approx = 10
 
 
 WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
@@ -157,11 +148,33 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
   # Fetch the sample data for the date in question, plus or minus the date_approx if specified if there is no data for the exact date
   # Get some data and merge dfs
   sampleIds <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(StnIds, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date, "';"))
-  #TODO: if any station has no data for the exact date, fetch data for the closest date within date_approx days
-  
-  
-  
-  
+
+  if (date_approx > 0 ) {
+    # Find which element of StnIds is not in sampleIds$StnId
+    missing <- setdiff(StnIds, sampleIds$StnId)
+    if (length(missing) > 0) {
+      # Look for samples one day at a time out from the 'date' parameter. Start with one day in future, then one day in past, then two days in future, two days in past, etc.
+      extra_sampleIds <- data.frame()
+      for (i in 1:date_approx) {
+        extra <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(missing, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date + i, "';"))
+        if (nrow(extra) > 0) {
+          extra_sampleIds <- rbind(extra_sampleIds, extra)
+          # remove the stations that have been found from the missing list
+          missing <- setdiff(missing, extra$StnId)
+        } else { # Now go to i days in the past
+          extra <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(missing, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date - i, "';"))
+          if (nrow(extra) > 0) {
+            extra_sampleIds <- rbind(extra_sampleIds, extra)
+            # remove the stations that have been found from the missing list
+            missing <- setdiff(missing, extra$StnId)
+          }
+        }
+      }
+      if (nrow(extra_sampleIds) > 0) {
+        sampleIds <- rbind(sampleIds, extra_sampleIds)
+      }
+    }
+  }
   
   results <- DBI::dbGetQuery(EQWin, paste0("SELECT SampleId, ParamId, Result FROM eqdetail WHERE SampleId IN (", paste0(sampleIds$SampleId, collapse = ", "), ") AND ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
   params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamName FROM eqparams WHERE ParamId IN (", paste0(results$ParamId, collapse = ", "), ");"))
@@ -279,7 +292,7 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
   # Make the workbook ###############################################################################################
   wb <- openxlsx::createWorkbook(title = "Water Quality Report")
   time <- Sys.time()
-  top <- data.frame(tmp = c(paste0("Water quality report for EQWin stations ", paste(locations$StnName, collapse = ", ")),  NA),
+  top <- data.frame(tmp = c(paste0("WQ report for EQWin stns  ", paste(locations$StnName, collapse = ", ")),  paste0("For ", date, if (date_approx > 0) paste0(". Requested stns w/o smpls on this date may show smpls within ", date_approx, " days.") else "" )),
                     tmp2 = NA,
                     tmp3 = NA,
                     tmp4 = NA,
@@ -306,10 +319,11 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
   # Create the header
   openxlsx::writeData(wb, "Report", top, startCol = 1, startRow = 1, colNames = FALSE)
   openxlsx::mergeCells(wb, "Report", cols = c(1:7), rows = 1)
+  openxlsx::mergeCells(wb, "Report", cols = c(1:7), rows = 2)
   openxlsx::addStyle(wb, "Report", topStyle, rows = 1, cols = c(1:10))
   openxlsx::addStyle(wb, "Report", topStyle, rows = 2, cols = c(1:10))
   
-  openxlsx::writeData(wb, "Report", NA, startCol = 1, startRow = 2, colNames = FALSE) # Empty row for spacing
+  openxlsx::writeData(wb, "Report", NA, startCol = 1, startRow = 3, colNames = FALSE) # Empty row for spacing
   
   # Create the table
   openxlsx::writeData(wb, "Report", "Standards", startCol = 2, startRow = 4, colNames = FALSE)

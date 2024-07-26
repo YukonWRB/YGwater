@@ -2,7 +2,7 @@
 % Please edit documentation in R/WQreport.R
 \name{WQreport}
 \alias{WQreport}
-\title{Create a tabular report of water quality data from the EQWin database}
+\title{Create an Excel workbook report of water quality data from the EQWin database}
 \usage{
 WQreport(
   date,
@@ -32,7 +32,7 @@ WQreport(
 
 \item{stnStds}{TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.}
 
-\item{date_approx}{An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date.}
+\item{date_approx}{An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date. If a station is found to not have any samples on the given 'date', the function will look for samples on the date + 1 day, - 1 day, + 2 days, etc. up to 'date_approx' days in the past and future and stop searching for a station once a sample is found. Default is 0.}
 
 \item{save_path}{The path to save the Excel file. Default is "choose" to allow user to select a folder interactively.}
 
@@ -42,5 +42,9 @@ WQreport(
 An Excel workbook saved where requested.
 }
 \description{
-Connection to EQWin is made using function \code{\link[=AccessConnect]{AccessConnect()}}
+NOTE: support for calculated standards is not yet implemented.
+Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name. Exceedances are noted using conditional formation, with a note added to explain which standard(s) are exceeded.
+}
+\details{
+Connection to EQWin is made using function \code{\link[=AccessConnect]{AccessConnect()}}.
 }
