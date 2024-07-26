@@ -10,7 +10,8 @@ eq_fetch(
   paramIDs = "all",
   dates = "all",
   BD = 2,
-  apply_standards = TRUE
+  apply_standards = TRUE,
+  path = "X:/EQWin/WR/DB/Water Resources.mdb"
 )
 }
 \arguments{
@@ -25,13 +26,15 @@ eq_fetch(
 \item{BD}{Treatment of values below detection limits (0 = Set to zero; 1 = Set to NA; 2 = Set to 0.5*(LOD); 3 = Set to sqrt(2)LOD). Above detection values are set to the upper limit of detection.}
 
 \item{apply_standards}{TRUE or FALSE, include standards with data. Provides a pop-up list for selection.}
+
+\item{path}{The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".}
 }
 \value{
 A list with one sub-list per station, each one containing 2 data frames with sample data and calculated standards
 }
 \description{
-Fetches sample data from the WRB database and returns a list of data frames suitable for modification for plot generation and other comparisons
+Fetches sample data from the WRB database and returns a list of data frames suitable for modification for plot generation and other comparisons. Connection to the EQWin database is made via function \code{\link[=AccessConnect]{AccessConnect()}}.
 }
 \details{
-Insert here what happens to values > DL, where the standards are taken from,
+Insert here what happens to values > DL, where the standards are taken from, etc
 }
