@@ -43,8 +43,27 @@ An Excel workbook saved where requested.
 }
 \description{
 NOTE: support for calculated standards is not yet implemented.
-Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name. Exceedances are noted using conditional formation, with a note added to explain which standard(s) are exceeded.
+
+Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name.
+
+Exceedances are noted using conditional formatting, with a note added to explain which standard(s) are exceeded.
 }
 \details{
 Connection to EQWin is made using function \code{\link[=AccessConnect]{AccessConnect()}}.
+}
+\examples{
+\dontrun{
+
+# These examples require access to the G drive to work and must write to a file. They are 
+# provided for demonstration purposes only and can't be run using the 'Run examples' button above.
+# Copy/paste them into your R console to run them if needed.
+
+# Generate a report for July 1, 2024 using a station group, parameter group, 
+# both CCME standards, and look for data within +- 1 day of July 1
+WQreport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure", stds = c("CCME_ST", "CCME_LT"), date_approx = 1)
+
+
+# Generate a report for a single location and single parameter, no standards.
+WQreport("1991-02-12", stations = c("(CM)CM-u/s"), parameters = c("pH-F"), stnStds = FALSE)
+}
 }

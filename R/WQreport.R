@@ -3,7 +3,10 @@
 #' @description
 #' 
 #' NOTE: support for calculated standards is not yet implemented.
-#' Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name. Exceedances are noted using conditional formation, with a note added to explain which standard(s) are exceeded.
+#' 
+#' Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name. 
+#' 
+#' Exceedances are noted using conditional formatting, with a note added to explain which standard(s) are exceeded.
 #' 
 #' @details
 #' Connection to EQWin is made using function [AccessConnect()].
@@ -22,18 +25,22 @@
 #' @return An Excel workbook saved where requested.
 #' @export
 #'
-
-# date = "2024-07-23"
-# stations = NULL
-# stnGrp = "QZ Eagle Gold HLF"
-# parameters = NULL
-# paramGrp = "EG-HLF-failure"
-# stds = c("CCME_ST", "CCME_LT")
-# stnStds = TRUE
-# save_path = "C:/Users/gtdelapl/Desktop"
-# dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
-# date_approx = 10
-
+#' @examples
+#' \dontrun{
+#' 
+#' # These examples require access to the G drive to work and must write to a file. They are 
+#' # provided for demonstration purposes only and can't be run using the 'Run examples' button above.
+#' # Copy/paste them into your R console to run them if needed.
+#' 
+#' # Generate a report for July 1, 2024 using a station group, parameter group, 
+#' # both CCME standards, and look for data within +- 1 day of July 1
+#' WQreport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure", stds = c("CCME_ST", "CCME_LT"), date_approx = 1)
+#' 
+#' 
+#' # Generate a report for a single location and single parameter, no standards.
+#' WQreport("1991-02-12", stations = c("(CM)CM-u/s"), parameters = c("pH-F"), stnStds = FALSE)
+#' 
+#' }
 
 WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
   
@@ -176,6 +183,10 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
     }
   }
   
+  if (nrow(sampleIds) == 0) {
+    stop("No samples found for the date '", date, "', or within ", date_approx, " days of that date.")
+  }
+  
   results <- DBI::dbGetQuery(EQWin, paste0("SELECT SampleId, ParamId, Result FROM eqdetail WHERE SampleId IN (", paste0(sampleIds$SampleId, collapse = ", "), ") AND ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
   params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamName FROM eqparams WHERE ParamId IN (", paste0(results$ParamId, collapse = ", "), ");"))
   results <- merge(results, params)
@@ -252,41 +263,43 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
   # Now find station-specific standards, which will be used to apply conditional formatting and notes when the workbook is made
   if (stnStds) {
     tmp <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnStd AS StdCode FROM eqstns WHERE StnId IN (", paste0(samps_locs$StnId, collapse = ", "), ") AND StnStd IS NOT NULL;"))
-    tmp <- merge(tmp, DBI::dbGetQuery(EQWin, paste0("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ('", paste0(tmp$StdCode, collapse = "', '"), "')")))
-    station_stdVals <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, ParamId, MaxVal, MinVal FROM eqstdval WHERE StdId IN (", paste(tmp$StdId, collapse = ", "), ") AND ParamId IN (", paste0(params$ParamId, collapse = ", "), ");"))
-    if (nrow(station_stdVals) > 0) { # Otherwise there are no station-specific standards for the parameters in the report
-      
-      station_stdVals <- merge(tmp, station_stdVals, all.y = TRUE)
-      
-      station_stdVals$display_min <- NA
-      station_stdVals$display_max <- NA
-      # Some MaxVal and MinVal fields are labelled as =xxxx. These refer to calculations stored in table eqcalcs. Since the standard varies by sample, the column for the standard value will simply say 'calc'
-      for (j in 1:nrow(station_stdVals)) {
-        if (grepl("=", station_stdVals$MaxVal[j])) {
-          station_stdVals$display_max[j] <- "calculated"
-        } else {
-          station_stdVals$display_max[j] <- station_stdVals$MaxVal[j]
-        }
-        if (grepl("=", station_stdVals$MinVal[j])) {
-          station_stdVals$display_min[j] <- "calculated"
-        } else {
-          station_stdVals$display_min[j] <- station_stdVals$MinVal[j]
-        }
-      }
-      
-      station_stdVals$string <- NA
-      for (j in 1:nrow(station_stdVals)) {
-        min <- station_stdVals[j, "display_min"]
-        max <- station_stdVals[j, "display_max"]
-        string <- paste0(if (is.na(min)) "" else paste0("Min: ", min, " - "), if (is.na(max)) "" else paste0("Max: ", max))
-        station_stdVals[j, "string"] <- if (nchar(string) > 0) string else string
-      }
-      
-      station_stdVals <- merge(station_stdVals, params, all.x = TRUE)
-    } else {
+    if (nrow(tmp) == 0) {
       stnStds <- FALSE
+    } else {
+      tmp <- merge(tmp, DBI::dbGetQuery(EQWin, paste0("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ('", paste0(tmp$StdCode, collapse = "', '"), "')")))
+      station_stdVals <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, ParamId, MaxVal, MinVal FROM eqstdval WHERE StdId IN (", paste(tmp$StdId, collapse = ", "), ") AND ParamId IN (", paste0(params$ParamId, collapse = ", "), ");"))
+      if (nrow(station_stdVals) > 0) { # Otherwise there are no station-specific standards for the parameters in the report
+        
+        station_stdVals <- merge(tmp, station_stdVals, all.y = TRUE)
+        
+        station_stdVals$display_min <- NA
+        station_stdVals$display_max <- NA
+        # Some MaxVal and MinVal fields are labelled as =xxxx. These refer to calculations stored in table eqcalcs. Since the standard varies by sample, the column for the standard value will simply say 'calc'
+        for (j in 1:nrow(station_stdVals)) {
+          if (grepl("=", station_stdVals$MaxVal[j])) {
+            station_stdVals$display_max[j] <- "calculated"
+          } else {
+            station_stdVals$display_max[j] <- station_stdVals$MaxVal[j]
+          }
+          if (grepl("=", station_stdVals$MinVal[j])) {
+            station_stdVals$display_min[j] <- "calculated"
+          } else {
+            station_stdVals$display_min[j] <- station_stdVals$MinVal[j]
+          }
+        }
+        
+        station_stdVals$string <- NA
+        for (j in 1:nrow(station_stdVals)) {
+          min <- station_stdVals[j, "display_min"]
+          max <- station_stdVals[j, "display_max"]
+          string <- paste0(if (is.na(min)) "" else paste0("Min: ", min, " - "), if (is.na(max)) "" else paste0("Max: ", max))
+          station_stdVals[j, "string"] <- if (nchar(string) > 0) string else string
+        }
+        station_stdVals <- merge(station_stdVals, params, all.x = TRUE)
+      } else {
+        stnStds <- FALSE
+      }
     }
-
   }
   
   # Make the workbook ###############################################################################################
