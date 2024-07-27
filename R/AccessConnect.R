@@ -20,6 +20,11 @@ AccessConnect <- function(path, silent = FALSE) {
     stop("You need to install the Microsoft Access Driver to connect to an Access database. Go to https://www.microsoft.com/en-us/download/details.aspx?id=54920 and install the version that matches your Microsoft Office installation bit-ness.")
   }
   
+  # Check that the file can actually be accessed
+  if (!file.exists(path)) {
+    stop("The file path you provided does not exist or can't be connected to at the moment.")
+  }
+  
   # Proceed with the connection if the driver is available
   con <- tryCatch({
     DBI::dbConnect(odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", path))
