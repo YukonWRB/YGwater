@@ -9,8 +9,8 @@ hydroApp_globals <- function(dev) {
         dbname = "AquaCache",
         host = Sys.getenv("AquaCacheHost"),
         port = Sys.getenv("AquaCachePort"),
-        user = Sys.getenv("AquaCacheAdminUser"),
-        password = Sys.getenv("AquaCacheAdminPass")
+        user = Sys.getenv("AquaCacheUser"),
+        password = Sys.getenv("AquaCachePass")
       )
     }
   } else {
@@ -20,11 +20,10 @@ hydroApp_globals <- function(dev) {
         dbname = "hydromet",
         host = Sys.getenv("hydrometHost"),
         port = Sys.getenv("hydrometPort"),
-        user = Sys.getenv("hydrometAdminUser"),
-        password = Sys.getenv("hydrometAdminPass")
+        user = Sys.getenv("hydrometUser"),
+        password = Sys.getenv("hydrometPass")
       )
     }
   }
-  
 }
 

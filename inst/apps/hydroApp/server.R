@@ -7,6 +7,8 @@
 
 app_server <- function(input, output, session) {
   
+  DBI::dbExecute(pool, "SET logged_in_user.username = 'WRB';")
+  
   #Render some text
   output$plot_years_note <- renderText("For ranges covering December-January, select the December year(s)")
   output$standby <- renderText("<b>Standby...<b>")
