@@ -4,17 +4,10 @@
 \alias{EQWinStd}
 \title{Calculate standards using formulas in EQWin}
 \usage{
-EQWinStd(
-  CalcId,
-  ParamId,
-  SampleId,
-  dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
-)
+EQWinStd(CalcId, SampleId, dbPath = "X:/EQWin/WR/DB/Water Resources.mdb")
 }
 \arguments{
 \item{CalcId}{The ID identifying the calculation to perform, from column CalcId of table eqcalcs.}
-
-\item{ParamId}{The parameter ID for the calculation, from column ParamId of table eqcalcs.}
 
 \item{SampleId}{The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.}
 
@@ -24,5 +17,5 @@ EQWinStd(
 A value for the calculated standard.
 }
 \description{
-The EQWin database stores formulas for calculating standards. This function retrieves the formula, parses it into R code, and calculates the standard for a specified parameter. As these calculations typically require additional parameter measurements, the SampleId is also required.
+The EQWin database stores formulas for calculating standards. This function retrieves the formula, parses it into R code, and calculates the standard for a specified parameter. As these calculations typically require additional measured values, the SampleId is also required. Note that the target parameter is NOT required; this is identified by the CalcId.
 }
