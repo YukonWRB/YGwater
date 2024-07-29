@@ -21,12 +21,13 @@ eq_fetch <- function(EQcode,
                      BD = 2,
                      apply_standards = TRUE){
   
-  # EQcode <- "EG"
-  # stationIDs = c("DG1", "DG2", "ISH", "LSDP-UND", "W22", "W23", "W27", "W29", "W4", "W49", "W8", "W99")
-  # paramIDs = "all"
-  # dates = c("1990-01-01", "2016-06-01")
-  # BD <- 2
-  # apply_standards = FALSE
+  EQcode = "EG"
+  apply_standards = TRUE
+  dates = "all"
+  # stationIDs = c("DG1", "DG2", "ISH", "LDSP-UND", "W22", "W23", "W27", "W29", "W4", "W49", "W8", "W99"),
+  stationIDs = c("DG-1", "DG-2", "ISH", "LDSP-UND", "W8", "W4-mix", "W21", "W22", "W23", "W27", "W29", "W45",  "W49", "W99")
+  paramIDs = "all"
+  BD = 2
   
   rlang::check_installed("odbc", reason = "required to connect to EQWin Access DB") #This is here because odbc is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
   
@@ -103,7 +104,20 @@ eq_fetch <- function(EQcode,
   print("Fetching sample results")
   results <- DBI::dbGetQuery(EQWin, paste0("SELECT ", paste0('SampleId', ", ", 'ParamId', ", ", 'Result'), " FROM eqdetail WHERE ParamID IN (", paste(eqparams$ParamId, collapse = ", "),") AND SampleId IN (", paste0(eqsampls$SampleId, collapse = ", "), ")"))
   
-  # Deal with values below detection limits according to user choice
+  # Create table showing where qualifier (BD, AD) values are measured. Deal with values below detection limits according to user choice. 
+  BD_qualifiers <- results %>%
+    dplyr::mutate(Result_BD = ifelse(grepl("^<", .data$Result), "Y", "N")) %>%
+    dplyr::select(c("SampleId", "ParamId", "Result_BD"))
+  
+  merge1 <- merge(samps, stns, by.x = "StnId", by.y = "StnId")
+  merge2 <- merge(BD_qualifiers, merge1, by.x = "SampleId", by.y = "SampleId")
+  merge3 <- merge(merge2, params, by.x = "ParamId", by.y = "ParamId")
+  suppressMessages(sampledata <- merge3 %>%
+                     dplyr::rename("Param" = ParamCode) %>% # Add brackets to units
+                     dplyr::select(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param, .data$Units, .data$Result_BD) %>% # Select relevant columns
+                     tidyr::pivot_wider(id_cols = c("StnCode", "CollectDateTime", "StnType"), names_from = .data$Param, values_from = .data$Result) %>%
+                     as.data.frame())
+  
   if (BD == 0) {
     results$Result[grepl("<", results$Result)] <- 0
   } else if (BD == 1) {
@@ -119,6 +133,7 @@ eq_fetch <- function(EQcode,
     rm(isBD)
   }
   
+  
   # Deal with values above the detection limit (frequently occurs with turbidity)
   results$Result <- gsub(">", "", results$Result)
   
@@ -127,12 +142,13 @@ eq_fetch <- function(EQcode,
   merge2 <- merge(results, merge1, by.x = "SampleId", by.y = "SampleId")
   merge3 <- merge(merge2, params, by.x = "ParamId", by.y = "ParamId")
   suppressMessages(sampledata <- merge3 %>%
-                     dplyr::mutate(Param = paste0(merge3$ParamCode, " (", merge3$Units, ")")) %>%
-                     dplyr::select(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param, .data$Units, .data$Result) %>%
-                     dplyr::group_by(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param) %>%
-                     dplyr::summarize(Result = suppressWarnings(mean(as.numeric(.data$Result)))) %>%
+                     dplyr::mutate(Param = paste0(merge3$ParamCode, " (", merge3$Units, ")")) %>% # Add brackets to units
+                     dplyr::select(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param, .data$Units, .data$Result) %>% # Select relevant columns
+                     #dplyr::group_by(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param) %>%
+                     #dplyr::summarize(Result = suppressWarnings(mean(as.numeric(.data$Result)))) %>%
                      tidyr::pivot_wider(id_cols = c("StnCode", "CollectDateTime", "StnType"), names_from = .data$Param, values_from = .data$Result) %>%
                      as.data.frame())
+  
   sampledata <- sampledata[with(sampledata, order(StnCode)), ]
   rm(merge1, merge2, merge3)
   rownames(sampledata) <- NULL
