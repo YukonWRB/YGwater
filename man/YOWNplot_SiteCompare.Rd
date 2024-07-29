@@ -6,9 +6,9 @@
 \usage{
 YOWNplot_SiteCompare(
   YOWNindex,
-  tsunit,
+  tsunit = "bgs",
   chartRange = "all",
-  chartXInterval = "1 month",
+  chartXInterval = "6 month",
   saveTo = "desktop",
   login = Sys.getenv(c("AQUSER", "AQPASS")),
   server = "https://yukon.aquaticinformatics.net/AQUARIUS"
