@@ -42,8 +42,6 @@ WQreport(
 An Excel workbook saved where requested.
 }
 \description{
-NOTE: support for calculated standards is not yet implemented.
-
 Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name.
 
 Exceedances are noted using conditional formatting, with a note added to explain which standard(s) are exceeded.

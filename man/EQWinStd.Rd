@@ -4,14 +4,14 @@
 \alias{EQWinStd}
 \title{Calculate standards using formulas in EQWin}
 \usage{
-EQWinStd(CalcId, SampleId, dbPath = "X:/EQWin/WR/DB/Water Resources.mdb")
+EQWinStd(CalcId, SampleId, con = NULL)
 }
 \arguments{
 \item{CalcId}{The ID identifying the calculation to perform, from column CalcId of table eqcalcs.}
 
 \item{SampleId}{The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.}
 
-\item{dbPath}{The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".}
+\item{con}{A connection to the EQWin database. Default NULL creates a connection to the default database location.}
 }
 \value{
 A value for the calculated standard.

@@ -2,8 +2,6 @@
 #' 
 #' @description
 #' 
-#' NOTE: support for calculated standards is not yet implemented.
-#' 
 #' Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name. 
 #' 
 #' Exceedances are noted using conditional formatting, with a note added to explain which standard(s) are exceeded.
@@ -154,7 +152,7 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
   # Fetch the data and form tables ###############################################################################################
   # Fetch the sample data for the date in question, plus or minus the date_approx if specified if there is no data for the exact date
   # Get some data and merge dfs
-  sampleIds <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(StnIds, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date, "';"))
+  sampleIds <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(StnIds, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date, "' AND SampleClass <> 'D';"))
 
   if (date_approx > 0 ) {
     # Find which element of StnIds is not in sampleIds$StnId
@@ -305,6 +303,7 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
   # Make the workbook ###############################################################################################
   wb <- openxlsx::createWorkbook(title = "Water Quality Report")
   time <- Sys.time()
+  attr(time, "tzone") <- "MST"
   top <- data.frame(tmp = c(paste0("WQ report for EQWin stns  ", paste(locations$StnName, collapse = ", ")),  paste0("For ", date, if (date_approx > 0) paste0(". Requested stns w/o smpls on this date may show smpls within ", date_approx, " days.") else "" )),
                     tmp2 = NA,
                     tmp3 = NA,
@@ -312,7 +311,7 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
                     tmp5 = NA,
                     tmp6 = NA,
                     tmp7 = NA,
-                    tmp8 = c(paste0("Issued at ", substr(format(time, tz = "MST"), 1, 16), " MST"), paste0("Created with R package YGwater ", utils::packageVersion("YGwater"))))
+                    tmp8 = c(paste0("Issued at ", substr(time, 1, 16), " MST"), paste0("Created with R package YGwater ", utils::packageVersion("YGwater"))))
   
   # Create styles and comments
   topStyle <- openxlsx::createStyle(fgFill = "turquoise2")
@@ -397,7 +396,7 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
           for (k in (2 + nrow(standards)):ncol(final_table)) {  # Now we can work left to right cell by cell
             if (is.na(final_table[i, k])) next # it's character at this point, and NA means that there is nothing in the field
             
-            compare_value <- suppressWarnings(as.numeric(final_table[i, k])) # The value to compare agains the standard
+            compare_value <- suppressWarnings(as.numeric(final_table[i, k])) # The value to compare against the standard
             if (is.na(compare_value)) next # If the value is NA, skip. This happens notably when the value is < the detection limit.
             
             for (l in c("MinVal", "MaxVal")) {
@@ -405,22 +404,22 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
               
               # Check if it's a simple standard or a calculated one.
               if (grepl("=", std_applies[[l]])) {
-                
-                # TODO implement logic to calculate the value using the EQWin calculation
-                # ref_value <- EQWinStd()
-                
+                # Find the CalcId corresponding to the referenced standard
+                calc_id <- DBI::dbGetQuery(EQWin, paste0("SELECT CalcId FROM eqcalcs WHERE CalcCode = '", sub("=", "", std_applies[[l]]), "';"))$CalcId
+                # Find the SampleId
+                stn_name <- names(final_table)[k]
+                sid <- samps_locs[paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")") == stn_name, "SampleId"]
+                min_max <- EQWinStd(calc_id, sid, EQWin)
               } else { # It's a simple standard! Nice and easy.
-                
                 min_max <- as.numeric(std_applies[[l]])
-                
-                if (l == "MinVal") {
-                  if (compare_value < min_max) {
-                    exceed_comments[i, (k - (1 + nrow(standards)))] <- paste0(if (!is.na(exceed_comments[i, (k - (1 + nrow(standards)))])) exceed_comments[i, (k - (1 + nrow(standards)))], if (!is.na(exceed_comments[i, (k - (1 + nrow(standards)))])) "\n", "Below ", standards[j, "StdCode"], " of ", min_max)
-                  }
-                } else if (l == "MaxVal") {
-                  if (compare_value > min_max) {
-                    exceed_comments[i, (k - (1 + nrow(standards)))] <- paste0(if (!is.na(exceed_comments[i, (k - (1 + nrow(standards)))])) exceed_comments[i, (k - (1 + nrow(standards)))], if (!is.na(exceed_comments[i, (k - (1 + nrow(standards)))])) "\n", "Exceeds ", standards[j, "StdCode"], " of ", min_max)
-                  }
+              }
+              if (l == "MinVal") {
+                if (compare_value < min_max) {
+                  exceed_comments[i, (k - (1 + nrow(standards)))] <- paste0(if (!is.na(exceed_comments[i, (k - (1 + nrow(standards)))])) exceed_comments[i, (k - (1 + nrow(standards)))], if (!is.na(exceed_comments[i, (k - (1 + nrow(standards)))])) "\n", "Below ", standards[j, "StdCode"], " of ", min_max)
+                }
+              } else if (l == "MaxVal") {
+                if (compare_value > min_max) {
+                  exceed_comments[i, (k - (1 + nrow(standards)))] <- paste0(if (!is.na(exceed_comments[i, (k - (1 + nrow(standards)))])) exceed_comments[i, (k - (1 + nrow(standards)))], if (!is.na(exceed_comments[i, (k - (1 + nrow(standards)))])) "\n", "Exceeds ", standards[j, "StdCode"], " of ", min_max)
                 }
               }
             }
@@ -434,8 +433,7 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
     for (i in 1:length(row_names)) {
       name <- row_names[i]
       col_number_final <- which(names(final_table) == name)
-      code <- sub(" \\(.*", "", name)
-      id <- unique(samps_locs[samps_locs$StnName == code, "StnId"])  # station ID
+      id <- unique(samps_locs[paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")") == name, "StnId"])  # station ID
       stn_std <- station_stdVals[station_stdVals$StnId == id, ]
       
       if (nrow(stn_std) > 0) { # Then a standard of some sort applies
@@ -453,24 +451,23 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
             
             for (l in c("MinVal", "MaxVal")) {
               if (is.na(std_applies[[l]])) next  # If the standard is NA, skip
-              
               # Check if it's a simple standard or a calculated one.
               if (grepl("=", std_applies[[l]])) {
-                
-                # TODO implement logic to calculate the value using the EQWin calculation
-                # ref_value <- EQWinStd()
-                
+                # Find the CalcId corresponding to the referenced standard
+                calc_id <- DBI::dbGetQuery(EQWin, paste0("SELECT CalcId FROM eqcalcs WHERE CalcCode = '", sub("=", "", std_applies[[l]]), "';"))$CalcId
+                # Find the SampleId
+                sid <- samps_locs[paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")") == name, "SampleId"]
+                min_max <- EQWinStd(calc_id, sid, EQWin)
               } else { # It's a simple standard! Nice and easy.
-                
                 min_max <- as.numeric(std_applies[[l]])
-                if (l == "MinVal") {
-                  if (compare_value < min_max) {
-                    exceed_comments[j,i] <- paste0(if (!is.na(exceed_comments[j,i])) exceed_comments[j,i], if (!is.na(exceed_comments[j,i])) "\n", "Below ", std_applies$StdCode, " of ", min_max)
-                  }
-                } else if (l == "MaxVal") {
-                  if (compare_value > min_max) {
-                    exceed_comments[j,i] <- paste0(if (!is.na(exceed_comments[j,i])) exceed_comments[j,i], if (!is.na(exceed_comments[j,i])) "\n", "Exceeds ", std_applies$StdCode, " of ", min_max)
-                  }
+              }
+              if (l == "MinVal") {
+                if (compare_value < min_max) {
+                  exceed_comments[j,i] <- paste0(if (!is.na(exceed_comments[j,i])) exceed_comments[j,i], if (!is.na(exceed_comments[j,i])) "\n", "Below ", std_applies$StdCode, " of ", min_max)
+                }
+              } else if (l == "MaxVal") {
+                if (compare_value > min_max) {
+                  exceed_comments[j,i] <- paste0(if (!is.na(exceed_comments[j,i])) exceed_comments[j,i], if (!is.na(exceed_comments[j,i])) "\n", "Exceeds ", std_applies$StdCode, " of ", min_max)
                 }
               }
             }
@@ -488,7 +485,10 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
       openxlsx::writeComment(wb, "Report", row = 5 + i, col = j + (1 + nrow(standards)), comment = openxlsx::createComment(comment, visible = FALSE, height = 20))
       openxlsx::addStyle(wb, "Report", exceedStyle, rows = 5 + i, cols = j + (1 + nrow(standards)), stack = TRUE)
     }
-  }
+    }
+  
+  # Freeze panes so the parameters, standards, and location header are always visible
+  openxlsx::freezePane(wb, "Report", firstActiveRow = 6, firstActiveCol = (2 + nrow(standards)))
 
   
   openxlsx::saveWorkbook(wb, paste0(save_path, "/WQ Report for ", date, " Issued ", Sys.Date(), ".xlsx"), overwrite = TRUE)

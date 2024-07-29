@@ -4,19 +4,22 @@
 #'
 #' @param CalcId The ID identifying the calculation to perform, from column CalcId of table eqcalcs.
 #' @param SampleId The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.
-#' @param dbPath The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".
+#' @param con A connection to the EQWin database. Default NULL creates a connection to the default database location.
 #'
 #' @return A value for the calculated standard.
 #' @export
 #'
 
-EQWinStd <- function(CalcId, SampleId, dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
+EQWinStd <- function(CalcId, SampleId, con = NULL) {
 
   # initial checks, connection, and validations #######################################################################################
   
   # Connect to EQWin
-  EQWin <- AccessConnect(dbPath, silent = TRUE)
-  on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+  if (is.null(con)) {
+    EQWin <- AccessConnect("X:/EQWin/WR/DB/Water Resources.mdb", silent = TRUE)
+    on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+  }
+
   
   # Check that the CalcId, ParamId, SampleId exist while retrieving necessary data
   script <- DBI::dbGetQuery(EQWin, paste0("SELECT CalcScript FROM eqcalcs WHERE CalcId = ", CalcId))$CalcScript
