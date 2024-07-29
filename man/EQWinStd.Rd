@@ -16,7 +16,7 @@ EQWinStd(
 
 \item{ParamId}{The parameter ID for the calculation, from column ParamId of table eqcalcs.}
 
-\item{SampleId}{The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values needed for the calculation.}
+\item{SampleId}{The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.}
 
 \item{dbPath}{The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".}
 }
@@ -24,5 +24,5 @@ EQWinStd(
 A value for the calculated standard.
 }
 \description{
-The EQWin database stores formulas for calculating standards. This function retrieves the formula, parses it into R code, and calculates the standard for a specified parameter. As these calculations typically require additional parameter measurements, the SampleId is also required. You can then use the
+The EQWin database stores formulas for calculating standards. This function retrieves the formula, parses it into R code, and calculates the standard for a specified parameter. As these calculations typically require additional parameter measurements, the SampleId is also required.
 }
