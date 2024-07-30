@@ -4,7 +4,7 @@
 #'
 #' @param CalcId The ID identifying the calculation to perform, from column CalcId of table eqcalcs.
 #' @param SampleId The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.
-#' @param con A connection to the EQWin database. Default NULL creates a connection to the default database location.
+#' @param con A connection to the EQWin database. Default NULL creates a connection to the default database location and closes the connection when done.
 #'
 #' @return A value for the calculated standard.
 #' @export
@@ -55,7 +55,7 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
   actual_script <- actual_script[!grepl("^#", actual_script)]
   
   # Create a named vector for parameters
-  params <- setNames(results$Result, results$ParamCode)
+  params <- stats::setNames(results$Result, results$ParamCode)
   
   # Create functions for later use ####################################################################################################
   # Function to replace parameter names with their values, defaulting to 0 if missing
