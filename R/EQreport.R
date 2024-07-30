@@ -32,15 +32,15 @@
 #' 
 #' # Generate a report for July 1, 2024 using a station group, parameter group, 
 #' # both CCME standards, and look for data within +- 1 day of July 1
-#' WQreport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure", stds = c("CCME_ST", "CCME_LT"), date_approx = 1)
+#' EQreport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure", stds = c("CCME_ST", "CCME_LT"), date_approx = 1)
 #' 
 #' 
 #' # Generate a report for a single location and single parameter, no standards.
-#' WQreport("1991-02-12", stations = c("(CM)CM-u/s"), parameters = c("pH-F"), stnStds = FALSE)
+#' EQreport("1991-02-12", stations = c("(CM)CM-u/s"), parameters = c("pH-F"), stnStds = FALSE)
 #' 
 #' }
 
-WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
+EQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
   
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
@@ -185,9 +185,8 @@ WQreport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, pa
     stop("No samples found for the date '", date, "', or within ", date_approx, " days of that date.")
   }
   
-  results <- DBI::dbGetQuery(EQWin, paste0("SELECT SampleId, ParamId, Result FROM eqdetail WHERE SampleId IN (", paste0(sampleIds$SampleId, collapse = ", "), ") AND ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
+  results <- DBI::dbGetQuery(EQWin, paste0("SELECT eqdetail.SampleId, eqdetail.ParamId, eqdetail.Result, eqparams.ParamCode, eqparams.ParamName FROM eqdetail INNER JOIN eqparams ON eqdetail.ParamId = eqparams.ParamId WHERE eqdetail.SampleId IN (", paste0(sampleIds$SampleId, collapse = ", "), ") AND eqdetail.ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
   params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamName FROM eqparams WHERE ParamId IN (", paste0(results$ParamId, collapse = ", "), ");"))
-  results <- merge(results, params)
   
   samps <- sampleIds[sampleIds$SampleId %in% results$SampleId, ]
   locations <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnCode, StnName, StnDesc FROM eqstns WHERE StnId IN (", paste0(samps$StnId, collapse = ", "), ");"))

@@ -290,8 +290,7 @@ plot <- function(id, con, language, restoring, data, inputs) {
       }
       # Now check if there actually is data to map for the selected parameter on the selected date and date approximation
       # If there is no data, return a modal dialog
-      ts_query
-      timeseries <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE parameter = ", input$param")
+      timeseries <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE parameter = ", input$param, ";"))
       continuous_data <- DBI::dbGetQuery(con, "SELECT ")
       discrete_data <- DBI::dbGetQuery(con, )
     }) # End of observeEvent for map creation
