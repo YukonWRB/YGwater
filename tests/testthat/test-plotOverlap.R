@@ -1,3 +1,7 @@
+# Tests depend on snapshots so can't be run on CRAN or CI
+skip_on_ci()
+skip_on_cran()
+
 old_warn <- getOption("warn")
 options(warn = -1)
 on.exit(options(warn = old_warn), add = TRUE)

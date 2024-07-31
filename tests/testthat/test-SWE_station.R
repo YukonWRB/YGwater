@@ -1,4 +1,6 @@
-test_that("Outputted table (summarise=TRUE) has proper dimensions when reading from AquaCache db", {
+test_that("Output (summarise=TRUE) has proper dimensions when reading from AquaCache db", {
+  skip_on_ci()
+  skip_on_cran()
   test <- suppressWarnings(SWE_station(year = 2022,
                                        month = 3,
                                        csv = FALSE,
@@ -9,6 +11,8 @@ test_that("Outputted table (summarise=TRUE) has proper dimensions when reading f
 })
 
 test_that("Output table (summarise=FALSE) has proper dimensions when reading from AquaCache db", {
+  skip_on_ci()
+  skip_on_cran()
   test <- suppressWarnings(SWE_station(year = 2022,
                                        month = 3,
                                        csv = FALSE,
@@ -20,6 +24,8 @@ test_that("Output table (summarise=FALSE) has proper dimensions when reading fro
 })
 
 test_that("Output table (summarise = TRUE) has proper dimensions when reading from snow db", {
+  skip_on_ci()
+  skip_on_cran()
   test <- suppressWarnings(SWE_station(year = 2022,
                                        month = 3,
                                        csv = FALSE,
@@ -30,6 +36,8 @@ test_that("Output table (summarise = TRUE) has proper dimensions when reading fr
 })
 
 test_that("Output table (summarise = FALSE) has proper dimensions when reading from snow db", {
+  skip_on_ci()
+  skip_on_cran()
   test <- suppressWarnings(SWE_station(year = 2022,
                                        month = 3,
                                        csv = FALSE,

@@ -1,3 +1,7 @@
+# Tests depend on parameters on the machine so can't be run on CRAN or CI
+skip_on_ci()
+skip_on_cran()
+
 dl <- aq_download(loc_id = "YOWN-0804",
                   ts_name = "Wlevel_bgs.Calculated",
                   start = "1950-01-01",

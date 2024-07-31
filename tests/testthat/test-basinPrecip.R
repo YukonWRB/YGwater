@@ -1,3 +1,7 @@
+# Tests depend on db connection so can't be run on CRAN or CI
+skip_on_ci()
+skip_on_cran()
+
 res <- basinPrecip("09EA004", start = Sys.time()-60*60*48, end = Sys.time()-60*60*6)
 test_that("times in past only work", {
   expect_true(res$mean_precip > 0)

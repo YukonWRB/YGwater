@@ -1,3 +1,5 @@
+skip_on_ci()
+skip_on_cran()
 
 res <- suppressWarnings(snowInfo(locations = "all", inactive = FALSE, save_path = NULL, stats = FALSE, plots = FALSE))
 
