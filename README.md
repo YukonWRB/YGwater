@@ -1,3 +1,8 @@
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/YukonWRB/YGwater/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/YukonWRB/YGwater/actions/workflows/R-CMD-check.yaml)
+<!-- badges: end -->
+
+
 #### Welcome to the Yukon Water Resources Branch's YGwater GitHub repository!
 
 This public repository holds many of the R functions that we use on a day-to-day basis at the Water Resources Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application that will soon be published (we'll put the URL here once it is).
