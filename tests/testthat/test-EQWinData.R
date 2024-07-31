@@ -1,3 +1,7 @@
+# Tests depend on db connection so can't be run on CRAN or CI
+skip_on_ci()
+skip_on_cran()
+
 test_that("error if no data", {
   if (file.exists("X:/EQWin/WR/DB/Water Resources.mdb")) {
     dir <- tempdir()

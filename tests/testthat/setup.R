@@ -1,4 +1,7 @@
 #Initial checks to make sure things run. These functions are defined in R/python-helpers.R
+# Tests depend on db connection so can't be run on CRAN or CI
+skip_on_ci()
+skip_on_cran()
 
 warning("tests on plotly objects weren't working in R 4.3.3 and up. These tests and the associated setup file have been disabled.")
 

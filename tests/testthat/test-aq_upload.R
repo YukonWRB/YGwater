@@ -1,3 +1,7 @@
+# Tests depend on parameters on the machine socan't be run on CRAN or CI
+skip_on_ci()
+skip_on_cran()
+
 #For this test to work the testing machine must have Aquarius credentials loaded into the .Renviron file. Refer to function documentation for more info.
 #These tests may never complete if Aquarius is being slow. Comment them all and run tests again if necessary to skip.
 test_that("aquarius upload works without overwrite", {

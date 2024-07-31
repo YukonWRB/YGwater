@@ -1,3 +1,7 @@
+# Tests depend on snapshots so can't be inspected on CRAN or CI
+skip_on_ci()
+skip_on_cran()
+
 # Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 
 warning("tests on plotly objects weren't working in R 4.3.3 and up. These tests have been disabled.")

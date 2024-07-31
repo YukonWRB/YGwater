@@ -1,3 +1,7 @@
+# Tests depend on snapshots so can't be run on CRAN or CI
+skip_on_ci()
+skip_on_cran()
+
 #NOTE: as of June 2023 hydrometDiscrete does not accept start/end dates other than 1 and 365. This explained in the help file.
 
 test_that("violin plot is as expected for full year with numeric startDay and endDay", {

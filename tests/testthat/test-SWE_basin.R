@@ -1,4 +1,6 @@
-test_that("Outputted table has proper dimensions when querying from AquaCache db", {
+test_that("Output table has proper dimensions when querying from AquaCache db", {
+  skip_on_ci()
+  skip_on_cran()
   test <- SWE_basin(year = 2022,
                     month = c(3,4,5),
                     threshold = 6,
@@ -9,7 +11,9 @@ test_that("Outputted table has proper dimensions when querying from AquaCache db
   expect_true(nrow(test) >= 1)
 })
 
-test_that("Outputted table has proper dimensions when querying from snow db", {
+test_that("Output table has proper dimensions when querying from snow db", {
+  skip_on_ci()
+  skip_on_cran()
   test <- SWE_basin(year = 2022,
                     month = c(3,4,5),
                     threshold = 6,
@@ -20,7 +24,9 @@ test_that("Outputted table has proper dimensions when querying from snow db", {
   expect_true(nrow(test) >= 1)
 })
 
-test_that("Outputted summary table has proper dimensions", {
+test_that("Output summary table has proper dimensions", {
+  skip_on_ci()
+  skip_on_cran()
   test <- SWE_basin(year = 2022,
                     month = c(3,4,5),
                     threshold = 6,
