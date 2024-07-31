@@ -27,10 +27,12 @@
 #' @examples
 #' \dontrun{
 #' # Using station and parameter groups
-#' EQWinData(start = "2024-07-01 00:00", end = Sys.Date(), stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure", format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
+#' EQWinData(start = "2024-07-01 00:00", end = Sys.Date(), stnGrp = "QZ Eagle Gold HLF",
+#' paramGrp = "EG-HLF-failure", format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
 #' 
 #' With specific stations and parameters
-#' EQWinData(start = "2024-01-01 00:00", end = Sys.Date(), stations = c("(EG)W23"), parameters = c("pH-F"), format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
+#' EQWinData(start = "2024-01-01 00:00", end = Sys.Date(), stations = c("(EG)W23"),
+#' parameters = c("pH-F"), format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
 #' }
 
 EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, format = 'wide', DL1 = NULL, DL2 = NULL, stds = NULL, stnStds = TRUE, save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {

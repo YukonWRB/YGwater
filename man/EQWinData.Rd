@@ -59,9 +59,11 @@ Connection to EQWin is made using function \code{\link[=AccessConnect]{AccessCon
 \examples{
 \dontrun{
 # Using station and parameter groups
-EQWinData(start = "2024-07-01 00:00", end = Sys.Date(), stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure", format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
+EQWinData(start = "2024-07-01 00:00", end = Sys.Date(), stnGrp = "QZ Eagle Gold HLF",
+paramGrp = "EG-HLF-failure", format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
 
 With specific stations and parameters
-EQWinData(start = "2024-01-01 00:00", end = Sys.Date(), stations = c("(EG)W23"), parameters = c("pH-F"), format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
+EQWinData(start = "2024-01-01 00:00", end = Sys.Date(), stations = c("(EG)W23"),
+parameters = c("pH-F"), format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
 }
 }

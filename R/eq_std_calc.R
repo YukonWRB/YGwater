@@ -131,7 +131,7 @@ eq_std_calc <- function(sampledata, calcs) {
   }
   hardx <- floor(hardx)
 
-  lookup_mn <- YGwater:::data$eq_std_calc_CCME_Mn
+  lookup_mn <- data$eq_std_calc_CCME_Mn
   `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx > Min & hardx <= Max)[which(colnames(lookup_mn) == as.character(pHx))])
   if (is.element("CCME_Mn-D_lt", calcs$MaxVal)) {
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Mn-D_lt")] <- `CCME_Mn-D_lt`
@@ -157,7 +157,7 @@ eq_std_calc <- function(sampledata, calcs) {
     tempx <- temp
   }
 
-  lookup_nh4 <- YGwater:::data$eq_std_calc_CCME_NH4
+  lookup_nh4 <- data$eq_std_calc_CCME_NH4
   CCME_NH4_lt <- dplyr::pull(dplyr::filter(lookup_nh4, Temp == tempx)[which(colnames(lookup_nh4) == as.character(pHx))])
   if (is.element("CCME_NH4_lt", calcs$MaxVal)) {
     calcs$MaxVal[which(calcs$MaxVal == "CCME_NH4_lt")] <- CCME_NH4_lt
