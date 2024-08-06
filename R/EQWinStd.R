@@ -18,6 +18,8 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
   if (is.null(con)) {
     EQWin <- AccessConnect("X:/EQWin/WR/DB/Water Resources.mdb", silent = TRUE)
     on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+  } else {
+    EQWin <- con
   }
 
   

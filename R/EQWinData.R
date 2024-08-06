@@ -21,7 +21,7 @@
 #' @param save_path The path to save the Excel file(s). Default is "choose" to allow user to select a folder interactively.
 #' @param dbPath The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".
 #' 
-#' @return An Excel workbook containing the requested station data, and optionally a workbook containing the standards.
+#' @return A list of data.frames containing the data, location and parameter info, and (optionally) standards, plus an Excel workbook containing the requested station data, an optional workbook containing the standards.
 #' @export
 #'
 #' @examples
@@ -170,6 +170,7 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
   locations <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnCode, StnName, StnDesc FROM eqstns WHERE StnId IN (", paste0(samps$StnId, collapse = ", "), ");"))
   samps_locs <- merge(locations, samps)
   
+  outputs <- list() # Holds the function outputs
   
   if (format == 'wide') {
     datalist <- list()
@@ -239,6 +240,7 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
     }
     openxlsx::write.xlsx(datalist, paste0(save_path, "/EQWinData_wide ", write_time, ".xlsx"))
     message("Data workbook saved to ", paste0(save_path, "/EQWinData_wide ", write_time, ".xlsx"))
+    outputs$data <- datalist
     
   } else if (format == 'long') {
     datalist <- list()
@@ -293,6 +295,9 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
     datalist[["parameters"]] <- unique(results[, c("ParamId", "ParamName")])
     openxlsx::write.xlsx(datalist, paste0(save_path, "/EQWinData_long", write_time, ".xlsx"), overwrite = TRUE)
     message("Data workbook saved to ", paste0(save_path, "/EQWinData_long ", write_time, ".xlsx"))
+    outputs$data <- datalist[["data"]]
+    outputs$locations <- datalist[["locations"]]
+    outputs$parameters <- datalist[["parameters"]]
   }
   
   
@@ -308,6 +313,7 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
     }
     openxlsx::write.xlsx(standards_list, paste0(save_path, "/EQWinStandards ", write_time, ".xlsx"))
     message("Standards workbook saved to ", paste0(save_path, "/EQWinStandards ", write_time, ".xlsx"))
+    outputs$standards <- standards_list
   }
   
   
@@ -332,6 +338,9 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
       }
       openxlsx::write.xlsx(stn_standards_list, paste0(save_path, "/EQWinStnStandards ", write_time, ".xlsx"))
       message("Stations standards workbook saved to ", paste0(save_path, "/EQWinStnStandards ", write_time, ".xlsx"))
+      outputs$stn_standards <- stn_standards_list
     }
   }
-}
+  
+  return(outputs)
+} # End of function

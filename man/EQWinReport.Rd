@@ -58,12 +58,12 @@ Connection to EQWin is made using function \code{\link[=AccessConnect]{AccessCon
 
 # Generate a report for July 1, 2024 using a station group, parameter group, 
 # both CCME standards, and look for data within +- 1 day of July 1
-EQreport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure",
+EQWinReport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure",
 stds = c("CCME_ST", "CCME_LT"), date_approx = 1)
 
 
 # Generate a report for a single location and single parameter, no standards.
-EQreport("1991-02-12", stations = c("(CM)CM-u/s"), parameters = c("pH-F"), stnStds = FALSE)
+EQWinReport("1991-02-12", stations = c("(CM)CM-u/s"), parameters = c("pH-F"), stnStds = FALSE)
 
 }
 }

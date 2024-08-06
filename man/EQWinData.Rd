@@ -48,7 +48,7 @@ EQWinData(
 \item{dbPath}{The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".}
 }
 \value{
-An Excel workbook containing the requested station data, and optionally a workbook containing the standards.
+A list of data.frames containing the data, location and parameter info, and (optionally) standards, plus an Excel workbook containing the requested station data, an optional workbook containing the standards.
 }
 \description{
 This function extracts data from the EQWin database and outputs it to an Excel workbook. The function can extract data from a specified date range, station(s), and parameter(s). The function can also output standard values as well as station-specific standards. .
