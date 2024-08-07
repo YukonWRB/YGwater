@@ -48,7 +48,7 @@ EQWinData(
 \item{dbPath}{The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".}
 }
 \value{
-An Excel workbook containing the requested station data, and optionally a workbook containing the standards.
+A list of data.frames containing the data, location and parameter info, and (optionally) standards, plus an Excel workbook containing the requested station data, an optional workbook containing the standards.
 }
 \description{
 This function extracts data from the EQWin database and outputs it to an Excel workbook. The function can extract data from a specified date range, station(s), and parameter(s). The function can also output standard values as well as station-specific standards. .
@@ -59,9 +59,11 @@ Connection to EQWin is made using function \code{\link[=AccessConnect]{AccessCon
 \examples{
 \dontrun{
 # Using station and parameter groups
-EQWinData(start = "2024-07-01 00:00", end = Sys.Date(), stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure", format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
+EQWinData(start = "2024-07-01 00:00", end = Sys.Date(), stnGrp = "QZ Eagle Gold HLF",
+paramGrp = "EG-HLF-failure", format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
 
 With specific stations and parameters
-EQWinData(start = "2024-01-01 00:00", end = Sys.Date(), stations = c("(EG)W23"), parameters = c("pH-F"), format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
+EQWinData(start = "2024-01-01 00:00", end = Sys.Date(), stations = c("(EG)W23"),
+parameters = c("pH-F"), format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
 }
 }
