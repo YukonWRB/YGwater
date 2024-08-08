@@ -133,12 +133,16 @@ console.log(language);")
   # Get info from database (passed to multiple modules). Data is re-fetched after successful login via an observeEvent.
   DBdata <- reactiveValues(
     locations = dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;"),
-    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;"),
+    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, media_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;"),
     locations_projects = dbGetQueryDT(pool, "SELECT * FROM locations_projects;"),
     locations_networks = dbGetQueryDT(pool, "SELECT * FROM locations_networks;"),
-    param_types = dbGetQueryDT(pool, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);"),
-    param_groups = dbGetQueryDT(pool, "SELECT DISTINCT p.group, p.group_fr FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
-    parameters = dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.group, p.group_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
+    media_types = dbGetQueryDT(pool, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_type = p.media_code);"),
+    
+    param_groups = dbGetQueryDT(pool, "SELECT DISTINCT p.group_id, p.group_name, p.group_name_fr FROM parameter_groups AS p WHERE EXISTS (SELECT 1 FROM parameter_relationships r WHERE r.group_id = p.group_id);"),
+    
+    parameters = dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
+    
+    
     projects = dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
     networks =  dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
     has_images = dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;"),
@@ -189,10 +193,10 @@ console.log(language);")
         
         # Re-fetch data from the database after successful login
         DBdata$locations <- dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;")
-        DBdata$timeseries <- dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, param_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;")
+        DBdata$timeseries <- dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter, media_type, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;")
         DBdata$locations_projects <- dbGetQueryDT(pool, "SELECT * FROM locations_projects;")
         DBdata$locations_networks <- dbGetQueryDT(pool, "SELECT * FROM locations_networks;")
-        DBdata$param_types <- dbGetQueryDT(pool, "SELECT p.* FROM param_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.param_type = p.param_type_code);")
+        DBdata$media_types <- dbGetQueryDT(pool, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_type = p.media_code);")
         DBdata$param_groups <- dbGetQueryDT(pool, "SELECT DISTINCT p.group, p.group_fr FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
         DBdata$parameters <- dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.group, p.group_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
         DBdata$projects <- dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);")

@@ -45,7 +45,7 @@ app_server <- function(input, output, session) {
       }
     } else if (input$first_selection == "View hydrometric plots + data") {
       if (!runCheck$plots) {
-        plotContainer$all_ts <- DBI::dbGetQuery(pool, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.param_type, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
+        plotContainer$all_ts <- DBI::dbGetQuery(pool, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.media_type, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         plotContainer$all_ts <- plotContainer$all_ts[order(plotContainer$all_ts$name), ]
         plotContainer$parameters_discrete <- DBI::dbGetQuery(pool, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
         plotContainer$parameters_discrete <- plotContainer$parameters_discrete[order(plotContainer$parameters_discrete$param_name), ]

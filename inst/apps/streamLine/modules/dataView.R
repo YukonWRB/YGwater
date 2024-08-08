@@ -164,9 +164,9 @@ data <- function(id, con, language, restoring, data, inputs) {
       )
       updateSelectizeInput(session, 
                            "pType",
-                           label = translations[id == "param_type", get(language$language)][[1]],
-                           choices = stats::setNames(c("All", data$param_types$param_type_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                           label = translations[id == "media_type", get(language$language)][[1]],
+                           choices = stats::setNames(c("All", data$media_types$media_code),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
@@ -241,8 +241,8 @@ data <- function(id, con, language, restoring, data, inputs) {
       )
       updateSelectizeInput(session, 
                            "pType",
-                           choices = stats::setNames(c("All", data$param_types$param_type_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                           choices = stats::setNames(c("All", data$media_types$media_code),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
@@ -308,10 +308,10 @@ data <- function(id, con, language, restoring, data, inputs) {
       
       if (!is.null(input$pType)) {
         if (length(input$pType) > 1) {
-          tbl <- tbl[tbl$param_type %in% input$pType, ]
+          tbl <- tbl[tbl$media_type %in% input$pType, ]
         } else {
           if (input$pType != "All") {
-            tbl <- tbl[tbl$param_type == input$pType, ]
+            tbl <- tbl[tbl$media_type == input$pType, ]
           }
         }
       }
@@ -397,9 +397,9 @@ data <- function(id, con, language, restoring, data, inputs) {
         # Attach location
         tbl[data$locations, on = c(location_id = "location_id"), translations[id == "loc", get(language$language)] := .(get(translations[id == "generic_name_col", get(language$language)]))]
         # Attach parameter type
-        tbl[data$param_types, on = c(param_type = "param_type_code"), 
+        tbl[data$media_types, on = c(media_type = "media_code"), 
             translations[id == "type", get(language$language)] := get(translations[id == "param_type_col", get(language$language)])]
-        tbl[, param_type := NULL]
+        tbl[, media_type := NULL]
         # Attach parameter descriptions
         tbl[data$parameters, on = c(parameter = "param_code"), 
             c(translations[id == "group", get(language$language)], translations[id == "parameter", get(language$language)], translations[id == "units", get(language$language)]) 

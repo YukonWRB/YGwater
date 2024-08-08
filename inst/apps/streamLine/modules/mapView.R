@@ -95,8 +95,8 @@ map <- function(id, language, restoring, data) {
     #   # )
     #   updateSelectizeInput(session, 
     #                        "pType",
-    #                        choices = stats::setNames(c("All", data$param_types$param_type_code),
-    #                                                  c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+    #                        choices = stats::setNames(c("All", data$media_types$media_code),
+    #                                                  c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
     #                                                  )
     #                        )
     #   )
@@ -164,8 +164,8 @@ map <- function(id, language, restoring, data) {
       )
       updateSelectizeInput(session, 
                            "pType",
-                           choices = stats::setNames(c("All", data$param_types$param_type_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                           choices = stats::setNames(c("All", data$media_types$media_code),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
@@ -270,9 +270,9 @@ map <- function(id, language, restoring, data) {
       )
       updateSelectizeInput(session, 
                            "pType",
-                           label = translations[id == "param_type", get(language$language)][[1]],
-                           choices = stats::setNames(c("All", data$param_types$param_type_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                           label = translations[id == "media_type", get(language$language)][[1]],
+                           choices = stats::setNames(c("All", data$media_types$media_code),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
@@ -353,10 +353,10 @@ map <- function(id, language, restoring, data) {
       
       if (!is.null(input$pType)) {
         if (length(input$pType) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$param_type %in% input$pType, ]
+          timeseries.sub <- timeseries.sub[timeseries.sub$media_type %in% input$pType, ]
         } else {
           if (input$pType != "All") {
-            timeseries.sub <- timeseries.sub[timeseries.sub$param_type == input$pType, ]
+            timeseries.sub <- timeseries.sub[timeseries.sub$media_type == input$pType, ]
           }
         }
       }
