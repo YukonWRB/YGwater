@@ -10,7 +10,7 @@
 #' @details
 #' To download data, you MUST have the database credentials loaded into your .Renviron profile. See function [AquaConnect()] for more information, and contact the database administrator/data scientist for credentials or help.
 #' 
-#' If you also wish to synchronize timeseries on our database with new data provided by others (such as when the WSC adjusts or publishes flow values) you must also have write credentials to the database. Please talk to the Data Scientist to get these credntials.
+#' If you also wish to synchronize timeseries on our database with new data provided by others (such as when the WSC adjusts or publishes flow values) you must also have write credentials to the database. Please talk to the Data Scientist to get these credentials.
 #'
 #' @param year Year for which the snow bulletin is to be created.
 #' @param month Month for which the snow bulletin is to be created. Options are 3, 4 or 5.

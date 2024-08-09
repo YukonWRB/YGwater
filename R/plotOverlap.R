@@ -50,8 +50,34 @@
 #' @export
 #'
 
-plotOverlap <- function(location = NULL,
-                        parameter = NULL,
+# location <- "09EA004"
+# parameter <- "water flow"
+# record_rate = NULL
+# startDay <- 1
+# endDay <- 365
+# tzone <- "MST"
+# years <- 2022
+# datum <- TRUE
+# title <- TRUE
+# custom_title <- NULL
+# filter <- NULL
+# historic_range <- "last"
+# returns <- "auto"
+# return_type <- "max"
+# return_months <- c(5:9)
+# return_max_year <- NULL
+# allowed_missing <- 10
+# plot_scale <- 1
+# legend <- TRUE
+# save_path <- NULL
+# con <- NULL
+# continuous_data <- NULL
+# snowbulletin <- FALSE
+# language <- "en"
+
+
+plotOverlap <- function(location,
+                        parameter,
                         record_rate = NULL,
                         startDay = 1,
                         endDay = 365,
@@ -281,7 +307,7 @@ plotOverlap <- function(location = NULL,
     }
 
     # Find the ts units
-    units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM parameters WHERE param_code = ", parameter_code, ";"))
+    units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE param_code = ", parameter_code, ";"))
 
     # Get the necessary data -------------------
     # start with daily means data
@@ -746,9 +772,6 @@ plotOverlap <- function(location = NULL,
   #Add some information below the legend
   if (legend) {
     spread_vert <- max - min #Used to determine where to put the text
-    # spreads_horz <- as.numeric(range(realtime$fake_datetime, na.rm = TRUE))
-    # Calculate positions as a fraction of the data range
-    # end_time1 <- as.POSIXct(spreads_horz[1] + (spreads_horz[2] - spreads_horz[1]))
     end_time1 <- max(realtime$fake_datetime, na.rm = TRUE)
     if (!is.infinite(minHist)) {
       if (overlaps) {
