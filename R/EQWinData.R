@@ -125,7 +125,7 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
   }
   
   if (!is.null(parameters)) {
-    ParamIds <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode FROM eqparams WHERE ParamCode IN ('", paste0(parameters, collapse = "', '"), "')"))
+    ParamIds <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, Units FROM eqparams WHERE ParamCode IN ('", paste0(parameters, collapse = "', '"), "')"))
     if (nrow(ParamIds) == 0) {
       stop("No parameters found in the EQWin database with the names '", paste0(parameters, collapse = "', '"), "'")
     }
@@ -163,8 +163,8 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
   sampleIds$CodeDesc <- gsub(",", "", sampleIds$CodeDesc)
   sampleIds$CodeDesc <- paste0("(", sampleIds$CodeDesc, ")")
   
-  results <- DBI::dbGetQuery(EQWin, paste0("SELECT eqdetail.SampleId, eqdetail.ParamId, eqdetail.Result, eqparams.ParamCode, eqparams.ParamName FROM eqdetail INNER JOIN eqparams ON eqdetail.ParamId = eqparams.ParamId WHERE eqdetail.SampleId IN (", paste0(sampleIds$SampleId, collapse = ", "), ") AND eqdetail.ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
-  params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamName FROM eqparams;"))
+  results <- DBI::dbGetQuery(EQWin, paste0("SELECT eqdetail.SampleId, eqdetail.ParamId, eqdetail.Result, eqparams.ParamCode, eqparams.ParamName, eqparams.Units FROM eqdetail INNER JOIN eqparams ON eqdetail.ParamId = eqparams.ParamId WHERE eqdetail.SampleId IN (", paste0(sampleIds$SampleId, collapse = ", "), ") AND eqdetail.ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
+  params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamName, Units FROM eqparams;"))
   
   samps <- sampleIds[sampleIds$SampleId %in% results$SampleId, ]
   locations <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnCode, StnName, StnDesc FROM eqstns WHERE StnId IN (", paste0(samps$StnId, collapse = ", "), ");"))
@@ -292,7 +292,7 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
       }
     }
     datalist[["locations"]] <- locations[locations$StnId %in% datalist[["data"]]$StnId, c("StnId", "StnName", "StnDesc")]
-    datalist[["parameters"]] <- unique(results[, c("ParamId", "ParamName")])
+    datalist[["parameters"]] <- unique(results[, c("ParamId", "ParamName", "Units")])
     openxlsx::write.xlsx(datalist, paste0(save_path, "/EQWinData_long", write_time, ".xlsx"), overwrite = TRUE)
     message("Data workbook saved to ", paste0(save_path, "/EQWinData_long ", write_time, ".xlsx"))
     outputs$data <- datalist[["data"]]
