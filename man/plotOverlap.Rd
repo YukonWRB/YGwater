@@ -6,8 +6,8 @@
 \title{Plot of overlapping years or portions thereof}
 \usage{
 plotOverlap(
-  location = NULL,
-  parameter = NULL,
+  location,
+  parameter,
   record_rate = NULL,
   startDay = 1,
   endDay = 365,
@@ -33,8 +33,8 @@ plotOverlap(
 )
 
 hydrometContinuous(
-  location = NULL,
-  parameter = NULL,
+  location,
+  parameter,
   record_rate = NULL,
   startDay = 1,
   endDay = 365,

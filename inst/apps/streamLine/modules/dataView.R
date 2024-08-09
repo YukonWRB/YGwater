@@ -404,7 +404,7 @@ data <- function(id, con, language, restoring, data, inputs) {
         tbl[data$parameters, on = c(parameter = "param_code"), 
             c(translations[id == "group", get(language$language)], translations[id == "parameter", get(language$language)], translations[id == "units", get(language$language)]) 
             := 
-              .(get(translations[id == "param_group_col", get(language$language)]), get(translations[id == "param_name_col", get(language$language)]), unit)] # data in column names "unit" is unchanging based on language
+              .(get(translations[id == "param_group_col", get(language$language)]), get(translations[id == "param_name_col", get(language$language)]), unit)] # data in column named "unit" is unchanging based on language
         tbl[, parameter := NULL]
         
         # Create sort.start, sort.end for sorting only

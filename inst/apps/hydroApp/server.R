@@ -253,12 +253,12 @@ app_server <- function(input, output, session) {
       updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-12-31"))
       updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()), "-01-01"))
       
-        plotContainer$param_code <- plotContainer$parameters_discrete[plotContainer$parameters_discrete$param_name == tolower(input$plot_param), "param_code"]
+        plotContainer$param_code <- plotContainer$parameters_discrete[tolower(plotContainer$parameters_discrete$param_name) == tolower(input$plot_param), "param_code"]
         updateSelectizeInput(session, "plot_loc_name", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code & plotContainer$all_ts$category == "discrete", "name"]))
         updateSelectizeInput(session, "plot_loc_code", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code & plotContainer$all_ts$category == "discrete", "location"]))
       
       } else if (input$plot_data_type == "Continuous") {
-        plotContainer$param_code <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param), "param_code"]
+        plotContainer$param_code <- plotContainer$parameters_continuous[tolower(plotContainer$parameters_continuous$param_name) == tolower(input$plot_param), "param_code"]
         updateSelectizeInput(session, "plot_loc_name", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code & plotContainer$all_ts$category == "continuous", "name"]))
         updateSelectizeInput(session, "plot_loc_code", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code & plotContainer$all_ts$category == "continuous", "location"]))
         if (input$plot_param %in% c("Snow Water Equivalent", "Snow Depth")) {

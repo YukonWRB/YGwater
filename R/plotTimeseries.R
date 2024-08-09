@@ -140,7 +140,7 @@ plotTimeseries <- function(location,
   #Confirm parameter and location exist in the database and that there is only one entry
   escaped_parameter <- gsub("'", "''", parameter)
   parameter_tbl <- DBI::dbGetQuery(con, 
-                                   paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
+                                   paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
                                    )
   parameter_code <- parameter_tbl$param_code[1]
   if (language == "fr") {
@@ -260,7 +260,7 @@ plotTimeseries <- function(location,
   }
   
   # Find the ts units
-  units <- parameter_tbl$unit[1]
+  units <- parameter_tbl$unit_default[1]
   
   range <- seq.POSIXt(start_date, end_date, by = "day")
   if (is.null(rate)) {

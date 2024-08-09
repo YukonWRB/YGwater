@@ -138,7 +138,7 @@ hydrometDiscrete <- function(location = NULL,
       stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager.")
     } else {
       tsid <- exists$timeseries_id
-      units <- DBI::dbGetQuery(con, paste0("SELECT unit FROM parameters WHERE param_code = ", parameter_code))[1,1]
+      units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE param_code = ", parameter_code))[1,1]
     }
 
     # Get the data ------------------------------------------------------------
