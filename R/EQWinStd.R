@@ -25,6 +25,13 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
   
   # Check that the CalcId, ParamId, SampleId exist while retrieving necessary data
   script <- DBI::dbGetQuery(EQWin, paste0("SELECT CalcScript FROM eqcalcs WHERE CalcId = ", CalcId))$CalcScript
+  
+  locale_info <- Sys.getlocale("LC_CTYPE")
+  encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
+  if (encoding != "utf8") {
+    script <- iconv(script, from = encoding, to = "UTF-8")
+  }
+  
   if (length(script) == 0) {
     stop("CalcId does not exist in the database.")
   }
