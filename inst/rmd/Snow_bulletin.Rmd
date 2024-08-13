@@ -389,7 +389,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
     )
   
   if (exists('flood') &
-      !is.null(flood) & parameter %in% c("water level", "water flow")) {
+      !is.null(flood) & parameter %in% c("water level", "discharge, river/stream")) {
     if (parameter == "water level") {
       plot <- plot +
         ggplot2::geom_hline(
@@ -1010,8 +1010,8 @@ if (language_param == "french") {
 }
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
-              year = year_param-1,
+              parameter = "discharge, river/stream",
+              year = year_param - 1,
               custom_title = custom_title,
               scale = scale_param,
               language = substr(language_param, 1, 2))
@@ -1106,7 +1106,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,
@@ -1208,7 +1208,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,
@@ -1274,7 +1274,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,
@@ -1379,7 +1379,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,
@@ -1397,7 +1397,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,
@@ -1482,7 +1482,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,
@@ -1543,7 +1543,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,
@@ -1648,7 +1648,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,
@@ -1710,7 +1710,7 @@ if (language_param == "french") {
 
 # Plotting
 snowbullWater(location = station_id,
-              parameter = "water flow",
+              parameter = "discharge, river/stream",
               year = year_param-1,
               custom_title = custom_title,
               scale = scale_param,

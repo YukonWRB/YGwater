@@ -32,7 +32,7 @@
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
-#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "water flow" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "water equivalent, snow" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
@@ -51,7 +51,7 @@
 #'
 
 # location <- "09EA004"
-# parameter <- "water flow"
+# parameter <- "discharge, river/stream"
 # record_rate = NULL
 # startDay <- 1
 # endDay <- 365
@@ -597,7 +597,7 @@ plotOverlap <- function(location,
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "water flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precip", parameter, ignore.case = TRUE)) { #remove all values less than 0
+      if (parameter %in% c("water level", "niveau d'eau", "discharge, river/stream", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "water equivalent, snow", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
         realtime[realtime$value < 0 & !is.na(realtime$value),"value"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         realtime[realtime$value < -100 & !is.na(realtime$value),"value"] <- NA
@@ -744,7 +744,7 @@ plotOverlap <- function(location,
         extremes <- suppressWarnings(fasstr::calc_annual_extremes(daily[daily$year <= return_max_year , ], dates = "datetime", values = "value", water_year_start = return_months[1], months = return_months, allowed_missing = allowed_missing))
         extremes$Measure <- "1-Day"
         if (return_type == "max") {
-          analysis <- fasstr::compute_frequency_analysis(data = extremes, events = "Year", values = "Max_1_Day", use_max = TRUE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))
+          analysis <- fasstr::compute_frequency_analysis(data = extremes, events = "Year", values = "Max_1_Day", use_max = TRUE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005), plot_curve = FALSE)
           return_yrs <- c(min(lubridate::year(analysis$Freq_Analysis_Data$Max_1_Day_Date)), max(lubridate::year(analysis$Freq_Analysis_Data$Max_1_Day_Date)))
         } else if (return_type == "min") {
           analysis <- fasstr::compute_frequency_analysis(data = extremes, events = "Year", values = "Min_1_Day", use_max = FALSE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))

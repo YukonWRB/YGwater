@@ -31,7 +31,7 @@ SWE_basin <-
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id = timeseries.timeseries_id
                       INNER JOIN locations ON timeseries.location_id = locations.location_id
                       INNER JOIN parameters ON timeseries.parameter = parameters.param_code
-                      WHERE parameters.param_name = 'snow water equivalent'")
+                      WHERE parameters.param_name = 'water equivalent, snow'")
       DBI::dbDisconnect(con)
       # Rename columns:
       colnames(Meas) <- c("location_id", "SWE", "target_date")
