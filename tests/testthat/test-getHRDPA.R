@@ -1,4 +1,5 @@
 skip_if_offline()
+skip_on_ci()
 
 test_that("four or five (depending on time and availability on remote) rasters are downloaded and saved as tiffs when using default parameters", {
   suppressWarnings(file.remove(list.files(tempdir(), full.names = TRUE)))
