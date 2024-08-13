@@ -44,16 +44,16 @@
 EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
   
   
-date = "2024-07-24"
-stations = NULL
-stnGrp = "QZ Eagle Gold HLF"
-parameters = NULL
-paramGrp = "EG-HLF-failure"
-stds = c("CCME_ST", "CCME_LT")
-stnStds = TRUE
-date_approx = 1
-save_path = "C:/Users/gtdelapl/Desktop"
-dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
+# date = "2024-07-24"
+# stations = NULL
+# stnGrp = "QZ Eagle Gold HLF"
+# parameters = NULL
+# paramGrp = "EG-HLF-failure"
+# stds = c("CCME_ST", "CCME_LT")
+# stnStds = TRUE
+# date_approx = 1
+# save_path = "C:/Users/gtdelapl/Desktop"
+# dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
   
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
@@ -87,7 +87,7 @@ dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
   }
   
   # Connect to EQWin
-  EQWin <- AccessConnect(dbPath, silent = TRUE)
+  EQWin <- AccessConnect(path = dbPath, silent = TRUE)
   on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
   
   # Fetch the station and/or parameter list if necessary (stnGrp or paramGrp was specified)
