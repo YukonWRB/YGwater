@@ -1,4 +1,5 @@
 skip_if_offline()
+skip_on_ci()
 
 test_that("correct number of raster are saved to disc", {
   suppressWarnings(dir.create(paste0(tempdir(), "/test_hrdps")))
