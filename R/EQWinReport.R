@@ -43,6 +43,18 @@
 
 EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
   
+  
+date = "2024-07-24"
+stations = NULL
+stnGrp = "QZ Eagle Gold HLF"
+parameters = NULL
+paramGrp = "EG-HLF-failure"
+stds = c("CCME_ST", "CCME_LT")
+stnStds = TRUE
+date_approx = 1
+save_path = "C:/Users/gtdelapl/Desktop"
+dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
+  
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
   if (!is.null(stations) & !is.null(stnGrp)) stop("You must specify either stations or stnGrp, not both")
@@ -54,16 +66,17 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
     date <- as.character(date)
   } else if (!inherits(date, "character")) {
     stop("date must be a Date object or a character vector that can be coerced to a date")
-  } else { # Date is at this point a character vector of 1 and must be converted to a Date object
-    tryCatch({
-      date <- as.Date(date)
-    }, error = function(e) {
-      stop("Failed to convert 'date' parameter to a Date object. Please provide a valid date in the format 'YYYY-MM-DD'")
-    })
   }
   
+  # Date is at this point a character vector of 1 and must be converted to a Date object
+  tryCatch({
+    date <- as.Date(date)
+  }, error = function(e) {
+    stop("Failed to convert 'date' parameter to a Date object. Please provide a valid date in the format 'YYYY-MM-DD'")
+  })
+  
   if (!inherits(date_approx, "numeric")) stop("date_approx must be a numeric value")
-
+  
   
   if (save_path == "choose") {
     if (!interactive()) {
@@ -76,7 +89,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   # Connect to EQWin
   EQWin <- AccessConnect(dbPath, silent = TRUE)
   on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
-
+  
   # Fetch the station and/or parameter list if necessary (stnGrp or paramGrp was specified)
   if (!is.null(stnGrp)) {
     # Check if the group actually exists
@@ -154,7 +167,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   # Fetch the sample data for the date in question, plus or minus the date_approx if specified if there is no data for the exact date
   # Get some data and merge dfs
   sampleIds <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(StnIds, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date, "' AND SampleClass <> 'D';"))
-
+  
   if (date_approx > 0 ) {
     # Find which element of StnIds is not in sampleIds$StnId
     missing <- setdiff(StnIds, sampleIds$StnId)
@@ -193,13 +206,26 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   locations <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnCode, StnName, StnDesc FROM eqstns WHERE StnId IN (", paste0(samps$StnId, collapse = ", "), ");"))
   samps_locs <- merge(locations, samps)
   
+  # Some locations and datetimes are duplicated with different sampleIds. Appeld a (1), (2) to these so that they create new columns.
+  samps_locs$colnames <- c(paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")"))
+  for (i in unique(samps_locs$colnames)) {
+    iter <- which(samps_locs$colnames == i)
+    if (length(iter) > 1) {
+      count <- 2
+      for (j in iter[-1]) {
+        samps_locs$colnames[j] <- paste0(samps_locs$colnames[j], " (", count, ")")
+        count <- count + 1
+      }
+    }
+  }
+  
   # Create the tables, first with only parameter names. the values_table and std_table will be filled in later and merged to final_table so that the standards show up first.
   final_table <- data.frame(Parameter = params$ParamName)
   values_table <- data.frame(Parameter = params$ParamName)
   # Add in columns for each location (date) and fill with results
   for (i in 1:nrow(samps_locs)) {
     tmp <- data.frame(tmp = results[results$SampleId == samps_locs$SampleId[i], "Result"], Parameter = results[results$SampleId == samps_locs$SampleId[i], "ParamName"], check.names = FALSE)
-    names(tmp) <- c(paste0(samps_locs$StnName[i], " (", samps_locs$CollectDateTime[i], ")"), "Parameter")
+    names(tmp) <- c(samps_locs$colnames[i], "Parameter")
     values_table <- merge(values_table, tmp, all.x = TRUE)
   }
   
@@ -256,7 +282,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
     standards <- data.frame()
   }
   final_table <- merge(final_table, values_table, all.x = TRUE)
-
+  
   
   # Now find station-specific standards, which will be used to apply conditional formatting and notes when the workbook is made
   if (stnStds) {
@@ -408,7 +434,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
                 calc_id <- DBI::dbGetQuery(EQWin, paste0("SELECT CalcId FROM eqcalcs WHERE CalcCode = '", sub("=", "", std_applies[[l]]), "';"))$CalcId
                 # Find the SampleId
                 stn_name <- names(final_table)[k]
-                sid <- samps_locs[paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")") == stn_name, "SampleId"]
+                sid <- samps_locs[samps_locs$colnames == stn_name, "SampleId"]
                 min_max <- EQWinStd(calc_id, sid, EQWin)
               } else { # It's a simple standard! Nice and easy.
                 min_max <- as.numeric(std_applies[[l]])
@@ -476,25 +502,22 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
       }
     }
   }
-    
-    # Work through the exceed_comments matrix and add comments and conditional formatting to the workbook
-    for (i in 1:nrow(exceed_comments)) {
-      for (j in 1:ncol(exceed_comments)) {
+  
+  # Work through the exceed_comments matrix and add comments and conditional formatting to the workbook
+  for (i in 1:nrow(exceed_comments)) {
+    for (j in 1:ncol(exceed_comments)) {
       comment <- exceed_comments[i, j]
       if (is.na(comment)) next()
       openxlsx::writeComment(wb, "Report", row = 5 + i, col = j + (1 + nrow(standards)), comment = openxlsx::createComment(comment, visible = FALSE, height = 20))
       openxlsx::addStyle(wb, "Report", exceedStyle, rows = 5 + i, cols = j + (1 + nrow(standards)), stack = TRUE)
     }
-    }
+  }
   
   # Freeze panes so the parameters, standards, and location header are always visible
   openxlsx::freezePane(wb, "Report", firstActiveRow = 6, firstActiveCol = (2 + nrow(standards)))
-
   
   openxlsx::saveWorkbook(wb, paste0(save_path, "/WQ Report for ", date, " Issued ", Sys.Date(), ".xlsx"), overwrite = TRUE)
-  # Some samples will have no hours:minutes in their datetimes, others will. This makes it likely that two samples will be on the same date, if so, label those appropriately to report all.
   
   return(message("Report saved to ", paste0(save_path, "/WQ Report for ", date, " Issued ", Sys.Date(), ".xlsx")))
   
 }
-
