@@ -9,7 +9,9 @@ basinPrecip(
   start = Sys.time() - 60 * 60 * 24,
   end = Sys.time(),
   map = FALSE,
-  raster_col = terra::map.pal("haxby", 100),
+  maptype = "dynamic",
+  title = TRUE,
+  raster_col = terra::map.pal("elevation", 20),
   silent = FALSE,
   con = NULL,
   hrdpa_loc = NULL,
@@ -25,7 +27,11 @@ basinPrecip(
 
 \item{map}{Should a map be output to the console? See details for more info.}
 
-\item{raster_col}{The colour palette to use for the raster plot. Default is terra::map.pal("haxby", 100) (\strong{not} the terra::plot default). Refer to \code{\link[terra:mappal]{terra::map.pal()}} for options.}
+\item{maptype}{Choose from 'dynamic' or 'static'. Leaflet maps are interactive and return the entire Yukon territory with the requested basin highlighted. Static maps are printed to the console and show only the requested basin. Only used if map = TRUE.}
+
+\item{title}{Should a title be added to the map? Only used if map = TRUE.}
+
+\item{raster_col}{The color palette to use for the raster plot. Default is terra::map.pal("elevation", 10), \strong{not} the terra::plot default. In all cases a very light blue-grey is the lowest precip amount color. Refer to \code{\link[terra:mappal]{terra::map.pal()}} for other color options. Only used if map = TRUE.}
 
 \item{silent}{If TRUE, no output is printed to the console.}
 

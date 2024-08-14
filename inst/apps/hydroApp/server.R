@@ -67,11 +67,13 @@ app_server <- function(input, output, session) {
   #Change the actionButton for rendering a map/data depending on which option the user chooses
   observeEvent(input$show_map, {
     if (input$show_map) {
+      shinyjs::show("map_type")
       updateActionButton(session, "precip_go", "Render map and calculate precip")
     } else {
+      shinyjs::hide("map_type")
       updateActionButton(session, "precip_go", "Calculate precip")
     }
-  }, ignoreInit = TRUE)
+  })
 
   #Cross-updating of precipitation location name or code
   observeEvent(input$precip_loc_code, {
@@ -94,10 +96,54 @@ app_server <- function(input, output, session) {
       end <- input$precip_end
       end <- end + 7*60*60
       attr(end, "tzone") <- "UTC"
-      precip_res <- basinPrecip(input$precip_loc_code, start = start, end = end, map = if (input$show_map) TRUE else FALSE)
+      precip_res <- basinPrecip(input$precip_loc_code, start = start, end = end, map = if (input$show_map) TRUE else FALSE, maptype = if (input$map_type == "Static") "static" else "dynamic", title = TRUE)
       if (input$show_map) {
-        output$precip_map <- renderPlot(precip_res$plot)
-        shinyjs::show("export_precip_map")
+        if (input$map_type == "Static") {
+          shinyjs::hide("precip_map_leaflet")
+          shinyjs::show("precip_map")
+          output$precip_map <- renderImage({
+            temp_plot <- tempfile(fileext = ".png")
+            grDevices::png(temp_plot, width = 900, height = 1200, res = 110)
+            print(precip_res$plot)
+            dev.off()
+            list(src = temp_plot, contentType = "image/png", width = 900, height = 1200, alt = "Precipitation Map")
+          }, deleteFile = TRUE)
+          shinyjs::show("export_precip_map")
+        } else {
+          shinyjs::hide("precip_map")
+          shinyjs::show("precip_map_leaflet")
+          
+          # Add code to update the legend based on the visible map bounds
+          precip_res$plot |>
+            htmlwidgets::onRender("
+      function(el, x) {
+        var map = this;
+
+        function updateLegend() {
+          var bounds = map.getBounds();
+          var minLng = bounds.getWest();
+          var maxLng = bounds.getEast();
+          var minLat = bounds.getSouth();
+          var maxLat = bounds.getNorth();
+
+          // Make an AJAX call to get the min and max values of the visible raster data
+          Shiny.setInputValue('update_raster_bounds', {
+            minLng: minLng,
+            maxLng: maxLng,
+            minLat: minLat,
+            maxLat: maxLat
+          });
+        }
+
+        map.on('moveend', updateLegend);
+        updateLegend();
+      }
+    ")
+          output$precip_map_leaflet <- leaflet::renderLeaflet({
+            precip_res$plot
+          })
+          shinyjs::hide("export_precip_map")
+        }
       }
       shinyjs::hide("standby")
       updateActionButton(session, "precip_go", "Go!")
@@ -123,6 +169,24 @@ app_server <- function(input, output, session) {
       shinyalert::shinyalert("Location code is not valid", type = "error", timer = 4000)
     }
   }, ignoreInit = TRUE)
+  
+  observeEvent(input$update_raster_bounds, {
+    bounds <- input$update_raster_bounds
+    
+    # Extract visible data within bounds using terra's crop function
+    visible_raster <- terra::crop(precip_res$total_raster, terra::ext(bounds$minLng, bounds$maxLng, bounds$minLat, bounds$maxLat))
+    
+    # Recalculate min and max
+    minmax_visible <- terra::minmax(visible_raster)
+    
+    # Update the Leaflet map with the new legend
+    leaflet::leafletProxy("precip_map_leaflet") %>%
+      leaflet::clearControls() %>%
+      leaflet::addLegend(pal = leaflet::colorNumeric(palette = c("#F0F7FF", terra::map.pal("elevation", 20)), domain = minmax_visible),
+                values = seq(minmax_visible[1], minmax_visible[2], length.out = 100),
+                title = "Precipitation (mm)",
+                position = "bottomright")
+  })
 
   # observeEvents related to displaying FOD comments -------------------------
   # Display FOD comments and make .csv available for download

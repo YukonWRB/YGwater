@@ -55,6 +55,7 @@ app_ui <- function(request) {
           shinyWidgets::airDatepickerInput("precip_start", "Start date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time() - 60 * 60 * 24 * 7, tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date() + 3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
           shinyWidgets::airDatepickerInput("precip_end", "End date/time MST", value = as.POSIXct(round(.POSIXct(Sys.time(), tz = "MST"), "hours")), timepicker = TRUE, maxDate = Sys.Date() + 3, startView = Sys.Date(), update_on = "close", timepickerOpts = shinyWidgets::timepickerOptions(hoursStep = 1, minutesStep = 30, timeFormat = "HH:mm"), todayButton = TRUE),
           checkboxInput("show_map", "Render map?"),
+          radioButtons("map_type", "Map type", choices = c("Static", "Dynamic"), selected = "Dynamic"),
           actionButton("precip_go", "Calculate precip"),
           textOutput("time_adj_note"),
           htmlOutput("results_head"),
@@ -67,8 +68,11 @@ app_ui <- function(request) {
         ),
         mainPanel(
           htmlOutput("standby"),
-          plotOutput("precip_map", height = "700px"),
-          downloadButton("export_precip_map", "Export as png")
+          leaflet::leafletOutput("precip_map_leaflet", width = "auto", height = "700px"), # Render the map (leaflet)
+          imageOutput("precip_map", width = "auto", height = "auto"),
+          tags$div(style = "text-align: center; margin-top: 20px; margin-bottom: 20px",  # Center the button below the image
+                   downloadButton("export_precip_map", "Export as png")
+          )
         )
       ),
       conditionalPanel(
