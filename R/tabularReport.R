@@ -26,6 +26,16 @@
 
 tabularReport <- function(level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose", con = NULL) {
 
+  # level_locations = "all"
+  # flow_locations = "all"
+  # snow_locations = "all"
+  # bridge_locations = "all"
+  # precip_locations = NULL
+  # past = 28
+  # save_path = "choose"
+  # archive_path = "choose"
+  # con = NULL
+  
 
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
@@ -57,11 +67,11 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   if (!is.null(snow_locations)) {
     if (snow_locations[1] == "default") {
       snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
-      snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water equivalent, snow' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+      snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
     } else if (snow_locations[1] == "all") {
-      snow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water equivalent, snow' AND t.category = 'continuous' ORDER BY location;")
+      snow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' ORDER BY location;")
     } else {
-      snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'water equivalent, snow' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
+      snow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter = p.param_code WHERE p.param_name = 'snow water equivalent' AND t.category = 'continuous' AND t.location IN ('", paste(snow_locations, collapse = "', '"), "') ORDER BY location;"))
     }
   }
   
