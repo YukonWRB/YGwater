@@ -22,7 +22,7 @@
 
 EQWinPlot <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, log = FALSE, title = TRUE, facet_on = 'stns', save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
   
-  
+
   # testing parameters
   # start <- "2024-01-01"
   # end <- "2024-08-06"
@@ -35,7 +35,7 @@ EQWinPlot <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
   # facet_on = 'stns'
   # save_path <- "C:/Users/gtdelapl/Desktop"
   # dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
-  
+
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
   if (!is.null(stations) & !is.null(stnGrp)) stop("You must specify either stations or stnGrp, not both")

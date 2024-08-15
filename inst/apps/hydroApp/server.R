@@ -96,7 +96,9 @@ app_server <- function(input, output, session) {
       end <- input$precip_end
       end <- end + 7*60*60
       attr(end, "tzone") <- "UTC"
+      
       precip_res <- basinPrecip(input$precip_loc_code, start = start, end = end, map = if (input$show_map) TRUE else FALSE, maptype = if (input$map_type == "Static") "static" else "dynamic", title = TRUE)
+      
       if (input$show_map) {
         if (input$map_type == "Static") {
           shinyjs::hide("precip_map_leaflet")
@@ -113,35 +115,7 @@ app_server <- function(input, output, session) {
           shinyjs::hide("precip_map")
           shinyjs::show("precip_map_leaflet")
           
-          # THis and the related observeEvent below are not working
-          #TODO: fix this
-          # Add code to update the legend based on the visible map bounds
-    #       precip_res$plot |>
-    #         htmlwidgets::onRender("
-    #   function(el, x) {
-    #     var map = this;
-    # 
-    #     function updateLegend() {
-    #       var bounds = map.getBounds();
-    #       var minLng = bounds.getWest();
-    #       var maxLng = bounds.getEast();
-    #       var minLat = bounds.getSouth();
-    #       var maxLat = bounds.getNorth();
-    #       
-    #       console.log('Bounds:', bounds);  // Debugging
-    # 
-    #       Shiny.setInputValue('update_raster_bounds', {
-    #         minLng: minLng,
-    #         maxLng: maxLng,
-    #         minLat: minLat,
-    #         maxLat: maxLat
-    #       }, {priority: 'event'});
-    #     }
-    # 
-    #     map.on('moveend', updateLegend);
-    #     updateLegend();
-    #   }
-    # ")
+        
           output$precip_map_leaflet <- leaflet::renderLeaflet({
             precip_res$plot
           })
@@ -172,24 +146,6 @@ app_server <- function(input, output, session) {
     }
   }, ignoreInit = TRUE)
   
-  # observeEvent(input$update_raster_bounds, {
-  #   bounds <- input$update_raster_bounds
-  #   print(paste0("bounds are ", bounds))
-  # 
-  #   # Extract visible data within bounds using terra's crop function
-  #   visible_raster <- terra::crop(precip_res$total_raster, terra::ext(bounds$minLng, bounds$maxLng, bounds$minLat, bounds$maxLat))
-  # 
-  #   # Recalculate min and max
-  #   minmax_visible <- terra::minmax(visible_raster)
-  # 
-  #   # Update the Leaflet map with the new legend
-  #   leaflet::leafletProxy("precip_map_leaflet") %>%
-  #     leaflet::clearControls() %>%
-  #     leaflet::addLegend(pal = leaflet::colorNumeric(palette = c("#F0F7FF", terra::map.pal("elevation", 20)), domain = minmax_visible),
-  #               values = seq(minmax_visible[1], minmax_visible[2], length.out = 100),
-  #               title = "Precipitation (mm)",
-  #               position = "bottomright")
-  # })
 
   # observeEvents related to displaying FOD comments -------------------------
   # Display FOD comments and make .csv available for download
