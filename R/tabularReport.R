@@ -26,6 +26,16 @@
 
 tabularReport <- function(level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose", con = NULL) {
 
+  # level_locations = "all"
+  # flow_locations = "all"
+  # snow_locations = "all"
+  # bridge_locations = "all"
+  # precip_locations = NULL
+  # past = 28
+  # save_path = "choose"
+  # archive_path = "choose"
+  # con = NULL
+  
 
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)

@@ -63,8 +63,7 @@ app_ui <- function(request) {
           textOutput("end_time"),
           textOutput("mean"),
           textOutput("min"),
-          textOutput("max"),
-          textOutput("watershed_area")
+          textOutput("max")
         ),
         mainPanel(
           htmlOutput("standby"),
