@@ -185,7 +185,7 @@ basinPrecip <- function(location,
     available <- data.frame()
     for (i in c("00", "06", "12", "18")) {
       tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/model_hrdpa/2.5km/", i, "/"))
-      tmp <- rvest::html_elements(tmp, xpath='//*[contains(@href, ".grib2")]') %>%
+      tmp <- rvest::html_elements(tmp, xpath = '//*[contains(@href, ".grib2")]') %>%
         rvest::html_attr("href")
       available <- rbind(available, as.data.frame(as.character(tmp)))
     }
@@ -618,11 +618,8 @@ basinPrecip <- function(location,
           leaflet::addLayersControl(overlayGroups = c("Streams", "Waterbodies", "Communities", "Roads", "Borders"), options = leaflet::layersControlOptions(collapsed = FALSE)) |>
           leaflet::hideGroup(c("Streams"))
         
-        
-        leafmap
-        
-        
         plot <- leafmap
+        
       } else {
         cropped_precip_rast <- terra::mask(total, watershed_buff)
         cropped_precip_rast <- terra::trim(cropped_precip_rast)
