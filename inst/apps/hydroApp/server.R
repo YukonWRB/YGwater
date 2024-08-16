@@ -114,8 +114,6 @@ app_server <- function(input, output, session) {
         } else { # dynamic map (leaflet)
           shinyjs::hide("precip_map")
           shinyjs::show("precip_map_leaflet")
-          
-        
           output$precip_map_leaflet <- leaflet::renderLeaflet({
             precip_res$plot
           })

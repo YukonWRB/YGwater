@@ -43,8 +43,8 @@
 
 EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
   
-  
-# date = "2024-07-24"
+# 
+# date = "2024-07-17"
 # stations = NULL
 # stnGrp = "QZ Eagle Gold HLF"
 # parameters = NULL
@@ -395,12 +395,14 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
       id <- unique(samps_locs[samps_locs$StnName == code, "StnId"])
       stn_std_comment <- station_stdVals[station_stdVals$StnId == id, c("ParamName", "string")]
       if (nrow(stn_std_comment) > 0) {
-        df_string <- apply(stn_std_comment, 1, paste, collapse = " ")
+        df_string <- unname(apply(stn_std_comment, 1, paste, collapse = " "))
         df_string <- paste(df_string, collapse = "\n")
-        comment <- paste(comment, "", paste0("Station-Specific Standards (", unique(station_stdVals$StdDesc), ") "), df_string, sep = "\n")
+        comment <- paste(comment, "", paste0("Station-Specific Standards (", unique(station_stdVals[station_stdVals$StnId == id, "StdDesc"]), ") "), df_string, sep = "\n")
       }
+    } else {
+      stn_std_comment <- data.frame()
     }
-    stn_std_comment <- data.frame()
+    
     # Now add the comment to the correct cell
     openxlsx::writeComment(wb, "Report", row = 5, col = which(names(final_table) == i), comment = openxlsx::createComment(comment, visible = FALSE, height = if (nrow(stn_std_comment) > 0) 20 else 1))
   }
