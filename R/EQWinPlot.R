@@ -14,13 +14,13 @@
 #' @param title Should the plot have a title?
 #' @param facet_on Should the plot be faceted by stations or by parameters?
 #' @param save_path The path to save the plot as an html file. Default is "choose" to allow user to select a folder interactively.
-#' @param dbPath The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".
+#' @param dbPath The path to the EQWin database. Default is "//carver/infosys/EQWin/WR/DB/Water Resources.mdb".
 #'
 #' @return A zoomable plot of the data from EQWin.
 #' @export
 #'
 
-EQWinPlot <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, log = FALSE, title = TRUE, facet_on = 'stns', save_path = "choose", dbPath = "X:/EQWin/WR/DB/Water Resources.mdb") {
+EQWinPlot <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, log = FALSE, title = TRUE, facet_on = 'stns', save_path = "choose", dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb") {
   
 
   # testing parameters
@@ -34,7 +34,7 @@ EQWinPlot <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
   # title = TRUE
   # facet_on = 'stns'
   # save_path <- "C:/Users/gtdelapl/Desktop"
-  # dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
+  # dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
 
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")

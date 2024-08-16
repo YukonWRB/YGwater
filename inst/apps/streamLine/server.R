@@ -68,7 +68,7 @@ console.log(language);")
     }
   })
   
-  observe({ # Find the abbreciation for use in the 'titleCase' function
+  observe({ # Find the abbreviation for use in the 'titleCase' function
     languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
   })
   

@@ -13,11 +13,12 @@
 
 EQchecks <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port")) {
   
-  stop("The application is under development and not yet available.")
+  warning("The application is under development and not functional yet.")
   
   rlang::check_installed("shiny", reason = "required to use EQchecks")
   rlang::check_installed("shinyjs", reason = "required to use EQchecks")
   rlang::check_installed("DT", reason = "required to use EQchecks")
+  rlang::check_installed("shinyWidgets", reason = "required to use EQchecks")
   
   appDir <- system.file("apps/EQchecks", package = "YGwater")
   

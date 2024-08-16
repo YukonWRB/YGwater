@@ -14,7 +14,7 @@ EQWinReport(
   stnStds = TRUE,
   date_approx = 0,
   save_path = "choose",
-  dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
+  dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
 )
 }
 \arguments{
@@ -36,7 +36,7 @@ EQWinReport(
 
 \item{save_path}{The path to save the Excel file. Default is "choose" to allow user to select a folder interactively.}
 
-\item{dbPath}{The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".}
+\item{dbPath}{The path to the EQWin database. Default is "//carver/infosys/EQWin/WR/DB/Water Resources.mdb".}
 }
 \value{
 An Excel workbook saved where requested.

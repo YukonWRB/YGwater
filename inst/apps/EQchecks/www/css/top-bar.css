@@ -1,0 +1,33 @@
+/* Custom styling for positioning and z-index of top bar containers */
+.top-bar-container {
+  height: 80px;
+  margin-bottom: 3px; /* Adjust to reduce/increase space above the navbar */
+  position: relative; /* Ensure container is positioned relative for absolute child positioning */
+}
+
+.logo-container img {
+  height: 80px;
+  width: auto; /* Maintain aspect ratio */
+  margin-top: -5px;
+  position: absolute; /* Position logo absolutely within its container */
+  top: 0; /* Align top edge with container */
+  left: 0px; /* spacing from the screen edge */
+  z-index: 2;
+}
+
+/* Styling for the right-aligned aurora and its container */
+.right-aligned-aurora {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.aurora-container img {
+  height: 120px;
+  width:  700;
+  position: absolute; /* Position aurora absolutely within its container */
+  top: -20px; /* Align top edge with container */
+  right: 0px; /* spacing from the screen edge */
+  z-index: 1; /* Background layer */
+}

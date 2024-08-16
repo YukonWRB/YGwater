@@ -79,7 +79,6 @@ plotUI <- function(id) {
 plot <- function(id, con, language, restoring, data, inputs) {
   moduleServer(id, function(input, output, session) {
     
-    print(input$main_choice)
     setBookmarkExclude(c())
     ns <- session$ns
     
