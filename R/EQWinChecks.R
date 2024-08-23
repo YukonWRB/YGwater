@@ -11,7 +11,7 @@
 #' @return Opens a Shiny application.
 #' @export
 
-EQchecks <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port")) {
+EQWinChecks <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port")) {
   
   warning("The application is under development and not functional yet.")
   
