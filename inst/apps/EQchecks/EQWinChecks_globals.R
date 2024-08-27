@@ -1,4 +1,4 @@
-EQchecks_globals <- function() {
+EQWinChecks_globals <- function() {
   
   library(shiny)
   library(shinyjs)

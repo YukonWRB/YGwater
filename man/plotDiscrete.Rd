@@ -12,10 +12,11 @@ plotDiscrete(
   parameters = NULL,
   paramGrp = NULL,
   log = FALSE,
-  title = TRUE,
-  facet_on = "locs",
+  facet_on = "params",
   rows = "auto",
-  save_path = "choose",
+  target_datetime = TRUE,
+  colorblind = FALSE,
+  lang = "en",
   dbSource = "EQ",
   dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
 )
@@ -25,23 +26,25 @@ plotDiscrete(
 
 \item{end}{The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Default is the current date.}
 
-\item{locations}{A vector of station names pr codes. If dbSource == 'AC': from AquaCache 'locations' table use column 'location' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use \code{locGrp} instead.}
+\item{locations}{A vector of station names or codes. If dbSource == 'AC': from AquaCache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use \code{locGrp} instead.}
 
 \item{locGrp}{Only used if \code{dbSource} is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{locations} instead.}
 
-\item{parameters}{A vector of parameter names or codes. If dbSource == 'AC': from AquaCache 'parameters' table use column 'param_name' (character vector) or 'param_code' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use \code{paramGrp} instead.}
+\item{parameters}{A vector of parameter names or codes. If dbSource == 'AC': from AquaCache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'param_code' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use \code{paramGrp} instead.}
 
 \item{paramGrp}{Only used if \code{dbSource} is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{parameters} instead.}
 
 \item{log}{Should the y-axis be log-transformed?}
 
-\item{title}{Should the plot have a title?}
-
 \item{facet_on}{Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.}
 
 \item{rows}{The number of rows to use in the facet grid. Default is 'auto' to automatically determine the number of rows based on the number of facets.}
 
-\item{save_path}{The path to save the plot as an html file. Default is "choose" to allow user to select a folder interactively.}
+\item{target_datetime}{Should the plot datetime use the 'target' datetime instead of the 'actual' datetime? Default is TRUE. This is only applicable is dbSource == 'AC'.}
+
+\item{colorblind}{Should the plot be colorblind-friendly? Default is FALSE.}
+
+\item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en", and this is only supported for dbSource == 'AC'.}
 
 \item{dbSource}{The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function \code{\link[=AquaConnect]{AquaConnect()}}.}
 

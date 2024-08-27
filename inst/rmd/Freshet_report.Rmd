@@ -1179,5 +1179,5 @@ if (report_name %in% c("Southern Lakes", "Southern lakes", "southern lakes")){
 # Additional information
 
 ```{r version control, echo=FALSE, results='asis', message=FALSE}
-cat(paste0("This report was generated with the R package YGwater version ", packageVersion("YGwater"), " built and maintained by the Yukon Department of Environment, Water Resources Branch. Please [contact us](mailto:waterlevels@yukon.ca) to report erroneous or missing data."))
+cat(paste0("This report was generated with the R package YGwater version ", utils::packageVersion("YGwater"), " built and maintained by the Yukon Department of Environment, Water Resources Branch. Please [contact us](mailto:waterlevels@yukon.ca) to report erroneous or missing data."))
 ```

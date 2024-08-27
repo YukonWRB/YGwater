@@ -27,8 +27,8 @@ EQWinChecks <- function(host = getOption("shiny.host", "127.0.0.1"), port = getO
   }
   
   # Load the global variables, library calls, and possibly in future a connection to the DB.
-  source(system.file("apps/EQchecks/EQchecks_globals.R", package = "YGwater"))
-  EQchecks_globals()
+  source(system.file("apps/EQchecks/EQWinChecks_globals.R", package = "YGwater"))
+  EQWinChecks_globals()
   
   
   

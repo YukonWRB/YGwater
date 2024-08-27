@@ -5,4 +5,4 @@ utils::globalVariables(c("timeseries"))
 utils::globalVariables(c("datetime_UTC", "value"))
 
 #globals for Shiny applications that source a script
-utils::globalVariables(c("hydroApp_globals", "streamLine_globals"))
+utils::globalVariables(c("hydroApp_globals", "streamLine_globals", "EQWinChecks_globals"))
