@@ -40,11 +40,12 @@ app_ui <- function(request) {
                collapsible = TRUE,
                fluid = TRUE,
                lang = "en",
+               tabPanel(title = "Plot", value = "plot", 
+                        plotUI("plot")),
+               tabPanel(title = "Map", value = "map",
+                        mapUI("map"))
                # tabPanel(title = "Checks", value = "checks",
                #          checksUI("checks")),
-               tabPanel(title = "Plot", value = "plot", 
-                        plotUI("plot"))
-               # Other panels could be developed
     ) # End navbarPage
   ) # End fluidPage
 }

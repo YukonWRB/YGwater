@@ -1,4 +1,5 @@
-continuousPlotUI <- function(id) {
+# To be created: will allow user to make plots combining discrete and continuous data.
+mixPlotUI <- function(id) {
   ns <- NS(id)
   sidebarLayout(
     sidebarPanel(
@@ -13,9 +14,9 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlotServer <- function(id, AquaCache) {
+mixPlotServer <- function(id, EQWin, AquaCache) {
   moduleServer(id, function(input, output, session) {
-
+    
   })
 }
 

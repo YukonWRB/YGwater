@@ -38,5 +38,8 @@ app_server <- function(input, output, session) {
     if (input$navbar == "plot") {
       plot("plot", EQWin, AquaCache)
     }
+    if (input$navbar == "map") {
+      map("map", EQWin, AquaCache)
+    }
   })
 }
