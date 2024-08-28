@@ -26,36 +26,51 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
 
   # testing parameters for EQWIN direct
-  # start <- "2024-06-24"
-  # end <- "2024-08-20"
+  # start <- "2024-07-09"
+  # end <- "2024-08-28"
   # locations <- NULL
   # parameters <- NULL
   # locGrp <- "QZ Eagle Gold HLF"
   # paramGrp <- "EG-HLF-failure"
   # log = FALSE
-  # facet_on = 'params'
+  # facet_on = 'locs'
   # rows = 'auto'
   # colorblind = FALSE
-  # target_datetime = TRUE
+  # target_datetime = FALSE
+  # dbSource = "EQ"
+  # lang = "en"
+  # dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
+  
+  # start <- "2024-07-09"
+  # end <- "2024-08-28"
+  # locations <- "(EG)W4"
+  # parameters <- NULL
+  # locGrp <- NULL
+  # paramGrp <- "EG-HLF-failure"
+  # log = FALSE
+  # facet_on = 'locs'
+  # rows = 'auto'
+  # colorblind = FALSE
+  # target_datetime = FALSE
   # dbSource = "EQ"
   # lang = "en"
   # dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
   
   # testing parameters for AquaCache
-  start <- "2020-01-01"
-  end <- "2024-05-05"
-  locations <- c("09AD-SC01", "08AA-SC01", "09AK-SC01", "09DC-SC01B")
-  parameters <- c("snow water equivalent", "snow depth")
-  locGrp <- NULL
-  paramGrp <- NULL
-  log = FALSE
-  facet_on = 'locs'
-  rows = 'auto'
-  colorblind = FALSE
-  lang = "en"
-  dbSource = "AC"
-  dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
-  target_datetime = TRUE
+  # start <- "2020-01-01"
+  # end <- "2024-05-05"
+  # locations <- c("09AD-SC01", "08AA-SC01", "09AK-SC01", "09DC-SC01B")
+  # parameters <- c("snow water equivalent", "snow depth")
+  # locGrp <- NULL
+  # paramGrp <- NULL
+  # log = FALSE
+  # facet_on = 'locs'
+  # rows = 'auto'
+  # colorblind = FALSE
+  # lang = "en"
+  # dbSource = "AC"
+  # dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
+  # target_datetime = TRUE
 
   # initial checks, connection, and validations #######################################################################################
   
@@ -355,7 +370,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   #Plot the data ####################################################################################################
   
   if (log) {
-    if (any(data$value <= 0)) {
+    if (any(data[!is.na(data$value), "value"] <= 0)) {
       warning("Some values are <= 0 and cannot be log-transformed. These values will be removed to keep your requested log transformation.")
       data <- data[data$value > 0, ]
     }
@@ -384,16 +399,18 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
       df <- df_list[[facet_value]]
       conditions <- df[is.na(df$value),] # Isolate the rows that are < DL or > DL
       df <- df[!is.na(df$value),]
-      unit_text <- unique(df$units)
       
       if (i == 1) {
         # Add entries for parameter/location_name which show up elsewhere in 'data' but not in facet 1
         missing <- setdiff(unique(data[[color_by]]), unique(df[[color_by]]))
         for (m in missing) {
           if (color_by == "location_name") {
+            unit_text <- unique(df$units)
             df <- rbind(df, data.frame(value = -Inf, datetime = min(df$datetime), param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA))
           } else {
-            df <- rbind(df, data.frame(value = -Inf, datetime = min(df$datetime), parameter = m, units = unit_text, location = NA, location_name = NA, result_condition = NA, result_condition_value = NA))
+            unit_text <- unique(data[data$param_name == m, "units"])
+            loc_text <- unique(data[data$location_name == facet_value, "location"])
+            df <- rbind(df, data.frame(value = -Inf, datetime = min(df$datetime), param_name = m, units = unit_text, location = loc_text, location_name = facet_value, result_condition = NA, result_condition_value = NA))
           }
         }
       }
@@ -441,16 +458,17 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
       }
       
       # Determine appropriate number of decimal places
-      decimals <- df$value%%1 |>
-        as.character()
-      # Check if there's anything to the right of the decimal point
-      if (any(grepl("\\.", decimals))) {
-        decimals <- sub(".*\\.", "", decimals)
-        decimals <- max(nchar(decimals))
-      } else {
-        decimals <- 0
-      }
-      sprintDecimals <- paste0("%.", decimals, "f")
+      # Currently not in use!
+      # decimals <- df$value %% 1 |>
+      #   as.character()
+      # # Check if there's anything to the right of the decimal point
+      # if (any(grepl("\\.", decimals))) {
+      #   decimals <- sub(".*\\.", "", decimals)
+      #   decimals <- max(nchar(decimals))
+      # } else {
+      #   decimals <- 0
+      # }
+      # sprintDecimals <- paste0("%.", decimals, "f")
       
       p <- plotly::plot_ly(df, 
                            x = ~datetime, 
@@ -462,12 +480,12 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                            legendgroup = ~get(color_by),
                            showlegend = (i == 1),
                            marker = list(
-                             opacity = ifelse(df$value == -Inf, 0, 1)
+                             opacity = ifelse(all(df$value == -Inf), 0, 1)
                            ),
                            hoverinfo = "text",
                            text = ~paste(get(color_by), "<br>",  # Name or parameter of trace
                                          if (targ_dt) paste("True sample datetime:", target_datetime, "<br>"),  # true sample datetime if requested and dbSource = 'AC'
-                                         sprintf(sprintDecimals, value), units, # Value and units
+                                         as.character(value), units, # Value and units
                                          if (type) paste("<br>Sample type:", sample_type),  # Sample type if provided
                                          if (collection) paste("<br>Collection method:", collection_method),  # Collection method if provided
                                          if (fraction) paste("<br>Sample fraction:", sample_fraction),  # Sample fraction if provided
@@ -495,7 +513,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                                hoverinfo = "text",
                                text = ~paste(get(color_by), "<br>", # Name or parameter of trace
                                              if (targ_dt) paste("True sample datetime", target_datetime, "<br>"), # true sample datetime if requested and dbSource = 'AC'
-                                             result_condition, "of", sprintf(sprintDecimals, result_condition_value), units, # Result condition and value
+                                             result_condition, "of", as.character(result_condition_value), units, # Result condition and value
                                              if (type) paste("<br>Sample type:", sample_type),  # Sample type if provided
                                              if (collection) paste("<br>Collection method:", collection_method),  # Collection method if provided
                                              if (fraction) paste("<br>Sample fraction:", sample_fraction),  # Sample fraction if provided

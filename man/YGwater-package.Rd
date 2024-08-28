@@ -2,7 +2,6 @@
 % Please edit documentation in R/YGwater-package.R
 \docType{package}
 \name{YGwater-package}
-\alias{YGwater}
 \alias{YGwater-package}
 \title{YGwater: Utility functions for the Yukon Water Science and Stewardship Branch}
 \description{
