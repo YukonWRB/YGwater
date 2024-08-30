@@ -23,7 +23,7 @@
 #' If specifying the option "table", the function will attempt to find returns for the location within the package internal data. The returns contained there are from consultant work involving a detailed analysis of which data to keep/discard, as well as a human determination of the most appropriate distribution and curve fitting methods. The caveat here is that these tables are not necessarily up to date, that most locations have no calculated return periods, and that return periods only exist for water levels.
 #'
 #' @param location The location for which you want a plot.
-#' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
+#' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
@@ -50,8 +50,8 @@
 #' @export
 #'
 
-# location <- "09EA004"
-# parameter <- "discharge, river/stream"
+# location <- "09AB004"
+# parameter <- 1165
 # record_rate = NULL
 # startDay <- 1
 # endDay <- 365
@@ -113,8 +113,10 @@ plotOverlap <- function(location,
   on.exit(options(warn = old_warn), add = TRUE)
 
   #### --------- Checks on input parameters and other start-up bits ------- ####
-  parameter <- tolower(parameter)
-  
+  if (inherits(parameter, "character")) {
+      parameter <- tolower(parameter)
+  }
+
   if (!(language %in% c("en", "fr"))) {
     stop("Your entry for the parameter 'language' is invalid. Please review the function documentation and try again.")
   }
@@ -253,17 +255,27 @@ plotOverlap <- function(location,
   if (is.null(continuous_data)) {
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
     #Confirm parameter and location exist in the database and that there is only one entry
-    escaped_parameter <- gsub("'", "''", parameter)
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
-    parameter_code <- parameter_tbl$param_code[1]
+    if (inherits(parameter, "character")) {
+      escaped_parameter <- gsub("'", "''", parameter)
+      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+      parameter_code <- parameter_tbl$param_code[1]
+      if (is.na(parameter_code)) {
+        stop("The parameter you entered does not exist in the database.")
+      }
+    } else if (inherits(parameter, "numeric")) {
+      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_code = ", parameter, ";"))
+      if (nrow(parameter_tbl) == 0) {
+        stop("The parameter you entered does not exist in the database.")
+      }
+      parameter_code <- parameter
+    } 
+    
     if (language == "fr") {
       parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
     } else if (language == "en" || is.na(parameter_name)) {
       parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
     }
-    if (is.na(parameter_code)) {
-      stop("The parameter you entered does not exist in the database.")
-    }
+
     if (is.null(record_rate)) {
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous';"))
     } else {
@@ -300,7 +312,7 @@ plotOverlap <- function(location,
     }
 
     # Find the necessary datum (latest datum)
-    if (datum & parameter %in% c("water level", "distance")) {
+    if (datum) {
       datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
     } else {
       datum <- data.frame(conversion_m = 0)

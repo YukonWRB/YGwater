@@ -15,23 +15,44 @@ map <- function(id, EQWin, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
     
-    # Load the submodule UI based on the plot type selected
-    output$submoduleUI <- renderUI({
-      ns <- session$ns
-      if (input$map_type == "Precipitation") {
-        mapPrecipUI(ns(id))
-      } else if (input$map_type == "Parameters") {
-        mapParamUI(ns(id))
+    ns <- session$ns
+
+    # Reactive value to store the selected submodule type
+    submodule <- reactiveVal(NULL)
+    
+    # Load the submodule server and UI based on the plot type selected
+    observeEvent(input$map_type,{
+      if (is.null(submodule())) { # Nothing has been loaded yet and submodule is NULL
+        if (input$map_type == "Precipitation") {
+          output$submoduleUI <- renderUI({
+            mapPrecipUI(ns("precip"))
+          })
+          submodule("Precipitation")
+          mapPrecipServer("precip", AquaCache)
+        } else if (input$map_type == "Parameters") {
+          output$submoduleUI <- renderUI({
+            mapParamUI(ns("param"))
+          })
+          mapParamServer("param", AquaCache)
+          submodule("Parameters")
+        }
+      } else { # Submodule has been loaded already, so only redo if we were on a different submodule
+        if (input$map_type == "Precipitation" && submodule() != "Precipitation") {
+          output$submoduleUI <- renderUI({
+            mapPrecipUI(ns("precip"))
+          })
+          submodule("Precipitation")
+          mapPrecipServer("precip", AquaCache)
+        } else if (input$map_type == "Parameters" && submodule() != "Parameters") {
+          output$submoduleUI <- renderUI({
+            mapParamUI(ns("param"))
+          })
+          mapParamServer("param", AquaCache)
+          submodule("Parameters")
+        }
       }
+      
     })
     
-    # Load the submodule server based on the plot type selected
-    observe({
-      if (input$map_type == "Precipitation") {
-        mapPrecipServer(id, AquaCache)
-      } else if (input$map_type == "Parameters") {
-        mapParamServer(id, AquaCache)
-      }
-    })
   }) # End of moduleServer
 }

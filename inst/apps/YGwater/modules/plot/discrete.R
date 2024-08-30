@@ -7,7 +7,6 @@ discretePlotUI <- function(id) {
                    NULL,
                    choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
                    selected = "AC"),
-      
       # start and end datetime
       dateRangeInput(ns("date_range"),
                      "Select date range",
@@ -15,38 +14,53 @@ discretePlotUI <- function(id) {
                      end = Sys.Date(),
                      max = Sys.Date() + 1,
                      format = "yyyy-mm-dd"),
-      
-      # Toggle button for locations or location groups (only show if data source  == EQWin)
-      radioButtons(ns("locs_groups"),
-                   NULL,
-                   choices = c("Locations", "Location Groups"),
-                   selected = "Locations"),
-      # Selectize input for locations, populated once connection is established
-      selectizeInput(ns("locations"),
-                     "Select locations",
-                     choices = "Placeholder",
-                     multiple = TRUE),
-      # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
-      selectizeInput(ns("location_groups"),
-                     "Select a location group",
-                     choices = "Placeholder",
-                     multiple = FALSE),
-      
-      # Toggle button for parameters or parameter groups (only show if data source == EQWin)
-      radioButtons(ns("params_groups"),
-                   NULL,
-                   choices = c("Parameters", "Parameter Groups"),
-                   selected = "Parameters"),
-      # Selectize input for parameters, populated once connection is established
-      selectizeInput(ns("parameters"),
-                     "Select parameters",
-                     choices = "Placeholder",
-                     multiple = TRUE),
-      # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
-      selectizeInput(ns("parameter_groups"),
-                     "Select a parameter group",
-                     choices = "Placeholder",
-                     multiple = FALSE),
+      conditionalPanel(ns = ns,
+                       condition = "input.data_source == 'EQ'",
+                       # Toggle button for locations or location groups (only show if data source  == EQWin)
+                       radioButtons(ns("locs_groups"),
+                                    NULL,
+                                    choices = c("Locations", "Location Groups"),
+                                    selected = "Locations"),
+                       # Selectize input for locations, populated once connection is established
+                       selectizeInput(ns("locations_EQ"),
+                                      "Select locations",
+                                      choices = "Placeholder",
+                                      multiple = TRUE),
+                       # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
+                       selectizeInput(ns("location_groups"),
+                                      "Select a location group",
+                                      choices = "Placeholder",
+                                      multiple = FALSE),
+                       
+                       # Toggle button for parameters or parameter groups (only show if data source == EQWin)
+                       radioButtons(ns("params_groups"),
+                                    NULL,
+                                    choices = c("Parameters", "Parameter Groups"),
+                                    selected = "Parameters"),
+                       # Selectize input for parameters, populated once connection is established
+                       selectizeInput(ns("parameters_EQ"),
+                                      "Select parameters",
+                                      choices = "Placeholder",
+                                      multiple = TRUE),
+                       # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
+                       selectizeInput(ns("parameter_groups"),
+                                      "Select a parameter group",
+                                      choices = "Placeholder",
+                                      multiple = FALSE)
+                       ),
+      conditionalPanel(ns = ns,
+                       condition = "input.data_source == 'AC'",
+                       # Selectize input for locations, populated once connection is established
+                       selectizeInput(ns("locations_AC"),
+                                      "Select locations",
+                                      choices = "Placeholder",
+                                      multiple = TRUE),
+                       # Selectize input for parameters, populated once connection is established
+                       selectizeInput(ns("parameters_AC"),
+                                      "Select parameters",
+                                      choices = "Placeholder",
+                                      multiple = TRUE)
+                       ),
       radioButtons(ns("facet_on"),
                    "Facet on",
                    choices = stats::setNames(c("locs", "params"), c("Locations", "Parameters")),
@@ -66,8 +80,7 @@ discretePlotUI <- function(id) {
     ),
     mainPanel(
       plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
-      actionButton(ns("full_screen"),
-                   "Full screen")
+      uiOutput(ns("full_screen_ui"))
     )
   )
 }
@@ -76,9 +89,7 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
     
-    print("loaded module")
-    # hide some things right off the bat
-    shinyjs::hide("full_screen")
+    ns <- session$ns  # Used to create UI elements within the server code
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues(EQ_locs = DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns;")),
@@ -90,35 +101,13 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
     
     observeEvent(input$data_source, {
       if (input$data_source == "EQ") {
-        updateSelectizeInput(session, "parameters", choices = setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
+        updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
         updateSelectizeInput(session, "parameter_groups", choices = data$EQ_param_grps$groupname, server = TRUE)
-        updateSelectizeInput(session, "locations", choices = setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)
+        updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)
         updateSelectizeInput(session, "location_groups", choices = data$EQ_loc_grps$groupname, server = TRUE)
-        shinyjs::show("locs_groups")
-        shinyjs::show("params_groups")
-        if (input$locs_groups == "Location Groups") {
-          shinyjs::hide("locations")
-          shinyjs::show("location_groups")
-        } else {
-          shinyjs::hide("location_groups")
-          shinyjs::show("locations")
-        }
-        if (input$params_groups == "Parameter Groups") {
-          shinyjs::hide("parameters")
-          shinyjs::show("parameter_groups")
-        } else {
-          shinyjs::hide("parameter_groups")
-          shinyjs::show("parameters")
-        }
-      } else { # AC selected
-        updateSelectizeInput(session, "parameters", choices = data$AC_params$param_name, server = TRUE)
-        updateSelectizeInput(session, "locations", choices = data$AC_locs$name, server = TRUE)
-        shinyjs::hide("locs_groups")
-        shinyjs::hide("params_groups")
-        shinyjs::hide("location_groups")
-        shinyjs::hide("parameter_groups")
-        shinyjs::show("locations")
-        shinyjs::show("parameters")
+      } else if (input$data_source == "AC") { # AC selected
+        updateSelectizeInput(session, "parameters_AC", choices = data$AC_params$param_name, server = TRUE)
+        updateSelectizeInput(session, "locations_AC", choices = data$AC_locs$name, server = TRUE)
       }
     })
     
@@ -126,19 +115,19 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
     observeEvent(input$locs_groups, {
       if (input$locs_groups == "Location Groups") {
         shinyjs::show("location_groups")
-        shinyjs::hide("locations")
+        shinyjs::hide("locations_EQ")
       } else {
         shinyjs::hide("location_groups")
-        shinyjs::show("locations")
+        shinyjs::show("locations_EQ")
       }
     })
     observeEvent(input$params_groups, {
       if (input$params_groups == "Parameter Groups") {
         shinyjs::show("parameter_groups")
-        shinyjs::hide("parameters")
+        shinyjs::hide("parameters_EQ")
       } else {
         shinyjs::hide("parameter_groups")
-        shinyjs::show("parameters")
+        shinyjs::show("parameters_EQ")
       }
     })
     
@@ -147,68 +136,87 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
       shinyjs::hide("full_screen")
       
       # Check if locations/location_group is not NULL, depending on the selection for input$locs_groups
-      if (input$locs_groups == "Locations") {
-        if (is.null(input$locations)) {
+      if (input$data_source == "EQ") {
+        if (input$locs_groups == "Locations") {
+          if (is.null(input$locations_EQ)) {
+            showModal(modalDialog("Please select at least one location.", easyClose = TRUE))
+            return()
+          }
+        } else {
+          if (is.null(input$location_groups)) {
+            showModal(modalDialog("Please select one location group.", easyClose = TRUE))
+            return()
+          }
+        }
+        # Same treatment for parameters/parameter_groups
+        if (input$params_groups == "Parameters") {
+          if (is.null(input$parameters_EQ)) {
+            showModal(modalDialog("Please select at least one parameter.", easyClose = TRUE))
+            return()
+          }
+        } else {
+          if (is.null(input$parameter_groups)) {
+            showModal(modalDialog("Please select one parameter group.", easyClose = TRUE))
+            return()
+          }
+        }
+      } else if (input$data_source == "AC") {
+        if (is.null(input$locations_AC)) {
           showModal(modalDialog("Please select at least one location.", easyClose = TRUE))
           return()
         }
-      } else {
-        if (is.null(input$location_groups)) {
-          showModal(modalDialog("Please select one location group.", easyClose = TRUE))
-          return()
-        }
-      }
-      # Same treatment for parameters/parameter_groups
-      if (input$params_groups == "Parameters") {
-        if (is.null(input$parameters)) {
+        if (is.null(input$parameters_AC)) {
           showModal(modalDialog("Please select at least one parameter.", easyClose = TRUE))
           return()
         }
-      } else {
-        if (is.null(input$parameter_groups)) {
-          showModal(modalDialog("Please select one parameter group.", easyClose = TRUE))
-          return()
-        }
       }
-      
-      # print(input$date_range)
-      # print(input$locations)
-      # print(input$location_groups)
-      # print(input$parameters)
-      # print(input$parameter_groups)
-      print(input$log_scale)
-      print(class(input$log_scale))
-      # print(input$facet_on)
-      # print(input$target_datetime)
-      # print(input$colorblind)
-      # print(input$lang)
-      # print(input$data_source)
+
       tryCatch({
-        plot <- plotDiscrete(start = input$date_range[1],
-                             end = input$date_range[2],
-                             locations = if (input$locs_groups == "Locations") input$locations else NULL,
-                             locGrp = if (input$locs_groups == "Location Groups") input$location_groups else NULL,
-                             parameters = if (input$params_groups == "Parameters") input$parameters else NULL,
-                             paramGrp = if (input$params_groups == "Parameter Groups") input$parameter_groups else NULL,
-                             log = input$log_scale,
-                             facet_on = input$facet_on,
-                             target_datetime = input$target_datetime,
-                             colorblind = input$colorblind,
-                             lang = input$lang,
-                             dbSource = input$data_source)
+        if (input$data_source == "EQ") {
+          plot <- plotDiscrete(start = input$date_range[1],
+                               end = input$date_range[2],
+                               locations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
+                               locGrp = if (input$locs_groups == "Location Groups") input$location_groups else NULL,
+                               parameters = if (input$params_groups == "Parameters") input$parameters_EQ else NULL,
+                               paramGrp = if (input$params_groups == "Parameter Groups") input$parameter_groups else NULL,
+                               log = input$log_scale,
+                               facet_on = input$facet_on,
+                               target_datetime = input$target_datetime,
+                               colorblind = input$colorblind,
+                               lang = input$lang,
+                               dbSource = input$data_source)
+        } else if (input$data_source == "AC") {
+          plot <- plotDiscrete(start = input$date_range[1],
+                               end = input$date_range[2],
+                               locations =input$locations_AC,
+                               locGrp = NULL,
+                               parameters = input$parameters_AC,
+                               paramGrp = NULL,
+                               log = input$log_scale,
+                               facet_on = input$facet_on,
+                               target_datetime = input$target_datetime,
+                               colorblind = input$colorblind,
+                               lang = input$lang,
+                               dbSource = input$data_source)
+        }
         
-        print("Plot created")
+        
         output$plot <- plotly::renderPlotly(plot)
+        
+        output$full_screen_ui <- renderUI({
+          actionButton(ns("full_screen"), "Full screen")
+        })
         
         shinyjs::show("full_screen")
       }, error = function(e) {
         showModal(modalDialog(paste0("An error occurred while creating the plot. Please check your inputs and try again.\n  \n  Error: ", e$message), easyClose = TRUE))
         return()
       })
-    })
+    }, ignoreInit = TRUE) # End of plot rendering loop
     
     observeEvent(input$full_screen, {
       shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot"), "');"))
-    })
-  })
+    }, ignoreInit = TRUE)
+    
+  }) # End of moduleServer
 }

@@ -484,6 +484,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                            ),
                            hoverinfo = "text",
                            text = ~paste(get(color_by), "<br>",  # Name or parameter of trace
+                                         datetime, "<br>",  # Datetime
                                          if (targ_dt) paste("True sample datetime:", target_datetime, "<br>"),  # true sample datetime if requested and dbSource = 'AC'
                                          as.character(value), units, # Value and units
                                          if (type) paste("<br>Sample type:", sample_type),  # Sample type if provided
@@ -512,6 +513,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                                showlegend = FALSE,
                                hoverinfo = "text",
                                text = ~paste(get(color_by), "<br>", # Name or parameter of trace
+                                             datetime, "<br>", # Datetime
                                              if (targ_dt) paste("True sample datetime", target_datetime, "<br>"), # true sample datetime if requested and dbSource = 'AC'
                                              result_condition, "of", as.character(result_condition_value), units, # Result condition and value
                                              if (type) paste("<br>Sample type:", sample_type),  # Sample type if provided

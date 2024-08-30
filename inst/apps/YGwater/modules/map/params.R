@@ -12,19 +12,32 @@ mapParamUI <- function(id) {
                    step = 0.1,
                    max = 365),
       radioButtons(ns("prct_abs"),
-                   NULL,
+                   "Display as ...",
                    choices = c("Percent historic range", "Absolute")),
+      actionButton(ns("create_map"),
+                   "Create map")
     ),
     mainPanel(
       leaflet::leafletOutput(ns("map")),
-      actionButton(ns("full_screen"),
-                   "Full screen")
+      uiOutput(ns("full_screen_ui"))
+      
     )
   )
 }
 
 mapParamServer <- function(id, AquaCache) {
   moduleServer(id, function(input, output, session) {
+
+    ns <- session$ns  # Used to create UI elements in the server code
+
+    observeEvent(input$create_map, {
+      
+      # Code to create the map...
+      
+      output$full_screen_ui <- renderUI({
+        actionButton(ns("full_screen"), "Full Screen")
+      })
+    })
     
   })
 }

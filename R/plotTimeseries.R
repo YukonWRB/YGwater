@@ -6,7 +6,7 @@
 #' This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
 #' 
 #' @param location The location for which you want a plot.
-#' @param parameter The parameter you wish to plot. The location:parameter combo must be in the local database.
+#' @param parameter The parameter name (text) or code (numeric) that you wish to plot. The location:parameter combo must be in the local database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
 #' @param period_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.
@@ -49,8 +49,27 @@ plotTimeseries <- function(location,
                            tzone = "auto",
                            con = NULL) 
 {
-
   
+  # location <- "29BA002"
+  # parameter = "water level"
+  # start_date <- "2023-08-30"
+  # end_date <- "2023-08-29"
+  # record_rate = NULL
+  # period_type = NULL
+  # z = NULL
+  # z_approx = NULL
+  # invert = NULL
+  # slider = TRUE
+  # datum = TRUE
+  # title = TRUE
+  # custom_title = NULL
+  # filter = NULL
+  # historic_range = TRUE
+  # language = "en"
+  # rate = NULL
+  # tzone = "auto"
+  # con = NULL
+
   # Checks and initial work ##########################################
   
   # Deal with non-standard evaluations from data.table to silence check() notes
@@ -105,9 +124,7 @@ plotTimeseries <- function(location,
     end_date <- as.POSIXct(end_date, tz = tzone)
     end_date <- end_date + 24*60*60
   }
-  
-  parameter <- tolower(parameter)
-  
+
   #back to UTC because DB queries are in UTC
   attr(start_date, "tzone") <- "UTC"
   attr(end_date, "tzone") <- "UTC"
@@ -138,20 +155,30 @@ plotTimeseries <- function(location,
   # Determine the timeseries and adjust the date range #################
   location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
   #Confirm parameter and location exist in the database and that there is only one entry
-  escaped_parameter <- gsub("'", "''", parameter)
-  parameter_tbl <- DBI::dbGetQuery(con, 
-                                   paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
-                                   )
-  parameter_code <- parameter_tbl$param_code[1]
+  if (inherits(parameter, "character")) {
+    parameter <- tolower(parameter)
+    escaped_parameter <- gsub("'", "''", parameter)
+    parameter_tbl <- DBI::dbGetQuery(con, 
+                                     paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
+    )
+    parameter_code <- parameter_tbl$param_code[1]
+    if (is.na(parameter_code)) {
+      stop("The parameter you entered does not exist in the database.")
+    }
+  } else if (inherits(parameter, "numeric")) {
+    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_code = ", parameter, ";"))
+    if (nrow(parameter_tbl) == 0) {
+      stop("The parameter you entered does not exist in the database.")
+    }
+    parameter_code <- parameter
+  } 
+
   if (language == "fr") {
     parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
   } else if (language == "en" || is.na(parameter_name)) {
     parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
   }
-  if (is.na(parameter_code)) {
-    stop("The parameter you entered does not exist in the database.")
-  }
-  
+
   if (is.null(record_rate)) { # period_type may or may not be NULL
     if (is.null(period_type)) { #both record_rate and period_type are NULL
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous';"))
@@ -247,6 +274,10 @@ plotTimeseries <- function(location,
   }
   if (end_date > exist_check$end_datetime) {
     end_date <- exist_check$end_datetime
+  }
+  
+  if (end_date < start_date) {
+    stop("It looks like data for this location begins before your requested start date.")
   }
   
   # Find the necessary datum (latest datum)
