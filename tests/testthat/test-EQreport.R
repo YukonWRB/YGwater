@@ -3,7 +3,7 @@ skip_on_ci()
 skip_on_cran()
 
 test_that("workbook is generated", {
-  if (file.exists("X:/EQWin/WR/DB/Water Resources.mdb")) {
+  if (file.exists("//carver/infosys/EQWin/WR/DB/Water Resources.mdb")) {
     dir <- tempdir()
     unlink(dir, recursive = TRUE)
     # Delete files in tempdir() on exit

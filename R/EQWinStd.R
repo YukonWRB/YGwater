@@ -16,7 +16,7 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
   
   # Connect to EQWin
   if (is.null(con)) {
-    EQWin <- AccessConnect("X:/EQWin/WR/DB/Water Resources.mdb", silent = TRUE)
+    EQWin <- AccessConnect("//carver/infosys/EQWin/WR/DB/Water Resources.mdb", silent = TRUE)
     on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
   } else {
     EQWin <- con

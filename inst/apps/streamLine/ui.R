@@ -5,7 +5,7 @@ ui <- function(request) {
     shinyjs::useShinyjs(),
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
       tags$link(rel = "stylesheet", type = "text/css", href = "css/feedback-btn.css"), # Feedback button
       tags$script(src = "js/mailto-update.js"), # Mailto language update script
       tags$script(src = "js/lang-update.js") # Language update script"))

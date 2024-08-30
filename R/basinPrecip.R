@@ -57,7 +57,12 @@ basinPrecip <- function(location,
   # hrdpa_loc = NULL
   # hrdps_loc = NULL
   
-  
+  # Check that terra is 1.7.81 at minimum.
+  if (maptype == "dynamic") {
+    if (utils::packageVersion("terra") < "1.7.8") {
+      stop("This function requires terra version 1.7.81 or higher for dynamic maps. You can switch to static maps, or update your version of terra. The CRAN version might not be up to date enough yet, in which case you need to use remotes::install_github('rspatial/terra') to get the latest version.")
+    }
+  }
   
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)

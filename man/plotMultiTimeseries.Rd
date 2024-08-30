@@ -31,7 +31,7 @@ plotMultiTimeseries(
 \arguments{
 \item{locations}{The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.}
 
-\item{parameters}{The parameter or parameters you wish to plot. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.}
+\item{parameters}{The parameter or parameters you wish to plot. You can specify parameter names (text) or code (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.}
 
 \item{record_rates}{The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.}
 

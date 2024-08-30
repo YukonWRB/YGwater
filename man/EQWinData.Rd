@@ -17,7 +17,7 @@ EQWinData(
   stds = NULL,
   stnStds = TRUE,
   save_path = "choose",
-  dbPath = "X:/EQWin/WR/DB/Water Resources.mdb"
+  dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
 )
 }
 \arguments{
@@ -45,7 +45,7 @@ EQWinData(
 
 \item{save_path}{The path to save the Excel file(s). Default is "choose" to allow user to select a folder interactively.}
 
-\item{dbPath}{The path to the EQWin database. Default is "X:/EQWin/WR/DB/Water Resources.mdb".}
+\item{dbPath}{The path to the EQWin database. Default is "//carver/infosys/EQWin/WR/DB/Water Resources.mdb".}
 }
 \value{
 A list of data.frames containing the data, location and parameter info, and (optionally) standards, plus an Excel workbook containing the requested station data, an optional workbook containing the standards.
