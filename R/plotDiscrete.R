@@ -33,7 +33,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # locGrp <- "QZ Eagle Gold HLF"
   # paramGrp <- "EG-HLF-failure"
   # log = FALSE
-  # facet_on = 'locs'
+  # facet_on = 'params'
   # rows = 'auto'
   # colorblind = FALSE
   # target_datetime = FALSE
@@ -234,6 +234,21 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
     # turn column 'value' to a numeric, which will remove the '<' and '>' characters
     data$value <- suppressWarnings(as.numeric(data$value))
     
+    # Check encoding and if necessary convert to UTF-8, otherwise plotly gets grumpy
+    locale_info <- Sys.getlocale("LC_CTYPE")
+    encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
+    for (i in 1:ncol(data)) {
+      if (inherits(data[, i], "character")) {
+        tryCatch({
+          grepl("[^\x01-\x7F]", data[[i]])
+        }, warning = function(w) {
+          if (encoding != "utf8") {
+            data[, i] <<- iconv(data[, i], from = encoding, to = "UTF-8")
+          }
+        })
+      }
+    }
+    
   } else { # dbSource == "AC"
     
     # Fetch data from AquaCache ##################################################################################################
@@ -417,7 +432,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
       
       # Determine y-axis label based on parameter and units
       y_axis_label <- if (facet_by == "param_name") {
-        paste(facet_value, " (", unit_text, ")", sep = "")
+        paste(facet_value, " (", unique(df$units), ")", sep = "")
       } else {
         paste(unique(df$location_name))
       }
@@ -541,7 +556,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   facet_by <- if (facet_on == "params") "param_name" else "location_name" # key to the correct column name
   data$param_name <- titleCase(data$param_name, lang)
   data$location_name <- titleCase(data$location_name, lang)
-  
+    
   plot <- create_facet_plot(data, facet_by, targ_dt = target_datetime)
   plot
   
