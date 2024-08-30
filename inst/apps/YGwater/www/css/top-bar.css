@@ -3,6 +3,11 @@
   height: 80px;
   margin-bottom: 3px; /* Adjust to reduce/increase space above the navbar */
   position: relative; /* Ensure container is positioned relative for absolute child positioning */
+   z-index: 1;
+}
+
+.navbar {
+  z-index: 1;
 }
 
 .logo-container img {
@@ -12,7 +17,7 @@
   position: absolute; /* Position logo absolutely within its container */
   top: 0; /* Align top edge with container */
   left: 0px; /* spacing from the screen edge */
-  z-index: 2;
+  z-index: 1;
 }
 
 /* Styling for the right-aligned aurora and its container */
@@ -21,6 +26,7 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
+   z-index: 2;
 }
 
 .aurora-container img {

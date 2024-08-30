@@ -5,10 +5,10 @@ ui <- function(request) {
     shinyjs::useShinyjs(),
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
       tags$link(rel = "stylesheet", type = "text/css", href = "css/feedback-btn.css"), # Feedback button
       tags$script(src = "js/mailto-update.js"), # Mailto language update script
       tags$script(src = "js/lang-update.js") # Language update script"))
+      # css for z index control is at the bottom because it must come after the css passed on silently by navbarPage
     ),
     
     # Create language selector and logo positioned above navbarPage
@@ -56,7 +56,10 @@ ui <- function(request) {
            href = "mailto:waterlevels@yukon.ca?subject=Placeholder&body=Placeholder", 
            icon("envelope"), 
            class = "feedback-btn", 
-           target = "_blank")
+           target = "_blank"),
+    tags$head(
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
+    )
     # Make a custom JS handler to update the email text (called from the server upon lang change)
   ) # End fluidPage
 }

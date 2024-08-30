@@ -31,8 +31,8 @@ plot <- function(id, EQWin, AquaCache) {
       
       if (input$plot_type == "Discrete") {
         
-        discData$parameters_discrete <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
-        discData$parameters_discrete <- discData$parameters_discrete[order(discData$parameters_discrete$param_name), ]
+        # discData$parameters_discrete <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
+        # discData$parameters_discrete <- discData$parameters_discrete[order(discData$parameters_discrete$param_name), ]
         
         output$submoduleUI <- renderUI({
           discretePlotUI(ns("discretePlot"))
