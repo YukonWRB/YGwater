@@ -5,6 +5,10 @@
   position: relative; /* Ensure container is positioned relative for absolute child positioning */
 }
 
+.navbar {
+  z-index: 1;
+}
+
 .logo-container img {
   height: 80px;
   width: auto; /* Maintain aspect ratio */

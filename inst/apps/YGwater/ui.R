@@ -20,8 +20,8 @@ app_ui <- function(request) {
     shinyjs::useShinyjs(),
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # Include the JavaScript file for full screen button
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
+      # css for z index control is at the bottom because it must come after the css passed on silently by navbarPage
     ),
     fluidRow(class = "top-bar-container",
              column(3,
@@ -46,6 +46,9 @@ app_ui <- function(request) {
                         mapUI("map"))
                # tabPanel(title = "Checks", value = "checks",
                #          checksUI("checks")),
-    ) # End navbarPage
+    ), # End navbarPage
+    tags$head(
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
+    )
   ) # End fluidPage
 }
