@@ -5,6 +5,7 @@
   position: relative; /* Ensure container is positioned relative for absolute child positioning */
 }
 
+/* Change z-index of navbar to ensure it is above other content. Since the Shiny call to navbarPage overwrites css that came before it, the call to this css file must be after navbarPage */
 .navbar {
   z-index: 1;
 }
@@ -15,7 +16,7 @@
   margin-top: -10px;
   position: absolute; /* Position logo absolutely within its container */
   top: 0; /* Align top edge with container */
-  left: 0px; /* spacing from the screen edge */
+  left: 0; /* spacing from the screen edge */
   z-index: 2;
 }
 
@@ -25,6 +26,7 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  z-index: 2; /* Above container but behind language selector and login button */
 }
 
 .aurora-container img {
@@ -32,7 +34,7 @@
   width:  600px;
   position: absolute; /* Position aurora absolutely within its container */
   top: -20px; /* Align top edge with container */
-  right: 0px; /* spacing from the screen edge */
+  right: 0; /* spacing from the screen edge */
   z-index: 1; /* Background layer */
 }
 
