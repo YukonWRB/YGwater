@@ -41,5 +41,8 @@ app_server <- function(input, output, session) {
     if (input$navbar == "map") {
       map("map", EQWin, AquaCache)
     }
+    if (input$navbar == "FOD") {
+      FOD("FOD")
+    }
   })
 }

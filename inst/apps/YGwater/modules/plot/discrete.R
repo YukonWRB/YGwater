@@ -94,7 +94,6 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
     observe({
-      print("here")
       EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns;"))
       EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns'")
       EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams;"))
