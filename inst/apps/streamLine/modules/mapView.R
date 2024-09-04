@@ -82,75 +82,6 @@ map <- function(id, language, restoring, data) {
     observeFilterInput("param")
     observeFilterInput("proj")
     observeFilterInput("net")
-    
-    
-    # Cross-update available filter options based on past selections
-    # observeEvent(input$type, {
-    #   # updateSelectizeInput(session, 
-    #   #                      "type",
-    #   #                      choices = stats::setNames(c("All", "discrete", "continuous"),
-    #   #                                                c(translations[id == "all", get(language$language)][[1]], titleCase(c(translations[id == "discrete", get(language$language)][[1]], translations[id == "continuous", get(language$language)][[1]]), language$abbrev)
-    #   #                                                )
-    #   #                      )
-    #   # )
-    #   updateSelectizeInput(session, 
-    #                        "pType",
-    #                        choices = stats::setNames(c("All", data$media_types$media_code),
-    #                                                  c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
-    #                                                  )
-    #                        )
-    #   )
-    #   updateSelectizeInput(session, 
-    #                        "pGrp",
-    #                        choices = stats::setNames(c("All", data$param_groups$group),
-    #                                                  c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
-    #                                                  )
-    #                        )
-    #   )
-    #   updateSelectizeInput(session,
-    #                        "param",
-    #                        choices = stats::setNames(c("All", data$parameters$param_code),
-    #                                                  c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
-    #                                                  )
-    #                        )
-    #   )
-    #   updateSelectizeInput(session,
-    #                        "proj",
-    #                        choices = stats::setNames(c("All", data$projects$project_id),
-    #                                                  c(translations[id == "all", get(language$language)][[1]], titleCase(data$projects[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
-    #                        )
-    #   )
-    #   updateSelectizeInput(session,
-    #                        "net",
-    #                        choices = stats::setNames(c("All", data$networks$network_id),
-    #                                                  c(translations[id == "all", get(language$language)][[1]], titleCase(data$networks[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
-    #                        )
-    #   )
-    #   updateSliderInput(session,
-    #                     "yrs",
-    #                     min = lubridate::year(min(data$timeseries$start_datetime)),
-    #                     max = lubridate::year(max(data$timeseries$end_datetime)),
-    #                     value = lubridate::year(c(min(data$timeseries$start_datetime), max(data$timeseries$end_datetime)))
-    #   )
-    # })
-    # observeEvent(input$pType, {
-    #   
-    # })
-    # observeEvent(input$pGrp, {
-    #   
-    # })
-    # observeEvent(input$param, {
-    #   
-    # })
-    # observeEvent(input$proj, {
-    #   
-    # })
-    # observeEvent(input$net, {
-    #   
-    # })
-    # observeEvent(input$yrs, {
-    #   
-    # })
 
     
     # Reset all filters when reset button pressed ##################################
@@ -165,7 +96,7 @@ map <- function(id, language, restoring, data) {
       updateSelectizeInput(session, 
                            "pType",
                            choices = stats::setNames(c("All", data$media_types$media_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
@@ -272,7 +203,7 @@ map <- function(id, language, restoring, data) {
                            "pType",
                            label = translations[id == "media_type", get(language$language)][[1]],
                            choices = stats::setNames(c("All", data$media_types$media_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )

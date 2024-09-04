@@ -15,6 +15,7 @@ YGwater_globals <- function() {
   source(system.file("apps/YGwater/modules/map/params.R", package = "YGwater"))
   
   source(system.file("apps/YGwater/modules/FOD/FOD_main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/basins/basins_main.R", package = "YGwater"))
   
   # Establish database connection
   # This is being done at the server level instead for YGwater Since the app will be used infrequently, this ensures that connections are only made when a user opens the app and is closed when the user closes the app.

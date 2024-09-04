@@ -36,9 +36,9 @@ app_ui <- function(request) {
                tabPanel(title = "Map", value = "map",
                         mapUI("map")),
                tabPanel(title = "FOD Comments", value = "FOD",
-                        FODUI("FOD"))
-               # tabPanel(title = "Checks", value = "checks",
-               #          checksUI("checks"))
+                        FODUI("FOD")),
+               tabPanel(title = "Create Basins", value = "basins",
+                        basinsUI("basins"))
     ), # End navbarPage
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
