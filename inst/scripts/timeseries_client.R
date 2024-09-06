@@ -764,7 +764,7 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       # Create a local function to request each batch of requests, using the verb as an override to the POST
                                       batchPost <- function(batchOfRequests, index) {
                                         offset <- batchSize * index
-                                        r <- httr::POST(url, body = batchOfRequests, encode = "json", add_headers("X-Http-Method-Override" = verb))
+                                        r <- httr::POST(url, body = batchOfRequests, encode = "json", httr::add_headers("X-Http-Method-Override" = verb))
                                         httr::stop_for_status(r, paste("receive", length(batchOfRequests), "batch", operationRoute, "responses at offset", offset))
 
                                         # Return the batch of responses
@@ -775,7 +775,7 @@ timeseriesClient <- setRefClass("timeseriesClient",
                                       responseBatches <- mapply(batchPost, requestBatches, seq_along(requestBatches) - 1, SIMPLIFY = FALSE)
 
                                       # Flatten the list of response data frames into a single data frame
-                                      rbind_pages(responseBatches)
+                                      jsonlite::rbind_pages(responseBatches)
                                     }
                                   },
 
