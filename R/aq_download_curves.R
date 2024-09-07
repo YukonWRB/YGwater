@@ -17,7 +17,7 @@
 #' @param login Your Aquarius login credentials as a character vector of two. Default pulls information from your .renviron file; see details.
 #' @param server The URL for your organization's Aquarius web server. Default pulls from your .renviron file; see details.
 #'
-#' @return A list with two data.frames: station metadata (simple data.frame) and rating curve information (complex data.frame). The later contains one row per parameter which has a rating curve (i.e. a distinct curve ID), with the final column containing a list of all the curves associated with that curve ID.
+#' @return A list with an element per rating model (one per inputParameter/outputParameter combination). Each element contains a list of rating curves, each with a data.frame of the relationship between input and output, the best-fit equation, and a plot of the data and fit. Metadata about the location is also included.
 #'
 #' @export
 
@@ -27,9 +27,7 @@ aq_download_curves <- function(loc_id,
                                start = "1950-01-01",
                                end = Sys.Date(),
                                login = Sys.getenv(c("AQUSER", "AQPASS")),
-                               server = Sys.getenv("AQSERVER")
-)
-{
+                               server = Sys.getenv("AQSERVER"))
   
   # loc_id <- "29AB007"
   # start <- "2000-01-01"
@@ -38,6 +36,7 @@ aq_download_curves <- function(loc_id,
   # server <- Sys.getenv("AQSERVER")
   # inputParameter <- NULL
   # outputParameter <- NULL
+{
 
   source(system.file("scripts",  "timeseries_client.R", package = "YGwater")) #This loads the code dependencies (though some have been put directly in this function for portability and to fix errors)
   
@@ -125,14 +124,11 @@ aq_download_curves <- function(loc_id,
         QueryTo = queryTo)
       r <- r[!sapply(r, is.null)]
     })
-    
-
     ratingCurves <- sendBatchRequests(publishUri, "RatingCurveListServiceRequest", "/GetRatingCurveList", ratingCurveRequests)
     ratingModels$Curves <- ratingCurves$RatingCurves
     
     ratingModels
   }
-  
   # Gets output values from a rating model. This is used to build input:output relationships and to calculate a best fit equation
   #
   # @param ratingModelIdentifier The identifier of the rating model
@@ -166,7 +162,6 @@ aq_download_curves <- function(loc_id,
   
   
   # Now that the functions are defined, connect to AQ and get the data out
-  
   #Make the Aquarius configuration
   config = list(
     server = server,
@@ -203,8 +198,13 @@ aq_download_curves <- function(loc_id,
       skip <- FALSE
       tryCatch({
         range <- curve$BaseRatingTable[[1]]$InputValue
-        stage <- seq(round(min(range), digits = 2), round(max(range), digits = 2), by = 0.01)
-        discharge <- getRatingModelOutputValues(ratingModels$Identifier[[i]], stage, effectiveTime = curve$PeriodsOfApplicability[[1]][1])
+        tryCatch({
+          stage <- seq(round(min(range), digits = 2), round(max(range), digits = 2), by = 0.01)
+          discharge <- getRatingModelOutputValues(ratingModels$Identifier[[i]], stage, effectiveTime = curve$PeriodsOfApplicability[[1]][1])
+        }, error = function(e){
+          stage <- seq(round(min(range), digits = 2), round(max(range), digits = 2), by = 0.1)
+          discharge <- getRatingModelOutputValues(ratingModels$Identifier[[i]], stage, effectiveTime = curve$PeriodsOfApplicability[[1]][1])
+        })
       }, error = function(e) {
         ratingModelsList[[list_element_name]][[curve_name]] <<- list(curve, curve_details = "Curve details could not be retrieved for this curve (likely failed to extract relationship info from Aquarius).")
         skip <<- TRUE
@@ -222,51 +222,96 @@ aq_download_curves <- function(loc_id,
         # Power Law Fitting
         no_power_law <- FALSE
         tryCatch({
-          power_law <- nls(discharge ~ a * (stage - h0)^b, data = valid_data, start = list(a = 1, h0 = min(valid_data$stage), b = 1))
+          
+          # Get decent starting values based on the range of the data
+          h0_start <- min(valid_data$stage) - 0.01  # Ensure it's slightly lower than the minimum
+          a_start <- max(valid_data$discharge) / (max(valid_data$stage) - h0_start)^1  # Rough guess for scaling
+          b_start <- 1  # Start with an exponent of 1
+          
+          power_law <- stats::nls(discharge ~ a * (stage - h0)^b,
+                                  data = valid_data,
+                                  start = list(a = a_start, 
+                                               h0 = h0_start, 
+                                               b = b_start))
+          
         }, error = function(e) {
           power_law <<- NULL
           no_power_law <<- TRUE
         })
-        # Polynomial fitting
+        
+        # Polynomial fitting with degree selection based on AIC
         no_poly <- FALSE
         tryCatch({
-          poly <- lm(discharge ~ poly(stage, 2), data = valid_data)
+          # Fit polynomial models with degrees 2, 3, and 4
+          poly_degree_2 <- stats::lm(discharge ~ poly(stage, 2, raw = TRUE), data = valid_data)
+          poly_degree_3 <- stats::lm(discharge ~ poly(stage, 3, raw = TRUE), data = valid_data)
+          poly_degree_4 <- stats::lm(discharge ~ poly(stage, 4, raw = TRUE), data = valid_data)
+          
+          # Calculate AIC for each model and select the best
+          AIC_values <- c(AIC(poly_degree_2), AIC(poly_degree_3), AIC(poly_degree_4))
+          best_poly_model <- switch(which.min(AIC_values), poly_degree_2, poly_degree_3, poly_degree_4)
+          
         }, error = function(e) {
-          poly <<- NULL
+          best_poly_model <<- NULL
           no_poly <<- TRUE
         })
+        
         # Calculate AIC and select the best performing model
-        if (no_power_law || no_poly) {
-          if (no_power_law && no_poly) {
-            stop("No model could be fit to the data.")
-          } else if (no_power_law) {
-            best_model <- "poly"
-          } else {
-            best_model <- "power_law"
-          }
-        } else {
-          AIC <- c(AIC(power_law), AIC(poly))
-          best_model <- ifelse(AIC[1] == min(AIC), "power_law", "poly")
+        if (no_power_law && no_poly) {
+          stop("No model could be fit to the data.")
         }
         
+        # Collect AICs only for models that succeeded
+        AIC_list <- list()
+        if (!no_power_law) AIC_list$power_law <- stats::AIC(power_law)
+        if (!no_poly) AIC_list$poly <- stats::AIC(best_poly_model)
         
-        # Extract the equation based on the best model
+        # Select the best model by comparing AIC values
+        best_model <- names(AIC_list)[which.min(unlist(AIC_list))]
+        
+        # Extract the equation and calculate fitted values
         if (best_model == "power_law") {
           # Extract coefficients from the power law model
           coef_vals <- coef(power_law)
-          equation <- paste0("output = ", round(coef_vals['a'], 4), " * (input - ", round(coef_vals['h0'], 4), ")^", round(coef_vals['b'], 4))
-        } else {
+          equation <- paste0(ratingModels$OutputParameter[[i]], " = ", round(coef_vals['a'], 4), " * (", ratingModels$InputParameter[[i]], " - ", round(coef_vals['h0'], 4), ")^", round(coef_vals['b'], 4))
+          
+          # Generate predicted values using the power law model
+          predicted <- predict(power_law, newdata = valid_data)
+          
+        } else if (best_model == "poly") {
           # Extract coefficients from the polynomial model
-          coef_vals <- coef(poly)
-          equation <- paste0("output = ", round(coef_vals[1], 4), " + ", round(coef_vals[2], 4), " * input + ", round(coef_vals[3], 4), " * input^2")
+          coef_vals <- coef(best_poly_model)
+          equation <- paste0(ratingModels$OutputParameter[[i]], " = ", round(coef_vals[1], 4), " + ", round(coef_vals[2], 4), " * ", ratingModels$InputParameter[[i]], " + ", round(coef_vals[3], 4), " * ", ratingModels$InputParameter[[i]], "^2")
+          
+          # Generate predicted values using the polynomial model
+          predicted <- predict(best_poly_model, newdata = valid_data)
         }
+        
+        plot_data <- data.frame(stage = valid_data$stage, discharge = valid_data$discharge, predicted = predicted)
+        plot_data <- data.frame(stage = valid_data$stage, discharge = valid_data$discharge, predicted = predicted, predicted_segmented = predicted_segmented)
+        
+        # Create a plot
+        plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = stage)) +
+          ggplot2::geom_point(ggplot2::aes(y = discharge, color = "Observed Data"), size = 2) +  # Plot the original data points
+          ggplot2::geom_line(ggplot2::aes(y = predicted, color = "Predicted Data"), size = 1.2) +  # Plot the fitted line
+          ggplot2::labs(x = ratingModels$InputParameter[[i]], 
+                        y = ratingModels$OutputParameter[[i]], 
+                        color = "Legend") +  # Set legend title
+          ggplot2::scale_color_manual(values = c("Observed Data" = "blue", "Predicted Data" = "red")) +  # Define legend colors
+          ggplot2::theme_minimal() +
+          ggplot2::annotate("text", x = min(valid_data$stage), y = min(valid_data$discharge) - 0.1 * diff(range(valid_data$discharge)), 
+                   label = equation, hjust = 0, size = 3, color = "black")
+        
       }, error = function(e) {
-        equation <- "No equation could be fit to the data."
+        equation <<- "No equation could be fit to the data."
+        plot <<- "No plot could be generated as no equation could be fit to the data."
       })
       
+        
       curve_details[[curve_name]] <- list(curve = curve, 
                                           relationship = relationship, 
-                                          equation = equation)
+                                          equation = equation,
+                                          plot = plot)
     }
     ratingModelsList[[list_element_name]] <- curve_details
   }

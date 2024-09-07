@@ -30,7 +30,7 @@ aq_download_curves(
 \item{server}{The URL for your organization's Aquarius web server. Default pulls from your .renviron file; see details.}
 }
 \value{
-A list with two data.frames: station metadata (simple data.frame) and rating curve information (complex data.frame). The later contains one row per parameter which has a rating curve (i.e. a distinct curve ID), with the final column containing a list of all the curves associated with that curve ID.
+A list with an element per rating model (one per inputParameter/outputParameter combination). Each element contains a list of rating curves, each with a data.frame of the relationship between input and output, the best-fit equation, and a plot of the data and fit. Metadata about the location is also included.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
