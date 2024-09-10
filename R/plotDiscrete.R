@@ -10,6 +10,7 @@
 #' @param paramGrp Only used if `dbSource` is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use `parameters` instead.
 #' @param log Should the y-axis be log-transformed?
 #' @param facet_on Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.
+#' @param loc_code Should the location code be used instead of the full location name?
 #' @param rows The number of rows to use in the facet grid. Default is 'auto' to automatically determine the number of rows based on the number of facets.
 #' @param target_datetime Should the plot datetime use the 'target' datetime instead of the 'actual' datetime? Default is TRUE. This is only applicable is dbSource == 'AC'.
 #' @param colorblind Should the plot be colorblind-friendly? Default is FALSE.
@@ -21,7 +22,7 @@
 #' @export
 #'
 
-plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp = NULL, parameters = NULL, paramGrp = NULL, log = FALSE, facet_on = 'params', rows = 'auto', target_datetime = TRUE, colorblind = FALSE, lang = "en", dbSource = "EQ", dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb") {
+plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp = NULL, parameters = NULL, paramGrp = NULL, log = FALSE, facet_on = 'params', loc_code = FALSE, rows = 'auto', target_datetime = TRUE, colorblind = FALSE, lang = "en", dbSource = "EQ", dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb") {
   
   #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
 
@@ -391,11 +392,11 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
     }
   }
   
-  create_facet_plot <- function(data, facet_by, targ_dt) {
+  create_facet_plot <- function(data, facet_by, targ_dt, loc_code) {
     # Split data based on the facet_by column
     df_list <- split(data, data[[facet_by]])
 
-    color_by <- if (facet_by == "param_name") "location_name" else "param_name"
+    color_by <- if (facet_by == "param_name") if (loc_code) "location" else "location_name" else "param_name"
 
 
     # Define custom color scale
@@ -419,7 +420,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
         # Add entries for parameter/location_name which show up elsewhere in 'data' but not in facet 1
         missing <- setdiff(unique(data[[color_by]]), unique(df[[color_by]]))
         for (m in missing) {
-          if (color_by == "location_name") {
+          if (color_by %in% c("location", "location_name")) {
             unit_text <- unique(df$units)
             df <- rbind(df, data.frame(value = -Inf, datetime = min(df$datetime), param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA))
           } else {
@@ -434,7 +435,11 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
       y_axis_label <- if (facet_by == "param_name") {
         paste(facet_value, " (", unique(df$units), ")", sep = "")
       } else {
-        paste(unique(df$location_name))
+        if (loc_code) {
+          paste(unique(df$location))
+        } else {
+          paste(unique(df$location_name))
+        }
       }
       
       # Determine what can be added to the hover labels
@@ -557,7 +562,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   data$param_name <- titleCase(data$param_name, lang)
   data$location_name <- titleCase(data$location_name, lang)
     
-  plot <- create_facet_plot(data, facet_by, targ_dt = target_datetime)
+  plot <- create_facet_plot(data, facet_by, targ_dt = target_datetime, loc_code = loc_code)
   plot
   
   return(plot)

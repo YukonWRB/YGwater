@@ -166,7 +166,7 @@ data <- function(id, con, language, restoring, data, inputs) {
                            "pType",
                            label = translations[id == "media_type", get(language$language)][[1]],
                            choices = stats::setNames(c("All", data$media_types$media_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
@@ -242,7 +242,7 @@ data <- function(id, con, language, restoring, data, inputs) {
       updateSelectizeInput(session, 
                            "pType",
                            choices = stats::setNames(c("All", data$media_types$media_code),
-                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
       )
@@ -398,13 +398,15 @@ data <- function(id, con, language, restoring, data, inputs) {
         tbl[data$locations, on = c(location_id = "location_id"), translations[id == "loc", get(language$language)] := .(get(translations[id == "generic_name_col", get(language$language)]))]
         # Attach parameter type
         tbl[data$media_types, on = c(media_type = "media_code"), 
-            translations[id == "type", get(language$language)] := get(translations[id == "param_type_col", get(language$language)])]
+            translations[id == "type", get(language$language)] := get(translations[id == "media_type_col", get(language$language)])]
         tbl[, media_type := NULL]
+        
         # Attach parameter descriptions
         tbl[data$parameters, on = c(parameter = "param_code"), 
             c(translations[id == "group", get(language$language)], translations[id == "parameter", get(language$language)], translations[id == "units", get(language$language)]) 
             := 
               .(get(translations[id == "param_group_col", get(language$language)]), get(translations[id == "param_name_col", get(language$language)]), unit)] # data in column named "unit" is unchanging based on language
+        
         tbl[, parameter := NULL]
         
         # Create sort.start, sort.end for sorting only

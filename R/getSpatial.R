@@ -84,7 +84,6 @@ getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, ge
     }
   }
   
-
   subquery <- paste0("WHERE")
 
   if (!is.null(geom_id)) {

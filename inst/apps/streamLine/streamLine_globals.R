@@ -12,6 +12,11 @@ streamLine_globals <- function(dev = FALSE) {
   
   translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/streamLine/translations.xlsx", package = "YGwater"), sheet = 1))
   
+  # Function to get correct text from translations table
+  translate <<- function(id, lang) {
+    translations[id == id, lang]
+  }
+  
   # Establish database connection
   if (dev) {
     if (!exists("pool")) {

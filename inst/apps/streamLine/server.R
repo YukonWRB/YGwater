@@ -137,12 +137,8 @@ console.log(language);")
     locations_projects = dbGetQueryDT(pool, "SELECT * FROM locations_projects;"),
     locations_networks = dbGetQueryDT(pool, "SELECT * FROM locations_networks;"),
     media_types = dbGetQueryDT(pool, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_type = p.media_code);"),
-    
     param_groups = dbGetQueryDT(pool, "SELECT DISTINCT p.group_id, p.group_name, p.group_name_fr FROM parameter_groups AS p WHERE EXISTS (SELECT 1 FROM parameter_relationships r WHERE r.group_id = p.group_id);"),
-    
-    parameters = dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
-    
-    
+    parameters = dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.unit_default AS unit, p.unit_solid AS unit_solid FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);"),
     projects = dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
     networks =  dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
     has_images = dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;"),
@@ -198,7 +194,7 @@ console.log(language);")
         DBdata$locations_networks <- dbGetQueryDT(pool, "SELECT * FROM locations_networks;")
         DBdata$media_types <- dbGetQueryDT(pool, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_type = p.media_code);")
         DBdata$param_groups <- dbGetQueryDT(pool, "SELECT DISTINCT p.group, p.group_fr FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
-        DBdata$parameters <- dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.group, p.group_fr, unit FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
+        DBdata$parameters <- dbGetQueryDT(pool, "SELECT p.param_code, p.param_name, p.param_name_fr, p.unit_default AS unit, p.unit_solid AS unit_solid FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter = p.param_code);")
         DBdata$projects <- dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);")
         DBdata$networks <- dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);")
         DBdata$has_images <- dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;")

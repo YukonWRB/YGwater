@@ -13,6 +13,7 @@ plotDiscrete(
   paramGrp = NULL,
   log = FALSE,
   facet_on = "params",
+  loc_code = FALSE,
   rows = "auto",
   target_datetime = TRUE,
   colorblind = FALSE,
@@ -37,6 +38,8 @@ plotDiscrete(
 \item{log}{Should the y-axis be log-transformed?}
 
 \item{facet_on}{Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.}
+
+\item{loc_code}{Should the location code be used instead of the full location name?}
 
 \item{rows}{The number of rows to use in the facet grid. Default is 'auto' to automatically determine the number of rows based on the number of facets.}
 
