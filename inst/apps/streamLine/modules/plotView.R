@@ -119,8 +119,8 @@ plot <- function(id, con, language, restoring, data, inputs) {
       # )
       updateSelectizeInput(session, 
                            "pType",
-                           label = translations[id == "media_type", get(language$language)][[1]],
-                           choices = stats::setNames(c("All", data$media_types$media_code),
+                           label = translations[id == "media_id", get(language$language)][[1]],
+                           choices = stats::setNames(c("All", data$media_types$media_id),
                                                      c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            ),
@@ -160,7 +160,7 @@ plot <- function(id, con, language, restoring, data, inputs) {
       updateSelectizeInput(session,
                            "param",
                            label = translations[id == "parameter", get(language$language)][[1]],
-                           choices = stats::setNames(c(data$parameters$param_code),
+                           choices = stats::setNames(c(data$parameters$parameter_id),
                                                      c(titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            ),
@@ -215,7 +215,7 @@ plot <- function(id, con, language, restoring, data, inputs) {
       # )
       updateSelectizeInput(session, 
                            "pType",
-                           choices = stats::setNames(c("All", data$media_types$media_code),
+                           choices = stats::setNames(c("All", data$media_types$media_id),
                                                      c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "param_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
@@ -241,7 +241,7 @@ plot <- function(id, con, language, restoring, data, inputs) {
       )
       updateSelectizeInput(session,
                            "param",
-                           choices = stats::setNames(data$parameters$param_code,
+                           choices = stats::setNames(data$parameters$parameter_id,
                                                      titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
                                                      
                            ),
@@ -279,7 +279,7 @@ plot <- function(id, con, language, restoring, data, inputs) {
         )
         return()
       }
-      if (!input$param %in%  data$parameters$param_code) {
+      if (!input$param %in%  data$parameters$parameter_id) {
         modalDialog(
           title = "Error",
           "Selected parameter does not exist in the database. Make sure you're selecting a menu option.",
@@ -289,7 +289,7 @@ plot <- function(id, con, language, restoring, data, inputs) {
       }
       # Now check if there actually is data to map for the selected parameter on the selected date and date approximation
       # If there is no data, return a modal dialog
-      timeseries <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE parameter = ", input$param, ";"))
+      timeseries <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE parameter_id = ", input$param, ";"))
       continuous_data <- DBI::dbGetQuery(con, "SELECT ")
       discrete_data <- DBI::dbGetQuery(con, )
     }) # End of observeEvent for map creation

@@ -95,7 +95,7 @@ map <- function(id, language, restoring, data) {
       )
       updateSelectizeInput(session, 
                            "pType",
-                           choices = stats::setNames(c("All", data$media_types$media_code),
+                           choices = stats::setNames(c("All", data$media_types$media_id),
                                                      c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
@@ -109,7 +109,7 @@ map <- function(id, language, restoring, data) {
       )
       updateSelectizeInput(session,
                            "param",
-                           choices = stats::setNames(c("All", data$parameters$param_code),
+                           choices = stats::setNames(c("All", data$parameters$parameter_id),
                                                      c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
@@ -148,7 +148,7 @@ map <- function(id, language, restoring, data) {
       # Get parameters per location
       param_name_col <- translations[id == "param_name_col", get(language$language)][[1]]
       to_text <- translations[id == "to", get(language$language)][[1]]
-      tmp <- data$timeseries[data$parameters, on = .(parameter = param_code), allow.cartesian = TRUE]
+      tmp <- data$timeseries[data$parameters, on = .(parameter = parameter_id), allow.cartesian = TRUE]
       tmp[, formatted_param := paste(titleCase(get(param_name_col), language$abbrev), " (", 
                                      format(as.Date(start_datetime), "%Y-%m-%d"), 
                                      " ", to_text, " ", 
@@ -201,8 +201,8 @@ map <- function(id, language, restoring, data) {
       )
       updateSelectizeInput(session, 
                            "pType",
-                           label = translations[id == "media_type", get(language$language)][[1]],
-                           choices = stats::setNames(c("All", data$media_types$media_code),
+                           label = translations[id == "media_id", get(language$language)][[1]],
+                           choices = stats::setNames(c("All", data$media_types$media_id),
                                                      c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
@@ -218,7 +218,7 @@ map <- function(id, language, restoring, data) {
       updateSelectizeInput(session,
                            "param",
                            label = translations[id == "parameter", get(language$language)][[1]],
-                           choices = stats::setNames(c("All", data$parameters$param_code),
+                           choices = stats::setNames(c("All", data$parameters$parameter_id),
                                                      c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
                                                      )
                            )
@@ -284,25 +284,25 @@ map <- function(id, language, restoring, data) {
       
       if (!is.null(input$pType)) {
         if (length(input$pType) > 1) {
-          timeseries.sub <- timeseries.sub[timeseries.sub$media_type %in% input$pType, ]
+          timeseries.sub <- timeseries.sub[timeseries.sub$media_id %in% input$pType, ]
         } else {
           if (input$pType != "All") {
-            timeseries.sub <- timeseries.sub[timeseries.sub$media_type == input$pType, ]
+            timeseries.sub <- timeseries.sub[timeseries.sub$media_id == input$pType, ]
           }
         }
       }
       
       if (!is.null(input$pGrp)) {
         if (length(input$pGrp) > 1) {
-          select.params <- data$parameters[data$parameters$group %in% input$pGrp, "param_code"]$param_code
-          timeseries.sub <- timeseries.sub[parameter %in% select.params, ]
+          select.params <- data$parameters[data$parameters$group %in% input$pGrp, "parameter_id"]$parameter_id
+          timeseries.sub <- timeseries.sub[parameter_id %in% select.params, ]
         } else {
           if (input$pGrp != "All") {
-            select.params <- data$parameters[data$parameters$group == input$pGrp, "param_code"]$param_code
+            select.params <- data$parameters[data$parameters$group == input$pGrp, "parameter_id"]$parameter_id
             if (length(select.params) > 1) {
-              timeseries.sub <- timeseries.sub[parameter %in% select.params, ]
+              timeseries.sub <- timeseries.sub[parameter_id %in% select.params, ]
             } else {
-              timeseries.sub <- timeseries.sub[parameter == select.params, ] 
+              timeseries.sub <- timeseries.sub[parameter_id == select.params, ] 
             }
           }
         }
@@ -310,10 +310,10 @@ map <- function(id, language, restoring, data) {
       
       if (!is.null(input$param)) {
         if (length(input$param) > 1) {
-          timeseries.sub <- timeseries.sub[parameter %in% input$param, ]
+          timeseries.sub <- timeseries.sub[parameter_id %in% input$param, ]
         } else {
           if (input$param != "All") {
-            timeseries.sub <- timeseries.sub[parameter == input$param, ]
+            timeseries.sub <- timeseries.sub[parameter_id == input$param, ]
           }
         }
       }

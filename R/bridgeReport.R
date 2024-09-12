@@ -48,7 +48,7 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
     tsid <- DBI::dbGetQuery(con, "
     SELECT t.location, t.timeseries_id, l.name 
     FROM timeseries AS t 
-    JOIN parameters AS p ON t.parameter = p.param_code 
+    JOIN parameters AS p ON t.parameter_id = p.parameter_id 
     JOIN locations_networks AS ln ON t.location_id = ln.location_id 
     JOIN networks AS n ON ln.network_id = n.network_id 
     JOIN (
@@ -57,7 +57,7 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
         WHERE location IN (
             SELECT location 
             FROM timeseries AS t 
-            JOIN parameters AS p ON t.parameter = p.param_code 
+            JOIN parameters AS p ON t.parameter_id = p.parameter_id 
             JOIN locations_networks AS ln ON t.location_id = ln.location_id 
             JOIN networks AS n ON ln.network_id = n.network_id 
             WHERE p.param_name = 'distance' 
@@ -71,7 +71,7 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
     tsid <- DBI::dbGetQuery(con, "
     SELECT t.location, t.timeseries_id, l.name 
     FROM timeseries AS t 
-    JOIN parameters AS p ON t.parameter = p.param_code 
+    JOIN parameters AS p ON t.parameter_id = p.parameter_id 
     JOIN locations_networks AS ln ON t.location_id = ln.location_id 
     JOIN networks AS n ON ln.network_id = n.network_id 
     JOIN (
@@ -80,7 +80,7 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
         WHERE location IN (
             SELECT location 
             FROM timeseries AS t 
-            JOIN parameters AS p ON t.parameter = p.param_code 
+            JOIN parameters AS p ON t.parameter_id = p.parameter_id 
             JOIN locations_networks AS ln ON t.location_id = ln.location_id 
             JOIN networks AS n ON ln.network_id = n.network_id 
             WHERE p.param_name = 'distance' 

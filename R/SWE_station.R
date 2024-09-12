@@ -85,26 +85,27 @@ SWE_station <- function(stations = "all",
     
     # Get measurements
     Meas <- DBI::dbGetQuery(con,
-                            paste0("SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name, datum_conversions.conversion_m, measurements_discrete.note, locations.name_fr
+                            paste0("SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name, datum_conversions.conversion_m, result_value_types.result_value_type, locations.name_fr
                       FROM measurements_discrete
                       INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
                       INNER JOIN locations ON timeseries.location=locations.location
-                      INNER JOIN parameters ON timeseries.parameter = parameters.param_code
+                      INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
                       INNER JOIN datum_conversions ON locations.location_id = datum_conversions.location_id
+                      INNER JOIN result_value_types ON measurements_discrete.result_value_type = result_value_types.result_value_type_id
                       WHERE (parameters.param_name = 'snow water equivalent' OR parameters.param_name = 'snow depth') AND
                               locations.location IN ('", paste0(stations, collapse = "', '"), "')")
     )
     
     DBI::dbDisconnect(con)
     # Rename columns:
-    colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "note", "name_fr")
+    colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "result_value_type", "name_fr")
     # Change 'snow water equivalent' to SWE
     Meas[Meas$parameter == 'snow water equivalent',]$parameter <- "SWE"
     # Where note = estimated, make estimate_flag = TRUE
     Meas$estimate_flag <- NA
-    Meas[grep("estimated", Meas$note), ]$estimate_flag <- TRUE
-    # Remove note
-    Meas <- Meas[, -c(which(names(Meas) == "note"))]
+    Meas[grep("Estimated", Meas$result_value_type), ]$estimate_flag <- TRUE
+    # Remove result_value_type
+    Meas <- Meas[, -c(which(names(Meas) == "result_value_type"))]
     
     # Calculate density
     # Spread the data into separate columns for swe and snow_depth

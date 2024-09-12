@@ -394,7 +394,7 @@ snowBulletinStats <-
                     value, q50 AS median, min, max, doy_count AS years FROM calculated_daily 
                     INNER JOIN timeseries ON calculated_daily.timeseries_id = timeseries.timeseries_id
                     INNER JOIN locations ON timeseries.location = locations.location
-                    INNER JOIN parameters ON timeseries.parameter = parameters.param_code
+                    INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
                     WHERE calculated_daily.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
                     AND date = '", year, "-0", month, "-01'"))
       pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$median * 100)
@@ -468,7 +468,7 @@ snowBulletinStats <-
                     value, q50 AS median, min, max, doy_count AS years FROM calculated_daily 
                     INNER JOIN timeseries ON calculated_daily.timeseries_id = timeseries.timeseries_id
                     INNER JOIN locations ON timeseries.location = locations.location
-                    INNER JOIN parameters ON timeseries.parameter = parameters.param_code
+                    INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
                     WHERE calculated_daily.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
                     AND date = '", year, "-0", month, "-01'"))
         flow_stats$perc_hist_med <- round(flow_stats$value / flow_stats$median * 100)

@@ -13,7 +13,7 @@
 #' @param plots Set TRUE if you want plots of SWE, depth, and density generated (but see next parameter).
 #' @param plot_type Set to "separate" for 3 plots per location, or "combined" for a single compound plot per location.
 #' @param quiet Suppresses most messages and warnings.
-#' @param con A connection to the snow database. Leave as NULL to use [AquaConnect()] to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.
+#' @param con A connection to the AquaCache database. Leave as NULL to use [AquaConnect()] to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.
 #'
 #' @return A list with four data.frames: location metadata, basic statistics, trend information, and snow course measurements is returned to the R environment. In addition, an Excel workbook is saved to the save_path with the four data.frames, and a new folder created to hold SWE and depth plots for each station requested.
 #'
@@ -24,15 +24,29 @@
 
 snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", stats = TRUE, complete_yrs = TRUE, plots = TRUE, plot_type = "combined", quiet = FALSE, con = NULL) {
 
+  # parameters for testing (remember to comment out when done)
+  # locations <- "all"
+  # inactive <- FALSE
+  # save_path <- "choose"
+  # stats <- TRUE
+  # complete_yrs <- TRUE
+  # plots <- TRUE
+  # plot_type <- "combined"
+  # quiet <- FALSE
+  # con <- NULL
+
   rlang::check_installed("trend", reason = "necessary to calculate trends.")
   if (plots) {
     rlang::check_installed("gridExtra", reason = "necessary to create plots.")
   }
   
   if (!is.null(save_path)) {
-    if (save_path %in% c("Choose", "choose")) {
+    if (save_path == "choose") {
+      if (!interactive()) {
+        stop("You must specify a save path when running in non-interactive mode.")
+      }
       message("Select the path to the folder where you want this report saved.")
-      save_path <- as.character(utils::choose.dir(caption = "Select Save Folder"))
+      save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
     }
     dir.create(paste0(save_path, "/SnowInfo_", Sys.Date()))
     if (plots) {
@@ -78,7 +92,7 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
   }
 
   #Get the measurements
-  tsids <- DBI::dbGetQuery(con, paste0("SELECT t.timeseries_id, t.location_id, t.end_datetime, p.param_name, l.location FROM timeseries as T JOIN parameters as p ON t.parameter = p.param_code JOIN locations AS l ON t.location = l.location WHERE t.location_id IN ('", paste(locations$location_id, collapse = "', '"), "')"))
+  tsids <- DBI::dbGetQuery(con, paste0("SELECT t.timeseries_id, t.location_id, t.end_datetime, p.param_name, l.location FROM timeseries as T JOIN parameters as p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location = l.location WHERE t.location_id IN ('", paste(locations$location_id, collapse = "', '"), "')"))
   
   meas <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value, timeseries_id FROM measurements_discrete WHERE timeseries_id IN (", paste(tsids$timeseries_id, collapse = ", "), ")"))
 
@@ -228,8 +242,8 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
             yearMaxDepth <- c(yearMaxDepth, locationDepth)
           }
           if (4 %in% months) {
-            locApr1SWE <- subset[as.Date(subset$target_date) == paste0(i, "-04-01") & subset$param_name == "snow water equivalent","value"]
-            locApr1Depth <- subset[as.Date(subset$target_date) == paste0(i, "-04-01") & subset$param_name == "snow depth","value"]
+            locApr1SWE <- subset[as.Date(subset$target_date) == paste0(i, "-04-01") & subset$param_name == "snow water equivalent", "value"]
+            locApr1Depth <- subset[as.Date(subset$target_date) == paste0(i, "-04-01") & subset$param_name == "snow depth", "value"]
             yearApr1SWE <- c(yearApr1SWE, locApr1SWE)
             yearApr1Depth <- c(yearApr1Depth, locApr1Depth)
           }
@@ -249,20 +263,32 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
       meanApr1SWESens <- trend::sens.slope(meanApr1SWE)
       meanApr1DepthSens <- trend::sens.slope(meanApr1Depth)
 
-      plot_all <- data.frame("location" = "all_locs_max",
-                             "SAMPLE_DATE" = as.Date(paste0(seq(min(yrs), min(yrs) + length(meanMaxSWE) - 1), "-01-01")),
-                             "SNOW_WATER_EQUIV" = meanMaxSWE,
-                             "DEPTH" = meanMaxDepth)
-      plot_apr1 <- data.frame("location" = "all_locs_Apr1",
-                              "SAMPLE_DATE" = as.Date(paste0(seq(min(yrs), min(yrs) + length(meanApr1SWE) - 1), "-04-01")),
-                              "SNOW_WATER_EQUIV" = meanApr1SWE,
-                              "DEPTH" = meanApr1Depth)
+      plot_all_SWE <- data.frame("location" = "all_locs_max",
+                                 target_datetime = as.POSIXct(paste0(seq(min(yrs), min(yrs) + length(meanMaxSWE) - 1), "-01-01 00:00")),
+                                 param_name = "snow water equivalent",
+                                 value = meanMaxSWE)
+      plot_all_depth <- data.frame("location" = "all_locs_max",
+                                   target_datetime = as.POSIXct(paste0(seq(min(yrs), min(yrs) + length(meanMaxSWE) - 1), "-01-01 00:00")),
+                                   param_name = "snow depth",
+                                   value = meanMaxDepth)
+      plot_apr1_SWE <- data.frame("location" = "all_locs_Apr1",
+                                 target_datetime = as.POSIXct(paste0(seq(min(yrs), min(yrs) + length(meanApr1SWE) - 1), "-04-01 00:00")),
+                                 param_name = "snow water equivalent",
+                                 value = meanApr1SWE)
+      plot_apr1_depth <- data.frame("location" = "all_locs_Apr1",
+                                   target_datetime = as.POSIXct(paste0(seq(min(yrs), min(yrs) + length(meanApr1SWE) - 1), "-04-01 00:00")),
+                                   param_name = "snow depth",
+                                   value = meanApr1Depth)
       new_all <- data.frame("location" = "all_locs_max",
                             "name" = "Territory-averaged maximum")
       new_apr1 <- data.frame("location" = "all_locs_Apr1",
                             "name" = "Territory-averaged April 1")
-      meas <- plyr::rbind.fill(meas, plot_all)
-      meas <- plyr::rbind.fill(meas, plot_apr1)
+      
+      meas <- plyr::rbind.fill(meas, plot_all_SWE)
+      meas <- plyr::rbind.fill(meas, plot_all_depth)
+      meas <- plyr::rbind.fill(meas, plot_apr1_SWE)
+      meas <- plyr::rbind.fill(meas, plot_apr1_depth)
+      
       locations <- plyr::rbind.fill(locations, new_all)
       locations <- plyr::rbind.fill(locations, new_apr1)
 
@@ -280,15 +306,15 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
                               "p.val_DEPTH_mean" = c(round(unname(meanMaxDepthSens$p.value), 3), round(unname(meanApr1DepthSens$p.value), 3)),
                               "sens.slope_DEPTH_mean" = c(round(unname(meanMaxDepthSens$estimates), 3), round(unname(meanApr1DepthSens$estimates), 3)),
                               "annual_prct_chg_SWE" = c(
-                                unname(meanMaxSWESens$estimates) / unname(stats::lm(plot_all$SNOW_WATER_EQUIV ~ plot_all$target_datetime)$coefficients[1]),
-                                unname(meanApr1SWESens$estimates) / unname(stats::lm(plot_apr1$SNOW_WATER_EQUIV ~ plot_apr1$target_datetime)$coefficients[1])
+                                unname(meanMaxSWESens$estimates) / unname(stats::lm(plot_all$SNOW_WATER_EQUIV ~ plot_all$SAMPLE_DATE)$coefficients[1]),
+                                unname(meanApr1SWESens$estimates) / unname(stats::lm(plot_apr1$SNOW_WATER_EQUIV ~ plot_apr1$SAMPLE_DATE)$coefficients[1])
                               ),
                               "annual_prct_chg_DEPTH" = c(
-                                unname(meanMaxDepthSens$estimates) / unname(stats::lm(plot_all$DEPTH ~ plot_all$target_datetime)$coefficients[1]),
-                                unname(meanApr1DepthSens$estimates) / unname(stats::lm(plot_apr1$DEPTH ~ plot_apr1$target_datetime)$coefficients[1])
+                                unname(meanMaxDepthSens$estimates) / unname(stats::lm(plot_all$DEPTH ~ plot_all$SAMPLE_DATE)$coefficients[1]),
+                                unname(meanApr1DepthSens$estimates) / unname(stats::lm(plot_apr1$DEPTH ~ plot_apr1$SAMPLE_DATE)$coefficients[1])
                                 ),
-                              "description" = c(paste0("Computed on one data point per year, consisting of the mean of maximum values reported for each location. Percent annual change calculated based on linear model intercepts of ", round(unname(stats::lm(plot_all$SNOW_WATER_EQUIV ~ plot_all$target_datetime)$coefficients[1]), 0), " mm SWE and ", round(unname(stats::lm(plot_all$DEPTH ~ plot_all$target_datetime)$coefficients[1]), 0), " cm depth at start year."),
-                                                paste0("Computed on one data point per year, consisting of April 1 values reported for each location. Percent annual change calculated based on linear model intercepts of ", round(unname(stats::lm(plot_apr1$SNOW_WATER_EQUIV ~ plot_apr1$target_datetime)$coefficients[1]), 0), " mm SWE and ", round(unname(stats::lm(plot_apr1$DEPTH ~ plot_apr1$target_datetime)$coefficients[1]), 0), " cm depth at start year."))
+                              "description" = c(paste0("Computed on one data point per year, consisting of the mean of maximum values reported for each location. Percent annual change calculated based on linear model intercepts of ", round(unname(stats::lm(plot_all$SNOW_WATER_EQUIV ~ plot_all$SAMPLE_DATE)$coefficients[1]), 0), " mm SWE and ", round(unname(stats::lm(plot_all$DEPTH ~ plot_all$SAMPLE_DATE)$coefficients[1]), 0), " cm depth at start year."),
+                                                paste0("Computed on one data point per year, consisting of April 1 values reported for each location. Percent annual change calculated based on linear model intercepts of ", round(unname(stats::lm(plot_apr1$SNOW_WATER_EQUIV ~ plot_apr1$SAMPLE_DATE)$coefficients[1]), 0), " mm SWE and ", round(unname(stats::lm(plot_apr1$DEPTH ~ plot_apr1$SAMPLE_DATE)$coefficients[1]), 0), " cm depth at start year."))
       )
     }
   } #End of stats loop
@@ -316,13 +342,13 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
       years <- plot_meas[plot_meas$param_name == "snow water equivalent", "year"]
       months <- plot_meas[plot_meas$param_name == "snow water equivalent", "month"]
       
-      density <- data.frame(timeseries_id = unique(plot_meas$timeseries_id),
+      density <- data.frame(timeseries_id = paste(unique(plot_meas$timeseries_id), collapse = ", "),
                             target_datetime = target_datetimes,
                             value = (SWE/10)/depth,
                             year = years,
                             month = months,
                             location_id = unique(plot_meas$location_id),
-      location = unique(plot_meas$location),
+                            location = unique(plot_meas$location),
                             param_name = "density")
       
       plot_meas <- rbind(plot_meas, density)

@@ -6,7 +6,7 @@
 #' This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
 #' 
 #' @param locations The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.
-#' @param parameters The parameter or parameters you wish to plot. You can specify parameter names (text) or code (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
+#' @param parameters The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param period_types The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
@@ -261,15 +261,15 @@ plotMultiTimeseries <- function(locations,
     if (inherits(parameter, "character")) {
       parameters <- tolower(parameters)
       escaped_parameter <- gsub("'", "''", parameter)
-      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
-      parameter_code <- parameter_tbl$param_code[1]
+      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+      parameter_code <- parameter_tbl$parameter_id[1]
       if (is.na(parameter_code)) {
         warning("The parameter you entered for location ", location, ", parameter ", parameter, " does not exist in the database. Moving on to the next entry.")
         remove <- c(remove, i)
         next
       }
     } else if (inherits(parameter, "numeric")) {
-      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_code = ", parameter, ";"))
+      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = ", parameter, ";"))
       if (nrow(parameter_tbl) == 0) {
         warning("The parameter code you entered for location ", location, ", parameter ", parameter, " does not exist in the database. Moving on to the next entry.")
         remove <- c(remove, i)
@@ -287,14 +287,14 @@ plotMultiTimeseries <- function(locations,
     
     if (is.null(record_rate)) { # period_type may or may not be NULL
       if (is.null(period_type)) { #both record_rate and period_type are NULL
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous';"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous';"))
       } else { #period_type is not NULL but record_rate is
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = '", period_type, "';"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND period_type = '", period_type, "';"))
       }
     } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "';"))
     } else { #both record_rate and period_type are not NULL
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
     }
     
     # Narrow down by z if necessary

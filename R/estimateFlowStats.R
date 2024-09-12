@@ -23,12 +23,14 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   ## Get predictor data
   con <- YGwater::AquaConnect()
   
+  flow_paramId <- DBI::dbGetQuery(con, "SELECT parameter_id FROM parameters WHERE param_name = 'discharge, river/stream'")$parameter_id
+  
   flow_all <- DBI::dbGetQuery(con, 
                               paste0("SELECT locations.name, timeseries.location, calculated_daily.date, calculated_daily.value, locations.geom_id ",
                                      "FROM calculated_daily ",
                                      "INNER JOIN timeseries ON calculated_daily.timeseries_id = timeseries.timeseries_id ",
                                      "INNER JOIN locations ON timeseries.location = locations.location ",
-                                     "WHERE timeseries.location IN ('", paste0(gauged_stations, collapse = "', '"), "') AND parameter = 4"))
+                                     "WHERE timeseries.location IN ('", paste0(gauged_stations, collapse = "', '"), "') AND parameter = ", flow_paramId, ";"))
   
   DBI::dbDisconnect(con)
   
