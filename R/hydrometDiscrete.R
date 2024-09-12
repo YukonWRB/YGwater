@@ -130,15 +130,15 @@ hydrometDiscrete <- function(location = NULL,
     # Check for existence of timeseries ---------------------------------------
     #then for presence of data within the time range requested.
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
-    parameter_code <- DBI::dbGetQuery(con, paste0("SELECT param_code FROM parameters WHERE param_name = '", parameter, "';"))[1,1]
-    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime FROM timeseries WHERE location_id = '", location_id, "' AND parameter = ", parameter_code, " AND category = 'discrete'"))
+    parameter_code <- DBI::dbGetQuery(con, paste0("SELECT parameter_id FROM parameters WHERE param_name = '", parameter, "';"))[1,1]
+    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime FROM timeseries WHERE location_id = '", location_id, "' AND parameter_id = ", parameter_code, " AND category = 'discrete'"))
     if (nrow(exists) == 0) {
       stop("There is no entry for the location and parameter combination that you specified of discrete data type. If you are trying to graph continuous data use hydrometContinuous.")
     } else if (nrow(exists) > 1) {
       stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager.")
     } else {
       tsid <- exists$timeseries_id
-      units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE param_code = ", parameter_code))[1,1]
+      units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code))[1,1]
     }
 
     # Get the data ------------------------------------------------------------

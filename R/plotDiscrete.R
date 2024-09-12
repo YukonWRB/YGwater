@@ -6,7 +6,7 @@
 #' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Default is the current date.
 #' @param locations A vector of station names or codes. If dbSource == 'AC': from AquaCache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use `locGrp` instead.
 #' @param locGrp Only used if `dbSource` is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use `locations` instead.
-#' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from AquaCache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'param_code' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
+#' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from AquaCache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
 #' @param paramGrp Only used if `dbSource` is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use `parameters` instead.
 #' @param log Should the y-axis be log-transformed?
 #' @param facet_on Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.
@@ -289,12 +289,12 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
     if (!is.null(parameters)) {
       if (inherits(parameters, "character")) {
         query <- paste0(
-          "SELECT param_code, param_name, param_name_fr, unit_default AS units FROM parameters WHERE ",
+          "SELECT parameter_id, param_name, param_name_fr, unit_default AS units FROM parameters WHERE ",
           "LOWER(param_name) IN (LOWER('", paste0(parameters, collapse = "'), LOWER('"), "')) ",
           "OR LOWER(param_name_fr) IN (LOWER('", paste0(parameters, collapse = "'), LOWER('"), "'))"
         )
       } else {
-        query <- paste0("SELECT param_code FROM parameters WHERE param_code IN (", paste0(parameters, collapse = ", "), ");")
+        query <- paste0("SELECT parameter_id FROM parameters WHERE parameter_id IN (", paste0(parameters, collapse = ", "), ");")
       }
       
       paramIds <- DBI::dbGetQuery(AC, query)
@@ -303,7 +303,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
       }
       if (nrow(paramIds) < length(parameters)) {
         # Find the missing parameters and tell the user which ones are missing
-        combined_paramIds <- unique(c(paramIds$param_code, paramIds$param_name, paramIds$param_name_fr))
+        combined_paramIds <- unique(c(paramIds$parameter_id, paramIds$param_name, paramIds$param_name_fr))
         missing <- setdiff(parameters, combined_paramIds)
         if (inherits(parameters, "character")) {
           warning("The following parameters were not found in the AquaCache database despite searching the 'param_name' and 'param_name_fr' columns: ", paste0(missing, collapse = ", "))
@@ -313,7 +313,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
       }
     }
     
-    tsids <- DBI::dbGetQuery(AC, paste0("SELECT location_id, parameter AS param_id, timeseries_id FROM timeseries WHERE location_id IN (", paste0(locIds$location_id, collapse = ", "), ") AND parameter IN (", paste0(paramIds$param_code, collapse = ", "), ");"))
+    tsids <- DBI::dbGetQuery(AC, paste0("SELECT location_id, parameter_id AS param_id, timeseries_id FROM timeseries WHERE location_id IN (", paste0(locIds$location_id, collapse = ", "), ") AND parameter_id IN (", paste0(paramIds$parameter_id, collapse = ", "), ");"))
     
     if (nrow(tsids) == 0) {
       stop("No timeseries were found matching your requested locations and parameters.")
@@ -321,7 +321,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
     
     # Merge the location and parameter names into the tsids data.frame
     tsids <- merge(tsids, locIds)
-    tsids <- merge(tsids, paramIds, by.x = "param_id", by.y = "param_code")
+    tsids <- merge(tsids, paramIds, by.x = "param_id", by.y = "parameter_id")
     tsids <- tsids[, -which(names(tsids) %in% c("location_id", "param_id"))] # drop unnecessary columns
     
     # Get the measurements from table measurements_discrete

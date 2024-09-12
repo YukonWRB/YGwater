@@ -1,4 +1,4 @@
-test_that("Output (summarise=TRUE) has proper dimensions when reading from AquaCache db", {
+test_that("Output (summarise = TRUE) has proper dimensions when reading from AquaCache db", {
   skip_on_ci()
   skip_on_cran()
   test <- suppressWarnings(SWE_station(year = 2022,
@@ -10,7 +10,7 @@ test_that("Output (summarise=TRUE) has proper dimensions when reading from AquaC
   expect_true(nrow(test) >= 1)
 })
 
-test_that("Output table (summarise=FALSE) has proper dimensions when reading from AquaCache db", {
+test_that("Output table (summarise = FALSE) has proper dimensions when reading from AquaCache db", {
   skip_on_ci()
   skip_on_cran()
   test <- suppressWarnings(SWE_station(year = 2022,

@@ -101,7 +101,7 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
       EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams;"))
       EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams'")
       AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete'")
-      AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.param_code, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.param_code = ts.parameter WHERE ts.category = 'discrete'")
+      AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete'")
       
       # Check encoding and if necessary convert to UTF-8
       locale_info <- Sys.getlocale("LC_CTYPE")
@@ -214,7 +214,7 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
         } else if (input$data_source == "AC") {
           plot <- plotDiscrete(start = input$date_range[1],
                                end = input$date_range[2],
-                               locations =input$locations_AC,
+                               locations = input$locations_AC,
                                locGrp = NULL,
                                parameters = input$parameters_AC,
                                paramGrp = NULL,

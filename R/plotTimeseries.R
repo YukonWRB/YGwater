@@ -159,19 +159,22 @@ plotTimeseries <- function(location,
     parameter <- tolower(parameter)
     escaped_parameter <- gsub("'", "''", parameter)
     parameter_tbl <- DBI::dbGetQuery(con, 
-                                     paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
+                                     paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
     )
-    parameter_code <- parameter_tbl$param_code[1]
+    parameter_code <- parameter_tbl$parameter_id[1]
     if (is.na(parameter_code)) {
       stop("The parameter you entered does not exist in the database.")
     }
   } else if (inherits(parameter, "numeric")) {
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_code = ", parameter, ";"))
+    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = ", parameter, ";"))
     if (nrow(parameter_tbl) == 0) {
       stop("The parameter you entered does not exist in the database.")
     }
     parameter_code <- parameter
-  } 
+  }
+  
+  # Where column param_name_fr is not filled in, use the English name
+  parameter_tbl$param_name_fr[is.na(parameter_tbl$param_name_fr)] <- parameter_tbl$param_name[is.na(parameter_tbl$param_name_fr)]
 
   if (language == "fr") {
     parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
@@ -181,14 +184,14 @@ plotTimeseries <- function(location,
 
   if (is.null(record_rate)) { # period_type may or may not be NULL
     if (is.null(period_type)) { #both record_rate and period_type are NULL
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous';"))
     } else { #period_type is not NULL but record_rate is
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = '", period_type, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND period_type = '", period_type, "';"))
     }
   } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "';"))
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "';"))
   } else { #both record_rate and period_type are not NULL
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
   }
   
   # Narrow down by z if necessary

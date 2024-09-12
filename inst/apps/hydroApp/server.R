@@ -45,11 +45,11 @@ app_server <- function(input, output, session) {
       }
     } else if (input$first_selection == "View hydrometric plots + data") {
       if (!runCheck$plots) {
-        plotContainer$all_ts <- DBI::dbGetQuery(pool, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter, ts.media_type, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
+        plotContainer$all_ts <- DBI::dbGetQuery(pool, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         plotContainer$all_ts <- plotContainer$all_ts[order(plotContainer$all_ts$name), ]
-        plotContainer$parameters_discrete <- DBI::dbGetQuery(pool, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'discrete';")
+        plotContainer$parameters_discrete <- DBI::dbGetQuery(pool, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id WHERE timeseries.category = 'discrete';")
         plotContainer$parameters_discrete <- plotContainer$parameters_discrete[order(plotContainer$parameters_discrete$param_name), ]
-        plotContainer$parameters_continuous <- DBI::dbGetQuery(pool, "SELECT DISTINCT parameters.param_code, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter = parameters.param_code WHERE timeseries.category = 'continuous';")
+        plotContainer$parameters_continuous <- DBI::dbGetQuery(pool, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id WHERE timeseries.category = 'continuous';")
         plotContainer$parameters_continuous <- plotContainer$parameters_continuous[order(plotContainer$parameters_continuous$param_name), ]
         datums <- DBI::dbGetQuery(pool, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
         
@@ -274,14 +274,14 @@ app_server <- function(input, output, session) {
       updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-12-31"))
       updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()), "-01-01"))
       
-        plotContainer$param_code <- plotContainer$parameters_discrete[tolower(plotContainer$parameters_discrete$param_name) == tolower(input$plot_param), "param_code"]
-        updateSelectizeInput(session, "plot_loc_name", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code & plotContainer$all_ts$category == "discrete", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code & plotContainer$all_ts$category == "discrete", "location"]))
+        plotContainer$parameter_id <- plotContainer$parameters_discrete[tolower(plotContainer$parameters_discrete$param_name) == tolower(input$plot_param), "parameter_id"]
+        updateSelectizeInput(session, "plot_loc_name", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id & plotContainer$all_ts$category == "discrete", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id & plotContainer$all_ts$category == "discrete", "location"]))
       
       } else if (input$plot_data_type == "Continuous") {
-        plotContainer$param_code <- plotContainer$parameters_continuous[tolower(plotContainer$parameters_continuous$param_name) == tolower(input$plot_param), "param_code"]
-        updateSelectizeInput(session, "plot_loc_name", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code & plotContainer$all_ts$category == "continuous", "name"]))
-        updateSelectizeInput(session, "plot_loc_code", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code & plotContainer$all_ts$category == "continuous", "location"]))
+        plotContainer$parameter_id <- plotContainer$parameters_continuous[tolower(plotContainer$parameters_continuous$param_name) == tolower(input$plot_param), "parameter_id"]
+        updateSelectizeInput(session, "plot_loc_name", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id & plotContainer$all_ts$category == "continuous", "name"]))
+        updateSelectizeInput(session, "plot_loc_code", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id & plotContainer$all_ts$category == "continuous", "location"]))
         if (input$plot_param %in% c("Snow Water Equivalent", "Snow Depth")) {
           updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
           updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
@@ -299,21 +299,21 @@ app_server <- function(input, output, session) {
   }) #Do not ignoreInit = TRUE
   
   observeEvent(input$plot_param2, {
-    plotContainer$param_code2 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param2), "param_code"]
-    updateSelectizeInput(session, "plot_loc_name2", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code2 & plotContainer$all_ts$category == "continuous", "name"]))
-    updateSelectizeInput(session, "plot_loc_code2", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code2 & plotContainer$all_ts$category == "continuous", "location"]))
+    plotContainer$parameter_id2 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param2), "parameter_id"]
+    updateSelectizeInput(session, "plot_loc_name2", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id2 & plotContainer$all_ts$category == "continuous", "name"]))
+    updateSelectizeInput(session, "plot_loc_code2", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id2 & plotContainer$all_ts$category == "continuous", "location"]))
   })
   
   observeEvent(input$plot_param3, {
-    plotContainer$param_code3 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param3), "param_code"]
-    updateSelectizeInput(session, "plot_loc_name3", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code3 & plotContainer$all_ts$category == "continuous", "name"]))
-    updateSelectizeInput(session, "plot_loc_code3", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code3 & plotContainer$all_ts$category == "continuous", "location"]))
+    plotContainer$parameter_id3 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param3), "parameter_id"]
+    updateSelectizeInput(session, "plot_loc_name3", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id3 & plotContainer$all_ts$category == "continuous", "name"]))
+    updateSelectizeInput(session, "plot_loc_code3", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id3 & plotContainer$all_ts$category == "continuous", "location"]))
   })
   
   observeEvent(input$plot_param4, {
-    plotContainer$param_code4 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param4), "param_code"]
-    updateSelectizeInput(session, "plot_loc_name4", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code4 & plotContainer$all_ts$category == "continuous", "name"]))
-    updateSelectizeInput(session, "plot_loc_code4", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$param_code4 & plotContainer$all_ts$category == "continuous", "location"]))
+    plotContainer$parameter_id4 <- plotContainer$parameters_continuous[plotContainer$parameters_continuous$param_name == tolower(input$plot_param4), "parameter_id"]
+    updateSelectizeInput(session, "plot_loc_name4", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id4 & plotContainer$all_ts$category == "continuous", "name"]))
+    updateSelectizeInput(session, "plot_loc_code4", choices = unique(plotContainer$all_ts[plotContainer$all_ts$parameter == plotContainer$parameter_id4 & plotContainer$all_ts$category == "continuous", "location"]))
   })
   
   observeEvent(input$plot_type, {
@@ -502,7 +502,7 @@ app_server <- function(input, output, session) {
     if (input$plot_loc_code %in% plotContainer$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
       updateSelectizeInput(session, "plot_loc_name", selected = unique(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code, "name"]))
       try({
-        possible_years <- seq(as.numeric(substr(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code & plotContainer$all_ts$parameter == plotContainer$param_code &  plotContainer$all_ts$category == tolower(input$plot_data_type), "start_datetime"], 1, 4)), as.numeric(substr(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code & plotContainer$all_ts$parameter == plotContainer$param_code &  plotContainer$all_ts$category == tolower(input$plot_data_type), "end_datetime"], 1, 4)))
+        possible_years <- seq(as.numeric(substr(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code & plotContainer$all_ts$parameter == plotContainer$parameter_id &  plotContainer$all_ts$category == tolower(input$plot_data_type), "start_datetime"], 1, 4)), as.numeric(substr(plotContainer$all_ts[plotContainer$all_ts$location == input$plot_loc_code & plotContainer$all_ts$parameter == plotContainer$parameter_id &  plotContainer$all_ts$category == tolower(input$plot_data_type), "end_datetime"], 1, 4)))
       shinyWidgets::updatePickerInput(session, "plot_years", choices = possible_years)
       })
       

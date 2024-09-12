@@ -57,18 +57,18 @@ continuousPlotServer <- function(id, AquaCache, data) {
     values <- reactiveValues()
     
     observe({
-      # Find the param_codes for 'water level', 'snow water equivalent', 'snow depth'
-      values$water_level <- data$parameters$param_code[data$parameters$param_name == "water level"]
-      values$swe <- data$parameters$param_code[data$parameters$param_name == "snow water equivalent"]
-      values$snow_depth <- data$parameters$param_code[data$parameters$param_name == "snow depth"]
+      # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth'
+      values$water_level <- data$parameters$parameter_id[data$parameters$param_name == "water level"]
+      values$swe <- data$parameters$parameter_id[data$parameters$param_name == "snow water equivalent"]
+      values$snow_depth <- data$parameters$parameter_id[data$parameters$param_name == "snow depth"]
       # Update the parameter choices
-      updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$param_code, titleCase(data$parameters$param_name)), selected = values$water_level)
+      updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = values$water_level)
     })
     
     observeEvent(input$param, {
       # Update the location choices
-      updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter == input$param, "name"]))
-      updateSelectizeInput(session, "loc_code", choices = unique(data$all_ts[data$all_ts$parameter == input$param, "location"]))
+      updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]))
+      updateSelectizeInput(session, "loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))
       if (input$param %in% c(values$swe, values$snow_depth)) {
         updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
         updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
@@ -92,8 +92,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
         updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
         try({
           possible_years <- seq(
-            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter == input$param, "start_datetime"], 1, 4)),
-            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter == input$param, "end_datetime"], 1, 4))
+            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id_id == input$param, "start_datetime"], 1, 4)),
+            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id_id == input$param, "end_datetime"], 1, 4))
             )
           updateSelectizeInput(session, "years", choices = possible_years)
         })
@@ -136,9 +136,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
       
       if (runTraceNew() == FALSE) {
         showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$param_code, titleCase(data$parameters$param_name)), selected = as.numeric(input$param)),
-          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter == input$param, "location"])),
-          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter == input$param, "name"])),
+          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$param)),
+          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id_id == input$param, "location"])),
+          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id_id == input$param, "name"])),
           numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
           footer = tagList(
             actionButton(ns("add_new_trace"), "Add trace"),
@@ -149,9 +149,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
         runTraceNew(TRUE)
       } else { # The modal has already run once, use the previously selected values
         showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$param_code, titleCase(data$parameters$param_name)), selected = as.numeric(input$traceNew_param)),
-          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter == input$traceNew_param, "location"])),
-          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter == input$traceNew_param, "name"])),
+          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$traceNew_param)),
+          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"])),
+          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"])),
           numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
           footer = tagList(
             actionButton(ns("add_new_trace"), "Add trace"),
@@ -167,8 +167,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
     
     # Observe the param inputs for all traces and update the location choices in the modal
     observeEvent(input$traceNew_param, {
-      updateSelectizeInput(session, "traceNew_loc_code", choices = unique(data$all_ts[data$all_ts$parameter == input$traceNew_param, "location"]))
-      updateSelectizeInput(session, "traceNew_loc_name", choices = unique(data$all_ts[data$all_ts$parameter == input$traceNew_param, "name"]))
+      updateSelectizeInput(session, "traceNew_loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]))
+      updateSelectizeInput(session, "traceNew_loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]))
     }, ignoreInit = TRUE)
     
     observeEvent(input$traceNew_loc_code, {
@@ -191,8 +191,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
                               parameter = as.numeric(input$traceNew_param),
                               location = input$traceNew_loc_code,
                               lead_lag = input$traceNew_lead_lag)
-        button1Text <- HTML(paste0("<b>Trace 1</b><br>", titleCase(data$parameters[data$parameters$param_code == traces$trace1$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"])))
-        button2Text <- HTML(paste0("<b>Trace 2</b><br>", titleCase(data$parameters[data$parameters$param_code == traces$trace2$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace2$location, "name"]), "<br>Lead/lag ", traces$trace2$lead_lag, " hours"))
+        button1Text <- HTML(paste0("<b>Trace 1</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces$trace1$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"])))
+        button2Text <- HTML(paste0("<b>Trace 2</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces$trace2$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace2$location, "name"]), "<br>Lead/lag ", traces$trace2$lead_lag, " hours"))
         output$trace1_ui <- renderUI({
           actionButton(ns("trace1"), button1Text)
         })
@@ -210,7 +210,7 @@ continuousPlotServer <- function(id, AquaCache, data) {
                               parameter = as.numeric(input$traceNew_param),
                               location = input$traceNew_loc_code,
                               lead_lag = input$traceNew_lead_lag)
-        button3Text <- HTML(paste0("<b>Trace 3</b><br>", titleCase(data$parameters[data$parameters$param_code == traces$trace3$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace3$location, "name"]), "<br>Lead/lag ", traces$trace3$lead_lag, " hours"))
+        button3Text <- HTML(paste0("<b>Trace 3</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces$trace3$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace3$location, "name"]), "<br>Lead/lag ", traces$trace3$lead_lag, " hours"))
         output$trace3_ui <- renderUI({
           actionButton(ns("trace3"), button3Text)
         })
@@ -221,7 +221,7 @@ continuousPlotServer <- function(id, AquaCache, data) {
                               parameter = as.numeric(input$traceNew_param),
                               location = input$traceNew_loc_code,
                               lead_lag = input$traceNew_lead_lag)
-        button4Text <- HTML(paste0("<b>Trace 4</b><br>", titleCase(data$parameters[data$parameters$param_code == traces$trace4$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace4$location, "name"]), "<br>Lead/lag ", traces$trace4$lead_lag, " hours"))
+        button4Text <- HTML(paste0("<b>Trace 4</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces$trace4$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace4$location, "name"]), "<br>Lead/lag ", traces$trace4$lead_lag, " hours"))
         output$trace4_ui <- renderUI({
           actionButton(ns("trace4"), button4Text)
         })
@@ -237,9 +237,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
     clicked_trace <- reactiveVal(NULL)
     observeEvent(input$trace1, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$param_code, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter),
-        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter == traces$trace1$parameter, "location"]), selected = traces$trace1$location),
-        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter == traces$trace1$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"])),
+        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter),
+        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace1$parameter, "location"]), selected = traces$trace1$location),
+        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace1$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"])),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
           actionButton(ns("remove_trace"), "Remove trace"),
@@ -251,9 +251,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
     })
     observeEvent(input$trace2, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$param_code, titleCase(data$parameters$param_name)), selected = traces$trace2$parameter),
-        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter == traces$trace2$parameter, "location"]), selected = traces$trace2$location),
-        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter == traces$trace2$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace2$location, "name"])),
+        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace2$parameter),
+        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace2$parameter, "location"]), selected = traces$trace2$location),
+        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace2$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace2$location, "name"])),
         numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace2$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
@@ -266,9 +266,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
     })
     observeEvent(input$trace3, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$param_code, titleCase(data$parameters$param_name)), selected = traces$trace3$parameter),
-        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter == traces$trace3$parameter, "location"]), selected = traces$trace3$location),
-        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter == traces$trace3$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == traces$trace3$location, "name"]),
+        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace3$parameter),
+        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace3$parameter, "location"]), selected = traces$trace3$location),
+        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace3$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == traces$trace3$location, "name"]),
         numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace3$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
@@ -281,9 +281,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
     })
     observeEvent(input$trace4, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$param_code, titleCase(data$parameters$param_name)), selected = traces$trace4$parameter),
-        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter == traces$trace4$parameter, "location"]), selected = traces$trace4$location),
-        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter == traces$trace4$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == traces$trace4$location, "name"]),
+        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace4$parameter),
+        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace4$parameter, "location"]), selected = traces$trace4$location),
+        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace4$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == traces$trace4$location, "name"]),
         numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace4$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
@@ -311,9 +311,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
       
       # Update the trace button text
       if (target_trace == "trace1") {
-        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(data$parameters[data$parameters$param_code == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[target_trace]]$location, "name"])))
+        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[target_trace]]$location, "name"])))
       } else {
-        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(data$parameters[data$parameters$param_code == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[target_trace]]$location, "name"]), "<br>Lead/lag ", traces[[target_trace]]$lead_lag, " hours"))
+        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[target_trace]]$location, "name"]), "<br>Lead/lag ", traces[[target_trace]]$lead_lag, " hours"))
       }
       
       output[[paste0(target_trace, "_ui")]] <- renderUI({
@@ -344,9 +344,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
       # Re-render text for all buttons
       for (i in 1:traceCount()) {
         if (i == 1) {
-          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(data$parameters[data$parameters$param_code == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[paste0("trace", i)]]$location, "name"])))
+          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[paste0("trace", i)]]$location, "name"])))
         } else {
-          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(data$parameters[data$parameters$param_code == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[paste0("trace", i)]]$location, "name"]), "<br>Lead/lag ", traces[[paste0("trace", i)]]$lead_lag, " hours"))
+          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[paste0("trace", i)]]$location, "name"]), "<br>Lead/lag ", traces[[paste0("trace", i)]]$lead_lag, " hours"))
         }
         updateActionButton(session, paste0("trace", i), label = button_text)
       }
@@ -357,9 +357,9 @@ continuousPlotServer <- function(id, AquaCache, data) {
         shinyjs::show("param")
         shinyjs::show("loc_code")
         shinyjs::show("loc_name")
-        updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$param_code, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter)
-        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter == input$param, "location"]), selected = traces$trace1$location)
-        updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"]))
+        updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter)
+        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]), selected = traces$trace1$location)
+        updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"]))
       } else {
         shinyjs::show("trace1_ui")
       }

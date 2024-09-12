@@ -25,12 +25,13 @@ calculateFlowStats <- function(stations, data = NULL, perc = 95, record_length =
     
     con <- YGwater::hydrometConnect()
     
+    flow_paramId <- DBI::dbGetQuery(con, "SELECT parameter_id FROM parameters WHERE param_name = 'discharge, river/stream'")$parameter_id
     flow_all <- DBI::dbGetQuery(con, 
                                 paste0("SELECT locations.name, timeseries.location, calculated_daily.date, calculated_daily.value ",
                                        "FROM calculated_daily ",
                                        "INNER JOIN timeseries ON calculated_daily.timeseries_id = timeseries.timeseries_id ",
                                        "INNER JOIN locations ON timeseries.location = locations.location ",
-                                       "WHERE timeseries.location IN ('", paste0(stations, collapse = "', '"), "') AND parameter = 4"))
+                                       "WHERE timeseries.location IN ('", paste0(stations, collapse = "', '"), "') timeseries.AND parameter_id = ", flow_paramId, ";"))
     
     DBI::dbDisconnect(con)
   } else {flow_all <- data}

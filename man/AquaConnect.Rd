@@ -2,14 +2,14 @@
 % Please edit documentation in R/AquaConnect.R
 \name{AquaConnect}
 \alias{AquaConnect}
-\title{Connect to the AquaCache database}
+\title{Connect to the hydromet database}
 \usage{
 AquaConnect(
-  name = "AquaCache",
-  host = Sys.getenv("AquaCacheHost"),
-  port = Sys.getenv("AquaCachePort"),
-  username = Sys.getenv("AquaCacheUser"),
-  password = Sys.getenv("AquaCachePass"),
+  name = "hydromet",
+  host = Sys.getenv("hydrometHost"),
+  port = Sys.getenv("hydrometPort"),
+  username = Sys.getenv("hydrometUser"),
+  password = Sys.getenv("hydrometPass"),
   RLS_user = Sys.getenv("RLS_user"),
   RLS_pass = Sys.getenv("RLS_pass"),
   silent = FALSE
@@ -18,13 +18,13 @@ AquaConnect(
 \arguments{
 \item{name}{Database name.}
 
-\item{host}{Database host address. By default searches the .Renviron file for parameter:value pair of form AquaCacheHost="hostname".}
+\item{host}{Database host address. By default searches the .Renviron file for parameter:value pair of form hydrometHost="hostname".}
 
-\item{port}{Connection port. By default searches the .Renviron file for parameter=value pair of form AquaCachePort="1234".}
+\item{port}{Connection port. By default searches the .Renviron file for parameter=value pair of form hydrometPort="1234".}
 
-\item{username}{Username. By default searches the .Renviron file for parameter=value pair of form AquaCacheUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.}
+\item{username}{Username. By default searches the .Renviron file for parameter=value pair of form hydrometUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.}
 
-\item{password}{Password. By default searches the .Renviron file for parameter=value pair of form AquaCachePass="password".}
+\item{password}{Password. By default searches the .Renviron file for parameter=value pair of form hydrometPass="password".}
 
 \item{RLS_user}{Username for row-level security. Default searches the .Renviron file for parameter=value pair of form RLS_user="username" and if not found either prompts the user for input or logs in as 'public' if not interactive.}
 
@@ -36,8 +36,9 @@ AquaConnect(
 A connection to the database.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#superseded}{\figure{lifecycle-superseded.svg}{options: alt='[Superseded]'}}}{\strong{[Superseded]}}
 
-This function exists to facilitate connecting to the production version AquaCache database. For the development version see \code{\link[=hydrometConnect]{hydrometConnect()}}.
-Database superusers will have access to all database records, but other users will be asked to provide their username and password to access records other than the 'public' ones. Note that this is \emph{not necessarily} the same username and password as the one used to log into the database itself.
+Superseded by function \code{\link[=AquaConnect]{AquaConnect()}}. Still exported by this package for backwards compatibility, as old database 'hydromet' is now a development environment.
+
+This function exists to facilitate connecting to the hydrology database. Database superusers will have access to all database records, but other users will be asked to provide their username and password to access records other than the 'public' ones. Note that this is \emph{not necessarily} the same username and password as the one used to log into the database itself.
 }

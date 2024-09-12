@@ -50,13 +50,13 @@
 #' @export
 #'
 
-# location <- "09AB004"
-# parameter <- 1165
+# location <- "09AA-M1"
+# parameter <- "snow water equivalent"
 # record_rate = NULL
-# startDay <- 1
-# endDay <- 365
+# startDay <- "2023-09-01"
+# endDay <- "2023-05-31
 # tzone <- "MST"
-# years <- 2022
+# years <- "2022"
 # datum <- TRUE
 # title <- TRUE
 # custom_title <- NULL
@@ -257,18 +257,20 @@ plotOverlap <- function(location,
     #Confirm parameter and location exist in the database and that there is only one entry
     if (inherits(parameter, "character")) {
       escaped_parameter <- gsub("'", "''", parameter)
-      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
-      parameter_code <- parameter_tbl$param_code[1]
+      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+      parameter_code <- parameter_tbl$parameter_id[1]
       if (is.na(parameter_code)) {
         stop("The parameter you entered does not exist in the database.")
       }
     } else if (inherits(parameter, "numeric")) {
-      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT param_code, param_name, param_name_fr FROM parameters WHERE param_code = ", parameter, ";"))
+      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ", parameter, ";"))
       if (nrow(parameter_tbl) == 0) {
         stop("The parameter you entered does not exist in the database.")
       }
       parameter_code <- parameter
-    } 
+    }
+    # Default to the english name if the french name is not available
+    parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name_fr"] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
     
     if (language == "fr") {
       parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
@@ -277,9 +279,9 @@ plotOverlap <- function(location,
     }
 
     if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous';"))
     } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
     }
     if (nrow(exist_check) == 0) {
       if (is.null(record_rate)) {
@@ -319,7 +321,7 @@ plotOverlap <- function(location,
     }
 
     # Find the ts units
-    units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE param_code = ", parameter_code, ";"))
+    units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code, ";"))
 
     # Get the necessary data -------------------
     # start with daily means data
