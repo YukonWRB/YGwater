@@ -20,7 +20,7 @@
 #' @export
 #'
 
-AquaConnect2 <- function(name = "AquaCache", host = Sys.getenv("AquaCacheHost"), port = Sys.getenv("AquaCachePort"), username = Sys.getenv("AquaCacheUser"), password = Sys.getenv("AquaCachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), silent = FALSE){
+AquaConnect <- function(name = "AquaCache", host = Sys.getenv("AquaCacheHost"), port = Sys.getenv("AquaCachePort"), username = Sys.getenv("AquaCacheUser"), password = Sys.getenv("AquaCachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), silent = FALSE){
 
   tryCatch({
     hydro <- DBI::dbConnect(drv = RPostgres::Postgres(),
@@ -98,7 +98,7 @@ AquaConnect2 <- function(name = "AquaCache", host = Sys.getenv("AquaCacheHost"),
 #' @export
 #'
 
-AquaConnect <- function(name = "hydromet", host = Sys.getenv("hydrometHost"), port = Sys.getenv("hydrometPort"), username = Sys.getenv("hydrometUser"), password = Sys.getenv("hydrometPass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), silent = FALSE){
+hydrometConnect <- function(name = "hydromet", host = Sys.getenv("hydrometHost"), port = Sys.getenv("hydrometPort"), username = Sys.getenv("hydrometUser"), password = Sys.getenv("hydrometPass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), silent = FALSE){
   
   warning("Function hydrometConnect() is superseded by function AquaConnect(). Please use AquaConnect() instead unless you need to access the dev database.")
   
