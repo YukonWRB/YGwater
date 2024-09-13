@@ -92,8 +92,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
         updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
         try({
           possible_years <- seq(
-            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id_id == input$param, "start_datetime"], 1, 4)),
-            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id_id == input$param, "end_datetime"], 1, 4))
+            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "start_datetime"], 1, 4)),
+            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "end_datetime"], 1, 4))
             )
           updateSelectizeInput(session, "years", choices = possible_years)
         })
@@ -137,8 +137,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
       if (runTraceNew() == FALSE) {
         showModal(modalDialog(
           selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$param)),
-          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id_id == input$param, "location"])),
-          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id_id == input$param, "name"])),
+          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])),
+          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"])),
           numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
           footer = tagList(
             actionButton(ns("add_new_trace"), "Add trace"),
