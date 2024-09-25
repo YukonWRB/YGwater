@@ -9,5 +9,5 @@ warning("tests on plotly objects weren't working in R 4.3.3 and up. These tests 
 # test_that("discrete plots work from EQWin DB", {
 #   
 #   # With locGrp and paramGrp
-#   plot <- plotDiscrete(start = "2023-06-01", end = "2023-07-01", locations = NULL, locGrp = "QZ Eagle Gold HLF", parameters = NULL, paramGrp = "EG-HLF-failure", log = TRUE, facet_on = 'params', rows = 'auto', dbSource = "EQ", dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb")
+#   plot <- plotDiscrete(start = "2023-06-01", end = "2023-07-01", locations = NULL, locGrp = "QZ Eagle Gold HLF", parameters = NULL, paramGrp = "EG-HLF-failure", log = TRUE, facet_on = 'params', rows = 'auto', dbSource = "EQ", dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb")
 # })

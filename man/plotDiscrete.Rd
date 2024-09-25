@@ -19,7 +19,8 @@ plotDiscrete(
   colorblind = FALSE,
   lang = "en",
   dbSource = "EQ",
-  dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
+  dbPath =
+    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
 )
 }
 \arguments{
@@ -51,7 +52,7 @@ plotDiscrete(
 
 \item{dbSource}{The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function \code{\link[=AquaConnect]{AquaConnect()}}.}
 
-\item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//carver/infosys/EQWin/WR/DB/Water Resources.mdb".}
+\item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".}
 }
 \value{
 A zoomable plot of the data from EQWin.

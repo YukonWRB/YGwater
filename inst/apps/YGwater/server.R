@@ -13,7 +13,7 @@ app_server <- function(input, output, session) {
   # Store information to pass between modules
   # moduleOutputs <- reactiveValues()
   
-  EQWin <- AccessConnect("//carver/infosys/EQWin/WR/DB/Water Resources.mdb", silent = TRUE)
+  EQWin <- AccessConnect("//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb", silent = TRUE)
   AquaCache <- AquaConnect(silent = TRUE)
   print("Connected to EQWin")
   print("Connected to AquaCache")

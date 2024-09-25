@@ -11,7 +11,7 @@ EQWinStd(CalcId, SampleId, con = NULL)
 
 \item{SampleId}{The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.}
 
-\item{con}{A connection to the EQWin database. Default NULL creates a connection to the default database location and closes the connection when done.}
+\item{con}{A connection to the EQWin database. Default NULL creates a connection to the default database location ("//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") and closes the connection when done.}
 }
 \value{
 A value for the calculated standard.
