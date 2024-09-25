@@ -4,7 +4,7 @@
 #'
 #' @param CalcId The ID identifying the calculation to perform, from column CalcId of table eqcalcs.
 #' @param SampleId The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.
-#' @param con A connection to the EQWin database. Default NULL creates a connection to the default database location and closes the connection when done.
+#' @param con A connection to the EQWin database. Default NULL creates a connection to the default database location ("//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") and closes the connection when done.
 #'
 #' @return A value for the calculated standard.
 #' @export
@@ -16,7 +16,7 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
   
   # Connect to EQWin
   if (is.null(con)) {
-    EQWin <- AccessConnect("//carver/infosys/EQWin/WR/DB/Water Resources.mdb", silent = TRUE)
+    EQWin <- AccessConnect("//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb", silent = TRUE)
     on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
   } else {
     EQWin <- con

@@ -16,13 +16,13 @@
 #' @param colorblind Should the plot be colorblind-friendly? Default is FALSE.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en", and this is only supported for dbSource == 'AC'.
 #' @param dbSource The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function [AquaConnect()].
-#' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//carver/infosys/EQWin/WR/DB/Water Resources.mdb".
+#' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".
 #'
 #' @return A zoomable plot of the data from EQWin.
 #' @export
 #'
 
-plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp = NULL, parameters = NULL, paramGrp = NULL, log = FALSE, facet_on = 'params', loc_code = FALSE, rows = 'auto', target_datetime = TRUE, colorblind = FALSE, lang = "en", dbSource = "EQ", dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb") {
+plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp = NULL, parameters = NULL, paramGrp = NULL, log = FALSE, facet_on = 'params', loc_code = FALSE, rows = 'auto', target_datetime = TRUE, colorblind = FALSE, lang = "en", dbSource = "EQ", dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
   
   #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
 
@@ -40,7 +40,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # target_datetime = FALSE
   # dbSource = "EQ"
   # lang = "en"
-  # dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
+  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   
   # start <- "2024-07-09"
   # end <- "2024-08-28"
@@ -55,7 +55,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # target_datetime = FALSE
   # dbSource = "EQ"
   # lang = "en"
-  # dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
+  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   
   # testing parameters for AquaCache
   # start <- "2020-01-01"
@@ -70,7 +70,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # colorblind = FALSE
   # lang = "en"
   # dbSource = "AC"
-  # dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
+  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   # target_datetime = TRUE
 
   # initial checks, connection, and validations #######################################################################################

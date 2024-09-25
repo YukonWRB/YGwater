@@ -18,7 +18,7 @@
 #' @param stnStds TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.
 #' @param date_approx An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date. If a station is found to not have any samples on the given 'date', the function will look for samples on the date + 1 day, - 1 day, + 2 days, etc. up to 'date_approx' days in the past and future and stop searching for a station once a sample is found. Default is 0.
 #' @param save_path The path to save the Excel file. Default is "choose" to allow user to select a folder interactively.
-#' @param dbPath The path to the EQWin database. Default is "//carver/infosys/EQWin/WR/DB/Water Resources.mdb".
+#' @param dbPath The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".
 #' 
 #' @return An Excel workbook saved where requested.
 #' @export
@@ -41,7 +41,7 @@
 #' 
 #' }
 
-EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb") {
+EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
   
 # 
 # date = "2024-07-17"
@@ -53,7 +53,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
 # stnStds = TRUE
 # date_approx = 1
 # save_path = "C:/Users/gtdelapl/Desktop"
-# dbPath = "//carver/infosys/EQWin/WR/DB/Water Resources.mdb"
+# dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
