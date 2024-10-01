@@ -332,7 +332,7 @@ plotOverlap <- function(location,
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
-      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "';"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "';"))
     } else if (historic_range == "last") {
       if (overlaps) {
         lubridate::year(daily_end) <- last_year + 1
@@ -343,7 +343,7 @@ plotOverlap <- function(location,
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
-      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "';"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "';"))
     }
 
     #Fill in any missing days in daily
