@@ -11,7 +11,7 @@ ui <- function(request) {
       # css for z index control is at the bottom because it must come after the css passed on silently by navbarPage
     ),
     
-    # Create language selector and logo positioned above navbarPage
+    # Create top bar
     fluidRow(class = "top-bar-container",
              column(3,
                     div(class = "logo-container",
@@ -26,7 +26,7 @@ ui <- function(request) {
                                            choices = names(translations)[-c(1,2)], 
                                            selected = "English")),
                         div(class = "login-btn-container",
-                            actionButton("loginBtn", "Login", class = "btn btn-primary"))
+                            actionButton("loginBtn", "Login", class = "btn btn-primary")
                     ),
                     class = "right-aligned-aurora")
     ),

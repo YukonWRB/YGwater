@@ -151,11 +151,11 @@ return(plot)
 
 snowbullpillow2 <- function(location_pil, location_surv, custom_title, language=language_param, year=year_param, scale=scale_param, month=month_param) {
   # Get this years snow pillow
-# snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily ",
+# snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily ",
 #                             "WHERE timeseries_id = ", location_pil,
 #                             " AND date >= '", year-1, "-09-01' ", #year_param
 #                             "AND date <= '", year, "-07-01' ")) #year_param
-snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM calculated_daily ",
+snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily ",
                             "WHERE timeseries_id = ", location_pil,
                             " AND date >= '", year - 1, "-09-01' ", #year_param
                             "AND date <= '", year, "-0", month, "-01' ")) #year_param

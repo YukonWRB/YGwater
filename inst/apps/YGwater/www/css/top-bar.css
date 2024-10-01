@@ -37,3 +37,12 @@
   right: 0px; /* spacing from the screen edge */
   z-index: 1; /* Background layer */
 }
+
+/* Adjust the position and priority of the language selector and login button */
+.lang-login-container {
+  position: relative;
+  margin-top: 10px;
+  z-index: 3; /* Foreground layer */
+  display: flex;
+  align-items: center;
+}

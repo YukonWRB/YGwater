@@ -535,7 +535,7 @@ data <- function(id, con, language, restoring, data, inputs) {
       } else if (input$type == "continuous") {
         subset_list <- vector("list", length(selected_tsids))
         for (i in seq_along(selected_tsids)) {
-          query <- sprintf("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM calculated_daily WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
+          query <- sprintf("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM measurements_calculated_daily WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
           subset_list[[i]] <- dbGetQueryDT(con, query)
         }
         subset <- data.table::rbindlist(subset_list)
@@ -660,11 +660,11 @@ data <- function(id, con, language, restoring, data, inputs) {
       if (input$type == "continuous") {
         req(input$modal_frequency)
         if (input$modal_frequency == "daily") {
-          rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM calculated_daily", " WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date", " < '", input$modal_date_range[2], "';"))[[1]]
+          rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM measurements_calculated_daily", " WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date", " < '", input$modal_date_range[2], "';"))[[1]]
           
           subset_list <- vector("list", length(selected_tsids))
           for (i in seq_along(selected_tsids)) {
-            query <- sprintf("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM calculated_daily WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
+            query <- sprintf("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM measurements_calculated_daily WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
             subset_list[[i]] <- dbGetQueryDT(con, query)
           }
           subset <- data.table::rbindlist(subset_list)
@@ -759,7 +759,7 @@ data <- function(id, con, language, restoring, data, inputs) {
           data$measurements <- dbGetQueryDT(con, paste0("SELECT timeseries_id, target_datetime, datetime, value, sample_class, note FROM measurements_discrete WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
           
         } else if (input$type == "continuous") {
-          data$measurements_daily <- dbGetQueryDT(con, paste0("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM calculated_daily WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date < '", input$modal_date_range[2], "';"))
+          data$measurements_daily <- dbGetQueryDT(con, paste0("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM measurements_calculated_daily WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date < '", input$modal_date_range[2], "';"))
           
           # Now add hourly or max resolution data if selected
           if (input$modal_frequency == "hourly") {
