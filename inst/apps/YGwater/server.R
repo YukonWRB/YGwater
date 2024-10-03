@@ -41,6 +41,7 @@ app_server <- function(input, output, session) {
   hideTab(inputId = "navbar", target = "plot")
   hideTab(inputId = "navbar", target = "map")
   hideTab(inputId = "navbar", target = "FOD")
+  hideTab(inputId = "navbar", target = "generate")
   hideTab(inputId = "navbar", target = "metadata")
   hideTab(inputId = "navbar", target = "new_ts_loc")
   hideTab(inputId = "navbar", target = "basins")
@@ -86,7 +87,6 @@ app_server <- function(input, output, session) {
         return()
       }
       tryCatch({
-        
         AquaCache <- AquaConnect(username = input$username, password = input$password, silent = TRUE)
         # Test the connection
         test <- DBI::dbGetQuery(AquaCache, "SELECT 1;")
@@ -146,6 +146,8 @@ app_server <- function(input, output, session) {
   
   
   observeEvent(input$navbar, {
+    print(programmatic_change())
+    print(initial_tab())
     if (programmatic_change()) {
       # Reset the flag and exit to prevent looping
       if (!is.null(initial_tab())) {
@@ -164,6 +166,7 @@ app_server <- function(input, output, session) {
       showTab(inputId = "navbar", target = "plot")
       showTab(inputId = "navbar", target = "map")
       showTab(inputId = "navbar", target = "FOD")
+      showTab(inputId = "navbar", target = "generate")
       # Hide 'admin' tab unless logged in
       if (user_logged_in()) {
         showTab(inputId = "navbar", target = "admin")
@@ -193,13 +196,14 @@ app_server <- function(input, output, session) {
       hideTab(inputId = "navbar", target = "map")
       hideTab(inputId = "navbar", target = "FOD")
       hideTab(inputId = "navbar", target = "admin")
+      hideTab(inputId = "navbar", target = "generate")
       
       # Select the last tab the user was on in admin mode
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
       
     } else {
       # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("plot", "map", "FOD")) {
+      if (input$navbar %in% c("plot", "map", "FOD", "generate")) {
         # User is in visualize mode
         last_visualize_tab(input$navbar)
       } else if (input$navbar %in% c("metadata", "new_ts_loc", "basins")) {
@@ -218,12 +222,14 @@ app_server <- function(input, output, session) {
     if (input$navbar == "FOD") {
       FOD("FOD")
     }
+    if (input$navbar == "generate") {
+      generate("generate", EQWin, AquaCache)
+    }
     if (input$navbar == "basins") {
       basins("basins", AquaCache)
     }
     if (input$navbar == "metadata") {
       metadata("metadata", AquaCache)
     }
-    # Add module calls for other tabs as needed
   })
 }
