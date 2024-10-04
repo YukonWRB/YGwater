@@ -146,8 +146,6 @@ app_server <- function(input, output, session) {
   
   
   observeEvent(input$navbar, {
-    print(programmatic_change())
-    print(initial_tab())
     if (programmatic_change()) {
       # Reset the flag and exit to prevent looping
       if (!is.null(initial_tab())) {
@@ -155,6 +153,7 @@ app_server <- function(input, output, session) {
         return()
       } else {
         initial_tab(FALSE)
+        programmatic_change(FALSE)
       }
     }
     

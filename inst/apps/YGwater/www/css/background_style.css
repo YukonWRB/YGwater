@@ -4,5 +4,6 @@
   border-radius: 0px;
   box-shadow: 1px 1px 1px rgba(0, 0, 0, 0.2);
   margin-left: -12px; /* Aligns with default sidebarPanel padding */
-  margin-right: -12px; /* Optional: Add this if you want more consistent horizontal padding */
+  margin-right: -12px;
+  margin-bottom: 10px;
 }

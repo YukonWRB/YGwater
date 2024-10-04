@@ -20,10 +20,7 @@ generate <- function(id, EQWin, AquaCache) {
 
     # Load the submodule server and UI based on the report type selected
     observeEvent(input$report_type, {
-      print("observed!")
-      
       if (input$report_type == "Water Quality Report") {
-        print("here!")
         output$submoduleUI <- renderUI({
           WQReportUI(ns("WQReport"))
         })

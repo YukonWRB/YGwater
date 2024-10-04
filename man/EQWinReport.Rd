@@ -14,8 +14,8 @@ EQWinReport(
   stnStds = TRUE,
   date_approx = 0,
   save_path = "choose",
-  dbPath =
-    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
+  con = NULL,
+  shiny_file_path = NULL
 )
 }
 \arguments{
@@ -29,7 +29,7 @@ EQWinReport(
 
 \item{paramGrp}{A parameter group as listed in the EQWin eqgroups table, column groupname. Leave NULL to use parameters instead.}
 
-\item{stds}{A vector of standard names as listed in the EQWin eqstds table. Leave NULL to exclude standards. As these can apply to all stations standard values will be listed in a column to the left of the results.}
+\item{stds}{A vector of standard names as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. As these can apply to all stations standard values will be listed in a column to the left of the results.}
 
 \item{stnStds}{TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.}
 
@@ -37,7 +37,9 @@ EQWinReport(
 
 \item{save_path}{The path to save the Excel file. Default is "choose" to allow user to select a folder interactively.}
 
-\item{dbPath}{The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".}
+\item{con}{A connection to the target database. If left NULL connection will be attempted to EQWin in the default path of "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb" and closed automatically when done.}
+
+\item{shiny_file_path}{The exact file path to save a file, used only for compatibility with Shiny applications. Do not use this parameter.}
 }
 \value{
 An Excel workbook saved where requested.
@@ -46,9 +48,6 @@ An Excel workbook saved where requested.
 Generates a report of water quality data for a given date, set of stations (or EQWin specified station group), and parameters (or specified parameter group). Guidelines passed to argument 'stds' are included as columns in the table, while station-specific guidelines are listed in a note in the cell containing the station name.
 
 Exceedances are noted using conditional formatting, with a note added to explain which standard(s) are exceeded.
-}
-\details{
-Connection to EQWin is made using function \code{\link[=AccessConnect]{AccessConnect()}}.
 }
 \examples{
 \dontrun{

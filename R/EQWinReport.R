@@ -6,19 +6,17 @@
 #' 
 #' Exceedances are noted using conditional formatting, with a note added to explain which standard(s) are exceeded.
 #' 
-#' @details
-#' Connection to EQWin is made using function [AccessConnect()].
-#' 
 #' @param date The date for which to fetch results as a Date object or character vector that can be coerced to a date.
 #' @param stations A vector of station names as listed in the EQWiN eqstns table, column StnCode. Leave NULL to use stnGrp instead.
 #' @param stnGrp A station group as listed in the EWQin eqgroups table, column groupname. Leave NULL to use stations instead.
 #' @param parameters A vector of parameter names as listed in the EQWin eqparams table, column ParamCode. Leave NULL to use paramGrp instead.
 #' @param paramGrp A parameter group as listed in the EQWin eqgroups table, column groupname. Leave NULL to use parameters instead.
-#' @param stds A vector of standard names as listed in the EQWin eqstds table. Leave NULL to exclude standards. As these can apply to all stations standard values will be listed in a column to the left of the results.
+#' @param stds A vector of standard names as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. As these can apply to all stations standard values will be listed in a column to the left of the results.
 #' @param stnStds TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.
 #' @param date_approx An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date. If a station is found to not have any samples on the given 'date', the function will look for samples on the date + 1 day, - 1 day, + 2 days, etc. up to 'date_approx' days in the past and future and stop searching for a station once a sample is found. Default is 0.
 #' @param save_path The path to save the Excel file. Default is "choose" to allow user to select a folder interactively.
-#' @param dbPath The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".
+#' @param con A connection to the target database. If left NULL connection will be attempted to EQWin in the default path of "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb" and closed automatically when done.
+#' @param shiny_file_path The exact file path to save a file, used only for compatibility with Shiny applications. Do not use this parameter.
 #' 
 #' @return An Excel workbook saved where requested.
 #' @export
@@ -41,7 +39,7 @@
 #' 
 #' }
 
-EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
+EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", con = NULL, shiny_file_path = NULL) {
   
 # 
 # date = "2024-07-17"
@@ -53,8 +51,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
 # stnStds = TRUE
 # date_approx = 1
 # save_path = "C:/Users/gtdelapl/Desktop"
-# dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
-  
+# con = NULL  
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
   if (!is.null(stations) & !is.null(stnGrp)) stop("You must specify either stations or stnGrp, not both")
@@ -77,30 +74,37 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   
   if (!inherits(date_approx, "numeric")) stop("date_approx must be a numeric value")
   
-  
-  if (save_path == "choose") {
-    if (!interactive()) {
-      stop("You must specify a save path when running in non-interactive mode.")
+  if (is.null(shiny_file_path)) {
+    if (save_path == "choose") {
+      if (!interactive()) {
+        stop("You must specify a save path when running in non-interactive mode.")
+      }
+      message("Select the path to the folder where you want this report saved.")
+      save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
     }
-    message("Select the path to the folder where you want this report saved.")
-    save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
   }
   
-  # Connect to EQWin
-  EQWin <- AccessConnect(path = dbPath, silent = TRUE)
-  on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+  
+  # Connect to EQWin if needed
+  if (is.null(con)) {
+    con <- AccessConnect(path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb", silent = TRUE)
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
+  } else {
+    if (!DBI::dbIsValid(con)) stop("The connection object is not valid")
+  }
+
   
   # Fetch the station and/or parameter list if necessary (stnGrp or paramGrp was specified)
   if (!is.null(stnGrp)) {
     # Check if the group actually exists
-    grp_count <- DBI::dbGetQuery(EQWin, paste0("SELECT COUNT(*) FROM eqgroups WHERE groupname = '", stnGrp, "' AND dbtablename = 'eqstns'"))[1,1]
+    grp_count <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM eqgroups WHERE groupname = '", stnGrp, "' AND dbtablename = 'eqstns'"))[1,1]
     if (grp_count == 0) {
       stop("The station group '", stnGrp, "' does not exist in the EQWin database")
     } else if (grp_count > 1) {
       stop("There are multiple station groups with the name '", stnGrp, "' in the EQWin database")
     } # otherwise proceed to fetch the stations
     
-    StnIds <- DBI::dbGetQuery(EQWin, paste0("SELECT groupitems FROM eqgroups WHERE groupname = '", stnGrp, "' AND dbtablename = 'eqstns'"))$groupitems
+    StnIds <- DBI::dbGetQuery(con, paste0("SELECT groupitems FROM eqgroups WHERE groupname = '", stnGrp, "' AND dbtablename = 'eqstns'"))$groupitems
     StnIds <- strsplit(StnIds, ",")[[1]]
     if (length(StnIds) == 0) {
       stop("No stations found in the station group '", stnGrp, "'")
@@ -108,14 +112,14 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   }
   if (!is.null(paramGrp)) {
     # Check if the group actually exists
-    grp_count <- DBI::dbGetQuery(EQWin, paste0("SELECT COUNT(*) FROM eqgroups WHERE groupname = '", paramGrp, "' AND dbtablename = 'eqparams'"))[1,1]
+    grp_count <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM eqgroups WHERE groupname = '", paramGrp, "' AND dbtablename = 'eqparams'"))[1,1]
     if (grp_count == 0) {
       stop("The parameter group '", paramGrp, "' does not exist in the EQWin database")
     } else if (grp_count > 1) {
       stop("There are multiple parameter groups with the name '", paramGrp, "' in the EQWin database")
     } # otherwise proceed to fetch the parameters
     
-    ParamIds <- DBI::dbGetQuery(EQWin, paste0("SELECT groupitems FROM eqgroups WHERE groupname = '", paramGrp, "' AND dbtablename = 'eqparams'"))$groupitems
+    ParamIds <- DBI::dbGetQuery(con, paste0("SELECT groupitems FROM eqgroups WHERE groupname = '", paramGrp, "' AND dbtablename = 'eqparams'"))$groupitems
     ParamIds <- strsplit(ParamIds, ",")[[1]]
     if (length(ParamIds) == 0) {
       stop("No parameters found in the parameter group '", paramGrp, "'")
@@ -124,7 +128,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   
   # Validate existence of parameters and/or stations
   if (!is.null(stations)) {
-    StnIds <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnCode FROM eqstns WHERE StnCode IN ('", paste0(stations, collapse = "', '"), "')"))
+    StnIds <- DBI::dbGetQuery(con, paste0("SELECT StnId, StnCode FROM eqstns WHERE StnCode IN ('", paste0(stations, collapse = "', '"), "')"))
     if (nrow(StnIds) == 0) {
       stop("No stations found in the EQWin database with the names '", paste0(stations, collapse = "', '"), "'")
     }
@@ -137,7 +141,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   }
   
   if (!is.null(parameters)) {
-    ParamIds <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode FROM eqparams WHERE ParamCode IN ('", paste0(parameters, collapse = "', '"), "')"))
+    ParamIds <- DBI::dbGetQuery(con, paste0("SELECT ParamId, ParamCode FROM eqparams WHERE ParamCode IN ('", paste0(parameters, collapse = "', '"), "')"))
     if (nrow(ParamIds) == 0) {
       stop("No parameters found in the EQWin database with the names '", paste0(parameters, collapse = "', '"), "'")
     }
@@ -151,7 +155,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   
   # Validate existence of standards
   if (!is.null(stds)) {
-    standards <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ('", paste0(stds, collapse = "', '"), "')"))
+    standards <- DBI::dbGetQuery(con, paste0("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ('", paste0(stds, collapse = "', '"), "')"))
     if (nrow(standards) == 0) {
       stop("No standards found in the EQWin database with the names '", paste0(stds, collapse = "', '"), "'")
     }
@@ -166,7 +170,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   # Fetch the data and form tables ###############################################################################################
   # Fetch the sample data for the date in question, plus or minus the date_approx if specified if there is no data for the exact date
   # Get some data and merge dfs
-  sampleIds <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(StnIds, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date, "' AND SampleClass <> 'D';"))
+  sampleIds <- DBI::dbGetQuery(con, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(StnIds, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date, "' AND SampleClass <> 'D';"))
   
   if (date_approx > 0 ) {
     # Find which element of StnIds is not in sampleIds$StnId
@@ -175,13 +179,13 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
       # Look for samples one day at a time out from the 'date' parameter. Start with one day in future, then one day in past, then two days in future, two days in past, etc.
       extra_sampleIds <- data.frame()
       for (i in 1:date_approx) {
-        extra <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(missing, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date + i, "';"))
+        extra <- DBI::dbGetQuery(con, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(missing, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date + i, "';"))
         if (nrow(extra) > 0) {
           extra_sampleIds <- rbind(extra_sampleIds, extra)
           # remove the stations that have been found from the missing list
           missing <- setdiff(missing, extra$StnId)
         } else { # Now go to i days in the past
-          extra <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(missing, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date - i, "';"))
+          extra <- DBI::dbGetQuery(con, paste0("SELECT StnId, SampleId, CollectDateTime FROM eqsampls WHERE StnId IN (", paste0(missing, collapse = ", "), ") AND DateValue(CollectDateTime) = '", date - i, "';"))
           if (nrow(extra) > 0) {
             extra_sampleIds <- rbind(extra_sampleIds, extra)
             # remove the stations that have been found from the missing list
@@ -199,11 +203,11 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
     stop("No samples found for the date '", date, "', or within ", date_approx, " days of that date.")
   }
   
-  results <- DBI::dbGetQuery(EQWin, paste0("SELECT eqdetail.SampleId, eqdetail.ParamId, eqdetail.Result, eqparams.ParamCode, eqparams.ParamName FROM eqdetail INNER JOIN eqparams ON eqdetail.ParamId = eqparams.ParamId WHERE eqdetail.SampleId IN (", paste0(sampleIds$SampleId, collapse = ", "), ") AND eqdetail.ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
-  params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamName FROM eqparams WHERE ParamId IN (", paste0(results$ParamId, collapse = ", "), ");"))
+  results <- DBI::dbGetQuery(con, paste0("SELECT eqdetail.SampleId, eqdetail.ParamId, eqdetail.Result, eqparams.ParamCode, eqparams.ParamName FROM eqdetail INNER JOIN eqparams ON eqdetail.ParamId = eqparams.ParamId WHERE eqdetail.SampleId IN (", paste0(sampleIds$SampleId, collapse = ", "), ") AND eqdetail.ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
+  params <- DBI::dbGetQuery(con, paste0("SELECT ParamId, ParamCode, ParamName FROM eqparams WHERE ParamId IN (", paste0(results$ParamId, collapse = ", "), ");"))
   
   samps <- sampleIds[sampleIds$SampleId %in% results$SampleId, ]
-  locations <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnCode, StnName, StnDesc FROM eqstns WHERE StnId IN (", paste0(samps$StnId, collapse = ", "), ");"))
+  locations <- DBI::dbGetQuery(con, paste0("SELECT StnId, StnCode, StnName, StnDesc FROM eqstns WHERE StnId IN (", paste0(samps$StnId, collapse = ", "), ");"))
   samps_locs <- merge(locations, samps)
   
   # Some locations and datetimes are duplicated with different sampleIds. Appeld a (1), (2) to these so that they create new columns.
@@ -231,7 +235,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   
   # Get standards data for the parameters retained
   if (!is.null(stds)) {
-    stdVals <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, ParamId, MaxVal, MinVal FROM eqstdval WHERE StdId IN (", paste(standards$StdId, collapse = ", "), ") AND ParamId IN (", paste0(params$ParamId, collapse = ", "), ");"))
+    stdVals <- DBI::dbGetQuery(con, paste0("SELECT StdId, ParamId, MaxVal, MinVal FROM eqstdval WHERE StdId IN (", paste(standards$StdId, collapse = ", "), ") AND ParamId IN (", paste0(params$ParamId, collapse = ", "), ");"))
     stdVals <- merge(stdVals, params)
     standard_remove_idx <- numeric(0)
     for (i in 1:nrow(standards)) {
@@ -286,12 +290,12 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   
   # Now find station-specific standards, which will be used to apply conditional formatting and notes when the workbook is made
   if (stnStds) {
-    tmp <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnStd AS StdCode FROM eqstns WHERE StnId IN (", paste0(samps_locs$StnId, collapse = ", "), ") AND StnStd IS NOT NULL;"))
+    tmp <- DBI::dbGetQuery(con, paste0("SELECT StnId, StnStd AS StdCode FROM eqstns WHERE StnId IN (", paste0(samps_locs$StnId, collapse = ", "), ") AND StnStd IS NOT NULL;"))
     if (nrow(tmp) == 0) {
       stnStds <- FALSE
     } else {
-      tmp <- merge(tmp, DBI::dbGetQuery(EQWin, paste0("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ('", paste0(tmp$StdCode, collapse = "', '"), "')")))
-      station_stdVals <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, ParamId, MaxVal, MinVal FROM eqstdval WHERE StdId IN (", paste(tmp$StdId, collapse = ", "), ") AND ParamId IN (", paste0(params$ParamId, collapse = ", "), ");"))
+      tmp <- merge(tmp, DBI::dbGetQuery(con, paste0("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ('", paste0(tmp$StdCode, collapse = "', '"), "')")))
+      station_stdVals <- DBI::dbGetQuery(con, paste0("SELECT StdId, ParamId, MaxVal, MinVal FROM eqstdval WHERE StdId IN (", paste(tmp$StdId, collapse = ", "), ") AND ParamId IN (", paste0(params$ParamId, collapse = ", "), ");"))
       if (nrow(station_stdVals) > 0) { # Otherwise there are no station-specific standards for the parameters in the report
         
         station_stdVals <- merge(tmp, station_stdVals, all.y = TRUE)
@@ -330,7 +334,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   wb <- openxlsx::createWorkbook(title = "Water Quality Report")
   time <- Sys.time()
   attr(time, "tzone") <- "MST"
-  top <- data.frame(tmp = c(paste0("WQ report for EQWin stns  ", paste(locations$StnName, collapse = ", ")),  paste0("For ", date, if (date_approx > 0) paste0(". Requested stns w/o smpls on this date may show smpls within ", date_approx, " days.") else "" )),
+  top <- data.frame(tmp = c(paste0("WQ report for EQWin stns  ", paste(locations$StnName, collapse = ", ")),  paste0("For ", date, if (date_approx > 0) paste0(". Requested stns w/o smpls on this date may show smpls within ", date_approx, " day(s).") else "" )),
                     tmp2 = NA,
                     tmp3 = NA,
                     tmp4 = NA,
@@ -433,11 +437,11 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
               # Check if it's a simple standard or a calculated one.
               if (grepl("=", std_applies[[l]])) {
                 # Find the CalcId corresponding to the referenced standard
-                calc_id <- DBI::dbGetQuery(EQWin, paste0("SELECT CalcId FROM eqcalcs WHERE CalcCode = '", sub("=", "", std_applies[[l]]), "';"))$CalcId
+                calc_id <- DBI::dbGetQuery(con, paste0("SELECT CalcId FROM eqcalcs WHERE CalcCode = '", sub("=", "", std_applies[[l]]), "';"))$CalcId
                 # Find the SampleId
                 stn_name <- names(final_table)[k]
                 sid <- samps_locs[samps_locs$colnames == stn_name, "SampleId"]
-                min_max <- EQWinStd(calc_id, sid, EQWin)
+                min_max <- EQWinStd(calc_id, sid, con)
               } else { # It's a simple standard! Nice and easy.
                 min_max <- as.numeric(std_applies[[l]])
               }
@@ -482,10 +486,10 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
               # Check if it's a simple standard or a calculated one.
               if (grepl("=", std_applies[[l]])) {
                 # Find the CalcId corresponding to the referenced standard
-                calc_id <- DBI::dbGetQuery(EQWin, paste0("SELECT CalcId FROM eqcalcs WHERE CalcCode = '", sub("=", "", std_applies[[l]]), "';"))$CalcId
+                calc_id <- DBI::dbGetQuery(con, paste0("SELECT CalcId FROM eqcalcs WHERE CalcCode = '", sub("=", "", std_applies[[l]]), "';"))$CalcId
                 # Find the SampleId
                 sid <- samps_locs[paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")") == name, "SampleId"]
-                min_max <- EQWinStd(calc_id, sid, EQWin)
+                min_max <- EQWinStd(calc_id, sid, con)
               } else { # It's a simple standard! Nice and easy.
                 min_max <- as.numeric(std_applies[[l]])
               }
@@ -518,8 +522,13 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   # Freeze panes so the parameters, standards, and location header are always visible
   openxlsx::freezePane(wb, "Report", firstActiveRow = 6, firstActiveCol = (2 + nrow(standards)))
   
-  openxlsx::saveWorkbook(wb, paste0(save_path, "/WQ Report for ", date, " Issued ", Sys.Date(), ".xlsx"), overwrite = TRUE)
-  
-  return(message("Report saved to ", paste0(save_path, "/WQ Report for ", date, " Issued ", Sys.Date(), ".xlsx")))
+  if (is.null(shiny_file_path)) {
+    openxlsx::saveWorkbook(wb, paste0(save_path, "/WQ Report for ", date, " Issued ", Sys.Date(), ".xlsx"), overwrite = TRUE)
+    
+    return(message("Report saved to ", paste0(save_path, "/WQ Report for ", date, " Issued ", Sys.Date(), ".xlsx")))
+  } else {
+    openxlsx::saveWorkbook(wb, shiny_file_path, overwrite = TRUE)
+  }
+
   
 }
