@@ -13,7 +13,7 @@ estimateFlowStats(
 )
 }
 \arguments{
-\item{gauged_stations}{The stations used for estimating flow. Given as a vector of the staton code. Ex: c(08AA008, 09BC001).}
+\item{gauged_stations}{The stations used for estimating flow. Given as a vector of the station code. Ex: c(08AA008, 09BC001).}
 
 \item{ungauged_area}{The area of the stations of interest. Given in square km and as a vector.}
 

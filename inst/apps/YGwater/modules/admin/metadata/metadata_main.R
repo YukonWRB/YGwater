@@ -10,7 +10,8 @@ metadataUI <- function(id) {
       actionButton(ns("summary"), "Summary (pop-up)"),  # This will be a pop-up or new tab for better viewing
       actionButton(ns("access"), "Access info"),
       actionButton(ns("infra_maintain"), "Infrastructure + maintenance info"),
-      actionButton(ns("transmission"), "Transmitter setup info")
+      actionButton(ns("acquisition"), "Data acquisition info"),
+      actionButton(ns("transmission"), "Data transmition info")
     ),
     mainPanel(
       DT::DTOutput(ns("metadata_overview"))

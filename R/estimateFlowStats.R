@@ -8,7 +8,7 @@
 #' 
 #' Statistics for each station are averaged over all years/seasons available, except for all-time data points. Years or seasons with more than 5 percent missing data (this is the default) are excluded from the statistics. Additionally, only stations with a minimum of 15 years/seasons of data (this is the default) are retained. Next, statistics are expressed as m3/s/km2 and plotted to visualize outliers (plots). Each statistic is averaged for all stations and applied to the ungauged rivers/streams/creeks using their catchment area.
 #' 
-#' @param gauged_stations The stations used for estimating flow. Given as a vector of the staton code. Ex: c(08AA008, 09BC001).
+#' @param gauged_stations The stations used for estimating flow. Given as a vector of the station code. Ex: c(08AA008, 09BC001).
 #' @param ungauged_area The area of the stations of interest. Given in square km and as a vector.
 #' @param ungauged_name The name of the stations of interest, given as a character vector. The name is only used to differentiate between ungauged location stats in the outputted table. Note: ungauged_name must be the same length as ungauged_area.
 #' @param perc The percent of data (days) required to include a year or season in the statistics. Default is 95.

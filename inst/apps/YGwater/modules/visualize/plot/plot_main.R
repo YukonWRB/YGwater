@@ -3,12 +3,12 @@
 plotUI <- function(id) {
   ns <- NS(id)
   fluidPage(
-        selectizeInput(ns("plot_type"),
-                       "Select a data type to plot",
-                       choices = c("Discrete", "Continuous", "Mix"),
-                       selected = "Discrete"),
-        uiOutput(ns("submoduleUI"))
-      )
+    selectizeInput(ns("plot_type"),
+                   "Select a data type to plot",
+                   choices = c("Discrete", "Continuous", "Mix"),
+                   selected = "Discrete"),
+    uiOutput(ns("submoduleUI"))
+  )
 }
 
 plot <- function(id, EQWin, AquaCache) {

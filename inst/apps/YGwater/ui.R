@@ -54,7 +54,8 @@ app_ui <- function(request) {
                         mapUI("map")),
                tabPanel(title = "FOD Comments", value = "FOD",
                         FODUI("FOD")),
-               
+               tabPanel(title = "Generate", value = "generate",
+                        generateUI("generate")),
                tabPanel(title = "View/Edit metadata", value = "metadata",
                         metadataUI("metadata")),
                tabPanel(title = "Add location/timeseries", value = "new_ts_loc",

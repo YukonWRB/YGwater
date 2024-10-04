@@ -248,7 +248,7 @@ aq_download_curves <- function(loc_id,
           poly_degree_4 <- stats::lm(discharge ~ poly(stage, 4, raw = TRUE), data = valid_data)
           
           # Calculate AIC for each model and select the best
-          AIC_values <- c(AIC(poly_degree_2), AIC(poly_degree_3), AIC(poly_degree_4))
+          AIC_values <- c(stats::AIC(poly_degree_2), stats::AIC(poly_degree_3), stats::AIC(poly_degree_4))
           best_poly_model <- switch(which.min(AIC_values), poly_degree_2, poly_degree_3, poly_degree_4)
           
         }, error = function(e) {
@@ -272,24 +272,23 @@ aq_download_curves <- function(loc_id,
         # Extract the equation and calculate fitted values
         if (best_model == "power_law") {
           # Extract coefficients from the power law model
-          coef_vals <- coef(power_law)
+          coef_vals <- stats::coef(power_law)
           equation <- paste0(ratingModels$OutputParameter[[i]], " = ", round(coef_vals['a'], 4), " * (", ratingModels$InputParameter[[i]], " - ", round(coef_vals['h0'], 4), ")^", round(coef_vals['b'], 4))
           
           # Generate predicted values using the power law model
-          predicted <- predict(power_law, newdata = valid_data)
+          predicted <- stats::predict(power_law, newdata = valid_data)
           
         } else if (best_model == "poly") {
           # Extract coefficients from the polynomial model
-          coef_vals <- coef(best_poly_model)
+          coef_vals <- stats::coef(best_poly_model)
           equation <- paste0(ratingModels$OutputParameter[[i]], " = ", round(coef_vals[1], 4), " + ", round(coef_vals[2], 4), " * ", ratingModels$InputParameter[[i]], " + ", round(coef_vals[3], 4), " * ", ratingModels$InputParameter[[i]], "^2")
           
           # Generate predicted values using the polynomial model
-          predicted <- predict(best_poly_model, newdata = valid_data)
+          predicted <- stats::predict(best_poly_model, newdata = valid_data)
         }
         
         plot_data <- data.frame(stage = valid_data$stage, discharge = valid_data$discharge, predicted = predicted)
-        plot_data <- data.frame(stage = valid_data$stage, discharge = valid_data$discharge, predicted = predicted, predicted_segmented = predicted_segmented)
-        
+
         # Create a plot
         plot <- ggplot2::ggplot(plot_data, ggplot2::aes(x = stage)) +
           ggplot2::geom_point(ggplot2::aes(y = discharge, color = "Observed Data"), size = 2) +  # Plot the original data points
