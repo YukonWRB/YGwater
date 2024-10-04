@@ -41,17 +41,18 @@
 
 EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", con = NULL, shiny_file_path = NULL) {
   
-# 
-# date = "2024-07-17"
+# date = "2024-09-22"
 # stations = NULL
-# stnGrp = "QZ Eagle Gold HLF"
+# stnGrp = "A Eagle Gold HLF"
 # parameters = NULL
 # paramGrp = "EG-HLF-failure"
 # stds = c("CCME_ST", "CCME_LT")
 # stnStds = TRUE
-# date_approx = 1
+# date_approx = 0
 # save_path = "C:/Users/gtdelapl/Desktop"
-# con = NULL  
+# con = NULL
+# shiny_file_path = NULL
+  
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
   if (!is.null(stations) & !is.null(stnGrp)) stop("You must specify either stations or stnGrp, not both")
@@ -488,7 +489,8 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
                 # Find the CalcId corresponding to the referenced standard
                 calc_id <- DBI::dbGetQuery(con, paste0("SELECT CalcId FROM eqcalcs WHERE CalcCode = '", sub("=", "", std_applies[[l]]), "';"))$CalcId
                 # Find the SampleId
-                sid <- samps_locs[paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")") == name, "SampleId"]
+                colname <- names(final_table)[col_number_final]
+                sid <- samps_locs[samps_locs$colnames == colname, "SampleId"]
                 min_max <- EQWinStd(calc_id, sid, con)
               } else { # It's a simple standard! Nice and easy.
                 min_max <- as.numeric(std_applies[[l]])
