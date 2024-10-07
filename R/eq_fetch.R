@@ -22,7 +22,8 @@ eq_fetch <- function(EQcode,
                      dates = "all",
                      BD = 2,
                      apply_standards = TRUE,
-                     path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"){
+                     path = "G:/water/Data/Databases_virtual_machines/databases/EQWinDB and select the file: WaterResources.mdb
+"){
   
   # EQcode <- "EG"
   # stationIDs = c("DG1", "DG2", "ISH", "LSDP-UND", "W22", "W23", "W27", "W29", "W4", "W49", "W8", "W99")
