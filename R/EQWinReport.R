@@ -7,13 +7,17 @@
 #' Exceedances are noted using conditional formatting, with a note added to explain which standard(s) are exceeded.
 #' 
 #' @param date The date for which to fetch results as a Date object or character vector that can be coerced to a date.
+#' @param date_approx An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date. If a station is found to not have any samples on the given 'date', the function will look for samples on the date + 1 day, - 1 day, + 2 days, etc. up to 'date_approx' days in the past and future and stop searching for a station once a sample is found. Default is 0.
 #' @param stations A vector of station names as listed in the EQWiN eqstns table, column StnCode. Leave NULL to use stnGrp instead.
 #' @param stnGrp A station group as listed in the EWQin eqgroups table, column groupname. Leave NULL to use stations instead.
 #' @param parameters A vector of parameter names as listed in the EQWin eqparams table, column ParamCode. Leave NULL to use paramGrp instead.
 #' @param paramGrp A parameter group as listed in the EQWin eqgroups table, column groupname. Leave NULL to use parameters instead.
 #' @param stds A vector of standard names as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. As these can apply to all stations standard values will be listed in a column to the left of the results.
 #' @param stnStds TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.
-#' @param date_approx An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date. If a station is found to not have any samples on the given 'date', the function will look for samples on the date + 1 day, - 1 day, + 2 days, etc. up to 'date_approx' days in the past and future and stop searching for a station once a sample is found. Default is 0.
+#' @param SD_exceed An optional number of standard deviations above/below mean to consider as an exceedance. Default NULL will not calculate this. Applied to both sides, so 2 will flag values 2 SD above or 2 SD below the mean, not 1 SD above and 1 SD below
+#' @param SD_start The start date for the standard deviation calculation as a vector of one date or character values that can be converted to dates. NULL uses the earliest date in the data.
+#' @param SD_end The end date for the standard deviation calculation as a vector of one date or character values that can be converted to dates. NULL uses the latest date in the data.
+#' @param SD_doy Optional days of year to **include** in the standard deviation calculation as a numeric vector (i.e. c(100:200)). NULL uses all relevant data.
 #' @param save_path The path to save the Excel file. Default is "choose" to allow user to select a folder interactively.
 #' @param con A connection to the target database. If left NULL connection will be attempted to EQWin in the default path of "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb" and closed automatically when done.
 #' @param shiny_file_path The exact file path to save a file, used only for compatibility with Shiny applications. Do not use this parameter.
@@ -28,7 +32,7 @@
 #' # provided for demonstration purposes only and can't be run using the 'Run examples' button above.
 #' # Copy/paste them into your R console to run them if needed.
 #' 
-#' # Generate a report for July 1, 2024 using a station group, parameter group, 
+#' # Generate a report for July 25, 2024 using a station group, parameter group, 
 #' # both CCME standards, and look for data within +- 1 day of July 1
 #' EQWinReport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure",
 #' stds = c("CCME_ST", "CCME_LT"), date_approx = 1)
@@ -37,9 +41,13 @@
 #' # Generate a report for a single location and single parameter, no standards.
 #' EQWinReport("1991-02-12", stations = c("(CM)CM-u/s"), parameters = c("pH-F"), stnStds = FALSE)
 #' 
+#' # Generate a report for July 15, 2024 using a station group, parameter group, and flagging values
+#' # that exceed 2 standard deviations from the mean before June 24, 2024.
+#' EQWinReport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure",
+#' SD_exceed = 2, SD_start = NULL, SD_end = "2024-06-23", date_approx = 1)
 #' }
 
-EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, date_approx = 0, save_path = "choose", con = NULL, shiny_file_path = NULL) {
+EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, SD_exceed = NULL, SD_start = NULL, SD_end = NULL, SD_doy = NULL, save_path = "choose", con = NULL, shiny_file_path = NULL) {
   
 # date = "2024-09-22"
 # stations = NULL
@@ -52,6 +60,10 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
 # save_path = "C:/Users/gtdelapl/Desktop"
 # con = NULL
 # shiny_file_path = NULL
+# SD_exceed = 2
+# SD_start = NULL
+# SD_end = "2024-06-23"
+# SD_doy = NULL
   
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
@@ -74,6 +86,45 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   })
   
   if (!inherits(date_approx, "numeric")) stop("date_approx must be a numeric value")
+  if (date_approx < 0) stop("date_approx must be a positive number")
+  
+  # Check the SD_exceed related parameters
+  if (!is.null(SD_exceed)) {
+    if (!is.numeric(SD_exceed)) stop("SD_exceed must be a numeric value")
+    if (SD_exceed < 0) stop("SD_exceed must be a positive number")
+    
+    if (!is.null(SD_start)) {
+      if (length(SD_start) > 1) stop("SD_start must be a single date")
+      if (inherits(SD_start, "Date")) {
+        SD_start <- as.character(SD_start)
+      } else if (!inherits(SD_start, "character")) {
+        stop("SD_start must be a Date object or a character vector that can be coerced to a date")
+      }
+      tryCatch({
+        SD_start <- as.Date(SD_start)
+      }, error = function(e) {
+        stop("Failed to convert 'SD_start' parameter to a Date object. Please provide a valid date in the format 'YYYY-MM-DD'")
+      })
+    }
+    if (!is.null(SD_end)) {
+      if (length(SD_end) > 1) stop("SD_end must be a single date")
+      if (inherits(SD_end, "Date")) {
+        SD_end <- as.character(SD_end)
+      } else if (!inherits(SD_end, "character")) {
+        stop("SD_end must be a Date object or a character vector that can be coerced to a date")
+      }
+      tryCatch({
+        SD_end <- as.Date(SD_end)
+      }, error = function(e) {
+        stop("Failed to convert 'SD_end' parameter to a Date object. Please provide a valid date in the format 'YYYY-MM-DD'")
+      })
+    }
+    if (!is.null(SD_doy)) {
+      if (!is.numeric(SD_doy)) stop("SD_doy must be a numeric vector")
+      if (length(SD_doy) == 0) stop("SD_doy must have at least one value")
+      if (any(SD_doy < 1) | any(SD_doy > 366)) stop("SD_doy values must be between 1 and 366")
+    }
+  }
   
   if (is.null(shiny_file_path)) {
     if (save_path == "choose") {
@@ -211,7 +262,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   locations <- DBI::dbGetQuery(con, paste0("SELECT StnId, StnCode, StnName, StnDesc FROM eqstns WHERE StnId IN (", paste0(samps$StnId, collapse = ", "), ");"))
   samps_locs <- merge(locations, samps)
   
-  # Some locations and datetimes are duplicated with different sampleIds. Appeld a (1), (2) to these so that they create new columns.
+  # Some locations and datetimes are duplicated with different sampleIds. Append a (1), (2) to these so that they create new columns.
   samps_locs$colnames <- c(paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")"))
   for (i in unique(samps_locs$colnames)) {
     iter <- which(samps_locs$colnames == i)
@@ -331,6 +382,51 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
     }
   }
   
+  # Now calculate SD exceedances if requested
+  if (!is.null(SD_exceed)) {
+    # Pull the data for the SD calculation. If SD_doy is specified, only include those days of year
+    SD_vals <- list()
+    for (i in unique(samps_locs$StnId)) {  # There may be duplicate stations in samps_locs, so we need to loop through unique stations. This is done for every parameter in ParamIds
+      query <- paste0("SELECT SampleId FROM eqsampls WHERE StnId = ", i, " AND SampleClass <> 'D'")
+      if (!is.null(SD_start)) {
+        query <- paste0(query, " AND DateValue(CollectDateTime) >= '", SD_start, "'")
+      }
+      if (!is.null(SD_end)) {
+        query <- paste0(query, " AND DateValue(CollectDateTime) <= '", SD_end, "'")
+      }
+      if (!is.null(SD_doy)) {
+        query <- paste0(query, " AND DatePart('y', CollectDateTime) IN (", paste0(SD_doy, collapse = ", "), ")")
+      }
+      sample_ids <- DBI::dbGetQuery(con, query)
+      
+      if (nrow(sample_ids) == 0) next
+      
+      results <- DBI::dbGetQuery(con, paste0("SELECT ParamId, Result FROM eqdetail WHERE SampleId IN (", paste0(sample_ids$SampleId, collapse = ", "), ") AND ParamId IN (", paste0(ParamIds, collapse = ", "), ");"))
+      
+      if (nrow(results) == 0) next
+      
+      # results$Result now contains character string with <XXX values... remove <, >, and convert to numeric
+      results$Result <- as.numeric(gsub("[<>,]", "", results$Result))
+      
+      # Now calculate the mean and SD_exceed for each parameter
+      sd_values <- data.frame()
+      for (j in unique(results$ParamId)) {
+        vals <- results[results$ParamId == j, "Result"]
+        if (length(vals) > 1) {
+          mean_val <- mean(vals, na.rm = TRUE)
+          sd_val <- stats::sd(vals, na.rm = TRUE)
+          sd_values <- rbind(sd_values, data.frame(ParamId = j, Mean = mean_val, SD = sd_val, SD_exceed_max = mean_val + (SD_exceed * sd_val), SD_exceed_min = mean_val - (SD_exceed * sd_val)))
+        }
+      }
+      if (nrow(sd_values) > 0) {
+        # replace ParamId with ParamCode, drop ParamId column
+        sd_values <- merge(sd_values, params)
+        sd_values <- sd_values[, c("ParamCode", "Mean", "SD", "SD_exceed_max", "SD_exceed_min")]
+        SD_vals[[as.character(i)]] <- sd_values
+      }
+    }
+  }
+  
   # Make the workbook ###############################################################################################
   wb <- openxlsx::createWorkbook(title = "Water Quality Report")
   time <- Sys.time()
@@ -346,7 +442,7 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   
   # Create styles and comments
   topStyle <- openxlsx::createStyle(fgFill = "turquoise2")
-  # fodNameStyle <- openxlsx::createStyle(fgFill = "darkorange", border = "TopBottomLeftRight", borderStyle = "medium")
+  noteStyle <- openxlsx::createStyle(fgFill = "orchid")
   standardHeadStyle <- openxlsx::createStyle(fgFill = "azure3")
   standardStyle <- openxlsx::createStyle(fgFill = "azure1")
   sampleHeadStyle <- openxlsx::createStyle(fgFill = "lemonchiffon2")
@@ -366,7 +462,28 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
   openxlsx::addStyle(wb, "Report", topStyle, rows = 1, cols = c(1:10))
   openxlsx::addStyle(wb, "Report", topStyle, rows = 2, cols = c(1:10))
   
-  openxlsx::writeData(wb, "Report", NA, startCol = 1, startRow = 3, colNames = FALSE) # Empty row for spacing
+  
+  # Header text for the options this function was run with
+  if (!is.null(stds) | stnStds | !is.null(SD_exceed)) {
+    string <- "Run with the following flag options:"
+  } else {
+    string <- "Run with no flag options."
+  }
+  if (!is.null(stds)) {
+    string <- paste0(string, " general standards")
+  }
+  if (stnStds) {
+    string <- paste0(string, if (!is.null(stds)) ", " else "", "station-specific standards")
+  }
+  if (!is.null(SD_exceed)) {
+    string <- paste0(string, if (!is.null(stds) | stnStds) ", " else "", "SD exceedances above/below ", SD_exceed, " SD from mean (from", if (!is.null(SD_start)) SD_start else " start of records to ", if (!is.null(SD_end)) SD_end else "end of records and", if (!is.null(SD_doy)) paste0(" on days of year ", paste0(min(SD_doy), " to ", max(SD_doy))) else " for all days of year", ").")
+  }
+  openxlsx::writeData(wb, "Report", string, startCol = 1, startRow = 3, colNames = FALSE)
+  openxlsx::addStyle(wb, "Report", noteStyle, rows = 3, cols = c(1:10))
+  
+  # To add an empty row, adjust all row/startRow references by 1
+  # openxlsx::writeData(wb, "Report", NA, startCol = 1, startRow = 3, colNames = FALSE) # Empty row for spacing
+  
   
   # Create the table
   openxlsx::writeData(wb, "Report", "Standards", startCol = 2, startRow = 4, colNames = FALSE)
@@ -461,11 +578,13 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
       }
     }
   }
+  
   if (stnStds) { # Finally, check the station-specific standard. If any are exceeded add to the matrix.
     row_names <- names(final_table)[(2 + nrow(standards)):ncol(final_table)]
     for (i in 1:length(row_names)) {
       name <- row_names[i]
       col_number_final <- which(names(final_table) == name)
+      name <- sub(" \\([0-9]+\\)$", "", name)
       id <- unique(samps_locs[paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")") == name, "StnId"])  # station ID
       stn_std <- station_stdVals[station_stdVals$StnId == id, ]
       
@@ -511,6 +630,53 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
     }
   }
   
+  if (!is.null(SD_exceed)) {
+    row_names <- names(final_table)[(2 + nrow(standards)):ncol(final_table)]
+    for (i in 1:length(row_names)) {
+      name <- row_names[i]
+      col_number_final <- which(names(final_table) == name)
+      name <- sub(" \\([0-9]+\\)$", "", name)
+      id <- unique(samps_locs[paste0(samps_locs$StnName, " (", samps_locs$CollectDateTime, ")") == name, "StnId"])  # station ID
+      
+      # Isolate the SD values for this station from the list created earlier
+      sd_vals <- SD_vals[[as.character(id)]]
+      
+      if (is.null(sd_vals)) next  # If there are no SD values for this station, skip
+      
+      if (nrow(sd_vals) > 0) { # Then sd values were calculated for the station
+        for (j in 1:nrow(final_table)) { # Now we can go cell by cell on final_table
+          param <- final_table$Parameter[j]
+          # see if there's a corresponding entry in sd_vals
+          sd_applies <- sd_vals[sd_vals$ParamCode == param, ]
+          if (nrow(sd_applies) == 0) {  # If there is no SD for this parameter, skip
+            next
+          } else {  # There is a SD value calculated. Check if the max and min values are exceeded
+            if (is.na(final_table[i, col_number_final])) next # it's character at this point, and NA means that there is nothing in the field
+            
+            compare_value <- suppressWarnings(as.numeric(final_table[j, col_number_final])) # The value to compare agains the standard
+            if (is.na(compare_value)) next # If the value is NA, skip. This happens notably when the value is < the detection limit.
+            
+            for (l in c("SD_exceed_max", "SD_exceed_min")) {
+              if (is.na(sd_applies[[l]])) next  # If the SD is NA, skip
+
+                min_max <- as.numeric(sd_applies[[l]])
+      
+              if (l == "SD_exceed_min") {
+                if (compare_value < min_max) {
+                  exceed_comments[j,i] <- paste0(if (!is.na(exceed_comments[j,i])) exceed_comments[j,i], if (!is.na(exceed_comments[j,i])) "\n", "Below ", SD_exceed, " standard deviations from the historical mean of ", round(sd_applies$Mean, 6), ".")
+                }
+              } else if (l == "SD_exceed_max") {
+                if (compare_value > min_max) {
+                  exceed_comments[j,i] <- paste0(if (!is.na(exceed_comments[j,i])) exceed_comments[j,i], if (!is.na(exceed_comments[j,i])) "\n", "Exceeds ", SD_exceed," standard deviations from the historical mean of ", round(sd_applies$Mean, 6), ".")
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  
   # Work through the exceed_comments matrix and add comments and conditional formatting to the workbook
   for (i in 1:nrow(exceed_comments)) {
     for (j in 1:ncol(exceed_comments)) {
@@ -532,5 +698,4 @@ EQWinReport <- function(date, stations = NULL, stnGrp = NULL, parameters = NULL,
     openxlsx::saveWorkbook(wb, shiny_file_path, overwrite = TRUE)
   }
 
-  
 }
