@@ -257,11 +257,6 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
       }
     })
     
-    
-    observe({
-      print(input$standard)
-      
-    })
     # Create and render the plot ############################################################
     first_plot <- reactiveVal(TRUE)
     first_plot_with_standards <- reactiveVal(TRUE)

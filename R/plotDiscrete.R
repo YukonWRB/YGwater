@@ -45,13 +45,13 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # lang = "en"
   # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   
-  # start <- "2024-07-09"
-  # end <- "2024-08-28"
-  # locations <- "(EG)W4"
-  # parameters <- NULL
+  # start <- "2024-06-09"
+  # end <- "2024-10-09"
+  # locations <- "(EG)W4-mix"
+  # parameters <- "HG-D"
   # locGrp <- NULL
-  # paramGrp <- "EG-HLF-failure"
-  # standard = c("CCME_ST")
+  # paramGrp <- NULL
+  # standard = "CSR_s3_fAL"
   # loc_code = TRUE
   # log = FALSE
   # facet_on = 'locs'
@@ -277,8 +277,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
     if (!is.null(standard)) {
       stdVals <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, ParamId, MaxVal AS std_max, MinVal AS std_min FROM eqstdval WHERE StdId = ", standards$StdId, " AND ParamId IN (", paste0(unique(results$ParamId), collapse = ", "), ");"))
       data <- merge(data, stdVals, all.x = TRUE)
-      stash <- data
-      
+
       # Now for rows where the std_max or std_min starts with "=" we need to calculate it and replace with the calculated value
       
       # Identify rows where std_max and std_min start with "="
@@ -299,83 +298,86 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
       ))
       all_calc_codes <- all_calc_codes[!is.na(all_calc_codes)]
       
-      # Fetch CalcId for all unique CalcCodes in one query
-      query <- paste0(
-        "SELECT CalcCode, CalcId FROM eqcalcs WHERE CalcCode IN (",
-        paste0("'", all_calc_codes, "'", collapse = ", "),
-        ");"
-      )
-      code_to_calcid_df <- DBI::dbGetQuery(EQWin, query)
-      
-      # Create a lookup table for CalcCode to CalcId
-      code_to_calcid <- setNames(code_to_calcid_df$CalcId, code_to_calcid_df$CalcCode)
-      
-      # Map CalcCodes to CalcIds in data
-      data$CalcId_std_max <- NA_integer_
-      data$CalcId_std_min <- NA_integer_
-      
-      data$CalcId_std_max[std_max_eq_idx] <- code_to_calcid[data$CalcCode_std_max[std_max_eq_idx]]
-      data$CalcId_std_min[std_min_eq_idx] <- code_to_calcid[data$CalcCode_std_min[std_min_eq_idx]]
-      
-      # Prepare data frames for std_max and std_min calculations
-      if (length(std_max_eq_idx) > 0) {
-        std_max_df <- data.frame(
-          idx = std_max_eq_idx,
-          CalcId = data$CalcId_std_max[std_max_eq_idx],
-          SampleId = data$SampleId[std_max_eq_idx],
-          std_type = "std_max",
-          stringsAsFactors = FALSE
+      if (length(all_calc_codes) > 0) {
+        # Fetch CalcId for all unique CalcCodes in one query
+        query <- paste0(
+          "SELECT CalcCode, CalcId FROM eqcalcs WHERE CalcCode IN (",
+          paste0("'", all_calc_codes, "'", collapse = ", "),
+          ");"
         )
-      } else {
-        std_max_df <- data.frame()
+        code_to_calcid_df <- DBI::dbGetQuery(EQWin, query)
+        
+        # Create a lookup table for CalcCode to CalcId
+        code_to_calcid <- setNames(code_to_calcid_df$CalcId, code_to_calcid_df$CalcCode)
+        
+        # Map CalcCodes to CalcIds in data
+        data$CalcId_std_max <- NA_integer_
+        data$CalcId_std_min <- NA_integer_
+        
+        data$CalcId_std_max[std_max_eq_idx] <- code_to_calcid[data$CalcCode_std_max[std_max_eq_idx]]
+        data$CalcId_std_min[std_min_eq_idx] <- code_to_calcid[data$CalcCode_std_min[std_min_eq_idx]]
+        
+        # Prepare data frames for std_max and std_min calculations
+        if (length(std_max_eq_idx) > 0) {
+          std_max_df <- data.frame(
+            idx = std_max_eq_idx,
+            CalcId = data$CalcId_std_max[std_max_eq_idx],
+            SampleId = data$SampleId[std_max_eq_idx],
+            std_type = "std_max",
+            stringsAsFactors = FALSE
+          )
+        } else {
+          std_max_df <- data.frame()
+        }
+        
+        if (length(std_min_eq_idx) > 0) {
+          std_min_df <- data.frame(
+            idx = std_min_eq_idx,
+            CalcId = data$CalcId_std_min[std_min_eq_idx],
+            SampleId = data$SampleId[std_min_eq_idx],
+            std_type = "std_min",
+            stringsAsFactors = FALSE
+          )
+        } else {
+          std_min_df <- data.frame()
+        }
+        
+        # Combine both data frames
+        combined_df <- rbind(std_max_df, std_min_df)
+        
+        # Get unique combinations of CalcId and SampleId to minimize EQWinStd calls
+        unique_combinations <- unique(combined_df[, c("CalcId", "SampleId")])
+        
+        
+        # Initialize a data frame to store EQWinStd results
+        EQWinStd_result <- data.frame()
+        
+        # Process each unique CalcId separately
+        for (calc_id in unique(unique_combinations$CalcId)) {
+          # Get SampleIds for this CalcId
+          sample_ids <- unique_combinations$SampleId[unique_combinations$CalcId == calc_id]
+          
+          # Call EQWinStd for this CalcId and vector of SampleIds
+          result_list <- suppressWarnings(EQWinStd(CalcIds = calc_id, SampleIds = sample_ids, con = EQWin))
+          
+          # Extract the result data frame
+          result_df <- result_list[[as.character(calc_id)]]
+          
+          # Add CalcId column
+          result_df$CalcId <- calc_id
+          
+          # Append to EQWinStd_result
+          EQWinStd_result <- rbind(EQWinStd_result, result_df)
+        }
+        
+        # Merge the results back to the combined_df
+        merged_df <- merge(combined_df, EQWinStd_result, by = c("CalcId", "SampleId"), all.x = TRUE)
+        
+        # Assign the calculated values back to data$std_max and data$std_min
+        data$std_max[merged_df$idx[merged_df$std_type == "std_max"]] <- merged_df$Value[merged_df$std_type == "std_max"]
+        data$std_min[merged_df$idx[merged_df$std_type == "std_min"]] <- merged_df$Value[merged_df$std_type == "std_min"]
       }
 
-      if (length(std_min_eq_idx) > 0) {
-        std_min_df <- data.frame(
-          idx = std_min_eq_idx,
-          CalcId = data$CalcId_std_min[std_min_eq_idx],
-          SampleId = data$SampleId[std_min_eq_idx],
-          std_type = "std_min",
-          stringsAsFactors = FALSE
-        )
-      } else {
-        std_min_df <- data.frame()
-      }
-
-      # Combine both data frames
-      combined_df <- rbind(std_max_df, std_min_df)
-      
-      # Get unique combinations of CalcId and SampleId to minimize EQWinStd calls
-      unique_combinations <- unique(combined_df[, c("CalcId", "SampleId")])
-      
-
-      # Initialize a data frame to store EQWinStd results
-      EQWinStd_result <- data.frame()
-      
-      # Process each unique CalcId separately
-      for (calc_id in unique(unique_combinations$CalcId)) {
-        # Get SampleIds for this CalcId
-        sample_ids <- unique_combinations$SampleId[unique_combinations$CalcId == calc_id]
-        
-        # Call EQWinStd for this CalcId and vector of SampleIds
-        result_list <- suppressWarnings(EQWinStd(CalcIds = calc_id, SampleIds = sample_ids, con = EQWin))
-        
-        # Extract the result data frame
-        result_df <- result_list[[as.character(calc_id)]]
-        
-        # Add CalcId column
-        result_df$CalcId <- calc_id
-        
-        # Append to EQWinStd_result
-        EQWinStd_result <- rbind(EQWinStd_result, result_df)
-      }
-      
-      # Merge the results back to the combined_df
-      merged_df <- merge(combined_df, EQWinStd_result, by = c("CalcId", "SampleId"), all.x = TRUE)
-      
-      # Assign the calculated values back to data$std_max and data$std_min
-      data$std_max[merged_df$idx[merged_df$std_type == "std_max"]] <- merged_df$Value[merged_df$std_type == "std_max"]
-      data$std_min[merged_df$idx[merged_df$std_type == "std_min"]] <- merged_df$Value[merged_df$std_type == "std_min"]
       
       # Convert columns to numeric
       data$std_max <- as.numeric(data$std_max)
