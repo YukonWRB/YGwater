@@ -8,6 +8,7 @@
 #' @param locGrp Only used if `dbSource` is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use `locations` instead.
 #' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from AquaCache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
 #' @param paramGrp Only used if `dbSource` is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use `parameters` instead.
+#' @param standard A standard name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if `dbSource` is 'EQ'.
 #' @param log Should the y-axis be log-transformed?
 #' @param facet_on Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.
 #' @param loc_code Should the location code be used instead of the full location name?
@@ -15,14 +16,14 @@
 #' @param target_datetime Should the plot datetime use the 'target' datetime instead of the 'actual' datetime? Default is TRUE. This is only applicable is dbSource == 'AC'.
 #' @param colorblind Should the plot be colorblind-friendly? Default is FALSE.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en", and this is only supported for dbSource == 'AC'.
-#' @param dbSource The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function [AquaConnect()].
+#' @param dbSource The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".
 #'
-#' @return A zoomable plot of the data from EQWin.
+#' @return An interactive HTML plot of the data from EQWin.
 #' @export
 #'
 
-plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp = NULL, parameters = NULL, paramGrp = NULL, log = FALSE, facet_on = 'params', loc_code = FALSE, rows = 'auto', target_datetime = TRUE, colorblind = FALSE, lang = "en", dbSource = "EQ", dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
+plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp = NULL, parameters = NULL, paramGrp = NULL, standard = NULL, log = FALSE, facet_on = 'params', loc_code = FALSE, rows = 'auto', target_datetime = TRUE, colorblind = FALSE, lang = "en", dbSource = "EQ", dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
   
   #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
 
@@ -31,8 +32,10 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # end <- "2024-08-28"
   # locations <- NULL
   # parameters <- NULL
-  # locGrp <- "QZ Eagle Gold HLF"
+  # locGrp <- "A EG Selec"
   # paramGrp <- "EG-HLF-failure"
+  # standard = c("CCME_ST")
+  # loc_code = TRUE
   # log = FALSE
   # facet_on = 'params'
   # rows = 'auto'
@@ -48,6 +51,8 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # parameters <- NULL
   # locGrp <- NULL
   # paramGrp <- "EG-HLF-failure"
+  # standard = c("CCME_ST")
+  # loc_code = TRUE
   # log = FALSE
   # facet_on = 'locs'
   # rows = 'auto'
@@ -113,6 +118,16 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
     }
   }
   
+  # check for proper call of standards
+  if (!is.null(standard)) {
+    if (dbSource == "AC") {
+      warning("Parameter 'standard' is only used when 'dbSource' is 'EQ'")
+      standard <- NULL
+    } else {
+      if (length(standard) > 1) stop("Parameter 'standard' must be a single standard name/code. Refer to function documentation.")
+    }
+  }
+  
   facet_on <- tolower(facet_on)
   if (!facet_on %in% c("locs", "params")) stop("facet_on must be either 'locs' or 'params'")
   
@@ -144,6 +159,14 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
     # Connect to EQWin
     EQWin <- AccessConnect(dbPath, silent = TRUE)
     on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+    
+    # Validate existence of standards
+    if (!is.null(standard)) {
+      standards <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ('", paste0(standard, collapse = "', '"), "')"))
+      if (nrow(standards) == 0) {
+        stop("No standards found in the EQWin database with the name '", standard, "'")
+      }
+    }
     
     # Fetch the station and/or parameter list if necessary (locGrp or paramGrp was specified)
     if (!is.null(locGrp)) {
@@ -222,8 +245,8 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
     data <- merge(results[, c("SampleId", "ParamId", "Result")], samps_locs[, c("SampleId", "StnId", "CollectDateTime")])
     data <- merge(data, params)
     data <- merge(data, locations)
-    data <- data[, -which(names(data) %in% c("SampleId", "ParamId", "StnId"))]  # Drop unnecessary column
-    names(data) <- c("value", "datetime", "param_name", "units", "location", "location_name")
+    data <- data[, -which(names(data) %in% c("StnId"))]  # Drop unnecessary column   ! Note that this leaves some columns that are not output from the AquaCache data fetch; thse are only for adding standard values to the plot and AquaCache will need to work differently.
+    names(data) <- c("ParamId", "SampleId", "value", "datetime", "param_name", "units", "location", "location_name")
     
     # Now add the result_condition and result_condition_value columns
     # Sometimes the "." is a "," in the result, so we need to replace it
@@ -248,6 +271,116 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
           }
         })
       }
+    }
+    
+    # Pull in standards from EQWin if necessary. This may involve calculations and could take some time!
+    if (!is.null(standard)) {
+      stdVals <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, ParamId, MaxVal AS std_max, MinVal AS std_min FROM eqstdval WHERE StdId = ", standards$StdId, " AND ParamId IN (", paste0(unique(results$ParamId), collapse = ", "), ");"))
+      data <- merge(data, stdVals, all.x = TRUE)
+      stash <- data
+      
+      # Now for rows where the std_max or std_min starts with "=" we need to calculate it and replace with the calculated value
+      
+      # Identify rows where std_max and std_min start with "="
+      std_max_eq_idx <- which(!is.na(data$std_max) & grepl("^=", data$std_max))
+      std_min_eq_idx <- which(!is.na(data$std_min) & grepl("^=", data$std_min))
+      
+      # Extract CalcCodes by removing "="
+      data$CalcCode_std_max <- NA_character_
+      data$CalcCode_std_min <- NA_character_
+      
+      data$CalcCode_std_max[std_max_eq_idx] <- sub("^=", "", data$std_max[std_max_eq_idx])
+      data$CalcCode_std_min[std_min_eq_idx] <- sub("^=", "", data$std_min[std_min_eq_idx])
+      
+      # Combine all CalcCodes and get unique values
+      all_calc_codes <- unique(c(
+        data$CalcCode_std_max[std_max_eq_idx],
+        data$CalcCode_std_min[std_min_eq_idx]
+      ))
+      all_calc_codes <- all_calc_codes[!is.na(all_calc_codes)]
+      
+      # Fetch CalcId for all unique CalcCodes in one query
+      query <- paste0(
+        "SELECT CalcCode, CalcId FROM eqcalcs WHERE CalcCode IN (",
+        paste0("'", all_calc_codes, "'", collapse = ", "),
+        ");"
+      )
+      code_to_calcid_df <- DBI::dbGetQuery(EQWin, query)
+      
+      # Create a lookup table for CalcCode to CalcId
+      code_to_calcid <- setNames(code_to_calcid_df$CalcId, code_to_calcid_df$CalcCode)
+      
+      # Map CalcCodes to CalcIds in data
+      data$CalcId_std_max <- NA_integer_
+      data$CalcId_std_min <- NA_integer_
+      
+      data$CalcId_std_max[std_max_eq_idx] <- code_to_calcid[data$CalcCode_std_max[std_max_eq_idx]]
+      data$CalcId_std_min[std_min_eq_idx] <- code_to_calcid[data$CalcCode_std_min[std_min_eq_idx]]
+      
+      # Prepare data frames for std_max and std_min calculations
+      if (length(std_max_eq_idx) > 0) {
+        std_max_df <- data.frame(
+          idx = std_max_eq_idx,
+          CalcId = data$CalcId_std_max[std_max_eq_idx],
+          SampleId = data$SampleId[std_max_eq_idx],
+          std_type = "std_max",
+          stringsAsFactors = FALSE
+        )
+      } else {
+        std_max_df <- data.frame()
+      }
+
+      if (length(std_min_eq_idx) > 0) {
+        std_min_df <- data.frame(
+          idx = std_min_eq_idx,
+          CalcId = data$CalcId_std_min[std_min_eq_idx],
+          SampleId = data$SampleId[std_min_eq_idx],
+          std_type = "std_min",
+          stringsAsFactors = FALSE
+        )
+      } else {
+        std_min_df <- data.frame()
+      }
+
+      # Combine both data frames
+      combined_df <- rbind(std_max_df, std_min_df)
+      
+      # Get unique combinations of CalcId and SampleId to minimize EQWinStd calls
+      unique_combinations <- unique(combined_df[, c("CalcId", "SampleId")])
+      
+
+      # Initialize a data frame to store EQWinStd results
+      EQWinStd_result <- data.frame()
+      
+      # Process each unique CalcId separately
+      for (calc_id in unique(unique_combinations$CalcId)) {
+        # Get SampleIds for this CalcId
+        sample_ids <- unique_combinations$SampleId[unique_combinations$CalcId == calc_id]
+        
+        # Call EQWinStd for this CalcId and vector of SampleIds
+        result_list <- suppressWarnings(EQWinStd(CalcIds = calc_id, SampleIds = sample_ids, con = EQWin))
+        
+        # Extract the result data frame
+        result_df <- result_list[[as.character(calc_id)]]
+        
+        # Add CalcId column
+        result_df$CalcId <- calc_id
+        
+        # Append to EQWinStd_result
+        EQWinStd_result <- rbind(EQWinStd_result, result_df)
+      }
+      
+      # Merge the results back to the combined_df
+      merged_df <- merge(combined_df, EQWinStd_result, by = c("CalcId", "SampleId"), all.x = TRUE)
+      
+      # Assign the calculated values back to data$std_max and data$std_min
+      data$std_max[merged_df$idx[merged_df$std_type == "std_max"]] <- merged_df$Value[merged_df$std_type == "std_max"]
+      data$std_min[merged_df$idx[merged_df$std_type == "std_min"]] <- merged_df$Value[merged_df$std_type == "std_min"]
+      
+      # Convert columns to numeric
+      data$std_max <- as.numeric(data$std_max)
+      data$std_min <- as.numeric(data$std_min)
+
     }
     
   } else { # dbSource == "AC"
@@ -422,11 +555,13 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
         for (m in missing) {
           if (color_by %in% c("location", "location_name")) {
             unit_text <- unique(df$units)
-            df <- rbind(df, data.frame(value = -Inf, datetime = min(df$datetime), param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA))
+            to_bind <- data.frame(value = -Inf, datetime = min(df$datetime), param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA)
+            dplyr::bind_rows(df, to_bind)  # used instead of rbind because it automatically adds columns with NA values
           } else {
             unit_text <- unique(data[data$param_name == m, "units"])
             loc_text <- unique(data[data$location_name == facet_value, "location"])
-            df <- rbind(df, data.frame(value = -Inf, datetime = min(df$datetime), param_name = m, units = unit_text, location = loc_text, location_name = facet_value, result_condition = NA, result_condition_value = NA))
+            to_bind <- data.frame(value = -Inf, datetime = min(df$datetime), param_name = m, units = unit_text, location = loc_text, location_name = facet_value, result_condition = NA, result_condition_value = NA)
+            df <- dplyr::bind_rows(df, to_bind)
           }
         }
       }
@@ -477,19 +612,6 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
         }
       }
       
-      # Determine appropriate number of decimal places
-      # Currently not in use!
-      # decimals <- df$value %% 1 |>
-      #   as.character()
-      # # Check if there's anything to the right of the decimal point
-      # if (any(grepl("\\.", decimals))) {
-      #   decimals <- sub(".*\\.", "", decimals)
-      #   decimals <- max(nchar(decimals))
-      # } else {
-      #   decimals <- 0
-      # }
-      # sprintDecimals <- paste0("%.", decimals, "f")
-      
       p <- plotly::plot_ly(df, 
                            x = ~datetime, 
                            y = ~value, 
@@ -500,7 +622,10 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                            legendgroup = ~get(color_by),
                            showlegend = (i == 1),
                            marker = list(
-                             opacity = ifelse(all(df$value == -Inf), 0, 1)
+                             opacity = ifelse(all(df$value == -Inf), 0, 1),
+                             symbol = "circle",
+                             size = 7,
+                             line = list(width = 0.2, color = rgb(0, 0, 0))
                            ),
                            hoverinfo = "text",
                            text = ~paste(get(color_by), "<br>",  # Name or parameter of trace
@@ -527,9 +652,12 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                                mode = 'markers', 
                                color = ~get(color_by), 
                                colors = custom_colors, 
-                               marker = list(opacity = 0.8, 
-                                             symbol = "circle-open", 
-                                             size = 5), 
+                               marker = list(opacity = 1, 
+                                             # symbol = "circle-open-dot", 
+                                             symbol = "star-open-dot",
+                                             size = 7,
+                                             line = list(width = 1, color = NULL)
+                                             ), 
                                showlegend = FALSE,
                                hoverinfo = "text",
                                text = ~paste(get(color_by), "<br>", # Name or parameter of trace
@@ -544,6 +672,56 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
         )
       }
       
+      # Now add points (actually lines) for the standard values where applicable
+      if (!is.null(standard)) {
+        if (length(df$std_max[!is.na(df$std_max)]) > 1) {
+          p <- plotly::add_trace(p,
+                                 data = df,
+                                 x = ~datetime,
+                                 y = ~std_max,
+                                 type = 'scatter',
+                                 mode = 'markers',
+                                 color = ~get(color_by),
+                                 colors = custom_colors,
+                                 marker = list(opacity = 1,
+                                               symbol = "line-ew",
+                                               size = 10,  # Controls line length
+                                               line = list(width = 2,
+                                                           color = NULL
+                                                           )
+                                               ), # controls the actual line width and clor
+                                 showlegend = FALSE,
+                                 hoverinfo = 'text',
+                                 text = ~paste(get(color_by), "<br>", # Name or parameter of trace,
+                                               datetime, "<br>", # Datetime
+                                               "Standard Max:", round(std_max, 6), units)
+          )
+        }
+        if (length(df$std_min[!is.na(df$std_min)]) > 1) {
+          p <- plotly::add_trace(p,
+                                 data = df,
+                                 x = ~datetime,
+                                 y = ~std_min,
+                                 type = 'scatter',
+                                 mode = 'markers',
+                                 color = ~get(color_by),
+                                 colors = custom_colors,
+                                 marker = list(opacity = 1,
+                                               symbol = "line-ew",
+                                               size = 10,
+                                               line = list(width = 2,
+                                                           color = NULL
+                                                           )
+                                               ),
+                                 showlegend = FALSE,
+                                 hoverinfo = 'text',
+                                 text = ~paste(get(color_by), "<br>", # Name or parameter of trace,
+                                               datetime, "<br>", # Datetime
+                                               "Standard Min:", round(std_min, 6), units)
+          )
+        }
+      }
+
       return(p)
     })
     
@@ -559,7 +737,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   } # End of plot creation function
   
   facet_by <- if (facet_on == "params") "param_name" else "location_name" # key to the correct column name
-  data$param_name <- titleCase(data$param_name, lang)
+  data$param_name <- data$param_name
   data$location_name <- titleCase(data$location_name, lang)
     
   plot <- create_facet_plot(data, facet_by, targ_dt = target_datetime, loc_code = loc_code)

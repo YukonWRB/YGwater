@@ -1,18 +1,19 @@
-#' Calculate standards using formulas in EQWin
+#' Calculate standards using formulas in EQWin (vectorized)
 #' 
 #' The EQWin database stores formulas for calculating standards. This function retrieves the formula, parses it into R code, and calculates the standard for a specified parameter. As these calculations typically require additional measured values, the SampleId is also required. Note that the target parameter is NOT required; this is identified by the CalcId.
 #'
-#' @param CalcId The ID identifying the calculation to perform, from column CalcId of table eqcalcs.
-#' @param SampleId The sample ID for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.
+#' @param CalcIds A vector of IDs identifying the calculation to perform, from column CalcId of table eqcalcs.
+#' @param SampleIds A vector of SampleIds for the calculation, from column SampleId of table eqsampls. This is required to retrieve the additional parameter values and the sample date needed for the calculation.
 #' @param con A connection to the EQWin database. Default NULL creates a connection to the default database location ("//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") and closes the connection when done.
 #'
 #' @return A value for the calculated standard.
 #' @export
 #'
 
-EQWinStd <- function(CalcId, SampleId, con = NULL) {
-
-  # initial checks, connection, and validations #######################################################################################
+EQWinStd <- function(CalcIds, SampleIds, con = NULL) {
+  # Ensure CalcIds and SampleIds are vectors
+  CalcIds <- unique(CalcIds)
+  SampleIds <- unique(SampleIds)
   
   # Connect to EQWin
   if (is.null(con)) {
@@ -21,34 +22,33 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
   } else {
     EQWin <- con
   }
-
   
-  # Check that the CalcId, ParamId, SampleId exist while retrieving necessary data
-  script <- DBI::dbGetQuery(EQWin, paste0("SELECT CalcScript FROM eqcalcs WHERE CalcId = ", CalcId))$CalcScript
+  # Fetch CalcScripts for all unique CalcIds
+  calc_query <- paste0("SELECT CalcId, CalcScript FROM eqcalcs WHERE CalcId IN (", paste(CalcIds, collapse = ","), ");")
+  calc_scripts_df <- DBI::dbGetQuery(EQWin, calc_query)
   
-  # Check encoding and if necessary convert to UTF-8
-  locale_info <- Sys.getlocale("LC_CTYPE")
-  encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
-  tryCatch({
-    grepl("[^\x01-\x7F]", script)
-  }, warning = function(w) {
-    if (encoding != "utf8") {
-      script <<- iconv(script, from = encoding, to = "UTF-8")
-    }
-  })
-  
-  if (length(script) == 0) {
-    stop("CalcId does not exist in the database.")
-  }
-  sample <- DBI::dbGetQuery(EQWin, paste0("SELECT SampleId, CollectDateTime FROM eqsampls WHERE SampleId = ", SampleId))
-  if (nrow(sample) == 0) {
-    stop("SampleId does not exist in the database.")
+  if (nrow(calc_scripts_df) == 0) {
+    stop("No valid CalcIds found in the database.")
   }
   
-  results <- DBI::dbGetQuery(EQWin, paste0("SELECT eqdetail.ParamId, eqdetail.Result, eqparams.ParamCode FROM eqdetail INNER JOIN eqparams ON eqdetail.ParamId = eqparams.ParamId WHERE eqdetail.SampleId = ", SampleId))
+  # Fetch sample data for all SampleIds
+  sample_query <- paste0("SELECT SampleId, CollectDateTime FROM eqsampls WHERE SampleId IN (", paste(SampleIds, collapse = ","), ");")
+  samples_df <- DBI::dbGetQuery(EQWin, sample_query)
+  
+  if (nrow(samples_df) == 0) {
+    stop("No valid SampleIds found in the database.")
+  }
+  
+  # Fetch results for all SampleIds
+  results_query <- paste0(
+    "SELECT eqdetail.SampleId, eqdetail.ParamId, eqdetail.Result, eqparams.ParamCode ",
+    "FROM eqdetail INNER JOIN eqparams ON eqdetail.ParamId = eqparams.ParamId ",
+    "WHERE eqdetail.SampleId IN (", paste(SampleIds, collapse = ","), ");"
+  )
+  results_df <- DBI::dbGetQuery(EQWin, results_query)
   
   # Convert results to numeric, handle "<" values as 0
-  results$Result <- sapply(results$Result, function(x) {
+  results_df$Result <- sapply(results_df$Result, function(x) {
     if (grepl("^<", x)) {
       return(0)
     } else {
@@ -56,32 +56,17 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
     }
   })
   
-  # Prepare the script and variables for parsing #######################################################################################
-  # Extract comments and actual script lines
-  script <- gsub("\r", "", script)
-  script_lines <- unlist(strsplit(script, "\n"))
-  actual_script <- script_lines[!grepl("^\\*", script_lines)]
-  actual_script <- actual_script[actual_script != ""]
-  
-  
-  # Extract lines beginning with "#". Not sure what to do with these yet!
-  comments <- actual_script[grepl("^#", actual_script)]
-  actual_script <- actual_script[!grepl("^#", actual_script)]
-  
-  # Create a named vector for parameters
-  params <- stats::setNames(results$Result, results$ParamCode)
-  
-  # Create functions for later use ####################################################################################################
-  # Function to replace parameter names with their values, defaulting to 0 if missing
-  replace_params <- function(expression, params) {
+  # Prepare helper functions
+  replace_params <- function(expression, params, sample_date) {
     for (param in names(params)) {
-      expression <- gsub(paste0("\\[", param, "\\]"), params[param], expression)
+      expression <- gsub(paste0("\\[", param, "\\]"), params[[param]], expression)
     }
-    expression <- gsub("\\[2\\.CollectDateTime\\]", paste0("'", as.Date(sample$CollectDateTime), "'"), expression)
+    expression <- gsub("\\[2\\.CollectDateTime\\]", paste0("'", as.Date(sample_date), "'"), expression)
     
-    expression <- gsub("#(y{4})", paste0("#", lubridate::year(sample$CollectDateTime)), expression)
-    expression <- gsub("-m{2}-)", paste0("-", lubridate::month(sample$CollectDateTime), "-"), expression)
-    expression <- gsub("-d{2}#)", paste0("-", lubridate::day(sample$CollectDateTime), "#"), expression)
+    # Replace date components
+    expression <- gsub("#(y{4})", paste0("#", format(sample_date, "%Y")), expression)
+    expression <- gsub("-m{2}-", paste0("-", format(sample_date, "%m"), "-"), expression)
+    expression <- gsub("-d{2}#", paste0("-", format(sample_date, "%d"), "#"), expression)
     
     expression <- gsub("#(\\d{4}-\\d{2}-\\d{2})#", "'\\1'", expression)
     
@@ -90,22 +75,20 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
     
     return(expression)
   }
-
-  # Replace letters in 'expression' with their values in 'vars'
+  
   replace_vars <- function(expression, vars) {
     for (var in names(vars)) {
-      expression <- gsub(var, vars[var], expression)
+      expression <- gsub(var, vars[[var]], expression, fixed = TRUE)
     }
     return(expression)
   }
   
-  # Function to format the expression for evaluation in R
-  format <- function(expression) {
+  format_expression <- function(expression) {
     # Replace "=" (but not "<=", ">=", "=<", "=>") with "==" for evaluation in R
-    expression <- gsub("([^<>=])=([^<>=])", "\\1==\\2", expression)      
-    # If single capital letters are still present surround them in single quotes so the equation parses properly
+    expression <- gsub("([^<>=])=([^<>=])", "\\1==\\2", expression)
+    # Surround single capital letters with single quotes
     expression <- gsub("([A-Z])", "'\\1'", expression)
-    # Replace @exp, @lna, @log with their R equivalents
+    # Replace function names
     expression <- gsub("@exp", "exp", expression)
     expression <- gsub("@lna", "log", expression)
     expression <- gsub("@log", "log10", expression)
@@ -113,102 +96,132 @@ EQWinStd <- function(CalcId, SampleId, con = NULL) {
     return(expression)
   }
   
-  # Evaluate the script ##############################################################################################################
-  # Initialize variables
-  variables <- list("X" = NA)
-  first_x <- FALSE
-  # Evaluate each line of the script
-  for (line in actual_script) {
-    # Remove spaces from everything except for character strings intended as calculation outputs
-    quoted_portion <- regmatches(line, gregexpr('"[^"]*"', line))[[1]]
-    cleaned_expression <- gsub(' ".*?"', '', line)  # Remove the quoted part temporarily
-    cleaned_expression <- gsub(" ", "", cleaned_expression)  # Remove all spaces
-    line <- paste0(cleaned_expression, quoted_portion)  # Add the quoted part back
+  # Function to process and evaluate a script for a single sample
+  process_script <- function(script_lines, params, sample_date) {
+    variables <- list("X" = NA)
+    first_x <- FALSE
     
-    # Replace parameter names with their actual values
-    line <- replace_params(line, params)
-    
-    # Split the line at the "=" sign to get the variable and the expression. The expression can in turn contain "=" signs.
-    parts <- unlist(strsplit(line, "=", fixed = TRUE))
-    var <- parts[1]
-    expr <- paste(parts[-1], collapse = "=")
-    
-    if (var == "X") {
-      first_x <- TRUE
-    } else {
-      # Sometimes X is not evaluated as TRUE and then other variables come before other X assignments.
-      first_x <- FALSE
-    }
-    
-    # Evaluate the expression
-    if (grepl("\\?", expr)) {
-      # Handle conditional expressions
-      condition <- strsplit(expr, "\\?")[[1]][1]
-      true_value <- strsplit(strsplit(expr, "\\?")[[1]][2], ":")[[1]][1]
-      false_value <- ifelse(length(strsplit(strsplit(expr, "\\?")[[1]][2], ":")[[1]]) > 1, 
-                            strsplit(strsplit(expr, "\\?")[[1]][2], ":")[[1]][2], 
-                            NA)
-
-      # If a letter is present in the condition, replace it with its value (if possible)
-      condition <- replace_vars(condition, variables)
-      condition <- format(condition)
+    for (line in script_lines) {
+      # Remove spaces except within quotes
+      quoted_portion <- regmatches(line, gregexpr('"[^"]*"', line))[[1]]
+      cleaned_expression <- gsub(' ".*?"', '', line)  # Remove the quoted part temporarily
+      cleaned_expression <- gsub(" ", "", cleaned_expression)  # Remove all spaces
+      line <- paste0(cleaned_expression, quoted_portion)  # Add the quoted part back
       
-      # Evaluate the condition and, if needed, the TRUE/FALSE value
-      condition_result <- eval(parse(text = condition))
+      # Replace parameter names with actual values
+      line <- replace_params(line, params, sample_date)
       
-     # Same treatment as above on true_value and false_value
-
-      # All or a portion of true_value might be in " " quotes, and this portion should not be replaced nor does it need to go through the next steps.
-      if (condition_result) {
-        true_value_quoted <- regmatches(true_value, gregexpr('"[^"]*"', true_value))[[1]]
-        true_value <- gsub('".*?"', '', true_value)  # Remove the quoted part temporarily
-        if (nchar(true_value) > 0) {
-          true_value <- replace_vars(true_value, variables)
-          true_value <- format(true_value)
-        }
-        true_value <- paste0(true_value, true_value_quoted)
+      # Split the line at the "=" sign
+      parts <- unlist(strsplit(line, "=", fixed = TRUE))
+      var <- parts[1]
+      expr <- paste(parts[-1], collapse = "=")
+      
+      if (var == "X") {
+        first_x <- TRUE
+      } else {
+        first_x <- FALSE
+      }
+      
+      if (grepl("\\?", expr)) {
+        # Handle conditional expressions
+        condition <- strsplit(expr, "\\?")[[1]][1]
+        true_value <- strsplit(strsplit(expr, "\\?")[[1]][2], ":")[[1]][1]
+        false_value <- ifelse(length(strsplit(strsplit(expr, "\\?")[[1]][2], ":")[[1]]) > 1,
+                              strsplit(strsplit(expr, "\\?")[[1]][2], ":")[[1]][2],
+                              NA)
         
-        variables[[var]] <- eval(parse(text = true_value))
+        condition <- replace_vars(condition, variables)
+        condition <- format_expression(condition)
+        condition_result <- eval(parse(text = condition))
+        
+        if (condition_result) {
+          true_value_quoted <- regmatches(true_value, gregexpr('"[^"]*"', true_value))[[1]]
+          true_value <- gsub('".*?"', '', true_value)  # Remove the quoted part temporarily
+          if (nchar(true_value) > 0) {
+            true_value <- replace_vars(true_value, variables)
+            true_value <- format_expression(true_value)
+          }
+          true_value <- paste0(true_value, true_value_quoted)
+          
+          variables[[var]] <- eval(parse(text = true_value))
+          if (first_x) {
+            break
+          }
+        } else {
+          if (!is.na(false_value)) {
+            false_value_quoted <- regmatches(false_value, gregexpr('"[^"]*"', false_value))[[1]]
+            false_value <- gsub('".*?"', '', false_value)  # Remove the quoted part temporarily
+            if (nchar(false_value) > 0) {
+              false_value <- replace_vars(false_value, variables)
+              false_value <- format_expression(false_value)
+            }
+            false_value <- paste0(false_value, false_value_quoted)
+            variables[[var]] <- eval(parse(text = false_value))
+          } else {
+            next
+          }
+        }
+      } else {
+        # Direct assignment
+        expr <- replace_vars(expr, variables)
+        expr <- format_expression(expr)
+        variables[[var]] <- eval(parse(text = expr))
         if (first_x) {
           break
         }
-        
-      } else if (!condition_result) {
-        if (!is.na(false_value)) {
-          false_value_quoted <- regmatches(false_value, gregexpr('"[^"]*"', false_value))[[1]]
-          false_value <- gsub('".*?"', '', false_value)  # Remove the quoted part temporarily
-          if (nchar(false_value) > 0) {
-            false_value <- replace_vars(false_value, variables)
-            false_value <- format(false_value)
-          }
-          false_value <- paste0(false_value, false_value_quoted)
-          variables[[var]] <- ifelse(!is.na(false_value), eval(parse(text = false_value)), variables[[var]])
-        } else {
-          # The condition evaluated as FALSE and there is no FALSE value, so do nothing and move on to the next line even if first_x is TRUE
-          next
-        }
       }
-    } else { # ? is not present in the expression so we're dealing with direct assignment
-      if (grepl("[A-Z]", expr) && nchar(expr) == 1) { # If the expression is a simple variable
-        expr <- replace_vars(expr, variables)
-        variables[[expr]] <- expr
-      } else { # The expression must be a simple value OR a calculation that may or may not involve other variables
-        # Deal with dates
-        expr <- gsub("\\[2\\.CollectDateTime\\]", paste0("'", as.Date(sample$CollectDateTime), "'"), expr)
-        expr <- gsub("#(\\d{4}-\\d{2}-\\d{2})#", "'\\1'", expr)
-        # Replace any letters in the expression with their values
-        expr <- replace_vars(expr, variables)
-        expr <- format(expr)
-        # Evaluate the expression
-        expr <- eval(parse(text = expr))
-      }
-      variables[[var]] <- expr
-      if (first_x) {
-        break
-      }
+    }
+    
+    return(variables$X)
+  }
+  
+  # Process each CalcScript and create functions
+  calc_functions <- list()
+  for (i in seq_len(nrow(calc_scripts_df))) {
+    calc_id <- calc_scripts_df$CalcId[i]
+    script <- calc_scripts_df$CalcScript[i]
+    
+    # Encoding check and conversion
+    script <- gsub("\r", "", script)
+    script_lines <- unlist(strsplit(script, "\n"))
+    # Remove comments and empty lines
+    actual_script <- script_lines[!grepl("^\\*|^#", script_lines)]
+    actual_script <- actual_script[actual_script != ""]
+    
+    # Create a function that applies the script to a sample's data
+    calc_functions[[as.character(calc_id)]] <- function(params, sample_date) {
+      process_script(actual_script, params, sample_date)
     }
   }
   
-  # Return the calculated standard value
-  return(variables$X)
+  # Prepare the results list
+  results_list <- list()
+  
+  # Apply each function to all samples
+  for (calc_id in CalcIds) {
+    func <- calc_functions[[as.character(calc_id)]]
+    # Initialize a vector to store results
+    calc_results <- numeric(length(SampleIds))
+    
+    for (j in seq_along(SampleIds)) {
+      sample_id <- SampleIds[j]
+      # Get sample date
+      sample_date <- samples_df$CollectDateTime[samples_df$SampleId == sample_id]
+      # Get parameters for this sample
+      sample_results <- results_df[results_df$SampleId == sample_id, ]
+      params <- stats::setNames(sample_results$Result, sample_results$ParamCode)
+      
+      # Apply the function
+      calc_results[j] <- func(params, sample_date)
+    }
+    
+    # Store results in a data frame
+    results_df_temp <- data.frame(
+      SampleId = SampleIds,
+      Value = calc_results
+    )
+    results_list[[as.character(calc_id)]] <- results_df_temp
+  }
+  
+  return(results_list)
 }

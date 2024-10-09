@@ -14,7 +14,7 @@
 #' @param paramGrp A parameter group as listed in the EQWin eqgroups table, column groupname. Leave NULL to use parameters instead.
 #' @param stds A vector of standard names as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. As these can apply to all stations standard values will be listed in a column to the left of the results.
 #' @param stnStds TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.
-#' @param SD_exceed An optional number of standard deviations above/below mean to consider as an exceedance. Default NULL will not calculate this. Applied to both sides, so 2 will flag values 2 SD above or 2 SD below the mean, not 1 SD above and 1 SD below
+#' @param SD_exceed An optional number of standard deviations above/below mean to consider as an exceedance. Default NULL will not calculate this.
 #' @param SD_start The start date for the standard deviation calculation as a vector of one date or character values that can be converted to dates. NULL uses the earliest date in the data.
 #' @param SD_end The end date for the standard deviation calculation as a vector of one date or character values that can be converted to dates. NULL uses the latest date in the data.
 #' @param SD_doy Optional days of year to **include** in the standard deviation calculation as a numeric vector (i.e. c(100:200)). NULL uses all relevant data.
@@ -419,7 +419,6 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
         }
       }
       if (nrow(sd_values) > 0) {
-        # replace ParamId with ParamCode, drop ParamId column
         sd_values <- merge(sd_values, params)
         sd_values <- sd_values[, c("ParamCode", "Mean", "SD", "SD_exceed_max", "SD_exceed_min")]
         SD_vals[[as.character(i)]] <- sd_values
@@ -530,7 +529,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
   }
   
   
-  # Flag when parameters are exceeded using comments and conditional formatting
+  # Flag when parameter standards are exceeded using comments and conditional formatting
   # Work with all-station standards first as these apply to all stations, then work on station-specific standards. Comments go in a cell of a data.frame so that station-specific comments can be accumulated later, then all comments are added cell-by-cell to the workbook.
   exceed_comments <- matrix(character(0), nrow = nrow(final_table), ncol = ncol(final_table) - (1 + nrow(standards)))
   if (!is.null(stds) ) {
@@ -559,7 +558,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
                 # Find the SampleId
                 stn_name <- names(final_table)[k]
                 sid <- samps_locs[samps_locs$colnames == stn_name, "SampleId"]
-                min_max <- EQWinStd(calc_id, sid, con)
+                min_max <- EQWinStd(calc_id, sid, con)[[1]]$Value
               } else { # It's a simple standard! Nice and easy.
                 min_max <- as.numeric(std_applies[[l]])
               }
@@ -598,7 +597,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
           } else {  # There is a standard, so check if the MaxVal and the MinVal standards are exceeded
             if (is.na(final_table[i, col_number_final])) next # it's character at this point, and NA means that there is nothing in the field
             
-            compare_value <- suppressWarnings(as.numeric(final_table[j, col_number_final])) # The value to compare agains the standard
+            compare_value <- suppressWarnings(as.numeric(final_table[j, col_number_final])) # The value to compare against the standard
             if (is.na(compare_value)) next # If the value is NA, skip. This happens notably when the value is < the detection limit.
             
             for (l in c("MinVal", "MaxVal")) {
@@ -610,7 +609,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
                 # Find the SampleId
                 colname <- names(final_table)[col_number_final]
                 sid <- samps_locs[samps_locs$colnames == colname, "SampleId"]
-                min_max <- EQWinStd(calc_id, sid, con)
+                min_max <- EQWinStd(calc_id, sid, con)[[1]]$Value
               } else { # It's a simple standard! Nice and easy.
                 min_max <- as.numeric(std_applies[[l]])
               }
