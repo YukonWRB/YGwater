@@ -31,10 +31,7 @@ eq_fetch <- function(EQcode,
   # BD <- 2
   # apply_standards = FALSE
   
-  rlang::check_installed("odbc", reason = "required to connect to EQWin Access DB") #This is here because odbc is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-  
   # Set a few options
-  
   old_scipen <- getOption("scipen")
   old_dplyr <- getOption("dplyr.summarise.inform")
   options(dplyr.summarise.inform = FALSE)

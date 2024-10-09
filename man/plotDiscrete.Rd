@@ -11,6 +11,7 @@ plotDiscrete(
   locGrp = NULL,
   parameters = NULL,
   paramGrp = NULL,
+  standard = NULL,
   log = FALSE,
   facet_on = "params",
   loc_code = FALSE,
@@ -36,6 +37,8 @@ plotDiscrete(
 
 \item{paramGrp}{Only used if \code{dbSource} is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{parameters} instead.}
 
+\item{standard}{A standard name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if \code{dbSource} is 'EQ'.}
+
 \item{log}{Should the y-axis be log-transformed?}
 
 \item{facet_on}{Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.}
@@ -50,12 +53,12 @@ plotDiscrete(
 
 \item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en", and this is only supported for dbSource == 'AC'.}
 
-\item{dbSource}{The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function \code{\link[=AquaConnect]{AquaConnect()}}.}
+\item{dbSource}{The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function \code{\link[=AquaConnect]{AquaConnect()}} while EQWin connections use \code{\link[=AccessConnect]{AccessConnect()}}.}
 
 \item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".}
 }
 \value{
-A zoomable plot of the data from EQWin.
+An interactive HTML plot of the data from EQWin.
 }
 \description{
 Plots data directly from EQWin or from the AquaCache for one or more location (station) and one or more parameter. Depending on the setting for argument 'facet_on', the function can either make a facet plot where each station is a facet (with parameters as distinct traces) or where each parameter is a facet (with locations as distinct traces). Values above or below the detection limit are shown as the detection limit but symbolized differently (open circles).

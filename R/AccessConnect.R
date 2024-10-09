@@ -11,6 +11,8 @@
 
 AccessConnect <- function(path, silent = FALSE) {
   
+  rlang::check_installed("odbc", reason = "Package odbc is required for Access database connections")
+  
   # Attempt to load the ODBC driver (if not found R will crash, so stop)
   odbc_drivers <- tryCatch(odbc::odbcListDrivers(), 
                            error = function(e) return(NULL))

@@ -39,7 +39,7 @@ EQWinReport(
 
 \item{stnStds}{TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.}
 
-\item{SD_exceed}{An optional number of standard deviations above/below mean to consider as an exceedance. Default NULL will not calculate this. Applied to both sides, so 2 will flag values 2 SD above or 2 SD below the mean, not 1 SD above and 1 SD below}
+\item{SD_exceed}{An optional number of standard deviations above/below mean to consider as an exceedance. Default NULL will not calculate this.}
 
 \item{SD_start}{The start date for the standard deviation calculation as a vector of one date or character values that can be converted to dates. NULL uses the earliest date in the data.}
 

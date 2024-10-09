@@ -13,7 +13,23 @@ WQReportUI <- function(id) {
                    selected = "EQ"),
       dateInput(ns("date"), "Report Date", value = Sys.Date() - 30,
                 width = "100%"),
-      numericInput(ns("date_approx"), "Look for data within this many days of the report date", value = 1,
+      div(
+        style = "display: flex; align-items: center;",
+        tags$label(
+          "Look for data within this many days of the report date", 
+          class = "control-label",
+          style = "margin-right: 5px;"
+        ),
+        span(
+          id = ns("date_approx_info"),
+          `data-toggle` = "tooltip",
+          `data-placement` = "right",
+          `data-trigger` = "click hover",
+          title = "Use this to include data up to a certain number of days of the report date. For example, you may want a single report with data from multiple locations sampled within 2-3 days. If multiple samples for a location fall within the date range, the one closest to the report date will be used.",
+          icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+        )
+      ),
+      numericInput(ns("date_approx"), NULL, value = 1,
                    width = "100%"),
       conditionalPanel(ns = ns,
                        condition = "input.data_source == 'EQ'",
@@ -54,14 +70,104 @@ WQReportUI <- function(id) {
                                       choices = "Placeholder",
                                       multiple = FALSE,
                                       width = "100%"),
+                       
+                       # Add a bit of space between the mandatory inputs and the optional ones
+                       tags$br(),
+                       
                        # Selectize input for standards, populated once connection is established
+                       htmlOutput(ns("standard_note")),
                        selectizeInput(ns("stds"),
-                                      "Select one or more standards to apply",
+                                      "Select one or more standards to apply (optional)",
                                       choices = "Placeholder",
                                       multiple = TRUE,
                                       width = "100%"),
                        # TRUE/FALSE selection for station-specific standards
-                       checkboxInput(ns("stnStds"), "Apply station-specific standards?", value = FALSE)
+                       checkboxInput(ns("stnStds"), "Apply station-specific standards?", value = FALSE),
+                       
+                       tags$br(),
+                       
+                       # inputs for values outside a given SD
+                       htmlOutput(ns("SD_note")),
+                       div(
+                         style = "display: flex; align-items: center;",
+                         tags$label(
+                           "Standard deviation threshold (leave empty to not calculate)", 
+                           class = "control-label",
+                           style = "margin-right: 5px;"
+                         ),
+                         span(
+                           id = ns("SD_info"),
+                           `data-toggle` = "tooltip",
+                           `data-placement` = "right",
+                           `data-trigger` = "click hover",
+                           title = "1 SD = 68% of data distribution, 2 SD = 95%, 3 SD = 99.7%. etc.",
+                           icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                         )
+                         
+                       ),
+                       numericInput(ns("SD_SD"), NULL, value = NULL, width = "100%"),
+                       
+                       div(
+                         style = "display: flex; align-items: center;",
+                         tags$label(
+                           "Start date for SD calculation", 
+                           class = "control-label",
+                           style = "margin-right: 5px;"
+                         ),
+                         span(
+                           id = ns("SD_start_info"),
+                           `data-toggle` = "tooltip",
+                           `data-placement` = "right",
+                           `data-trigger` = "click hover",
+                           title = "Leave empty to use data from the start of records.",
+                           icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                         )
+                       ),
+                       dateInput(ns("SD_start"), NULL, value = NA,
+                                 width = "100%"),
+                       
+                       div(
+                         style = "display: flex; align-items: center;",
+                         tags$label(
+                           "End date for SD calculation", 
+                           class = "control-label",
+                           style = "margin-right: 5px;"
+                         ),
+                         span(
+                           id = ns("SD_end_info"),
+                           `data-toggle` = "tooltip",
+                           `data-placement` = "right",
+                           `data-trigger` = "click hover",
+                           title = "Leave empty to use data to the end of records.",
+                           icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                         )
+                       ),
+                       dateInput(ns("SD_end"), NULL, value = NA,
+                                 width = "100%"),
+                       div(
+                         style = "display: flex; align-items: center;",
+                         tags$label(
+                           "Select date range (year is ignored)", 
+                           class = "control-label",
+                           style = "margin-right: 5px;"
+                         ),
+                         span(
+                           id = ns("SD_end_info"),
+                           `data-toggle` = "tooltip",
+                           `data-placement` = "right",
+                           `data-trigger` = "click hover",
+                           title = "Use this to exclude data outside of a certain range. For example, if you only want to include data from May to September, select May 1st and September 30th. The year is ignored.",
+                           icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                         )
+                       ),
+                       dateRangeInput(
+                         ns("SD_date_range"), 
+                         label = NULL, 
+                         start = "2000-01-01", 
+                         end = "2000-12-31", 
+                         width = "100%"
+                       )
+                       
       ),
       
       conditionalPanel(ns = ns,
@@ -91,6 +197,24 @@ WQReportServer <- function(id, EQWin, AquaCache) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
+    
+    # Fill in some htmlOutputs
+    output$standard_note <- renderUI({
+      HTML("<p>
+      <i><b>Optional:</b> Select standards/guidelines and station specific standards/guidelines to apply.<br>
+      General standards show up as an additional column in the report with values for each parameter <br>
+      Station-specific standards show up as notes in the report for each station.<br>
+      Reported values which exceed standards/guidelines are highlighted in red with a note provided.
+      </p>")
+    })
+    
+    output$SD_note <- renderUI({
+      HTML("<p>
+      <i><b>Optional:</b> Select a standard deviation threshold to flag outlier values.<br>
+      A mean and standard deviation will be calculated using past measurements if the exist.<br>
+      <b>This can add a lot of time to the report generation process, be patient!.</b>
+      </p>")
+    })
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
@@ -163,6 +287,7 @@ WQReportServer <- function(id, EQWin, AquaCache) {
       }
     })
     
+    # Create the download!!!
     output$create_report <- downloadHandler(
       filename = function() {
         paste0("EQWin Report for ", input$date, " Issued ", Sys.Date(), ".xlsx")
@@ -172,6 +297,12 @@ WQReportServer <- function(id, EQWin, AquaCache) {
 
           incProgress(0.5)
           
+          if (!is.na(input$SD_SD)) {
+            SD_doy_range <- c(lubridate::yday(input$SD_date_range[1]), lubridate::yday(input$SD_date_range[2]))
+          } else {
+            SD_doy_range <- NULL
+          }
+          
           EQWinReport(date = input$date,
                       date_approx = as.numeric(input$date_approx),
                       stations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
@@ -180,6 +311,10 @@ WQReportServer <- function(id, EQWin, AquaCache) {
                       paramGrp = if (input$params_groups == "Parameter Groups") input$parameter_groups else NULL,
                       stds = input$stds,
                       stnStds = input$stnStds,
+                      SD_exceed = if (!is.na(input$SD_SD)) input$SD_SD else NULL,
+                      SD_start = if (length(input$SD_start) > 0) input$SD_start else NULL,
+                      SD_end = if (length(input$SD_end) > 0) input$SD_end else NULL,
+                      SD_doy = SD_doy_range,
                       shiny_file_path = file,
                       con = EQWin)
           
