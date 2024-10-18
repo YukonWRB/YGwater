@@ -130,7 +130,8 @@ discretePlotUI <- function(id) {
       
       div(
         checkboxInput(ns("loc_code"),
-                      NULL),
+                      label = NULL,
+                      value = TRUE),
         style = "display: flex; align-items: center;",
         tags$label(
           "Use location code instead of name", 
@@ -141,7 +142,7 @@ discretePlotUI <- function(id) {
       
       div(
         checkboxInput(ns("target_datetime"),
-                    NULL),
+                    label = NULL),
         style = "display: flex; align-items: center;",
         tags$label(
           "Use target instead of actual datetime", 
