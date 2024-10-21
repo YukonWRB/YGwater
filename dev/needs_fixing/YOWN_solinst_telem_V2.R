@@ -41,14 +41,18 @@ for (z in active_telem) {
   for (i in messageIDs) {
     msg <- gmailr::gm_message(i) # Run query to find matching email
     body <- gmailr::gm_body(msg) # Extract body of message
+    if (nchar(body) < 5) {
+      gmailr::gm_trash_message(i)
+    } else {
     body_list[[i]] <- body # Add each message to list
-    # gmailr::gm_trash_message(i)
+    }
+    
   }
   
-  #### Extract and check data from message body, upload to Aquarius, append data to master _telem .csv in appropriate folder ####
+  #### Extract and check data from message body, upload to Aquarius ####
   
-  for (i in body_list) {
-    lines <- unlist(strsplit(unlist(i), "\r\n"))
+  for (n in 1:length(body_list)) {
+    lines <- unlist(strsplit(unlist(body_list[[n]]), "\r\n"))
     lines <- lines[lines != ""]
     
     # Extract LevelSender heading
@@ -96,15 +100,8 @@ for (z in active_telem) {
     attr(data$Time , "tzone") <- "UTC"
     
     # Check units, stop if not correct
-    if (all(colnames(data) != c("Time", "Temperature( C)", "Level(m)", "Conductivity(uS/cm)"))) {
-      email <- gmailr::gm_mime() %>%
-        gmailr::gm_to("cole.fischer@yukon.ca") %>%
-        gmailr::gm_from("YOWNtelemetry@gmail.com") %>%
-        gmailr::gm_subject("LevelSender Error") %>%
-        gmailr::gm_text_body(paste("LevelSender", LS_head_df$value[2], "has encountered an error"))
-      gmailr::gm_send_message(email)
-      stop("LevelSender has encountered an error during units check")
-    }
+data <- data %>%
+  dplyr::select(c("Time", "Temperature( C)", "Level(m)", "Conductivity(uS/cm)"))
     
     #### Upload to Aquarius ####
     # Parse time series name
@@ -118,69 +115,7 @@ for (z in active_telem) {
                          login = Sys.getenv(c("AQUSER", "AQPASS")),
                          server = "https://yukon.aquaticinformatics.net/AQUARIUS")
     }
-    
-    #### Create or add data to .csv in appropriate folder ####
-    # Check to see if year directory exists, if not create it
-    directory <- paste0("G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS/",  grep(z, YOWNnames, value = TRUE), "/Logger files and notes/", lubridate::year(max(data$Time)))
-    if (!file.exists(directory)) {
-      dir.create(directory, recursive = TRUE)
-    }
-    
-    # Check to see if telem file exists, if not write excel file with one tab per LTC serial # and one for LS heading
-    telem_xlsx_path <- paste0(directory, "/", "telem_LS_", LS_head_df$value[LS_head_df$field == "Serial"], ".xlsx")
-    if (!file.exists(telem_xlsx_path)) { #Check if telem file exists, if not write it and add telem unit metadata tab
-      wb <- openxlsx::createWorkbook()
-      openxlsx::addWorksheet(wb, "LS_header")
-      openxlsx::writeData(wb = wb, sheet = "LS_header", na.omit(c(rbind(as.character(LS_head_df$field), as.character(LS_head_df$value)))), colNames = FALSE)
-      openxlsx::saveWorkbook(wb, file = telem_xlsx_path)
-    }
-    
-    telem_xlsx <- openxlsx::loadWorkbook(telem_xlsx_path) # Load telem xlsx for editing
-    sheet_names <- as.vector(openxlsx::getSheetNames(telem_xlsx_path)) # Extract sheet names
-    LTC_tabName <- paste0(LTC_head_df[LTC_head_df$field == "Serial", "value"], " ", as.POSIXct(format = "%d/%m/%Y", tz = "MST", LTC_head_df[LTC_head_df$field == "Start Logger", "value"])) # Extract LTC serial and start date for sheet naming
-    
-    if (!LTC_tabName %in% sheet_names) { # Check if LTC serial has dedicated tab, if not create it. Add LTC metadata and column headings
-      telem_xlsx <- openxlsx::loadWorkbook(telem_xlsx_path)
-      openxlsx::addWorksheet(telem_xlsx, LTC_tabName)
-      openxlsx::writeData(wb = telem_xlsx, sheet = LTC_tabName, na.omit(c(rbind(as.character(LTC_head_df$field), as.character(LTC_head_df$value)))), colNames = FALSE) # Write LTC metadata
-      openxlsx::saveWorkbook(telem_xlsx, file = telem_xlsx_path, overwrite = TRUE)
-      sheet <- openxlsx::readWorkbook(telem_xlsx_path, LTC_tabName)
-      openxlsx::writeData(wb = telem_xlsx, sheet = LTC_tabName, x = matrix(c("Time", "Temperature( C)", "Level(m)",	"Conductivity(uS/cm)"
-      ), ncol = 4), startRow = max(which(!is.na(sheet[,1]) & sheet[,] != "") + 2), startCol = 1, colNames = FALSE) # Write column headings
-      openxlsx::saveWorkbook(telem_xlsx, file = telem_xlsx_path, overwrite = TRUE)
-    }
-    
-    # Change data back to MST, write to excel sheet, checking to make sure header row is unchanged
-    header_row <- names(openxlsx::read.xlsx(telem_xlsx, sheet = LTC_tabName, rows = length(na.omit(c(rbind(as.character(LTC_head_df$field), as.character(LTC_head_df$value))))) + 1 , sep.names = " "))
-    
-    if (all(header_row == names(data))) {
-      attr(data$Time, "tzone") <- "MST"
-      telem_xlsx <- openxlsx::loadWorkbook(telem_xlsx_path)
-      sheet <- openxlsx::readWorkbook(telem_xlsx_path, LTC_tabName)
-      openxlsx::writeData(wb = telem_xlsx, sheet = LTC_tabName, startRow = length(sheet$Logger.1) + 2, x = data, colNames = FALSE)
-      openxlsx::saveWorkbook(telem_xlsx, file = telem_xlsx_path, overwrite = TRUE)
-      sheet <- openxlsx::readWorkbook(telem_xlsx_path, LTC_tabName)
-      sort_start_row <- length(na.omit(c(rbind(as.character(LTC_head_df$field), as.character(LTC_head_df$value))))) + 2
-      sorted_data <- sheet[sort_start_row:nrow(sheet),]
-      colnames(sorted_data) <- c("Time", "Temperature( C)", "Level(m)",	"Conductivity(uS/cm)")
-      sorted_data <- sorted_data[order(sorted_data$Time, decreasing = TRUE), ]
-      sheet[sort_start_row:nrow(sheet), ] <- sorted_data
-      openxlsx::writeData(telem_xlsx, sheet = LTC_tabName, x = sheet, colNames = FALSE)
-      openxlsx::saveWorkbook(telem_xlsx, file = telem_xlsx_path, overwrite = TRUE)
-    } else {
-      email <- gmailr::gm_mime() %>%
-        gmailr::gm_to("cole.fischer@yukon.ca") %>%
-        gmailr::gm_from("YOWNtelemetry@gmail.com") %>%
-        gmailr::gm_subject("LevelSender Error") %>%
-        gmailr::gm_text_body(paste("LevelSender processing has encountered an error"))
-      gmailr::gm_send_message(email)
-      stop("Something is wrong with the data headers")
-    }
+    gmailr::gm_trash_message(names(body_list[n]))
   }
-}
-  
-  
-  
-  
-  
-  
+} 
+    
