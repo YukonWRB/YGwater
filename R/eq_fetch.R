@@ -50,7 +50,7 @@ eq_fetch <- function(EQcode,
     stns <- eqstns %>%
       dplyr::filter(stringr::str_detect(.data$StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
       dplyr::mutate("StnCode" = gsub(paste0("(", EQcode, ")"), "", .data$StnCode, fixed = TRUE))
-  } else if (all(paste0("(", EQcode, ")", stationIDs) %in% eqstns$StnCode)) { # Optimal case, all requested stations exist in EQWin database
+  } else if (all(paste0(EQcode, stationIDs) %in% eqstns$StnCode)) { # Optimal case, all requested stations exist in EQWin database
     stns <- eqstns %>%
       dplyr::filter(stringr::str_detect(.data$StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
       dplyr::mutate("StnCode" = gsub(paste0("(", EQcode, ")"), "", .data$StnCode, fixed = TRUE)) %>%
