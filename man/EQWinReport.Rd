@@ -6,13 +6,17 @@
 \usage{
 EQWinReport(
   date,
+  date_approx = 0,
   stations = NULL,
   stnGrp = NULL,
   parameters = NULL,
   paramGrp = NULL,
   stds = NULL,
   stnStds = TRUE,
-  date_approx = 0,
+  SD_exceed = NULL,
+  SD_start = NULL,
+  SD_end = NULL,
+  SD_doy = NULL,
   save_path = "choose",
   con = NULL,
   shiny_file_path = NULL
@@ -20,6 +24,8 @@ EQWinReport(
 }
 \arguments{
 \item{date}{The date for which to fetch results as a Date object or character vector that can be coerced to a date.}
+
+\item{date_approx}{An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date. If a station is found to not have any samples on the given 'date', the function will look for samples on the date + 1 day, - 1 day, + 2 days, etc. up to 'date_approx' days in the past and future and stop searching for a station once a sample is found. Default is 0.}
 
 \item{stations}{A vector of station names as listed in the EQWiN eqstns table, column StnCode. Leave NULL to use stnGrp instead.}
 
@@ -33,7 +39,13 @@ EQWinReport(
 
 \item{stnStds}{TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. As these are station-specific, the standard values will be listed in a comment linked to the station name in the table header.}
 
-\item{date_approx}{An optional maximum number of days in the past or future to fetch results for stations where data is unavailable for the exact date. If a station is found to not have any samples on the given 'date', the function will look for samples on the date + 1 day, - 1 day, + 2 days, etc. up to 'date_approx' days in the past and future and stop searching for a station once a sample is found. Default is 0.}
+\item{SD_exceed}{An optional number of standard deviations above/below mean to consider as an exceedance. Default NULL will not calculate this.}
+
+\item{SD_start}{The start date for the standard deviation calculation as a vector of one date or character values that can be converted to dates. NULL uses the earliest date in the data.}
+
+\item{SD_end}{The end date for the standard deviation calculation as a vector of one date or character values that can be converted to dates. NULL uses the latest date in the data.}
+
+\item{SD_doy}{Optional days of year to \strong{include} in the standard deviation calculation as a numeric vector (i.e. c(100:200)). NULL uses all relevant data.}
 
 \item{save_path}{The path to save the Excel file. Default is "choose" to allow user to select a folder interactively.}
 
@@ -56,7 +68,7 @@ Exceedances are noted using conditional formatting, with a note added to explain
 # provided for demonstration purposes only and can't be run using the 'Run examples' button above.
 # Copy/paste them into your R console to run them if needed.
 
-# Generate a report for July 1, 2024 using a station group, parameter group, 
+# Generate a report for July 25, 2024 using a station group, parameter group, 
 # both CCME standards, and look for data within +- 1 day of July 1
 EQWinReport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure",
 stds = c("CCME_ST", "CCME_LT"), date_approx = 1)
@@ -65,5 +77,9 @@ stds = c("CCME_ST", "CCME_LT"), date_approx = 1)
 # Generate a report for a single location and single parameter, no standards.
 EQWinReport("1991-02-12", stations = c("(CM)CM-u/s"), parameters = c("pH-F"), stnStds = FALSE)
 
+# Generate a report for July 15, 2024 using a station group, parameter group, and flagging values
+# that exceed 2 standard deviations from the mean before June 24, 2024.
+EQWinReport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure",
+SD_exceed = 2, SD_start = NULL, SD_end = "2024-06-23", date_approx = 1)
 }
 }
