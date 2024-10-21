@@ -49,26 +49,26 @@ plotTimeseries <- function(location,
                            tzone = "auto",
                            con = NULL) 
 {
-  
-  # location <- "29BA002"
-  # parameter = "water level"
-  # start_date <- "2023-08-30"
-  # end_date <- "2023-08-29"
-  # record_rate = NULL
-  # period_type = NULL
-  # z = NULL
-  # z_approx = NULL
-  # invert = NULL
-  # slider = TRUE
-  # datum = TRUE
-  # title = TRUE
-  # custom_title = NULL
-  # filter = NULL
-  # historic_range = TRUE
-  # language = "en"
-  # rate = NULL
-  # tzone = "auto"
-  # con = NULL
+
+#   location <- "29AB-M3"
+#   parameter = "Snow Water Equivalent"
+#   start_date <- "2023-08-30"
+#   end_date <- "2024-12-31"
+#   record_rate = NULL
+#   period_type = NULL
+#   z = NULL
+#   z_approx = NULL
+#   invert = NULL
+#   slider = TRUE
+#   datum = FALSE
+#   title = TRUE
+#   custom_title = NULL
+#   filter = NULL
+#   historic_range = TRUE
+#   language = "en"
+#   rate = NULL
+#   tzone = "auto"
+#   con = NULL
 
   # Checks and initial work ##########################################
   

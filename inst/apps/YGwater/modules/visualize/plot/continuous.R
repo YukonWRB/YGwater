@@ -11,10 +11,56 @@ continuousPlotUI <- function(id) {
       conditionalPanel(
         ns = ns,
         condition = "input.type == 'Overlapping years'",
-        dateInput(ns("start_doy"), "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
-        dateInput(ns("end_doy"), "End day-of-year", value = paste0(lubridate::year(Sys.Date()), "-12-31")),
-        selectizeInput(ns("years"), label = "Select years to plot", choices = "placeholder", multiple = TRUE), #Choices are selected in the server
-        selectizeInput(ns("historic_range_overlap"), "Historic range includes all years of record or up to last year plotted?", choices = c("all", "last"), selected = "all"),
+        
+        div(
+          dateInput(ns("start_doy"), "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
+          style = "display: flex; align-items: center;",
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "The year is ignored; only the day-of-year is used.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        div(
+          dateInput(ns("end_doy"), "End day-of-year", , value = paste0(lubridate::year(Sys.Date()), "-01-01")),
+          style = "display: flex; align-items: center;",
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "The year is ignored; only the day-of-year is used.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        div(
+          selectizeInput(ns("years"), label = "Select years to plot", , choices = "placeholder", multiple = TRUE), #Choices are selected in the server
+          style = "display: flex; align-items: center;",
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "For periods overlaping the new year select the December year.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        div(
+          selectizeInput(ns("historic_range_overlap"),"Historic range includes all years of record or up to last year plotted?", 
+choices = c("all", "last"), selected = "all"),
+          style = "display: flex; align-items: center;",
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "Historic ranges are plotted as a gray ribbon.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
         selectizeInput(ns("return_periods"), "Plot return periods?", choices = stats::setNames(c("none", "auto", "calculate", "table"), c("none", "auto select", "calculate", "from table")), selected = "auto select"),
         selectizeInput(ns("return_type"), "Select return type", choices = c("Min", "Max"), selected = "Max"),
         numericInput(ns("return_yrs"), "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),

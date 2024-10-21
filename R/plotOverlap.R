@@ -50,22 +50,22 @@
 #' @export
 #'
 
-# location <- "09AA-M1"
+# location <- "29AB-M3"
 # parameter <- "snow water equivalent"
 # record_rate = NULL
 # startDay <- "2023-09-01"
-# endDay <- "2023-05-31
+# endDay <- "2024-06-01"
 # tzone <- "MST"
-# years <- "2022"
-# datum <- TRUE
+# years <- "2024"
+# datum <- FALSE
 # title <- TRUE
 # custom_title <- NULL
 # filter <- NULL
-# historic_range <- "last"
+# historic_range <- "max"
 # returns <- "auto"
 # return_type <- "max"
-# return_months <- c(5:9)
-# return_max_year <- NULL
+# return_months <- c(3,4,5)
+# return_max_year <- 2024
 # allowed_missing <- 10
 # plot_scale <- 1
 # legend <- TRUE
@@ -313,26 +313,32 @@ plotOverlap <- function(location,
       tsid <- exist_check$timeseries_id
     }
 
+    # Find the ts units
+    units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code, ";"))
+
     # Find the necessary datum (latest datum)
     if (datum) {
-      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+      if (units != "m") {
+        warning("The parameter you are plotting is not in meters. Datum will not be applied.")
+        datum <- data.frame(conversion_m = 0)
+      } else {
+        datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+      }
     } else {
       datum <- data.frame(conversion_m = 0)
     }
 
-    # Find the ts units
-    units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code, ";"))
 
     # Get the necessary data -------------------
     # start with daily means data
     daily_end <- endDay
     if (historic_range == "all") {
-      lubridate::year(daily_end) <- lubridate::year(Sys.time())
+      lubridate::year(daily_end) <- max(max(years) + 1, lubridate::year(Sys.time()))
       daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
-      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "';"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
     } else if (historic_range == "last") {
       if (overlaps) {
         lubridate::year(daily_end) <- last_year + 1
@@ -343,7 +349,7 @@ plotOverlap <- function(location,
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
-      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "';"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
     }
 
     #Fill in any missing days in daily
