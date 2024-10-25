@@ -26,6 +26,8 @@ plotOverlap(
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
+  gridx = FALSE,
+  gridy = TRUE,
   legend = TRUE,
   save_path = NULL,
   con = NULL,
@@ -55,6 +57,8 @@ hydrometContinuous(
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
+  gridx = FALSE,
+  gridy = TRUE,
   legend = TRUE,
   save_path = NULL,
   con = NULL,
@@ -103,6 +107,10 @@ hydrometContinuous(
 \item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
 
 \item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
+\item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
+
+\item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
 
 \item{legend}{Should a legend (including text for min/max range and return periods) be added to the plot?}
 

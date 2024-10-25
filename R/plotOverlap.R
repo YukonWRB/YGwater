@@ -42,6 +42,8 @@
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
+#' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param legend Should a legend (including text for min/max range and return periods) be added to the plot?
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
@@ -98,6 +100,8 @@ plotOverlap <- function(location,
                         line_scale = 1,
                         axis_scale = 1,
                         legend_scale = 1,
+                        gridx = FALSE,
+                        gridy = TRUE,
                         legend = TRUE,
                         save_path = NULL,
                         con = NULL,
@@ -700,6 +704,7 @@ plotOverlap <- function(location,
     ggplot2::scale_x_datetime(date_breaks = date_breaks, date_labels = labs, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
     ggplot2::labs(x = NULL, y =  paste0(parameter_name, " (", units, ")")) +
     ggplot2::theme_classic()
+  
   if (legend) {
     plot <- plot + 
       ggplot2::theme(legend.position = "right", 
@@ -732,6 +737,13 @@ plotOverlap <- function(location,
     } else {
       minHist <- Inf # set to Inf here so that historical range is not printed later on the graph
     }
+  }
+  
+  if (gridy) {
+    plot <- plot + ggplot2::theme(panel.grid.major.x = ggplot2::element_line(color = "black", size = 0.5))
+  }
+  if (gridx) {
+    plot <- plot + ggplot2::theme(panel.grid.major.y = ggplot2::element_line(color = "black", size = 0.5))
   }
 
   if (snowbulletin == FALSE) {

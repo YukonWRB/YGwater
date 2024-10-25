@@ -24,6 +24,8 @@
 #' @param line_scale A scale factor to apply to the size (width) of the line. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
+#' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
@@ -51,6 +53,8 @@ plotTimeseries <- function(location,
                            line_scale = 1,
                            axis_scale = 1,
                            legend_scale = 1,
+                           gridx = FALSE,
+                           gridy = FALSE,
                            rate = NULL,
                            tzone = "auto",
                            con = NULL) 
@@ -461,15 +465,16 @@ plotTimeseries <- function(location,
                               font = list(size = axis_scale * 18))
       else NULL, 
       xaxis = list(title = list(standoff = 0), 
-                   showgrid = FALSE, 
+                   showgrid = gridx, 
                    showline = TRUE, 
                    tickformat = if (lang == "en") "%b %d '%y" else "%d %b '%y",
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
                    rangeslider = list(visible = if (slider) TRUE else FALSE)), 
       yaxis = list(title = y_title, 
-                   showgrid = FALSE, 
+                   showgrid = gridy, 
                    showline = TRUE,
+                   zeroline = FALSE,
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12)), 
       margin = list(b = 0,

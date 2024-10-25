@@ -250,15 +250,20 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
       }
     })
     
+
+    # Modal dialog for extra aesthetics  ####
+    
     # Create a list with default aesthetic values
     plot_aes <- reactiveValues(lang = "en",
-                   colorblind = FALSE,
-                   point_scale = 1,
-                   guideline_scale = 1,
-                   axis_scale = 1,
-                   legend_scale = 1)
+                               showgridx = FALSE,
+                               showgridy = FALSE,
+                               colorblind = FALSE,
+                               point_scale = 1,
+                               guideline_scale = 1,
+                               axis_scale = 1,
+                               legend_scale = 1)
     
-    # Modal dialog for extra aesthetics
+    
     observeEvent(input$extra_aes, {
       showModal(modalDialog(
         title = "Modify plot aesthetics",
@@ -268,8 +273,12 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                        NULL,
                        choices = stats::setNames(c("en", "fr"), c("English", "French")),
                        selected = plot_aes$lang),
-          tags$hr(),
-          tags$h5("Color palette"),
+          checkboxInput(ns("showgridx"),
+                        "Show x-axis gridlines",
+                        value = plot_aes$showgridx),
+          checkboxInput(ns("showgridy"),
+                        "Show y-axis gridlines",
+                        value = plot_aes$showgridy),
           checkboxInput(ns("colorblind"),
                         "Colorblind friendly",
                         value = plot_aes$colorblind),
@@ -310,6 +319,8 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
     observeEvent(input$aes_apply, {
       plot_aes$lang <- input$lang
       plot_aes$colorblind <- input$colorblind
+      plot_aes$showgridx <- input$showgridx
+      plot_aes$showgridy <- input$showgridy
       plot_aes$point_scale <- input$point_scale
       plot_aes$guideline_scale <- input$guideline_scale
       plot_aes$axis_scale <- input$axis_scale
@@ -385,6 +396,8 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                  guideline_scale = plot_aes$guideline_scale,
                                  axis_scale = plot_aes$axis_scale,
                                  legend_scale = plot_aes$legend_scale,
+                                 gridx = plot_aes$showgridx,
+                                 gridy = plot_aes$showgridy,
                                  dbSource = input$data_source)
           } else if (input$data_source == "AC") {
             plot <- plotDiscrete(start = input$date_range[1],
@@ -403,6 +416,8 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                  guideline_scale = plot_aes$guideline_scale,
                                  axis_scale = plot_aes$axis_scale,
                                  legend_scale = plot_aes$legend_scale,
+                                 gridx = plot_aes$showgridx,
+                                 gridy = plot_aes$showgridy,
                                  dbSource = input$data_source)
           }
           

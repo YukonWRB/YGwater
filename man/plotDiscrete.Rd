@@ -23,6 +23,8 @@ plotDiscrete(
   guideline_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
+  gridx = FALSE,
+  gridy = FALSE,
   dbSource = "EQ",
   dbPath =
     "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
@@ -64,6 +66,10 @@ plotDiscrete(
 \item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
 
 \item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
+\item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
+
+\item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
 
 \item{dbSource}{The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function \code{\link[=AquaConnect]{AquaConnect()}} while EQWin connections use \code{\link[=AccessConnect]{AccessConnect()}}.}
 
