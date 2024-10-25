@@ -939,7 +939,6 @@ plotMultiTimeseries <- function(type = 'traces',
                             titleY = TRUE, 
                             margin = c(0,0,0,(0.05 * axis_scale))) %>%
       plotly::layout(annotations = subtitles)
-    plot
   }
   
   return(plot)

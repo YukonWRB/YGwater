@@ -759,7 +759,6 @@ continuousPlotServer <- function(id, AquaCache, data) {
             
           } else if (input$type == "Long timeseries") {
             shinyjs::hide("plot_gg")
-            
             # Check if multiple traces are selected
             
             if (traceCount() == 1) {  # Either a single trace, or more than 1 subplot
@@ -780,22 +779,21 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                             axis_scale = plot_aes$axis_scale,
                                             legend_scale = plot_aes$legend_scale,
                                             con = AquaCache)
+              } else {
+                plot <- plotTimeseries(location = input$loc_code,
+                                       parameter = as.numeric(input$param),
+                                       start_date = input$start_date,
+                                       end_date = input$end_date,
+                                       historic_range = input$historic_range,
+                                       datum = input$apply_datum,
+                                       filter = filter,
+                                       lang = plot_aes$lang,
+                                       line_scale = plot_aes$line_scale,
+                                       axis_scale = plot_aes$axis_scale,
+                                       legend_scale = plot_aes$legend_scale,
+                                       con = AquaCache)
               }
-            } else {
-              plot <- plotTimeseries(location = input$loc_code,
-                                     parameter = as.numeric(input$param),
-                                     start_date = input$start_date,
-                                     end_date = input$end_date,
-                                     historic_range = input$historic_range,
-                                     datum = input$apply_datum,
-                                     filter = filter,
-                                     lang = plot_aes$lang,
-                                     line_scale = plot_aes$line_scale,
-                                     axis_scale = plot_aes$axis_scale,
-                                     legend_scale = plot_aes$legend_scale,
-                                     con = AquaCache)
-            }
-          } else { # Multiple traces, single plot
+            } else { # Multiple traces, single plot
             locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
             params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
             lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
@@ -811,14 +809,13 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                         lang = plot_aes$lang,
                                         line_scale = plot_aes$line_scale,
                                         axis_scale = plot_aes$axis_scale,
-                                          legend_scale = plot_aes$legend_scale,
-                                          con = AquaCache)
+                                        legend_scale = plot_aes$legend_scale,
+                                        con = AquaCache)
             }
-            
+          }
             
             output$plot_plotly <- plotly::renderPlotly(plot)
             shinyjs::show("plot_plotly")
-          
           incProgress(1)
         }) # End withProgress\
         
