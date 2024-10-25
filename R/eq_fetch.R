@@ -4,7 +4,7 @@
 #'
 #' @details Insert here what happens to values > DL, where the standards are taken from, etc
 #'
-#' @param EQcode Site code as it appears in EQWin eg. "(LOB)" or "(KNO)". Function only works for stations with  designated project code in brackets
+#' @param EQcode Site code as it appears in EQWin eg. "LOB" or "KNO". Function only works for stations with  designated project code in brackets
 #' @param stationIDs "all" for all stations (default) OR character vector of selected stations as they appear in the EQWin database WITHOUT the EQcode c("MW-01", "MW-02)
 #' @param paramIDs "all" for all parameters (default) OR vector of selected parameters exactly as they appear in the EQWin database
 #' @param dates "all" for all dates (default) OR character vector of length 2 of start and end date in format c("YYYY-MM-DD", "YYYY-MM-DD")
@@ -26,11 +26,12 @@ eq_fetch <- function(EQcode,
                      path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"){
   
   # EQcode <- "EG"
-  # stationIDs = c("DG1", "DG2", "ISH", "LSDP-UND", "W22", "W23", "W27", "W29", "W4", "W49", "W8", "W99")
-  # paramIDs = "all"
-  # dates = c("1990-01-01", "2016-06-01")
+  # stationIDs = c("ISH-1", "LDSP-UND")
+  # paramIDs = c("Fe-D", "Zn-D", "Cond-F")
+  # dates = c("2024-07-01", "2024-10-21")
   # BD <- 2
   # apply_standards = FALSE
+  # path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   
   # Set a few options
   old_scipen <- getOption("scipen")
@@ -44,22 +45,22 @@ eq_fetch <- function(EQcode,
   EQWin <- AccessConnect(path, silent = TRUE)
   on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
   
+  # Add project code to EQWin stations
+  stationIDs <- paste0("(", EQcode, ")", stationIDs)
+  
   # Download stations and filter to user input
   eqstns <- DBI::dbGetQuery(EQWin, "SELECT StnId, StnCode, StnName, StnType, udf_Stn_Status FROM eqstns WHERE StnCode")
   
   if (tolower(paste(stationIDs, collapse = "")) == "all") {
     stns <- eqstns %>%
-      dplyr::filter(stringr::str_detect(.data$StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
-      dplyr::mutate("StnCode" = gsub(paste0("(", EQcode, ")"), "", .data$StnCode, fixed = TRUE))
-  } else if (all(paste0("(", EQcode, ")", stationIDs) %in% eqstns$StnCode)) { # Optimal case, all requested stations exist in EQWin database
+      dplyr::filter(stringr::str_detect(.data$StnCode, paste0("^", "\\(", EQcode, "\\)")))
+  } else if (all(stationIDs %in% eqstns$StnCode)) { # Optimal case, all requested stations exist in EQWin database
     stns <- eqstns %>%
       dplyr::filter(stringr::str_detect(.data$StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
-      dplyr::mutate("StnCode" = gsub(paste0("(", EQcode, ")"), "", .data$StnCode, fixed = TRUE)) %>%
       dplyr::filter(.data$StnCode %in% stationIDs)
   } else { # If certain stations do not exist, remove and continue but print warning
     stns <- eqstns %>%
       dplyr::filter(stringr::str_detect(.data$StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
-      dplyr::mutate("StnCode" = gsub(paste0("(", EQcode, ")"), "", .data$StnCode, fixed = TRUE)) %>%
       dplyr::filter(.data$StnCode %in% stationIDs[!stationIDs %in% paste(setdiff(stationIDs, .data$StnCode))])
     warning(paste0("The following stations do not match exactly what is in EQWin and were omitted: ", paste(setdiff(stationIDs, stns$StnCode), collapse = ", "), ". Check spelling and letter case"))
   }
@@ -125,6 +126,7 @@ eq_fetch <- function(EQcode,
   merge2 <- merge(results, merge1, by.x = "SampleId", by.y = "SampleId")
   merge3 <- merge(merge2, params, by.x = "ParamId", by.y = "ParamId")
   suppressMessages(sampledata <- merge3 %>%
+                     dplyr::filter(StnCode %in% stationIDs) %>%
                      dplyr::mutate(Param = paste0(merge3$ParamCode, " (", merge3$Units, ")")) %>%
                      dplyr::select(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param, .data$Units, .data$Result) %>%
                      dplyr::group_by(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param) %>%
