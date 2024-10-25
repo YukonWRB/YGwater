@@ -704,14 +704,24 @@ plotDiscrete <- function(start,
                                              ), 
                                showlegend = FALSE,
                                hoverinfo = "text",
-                               text = ~paste(get(color_by), "<br>", # Name or parameter of trace
-                                             datetime, "<br>", # Datetime
-                                             if (targ_dt) paste("True sample datetime", target_datetime, "<br>"), # true sample datetime if requested and dbSource = 'AC'
-                                             result_condition, "of", as.character(result_condition_value), units, # Result condition and value
-                                             if (type) paste("<br>Sample type:", sample_type),  # Sample type if provided
-                                             if (collection) paste("<br>Collection method:", collection_method),  # Collection method if provided
-                                             if (fraction) paste("<br>Sample fraction:", sample_fraction),  # Sample fraction if provided
-                                             if (speciation) paste("<br>Result speciation", result_speciation)  # Result speciation if provided
+                               text = ~paste(get(color_by), 
+                                             "<br>", # Name or parameter of trace
+                                             datetime, 
+                                             "<br>", # Datetime
+                                             if (targ_dt) paste("True sample datetime", 
+                                                                target_datetime, "<br>"), # true sample datetime if requested and dbSource = 'AC'
+                                             result_condition, 
+                                             "of", 
+                                             as.character(result_condition_value), 
+                                             units, # Result condition and value
+                                             if (type) paste("<br>Sample type:", 
+                                                             sample_type),  # Sample type if provided
+                                             if (collection) paste("<br>Collection method:", 
+                                                                   collection_method),  # Collection method if provided
+                                             if (fraction) paste("<br>Sample fraction:", 
+                                                                 sample_fraction),  # Sample fraction if provided
+                                             if (speciation) paste("<br>Result speciation", 
+                                                                   result_speciation)  # Result speciation if provided
                                )
         )
       }
@@ -736,9 +746,12 @@ plotDiscrete <- function(start,
                                                ), # controls the actual line width and clor
                                  showlegend = FALSE,
                                  hoverinfo = 'text',
-                                 text = ~paste(get(color_by), "<br>", # Name or parameter of trace,
-                                               datetime, "<br>", # Datetime
-                                               "Standard Max:", round(std_max, 6), units)
+                                 text = ~paste(get(color_by), 
+                                               "<br>", # Name or parameter of trace,
+                                               datetime, 
+                                               "<br>", # Datetime
+                                               "Standard Max:", 
+                                               round(std_max, 6), units)
           )
         }
         if (length(df$std_min[!is.na(df$std_min)]) > 1) {
@@ -776,7 +789,12 @@ plotDiscrete <- function(start,
       nrows <- rows
     }
     
-    plotly::subplot(plots, nrows = nrows, shareX = FALSE, titleX = FALSE, titleY = TRUE) %>%
+    plotly::subplot(plots, 
+                    nrows = nrows, 
+                    shareX = FALSE, 
+                    titleX = FALSE, 
+                    titleY = TRUE,
+                    margin = c(0,0,0,(0.05 * axis_scale))) %>%
       plotly::layout(showlegend = TRUE)
   } # End of plot creation function
   
