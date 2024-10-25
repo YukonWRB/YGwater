@@ -16,7 +16,7 @@ eq_fetch(
 )
 }
 \arguments{
-\item{EQcode}{Site code as it appears in EQWin eg. "(LOB)" or "(KNO)". Function only works for stations with  designated project code in brackets}
+\item{EQcode}{Site code as it appears in EQWin eg. "LOB" or "KNO". Function only works for stations with  designated project code in brackets}
 
 \item{stationIDs}{"all" for all stations (default) OR character vector of selected stations as they appear in the EQWin database WITHOUT the EQcode c("MW-01", "MW-02)}
 

@@ -27,6 +27,8 @@
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
+#' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
@@ -57,6 +59,8 @@ plotMultiTimeseries <- function(type = 'traces',
                                 line_scale = 1,
                                 axis_scale = 1,
                                 legend_scale = 1,
+                                gridx = FALSE,
+                                gridy = FALSE,
                                 rate = NULL,
                                 tzone = "auto",
                                 con = NULL) {
@@ -705,7 +709,8 @@ plotMultiTimeseries <- function(type = 'traces',
         type = if (log[i]) "log" else "linear",
         zeroline = FALSE,
         showline = TRUE,
-        showgrid = FALSE,
+        showgrid = gridy,
+        gridcolor = colors[i],
         showspikes = TRUE,
         spikethickness = axis_scale * 2,
         autorange = if (timeseries[i, "axis_orientation"]) "reversed" else NULL
@@ -778,7 +783,7 @@ plotMultiTimeseries <- function(type = 'traces',
       ),
       xaxis = list(
         title = list(standoff = 0, font = list(size = 1)),
-        showgrid = FALSE,
+        showgrid = gridx,
         showline = TRUE,
         showspikes = TRUE,
         tickformat = if (lang == "fr") "%d %b '%y" else "%b %d '%y",
@@ -877,7 +882,7 @@ plotMultiTimeseries <- function(type = 'traces',
         plotly::layout(
           title = NULL, 
           xaxis = list(title = list(standoff = 0), 
-                       showgrid = FALSE, 
+                       showgrid = gridx,
                        showline = TRUE, 
                        tickformat = if (lang == "en") "%b %d '%y" else "%d %b '%y",
                        titlefont = list(size = axis_scale * 14),
@@ -885,7 +890,7 @@ plotMultiTimeseries <- function(type = 'traces',
           yaxis = list(title = paste0(parameter_name, 
                                       " (", timeseries[i, "units"], 
                                       ")"),
-                       showgrid = FALSE, 
+                       showgrid = gridy,
                        showline = TRUE,
                        titlefont = list(size = axis_scale * 14),
                        tickfont = list(size = axis_scale * 12)), 
@@ -939,7 +944,6 @@ plotMultiTimeseries <- function(type = 'traces',
                             titleY = TRUE, 
                             margin = c(0,0,0,(0.05 * axis_scale))) %>%
       plotly::layout(annotations = subtitles)
-    plot
   }
   
   return(plot)

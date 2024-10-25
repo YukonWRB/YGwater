@@ -193,6 +193,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
     # Modal dialog for extra aesthetics ########################################################################
     # Create a list with default aesthetic values
     plot_aes <- reactiveValues(lang = "en",
+                               showgridx = FALSE,
+                               showgridy = FALSE,
                                line_scale = 1,
                                axis_scale = 1,
                                legend_scale = 1)
@@ -207,6 +209,12 @@ continuousPlotServer <- function(id, AquaCache, data) {
                        NULL,
                        choices = stats::setNames(c("en", "fr"), c("English", "French")),
                        selected = plot_aes$lang),
+          checkboxInput(ns("showgridx"),
+                        "Show x-axis gridlines",
+                        value = plot_aes$showgridx),
+          checkboxInput(ns("showgridy"),
+                        "Show y-axis gridlines",
+                        value = plot_aes$showgridy),
           sliderInput(ns("line_scale"),
                       "Line scale factor",
                       min = 0.2,
@@ -236,6 +244,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
     
     observeEvent(input$aes_apply, {
       plot_aes$lang <- input$lang
+      plot_aes$showgridx <- input$showgridx
+      plot_aes$showgridy <- input$showgridy
       plot_aes$line_scale <- input$line_scale
       plot_aes$axis_scale <- input$axis_scale
       plot_aes$legend_scale <- input$legend_scale
@@ -752,6 +762,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                 axis_scale = 1.4 * plot_aes$axis_scale,
                                 legend_scale = 1.4 * plot_aes$legend_scale,
                                 lang = plot_aes$lang,
+                                gridx = plot_aes$showgridx,
+                                gridy = plot_aes$showgridy,
                                 con = AquaCache)
             
             output$plot_gg <- renderPlot(plot)
@@ -759,7 +771,6 @@ continuousPlotServer <- function(id, AquaCache, data) {
             
           } else if (input$type == "Long timeseries") {
             shinyjs::hide("plot_gg")
-            
             # Check if multiple traces are selected
             
             if (traceCount() == 1) {  # Either a single trace, or more than 1 subplot
@@ -779,23 +790,26 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                             line_scale = plot_aes$line_scale,
                                             axis_scale = plot_aes$axis_scale,
                                             legend_scale = plot_aes$legend_scale,
+                                            gridx = plot_aes$showgridx,
+                                            gridy = plot_aes$showgridy,
                                             con = AquaCache)
+              } else {
+                plot <- plotTimeseries(location = input$loc_code,
+                                       parameter = as.numeric(input$param),
+                                       start_date = input$start_date,
+                                       end_date = input$end_date,
+                                       historic_range = input$historic_range,
+                                       datum = input$apply_datum,
+                                       filter = filter,
+                                       lang = plot_aes$lang,
+                                       line_scale = plot_aes$line_scale,
+                                       axis_scale = plot_aes$axis_scale,
+                                       legend_scale = plot_aes$legend_scale,
+                                       gridx = plot_aes$showgridx,
+                                       gridy = plot_aes$showgridy,
+                                       con = AquaCache)
               }
-            } else {
-              plot <- plotTimeseries(location = input$loc_code,
-                                     parameter = as.numeric(input$param),
-                                     start_date = input$start_date,
-                                     end_date = input$end_date,
-                                     historic_range = input$historic_range,
-                                     datum = input$apply_datum,
-                                     filter = filter,
-                                     lang = plot_aes$lang,
-                                     line_scale = plot_aes$line_scale,
-                                     axis_scale = plot_aes$axis_scale,
-                                     legend_scale = plot_aes$legend_scale,
-                                     con = AquaCache)
-            }
-          } else { # Multiple traces, single plot
+            } else { # Multiple traces, single plot
             locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
             params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
             lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
@@ -811,14 +825,15 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                         lang = plot_aes$lang,
                                         line_scale = plot_aes$line_scale,
                                         axis_scale = plot_aes$axis_scale,
-                                          legend_scale = plot_aes$legend_scale,
-                                          con = AquaCache)
-            }
-            
-            
+                                        legend_scale = plot_aes$legend_scale,
+                                        gridx = plot_aes$showgridx,
+                                        gridy = plot_aes$showgridy,
+                                        con = AquaCache)
+            }        
             output$plot_plotly <- plotly::renderPlotly(plot)
             shinyjs::show("plot_plotly")
-          
+          }
+
           incProgress(1)
         }) # End withProgress\
         

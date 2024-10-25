@@ -20,6 +20,8 @@
 #' @param guideline_scale A scale factor to apply to the size of standard/guideline values Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
+#' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param dbSource The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
 #' databases/EQWinDB/WaterResources.mdb".
@@ -43,7 +45,9 @@ plotDiscrete <- function(start,
                          point_scale = 1, 
                          guideline_scale = 1, 
                          axis_scale = 1, 
-                         legend_scale = 1, 
+                         legend_scale = 1,
+                         gridx = FALSE,
+                         gridy = FALSE,
                          dbSource = "EQ", 
                          dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
   
@@ -676,12 +680,17 @@ plotDiscrete <- function(start,
                            )
       ) %>%
         plotly::layout(title = NULL,
-                       yaxis = list(title = y_axis_label, 
+                       yaxis = list(title = y_axis_label,
+                                    showline = TRUE,
+                                    showgrid = gridy,
+                                    zeroline = FALSE,
                                     type = if (log) "log" else "linear",
                                     titlefont = list(size = axis_scale * 16),
                                     tickfont = list(size = axis_scale * 14)
                                     ),
                        xaxis = list(title = NULL,
+                                    showline = TRUE,
+                                    showgrid = gridx,
                                     tickfont = list(size = axis_scale * 14)),
                        legend = list(font = list(size = legend_scale * 14)
                                      )
@@ -704,14 +713,24 @@ plotDiscrete <- function(start,
                                              ), 
                                showlegend = FALSE,
                                hoverinfo = "text",
-                               text = ~paste(get(color_by), "<br>", # Name or parameter of trace
-                                             datetime, "<br>", # Datetime
-                                             if (targ_dt) paste("True sample datetime", target_datetime, "<br>"), # true sample datetime if requested and dbSource = 'AC'
-                                             result_condition, "of", as.character(result_condition_value), units, # Result condition and value
-                                             if (type) paste("<br>Sample type:", sample_type),  # Sample type if provided
-                                             if (collection) paste("<br>Collection method:", collection_method),  # Collection method if provided
-                                             if (fraction) paste("<br>Sample fraction:", sample_fraction),  # Sample fraction if provided
-                                             if (speciation) paste("<br>Result speciation", result_speciation)  # Result speciation if provided
+                               text = ~paste(get(color_by), 
+                                             "<br>", # Name or parameter of trace
+                                             datetime, 
+                                             "<br>", # Datetime
+                                             if (targ_dt) paste("True sample datetime", 
+                                                                target_datetime, "<br>"), # true sample datetime if requested and dbSource = 'AC'
+                                             result_condition, 
+                                             "of", 
+                                             as.character(result_condition_value), 
+                                             units, # Result condition and value
+                                             if (type) paste("<br>Sample type:", 
+                                                             sample_type),  # Sample type if provided
+                                             if (collection) paste("<br>Collection method:", 
+                                                                   collection_method),  # Collection method if provided
+                                             if (fraction) paste("<br>Sample fraction:", 
+                                                                 sample_fraction),  # Sample fraction if provided
+                                             if (speciation) paste("<br>Result speciation", 
+                                                                   result_speciation)  # Result speciation if provided
                                )
         )
       }
@@ -736,9 +755,12 @@ plotDiscrete <- function(start,
                                                ), # controls the actual line width and clor
                                  showlegend = FALSE,
                                  hoverinfo = 'text',
-                                 text = ~paste(get(color_by), "<br>", # Name or parameter of trace,
-                                               datetime, "<br>", # Datetime
-                                               "Standard Max:", round(std_max, 6), units)
+                                 text = ~paste(get(color_by), 
+                                               "<br>", # Name or parameter of trace,
+                                               datetime, 
+                                               "<br>", # Datetime
+                                               "Standard Max:", 
+                                               round(std_max, 6), units)
           )
         }
         if (length(df$std_min[!is.na(df$std_min)]) > 1) {
@@ -776,7 +798,12 @@ plotDiscrete <- function(start,
       nrows <- rows
     }
     
-    plotly::subplot(plots, nrows = nrows, shareX = FALSE, titleX = FALSE, titleY = TRUE) %>%
+    plotly::subplot(plots, 
+                    nrows = nrows, 
+                    shareX = FALSE, 
+                    titleX = FALSE, 
+                    titleY = TRUE,
+                    margin = c(0, (0.08 * axis_scale), 0, (0.08 * axis_scale))) %>%
       plotly::layout(showlegend = TRUE)
   } # End of plot creation function
   

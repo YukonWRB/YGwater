@@ -24,6 +24,8 @@ plotTimeseries(
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
+  gridx = FALSE,
+  gridy = FALSE,
   rate = NULL,
   tzone = "auto",
   con = NULL
@@ -67,6 +69,10 @@ plotTimeseries(
 \item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
 
 \item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
+\item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
+
+\item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
 
 \item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
