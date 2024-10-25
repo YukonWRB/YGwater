@@ -20,7 +20,10 @@
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range be plotted? Default is TRUE.
-#' @param language The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
+#' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
+#' @param line_scale A scale factor to apply to the size (width) of the line. Default is 1.
+#' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
+#' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
@@ -44,31 +47,37 @@ plotTimeseries <- function(location,
                            custom_title = NULL,
                            filter = NULL,
                            historic_range = TRUE,
-                           language = "en",
+                           lang = "en",
+                           line_scale = 1,
+                           axis_scale = 1,
+                           legend_scale = 1,
                            rate = NULL,
                            tzone = "auto",
                            con = NULL) 
 {
 
-#   location <- "29AB-M3"
-#   parameter = "Snow Water Equivalent"
-#   start_date <- "2023-08-30"
-#   end_date <- "2024-12-31"
-#   record_rate = NULL
-#   period_type = NULL
-#   z = NULL
-#   z_approx = NULL
-#   invert = NULL
-#   slider = TRUE
-#   datum = FALSE
-#   title = TRUE
-#   custom_title = NULL
-#   filter = NULL
-#   historic_range = TRUE
-#   language = "en"
-#   rate = NULL
-#   tzone = "auto"
-#   con = NULL
+  # location <- "29AB-M3"
+  # parameter = "Snow Water Equivalent"
+  # start_date <- "2023-08-30"
+  # end_date <- "2024-12-31"
+  # record_rate = NULL
+  # period_type = NULL
+  # z = NULL
+  # z_approx = NULL
+  # invert = NULL
+  # slider = TRUE
+  # datum = FALSE
+  # title = TRUE
+  # custom_title = NULL
+  # filter = NULL
+  # historic_range = TRUE
+  # lang = "en"
+  # line_scale = 1
+  # axis_scale = 1
+  # legend_scale = 1
+  # rate = NULL
+  # tzone = "auto"
+  # con = NULL
 
   # Checks and initial work ##########################################
   
@@ -129,8 +138,8 @@ plotTimeseries <- function(location,
   attr(start_date, "tzone") <- "UTC"
   attr(end_date, "tzone") <- "UTC"
   
-  if (!(language %in% c("en", "fr"))) {
-    stop("Your entry for the parameter 'language' is invalid. Please review the function documentation and try again.")
+  if (!(lang %in% c("en", "fr"))) {
+    stop("Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again.")
   }
   
   if (!is.null(record_rate)) {
@@ -176,9 +185,9 @@ plotTimeseries <- function(location,
   # Where column param_name_fr is not filled in, use the English name
   parameter_tbl$param_name_fr[is.na(parameter_tbl$param_name_fr)] <- parameter_tbl$param_name[is.na(parameter_tbl$param_name_fr)]
 
-  if (language == "fr") {
+  if (lang == "fr") {
     parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
-  } else if (language == "en" || is.na(parameter_name)) {
+  } else if (lang == "en" || is.na(parameter_name)) {
     parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
   }
 
@@ -259,13 +268,13 @@ plotTimeseries <- function(location,
   
   if (title == TRUE) {
     if (is.null(custom_title)) {
-      if (language == "fr") {
+      if (lang == "fr") {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
       } 
-      if (language == "en" || is.na(stn_name) == TRUE) {
+      if (lang == "en" || is.na(stn_name) == TRUE) {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
       }
-      stn_name <- titleCase(stn_name, language)
+      stn_name <- titleCase(stn_name, lang)
     } else {
       stn_name <- custom_title
     }
@@ -430,25 +439,46 @@ plotTimeseries <- function(location,
   plot <- plotly::plot_ly()
   if (historic_range) {
     plot <- plot %>%
-      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (language == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), " q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
+      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), " q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
       plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), " Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
   
   plot <- plot %>%
+    plotly::add_trace(data = trace_data, 
+                      x = ~datetime, 
+                      y = ~value, 
+                      type = "scatter", 
+                      mode = "lines",
+                      line = list(width = 2.5 * line_scale),
+                      name = parameter_name, 
+                      color = I("#0097A9"), 
+                      hoverinfo = "text", 
+                      text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
     plotly::layout(
-      title = list(text = stn_name, x = 0.05, xref = "container"), 
-      xaxis = list(title = list(standoff = 0, font = list(size = 1)), 
+      title = if (title) list(text = stn_name, 
+                              x = 0.05, 
+                              xref = "container",
+                              font = list(size = axis_scale * 18))
+      else NULL, 
+      xaxis = list(title = list(standoff = 0), 
                    showgrid = FALSE, 
                    showline = TRUE, 
-                   tickformat = if (language == "en") "%b %d '%y" else "%d %b '%y", 
+                   tickformat = if (lang == "en") "%b %d '%y" else "%d %b '%y",
+                   titlefont = list(size = axis_scale * 14),
+                   tickfont = list(size = axis_scale * 12),
                    rangeslider = list(visible = if (slider) TRUE else FALSE)), 
-      yaxis = list(title = y_title, showgrid = FALSE, showline = TRUE), 
-      margin = list(b = 0), 
-      hovermode = "x unified"
+      yaxis = list(title = y_title, 
+                   showgrid = FALSE, 
+                   showline = TRUE,
+                   titlefont = list(size = axis_scale * 14),
+                   tickfont = list(size = axis_scale * 12)), 
+      margin = list(b = 0,
+                    t = 40 * axis_scale,
+                    l = 50 * axis_scale), 
+      hovermode = "x unified",
+      legend = list(font = list(size = legend_scale * 12))
     ) %>%
-    plotly::add_lines(data = trace_data, x = ~datetime, y = ~value, type = "scatter", mode = "lines", name = parameter_name, color = I("#0097A9"), hoverinfo = "text", text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
-
-    plotly::config(locale = language)
+    plotly::config(locale = lang)
   
   return(plot)
 }

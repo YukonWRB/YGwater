@@ -10,7 +10,8 @@
 #' @param dates "all" for all dates (default) OR character vector of length 2 of start and end date in format c("YYYY-MM-DD", "YYYY-MM-DD")
 #' @param BD Treatment of values below detection limits (0 = Set to zero; 1 = Set to NA; 2 = Set to 0.5*(LOD); 3 = Set to sqrt(2)LOD). Above detection values are set to the upper limit of detection.
 #' @param apply_standards TRUE or FALSE, include standards with data. Provides a pop-up list for selection.
-#' @param path The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".
+#' @param path The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
+#' databases/EQWinDB/WaterResources.mdb".
 
 #' @return A list with one sub-list per station, each one containing 2 data frames with sample data and calculated standards
 #'
