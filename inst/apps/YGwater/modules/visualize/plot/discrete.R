@@ -160,23 +160,15 @@ discretePlotUI <- function(id) {
       ),
       
       div(
-        checkboxInput(ns("colorblind"),
-                      NULL),
-        style = "display: flex; align-items: center;",
-        tags$label(
-          "Colorblind friendly", 
-          class = "control-label",
-          style = "margin-right: 5px;"
-        )
-      ),
+        actionButton(ns("extra_aes"),
+                     "Modify plot aesthetics",
+                     title = "Modify plot aesthetics such as language, color palette, point/line size, text size.",
+                     style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
+        actionButton(ns("make_plot"),
+                     "Create Plot",
+                     style = "display: block; width: 100%;") # Ensure block display and full width
+      )
       
-      radioButtons(ns("lang"),
-                   NULL,
-                   choices = stats::setNames(c("en", "fr"), c("English", "French")),
-                   selected = "en"),
-      
-      actionButton(ns("make_plot"),
-                   "Create Plot")
     ),
     
     mainPanel(
@@ -258,6 +250,77 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
       }
     })
     
+    # Create a list with default aesthetic values
+    plot_aes <- reactiveValues(lang = "en",
+                   colorblind = FALSE,
+                   point_scale = 1,
+                   guideline_scale = 1,
+                   axis_scale = 1,
+                   legend_scale = 1)
+    
+    # Modal dialog for extra aesthetics
+    observeEvent(input$extra_aes, {
+      showModal(modalDialog(
+        title = "Modify plot aesthetics",
+        tags$div(
+          tags$h5("Language"),
+          radioButtons(ns("lang"),
+                       NULL,
+                       choices = stats::setNames(c("en", "fr"), c("English", "French")),
+                       selected = plot_aes$lang),
+          tags$hr(),
+          tags$h5("Color palette"),
+          checkboxInput(ns("colorblind"),
+                        "Colorblind friendly",
+                        value = plot_aes$colorblind),
+          tags$hr(),
+          sliderInput(ns("point_scale"),
+                      "Point scale factor",
+                      min = 0.2,
+                      max = 3,
+                      value = plot_aes$point_scale,
+                      step = 0.1),
+          sliderInput(ns("guideline_scale"),
+                      "Guideline/standard scale factor",
+                      min = 0.2,
+                      max = 3,
+                      value = plot_aes$guideline_scale,
+                      step = 0.1),
+          sliderInput(ns("axis_scale"),
+                      "Axes scale factor (text and values)",
+                      min = 0.2,
+                      max = 3,
+                      value = plot_aes$axis_scale,
+                      step = 0.1),
+          sliderInput(ns("legend_scale"),
+                      "Legend text scale factor",
+                      min = 0.2,
+                      max = 3,
+                      value = plot_aes$legend_scale,
+                      step = 0.1)
+        ),
+        easyClose = FALSE,
+        footer = tagList(
+          actionButton(ns("aes_apply"), "Apply"),
+          actionButton(ns("aes_cancel"), "Cancel")
+        )
+      ))
+    })
+    
+    observeEvent(input$aes_apply, {
+      plot_aes$lang <- input$lang
+      plot_aes$colorblind <- input$colorblind
+      plot_aes$point_scale <- input$point_scale
+      plot_aes$guideline_scale <- input$guideline_scale
+      plot_aes$axis_scale <- input$axis_scale
+      plot_aes$legend_scale <- input$legend_scale
+      removeModal()
+    })
+    
+    observeEvent(input$aes_cancel, {
+      removeModal()
+    })
+    
     # Create and render the plot ############################################################
     first_plot <- reactiveVal(TRUE)
     first_plot_with_standards <- reactiveVal(TRUE)
@@ -299,7 +362,7 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
           return()
         }
       }
-      
+
       tryCatch({
         withProgress(message = "Generating plot... please be patient", value = 0, {
           
@@ -316,8 +379,12 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                  facet_on = input$facet_on,
                                  loc_code = input$loc_code,
                                  target_datetime = input$target_datetime,
-                                 colorblind = input$colorblind,
-                                 lang = input$lang,
+                                 colorblind = plot_aes$colorblind,
+                                 lang = plot_aes$lang,
+                                 point_scale = plot_aes$point_scale,
+                                 guideline_scale = plot_aes$guideline_scale,
+                                 axis_scale = plot_aes$axis_scale,
+                                 legend_scale = plot_aes$legend_scale,
                                  dbSource = input$data_source)
           } else if (input$data_source == "AC") {
             plot <- plotDiscrete(start = input$date_range[1],
@@ -330,8 +397,12 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                  facet_on = input$facet_on,
                                  loc_code = input$loc_code,
                                  target_datetime = input$target_datetime,
-                                 colorblind = input$colorblind,
-                                 lang = input$lang,
+                                 colorblind = plot_aes$colorblind,
+                                 lang = plot_aes$lang,
+                                 point_scale = plot_aes$point_scale,
+                                 guideline_scale = plot_aes$guideline_scale,
+                                 axis_scale = plot_aes$axis_scale,
+                                 legend_scale = plot_aes$legend_scale,
                                  dbSource = input$data_source)
           }
           

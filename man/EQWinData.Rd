@@ -46,7 +46,8 @@ EQWinData(
 
 \item{save_path}{The path to save the Excel file(s). Default is "choose" to allow user to select a folder interactively.}
 
-\item{dbPath}{The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".}
+\item{dbPath}{The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
+databases/EQWinDB/WaterResources.mdb".}
 }
 \value{
 A list of data.frames containing the data, location and parameter info, and (optionally) standards, plus an Excel workbook containing the requested station data, an optional workbook containing the standards.

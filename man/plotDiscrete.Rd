@@ -19,6 +19,10 @@ plotDiscrete(
   target_datetime = TRUE,
   colorblind = FALSE,
   lang = "en",
+  point_scale = 1,
+  guideline_scale = 1,
+  axis_scale = 1,
+  legend_scale = 1,
   dbSource = "EQ",
   dbPath =
     "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
@@ -37,7 +41,7 @@ plotDiscrete(
 
 \item{paramGrp}{Only used if \code{dbSource} is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{parameters} instead.}
 
-\item{standard}{A standard name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if \code{dbSource} is 'EQ'.}
+\item{standard}{A standard or guideline name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if \code{dbSource} is 'EQ'.}
 
 \item{log}{Should the y-axis be log-transformed?}
 
@@ -53,9 +57,18 @@ plotDiscrete(
 
 \item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en", and this is only supported for dbSource == 'AC'.}
 
+\item{point_scale}{A scale factor to apply to the size of points. Default is 1.}
+
+\item{guideline_scale}{A scale factor to apply to the size of standard/guideline values Default is 1.}
+
+\item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
+
+\item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
 \item{dbSource}{The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function \code{\link[=AquaConnect]{AquaConnect()}} while EQWin connections use \code{\link[=AccessConnect]{AccessConnect()}}.}
 
-\item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".}
+\item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
+databases/EQWinDB/WaterResources.mdb".}
 }
 \value{
 An interactive HTML plot of the data from EQWin.
