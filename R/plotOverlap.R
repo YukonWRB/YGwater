@@ -39,33 +39,37 @@
 #' @param return_months Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within `startDay` and `endDay`, but will only consider data up to the last year specified in `years`. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of [fasstr::calc_annual_extremes()] and also used to set the 'water_year_start' parameter of this function.
 #' @param return_max_year The last year of data to consider when calculating returns. If left NULL behavior depends on parameter `historic_range`: if `historic_range` is set to 'last' defaults to the last year in `year` otherwise uses all data available. Automatically set to max(years) if `historic_range` is 'last', otherwise set to the current year.
 #' @param allowed_missing Allowable % of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of [fasstr::calc_annual_extremes()].
-#' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
+#' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
+#' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
+#' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
+#' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param legend Should a legend (including text for min/max range and return periods) be added to the plot?
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
 #' @param continuous_data A data.frame with the data to be plotted. Must contain the following columns: datetime, value.
 #' @param snowbulletin If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
-#' @param language The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
+#' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @export
 #'
 
-# location <- "09AA-M1"
+# location <- "29AB-M3"
 # parameter <- "snow water equivalent"
 # record_rate = NULL
 # startDay <- "2023-09-01"
-# endDay <- "2023-05-31
+# endDay <- "2024-06-01"
 # tzone <- "MST"
-# years <- "2022"
-# datum <- TRUE
+# years <- "2024"
+# datum <- FALSE
 # title <- TRUE
 # custom_title <- NULL
 # filter <- NULL
-# historic_range <- "last"
+# historic_range <- "max"
 # returns <- "auto"
 # return_type <- "max"
-# return_months <- c(5:9)
-# return_max_year <- NULL
+# return_months <- c(3,4,5)
+# return_max_year <- 2024
 # allowed_missing <- 10
 # plot_scale <- 1
 # legend <- TRUE
@@ -73,7 +77,7 @@
 # con <- NULL
 # continuous_data <- NULL
 # snowbulletin <- FALSE
-# language <- "en"
+# lang <- "en"
 
 
 plotOverlap <- function(location,
@@ -93,13 +97,17 @@ plotOverlap <- function(location,
                         return_months = c(5:9),
                         return_max_year = NULL,
                         allowed_missing = 10,
-                        plot_scale = 1,
+                        line_scale = 1,
+                        axis_scale = 1,
+                        legend_scale = 1,
+                        gridx = FALSE,
+                        gridy = TRUE,
                         legend = TRUE,
                         save_path = NULL,
                         con = NULL,
                         continuous_data = NULL,
                         snowbulletin = FALSE,
-                        language = "en")
+                        lang = "en")
 {
   
   if (is.null(con)) {
@@ -117,15 +125,15 @@ plotOverlap <- function(location,
       parameter <- tolower(parameter)
   }
 
-  if (!(language %in% c("en", "fr"))) {
-    stop("Your entry for the parameter 'language' is invalid. Please review the function documentation and try again.")
+  if (!(lang %in% c("en", "fr"))) {
+    stop("Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again.")
   }
 
-  if (language == "fr") {
+  if (lang == "fr") {
     lc <- Sys.getlocale("LC_ALL")
     Sys.setlocale("LC_ALL", "French_Canada.1252")
     on.exit(Sys.setlocale("LC_ALL", lc), add = TRUE)
-  } else if (language == "en") {
+  } else if (lang == "en") {
     lc <- Sys.getlocale("LC_ALL")
     Sys.setlocale("LC_ALL", "English_Canada.1252")
     on.exit(Sys.setlocale("LC_ALL", lc), add = TRUE)
@@ -272,9 +280,9 @@ plotOverlap <- function(location,
     # Default to the english name if the french name is not available
     parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name_fr"] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
     
-    if (language == "fr") {
+    if (lang == "fr") {
       parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
-    } else if (language == "en" || is.na(parameter_name)) {
+    } else if (lang == "en" || is.na(parameter_name)) {
       parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
     }
 
@@ -313,26 +321,32 @@ plotOverlap <- function(location,
       tsid <- exist_check$timeseries_id
     }
 
+    # Find the ts units
+    units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code, ";"))
+
     # Find the necessary datum (latest datum)
     if (datum) {
-      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+      if (units != "m") {
+        warning("The parameter you are plotting is not in meters. Datum will not be applied.")
+        datum <- data.frame(conversion_m = 0)
+      } else {
+        datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+      }
     } else {
       datum <- data.frame(conversion_m = 0)
     }
 
-    # Find the ts units
-    units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code, ";"))
 
     # Get the necessary data -------------------
     # start with daily means data
     daily_end <- endDay
     if (historic_range == "all") {
-      lubridate::year(daily_end) <- lubridate::year(Sys.time())
+      lubridate::year(daily_end) <- max(max(years) + 1, lubridate::year(Sys.time()))
       daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
-      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "';"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
     } else if (historic_range == "last") {
       if (overlaps) {
         lubridate::year(daily_end) <- last_year + 1
@@ -343,7 +357,7 @@ plotOverlap <- function(location,
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
-      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "';"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
     }
 
     #Fill in any missing days in daily
@@ -636,49 +650,49 @@ plotOverlap <- function(location,
   # x axis settings
   if  (length(day_seq) > 200) {
     date_breaks = "2 months"
-    if (language == "fr") {
+    if (lang == "fr") {
       labs = "%d %b"
     } else {
       labs = "%b %d"
     }
   } else if (length(day_seq) > 60) {
     date_breaks = "1 month"
-    if (language == "fr") {
+    if (lang == "fr") {
       labs = "%d %b"
     } else {
       labs = "%b %d"
     }
   } else if (length(day_seq) > 14) {
     date_breaks = "1 week"
-    if (language == "fr") {
+    if (lang == "fr") {
       labs = "%d %b"
     } else {
       labs = "%b %d"
     }
   } else if (length(day_seq) > 7) {
     date_breaks = "2 days"
-    if (language == "fr") {
+    if (lang == "fr") {
       labs = "%d %b"
     } else {
       labs = "%b %d"
     }
   } else if (length(day_seq) >= 2) {
     date_breaks = "1 days"
-    if (language == "fr") {
+    if (lang == "fr") {
       labs = "%d %b"
     } else {
       labs = "%b %d"
     }
   } else if (length(day_seq) > 1) {
     date_breaks = "24 hours"
-    if (language == "fr") {
+    if (lang == "fr") {
       labs = "%H:%M"
     } else {
       labs = "%H:%M"
     }
   } else if (length(day_seq) == 1) {
     date_breaks = "12 hour"
-    if (language == "fr") {
+    if (lang == "fr") {
       labs = "%H:%M"
     } else {
       labs = "%H:%M"
@@ -690,10 +704,22 @@ plotOverlap <- function(location,
     ggplot2::scale_x_datetime(date_breaks = date_breaks, date_labels = labs, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
     ggplot2::labs(x = NULL, y =  paste0(parameter_name, " (", units, ")")) +
     ggplot2::theme_classic()
+  
   if (legend) {
-    plot <- plot + ggplot2::theme(legend.position = "right", legend.justification = c(0, 0.95), legend.text = ggplot2::element_text(size = 8*plot_scale), legend.title = ggplot2::element_text(size = 9*plot_scale), axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale))
+    plot <- plot + 
+      ggplot2::theme(legend.position = "right", 
+                     legend.justification = c(0, 0.95), 
+                     legend.text = ggplot2::element_text(size = 8 * legend_scale), 
+                     legend.title = ggplot2::element_text(size = 9 * legend_scale), 
+                     axis.title.y = ggplot2::element_text(size = 12 * axis_scale), 
+                     axis.text.x = ggplot2::element_text(size = 11 * axis_scale), 
+                     axis.text.y = ggplot2::element_text(size = 11 * axis_scale))
   } else {
-    plot <- plot + ggplot2::theme(legend.position = "none", axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale))
+    plot <- plot + 
+      ggplot2::theme(legend.position = "none", 
+                     axis.title.y = ggplot2::element_text(size = 12 * axis_scale), 
+                     axis.text.x = ggplot2::element_text(size = 11 * axis_scale), 
+                     axis.text.y = ggplot2::element_text(size = 11 * axis_scale))
   }
 
   if (!is.infinite(minHist)) {
@@ -702,21 +728,28 @@ plotOverlap <- function(location,
         ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"), na.rm = T)
       if (!all(is.na(realtime$q25))) {
         plot <- plot +
-          ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = if (language == "en") "25th-75th Percentile  " else "25e-75e percentile    "), na.rm = T) +
-          ggplot2::scale_fill_manual(name = if (language == "en") "Historical Range" else "Plage historique", values = if (language == "en") c("Min - Max" = "gray90", "25th-75th Percentile  " = "gray80") else c("Min - Max" = "gray90", "25e-75e percentile    " = "gray80"))
+          ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = if (lang == "en") "25th-75th Percentile  " else "25e-75e percentile    "), na.rm = T) +
+          ggplot2::scale_fill_manual(name = if (lang == "en") "Historical Range" else "Plage historique", values = if (lang == "en") c("Min - Max" = "gray90", "25th-75th Percentile  " = "gray80") else c("Min - Max" = "gray90", "25e-75e percentile    " = "gray80"))
       } else {
         plot <- plot +
-          ggplot2::scale_fill_manual(name = if (language == "en") "Historical Range" else "Plage historique", values = c("Min - Max" = "gray90"))
+          ggplot2::scale_fill_manual(name = if (lang == "en") "Historical Range" else "Plage historique", values = c("Min - Max" = "gray90"))
       }
     } else {
       minHist <- Inf # set to Inf here so that historical range is not printed later on the graph
     }
   }
+  
+  if (gridy) {
+    plot <- plot + ggplot2::theme(panel.grid.major.x = ggplot2::element_line(color = "black", size = 0.5))
+  }
+  if (gridx) {
+    plot <- plot + ggplot2::theme(panel.grid.major.y = ggplot2::element_line(color = "black", size = 0.5))
+  }
 
   if (snowbulletin == FALSE) {
     plot <- plot +
       ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
-      ggplot2::scale_colour_manual(name = if (language == "en") "Year" else "Ann\u00E9e", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks = rev(unique(realtime$plot_year)))
+      ggplot2::scale_colour_manual(name = if (lang == "en") "Year" else "Ann\u00E9e", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks = rev(unique(realtime$plot_year)))
   } else {
     plot <- plot +
       ggplot2::geom_line(ggplot2::aes(y = max), colour = "#0097A9", size = 1) +
@@ -738,17 +771,32 @@ plotOverlap <- function(location,
         loc_returns[is.na(loc_returns) == TRUE] <- -10 #This prevents a ggplot error when it tries to plot a logical along with numerics, but keeps the values out of the plot.
 
         plot <- plot +
-          ggplot2::geom_hline(yintercept = loc_returns$twoyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$fiveyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$tenyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$twentyyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$fiftyyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$onehundredyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$twohundredyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$fivehundredyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$thousandyear, linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$twothousandyear, linetype = "dashed", color = "black") +
-          ggplot2::annotate("text", x = mean(realtime$fake_datetime), y = c(loc_returns$twoyear, loc_returns$fiveyear, loc_returns$tenyear, loc_returns$twentyyear, loc_returns$fiftyyear, loc_returns$onehundredyear, loc_returns$twohundredyear, loc_returns$fivehundredyear, loc_returns$thousandyear, loc_returns$twothousandyear), label = if (language == "en") label_en else if (language == "fr") label_fr, size = 2.6*plot_scale, vjust = -.2*plot_scale)
+          ggplot2::geom_hline(yintercept = loc_returns$twoyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$fiveyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$tenyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$twentyyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$fiftyyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$onehundredyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$twohundredyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$fivehundredyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$thousandyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = loc_returns$twothousandyear, 
+                              linetype = "dashed", color = "black") +
+          ggplot2::annotate("text", 
+                            x = mean(realtime$fake_datetime), 
+                            y = c(loc_returns$twoyear, loc_returns$fiveyear, loc_returns$tenyear, loc_returns$twentyyear, loc_returns$fiftyyear, loc_returns$onehundredyear, loc_returns$twohundredyear, loc_returns$fivehundredyear, loc_returns$thousandyear, loc_returns$twothousandyear), 
+                            label = if (lang == "en") label_en else if (lang == "fr") label_fr, 
+                            size = 2.6 * line_scale, 
+                            vjust = -.2 * line_scale)
       } else if (returns == "auto") { # if there is no entry to the table AND the user specified auto, calculate loop will run after this
         returns <- "calculate"
       }
@@ -767,17 +815,32 @@ plotOverlap <- function(location,
         freq <- analysis$Freq_Fitted_Quantiles
 
         plot <- plot +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[10,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[9,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[8,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[7,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[6,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[5,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[4,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[3,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[2,4]), linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[1,4]), linetype = "dashed", color = "black") +
-          ggplot2::annotate("text", x = mean(realtime$fake_datetime), y = c(as.numeric(freq[10,4]), as.numeric(freq[9,4]), as.numeric(freq[8,4]), as.numeric(freq[7,4]), as.numeric(freq[6,4]), as.numeric(freq[5,4]), as.numeric(freq[4,4]), as.numeric(freq[3,4]), as.numeric(freq[2,4]), as.numeric(freq[1,4])), label = if (language == "en") label_en else if (language == "fr") label_fr, size = 2.6*plot_scale, vjust = -.2*plot_scale)
+          ggplot2::geom_hline(yintercept = as.numeric(freq[10,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[9,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[8,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[7,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[6,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[5,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[4,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[3,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[2,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::geom_hline(yintercept = as.numeric(freq[1,4]), 
+                              linetype = "dashed", color = "black") +
+          ggplot2::annotate("text", 
+                            x = mean(realtime$fake_datetime),
+                            y = c(as.numeric(freq[10,4]), as.numeric(freq[9,4]), as.numeric(freq[8,4]), as.numeric(freq[7,4]), as.numeric(freq[6,4]), as.numeric(freq[5,4]), as.numeric(freq[4,4]), as.numeric(freq[3,4]), as.numeric(freq[2,4]), as.numeric(freq[1,4])), 
+                            label = if (lang == "en") label_en else if (lang == "fr") label_fr, 
+                            size = 2.6 * line_scale, 
+                            vjust = -.2 * line_scale)
       }, error = function(e) {
         returns <<- "failed"
       })
@@ -789,20 +852,20 @@ plotOverlap <- function(location,
     end_time1 <- max(realtime$fake_datetime, na.rm = TRUE)
     if (!is.infinite(minHist)) {
       if (overlaps) {
-        if (language == "en") {
+        if (lang == "en") {
           line1 <- paste0("\n         \n        Historical range based\n        on years\n        ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
         } else {
           line1 <- paste0("\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es\n        ", ribbon_start_end[1], " \u00E0 ", ribbon_start_end[2], "." )
         } 
       } else {
-        if (language == "en") {
+        if (lang == "en") {
           line1 <- paste0("\n         \n        Historical range based\n        on years ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
         } else {
           line1 <- paste0("\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es ", ribbon_start_end[1], " \u00E0 ", ribbon_start_end[2], "." )
         }
       }
     } else {
-      if (language == "en") {
+      if (lang == "en") {
         line1 <- "\n         \n        Not enough data for\n        historical ranges"
       } else {
         line1 <- "\n         \n        Pas assez de donn\u00E9es pour\n        les plages historiques"
@@ -811,7 +874,7 @@ plotOverlap <- function(location,
         ggplot2::theme(legend.box.spacing = ggplot2::unit(0, "pt"), legend.box.margin = ggplot2::margin(0, 0, 0, 0))
     }
     if (returns == "calculate") {
-      if (language == "en") {
+      if (lang == "en") {
         line2 <- paste0("        \n        \n        Return periods calculated\n        using months ", month.abb[return_months[1]], " to ",  month.abb[return_months[length(return_months)]], " \n        and years ", return_yrs[1], " to ", return_yrs[2], ". \n        ", nrow(analysis$Freq_Analysis_Data), " data points retained after\n        removing years with > ", allowed_missing, " %\n        missing data.")
       } else {
         line2 <- paste0("        \n        \n        P\u00E9riodes de retour calcul\u00E9es\n        en utilisant les mois de ", format(ISOdate(2000, return_months[1], 1), "%b"), "\n        \u00E0 ",  format(ISOdate(2000, return_months[length(return_months)], 1), "%b"), " et les ann\u00E9es de ", return_yrs[1], "\n        \u00E0 ", return_yrs[2], ". ", nrow(analysis$Freq_Analysis_Data), " points de donn\u00E9es\n        conserv\u00E9s apr\u00E8s avoir retir\u00E9\n        les ann\u00E9es avec > ", allowed_missing, "% de\n        donn\u00E9es manquantes.")
@@ -819,9 +882,9 @@ plotOverlap <- function(location,
       lines <- paste0(line1, line2)
       plot <- plot +
         ggplot2::coord_cartesian(clip = "off", default = TRUE) +
-        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8 * plot_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7*spread_vert/30, ymax = (max - spread_vert/2) - 7*spread_vert/30)
+        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8 * legend_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7*spread_vert/30, ymax = (max - spread_vert/2) - 7*spread_vert/30)
     } else if (returns == "table") {
-      if (language == "en") {
+      if (lang == "en") {
         line2 <- "        \n        \n        Return periods are based\n        on statistical analysis\n        of select data from the\n        start of records to 2021."
       } else {
         line2 <- "        \n        \n        P\u00E9riodes de retour bas\u00E9es\n        sur l'analyse statistique\n        de donn\u00E9es s\u00E9lectionn\u00E9es\n        depuis le d\u00E9but des enregistrements\n        jusqu'\u00E0 2021."
@@ -829,9 +892,9 @@ plotOverlap <- function(location,
       lines <- paste0(line1, line2)
       plot <- plot +
         ggplot2::coord_cartesian(clip = "off", default = TRUE) +
-        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8*plot_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
+        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8 * legend_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
     } else if (returns == "failed") {
-      if (language == "en") {
+      if (lang == "en") {
         line2 <- "        \n        \n        Insufficient data to \n        calculate returns using\n        last requested year."
       } else {
         line2 <- "        \n        \n        Donn\u00E9es insuffisantes \n        pour calculer les p\u00E9riodes\n        de retour en utilisant\n        la derni\u00E8re ann\u00E9e demand\u00E9e."
@@ -839,11 +902,11 @@ plotOverlap <- function(location,
       lines <- paste0(line1, line2)
       plot <- plot +
         ggplot2::coord_cartesian(clip = "off", default = TRUE) +
-        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8*plot_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
+        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8 * legend_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
     } else {
       plot <- plot +
         ggplot2::coord_cartesian(clip = "off", default = TRUE) +
-        ggplot2::annotation_custom(grid::textGrob(line1, gp = grid::gpar(fontsize = 8*plot_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
+        ggplot2::annotation_custom(grid::textGrob(line1, gp = grid::gpar(fontsize = 8 * legend_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
     }
   }
   
@@ -851,21 +914,21 @@ plotOverlap <- function(location,
   # Wrap things up and return() -----------------------
   if (title == TRUE) {
     if (is.null(custom_title) == TRUE) {
-      if (language == "fr") {
+      if (lang == "fr") {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
       } 
-      if (language == "en" || is.na(stn_name) == TRUE) {
+      if (lang == "en" || is.na(stn_name) == TRUE) {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
       }
-      stn_name <- titleCase(stn_name, language)
+      stn_name <- titleCase(stn_name, lang)
       
       plot <- plot +
         ggplot2::labs(title = stn_name) +
-        ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12*plot_scale, face = "bold"))
+        ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * axis_scale, face = "bold"))
     } else if (is.null(custom_title) == FALSE) {
       plot <- plot +
         ggplot2::labs(title = as.character(custom_title)) +
-        ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12*plot_scale, face = "bold"))
+        ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * axis_scale, face = "bold"))
     }
   }
 

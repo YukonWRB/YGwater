@@ -16,7 +16,7 @@ eq_fetch(
 )
 }
 \arguments{
-\item{EQcode}{Site code as it appears in EQWin eg. "(LOB)" or "(KNO)". Function only works for stations with  designated project code in brackets}
+\item{EQcode}{Site code as it appears in EQWin eg. "LOB" or "KNO". Function only works for stations with  designated project code in brackets}
 
 \item{stationIDs}{"all" for all stations (default) OR character vector of selected stations as they appear in the EQWin database WITHOUT the EQcode c("MW-01", "MW-02)}
 
@@ -28,7 +28,8 @@ eq_fetch(
 
 \item{apply_standards}{TRUE or FALSE, include standards with data. Provides a pop-up list for selection.}
 
-\item{path}{The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".}
+\item{path}{The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
+databases/EQWinDB/WaterResources.mdb".}
 }
 \value{
 A list with one sub-list per station, each one containing 2 data frames with sample data and calculated standards

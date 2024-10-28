@@ -5,6 +5,7 @@
 #' 
 #' This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
 #' 
+#' @param type Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.
 #' @param locations The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param parameters The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.
@@ -13,7 +14,7 @@
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
-#' @param lead_lag The number of **hours** to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters
+#' @param lead_lag The number of **hours** to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters. Not used for `type` 'subplots'.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
@@ -22,7 +23,12 @@
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Default NULL will plot historic ranges for up to two traces and no historical ranges at all if more than two traces; TRUE will plot historic ranges for all traces; FALSE will not plot historic ranges.
-#' @param language The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
+#' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
+#' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
+#' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
+#' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
+#' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
@@ -31,7 +37,8 @@
 #' 
 #' @export
 
-plotMultiTimeseries <- function(locations,
+plotMultiTimeseries <- function(type = 'traces',
+                                locations,
                                 parameters,
                                 record_rates = NULL,
                                 period_types = NULL,
@@ -48,20 +55,55 @@ plotMultiTimeseries <- function(locations,
                                 custom_title = NULL,
                                 filter = NULL,
                                 historic_range = NULL,
-                                language = "en",
+                                lang = "en",
+                                line_scale = 1,
+                                axis_scale = 1,
+                                legend_scale = 1,
+                                gridx = FALSE,
+                                gridy = FALSE,
                                 rate = NULL,
                                 tzone = "auto",
                                 con = NULL) {
   
+  # type <- 'subplots'
+  # locations <- c("09FC001", "09EA004")
+  # parameters <- c("water level", "discharge, river/stream")
+  # record_rates <- NULL
+  # period_types <- NULL
+  # z <- NULL
+  # z_approx <- NULL
+  # start_date <- Sys.Date() - 30
+  # end_date <- Sys.Date()
+  # lead_lag <- NULL
+  # log <- FALSE
+  # invert <- NULL
+  # slider <- FALSE
+  # datum <- TRUE
+  # title <- TRUE
+  # custom_title <- NULL
+  # filter <- NULL
+  # historic_range <- NULL
+  # lang <- "en"
+  # line_scale <- 1
+  # axis_scale <- 1
+  # legend_scale <- 1
+  # rate <- NULL
+  # tzone <- "auto"
+  
+  
   # Checks and initial work ##########################################
+  
+  if (!type %in% c('traces', 'subplots')) {
+    stop("Your entry for the parameter 'type' is invalid. Please review the function documentation and try again.")
+  }
   
   # Deal with non-standard evaluations from data.table to silence check() notes
   period_secs <- period <- expected <- datetime <- gap_exists <- NULL
   
   rlang::check_installed("plotly", "necessary for interactive plots")
   
-  if (!(language %in% c("en", "fr"))) {
-    stop("Your entry for the parameter 'language' is invalid. Please review the function documentation and try again.")
+  if (!(lang %in% c("en", "fr"))) {
+    stop("Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again.")
   }
   
   
@@ -249,6 +291,7 @@ plotMultiTimeseries <- function(locations,
     z <- if (is.na(timeseries$z[i])) NULL else timeseries$z[i]
     z_approx <- if (is.na(timeseries$z_approx[i])) NULL else timeseries$z_approx[i]
     lead_lag <- if (is.na(timeseries$lead_lag[i])) 0 else timeseries$lead_lag[i]
+    if (lead_lag == 0) timeseries$lead_lag[i] <- 0
     
     # Determine the timeseries and adjust the date range #################
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
@@ -279,9 +322,9 @@ plotMultiTimeseries <- function(locations,
     }
     
     timeseries[i, "axis_orientation"] <- if (is.null(invert[i])) {if (parameter_tbl$plot_default_y_orientation[1] == "inverted") TRUE else FALSE} else invert[i]
-    if (language == "fr") {
+    if (lang == "fr") {
       timeseries[i, "parameter_name"] <- titleCase(parameter_tbl$param_name_fr[1], "fr")
-    } else if (language == "en" || is.na(timeseries[i, "parameter_name"])) {
+    } else if (lang == "en" || is.na(timeseries[i, "parameter_name"])) {
       timeseries[i, "parameter_name"] <- titleCase(parameter_tbl$param_name[1], "en")
     }
     
@@ -555,43 +598,58 @@ plotMultiTimeseries <- function(locations,
   }
   
   
-  if (language == "fr") {
+  if (lang == "fr") {
     for (i in 1:nrow(timeseries)) {
       name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
       if (is.na(name)) {
         name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
       }
-      timeseries[i, "name"] <- titleCase(name, language)
+      timeseries[i, "name"] <- titleCase(name, lang)
     }
   }
-  if (language == "en") {
+  if (lang == "en") {
     for (i in 1:nrow(timeseries)) {
       name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
-      timeseries[i, "name"] <- titleCase(name, language)
+      timeseries[i, "name"] <- titleCase(name, lang)
     }      
   }
   
   # Make the title ###################################
-  if (title == TRUE) {
+  use_title <- FALSE
+  if (title) {
+    use_title <- TRUE
     if (is.null(custom_title)) {
       generate_plot_title <- function(tbl) {
         # Group by location to handle different parameters per location
-        title <- tbl %>%
-          dplyr::group_by(location, name) %>%
-          # dplyr::summarise(parameter_names = paste(parameter_name, collapse = ", "), .groups = "drop") %>%
-          dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
-                        # Format title line by line
-                        lead_lag_text = ifelse(lead_lag > 0, paste0(" [+ ", lead_lag, " hours]"), 
-                                               ifelse(lead_lag < 0, paste0(" [", lead_lag, " hours]"), "")),
-                        title = paste0(name, 
-                                      " (", 
-                                      .data$parameter_name, ")",
-                                      .data$lead_lag_text
-                        )
-          ) %>%
-          # Combine all lines into a single title
-          dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
-          dplyr::pull("plot_title") # Extract the plot title as a string
+        if (type == 'traces') {
+          title <- tbl %>%
+            dplyr::group_by(location, name) %>%
+            dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
+                          # Format title line by line
+                          lead_lag_text = ifelse(lead_lag >= 0, paste0(" [+ ", lead_lag, " hours]"), 
+                                                 ifelse(lead_lag < 0, paste0(" [-", lead_lag, " hours]"), "")),
+                          title = paste0(name, 
+                                         " (", 
+                                         .data$parameter_name, ")",
+                                         .data$lead_lag_text)
+            ) %>%
+            # Combine all lines into a single title
+            dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
+            dplyr::pull("plot_title") # Extract the plot title as a string
+        } else {
+          title <- tbl %>%
+            dplyr::group_by(location, name) %>%
+            dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
+                          # Format title line by line
+                          title = paste0(name, 
+                                         " (", 
+                                         .data$parameter_name, ")")
+            ) %>%
+            # Combine all lines into a single title
+            dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
+            dplyr::pull("plot_title") # Extract the plot title as a string
+        }
+        
         return(title)
       }
       
@@ -602,41 +660,7 @@ plotMultiTimeseries <- function(locations,
     }
   }
   
-  
-  ### Code below could be used if wanting to automatically send traces to one or the other axis
-  # Determine the appropriate axis to send each trace to   ############################
-  # ranges <- sapply(data, function(x) range(x[["trace_data"]]$value, na.rm = TRUE))
-  # timeseries$min <- ranges[1,]
-  # timeseries$max <- ranges[2,]
-  # timeseries$spread <- timeseries$max - timeseries$min
-  # 
-  # # Calculate a custom distance matrix emphasizing spread differences
-  # calculate_custom_distance <- function(df) {
-  #   n <- nrow(df)
-  #   dist_matrix <- matrix(0, n, n)
-  #   for (i in 1:n) {
-  #     for (j in 1:n) {
-  #       # Custom distance: emphasizing spread differences more heavily
-  #       spread_diff <- abs(log(df$spread[i] + 1) - log(df$spread[j] + 1)) * 2  # Weight spread differences more
-  #       position_diff <- abs(df$min[i] - df$min[j]) + abs(df$max[i] - df$max[j])
-  #       dist_matrix[i, j] <- spread_diff + position_diff
-  #     }
-  #   }
-  #   as.dist(dist_matrix)
-  # }
-  # # Apply the function
-  # custom_dist_matrix <- calculate_custom_distance(timeseries)
-  # # Hierarchical clustering with the custom distance matrix
-  # hc <- hclust(custom_dist_matrix)
-  # clusters <- cutree(hc, k = yaxis)
-  # # Assign clusters to y-axes
-  # timeseries$axis <- paste0("y", clusters)
-  
-  timeseries$axis <- paste0("y", seq_along(1:nrow(timeseries)))
-  
-  
   # Make the plot ###################################
-  
   colors <- grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(data))
   
   # Function to add an opacity value to a hex color
@@ -645,125 +669,282 @@ plotMultiTimeseries <- function(locations,
     sprintf("rgba(%d, %d, %d, %.2f)", rgb_vals[1,], rgb_vals[2,], rgb_vals[3,], opacity)
   }
   
-  # Create lists of y-axis properties
-  n_axes <- nrow(timeseries)
-  for (i in 1:n_axes) {
-    # Make axis titles
-    # Truncate long strings
-    if (nchar(timeseries[i, "name"]) > 25) {
-      name <- paste0(substr(timeseries[i, "name"], 1, 22), "...")
-    } else {
-      name <- timeseries[i, "name"]
-    }
-    if (nchar(timeseries[i, "parameter_name"]) > 18) {
-      parameter_name <- paste0(substr(timeseries[i, "parameter_name"], 1, 15), "...")
-    } else {
-      parameter_name <- timeseries[i, "parameter_name"]
-    }
+  if (type == "traces") {
     
-    
-    timeseries[i, "trace_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
-    timeseries[i, "tooltip_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
-    timeseries[i, "range_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
-    
-    tmp <- list(
-      titlefont = list(color = colors[i], size = 14),
-      tickfont = list(color = colors[i], size = 12),
-      tickcolor = colors[i],
-      ticks = "outside",
-      overlaying = if (i > 1) "y" else NULL,
-      side = if (i %% 2 == 0) "right" else "left",  # Check if even or odd
-      title = list(
-        text = timeseries[i, "trace_title"],
-        standoff = ((i - 1) %/% 2) * 22
-      ),
-      type = if (log[i]) "log" else "linear",
-      zeroline = FALSE,
-      showline = TRUE,
-      showgrid = FALSE,
-      showspikes = TRUE,
-      spikethickness = 2,
-      autorange = if (timeseries[i, "axis_orientation"]) "reversed" else NULL
-    )
-    axis <- timeseries$axis[i]
-    assign(axis, tmp)
-  }
-  
-  
-  plot <- plotly::plot_ly()
-  
-  if (historic_range) {
+    timeseries$axis <- paste0("y", seq_along(1:nrow(timeseries)))
+
+    # Create lists of y-axis properties
+    n_axes <- nrow(timeseries)
     for (i in 1:n_axes) {
-      data.sub <- data[[i]][["range_data"]][!is.na(data[[i]][["range_data"]]$min) & !is.na(data[[i]][["range_data"]]$max), ]
-      data.sub$tooltip <- paste0(timeseries[i, "tooltip_title"], ": Min: ", round(data.sub$min, 2), " Max: ", round(data.sub$max, 2), ", ", as.Date(data.sub$datetime))
-      plot <- plot %>%
-        plotly::add_ribbons(
-          data = data.sub,
-          x = ~datetime, 
-          ymin = ~min,
-          ymax = ~max, 
-          name = timeseries[i, "range_title"],
-          color = I(add_opacity_to_color(colors[i], 0.15)),
-          yaxis = timeseries[i, "axis"],
-          line = list(width = 0.3),
-          hoverinfo = "text",
-          text = ~tooltip
-        )
+      # Make axis titles
+      # Truncate long strings
+      if (nchar(timeseries[i, "name"]) > 27 * (1/legend_scale)) {
+        name <- paste0(substr(timeseries[i, "name"], 1, 24 * (1/legend_scale)), "...")
+      } else {
+        name <- timeseries[i, "name"]
+      }
+      if (nchar(timeseries[i, "parameter_name"]) > 20 * (1/legend_scale)) {
+        parameter_name <- paste0(substr(timeseries[i, "parameter_name"], 1, 17 * (1/legend_scale)), "...")
+      } else {
+        parameter_name <- timeseries[i, "parameter_name"]
+      }
+      
+      
+      timeseries[i, "trace_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
+      timeseries[i, "tooltip_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
+      timeseries[i, "range_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
+      
+      tmp <- list(
+        titlefont = list(color = colors[i], size = axis_scale * 14),
+        tickfont = list(color = colors[i], size = axis_scale * 12),
+        tickcolor = colors[i],
+        ticks = "outside",
+        overlaying = if (i > 1) "y" else NULL,
+        side = if (i %% 2 == 0) "right" else "left",  # Check if even or odd
+        title = list(
+          text = timeseries[i, "trace_title"],
+          standoff = ((i - 1) %/% 2) * 22,
+          font = list(size = axis_scale * 14)
+        ),
+        type = if (log[i]) "log" else "linear",
+        zeroline = FALSE,
+        showline = TRUE,
+        showgrid = gridy,
+        gridcolor = colors[i],
+        showspikes = TRUE,
+        spikethickness = axis_scale * 2,
+        autorange = if (timeseries[i, "axis_orientation"]) "reversed" else NULL
+      )
+      axis <- timeseries$axis[i]
+      assign(axis, tmp)
     }
+    
+    
+    plot <- plotly::plot_ly()
+    
+    if (historic_range) {
+      for (i in 1:n_axes) {
+        data.sub <- data[[i]][["range_data"]][!is.na(data[[i]][["range_data"]]$min) & !is.na(data[[i]][["range_data"]]$max), ]
+        data.sub$tooltip <- paste0(timeseries[i, "tooltip_title"], ": Min: ", round(data.sub$min, 2), " Max: ", round(data.sub$max, 2), ", ", as.Date(data.sub$datetime))
+        plot <- plot %>%
+          plotly::add_ribbons(
+            data = data.sub,
+            x = ~datetime, 
+            ymin = ~min,
+            ymax = ~max, 
+            name = timeseries[i, "range_title"],
+            color = I(add_opacity_to_color(colors[i], 0.15)),
+            yaxis = timeseries[i, "axis"],
+            line = list(width = 0.3),
+            hoverinfo = "text",
+            text = ~tooltip
+          )
+      }
+    }
+    # Add the traces
+    for (i in 1:n_axes) {
+      data.sub <- data[[i]][["trace_data"]]
+      data.sub$tooltip <- paste0(timeseries[i, "tooltip_title"], ": ", round(data.sub$value, 4), ", ", data.sub$datetime)
+      plot <- plot %>%
+        plotly::add_lines(
+          data = data.sub, 
+          x = ~datetime, 
+          y = ~value, 
+          type = "scatter", 
+          mode = "lines",
+          line = list(width = 2.5 * line_scale),
+          name = timeseries[i, "trace_title"], 
+          yaxis = timeseries[i, "axis"],
+          color = I(colors[i]), 
+          hoverinfo = "text",
+          text = ~tooltip)
+    }
+    
+    # Collect the axis variables dynamically
+    axis_layouts <- lapply(seq(n_axes), function(i) {
+      axis_var_name <- paste0("y", i)
+      get(axis_var_name)
+    })
+    
+    # Names for the layout list based on number of axes
+    names(axis_layouts) <- sapply(seq(n_axes), function(i) paste0("yaxis", if (i == 1) "" else i))
+    
+    # Add other layout parameters
+    layout_params <- list(
+      title = list(text = title, 
+                   x = 0.05, 
+                   xref = "container",
+                   font = list(size = 18 * axis_scale)),
+      margin = list(
+        l = 60 + (20 * ((n_axes - 1) %/% 2)),
+        r = 60 + (20 * ((n_axes - 1) %/% 2)),
+        b = 0,
+        t = 30 * length(unique(locations))
+      ),
+      xaxis = list(
+        title = list(standoff = 0, font = list(size = 1)),
+        showgrid = gridx,
+        showline = TRUE,
+        showspikes = TRUE,
+        tickformat = if (lang == "fr") "%d %b '%y" else "%b %d '%y",
+        rangeslider = list(visible = if (slider) TRUE else FALSE)
+      ),
+      hovermode = "closest",
+      legend = list(font = list(size = legend_scale * 12))
+    )
+    
+    # Combine axis layouts with other layout settings
+    total_layout_settings <- c(layout_params, axis_layouts)
+    # Apply all settings using do.call to handle dynamic list of settings
+    plot <- do.call(plotly::layout, c(list(plot), total_layout_settings))
+    
+    plot <- plotly::config(plot, locale = lang)
+    # End of traces plot
+    
+  } else { # User has requested subplots
+    
+    # Create lists of plots
+    subplots <- list()
+    subtitles <- list()
+    nrows <- ceiling(sqrt(length(data)))
+    ncols <- ceiling(length(data) / nrows)
+    
+    for (i in seq_along(data)) {
+      
+      color <- colors[i]
+      # Make axis titles
+      # Truncate long strings
+      if (nchar(timeseries[i, "name"]) > 30 * (1/legend_scale)) {
+        name <- paste0(substr(timeseries[i, "name"], 1, 27 * (1/legend_scale)), "...")
+      } else {
+        name <- timeseries[i, "name"]
+      }
+      if (nchar(timeseries[i, "parameter_name"]) > 20 * (1/legend_scale)) {
+        parameter_name <- paste0(substr(timeseries[i, "parameter_name"], 1, 17 * (1/legend_scale)), "...")
+      } else {
+        parameter_name <- timeseries[i, "parameter_name"]
+      }
+      
+      subplot <- plotly::plot_ly()
+      if (historic_range) {
+        subplot <- subplot %>%
+          plotly::add_ribbons(data = data[[i]]$range_data[!is.na(data[[i]]$range_data$q25) & !is.na(data[[i]]$range_data$q75), ], 
+                              x = ~datetime, 
+                              ymin = ~q25, 
+                              ymax = ~q75, 
+                              name = if (lang == "en") "IQR" else "EIQ",
+                              legendgroup = if (lang == "en") "IQR" else "EIQ",
+                              showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
+                              color = I("grey40"), 
+                              line = list(width = 0.2), 
+                              hoverinfo = "text", 
+                              text = ~paste0("q25: ", 
+                                             round(q25, 2), 
+                                             " q75: ", 
+                                             round(q75, 2), 
+                                             " (", as.Date(datetime), 
+                                             ")")
+                              ) %>%
+          plotly::add_ribbons(data = data[[i]]$range_data[!is.na(data[[i]]$range_data$min) & !is.na(data[[i]]$range_data$max), ], 
+                              x = ~datetime, 
+                              ymin = ~min, 
+                              ymax = ~max, 
+                              name = "Min-Max",
+                              legendgroup = "Min-Max",
+                              showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
+                              color = I("grey80"), 
+                              line = list(width = 0.2), 
+                              hoverinfo = "text", 
+                              text = ~paste0("Min: ", 
+                                             round(min, 2), 
+                                             " Max: ", 
+                                             round(max, 2), 
+                                             " (", as.Date(datetime), 
+                                             ")")
+                              ) 
+      }
+      subplot <- subplot %>%
+        plotly::add_trace(data = data[[i]]$trace_data, 
+                          x = ~datetime, 
+                          y = ~value, 
+                          type = "scatter", 
+                          mode = "lines",
+                          line = list(width = 2.5 * line_scale),
+                          name = parameter_name, 
+                          color = I(color), 
+                          hoverinfo = "text", 
+                          text = ~paste0(parameter_name, 
+                                         ": ", 
+                                         round(value, 4), 
+                                         " (", datetime, 
+                                         ")")
+                          ) %>%
+        plotly::layout(
+          title = NULL, 
+          xaxis = list(title = list(standoff = 0), 
+                       showgrid = gridx,
+                       showline = TRUE, 
+                       tickformat = if (lang == "en") "%b %d '%y" else "%d %b '%y",
+                       titlefont = list(size = axis_scale * 14),
+                       tickfont = list(size = axis_scale * 12)),
+          yaxis = list(title = paste0(parameter_name, 
+                                      " (", timeseries[i, "units"], 
+                                      ")"),
+                       showgrid = gridy,
+                       showline = TRUE,
+                       titlefont = list(size = axis_scale * 14),
+                       tickfont = list(size = axis_scale * 12)), 
+          margin = list(b = 0,
+                        t = 40 * axis_scale,
+                        l = 50 * axis_scale), 
+          hovermode = "x unified",
+          legend = list(font = list(size = legend_scale * 12))
+        ) %>%
+        plotly::config(locale = lang)
+      
+      
+      # Calculate the position of the annotation
+      row <- ceiling(i / ncols)
+      col <- (i - 1) %% ncols + 1
+      
+      # Adjust x and y based on row and col
+      x_pos <- (col - 0.5) / ncols  # Center of the subplot column
+      y_pos <- 1 - ((row - 1) / nrows)  # Slightly above the top of the subplot
+      
+      if (row != nrows) {  # This adds in a horizontal line to separate the subplots as it's otherwise not present if shareX = TRUE
+        subplot <- subplot %>%
+          plotly::layout(shapes = list(list(type = "line", 
+                                            x0 = 0, 
+                                            x1 = 1, 
+                                            y0 = 0, 
+                                            y1 = 0, 
+                                            xref = "paper", 
+                                            yref = "paper", 
+                                            line = list(color = "black", width = 0.7))))
+      }
+      subplots[[i]] <- subplot
+      
+      subtitles[[i]] <- list(
+        x = x_pos,  # This needs to be adjusted for each subplot based on the number of rows (object nrows)
+        y = y_pos, # This needs to be adjusted for each subplot base on the number of cols (object ncols)
+        xref = "paper",
+        yref = "paper",
+        xanchor = "center",
+        yanchor = "bottom",
+        text = name,
+        showarrow = FALSE,
+        font = list(size = 16 * axis_scale)
+      )
+    }
+    plot <- plotly::subplot(subplots, 
+                            nrows = nrows, 
+                            shareX = TRUE, 
+                            shareY = FALSE, 
+                            titleX = FALSE, 
+                            titleY = TRUE, 
+                            margin = c(0,0,0,(0.05 * axis_scale))) %>%
+      plotly::layout(annotations = subtitles)
   }
-  # Add the traces
-  for (i in 1:n_axes) {
-    data.sub <- data[[i]][["trace_data"]]
-    data.sub$tooltip <- paste0(timeseries[i, "tooltip_title"], ": ", round(data.sub$value, 4), ", ", data.sub$datetime)
-    plot <- plot %>%
-      plotly::add_lines(
-        data = data.sub, 
-        x = ~datetime, 
-        y = ~value, 
-        type = "scatter", 
-        mode = "lines", 
-        name = timeseries[i, "trace_title"], 
-        yaxis = timeseries[i, "axis"],
-        color = I(colors[i]), 
-        hoverinfo = "text",
-        text = ~tooltip)
-  }
-  
-  # Collect the axis variables dynamically
-  axis_layouts <- lapply(seq(n_axes), function(i) {
-    axis_var_name <- paste0("y", i)
-    get(axis_var_name)
-  })
-  
-  # Names for the layout list based on number of axes
-  names(axis_layouts) <- sapply(seq(n_axes), function(i) paste0("yaxis", if (i == 1) "" else i))
-  
-  # Add other layout parameters
-  layout_params <- list(
-    title = list(text = title, x = 0.05, xref = "container"),
-    margin = list(
-      l = 60 + (20 * ((n_axes - 1) %/% 2)),
-      r = 60 + (20 * ((n_axes - 1) %/% 2)),
-      b = 0,
-      t = 30 * length(unique(locations))
-    ),
-    xaxis = list(
-      title = list(standoff = 0, font = list(size = 1)),
-      showgrid = FALSE,
-      showline = TRUE,
-      showspikes = TRUE,
-      tickformat = if (language == "fr") "%d %b '%y" else "%b %d '%y",
-      rangeslider = list(visible = if (slider) TRUE else FALSE)
-    ),
-    hovermode = "closest"
-  )
-  
-  # Combine axis layouts with other layout settings
-  total_layout_settings <- c(layout_params, axis_layouts)
-  # Apply all settings using do.call to handle dynamic list of settings
-  plot <- do.call(plotly::layout, c(list(plot), total_layout_settings))
-  
-  plot <- plotly::config(plot, locale = language)
   
   return(plot)
 }

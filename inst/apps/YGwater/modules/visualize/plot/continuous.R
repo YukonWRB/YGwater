@@ -11,10 +11,56 @@ continuousPlotUI <- function(id) {
       conditionalPanel(
         ns = ns,
         condition = "input.type == 'Overlapping years'",
-        dateInput(ns("start_doy"), "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
-        dateInput(ns("end_doy"), "End day-of-year", value = paste0(lubridate::year(Sys.Date()), "-12-31")),
-        selectizeInput(ns("years"), label = "Select years to plot", choices = "placeholder", multiple = TRUE), #Choices are selected in the server
-        selectizeInput(ns("historic_range_overlap"), "Historic range includes all years of record or up to last year plotted?", choices = c("all", "last"), selected = "all"),
+        
+        div(
+          dateInput(ns("start_doy"), "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
+          style = "display: flex; align-items: center;",
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "The year is ignored; only the day-of-year is used.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        div(
+          dateInput(ns("end_doy"), "End day-of-year", , value = paste0(lubridate::year(Sys.Date()), "-01-01")),
+          style = "display: flex; align-items: center;",
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "The year is ignored; only the day-of-year is used.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        div(
+          selectizeInput(ns("years"), label = "Select years to plot", , choices = "placeholder", multiple = TRUE), #Choices are selected in the server
+          style = "display: flex; align-items: center;",
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "For periods overlaping the new year select the December year.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        div(
+          selectizeInput(ns("historic_range_overlap"),"Historic range includes all years of record or up to last year plotted?", 
+                         choices = c("all", "last"), selected = "all"),
+          style = "display: flex; align-items: center;",
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "Historic ranges are plotted as a gray ribbon.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
         selectizeInput(ns("return_periods"), "Plot return periods?", choices = stats::setNames(c("none", "auto", "calculate", "table"), c("none", "auto select", "calculate", "from table")), selected = "auto select"),
         selectizeInput(ns("return_type"), "Select return type", choices = c("Min", "Max"), selected = "Max"),
         numericInput(ns("return_yrs"), "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),
@@ -27,18 +73,36 @@ continuousPlotUI <- function(id) {
         dateInput(ns("start_date"), "Start date", value = Sys.Date() - 365, max = Sys.Date() - 1),
         dateInput(ns("end_date"), "End date", value = Sys.Date(), max = Sys.Date()),
         uiOutput(ns("trace1_ui")), # Will be a button with the trace values. Upon click, user can edit or remove the trace.
-        uiOutput(ns("trace2_ui")), # Will be a button with the trace values. Upon click, user can edit or remove the trace.
+        uiOutput(ns("trace2_ui")),
         uiOutput(ns("trace3_ui")),
         uiOutput(ns("trace4_ui")),
-        actionButton(ns("add_trace"),
-                     "Add trace"),
+        uiOutput(ns("subplot1_ui")), # Will be a button with the subplot values. Upon click, user can edit or remove the subplot.
+        uiOutput(ns("subplot2_ui")),
+        uiOutput(ns("subplot3_ui")),
+        uiOutput(ns("subplot4_ui")),
+        div(
+          style = "display: flex; justify-content: flex-start;", # Use flexbox to align buttons side by side
+          actionButton(ns("add_trace"),
+                       "Add trace",
+                       style = "margin-right: 5px;"),
+          actionButton(ns("add_subplot"),
+                       "Add subplot")
+        ),
         checkboxInput(ns("log_y"), "Log scale y-axis?"),
         checkboxInput(ns("historic_range"), "Plot historic range?")
       ),
       checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
       checkboxInput(ns("plot_filter"), "Filter extreme values?"),
-      actionButton(ns("make_plot"),
-                   "Create Plot")
+      
+      div(
+        actionButton(ns("extra_aes"),
+                     "Modify plot aesthetics",
+                     title = "Modify plot aesthetics such as language, line size, text size.",
+                     style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
+        actionButton(ns("make_plot"),
+                     "Create Plot",
+                     style = "display: block; width: 100%;") # Ensure block display and full width
+      )
     ),
     mainPanel(
       plotOutput(ns("plot_gg"), height = "800px"),
@@ -54,6 +118,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
     
     ns <- session$ns # Used to create UI elements within server
     
+    
+    # Initial setup and data loading ########################################################################
     values <- reactiveValues()
     
     observe({
@@ -123,14 +189,80 @@ continuousPlotServer <- function(id, AquaCache, data) {
         shinyjs::show("return_yrs")
       }
     }, ignoreInit = TRUE)
-  
-    # Add/remove/modify trace buttons #######################################################################
     
+    # Modal dialog for extra aesthetics ########################################################################
+    # Create a list with default aesthetic values
+    plot_aes <- reactiveValues(lang = "en",
+                               showgridx = FALSE,
+                               showgridy = FALSE,
+                               line_scale = 1,
+                               axis_scale = 1,
+                               legend_scale = 1)
+    
+    # Modal dialog for extra aesthetics
+    observeEvent(input$extra_aes, {
+      showModal(modalDialog(
+        title = "Modify plot aesthetics",
+        tags$div(
+          tags$h5("Language"),
+          radioButtons(ns("lang"),
+                       NULL,
+                       choices = stats::setNames(c("en", "fr"), c("English", "French")),
+                       selected = plot_aes$lang),
+          checkboxInput(ns("showgridx"),
+                        "Show x-axis gridlines",
+                        value = plot_aes$showgridx),
+          checkboxInput(ns("showgridy"),
+                        "Show y-axis gridlines",
+                        value = plot_aes$showgridy),
+          sliderInput(ns("line_scale"),
+                      "Line scale factor",
+                      min = 0.2,
+                      max = 3,
+                      value = plot_aes$line_scale,
+                      step = 0.1),
+          sliderInput(ns("axis_scale"),
+                      "Axes scale factor (text and values)",
+                      min = 0.2,
+                      max = 3,
+                      value = plot_aes$axis_scale,
+                      step = 0.1),
+          sliderInput(ns("legend_scale"),
+                      "Legend text scale factor",
+                      min = 0.2,
+                      max = 3,
+                      value = plot_aes$legend_scale,
+                      step = 0.1)
+        ),
+        easyClose = FALSE,
+        footer = tagList(
+          actionButton(ns("aes_apply"), "Apply"),
+          actionButton(ns("aes_cancel"), "Cancel")
+        )
+      ))
+    })
+    
+    observeEvent(input$aes_apply, {
+      plot_aes$lang <- input$lang
+      plot_aes$showgridx <- input$showgridx
+      plot_aes$showgridy <- input$showgridy
+      plot_aes$line_scale <- input$line_scale
+      plot_aes$axis_scale <- input$axis_scale
+      plot_aes$legend_scale <- input$legend_scale
+      removeModal()
+    })
+    
+    observeEvent(input$aes_cancel, {
+      removeModal()
+    })
+    
+    
+    # Add/remove/modify trace buttons #######################################################################
     traces <- reactiveValues()
     traceCount <- reactiveVal(1)
     
     ## Add extra trace
-    runTraceNew <- reactiveVal(FALSE)
+    runTraceNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
     observeEvent(input$add_trace, {
       # When the button is clicked, a modal will appear with the necessary fields to add a trace. The trace values are then displayed to the user under button 'trace_x'
       
@@ -182,6 +314,7 @@ continuousPlotServer <- function(id, AquaCache, data) {
     }, ignoreInit = TRUE)
     
     observeEvent(input$add_new_trace, {
+      shinyjs::hide("add_subplot")
       if (traceCount() == 1) {
         traces$trace1 <- list(trace = "trace1",
                               parameter = as.numeric(input$param),
@@ -357,6 +490,7 @@ continuousPlotServer <- function(id, AquaCache, data) {
         shinyjs::show("param")
         shinyjs::show("loc_code")
         shinyjs::show("loc_name")
+        shinyjs::show("add_subplot")
         updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter)
         updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]), selected = traces$trace1$location)
         updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"]))
@@ -367,59 +501,320 @@ continuousPlotServer <- function(id, AquaCache, data) {
       
       traces$trace1$lead_lag <- 0
     })
-
+    
+    # Add/remove/modify subplot buttons #######################################################################
+    subplots <- reactiveValues()
+    subplotCount <- reactiveVal(1)
+    
+    ## Add extra subplot
+    runSubplotNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
+    observeEvent(input$add_subplot, {
+      # When the button is clicked, a modal will appear with the necessary fields to add a subplot. The subplot values are then displayed to the user under button 'subplot_x'
+      
+      if (runSubplotNew() == FALSE) {
+        showModal(modalDialog(
+          selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$param)),
+          selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])),
+          selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"])),
+          footer = tagList(
+            actionButton(ns("add_new_subplot"), "Add subplot"),
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        runSubplotNew(TRUE)
+      } else { # The modal has already run once, use the previously selected values
+        showModal(modalDialog(
+          selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$subplotNew_param)),
+          selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"])),
+          selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"])),
+          footer = tagList(
+            actionButton(ns("add_new_subplot"), "Add subplot"),
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+      }
+    })
+    
+    # No need for an observeEvent for the cancel button as it is handled by an observer above
+    
+    # Observe the param inputs for all traces and update the location choices in the modal
+    observeEvent(input$subplotNew_param, {
+      updateSelectizeInput(session, "subplotNew_loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]))
+      updateSelectizeInput(session, "subplotNew_loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]))
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$subplotNew_loc_code, {
+      if (input$subplotNew_loc_code %in% data$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
+        updateSelectizeInput(session, "subplotNew_loc_name", selected = unique(data$all_ts[data$all_ts$location == input$subplotNew_loc_code, "name"]))
+      }
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$subplotNew_loc_name, {
+      updateSelectizeInput(session, "subplotNew_loc_code", selected = unique(data$all_ts[data$all_ts$name == input$subplotNew_loc_name, "location"]))
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$add_new_subplot, {
+      shinyjs::hide("add_trace")
+      if (subplotCount() == 1) {
+        subplots$subplot1 <- list(subplot = "subplot1",
+                              parameter = as.numeric(input$param),
+                              location = input$loc_code)
+        subplots$subplot2 <- list(subplot = "subplot2",
+                              parameter = as.numeric(input$subplotNew_param),
+                              location = input$subplotNew_loc_code)
+        button1Text <- HTML(paste0("<b>Subplot 1</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot1$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"])))
+        button2Text <- HTML(paste0("<b>Subplot 2</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot2$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot2$location, "name"])))
+        output$subplot1_ui <- renderUI({
+          actionButton(ns("subplot1"), button1Text)
+        })
+        shinyjs::show("subplot1_ui")
+        output$subplot2_ui <- renderUI({
+          actionButton(ns("subplot2"), button2Text)
+        })
+        subplotCount(2)
+        shinyjs::hide("param")
+        shinyjs::hide("loc_code")
+        shinyjs::hide("loc_name")
+        
+      } else if (subplotCount() == 2) {
+        subplots$subplot3 <- list(subplot = "subplot3",
+                              parameter = as.numeric(input$subplotNew_param),
+                              location = input$subplotNew_loc_code)
+        button3Text <- HTML(paste0("<b>Subplot 3</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot3$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot3$location, "name"])))
+        output$subplot3_ui <- renderUI({
+          actionButton(ns("subplot3"), button3Text)
+        })
+        subplotCount(3)
+        
+      } else if (subplotCount() == 3) {
+        subplots$subplot4 <- list(subplot = "subplot4",
+                              parameter = as.numeric(input$subplotNew_param),
+                              location = input$subplotNew_loc_code)
+        button4Text <- HTML(paste0("<b>Subplot 4</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot4$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot4$location, "name"])))
+        output$subplot4_ui <- renderUI({
+          actionButton(ns("subplot4"), button4Text)
+        })
+        
+        subplotCount(4)
+        shinyjs::hide("add_subplot")
+      }
+      
+      removeModal()
+    })
+    
+    # Observer for when user clicks a subplot button. This should bring up a populated modal with the subplot information, allowing user to edit the subplot. As well, a new button to remove the subplot should appear. Removal of a subplot requires rejigging subplotCount and elements of subplots$subplot_n
+    clicked_subplot <- reactiveVal(NULL)
+    observeEvent(input$subplot1, {
+      showModal(modalDialog(
+        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot1$parameter),
+        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot1$parameter, "location"]), selected = subplots$subplot1$location),
+        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot1$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"])),
+        footer = tagList(
+          actionButton(ns("modify_subplot"), "Modify subplot"),
+          actionButton(ns("remove_subplot"), "Remove subplot"),
+          actionButton(ns("cancel_modify"), "Cancel")
+        ),
+        easyClose = TRUE
+      ))
+      clicked_subplot(subplots$subplot1$subplot)
+    })
+    observeEvent(input$subplot2, {
+      showModal(modalDialog(
+        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot2$parameter),
+        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot2$parameter, "location"]), selected = subplots$subplot2$location),
+        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot2$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot2$location, "name"])),
+        footer = tagList(
+          actionButton(ns("modify_subplot"), "Modify subplot"),
+          actionButton(ns("remove_subplot"), "Remove subplot"),
+          actionButton(ns("cancel_modify"), "Cancel")
+        ),
+        easyClose = TRUE
+      ))
+      clicked_subplot(subplots$subplot2$subplot)
+    })
+    observeEvent(input$subplot3, {
+      showModal(modalDialog(
+        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot3$parameter),
+        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot3$parameter, "location"]), selected = subplots$subplot3$location),
+        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot3$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot3$location, "name"]),
+        footer = tagList(
+          actionButton(ns("modify_subplot"), "Modify subplot"),
+          actionButton(ns("remove_subplot"), "Remove subplot"),
+          actionButton(ns("cancel_modify"), "Cancel")
+        ),
+        easyClose = TRUE
+      ))
+      clicked_subplot(subplots$subplot3$subplot)
+    })
+    observeEvent(input$subplot4, {
+      showModal(modalDialog(
+        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot4$parameter),
+        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot4$parameter, "location"]), selected = subplots$subplot4$location),
+        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot4$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot4$location, "name"]),
+        footer = tagList(
+          actionButton(ns("modify_subplot"), "Modify subplot"),
+          actionButton(ns("remove_subplot"), "Remove subplot"),
+          actionButton(ns("cancel_modify"), "Cancel")
+        ),
+        easyClose = TRUE
+      ))
+      clicked_subplot(subplots$subplot4$subplot)
+    })
+    
+    
+    
+    ## modify/delete subplot
+    observeEvent(input$modify_subplot, {
+      # Update the subplot values
+      target_subplot <- clicked_subplot()
+      subplots[[target_subplot]]$parameter <- as.numeric(input$subplotNew_param)
+      subplots[[target_subplot]]$location <- input$subplotNew_loc_code
+      
+      # Update the subplot button text
+      if (target_subplot == "subplot1") {
+        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots[[target_subplot]]$location, "name"])))
+      } else {
+        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots[[target_subplot]]$location, "name"])))
+      }
+      
+      output[[paste0(target_subplot, "_ui")]] <- renderUI({
+        actionButton(ns(paste0(target_subplot)), button_text)
+      })
+      removeModal()
+    })
+    
+    new_subplots <- reactiveValues() # This will enable a rename of reactiveValue names
+    observeEvent(input$remove_subplot, {
+      # Remove the selected subplot values
+      target_subplot <- clicked_subplot()
+      # Remove the subplot from the reactiveValues
+      subplots[[target_subplot]] <- NULL
+      # Remove the subplot button
+      output[[paste0(target_subplot, "_ui")]] <- NULL
+      # Decrement the subplot count
+      subplotCount(subplotCount() - 1)
+      # Re-jig the subplot button text and the names of elements of subplots
+      increment <- 1
+      for (i in names(subplots)) {
+        if (i != target_subplot) {
+          new_subplots[[paste0("subplot", increment)]] <- subplots[[i]]
+          increment <- increment + 1
+        }
+      }
+      subplots <- new_subplots
+      # Re-render text for all buttons
+      for (i in 1:subplotCount()) {
+        if (i == 1) {
+          button_text <- HTML(paste0("<b>Subplot ", i, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots[[paste0("subplot", i)]]$location, "name"])))
+        } else {
+          button_text <- HTML(paste0("<b>Subplot ", i, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots[[paste0("subplot", i)]]$location, "name"])))
+        }
+        updateActionButton(session, paste0("subplot", i), label = button_text)
+      }
+      
+      if (subplotCount() == 1) {
+        # Remove the remaining subplot button and show the param and location selectors
+        shinyjs::hide("subplot1_ui")
+        shinyjs::show("param")
+        shinyjs::show("loc_code")
+        shinyjs::show("loc_name")
+        shinyjs::show("add_trace")
+        updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot1$parameter)
+        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]), selected = subplots$subplot1$location)
+        updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"]))
+      } else {
+        shinyjs::show("subplot1_ui")
+      }
+      removeModal()
+    })
+    
     
     # Create and render the plot ############################################################
     observeEvent(input$make_plot, {
       shinyjs::hide("full_screen")
-
-      tryCatch({
-        
-        filter <- if (input$plot_filter) 20 else NULL
       
-        if (input$type == "Overlapping years") {
-          shinyjs::hide("plot_plotly")
+      tryCatch({
+        withProgress(message = "Generating plot... please be patient", value = 0, {
           
-          return_months <- as.numeric(unlist(strsplit(input$return_months, ",")))
+          incProgress(0.5)
+          filter <- if (input$plot_filter) 20 else NULL
           
-          plot <- plotOverlap(location = input$loc_code,
-                              parameter = as.numeric(input$param),
-                              startDay = input$start_doy,
-                              endDay = input$end_doy,
-                              years = input$years,
-                              historic_range = input$historic_range_overlap,
-                              datum = input$apply_datum,
-                              filter = filter,
-                              returns = input$return_periods,
-                              return_type = input$return_type,
-                              return_months = return_months,
-                              return_max_year = input$return_yrs,
-                              plot_scale = 1.4,
-                              con = AquaCache)
-
-          output$plot_gg <- renderPlot(plot)
-          shinyjs::show("plot_gg")
-
-        } else if (input$type == "Long timeseries") {
-          shinyjs::hide("plot_gg")
-
-          # Check if multiple traces are selected
-
-          if (traceCount() == 1) {
+          if (input$type == "Overlapping years") {
+            shinyjs::hide("plot_plotly")
             
-            plot <- plotTimeseries(location = input$loc_code,
-                                   parameter = as.numeric(input$param),
-                                   start_date = input$start_date,
-                                   end_date = input$end_date,
-                                   historic_range = input$historic_range,
-                                   datum = input$apply_datum,
-                                   filter = filter,
-                                   con = AquaCache)
-          } else {
+            return_months <- as.numeric(unlist(strsplit(input$return_months, ",")))
+            
+            plot <- plotOverlap(location = input$loc_code,
+                                parameter = as.numeric(input$param),
+                                startDay = input$start_doy,
+                                endDay = input$end_doy,
+                                years = input$years,
+                                historic_range = input$historic_range_overlap,
+                                datum = input$apply_datum,
+                                filter = filter,
+                                returns = input$return_periods,
+                                return_type = input$return_type,
+                                return_months = return_months,
+                                return_max_year = input$return_yrs,
+                                line_scale = 1.4 * plot_aes$line_scale,
+                                axis_scale = 1.4 * plot_aes$axis_scale,
+                                legend_scale = 1.4 * plot_aes$legend_scale,
+                                lang = plot_aes$lang,
+                                gridx = plot_aes$showgridx,
+                                gridy = plot_aes$showgridy,
+                                con = AquaCache)
+            
+            output$plot_gg <- renderPlot(plot)
+            shinyjs::show("plot_gg")
+            
+          } else if (input$type == "Long timeseries") {
+            shinyjs::hide("plot_gg")
+            # Check if multiple traces are selected
+            
+            if (traceCount() == 1) {  # Either a single trace, or more than 1 subplot
+              if (subplotCount() > 1) {
+                locs <- c(subplots$subplot1$location, subplots$subplot2$location, subplots$subplot3$location, subplots$subplot4$location)
+                params <- c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter)
+                
+                plot <- plotMultiTimeseries(type = "subplots",
+                                            locations = locs,
+                                            parameters = params,
+                                            start_date = input$start_date,
+                                            end_date = input$end_date,
+                                            historic_range = input$historic_range,
+                                            datum = input$apply_datum,
+                                            filter = filter,
+                                            lang = plot_aes$lang,
+                                            line_scale = plot_aes$line_scale,
+                                            axis_scale = plot_aes$axis_scale,
+                                            legend_scale = plot_aes$legend_scale,
+                                            gridx = plot_aes$showgridx,
+                                            gridy = plot_aes$showgridy,
+                                            con = AquaCache)
+              } else {
+                plot <- plotTimeseries(location = input$loc_code,
+                                       parameter = as.numeric(input$param),
+                                       start_date = input$start_date,
+                                       end_date = input$end_date,
+                                       historic_range = input$historic_range,
+                                       datum = input$apply_datum,
+                                       filter = filter,
+                                       lang = plot_aes$lang,
+                                       line_scale = plot_aes$line_scale,
+                                       axis_scale = plot_aes$axis_scale,
+                                       legend_scale = plot_aes$legend_scale,
+                                       gridx = plot_aes$showgridx,
+                                       gridy = plot_aes$showgridy,
+                                       con = AquaCache)
+              }
+            } else { # Multiple traces, single plot
             locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
             params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
             lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
-            plot <- plotMultiTimeseries(locations = locs,
+            plot <- plotMultiTimeseries(type = "traces",
+                                        locations = locs,
                                         parameters = params,
                                         lead_lag = lead_lags,
                                         start_date = input$start_date,
@@ -427,20 +822,26 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                         historic_range = input$historic_range,
                                         datum = input$apply_datum,
                                         filter = filter,
+                                        lang = plot_aes$lang,
+                                        line_scale = plot_aes$line_scale,
+                                        axis_scale = plot_aes$axis_scale,
+                                        legend_scale = plot_aes$legend_scale,
+                                        gridx = plot_aes$showgridx,
+                                        gridy = plot_aes$showgridy,
                                         con = AquaCache)
+            }        
+            output$plot_plotly <- plotly::renderPlotly(plot)
+            shinyjs::show("plot_plotly")
           }
-          
 
-          output$plot_plotly <- plotly::renderPlotly(plot)
-          shinyjs::show("plot_plotly")
-        }
-
-
+          incProgress(1)
+        }) # End withProgress\
+        
         # Create a full screen button
         output$full_screen_ui <- renderUI({
           actionButton(ns("full_screen"), "Full screen")
         })
-
+        
         shinyjs::show("full_screen")
       }, error = function(e) {
         showModal(modalDialog(paste0("An error occurred while creating the plot. Please check your inputs and try again.\n  \n  Error: ", e$message), easyClose = TRUE))

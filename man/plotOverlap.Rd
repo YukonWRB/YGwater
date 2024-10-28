@@ -23,13 +23,17 @@ plotOverlap(
   return_months = c(5:9),
   return_max_year = NULL,
   allowed_missing = 10,
-  plot_scale = 1,
+  line_scale = 1,
+  axis_scale = 1,
+  legend_scale = 1,
+  gridx = FALSE,
+  gridy = TRUE,
   legend = TRUE,
   save_path = NULL,
   con = NULL,
   continuous_data = NULL,
   snowbulletin = FALSE,
-  language = "en"
+  lang = "en"
 )
 
 hydrometContinuous(
@@ -50,13 +54,17 @@ hydrometContinuous(
   return_months = c(5:9),
   return_max_year = NULL,
   allowed_missing = 10,
-  plot_scale = 1,
+  line_scale = 1,
+  axis_scale = 1,
+  legend_scale = 1,
+  gridx = FALSE,
+  gridy = TRUE,
   legend = TRUE,
   save_path = NULL,
   con = NULL,
   continuous_data = NULL,
   snowbulletin = FALSE,
-  language = "en"
+  lang = "en"
 )
 }
 \arguments{
@@ -94,7 +102,15 @@ hydrometContinuous(
 
 \item{allowed_missing}{Allowable \% of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of \code{\link[fasstr:calc_annual_extremes]{fasstr::calc_annual_extremes()}}.}
 
-\item{plot_scale}{Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.}
+\item{line_scale}{A scale factor to apply to the size (width) of the lines. Default is 1.}
+
+\item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
+
+\item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
+\item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
+
+\item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
 
 \item{legend}{Should a legend (including text for min/max range and return periods) be added to the plot?}
 
@@ -106,7 +122,7 @@ hydrometContinuous(
 
 \item{snowbulletin}{If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.}
 
-\item{language}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
+\item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.

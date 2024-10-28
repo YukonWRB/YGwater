@@ -8,7 +8,7 @@
 #' @param locGrp Only used if `dbSource` is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use `locations` instead.
 #' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from AquaCache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
 #' @param paramGrp Only used if `dbSource` is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use `parameters` instead.
-#' @param standard A standard name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if `dbSource` is 'EQ'.
+#' @param standard A standard or guideline name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if `dbSource` is 'EQ'.
 #' @param log Should the y-axis be log-transformed?
 #' @param facet_on Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.
 #' @param loc_code Should the location code be used instead of the full location name?
@@ -16,14 +16,40 @@
 #' @param target_datetime Should the plot datetime use the 'target' datetime instead of the 'actual' datetime? Default is TRUE. This is only applicable is dbSource == 'AC'.
 #' @param colorblind Should the plot be colorblind-friendly? Default is FALSE.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en", and this is only supported for dbSource == 'AC'.
+#' @param point_scale A scale factor to apply to the size of points. Default is 1.
+#' @param guideline_scale A scale factor to apply to the size of standard/guideline values Default is 1.
+#' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
+#' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
+#' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param dbSource The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
-#' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".
+#' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
+#' databases/EQWinDB/WaterResources.mdb".
 #'
 #' @return An interactive HTML plot of the data from EQWin.
 #' @export
 #'
 
-plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp = NULL, parameters = NULL, paramGrp = NULL, standard = NULL, log = FALSE, facet_on = 'params', loc_code = FALSE, rows = 'auto', target_datetime = TRUE, colorblind = FALSE, lang = "en", dbSource = "EQ", dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
+plotDiscrete <- function(start, 
+                         end = Sys.Date() + 1, 
+                         locations = NULL, locGrp = NULL, 
+                         parameters = NULL, paramGrp = NULL, 
+                         standard = NULL, 
+                         log = FALSE, 
+                         facet_on = 'params', 
+                         loc_code = FALSE, 
+                         rows = 'auto', 
+                         target_datetime = TRUE, 
+                         colorblind = FALSE, 
+                         lang = "en", 
+                         point_scale = 1, 
+                         guideline_scale = 1, 
+                         axis_scale = 1, 
+                         legend_scale = 1,
+                         gridx = FALSE,
+                         gridy = FALSE,
+                         dbSource = "EQ", 
+                         dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
   
   #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
 
@@ -41,6 +67,10 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # rows = 'auto'
   # colorblind = FALSE
   # target_datetime = FALSE
+  # point_scale = 1
+  # axis_scale = 1
+  # legend_scale = 1
+  # guideline_scale = 1
   # dbSource = "EQ"
   # lang = "en"
   # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
@@ -58,6 +88,10 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # rows = 'auto'
   # colorblind = FALSE
   # target_datetime = FALSE
+  # point_scale = 1
+  # axis_scale = 1
+  # legend_scale = 1
+  # guideline_scale = 1
   # dbSource = "EQ"
   # lang = "en"
   # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
@@ -74,6 +108,11 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
   # rows = 'auto'
   # colorblind = FALSE
   # lang = "en"
+  # point_scale = 1
+  # axis_scale = 1
+  # legend_scale = 1
+  # target_datetime = FALSE
+  # guideline_scale = 1
   # dbSource = "AC"
   # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   # target_datetime = TRUE
@@ -308,7 +347,7 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
         code_to_calcid_df <- DBI::dbGetQuery(EQWin, query)
         
         # Create a lookup table for CalcCode to CalcId
-        code_to_calcid <- setNames(code_to_calcid_df$CalcId, code_to_calcid_df$CalcCode)
+        code_to_calcid <- stats::setNames(code_to_calcid_df$CalcId, code_to_calcid_df$CalcCode)
         
         # Map CalcCodes to CalcIds in data
         data$CalcId_std_max <- NA_integer_
@@ -626,8 +665,8 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                            marker = list(
                              opacity = ifelse(all(df$value == -Inf), 0, 1),
                              symbol = "circle",
-                             size = 7,
-                             line = list(width = 0.2, color = rgb(0, 0, 0))
+                             size = point_scale * 7,
+                             line = list(width = 0.2, color = grDevices::rgb(0, 0, 0))
                            ),
                            hoverinfo = "text",
                            text = ~paste(get(color_by), "<br>",  # Name or parameter of trace
@@ -641,9 +680,21 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                            )
       ) %>%
         plotly::layout(title = NULL,
-                       yaxis = list(title = y_axis_label, 
-                                    type = if (log) "log" else "linear"),
-                       xaxis = list(title = NULL))
+                       yaxis = list(title = y_axis_label,
+                                    showline = TRUE,
+                                    showgrid = gridy,
+                                    zeroline = FALSE,
+                                    type = if (log) "log" else "linear",
+                                    titlefont = list(size = axis_scale * 16),
+                                    tickfont = list(size = axis_scale * 14)
+                                    ),
+                       xaxis = list(title = NULL,
+                                    showline = TRUE,
+                                    showgrid = gridx,
+                                    tickfont = list(size = axis_scale * 14)),
+                       legend = list(font = list(size = legend_scale * 14)
+                                     )
+                       )
       
       if (nrow(conditions) > 0) {
         p <- plotly::add_trace(p, 
@@ -657,19 +708,29 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                                marker = list(opacity = 1, 
                                              # symbol = "circle-open-dot", 
                                              symbol = "star-open-dot",
-                                             size = 7,
+                                             size = point_scale * 7,
                                              line = list(width = 1, color = NULL)
                                              ), 
                                showlegend = FALSE,
                                hoverinfo = "text",
-                               text = ~paste(get(color_by), "<br>", # Name or parameter of trace
-                                             datetime, "<br>", # Datetime
-                                             if (targ_dt) paste("True sample datetime", target_datetime, "<br>"), # true sample datetime if requested and dbSource = 'AC'
-                                             result_condition, "of", as.character(result_condition_value), units, # Result condition and value
-                                             if (type) paste("<br>Sample type:", sample_type),  # Sample type if provided
-                                             if (collection) paste("<br>Collection method:", collection_method),  # Collection method if provided
-                                             if (fraction) paste("<br>Sample fraction:", sample_fraction),  # Sample fraction if provided
-                                             if (speciation) paste("<br>Result speciation", result_speciation)  # Result speciation if provided
+                               text = ~paste(get(color_by), 
+                                             "<br>", # Name or parameter of trace
+                                             datetime, 
+                                             "<br>", # Datetime
+                                             if (targ_dt) paste("True sample datetime", 
+                                                                target_datetime, "<br>"), # true sample datetime if requested and dbSource = 'AC'
+                                             result_condition, 
+                                             "of", 
+                                             as.character(result_condition_value), 
+                                             units, # Result condition and value
+                                             if (type) paste("<br>Sample type:", 
+                                                             sample_type),  # Sample type if provided
+                                             if (collection) paste("<br>Collection method:", 
+                                                                   collection_method),  # Collection method if provided
+                                             if (fraction) paste("<br>Sample fraction:", 
+                                                                 sample_fraction),  # Sample fraction if provided
+                                             if (speciation) paste("<br>Result speciation", 
+                                                                   result_speciation)  # Result speciation if provided
                                )
         )
       }
@@ -687,16 +748,19 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                                  colors = custom_colors,
                                  marker = list(opacity = 1,
                                                symbol = "line-ew",
-                                               size = 10,  # Controls line length
-                                               line = list(width = 2,
+                                               size = guideline_scale * 10,  # Controls line length
+                                               line = list(width = guideline_scale * 2,
                                                            color = NULL
                                                            )
                                                ), # controls the actual line width and clor
                                  showlegend = FALSE,
                                  hoverinfo = 'text',
-                                 text = ~paste(get(color_by), "<br>", # Name or parameter of trace,
-                                               datetime, "<br>", # Datetime
-                                               "Standard Max:", round(std_max, 6), units)
+                                 text = ~paste(get(color_by), 
+                                               "<br>", # Name or parameter of trace,
+                                               datetime, 
+                                               "<br>", # Datetime
+                                               "Standard Max:", 
+                                               round(std_max, 6), units)
           )
         }
         if (length(df$std_min[!is.na(df$std_min)]) > 1) {
@@ -710,8 +774,8 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
                                  colors = custom_colors,
                                  marker = list(opacity = 1,
                                                symbol = "line-ew",
-                                               size = 10,
-                                               line = list(width = 2,
+                                               size = guideline_scale * 10,
+                                               line = list(width = guideline_scale * 2,
                                                            color = NULL
                                                            )
                                                ),
@@ -734,7 +798,12 @@ plotDiscrete <- function(start, end = Sys.Date() + 1, locations = NULL, locGrp =
       nrows <- rows
     }
     
-    plotly::subplot(plots, nrows = nrows, shareX = FALSE, titleX = FALSE, titleY = TRUE) %>%
+    plotly::subplot(plots, 
+                    nrows = nrows, 
+                    shareX = FALSE, 
+                    titleX = FALSE, 
+                    titleY = TRUE,
+                    margin = c(0, (0.08 * axis_scale), 0, (0.08 * axis_scale))) %>%
       plotly::layout(showlegend = TRUE)
   } # End of plot creation function
   

@@ -5,6 +5,7 @@
 \title{Plot a more than one continuous timeseries from the AquaCache database}
 \usage{
 plotMultiTimeseries(
+  type = "traces",
   locations,
   parameters,
   record_rates = NULL,
@@ -22,13 +23,20 @@ plotMultiTimeseries(
   custom_title = NULL,
   filter = NULL,
   historic_range = NULL,
-  language = "en",
+  lang = "en",
+  line_scale = 1,
+  axis_scale = 1,
+  legend_scale = 1,
+  gridx = FALSE,
+  gridy = FALSE,
   rate = NULL,
   tzone = "auto",
   con = NULL
 )
 }
 \arguments{
+\item{type}{Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.}
+
 \item{locations}{The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.}
 
 \item{parameters}{The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.}
@@ -45,7 +53,7 @@ plotMultiTimeseries(
 
 \item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.}
 
-\item{lead_lag}{The number of \strong{hours} to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters}
+\item{lead_lag}{The number of \strong{hours} to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters. Not used for \code{type} 'subplots'.}
 
 \item{log}{Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.}
 
@@ -63,7 +71,17 @@ plotMultiTimeseries(
 
 \item{historic_range}{Default NULL will plot historic ranges for up to two traces and no historical ranges at all if more than two traces; TRUE will plot historic ranges for all traces; FALSE will not plot historic ranges.}
 
-\item{language}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
+\item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
+
+\item{line_scale}{A scale factor to apply to the size (width) of the lines. Default is 1.}
+
+\item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
+
+\item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
+\item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
+
+\item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
 
 \item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
