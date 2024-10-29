@@ -49,7 +49,7 @@
 
 EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, SD_exceed = NULL, SD_start = NULL, SD_end = NULL, SD_doy = NULL, save_path = "choose", con = NULL, shiny_file_path = NULL) {
   
-# date = "2024-09-22"
+# date = "2024-09-29"
 # stations = NULL
 # stnGrp = "A Eagle Gold HLF"
 # parameters = NULL
@@ -63,7 +63,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
 # SD_exceed = 2
 # SD_start = NULL
 # SD_end = "2024-06-23"
-# SD_doy = NULL
+# SD_doy = c(135:290)
   
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")

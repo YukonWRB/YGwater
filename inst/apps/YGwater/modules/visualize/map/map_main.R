@@ -5,8 +5,8 @@ mapUI <- function(id) {
   fluidPage(
     selectizeInput(ns("map_type"),
                    label = "Map Type",
-                   choices = c("Precipitation", "Parameters"),
-                   selected = "Parameters"),
+                   choices = c("Monitoring locations", "Precipitation", "Other parameter values"),
+                   selected = "Monitoring locations"),
     uiOutput(ns("submoduleUI"))
   )
 }
@@ -29,21 +29,21 @@ map <- function(id, EQWin, AquaCache) {
           })
           submodule("Precipitation")
           mapPrecipServer("precip", AquaCache)
-        } else if (input$map_type == "Parameters") {
+        } else if (input$map_type == "Other parameter values") {
           output$submoduleUI <- renderUI({
             mapParamUI(ns("param"))
           })
           mapParamServer("param", AquaCache)
           submodule("Parameters")
         }
-      } else { # Submodule has been loaded already, so only redo if we were on a different submodule
+      } else { # Submodule has been loaded already, so only redo if we are calling a different submodule
         if (input$map_type == "Precipitation" && submodule() != "Precipitation") {
           output$submoduleUI <- renderUI({
             mapPrecipUI(ns("precip"))
           })
           submodule("Precipitation")
           mapPrecipServer("precip", AquaCache)
-        } else if (input$map_type == "Parameters" && submodule() != "Parameters") {
+        } else if (input$map_type == "Other parameter values" && submodule() != "Parameters") {
           output$submoduleUI <- renderUI({
             mapParamUI(ns("param"))
           })
