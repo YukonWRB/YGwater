@@ -59,7 +59,7 @@ app_server <- function(input, output, session) {
                              end_date = input$end_dt,
                              historic_range = TRUE,
                              datum = FALSE,
-                             filter = 20,
+                             filter = NULL,
                              lang = input$lang,
                              line_scale = 1,
                              axis_scale = 1,
