@@ -1,4 +1,4 @@
-YGwater_globals <- function() {
+YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RLS_pass, accessPath) {
   
   library(shiny)
   library(shinyjs)
@@ -27,9 +27,17 @@ YGwater_globals <- function() {
   source(system.file("apps/YGwater/modules/visualize/map/params.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/FOD/FOD_main.R", package = "YGwater"))
   
-  # Establish database connection
-  # This is being done at the server level instead for YGwater Since the app will be used infrequently, this ensures that connections are only made when a user opens the app and is closed when the user closes the app.
-
-  
+  # Establish database connection parameters
+  # The actual connection is being done at the server level instead for YGwater Since the app will be used infrequently, this ensures that connections are only made when a user opens the app and is closed when the user closes the app.
+  config <<- list(
+    dbName = dbName,
+    dbHost = dbHost,
+    dbPort = dbPort,
+    dbUser = dbUser,
+    dbPass = dbPass,
+    RLS_user = RLS_user,
+    RLS_pass = RLS_pass,
+    accessPath = accessPath
+  )
 }
 

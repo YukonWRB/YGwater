@@ -10,8 +10,16 @@ app_server <- function(input, output, session) {
   shinyjs::useShinyjs()
   
   # Initial database connections without edit privileges
-  EQWin <- AccessConnect("//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb", silent = TRUE)
-  AquaCache <- AquaConnect(silent = TRUE)
+  EQWin <- AccessConnect(config$accessPath)
+  AquaCache <- AquaConnect(name = config$dbName, 
+                           host = config$dbHost,
+                           port = config$dbPort,
+                           username = config$dbUser,
+                           password = config$dbPass,
+                           RLS_user = config$RLS_user,
+                           RLS_pass = config$RLS_pass,
+                           silent = TRUE)
+  
   print("Connected to EQWin")
   print("Connected to AquaCache")
   
@@ -87,7 +95,15 @@ app_server <- function(input, output, session) {
         return()
       }
       tryCatch({
-        AquaCache <- AquaConnect(username = input$username, password = input$password, silent = TRUE)
+        DBI::dbDisconnect(AquaCache)
+        AquaCache <- AquaConnect(name = config$dbName, 
+                                 host = config$dbHost,
+                                 port = config$dbPort,
+                                 RLS_user = config$RLS_user,
+                                 RLS_pass = config$RLS_pass,
+                                 username = input$username, 
+                                 password = input$password, 
+                                 silent = TRUE)
         # Test the connection
         test <- DBI::dbGetQuery(AquaCache, "SELECT 1;")
         if (nrow(test) > 0) {
@@ -112,7 +128,14 @@ app_server <- function(input, output, session) {
             easyClose = TRUE,
             footer = modalButton("Close")
           ))
-          AquaCache <- AquaConnect(silent = TRUE)
+          AquaCache <- AquaConnect(name = config$dbName, 
+                                   host = config$dbHost,
+                                   port = config$dbPort,
+                                   username = config$dbUser,
+                                   password = config$dbPass,
+                                   RLS_user = config$RLS_user,
+                                   RLS_pass = config$RLS_pass,
+                                   silent = TRUE)
           return()
         }
       }, error = function(e) {
@@ -122,7 +145,18 @@ app_server <- function(input, output, session) {
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
-        AquaCache <- AquaConnect(silent = TRUE)
+        # Check to see if the connection is still open, if not reconnect
+        test <- DBI::dbGetQuery(AquaCache, "SELECT 1;")
+        if (nrow(test) == 0) {
+          AquaCache <- AquaConnect(name = config$dbName, 
+                                   host = config$dbHost,
+                                   port = config$dbPort,
+                                   username = config$dbUser,
+                                   password = config$dbPass,
+                                   RLS_user = config$RLS_user,
+                                   RLS_pass = config$RLS_pass,
+                                   silent = TRUE)
+        }
         return()
       })
   })
@@ -138,7 +172,15 @@ app_server <- function(input, output, session) {
     shinyjs::hide("logoutBtn")
     shinyjs::show("loginBtn")
     
-    AquaCache <- AquaConnect(silent = TRUE)
+    DBI::dbDisconnect(AquaCache)
+    AquaCache <- AquaConnect(name = config$dbName, 
+                             host = config$dbHost,
+                             port = config$dbPort,
+                             username = config$dbUser,
+                             password = config$dbPass,
+                             RLS_user = config$RLS_user,
+                             RLS_pass = config$RLS_pass,
+                             silent = TRUE)
     # Redirect to 'visualize' tab
     updateTabsetPanel(session, "navbar", selected = "visualize")
     hideTab(inputId = "navbar", target = "admin")
