@@ -670,7 +670,7 @@ data <- function(id, con, language, restoring, data, inputs) {
           subset <- data.table::rbindlist(subset_list)
           subset[, c(3, 7:15) := lapply(.SD, round, 2), .SDcols = c(3, 7:15)]
         } else if (input$modal_frequency == "hourly") {
-          rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM measurements_hourly WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
+          rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM measurements_continuous_corrected_hourly WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
           
           subset_list <- vector("list", length(selected_tsids))
           for (i in seq_along(selected_tsids)) {
@@ -763,7 +763,7 @@ data <- function(id, con, language, restoring, data, inputs) {
           
           # Now add hourly or max resolution data if selected
           if (input$modal_frequency == "hourly") {
-            data$measurements_hourly <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_hourly WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
+            data$measurements_continuous_corrected_hourly <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_continuous_corrected_hourly WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
           } else if (input$modal_frequency == "max") {
             data$measurements_max <- dbGetQueryDT(con, paste0("SELECT timeseries_id, datetime, value, grade, approval, period, imputed FROM measurements_continuous WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
           }
