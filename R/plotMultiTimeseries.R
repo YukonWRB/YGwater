@@ -1,9 +1,9 @@
-#' Plot a more than one continuous timeseries from the AquaCache database
+#' Plot multiple timeseries from the AquaCache database
 #'
 #' @description
 #' `r lifecycle::badge('stable')`
 #' 
-#' This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information.
+#' This function plots multiple continuous timeseries from the AquaCache database using either a facet plot or a single plot with multiple traces. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
 #' 
 #' @param type Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.
 #' @param locations The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.
@@ -461,26 +461,45 @@ plotMultiTimeseries <- function(type = 'traces',
     # Get the data ####################################
     tsid <- exist_check$timeseries_id
     
+    # Check if we should spend the extra time to get corrected measurements
+    corrections_apply <- DBI::dbGetQuery(con, paste0("SELECT correction_id FROM corrections WHERE timeseries_id = ", tsid, " AND start_dt <= '", sub.end_date, "' AND end_dt >= '", sub.start_date, "' LIMIT 1;"))
+    if (nrow(corrections_apply) == 1) {
+      corrections_apply <- TRUE
+    } else {
+      corrections_apply <- FALSE
+    }
+    
     if (historic_range) { # get data from the measurements_calculated_daily table for historic ranges plus values from measurements_continuous. Where there isn't any data in measurements_continuous fill in with the value from the daily table.
       range_end <- sub.end_date + 1*24*60*60
       range_start <- sub.start_date - 1*24*60*60
       range_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", range_start, "' AND '", range_end, "' ORDER BY date ASC;"))
       range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
       attr(range_data$datetime, "tzone") <- tzone
-      if (rate == "day") {
+      if (rate == "day") { # daily data is always generated using corrected data
         trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY date DESC;"))
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
       } else if (rate == "hour") {
-        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC;"))
-      } else if (rate == "max") {
-        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        if (corrections_apply) {
+          trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC;"))
+        } else {
+          trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC;"))
+        }
+      } else if (rate == "max") {  # limit to 200 000 records for plotting performance
+        if (corrections_apply) {
+          trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        } else {
+          trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        }
         if (nrow(trace_data) > 0) {
           if (min(trace_data$datetime) > sub.start_date) {
-            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
+            if (corrections_apply) {
+              infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
+            } else {
+              infill <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
+            }
             trace_data <- rbind(infill, trace_data)
           }
         }
-        
       }
       attr(trace_data$datetime, "tzone") <- tzone
     } else { #No historic range requested
@@ -497,7 +516,6 @@ plotMultiTimeseries <- function(type = 'traces',
             trace_data <- rbind(infill, trace_data)
           }
         }
-        
       }
       attr(trace_data$datetime, "tzone") <- tzone
     }
@@ -597,7 +615,6 @@ plotMultiTimeseries <- function(type = 'traces',
     stop("Couldn't find data for any of the location and parameter combinations within the time range you specified.")
   }
   
-  
   if (lang == "fr") {
     for (i in 1:nrow(timeseries)) {
       name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
@@ -688,7 +705,6 @@ plotMultiTimeseries <- function(type = 'traces',
       } else {
         parameter_name <- timeseries[i, "parameter_name"]
       }
-      
       
       timeseries[i, "trace_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ", ", timeseries[i, "units"], ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
       timeseries[i, "tooltip_title"] <- paste0(name, if (!is.na(timeseries[i, "z"])) paste0(" ", timeseries[i, "z"], " meters") else "", " (", parameter_name, ")", ifelse(timeseries[i, "lead_lag"] > 0, paste0(" [+ ", timeseries[i, "lead_lag"], " hours]"), ifelse(timeseries[i, "lead_lag"] < 0, paste0(" [", timeseries[i, "lead_lag"], " hours]"), "")))
