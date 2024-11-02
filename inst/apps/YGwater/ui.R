@@ -30,6 +30,10 @@ app_ui <- function(request) {
                     div(class = "aurora-container",
                         htmltools::img(src = "imgs/YG_Aurora_resized_flipped.png", .noWS = "outside", alt = "Aurora")),
                     div(class = "lang-login-container",
+                        div(class = "language-select-container",
+                            selectizeInput(inputId = "langSelect", label = NULL, 
+                                           choices = names(translations)[-c(1,2)], 
+                                           selected = "English")),
                         div(class = "login-btn-container",
                             actionButton("loginBtn", "Login", class = "btn btn-primary"),
                             actionButton("logoutBtn", "Logout", class = "btn btn-primary", style = "display: none;")) # Initially hidden

@@ -58,10 +58,10 @@ Imports:
     xml2,
     zoo
 Suggests:
+    AquaCache,
     DT,
     flextable,
     fuzzyjoin,
-    AquaCache,
     imager,
     knitr,
     glue,

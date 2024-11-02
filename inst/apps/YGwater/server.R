@@ -7,10 +7,38 @@
 
 app_server <- function(input, output, session) {
   
-  shinyjs::useShinyjs()
+  
+  # Initial setup #############################################################
+  # Automatically update URL every time an input changes
+  observe({
+    reactiveValuesToList(input)
+    session$doBookmark()
+  })
+  setBookmarkExclude(c("userLang", "loginBtn"))
+  
+  # Update the query string
+  onBookmarked(updateQueryString)
+  isRestoring <- reactiveVal(FALSE)
+  
+  onRestore(function(state) {
+    isRestoring(TRUE)
+  })
   
   # Initial database connections without edit privileges
-  EQWin <- AccessConnect(config$accessPath)
+  if (file.exists(config$accessPath)) {
+    tryCatch({
+      EQWin <- AccessConnect(config$accessPath)
+      valid <- DBI::dbGetQuery(EQWin, "SELECT 1;")
+      if (nrow(valid) == 0) {
+        EQWin <- NULL
+      }
+    }, error = function(e) {
+      EQWin <<- NULL
+    })
+  } else {
+    EQWin <- NULL
+  }
+  
   AquaCache <- AquaConnect(name = config$dbName, 
                            host = config$dbHost,
                            port = config$dbPort,
@@ -36,6 +64,47 @@ app_server <- function(input, output, session) {
     print("Disconnected from EQWin after session end")
     print("Disconnected from AquaCache after session end")
   })
+  
+  # Language selection ########################################################
+  # Determine user's browser language. This should only run once when the app is loaded.
+  observe({
+    if (!isRestoring()) {
+      shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
+Shiny.onInputChange('userLang', language);
+console.log(language);")
+    }
+  })
+  # Check if userLang contains en or fr in the string and set the language accordingly
+  observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
+    if (substr(input$userLang , 1, 2) == "en") {
+      updateSelectizeInput(session, "langSelect", selected = "English")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
+    } else if (substr(input$userLang , 1, 2) == "fr") {
+      updateSelectizeInput(session, "langSelect", selected = "Français")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "fr"))  # Updates the language in the web page html head.
+      
+    } else {
+      updateSelectizeInput(session, "langSelect", selected = "English")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
+      
+    }
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
+  languageSelection <- reactiveValues() # holds language and abbreviation
+  
+  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
+  observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
+    if (input$langSelect %in% names(translations)[-c(1,2)]) {
+      languageSelection$language <- input$langSelect
+    }
+  })
+  
+  observe({ # Find the abbreviation for use in the 'titleCase' function
+    languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
+  })
+  
+  
   
   # Initialize a flag to track programmatic tab changes
   programmatic_change <- reactiveVal(FALSE)
@@ -186,7 +255,11 @@ app_server <- function(input, output, session) {
     hideTab(inputId = "navbar", target = "admin")
   })
   
+  # Load specific modules based on input$navbar ################################
+  # Store information to pass between modules
+  mainModuleOutputs <- reactiveValues()
   
+  # Move between tabs/modules
   observeEvent(input$navbar, {
     if (programmatic_change()) {
       # Reset the flag and exit to prevent looping
@@ -258,7 +331,13 @@ app_server <- function(input, output, session) {
       plot("plot", EQWin, AquaCache)
     }
     if (input$navbar == "map") {
-      map("map", EQWin, AquaCache)
+      mainModuleOutputs$map_main <- map("map", AquaCache, language = languageSelection)
+      observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
+        if (!is.null(mainModuleOutputs$map_main$change_tab)) {
+          updateNavbarPage(session, "navbar", selected = mainModuleOutputs$map_main$change_tab)
+          mainModuleOutputs$map_main$change_tab <- NULL
+        }
+      })
     }
     if (input$navbar == "FOD") {
       FOD("FOD")

@@ -25,7 +25,19 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/visualize/map/map_main.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/precip.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/params.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/map/locations.R", package = "YGwater"))
+  
   source(system.file("apps/YGwater/modules/visualize/FOD/FOD_main.R", package = "YGwater"))
+  
+  
+  # Load translations infrastructure, even if it's not being used at the moment!
+  translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/streamLine/translations.xlsx", package = "YGwater"), sheet = 1))
+  
+  # Function to get correct text from translations table
+  translate <<- function(id, lang) {
+    translations[id == id, lang]
+  }
+  
   
   # Establish database connection parameters
   # The actual connection is being done at the server level instead for YGwater Since the app will be used infrequently, this ensures that connections are only made when a user opens the app and is closed when the user closes the app.

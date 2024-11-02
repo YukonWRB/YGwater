@@ -187,30 +187,37 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
     observe({
-      EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns;"))
-      EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns'")
-      EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams;"))
-      EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams'")
-      EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds")
+      if (!is.null(EQWin)) {
+        EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns;"))
+        EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns'")
+        EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams;"))
+        EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams'")
+        EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds")
+        
+        # Check encoding and if necessary convert to UTF-8
+        locale_info <- Sys.getlocale("LC_CTYPE")
+        encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
+        tryCatch({
+          grepl("[^\x01-\x7F]", EQ_locs$StnDesc)
+        }, warning = function(w) {
+          if (encoding != "utf8") {
+            EQ_locs$StnDesc <<- iconv(EQ_locs$StnDesc, from = encoding, to = "UTF-8")
+          }
+        })
+        
+        data$EQ_locs <- EQ_locs
+        data$EQ_loc_grps <- EQ_loc_grps
+        data$EQ_params <- EQ_params
+        data$EQ_param_grps <- EQ_param_grps
+        data$EQ_stds <- EQ_stds
+      } else {
+        updateRadioButtons(session, "data_source", choices = stats::setNames(c("AC"), c("AquaCache")), selected = "AC")
+      }
+      
       AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete'")
       AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete'")
       
-      # Check encoding and if necessary convert to UTF-8
-      locale_info <- Sys.getlocale("LC_CTYPE")
-      encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
-      tryCatch({
-        grepl("[^\x01-\x7F]", EQ_locs$StnDesc)
-      }, warning = function(w) {
-        if (encoding != "utf8") {
-          EQ_locs$StnDesc <<- iconv(EQ_locs$StnDesc, from = encoding, to = "UTF-8")
-        }
-      })
-      
-      data$EQ_locs <- EQ_locs
-      data$EQ_loc_grps <- EQ_loc_grps
-      data$EQ_params <- EQ_params
-      data$EQ_param_grps <- EQ_param_grps
-      data$EQ_stds <- EQ_stds
+
       data$AC_locs <- AC_locs
       data$AC_params <- AC_params
     })

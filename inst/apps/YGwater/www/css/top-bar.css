@@ -46,3 +46,17 @@
   display: flex;
   align-items: center;
 }
+
+.language-select-container {
+  text-align: left;
+  margin-top: 10px;
+  margin-right: 20px;
+  z-index: 3; /* Foreground layer */
+}
+
+.selectize-control, .selectize-dropdown {
+  width: auto !important; /* Auto-adjust the dropdown width */
+}
+.selectize-dropdown {
+  z-index: 1050 !important; /* Ensure the dropdown overlays other content */
+}
