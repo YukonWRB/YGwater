@@ -181,7 +181,18 @@ EQWinStd <- function(CalcIds, SampleIds, con = NULL) {
     calc_id <- calc_scripts_df$CalcId[i]
     script <- calc_scripts_df$CalcScript[i]
     
-    # Encoding check and conversion
+    # Check encoding and if necessary convert to UTF-8
+    locale_info <- Sys.getlocale("LC_CTYPE")
+    encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
+    tryCatch({
+      grepl("[^\x01-\x7F]", script)
+    }, warning = function(w) {
+      if (encoding != "utf8") {
+        script <<- iconv(script, from = encoding, to = "UTF-8")
+      }
+    })
+    
+    # Conversion
     script <- gsub("\r", "", script)
     script_lines <- unlist(strsplit(script, "\n"))
     # Remove comments and empty lines

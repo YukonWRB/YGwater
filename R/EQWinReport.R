@@ -49,7 +49,7 @@
 
 EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, stds = NULL, stnStds = TRUE, SD_exceed = NULL, SD_start = NULL, SD_end = NULL, SD_doy = NULL, save_path = "choose", con = NULL, shiny_file_path = NULL) {
   
-# date = "2024-09-22"
+# date = "2024-10-26"
 # stations = NULL
 # stnGrp = "A Eagle Gold HLF"
 # parameters = NULL
@@ -63,8 +63,8 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
 # SD_exceed = 2
 # SD_start = NULL
 # SD_end = "2024-06-23"
-# SD_doy = NULL
-  
+# SD_doy = c(135:290)
+
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")
   if (!is.null(stations) & !is.null(stnGrp)) stop("You must specify either stations or stnGrp, not both")
@@ -544,10 +544,8 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
         } else {  # There is a standard, so check if the MaxVal and the MinVal standards are exceeded
           for (k in (2 + nrow(standards)):ncol(final_table)) {  # Now we can work left to right cell by cell
             if (is.na(final_table[i, k])) next # it's character at this point, and NA means that there is nothing in the field
-            
             compare_value <- suppressWarnings(as.numeric(final_table[i, k])) # The value to compare against the standard
             if (is.na(compare_value)) next # If the value is NA, skip. This happens notably when the value is < the detection limit.
-            
             for (l in c("MinVal", "MaxVal")) {
               if (is.na(std_applies[[l]])) next  # If the standard is NA, skip
               
@@ -559,6 +557,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
                 stn_name <- names(final_table)[k]
                 sid <- samps_locs[samps_locs$colnames == stn_name, "SampleId"]
                 min_max <- EQWinStd(calc_id, sid, con)[[1]]$Value
+                if (is.na(min_max)) next
               } else { # It's a simple standard! Nice and easy.
                 min_max <- as.numeric(std_applies[[l]])
               }

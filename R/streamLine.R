@@ -17,7 +17,7 @@
 
 streamLine <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), browser = TRUE, display.mode = "normal", dev = FALSE) {
   
-  rlang::check_installed("glue", reason = "required to formulate save SQL queries in streamLine application.")
+  rlang::check_installed("glue", reason = "required to formulate saved SQL queries in streamLine application.")
   rlang::check_installed("digest", reason = "required to hash and check passwords in streamLine application.")
   rlang::check_installed("shiny", reason = "required to use streamLine application.")
   rlang::check_installed("shinyjs", reason = "required to use streamLine application.")
@@ -25,7 +25,7 @@ streamLine <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
   rlang::check_installed("leaflet", reason = "required to use streamLine application.")
   rlang::check_installed("pool", reason = "required to use streamLine application.")
   rlang::check_installed("htmlwidgets", reason = "required to use streamLine application.")
-  rlang::check_installed("RSQLite", reason = "required to download data as .SQLite format.")
+  rlang::check_installed("RSQLite", reason = "required to send data to users as .SQLite format.")
   
   appDir <- system.file("apps/streamLine", package = "YGwater")
   

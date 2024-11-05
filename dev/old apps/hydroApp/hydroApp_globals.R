@@ -17,11 +17,11 @@ hydroApp_globals <- function(dev) {
     if (!exists("pool")) {
       pool <<- pool::dbPool(
         drv = RPostgres::Postgres(),
-        dbname = "hydromet",
-        host = Sys.getenv("hydrometHost"),
-        port = Sys.getenv("hydrometPort"),
-        user = Sys.getenv("hydrometUser"),
-        password = Sys.getenv("hydrometPass")
+        dbname = "AquaCache_dev",
+        host = Sys.getenv("AquaCacheHost"),
+        port = Sys.getenv("AquaCachePort"),
+        user = Sys.getenv("AquaCacheUser"),
+        password = Sys.getenv("AquaCachePass")
       )
     }
   }

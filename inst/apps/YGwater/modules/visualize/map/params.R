@@ -25,7 +25,7 @@ mapParamUI <- function(id) {
   )
 }
 
-mapParamServer <- function(id, AquaCache) {
+mapParamServer <- function(id, AquaCache, data, language) {
   moduleServer(id, function(input, output, session) {
 
     ns <- session$ns  # Used to create UI elements in the server code

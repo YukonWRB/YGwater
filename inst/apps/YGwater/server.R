@@ -7,11 +7,52 @@
 
 app_server <- function(input, output, session) {
   
-  shinyjs::useShinyjs()
   
+  # Initial setup #############################################################
+  # Automatically update URL every time an input changes
+  observe({
+    reactiveValuesToList(input)
+    session$doBookmark()
+  })
+  setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn"))
+  
+  # All other bookmark exclusions need to go here because exclusions don't seem to run until the server of each module is called. Since the UI is loaded right away, this results in the bookmarking of the excluded inputs before the exclusions are set.
+  # A possible work-around that would also decrease load times is to load the UI of each module only when the tab is selected via the server.
+  
+  # Update the query string
+  onBookmarked(updateQueryString)
+  
+  isRestoring <- reactiveVal(FALSE)
+  
+  onRestore(function(state) {
+    isRestoring(TRUE)
+  })
+  
+  ## database connections ###########
   # Initial database connections without edit privileges
-  EQWin <- AccessConnect("//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb", silent = TRUE)
-  AquaCache <- AquaConnect(silent = TRUE)
+  if (file.exists(config$accessPath)) {
+    tryCatch({
+      EQWin <- AccessConnect(config$accessPath)
+      valid <- DBI::dbGetQuery(EQWin, "SELECT 1;")
+      if (nrow(valid) == 0) {
+        EQWin <- NULL
+      }
+    }, error = function(e) {
+      EQWin <<- NULL
+    })
+  } else {
+    EQWin <- NULL
+  }
+  
+  AquaCache <- AquaConnect(name = config$dbName, 
+                           host = config$dbHost,
+                           port = config$dbPort,
+                           username = config$dbUser,
+                           password = config$dbPass,
+                           RLS_user = config$RLS_user,
+                           RLS_pass = config$RLS_pass,
+                           silent = TRUE)
+  
   print("Connected to EQWin")
   print("Connected to AquaCache")
   
@@ -27,6 +68,45 @@ app_server <- function(input, output, session) {
     DBI::dbDisconnect(AquaCache)
     print("Disconnected from EQWin after session end")
     print("Disconnected from AquaCache after session end")
+  })
+  
+  # Language selection ########################################################
+  
+  # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
+  languageSelection <- reactiveValues() # holds language and abbreviation
+  
+  # Determine user's browser language. This should only run once when the app is loaded.
+  observe({
+    if (!isRestoring()) {
+      shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
+Shiny.onInputChange('userLang', language);
+console.log(language);")
+    }
+  })
+  # Check if userLang contains en or fr in the string and set the language accordingly
+  observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
+    if (substr(input$userLang , 1, 2) == "en") {
+      updateSelectizeInput(session, "langSelect", selected = "English")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
+    } else if (substr(input$userLang , 1, 2) == "fr") {
+      updateSelectizeInput(session, "langSelect", selected = "Français")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "fr"))  # Updates the language in the web page html head.
+      
+    } else {
+      updateSelectizeInput(session, "langSelect", selected = "English")
+      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
+    }
+  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  
+  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
+  observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
+    if (input$langSelect %in% names(translations)[-c(1,2)]) {
+      languageSelection$language <- input$langSelect
+    }
+  })
+  
+  observe({ # Find the abbreviation for use in the 'titleCase' function
+    languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
   })
   
   # Initialize a flag to track programmatic tab changes
@@ -47,10 +127,12 @@ app_server <- function(input, output, session) {
   hideTab(inputId = "navbar", target = "basins")
   hideTab(inputId = "navbar", target = "admin")  # Hide 'admin' tab initially as it should only be seen upon login
   
-  # Log in to the database (optional for editing privileges) ##########################################
+  
+  # Log in/out for edits ##########################################
   log_attempts <- reactiveVal(0) # counter for login attempts
   user_logged_in <- reactiveVal(FALSE) # Reactive value to track login status
   
+  ## Log in #########
   observeEvent(input$loginBtn, {
     if (log_attempts() > 3) {
       showModal(modalDialog(
@@ -73,62 +155,91 @@ app_server <- function(input, output, session) {
       ))
     }
   })
+  
   # Log in attempt if the button is clicked
   observeEvent(input$confirmLogin, {
     log_attempts(log_attempts() + 1)
     
-      if (nchar(input$username) == 0 || nchar(input$password) == 0) {
+    if (nchar(input$username) == 0 || nchar(input$password) == 0) {
+      showModal(modalDialog(
+        title = "Login Failed",
+        "Please enter both a username and password.",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      return()
+    }
+    tryCatch({
+      DBI::dbDisconnect(AquaCache)
+      AquaCache <<- AquaConnect(name = config$dbName, 
+                                host = config$dbHost,
+                                port = config$dbPort,
+                                RLS_user = config$RLS_user,
+                                RLS_pass = config$RLS_pass,
+                                username = input$username, 
+                                password = input$password, 
+                                silent = TRUE)
+      test <- DBI::dbGetQuery(AquaCache, "SELECT 1;")
+      # Test the connection
+      if (nrow(test) > 0) {
         showModal(modalDialog(
-          title = "Login Failed",
-          "Please enter both a username and password.",
+          title = "Login Successful",
+          "You are now logged in.",
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
+        user_logged_in(TRUE)
+        shinyjs::hide("loginBtn")
+        shinyjs::show("logoutBtn")
+        
+        # Redirect to 'admin' tab
+        showTab(inputId = "navbar", target = "admin")
+        updateTabsetPanel(session, "navbar", selected = "admin")
         return()
-      }
-      tryCatch({
-        AquaCache <- AquaConnect(username = input$username, password = input$password, silent = TRUE)
-        # Test the connection
-        test <- DBI::dbGetQuery(AquaCache, "SELECT 1;")
-        if (nrow(test) > 0) {
-          showModal(modalDialog(
-            title = "Login Successful",
-            "You are now logged in.",
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          ))
-          user_logged_in(TRUE)
-          shinyjs::hide("loginBtn")
-          shinyjs::show("logoutBtn")
-          
-          # Redirect to 'admin' tab
-          showTab(inputId = "navbar", target = "admin")
-          updateTabsetPanel(session, "navbar", selected = "admin")
-          return()
-        } else {
-          showModal(modalDialog(
-            title = "Login Failed",
-            "Invalid username or password.",
-            easyClose = TRUE,
-            footer = modalButton("Close")
-          ))
-          AquaCache <- AquaConnect(silent = TRUE)
-          return()
-        }
-      }, error = function(e) {
+      } else {
         showModal(modalDialog(
           title = "Login Failed",
           "Invalid username or password.",
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
-        AquaCache <- AquaConnect(silent = TRUE)
+        AquaCache <<- AquaConnect(name = config$dbName, 
+                                  host = config$dbHost,
+                                  port = config$dbPort,
+                                  username = config$dbUser,
+                                  password = config$dbPass,
+                                  RLS_user = config$RLS_user,
+                                  RLS_pass = config$RLS_pass,
+                                  silent = TRUE)
         return()
-      })
+      }
+    }, error = function(e) {
+      showModal(modalDialog(
+        title = "Login Failed",
+        "Invalid username or password.",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      # Check to see if the connection is still open, if not reconnect
+      test <- DBI::dbGetQuery(AquaCache, "SELECT 1;")
+      if (nrow(test) == 0) {
+        AquaCache <<- AquaConnect(name = config$dbName, 
+                                  host = config$dbHost,
+                                  port = config$dbPort,
+                                  username = config$dbUser,
+                                  password = config$dbPass,
+                                  RLS_user = config$RLS_user,
+                                  RLS_pass = config$RLS_pass,
+                                  silent = TRUE)
+      }
+      return()
+    })
   })
   
-  # Logout functionality #####################################################
+  ## Log out #####################################################
   observeEvent(input$logoutBtn, {
+    
+    # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
     user_logged_in(FALSE)  # Set login status to FALSE
     # Hide the 'admin' tabs upon logout
     hideTab(inputId = "navbar", target = "admin")
@@ -138,13 +249,25 @@ app_server <- function(input, output, session) {
     shinyjs::hide("logoutBtn")
     shinyjs::show("loginBtn")
     
-    AquaCache <- AquaConnect(silent = TRUE)
+    DBI::dbDisconnect(AquaCache)
+    AquaCache <<- AquaConnect(name = config$dbName, 
+                              host = config$dbHost,
+                              port = config$dbPort,
+                              username = config$dbUser,
+                              password = config$dbPass,
+                              RLS_user = config$RLS_user,
+                              RLS_pass = config$RLS_pass,
+                              silent = TRUE)
     # Redirect to 'visualize' tab
     updateTabsetPanel(session, "navbar", selected = "visualize")
     hideTab(inputId = "navbar", target = "admin")
   })
   
+  # Load modules based on input$navbar ################################
+  # Store information to pass between modules
+  primary_outputs <- reactiveValues()
   
+  # Move between tabs/modules
   observeEvent(input$navbar, {
     if (programmatic_change()) {
       # Reset the flag and exit to prevent looping
@@ -170,7 +293,7 @@ app_server <- function(input, output, session) {
       if (user_logged_in()) {
         showTab(inputId = "navbar", target = "admin")
       }
-
+      
       # Hide irrelevant tabs
       hideTab(inputId = "navbar", target = "metadata")
       hideTab(inputId = "navbar", target = "new_ts_loc")
@@ -188,7 +311,7 @@ app_server <- function(input, output, session) {
       showTab(inputId = "navbar", target = "new_ts_loc")
       showTab(inputId = "navbar", target = "basins")
       showTab(inputId = "navbar", target = "visualize")
-
+      
       
       # Hide irrelevant tabs
       hideTab(inputId = "navbar", target = "plot")
@@ -216,7 +339,13 @@ app_server <- function(input, output, session) {
       plot("plot", EQWin, AquaCache)
     }
     if (input$navbar == "map") {
-      map("map", EQWin, AquaCache)
+      primary_outputs$map_main <- map("map", AquaCache, language = languageSelection)
+      observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
+        if (!is.null(primary_outputs$map_main$change_tab)) {
+          updateNavbarPage(session, "navbar", selected = (primary_outputs$map_main$change_tab))
+          primary_outputs$map_main$change_tab <- NULL
+        }
+      })
     }
     if (input$navbar == "FOD") {
       FOD("FOD")
@@ -230,5 +359,6 @@ app_server <- function(input, output, session) {
     if (input$navbar == "metadata") {
       metadata("metadata", AquaCache)
     }
-  })
-}
+  }) # End of observeEvent for loading modules based on navbar
+  
+} # End of main server

@@ -138,7 +138,7 @@ map <- function(id, language, restoring, data) {
     popupData <- reactive({
       # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
       # Get location names
-      popup_names <- data$locations[, .(location_id, popup_name = get(translations[id == "generic_name_col", get(language$language)][[1]]))]
+      popup_names <- data$locations[ , .(location_id, popup_name = get(translations[id == "generic_name_col", get(language$language)][[1]]))]
       popup_names[, popup_name := titleCase(popup_name, language$abbrev)]
       # Aggregate time range for each location
       time_range <- data$timeseries[, .(
