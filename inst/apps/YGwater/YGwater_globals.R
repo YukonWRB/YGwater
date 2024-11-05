@@ -35,12 +35,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # Load translations infrastructure
   translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/streamLine/translations.xlsx", package = "YGwater"), sheet = 1))
   
-  # Function to get correct text from translations table
-  translate <<- function(id, lang) {
-    translations[id == id, lang]
-  }
-  
-  
   # Establish database connection parameters
   # The actual connection is being done at the server level for YGwater. This allows using a login input form to connect to the database with edit privileges.
   config <<- list(

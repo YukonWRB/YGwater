@@ -16,6 +16,9 @@ app_server <- function(input, output, session) {
   })
   setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn"))
   
+  # All other bookmark exclusions need to go here because exclusions don't seem to run until the server of each module is called. Since the UI is loaded right away, this results in the bookmarking of the excluded inputs before the exclusions are set.
+  # A possible work-around that would also decrease load times is to load the UI of each module only when the tab is selected via the server.
+  
   # Update the query string
   onBookmarked(updateQueryString)
   
