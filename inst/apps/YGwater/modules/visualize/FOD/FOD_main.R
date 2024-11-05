@@ -21,8 +21,9 @@ FOD <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     
-    ns <- session$ns  # Used for generating UI elements from server
+    setBookmarkExclude(c("FOD_go"))
     
+    ns <- session$ns  # Used for generating UI elements from server
     
     #Create containers
     FOD_comments <- reactiveValues(comments = list(),

@@ -36,5 +36,6 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   source(system.file("apps/YGwater/YGwater_globals.R", package = "YGwater"))
   YGwater_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass, RLS_user = RLS_user, RLS_pass = RLS_pass, accessPath = accessPath)
   
+  shiny::enableBookmarking(store = "url")  # Enable bookmarking
   shiny::runApp(appDir, display.mode = "normal", host = host, port = port)
 }

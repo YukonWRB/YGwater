@@ -5,18 +5,7 @@
 visualizeUI <- function(id) {
   ns <- NS(id)
   fluidPage(
-    sidebarPanel(
-      actionButton(ns("toggle"), "Toggle point selection"),
-      # Add some whitespace between buttons
-      div(style = "height: 10px;"),
-      uiOutput(ns("points")),
-      actionButton(ns("delineate"), "Delineate basins"),
-      div(style = "height: 10px;"),
-      downloadButton(ns("download"), "Download basins")
-    ),
-    mainPanel(
-      leaflet::leafletOutput(ns("map"))
-    )
+
   )
 }
 

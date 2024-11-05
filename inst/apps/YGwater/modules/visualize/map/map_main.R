@@ -15,12 +15,14 @@ map <- function(id, AquaCache, language) {
   
   moduleServer(id, function(input, output, session) {
     
+    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click"))
+    
     ns <- session$ns
     
     # Load common mapping data
     data <- reactiveValues(
       locations = dbGetQueryDT(AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
-      timeseries = dbGetQueryDT(AquaCache, "SELECT ts.timeseries_id, ts.location_id, p.param_name, m.media_type, ts.category, ts.period_type, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"),
+      timeseries = dbGetQueryDT(AquaCache, "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.category, ts.period_type, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"),
       projects = dbGetQueryDT(AquaCache, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
       networks =  dbGetQueryDT(AquaCache, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
       locations_projects = dbGetQueryDT(AquaCache, "SELECT * FROM locations_projects;"),
@@ -31,7 +33,8 @@ map <- function(id, AquaCache, language) {
     )
     
     # Store information to pass between modules
-    moduleOutputs <- reactiveValues()
+    subModuleOutputs <- reactiveValues() # Holds the stuff that needs to be output from the sub-modules back tot this server
+    mainModuleOutputs <- reactiveValues() # Hold the stuff that needs to be output from this module back to the main server
 
     # Reactive value to store the selected submodule type
     submodule <- reactiveVal(NULL)
@@ -55,8 +58,14 @@ map <- function(id, AquaCache, language) {
           output$submoduleUI <- renderUI({
             mapLocsUI(ns("locs"))
           })
-          moduleOutputs$locs <- mapLocsServer("locs", AquaCache, data, language)
+          subModuleOutputs$locs <- mapLocsServer("locs", AquaCache, data, language)
           submodule("locs")
+          observe({
+            if (!is.null(subModuleOutputs$locs$change_tab)) {
+              mainModuleOutputs$change_tab <- subModuleOutputs$locs$change_tab
+            }
+          })
+          
         }
       } else { # Submodule has been loaded already, so only redo if we are calling a different submodule
         if (input$map_type == "precip" && submodule() != "precip") {
@@ -75,16 +84,19 @@ map <- function(id, AquaCache, language) {
           output$submoduleUI <- renderUI({
             mapLocsUI(ns("locs"))
           })
-          moduleOutputs$locs <- mapLocsServer("locs", AquaCache, data, language)
+          subModuleOutputs$locs <- mapLocsServer("locs", AquaCache, data, language)
           submodule("locs")
+          observe({
+            if (!is.null(subModuleOutputs$locs$change_tab)) {
+              mainModuleOutputs$change_tab <- subModuleOutputs$locs$change_tab
+            }
+          })
+          
         }
       }
     }) # End of observeEvent that loads submodules
 
-    return(moduleOutputs)
-    
-    observe({
-      print(moduleOutputs)
-    })
+    return(mainModuleOutputs)
+
   }) # End of moduleServer
 }

@@ -41,14 +41,7 @@ mapLocsUI <- function(id) {
                     `data-trigger` = "click hover",
                     title = "Placeholder",
                     icon("info-circle", style = "font-size: 150%;")),
-                  selectizeInput(ns("type"), "Data Type", choices = c("All" = "All"), multiple = TRUE), # choices and labels are updated in the server module
-                  selectizeInput(ns("pType"), "Parameter Type", choices = c("All" = "All"), multiple = TRUE),
-                  selectizeInput(ns("pGrp"), "Parameter Group", choices = c("All" = "All"), multiple = TRUE),
-                  selectizeInput(ns("param"), "Parameter", choices = c("All" = "All"), multiple = TRUE),
-                  selectizeInput(ns("proj"), "Project", choices = c("All" = "All"), multiple = TRUE),
-                  selectizeInput(ns("net"), "Network", choices = c("All" = "All"), multiple = TRUE),
-                  sliderInput(ns("yrs"), "With data between...", sep = "", min = 1897, max = lubridate::year(Sys.Date()), value = c(1897, lubridate::year(Sys.Date())), step = 1),
-                  actionButton(ns("reset"), "Reset Filters"),
+                  uiOutput(ns("controls_ui")),
                   style = "opacity: 1; z-index: 400;"  # Adjust styling
     ) # End of absolutePanel
   ) # End of tagList
@@ -80,6 +73,108 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       observeFilterInput("proj")
       observeFilterInput("net")
       
+      # Create the filter inputs ############################################################################
+      # Generate all controls in a single renderUI
+      output$controls_ui <- renderUI({
+        req(data, language$language, language$abbrev)
+        
+        tagList(
+          selectizeInput(
+            ns("type"),
+            label = translations[id == "data_type", get(language$language)][[1]],
+            choices = stats::setNames(
+              c("All", "discrete", "continuous"),
+              c(
+                translations[id == "all", get(language$language)][[1]],
+                titleCase(
+                  c(
+                    translations[id == "discrete", get(language$language)][[1]],
+                    translations[id == "continuous", get(language$language)][[1]]
+                  ),
+                  language$abbrev
+                )
+              )
+            ),
+            multiple = TRUE,
+            selected = "All"
+          ),
+          selectizeInput(
+            ns("pType"),
+            label = translations[id == "type", get(language$language)][[1]],
+            choices = stats::setNames(
+              c("All", data$media_types$media_id),
+              c(
+                translations[id == "all", get(language$language)][[1]],
+                titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
+              )
+            ),
+            multiple = TRUE,
+            selected = "All"
+          ),
+          # Continue with other inputs
+          selectizeInput(
+            ns("pGrp"),
+            label = translations[id == "param_group", get(language$language)][[1]],
+            choices = stats::setNames(
+              c("All", data$param_groups$group),
+              c(
+                translations[id == "all", get(language$language)][[1]],
+                titleCase(data$param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
+              )
+            ),
+            multiple = TRUE,
+            selected = "All"
+          ),
+          selectizeInput(
+            ns("param"),
+            label = translations[id == "parameter", get(language$language)][[1]],
+            choices = stats::setNames(
+              c("All", data$parameters$parameter_id),
+              c(
+                translations[id == "all", get(language$language)][[1]],
+                titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+              )
+            ),
+            multiple = TRUE,
+            selected = "All"
+          ),
+          selectizeInput(
+            ns("proj"),
+            label = translations[id == "project", get(language$language)][[1]],
+            choices = stats::setNames(
+              c("All", data$projects$project_id),
+              c(
+                translations[id == "all", get(language$language)][[1]],
+                titleCase(data$projects[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev)
+              )
+            ),
+            multiple = TRUE,
+            selected = "All"
+          ),
+          selectizeInput(
+            ns("net"),
+            label = translations[id == "network", get(language$language)][[1]],
+            choices = stats::setNames(
+              c("All", data$networks$network_id),
+              c(
+                translations[id == "all", get(language$language)][[1]],
+                titleCase(data$networks[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev)
+              )
+            ),
+            multiple = TRUE,
+            selected = "All"
+          ),
+          sliderInput(
+            ns("yrs"),
+            label = translations[id == "year_filter", get(language$language)][[1]],
+            min = lubridate::year(min(data$timeseries$start_datetime)),
+            max = lubridate::year(max(data$timeseries$end_datetime)),
+            value = lubridate::year(c(min(data$timeseries$start_datetime), max(data$timeseries$end_datetime))),
+            step = 1
+          ),
+          actionButton(ns("reset"), translations[id == "reset", get(language$language)][[1]])
+        )
+      })
       
       # Reset all filters when reset button pressed ##################################
       observeEvent(input$reset, {
@@ -88,40 +183,46 @@ mapLocsServer <- function(id, AquaCache, data, language) {
                              choices = stats::setNames(c("All", "discrete", "continuous"),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(c(translations[id == "discrete", get(language$language)][[1]], translations[id == "continuous", get(language$language)][[1]]), language$abbrev)
                                                        )
-                             )
+                             ),
+                             selected = "All"
         )
         updateSelectizeInput(session, 
                              "pType",
                              choices = stats::setNames(c("All", data$media_types$media_id),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
                                                        )
-                             )
+                             ),
+                             selected = "All"
         )
         updateSelectizeInput(session, 
                              "pGrp",
                              choices = stats::setNames(c("All", data$param_groups$group),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
                                                        )
-                             )
+                             ),
+                             selected = "All"
         )
         updateSelectizeInput(session,
                              "param",
                              choices = stats::setNames(c("All", data$parameters$parameter_id),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
                                                        )
-                             )
+                             ),
+                             selected = "All"
         )
         updateSelectizeInput(session,
                              "proj",
                              choices = stats::setNames(c("All", data$projects$project_id),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$projects[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
-                             )
+                             ),
+                             selected = "All"
         )
         updateSelectizeInput(session,
                              "net",
                              choices = stats::setNames(c("All", data$networks$network_id),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$networks[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
-                             )
+                             ),
+                             selected = "All"
         )
         updateSliderInput(session,
                           "yrs",
@@ -176,14 +277,14 @@ mapLocsServer <- function(id, AquaCache, data, language) {
           "<strong>", translations[id == "parameter(s)", get(language$language)][[1]], ":</strong><br/><i>", parameters, "</i><br/>",
           "<strong>", translations[id == "network(s)", get(language$language)][[1]], ":</strong><br/><i>", networks, "</i><br/>",
           "<strong>", translations[id == "project(s)", get(language$language)][[1]], ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i><br/>",
-          "<br/><a href='#' onclick='changeTab(\"map-\", \"clicked_view_data\", \"", location_id, "\"); return false;'>", translations[id == "view_data", get(language$language)][[1]], "</a><br/>",
-          "<a href='#' onclick='changeTab(\"map-\", \"clicked_view_plots\", \"", location_id, "\"); return false;'>", translations[id == "view_plots", get(language$language)][[1]], "</a>"
+          "<br/><a href='#' onclick='changeTab(\"map-locs-\", \"clicked_view_data\", \"", location_id, "\"); return false;'>", translations[id == "view_data", get(language$language)][[1]], "</a><br/>",
+          "<a href='#' onclick='changeTab(\"map-locs\", \"clicked_view_plots\", \"", location_id, "\"); return false;'>", translations[id == "view_plots", get(language$language)][[1]], "</a>"
         )]
         
         tmp
       })
       
-      # Update the tooltip's text and inputs
+      # Update the tooltip's text and inputs based on the selected language ############################
       observe({
         tooltipText <- translations[id == "tooltip_reset", get(language$language)][[1]]
         session$sendCustomMessage(type = 'update-tooltip', message = list(id = ns("info"), title = tooltipText))
@@ -373,9 +474,11 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       }) # End of observe for map filters and rendering location points
       
       
-      # Pass a message to the main server when a location is clicked ############################
+      # Pass a message to the main map server when a location is clicked ############################
       # Listen for a click in the popup
       observeEvent(input$clicked_view_data, {
+        print("observed click")
+        print(input$clicked_view_data)
         if (!is.null(input$clicked_view_data)) {
           outputs$change_tab <- "data"
           outputs$location_id <- input$clicked_view_data
