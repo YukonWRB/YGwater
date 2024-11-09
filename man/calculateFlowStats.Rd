@@ -4,19 +4,27 @@
 \alias{calculateFlowStats}
 \title{Function that calculates water flow statistics at creeks}
 \usage{
-calculateFlowStats(stations, data = NULL, perc = 95, record_length = 15)
+calculateFlowStats(
+  stations = NULL,
+  data = NULL,
+  perc = 95,
+  record_length = 15,
+  con = NULL
+)
 }
 \arguments{
-\item{stations}{The stations for which to calculate flow. Given as a vector of the station code. Ex: c('08AA008', '09BC001').}
+\item{stations}{The stations for which to calculate flow. Given as a vector of the station code. Ex: c('08AA008', '09BC001'). Leave NULL if using the \code{data} argument instead.}
 
 \item{data}{If the stations are not in the hydromet database, provide the data as a single table with the columns: name, location, date, value. Name is the name of the station, location is the location code or id, date is the date of measurement in yyyy-mm-dd, and value is the flow measurement in m3/s.}
 
 \item{perc}{The percent of data (days) required to include a year or season in the statistics. Default is 95.}
 
 \item{record_length}{The length of record (# of years/seasons) at a station required to be included in the statistics. Default is 15.}
+
+\item{con}{A connection to the database. Leave NULL to use the default connection for this package, which is automatically closed when finished.}
 }
 \value{
-A table containing the calculated stats for the river/stream/creek of interest. The table contains 4 columns: location, season, stat and value. The location column is the name/names given in the 'ungauged_name' parameter. The season column refers to the season for which the stat was calculated, where annual is the entire year, fall is Sept. 1st - Oct 31st, freshet is April 20 - June 30, summer is July 1st - August 31st, and winter is Nov. 1st - April 19. The stat column column refers to the type of statistic. The difference between max and max_all is that max is the average maximum for that season and the max_all is the all-time maximum for that season.
+A table containing the calculated stats for the river/stream/creek of interest. The table contains 4 columns: location, season, stat and value. The season column refers to the season for which the stat was calculated, where annual is the entire year, fall is Sept. 1st - Oct 31st, freshet is April 20 - June 30, summer is July 1st - August 31st, and winter is Nov. 1st - April 19. The stat column column refers to the type of statistic. The difference between max and max_all is that max is the average maximum for that season and the max_all is the all-time maximum for that season.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
