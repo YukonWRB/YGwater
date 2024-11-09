@@ -7,7 +7,7 @@
 #' 
 #' Statistics for each station are averaged over all years/seasons available, except for all-time data points. Years or seasons with more than 5 percent missing data (this is the default) are excluded from the statistics. Additionally, only stations with a minimum of 15 years/seasons of data (this is the default) are retained.
 #' 
-#' @param stations The stations for which to calculate flow. Given as a vector of the station code. Ex: c('08AA008', '09BC001'). Leave NULL if using the `data` argument instead.
+#' @param stations The stations for which to calculate flow. Given as a vector of the station code matching the database's location table, 'location' column. Ex: c('08AA008', '09BC001'). Leave NULL if using the `data` argument instead.
 #' @param data If the stations are not in the hydromet database, provide the data as a single table with the columns: name, location, date, value. Name is the name of the station, location is the location code or id, date is the date of measurement in yyyy-mm-dd, and value is the flow measurement in m3/s.
 #' @param perc The percent of data (days) required to include a year or season in the statistics. Default is 95.
 #' @param record_length The length of record (# of years/seasons) at a station required to be included in the statistics. Default is 15.
@@ -19,12 +19,16 @@
 
 calculateFlowStats <- function(stations = NULL, data = NULL, perc = 95, record_length = 15, con = NULL) {
   
+  if (is.null(stations) & is.null(data)) {
+    stop("You must provide either the stations or the data.")
+  } else if (!is.null(stations) & !is.null(data)) {
+    stop("You must provide either the stations or the data, not both.")
+  }
   
-  # Testing shortcuts
-  # con <- AquaCache::AquaConnect()
-  # stations <- "YEC-MRW"
-  # perc = 95
-  # record_length = 10
+  if (perc < 0 | perc > 100) {
+    stop("The value of perc must be between 0 and 100.")
+  }
+  
   #### ------------------------------ Get data -----------------------------####
   
   if (is.null(data)) {

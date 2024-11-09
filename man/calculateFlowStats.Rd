@@ -13,7 +13,7 @@ calculateFlowStats(
 )
 }
 \arguments{
-\item{stations}{The stations for which to calculate flow. Given as a vector of the station code. Ex: c('08AA008', '09BC001'). Leave NULL if using the \code{data} argument instead.}
+\item{stations}{The stations for which to calculate flow. Given as a vector of the station code matching the database's location table, 'location' column. Ex: c('08AA008', '09BC001'). Leave NULL if using the \code{data} argument instead.}
 
 \item{data}{If the stations are not in the hydromet database, provide the data as a single table with the columns: name, location, date, value. Name is the name of the station, location is the location code or id, date is the date of measurement in yyyy-mm-dd, and value is the flow measurement in m3/s.}
 
