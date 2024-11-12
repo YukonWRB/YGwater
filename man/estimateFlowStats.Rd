@@ -9,19 +9,22 @@ estimateFlowStats(
   ungauged_area,
   ungauged_name,
   perc = 95,
-  record_length = 15
+  record_length = 15,
+  con = NULL
 )
 }
 \arguments{
-\item{gauged_stations}{The stations used for estimating flow. Given as a vector of the station code. Ex: c(08AA008, 09BC001).}
+\item{gauged_stations}{The stations used for estimating flow. Given as a vector of the station code. Ex: c(08AA008, 09BC001). These must be locations in the databases' location table, column 'location'. In addition there must be correspondingly named polygons in the 'vectors' table under the 'Drainage basins' layer.}
 
 \item{ungauged_area}{The area of the stations of interest. Given in square km and as a vector.}
 
-\item{ungauged_name}{The name of the stations of interest, given as a character vector. The name is only used to differentiate between ungauged location stats in the outputted table. Note: ungauged_name must be the same length as ungauged_area.}
+\item{ungauged_name}{The name of the stations of interest, given as a character vector. The name is only used to differentiate between ungauged location stats in the output table. Note: ungauged_name must be the same length as ungauged_area.}
 
 \item{perc}{The percent of data (days) required to include a year or season in the statistics. Default is 95.}
 
 \item{record_length}{The length of record (# of years/seasons) at a station required to be included in the statistics. Default is 15.}
+
+\item{con}{A connection to the database. Leave NULL to use the default connection for this package, which is automatically closed when finished.}
 }
 \value{
 A list containing three objects: two table and a list of plots. The first table contains the estimated stats for the river/stream/creek of interest. The table contains 4 columns: location, season, stat and value. The location column is the name/names given in the 'ungauged_name' parameter. The season column refers to the season for which the stat was calculated, where annual is the entire year, fall is Sept. 1st - Oct 31st, freshet is April 20 - June 30, summer is July 1st - August 31st, and winter is Nov. 1st - April 19. The stat column column refers to the type of statistic. The difference between max and max_all is that max is the average maximum for that season and the max_all is the all-time maximum for that season. The second table is of all the statistics for the gauges water courses by km. The list of plots contains 5 ggplots that display the range of station flows normalized by area for the statistics of interest. They are useful for identifying outliers. The first contains the normalized flows separated into seasons and statistic. The following 4 display the normalized flows for the maximum statistic, the minimum statistic, the mean statistic and the max_all statistic.
