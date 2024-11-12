@@ -39,7 +39,7 @@ mapLocsUI <- function(id) {
                     `data-toggle` = "tooltip",
                     `data-placement` = "right",
                     `data-trigger` = "click hover",
-                    title = translations[id == "tooltip_reset", get(language$language)][[1]],
+                    title = "placeholder",
                     icon("info-circle", style = "font-size: 150%;")),
                   uiOutput(ns("controls_ui")),
                   style = "opacity: 1; z-index: 400;"  # Adjust styling
@@ -80,8 +80,6 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       # Generate all controls in a single renderUI
       output$controls_ui <- renderUI({
         req(data, language$language, language$abbrev)
-        
-        print("Creating UI elements")
         
         tagList(
           selectizeInput(
@@ -178,7 +176,6 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       
       # Reset all filters when reset button pressed ##################################
       observeEvent(input$reset, {
-        print("Resetting filters")
         updateSelectizeInput(session, 
                              "type",
                              choices = stats::setNames(c("All", "discrete", "continuous"),
@@ -281,7 +278,6 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       
       # Update the tooltip's text and inputs based on the selected language ############################
       observeEvent(language$language, {
-        print("language text update")
         tooltipText <- translations[id == "tooltip_reset", get(language$language)][[1]]
         session$sendCustomMessage(type = 'update-tooltip', message = list(id = ns("info"), title = tooltipText))
         
@@ -473,8 +469,6 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       # Pass a message to the main map server when a location is clicked ############################
       # Listen for a click in the popup
       observeEvent(input$clicked_view_data, {
-        print("observed click")
-        print(input$clicked_view_data)
         if (!is.null(input$clicked_view_data)) {
           outputs$change_tab <- "data"
           outputs$location_id <- input$clicked_view_data
