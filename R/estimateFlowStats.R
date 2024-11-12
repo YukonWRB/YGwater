@@ -46,8 +46,6 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
                                      "INNER JOIN locations ON timeseries.location = locations.location ",
                                      "WHERE timeseries.location IN ('", paste0(gauged_stations, collapse = "', '"), "') AND timeseries.parameter_id = ", flow_paramId, ";"))
   
-  DBI::dbDisconnect(con)
-  
   ## Get areas for stations
   areas <- YGwater::getVector(layer_name = "Drainage basins", feature_name = gauged_stations)
   if (nrow(areas) != length(gauged_stations)) {
