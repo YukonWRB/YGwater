@@ -66,8 +66,8 @@ plotMultiTimeseries <- function(type = 'traces',
                                 con = NULL) {
   
   # type <- 'subplots'
-  # locations <- c("09FC001", "09EA004")
-  # parameters <- c("water level", "discharge, river/stream")
+  # locations <- c("09FC001", "09EA004", "08AA012")
+  # parameters <- c("water level", "discharge, river/stream", "water level")
   # record_rates <- NULL
   # period_types <- NULL
   # z <- NULL
@@ -87,6 +87,8 @@ plotMultiTimeseries <- function(type = 'traces',
   # line_scale <- 1
   # axis_scale <- 1
   # legend_scale <- 1
+  # gridx <- FALSE
+  # gridy <- FALSE
   # rate <- NULL
   # tzone <- "auto"
   
@@ -936,7 +938,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                             y1 = 0, 
                                             xref = "paper", 
                                             yref = "paper", 
-                                            line = list(color = "black", width = 0.7))))
+                                            line = list(color = "black", width = 0.6))))
       }
       subplots[[i]] <- subplot
       
@@ -958,7 +960,7 @@ plotMultiTimeseries <- function(type = 'traces',
                             shareY = FALSE, 
                             titleX = FALSE, 
                             titleY = TRUE, 
-                            margin = c(0,0,0,(0.05 * axis_scale))) %>%
+                            margin = c(0, (0.05 * axis_scale), 0, (0.05 * axis_scale))) %>%
       plotly::layout(annotations = subtitles)
   }
   

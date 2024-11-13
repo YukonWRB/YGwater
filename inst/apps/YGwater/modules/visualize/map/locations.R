@@ -39,7 +39,7 @@ mapLocsUI <- function(id) {
                     `data-toggle` = "tooltip",
                     `data-placement` = "right",
                     `data-trigger` = "click hover",
-                    title = "Placeholder",
+                    title = "placeholder",
                     icon("info-circle", style = "font-size: 150%;")),
                   uiOutput(ns("controls_ui")),
                   style = "opacity: 1; z-index: 400;"  # Adjust styling
@@ -59,9 +59,11 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       observeFilterInput <- function(inputId) {
         observeEvent(input[[inputId]], {
           # Check if 'All' is selected and adjust accordingly
-          if (length(input[[inputId]]) > 1) {
-            if ("All" %in% input[[inputId]]) {
+          if (length(input[[inputId]]) > 1) { # If 'All' was selected last, remove all other selections
+            if (input[[inputId]][length(input[[inputId]])] == "All") {
               updateSelectizeInput(session, inputId, selected = "All")
+            } else if ("All" %in% input[[inputId]]) { # If 'All' is already selected and another option is selected, remove 'All'
+              updateSelectizeInput(session, inputId, selected = input[[inputId]][length(input[[inputId]])])
             }
           }
         })
@@ -72,6 +74,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       observeFilterInput("param")
       observeFilterInput("proj")
       observeFilterInput("net")
+      
       
       # Create the filter inputs ############################################################################
       # Generate all controls in a single renderUI
@@ -95,8 +98,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
                 )
               )
             ),
-            multiple = TRUE,
-            selected = "All"
+            multiple = TRUE
           ),
           selectizeInput(
             ns("pType"),
@@ -108,22 +110,20 @@ mapLocsServer <- function(id, AquaCache, data, language) {
                 titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
               )
             ),
-            multiple = TRUE,
-            selected = "All"
+            multiple = TRUE
           ),
           # Continue with other inputs
           selectizeInput(
             ns("pGrp"),
             label = translations[id == "param_group", get(language$language)][[1]],
             choices = stats::setNames(
-              c("All", data$param_groups$group),
+              c("All", data$parameter_groups$group_id),
               c(
                 translations[id == "all", get(language$language)][[1]],
-                titleCase(data$param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
+                titleCase(data$parameter_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
               )
             ),
-            multiple = TRUE,
-            selected = "All"
+            multiple = TRUE
           ),
           selectizeInput(
             ns("param"),
@@ -135,8 +135,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
                 titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
               )
             ),
-            multiple = TRUE,
-            selected = "All"
+            multiple = TRUE
           ),
           selectizeInput(
             ns("proj"),
@@ -148,8 +147,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
                 titleCase(data$projects[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev)
               )
             ),
-            multiple = TRUE,
-            selected = "All"
+            multiple = TRUE
           ),
           selectizeInput(
             ns("net"),
@@ -161,8 +159,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
                 titleCase(data$networks[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev)
               )
             ),
-            multiple = TRUE,
-            selected = "All"
+            multiple = TRUE
           ),
           sliderInput(
             ns("yrs"),
@@ -173,6 +170,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
             step = 1
           ),
           actionButton(ns("reset"), translations[id == "reset", get(language$language)][[1]])
+          
         )
       })
       
@@ -183,46 +181,40 @@ mapLocsServer <- function(id, AquaCache, data, language) {
                              choices = stats::setNames(c("All", "discrete", "continuous"),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(c(translations[id == "discrete", get(language$language)][[1]], translations[id == "continuous", get(language$language)][[1]]), language$abbrev)
                                                        )
-                             ),
-                             selected = "All"
+                             )
         )
         updateSelectizeInput(session, 
                              "pType",
                              choices = stats::setNames(c("All", data$media_types$media_id),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$media_types[[translations[id == "media_type_col", get(language$language)][[1]]]], language$abbrev)
                                                        )
-                             ),
-                             selected = "All"
+                             )
         )
         updateSelectizeInput(session, 
                              "pGrp",
-                             choices = stats::setNames(c("All", data$param_groups$group),
-                                                       c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
+                             choices = stats::setNames(c("All", data$parameter_groups$group_id),
+                                                       c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameter_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
                                                        )
-                             ),
-                             selected = "All"
+                             )
         )
         updateSelectizeInput(session,
                              "param",
                              choices = stats::setNames(c("All", data$parameters$parameter_id),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
                                                        )
-                             ),
-                             selected = "All"
+                             )
         )
         updateSelectizeInput(session,
                              "proj",
                              choices = stats::setNames(c("All", data$projects$project_id),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$projects[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
                              ),
-                             selected = "All"
         )
         updateSelectizeInput(session,
                              "net",
                              choices = stats::setNames(c("All", data$networks$network_id),
                                                        c(translations[id == "all", get(language$language)][[1]], titleCase(data$networks[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev))
-                             ),
-                             selected = "All"
+                             )
         )
         updateSliderInput(session,
                           "yrs",
@@ -232,7 +224,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
         )
       }) # End of observeEvent for reset filters button
       
-      # Update text (including map popup) based on language ###########################################
+      # Update map popup based on language ###########################################
       popupData <- reactive({
         # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
         # Get location names
@@ -285,7 +277,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       })
       
       # Update the tooltip's text and inputs based on the selected language ############################
-      observe({
+      observeEvent(language$language, {
         tooltipText <- translations[id == "tooltip_reset", get(language$language)][[1]]
         session$sendCustomMessage(type = 'update-tooltip', message = list(id = ns("info"), title = tooltipText))
         
@@ -308,8 +300,8 @@ mapLocsServer <- function(id, AquaCache, data, language) {
         updateSelectizeInput(session, 
                              "pGrp",
                              label = translations[id == "param_group", get(language$language)][[1]],
-                             choices = stats::setNames(c("All", data$param_groups$group),
-                                                       c(translations[id == "all", get(language$language)][[1]], titleCase(data$param_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
+                             choices = stats::setNames(c("All", data$parameter_groups$group_id),
+                                                       c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameter_groups[[translations[id == "param_group_col", get(language$language)][[1]]]], language$abbrev)
                                                        )
                              )
         )
@@ -346,7 +338,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
                            "reset",
                            label = translations[id == "reset", get(language$language)][[1]]
         )
-      })
+      }, ignoreNULL = TRUE, ignoreInit = TRUE)
       
       # Create the basic map ###########################################################
       output$map <- leaflet::renderLeaflet({
@@ -477,8 +469,6 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       # Pass a message to the main map server when a location is clicked ############################
       # Listen for a click in the popup
       observeEvent(input$clicked_view_data, {
-        print("observed click")
-        print(input$clicked_view_data)
         if (!is.null(input$clicked_view_data)) {
           outputs$change_tab <- "data"
           outputs$location_id <- input$clicked_view_data
