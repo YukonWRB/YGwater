@@ -47,7 +47,7 @@ app_ui <- function(request) {
                collapsible = TRUE,
                fluid = TRUE,
                lang = "en",
-               tabPanel(title = "Viewer Mode", value = "visualize",
+               tabPanel(title = "Viewer Mode", value = "viz",
                         uiOutput("visualize_ui")),
                tabPanel(title = "Plot", value = "plot", 
                         uiOutput("plot_ui")),
@@ -55,8 +55,10 @@ app_ui <- function(request) {
                         uiOutput("map_ui")),
                tabPanel(title = "FOD Comments", value = "FOD",
                         uiOutput("fod_ui")),
-               tabPanel(title = "Generate", value = "generate",
-                        uiOutput("generate_ui"))
+               tabPanel(title = "Generate", value = "gen",
+                        uiOutput("gen_ui")),
+               tabPanel(title = "View images", value = "img",
+                        uiOutput("img_ui")),
     ), # End navbarPage
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
