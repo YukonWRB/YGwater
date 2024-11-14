@@ -1,4 +1,4 @@
-#' Extract EQWin data to an Excel report or .csv
+#' Extract EQWin data to an Excel workbook or .csv
 #'
 #' @description
 #' 

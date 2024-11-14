@@ -4,7 +4,7 @@ mapUI <- function(id) {
   ns <- NS(id)
   fluidPage(
     selectizeInput(ns("map_type"),
-                   label = "Map Type",
+                   label = NULL,
                    choices = stats::setNames(c("locs", "precip", "params"), c("Monitoring locations", "Precipitation", "Other parameter values")),
                    selected = "Monitoring locations"),
     uiOutput(ns("submoduleUI"))

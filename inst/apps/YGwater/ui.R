@@ -48,23 +48,15 @@ app_ui <- function(request) {
                fluid = TRUE,
                lang = "en",
                tabPanel(title = "Viewer Mode", value = "visualize",
-                        visualizeUI("visualize")),
-               tabPanel(title = "Admin Mode", value = "admin",
-                        adminUI("admin")),
+                        uiOutput("visualize_ui")),
                tabPanel(title = "Plot", value = "plot", 
-                        plotUI("plot")),
+                        uiOutput("plot_ui")),
                tabPanel(title = "Map", value = "map",
-                        mapUI("map")),
+                        uiOutput("map_ui")),
                tabPanel(title = "FOD Comments", value = "FOD",
-                        FODUI("FOD")),
+                        uiOutput("fod_ui")),
                tabPanel(title = "Generate", value = "generate",
-                        generateUI("generate")),
-               tabPanel(title = "View/edit metadata", value = "metadata",
-                        metadataUI("metadata")),
-               tabPanel(title = "Add location/timeseries", value = "new_ts_loc",
-                        new_ts_locUI("new_ts_loc")),
-               tabPanel(title = "Create basins", value = "basins",
-                        basinsUI("basins"))
+                        uiOutput("generate_ui"))
     ), # End navbarPage
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
