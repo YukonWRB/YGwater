@@ -23,10 +23,25 @@ app_server <- function(input, output, session) {
   onBookmarked(updateQueryString)
   
   isRestoring <- reactiveVal(FALSE)
+  isRestoring_img <- reactiveVal(FALSE)
   
   onRestore(function(state) {
     isRestoring(TRUE)
+    isRestoring_img(TRUE)
   })
+  
+  # Initialize reactive flags to track whether each UI has been loaded
+  ui_loaded <- reactiveValues(
+    viz = FALSE,
+    admin = FALSE,
+    plot = FALSE,
+    map = FALSE,
+    FOD = FALSE,
+    img = FALSE,
+    gen = FALSE,
+    metadata = FALSE,
+    new_ts_loc = FALSE,
+    basins = FALSE)
   
   ## database connections ###########
   # Initial database connections without edit privileges
@@ -109,25 +124,6 @@ console.log(language);")
     languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
   })
   
-  # Initialize a flag to track programmatic tab changes
-  programmatic_change <- reactiveVal(FALSE)
-  
-  # Initialize reactive values to store last tabs for each mode
-  last_visualize_tab <- reactiveVal("plot")      # Default tab for visualize mode
-  last_admin_tab <- reactiveVal("metadata")      # Default tab for admin mode
-  initial_tab <- reactiveVal(NULL)
-  
-  # Initially hide all tabs except "visualize"
-  hideTab(inputId = "navbar", target = "plot")
-  hideTab(inputId = "navbar", target = "map")
-  hideTab(inputId = "navbar", target = "FOD")
-  hideTab(inputId = "navbar", target = "generate")
-  hideTab(inputId = "navbar", target = "metadata")
-  hideTab(inputId = "navbar", target = "new_ts_loc")
-  hideTab(inputId = "navbar", target = "basins")
-  hideTab(inputId = "navbar", target = "admin")  # Hide 'admin' tab initially as it should only be seen upon login
-  
-  
   # Log in/out for edits ##########################################
   log_attempts <- reactiveVal(0) # counter for login attempts
   user_logged_in <- reactiveVal(FALSE) # Reactive value to track login status
@@ -192,7 +188,30 @@ console.log(language);")
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
+        # Create the new tabs for the 'admin' mode
+        # In the login success handler, after user_logged_in(TRUE):
+        insertTab("navbar",
+                  tabPanel(title = "Admin mode", value = "admin",
+                           uiOutput("admin_ui")),
+                  target = "gen", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "View/edit metadata", value = "metadata",
+                           uiOutput("metadata_ui")),
+                  target = "gen", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "Add location/timeseries", value = "new_ts_loc",
+                           uiOutput("new_ts_loc_ui")),
+                  target = "metadata", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "Create basins", value = "basins",
+                           uiOutput("basins_ui")),
+                  target = "new_ts_loc", position = "after")
+        
         # Redirect to 'admin' tab
+        if (ui_loaded$admin == FALSE) {
+          output$admin_ui <- renderUI(adminUI("admin"))
+          ui_loaded$admin <- TRUE
+        }
         showTab(inputId = "navbar", target = "admin")
         updateTabsetPanel(session, "navbar", selected = "admin")
         return()
@@ -243,7 +262,7 @@ console.log(language);")
     user_logged_in(FALSE)  # Set login status to FALSE
     # Hide the 'admin' tabs upon logout
     hideTab(inputId = "navbar", target = "admin")
-    showTab(inputId = "navbar", target = "visualize", select = TRUE)
+    showTab(inputId = "navbar", target = "viz", select = TRUE)
     
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
@@ -258,15 +277,27 @@ console.log(language);")
                               RLS_user = config$RLS_user,
                               RLS_pass = config$RLS_pass,
                               silent = TRUE)
-    # Redirect to 'visualize' tab
-    updateTabsetPanel(session, "navbar", selected = "visualize")
-    hideTab(inputId = "navbar", target = "admin")
+    # Redirect to 'viz' tab
+    updateTabsetPanel(session, "navbar", selected = "viz")
+    # Remove admin-related tabs on logout
+    removeTab("navbar", "admin", session = session)
+    removeTab("navbar", "metadata", session = session)
+    removeTab("navbar", "new_ts_loc", session = session)
+    removeTab("navbar", "basins", session = session)
   })
   
   # Load modules based on input$navbar ################################
   # Store information to pass between modules
   primary_outputs <- reactiveValues()
   
+    # Initialize a flag to track programmatic tab changes
+  programmatic_change <- reactiveVal(FALSE)
+  
+  # Initialize reactive values to store last tabs for each mode
+  last_viz_tab <- reactiveVal("plot")      # Default tab for viz mode
+  last_admin_tab <- reactiveVal("metadata")      # Default tab for admin mode
+  initial_tab <- reactiveVal(NULL)
+    
   # Move between tabs/modules
   observeEvent(input$navbar, {
     if (programmatic_change()) {
@@ -280,17 +311,22 @@ console.log(language);")
       }
     }
     
-    if (input$navbar == "visualize") {
+    if (input$navbar == "viz") {
+      if (ui_loaded$viz == FALSE) {
+        output$viz_ui <- renderUI(vizUI("viz"))
+        ui_loaded$viz <- TRUE
+      }
       # Set the flag before changing the tab programmatically
       programmatic_change(TRUE)
       
-      # Show relevant tabs for visualize mode
+      # Show relevant tabs for viz mode
       showTab(inputId = "navbar", target = "plot")
       showTab(inputId = "navbar", target = "map")
       showTab(inputId = "navbar", target = "FOD")
-      showTab(inputId = "navbar", target = "generate")
+      showTab(inputId = "navbar", target = "gen")
+      showTab(inputId = "navbar", target = "img")
       # Hide 'admin' tab unless logged in
-      if (user_logged_in()) {
+      if (user_logged_in()) {  # this UI element is generated upon successful login
         showTab(inputId = "navbar", target = "admin")
       }
       
@@ -298,10 +334,10 @@ console.log(language);")
       hideTab(inputId = "navbar", target = "metadata")
       hideTab(inputId = "navbar", target = "new_ts_loc")
       hideTab(inputId = "navbar", target = "basins")
-      hideTab(inputId = "navbar", target = "visualize")
+      hideTab(inputId = "navbar", target = "viz")
       
-      # Select the last tab the user was on in visualize mode
-      updateTabsetPanel(session, "navbar", selected = last_visualize_tab())
+      # Select the last tab the user was on in viz mode
+      updateTabsetPanel(session, "navbar", selected = last_viz_tab())
       
     } else if (input$navbar == "admin") {
       programmatic_change(TRUE)
@@ -310,7 +346,7 @@ console.log(language);")
       showTab(inputId = "navbar", target = "metadata")
       showTab(inputId = "navbar", target = "new_ts_loc")
       showTab(inputId = "navbar", target = "basins")
-      showTab(inputId = "navbar", target = "visualize")
+      showTab(inputId = "navbar", target = "viz")
       
       
       # Hide irrelevant tabs
@@ -318,16 +354,17 @@ console.log(language);")
       hideTab(inputId = "navbar", target = "map")
       hideTab(inputId = "navbar", target = "FOD")
       hideTab(inputId = "navbar", target = "admin")
-      hideTab(inputId = "navbar", target = "generate")
+      hideTab(inputId = "navbar", target = "gen")
+      hideTab(inputId = "navbar", target = "img")
       
       # Select the last tab the user was on in admin mode
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
       
     } else {
       # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("plot", "map", "FOD", "generate")) {
-        # User is in visualize mode
-        last_visualize_tab(input$navbar)
+      if (input$navbar %in% c("plot", "map", "FOD", "gen", "img")) {
+        # User is in viz mode
+        last_viz_tab(input$navbar)
       } else if (input$navbar %in% c("metadata", "new_ts_loc", "basins")) {
         # User is in admin mode
         last_admin_tab(input$navbar)
@@ -336,9 +373,17 @@ console.log(language);")
     
     # Load modules when the corresponding tabs are selected
     if (input$navbar == "plot") {
+      if (ui_loaded$plot == FALSE) {
+        output$plot_ui <- renderUI(plotUI("plot"))
+        ui_loaded$plot <- TRUE
+      }
       plot("plot", EQWin, AquaCache)
     }
     if (input$navbar == "map") {
+      if (ui_loaded$map == FALSE) {
+        output$map_ui <- renderUI(mapUI("map"))
+        ui_loaded$map <- TRUE
+      }
       primary_outputs$map_main <- map("map", AquaCache, language = languageSelection)
       observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
         if (!is.null(primary_outputs$map_main$change_tab)) {
@@ -348,15 +393,38 @@ console.log(language);")
       })
     }
     if (input$navbar == "FOD") {
+      if (ui_loaded$FOD == FALSE) {
+        output$fod_ui <- renderUI(FODUI("FOD"))
+        ui_loaded$FOD <- TRUE
+      }
       FOD("FOD")
     }
-    if (input$navbar == "generate") {
-      generate("generate", EQWin, AquaCache)
+    if (input$navbar == "img") {
+      if (ui_loaded$img == FALSE) {
+        output$img_ui <- renderUI(imgUI("img"))
+        ui_loaded$img <- TRUE
+      }
+      img("img", con = AquaCache, language = languageSelection, restoring = isRestoring_img)
+    }
+    if (input$navbar == "gen") {
+      if (ui_loaded$gen == FALSE) {
+        output$gen_ui <- renderUI(genUI("gen"))
+        ui_loaded$gen <- TRUE
+      }
+      gen("gen", EQWin, AquaCache)
     }
     if (input$navbar == "basins") {
+      if (ui_loaded$basins == FALSE) {
+        output$basins_ui <- renderUI(basinsUI("basins"))
+        ui_loaded$basins <- TRUE
+      }
       basins("basins", AquaCache)
     }
     if (input$navbar == "metadata") {
+      if (ui_loaded$metadata == FALSE) {
+        output$metadata_ui <- renderUI(metadataUI("metadata"))
+        ui_loaded$metadata <- TRUE
+      }
       metadata("metadata", AquaCache)
     }
   }) # End of observeEvent for loading modules based on navbar

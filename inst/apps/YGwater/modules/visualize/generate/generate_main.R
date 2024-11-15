@@ -1,6 +1,6 @@
 # UI and server code for report generation tab. Modules are called depending on the plot type selected.
 
-generateUI <- function(id) {
+genUI <- function(id) {
   ns <- NS(id)
   fluidPage(
     selectizeInput(ns("report_type"),
@@ -12,7 +12,7 @@ generateUI <- function(id) {
   )
 }
 
-generate <- function(id, EQWin, AquaCache) {
+gen <- function(id, EQWin, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
     
