@@ -28,7 +28,7 @@ map <- function(id, AquaCache, language) {
       locations_projects = dbGetQueryDT(AquaCache, "SELECT * FROM locations_projects;"),
       locations_networks = dbGetQueryDT(AquaCache, "SELECT * FROM locations_networks;"),
       media_types = dbGetQueryDT(AquaCache, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_id = p.media_id);"),
-      parameters = dbGetQueryDT(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"),
+      parameters = dbGetQueryDT(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"),
       parameter_groups = dbGetQueryDT(AquaCache, "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr FROM parameter_groups AS pg LEFT JOIN parameter_relationships AS pr ON pg.group_id = pr.group_id WHERE pr.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries);"),
       parameter_sub_groups = dbGetQueryDT(AquaCache, "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr FROM parameter_sub_groups AS psg LEFT JOIN parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id WHERE pr.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries);"),
       has_image_series = dbGetQueryDT(AquaCache, "SELECT DISTINCT location_id FROM images_index;"),
@@ -79,7 +79,7 @@ map <- function(id, AquaCache, language) {
           mapPrecipServer("precip", AquaCache, data, language)
         } else if (input$map_type == "params" && submodule() != "params") {
           output$submoduleUI <- renderUI({
-            mapParamUI(ns("param"))
+            mapParamUI(ns("params"))
           })
           mapParamServer("params", AquaCache, data, language)
           submodule("params")

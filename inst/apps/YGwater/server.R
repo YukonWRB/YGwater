@@ -193,7 +193,7 @@ console.log(language);")
         insertTab("navbar",
                   tabPanel(title = "Admin mode", value = "admin",
                            uiOutput("admin_ui")),
-                  target = "gen", position = "after")
+                  target = "map", position = "before")
         insertTab("navbar",
                   tabPanel(title = "View/edit metadata", value = "metadata",
                            uiOutput("metadata_ui")),
@@ -207,12 +207,6 @@ console.log(language);")
                            uiOutput("basins_ui")),
                   target = "new_ts_loc", position = "after")
         
-        # Redirect to 'admin' tab
-        if (ui_loaded$admin == FALSE) {
-          output$admin_ui <- renderUI(adminUI("admin"))
-          ui_loaded$admin <- TRUE
-        }
-        showTab(inputId = "navbar", target = "admin")
         updateTabsetPanel(session, "navbar", selected = "admin")
         return()
       } else {
@@ -294,7 +288,7 @@ console.log(language);")
   programmatic_change <- reactiveVal(FALSE)
   
   # Initialize reactive values to store last tabs for each mode
-  last_viz_tab <- reactiveVal("plot")      # Default tab for viz mode
+  last_viz_tab <- reactiveVal("map")      # Default tab for viz mode
   last_admin_tab <- reactiveVal("metadata")      # Default tab for admin mode
   initial_tab <- reactiveVal(NULL)
     
@@ -312,10 +306,6 @@ console.log(language);")
     }
     
     if (input$navbar == "viz") {
-      if (ui_loaded$viz == FALSE) {
-        output$viz_ui <- renderUI(vizUI("viz"))
-        ui_loaded$viz <- TRUE
-      }
       # Set the flag before changing the tab programmatically
       programmatic_change(TRUE)
       
