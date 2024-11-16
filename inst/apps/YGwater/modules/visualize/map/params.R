@@ -3,7 +3,7 @@ mapParamUI <- function(id) {
   tagList(
     tags$head(
       tags$style(
-        # Remove the regular leaflet zoom control as the map filters are in that location, add it in another location when rendering the map
+        # Remove the regular leaflet zoom control to decrease map business
         HTML("
       .leaflet-left .leaflet-control{
         visibility: hidden;
@@ -44,18 +44,6 @@ mapParamServer <- function(id, AquaCache, data, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    # Create a diverging color palette centered at 50%
-    
-    # "#8c510a",  # Dark Brown (Extreme Drought)
-    # "#d8b365",  # Light Brown
-    # "#f6e8c3",  # Beige (Normal)
-    # "#fddbc7",  # Light Peach
-    # "#f4a582",  # Salmon
-    # "#d6604d",  # Brick Red
-    # "#b2182b"   # Dark Red (Extreme Flood)
-    
-    # palette <- c("#313695", "#4575B4", "#74ADD1", "#ABD9E9", "#E0F3F8", "#FFFFBF", "#FEE090", "#FDAE61", "#F46D43", "#D73027", "#A50026")
-    
     palette <- c("#d8b365", "#FEE090", "#74ADD1", "#4575D2", "#313695",  "#A50026")
   
     value_palette <- leaflet::colorBin(
@@ -74,11 +62,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
         leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
         leaflet::addLayersControl(baseGroups = c("Topographic", "Satellite")) %>%
         leaflet::addScaleBar(position = "bottomleft", options = leaflet::scaleBarOptions(imperial = FALSE)) %>%
-        leaflet::setView(lng = -135.05, lat = 65.00, zoom = 5) %>% # Center on Yukon
-        htmlwidgets::onRender(
-          "function(el, x) {
-          L.control.zoom({position:'bottomright'}).addTo(this);
-        }")
+        leaflet::setView(lng = -135.05, lat = 65.00, zoom = 5) # Center on Yukon
     })
     
     # Create the filter inputs ############################################################################
@@ -88,13 +72,33 @@ mapParamServer <- function(id, AquaCache, data, language) {
       
       tagList(
         selectizeInput(
-          ns("param"),
+          ns("params"),
+          label = NULL,
+          choices = stats::setNames(
+            c(1,2),
+            c(translations[id == "map_one_parameter", get(language$language)][[1]], translations[id == "map_two_parameters", get(language$language)][[1]])
+          ),
+          selected = 1,
+          multiple = FALSE
+        ),
+        selectizeInput(
+          ns("param1"),
           label = translations[id == "parameter", get(language$language)][[1]],
           choices = stats::setNames(
             data$parameters$parameter_id,
               titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
           ),
-          selected = 1165,
+          selected = 1050, # Water flow
+          multiple = FALSE
+        ),
+        selectizeInput(
+          ns("param2"),
+          label = translations[id == "parameter", get(language$language)][[1]],
+          choices = stats::setNames(
+            data$parameters$parameter_id,
+            titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+          ),
+          selected = 1165, # Water level (for places where flow does not exist)
           multiple = FALSE
         ),
         dateInput(ns("target"),
@@ -119,10 +123,34 @@ mapParamServer <- function(id, AquaCache, data, language) {
       )
     })
     
+    observeEvent(input$params, {
+      if (input$params == 1) {
+        shinyjs::hide(ns("param2"))
+      } else {
+        shinyjs::show(ns("param2"))
+      }
+    })
+    
     # Update the filter text based on the selected language ############################
     observeEvent(language$language, {
       updateSelectizeInput(session,
-                           "param",
+                           "params",
+                           label = NULL,
+                           choices = stats::setNames(
+                             c(1,2),
+                             c(translations[id == "map_one_parameter", get(language$language)][[1]], translations[id == "map_two_parameters", get(language$language)][[1]])
+                           )
+      )
+      updateSelectizeInput(session,
+                           "param1",
+                           label = translations[id == "parameter", get(language$language)][[1]],
+                           choices = stats::setNames(c("All", data$parameters$parameter_id),
+                                                     c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+                                                     )
+                           )
+      )
+      updateSelectizeInput(session,
+                           "param2",
                            label = translations[id == "parameter", get(language$language)][[1]],
                            choices = stats::setNames(c("All", data$parameters$parameter_id),
                                                      c(translations[id == "all", get(language$language)][[1]], titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
@@ -137,34 +165,75 @@ mapParamServer <- function(id, AquaCache, data, language) {
     
     # Listen for the user's selection of a parameter and update the map markers and popups ########
     observeEvent(input$go, {
-      req(input$param)
+      req(input$param1)
+      
+      if (input$params == 2) {
+        req(input$param2)
+      }
       
       if (is.na(input$yrs) || is.na(input$days)) {
         return()
       }
       
       # Stop if the parameter does not exist; it's possible that the user typed something in themselves
-      if (!input$param %in% data$parameters$parameter_id) {
+      if (!input$param1 %in% data$parameters$parameter_id) {
+        return()
+      }
+      if (input$params == 2 && !input$param2 %in% data$parameters$parameter_id) {
         return()
       }
       
-      tsids <- dbGetQueryDT(AquaCache, sprintf(
+      
+      tsids1 <- dbGetQueryDT(AquaCache, sprintf(
         "SELECT timeseries_id FROM timeseries WHERE parameter_id = %s;",
-        input$param
+        input$param1
       ))$timeseries_id
       
-      range <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ", as.numeric(input$yrs), " AND timeseries_id IN (", paste(tsids, collapse = ","), ") AND date BETWEEN '", input$target - as.numeric(input$days), "' AND '", input$target + as.numeric(input$days), "';"))
+      range1 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ", as.numeric(input$yrs), " AND timeseries_id IN (", paste(tsids1, collapse = ","), ") AND date BETWEEN '", input$target - as.numeric(input$days), "' AND '", input$target + as.numeric(input$days), "';"))
       
       # Calculate the absolute difference in days between each date and the target date
-      range[, date_diff := abs(date - as.Date(input$target))]
+      range1[, date_diff := abs(date - as.Date(input$target))]
       
       # Order the data by 'timeseries_id' and 'date_diff'
-      data.table::setorder(range, timeseries_id, date_diff)
+      data.table::setorder(range1, timeseries_id, date_diff)
       
       # For each 'timeseries_id', select the row with the smallest 'date_diff'
-      closest_measurements <- range[, .SD[1], by = timeseries_id]
+      closest_measurements1 <- range1[, .SD[1], by = timeseries_id]
       
-      locs_tsids <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
+      locs_tsids1 <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements1$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
+      
+      locs_tsids1$param_name <- data$parameters[data$parameters$parameter_id == input$param1,  get(translations[id == "param_name_col", get(language$language)])]
+      locs_tsids1$param_unit <- data$parameters[data$parameters$parameter_id == input$param1,  "unit_default"]
+      
+      
+      # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
+      if (input$params == 2) {
+        tsids2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id FROM timeseries WHERE parameter_id = ", input$param2, " AND timeseries_id NOT IN (", paste(locs_tsids1$timeseries_id, sep = ", "), ";"))$timeseries_id
+        
+        range2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ", as.numeric(input$yrs), " AND timeseries_id IN (", paste(tsids2, collapse = ","), ") AND date BETWEEN '", input$target - as.numeric(input$days), "' AND '", input$target + as.numeric(input$days), "';"))
+        
+        # Calculate the absolute difference in days between each date and the target date
+        range2[, date_diff := abs(date - as.Date(input$target))]
+        
+        # Order the data by 'timeseries_id' and 'date_diff'
+        data.table::setorder(range2, timeseries_id, date_diff)
+        
+        # For each 'timeseries_id', select the row with the smallest 'date_diff'
+        closest_measurements2 <- range2[, .SD[1], by = timeseries_id]
+        
+        locs_tsids2 <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements2$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
+        
+        locs_tsids2$param_name <- data$parameters[data$parameters$parameter_id == input$param2,  get(translations[id == "param_name_col", get(language$language)])]
+        locs_tsid2$param_unit <- data$parameters[data$parameters$parameter_id == input$param1,  "unit_default"]
+        
+        
+        # Merge the two sets of locations and timeseries IDs
+        locs_tsids <- rbind(locs_tsids1, locs_tsids2)
+        closest_measurements <- rbind(closest_measurements1, closest_measurements2)
+      } else {
+        locs_tsids <- locs_tsids1
+        closest_measurements <- closest_measurements1
+      }
       
       mapping_data <- merge(
         closest_measurements,
@@ -172,12 +241,9 @@ mapParamServer <- function(id, AquaCache, data, language) {
         by = "timeseries_id",
         all.x = TRUE
       )
-      # Cap values at -20% and 120% (above or below use symbology of -20 or 120)
+      # Cap values at 0 and 100% (above or below use symbology of 0 or 100)
       mapping_data[, percent_historic_range_capped := pmax(pmin(percent_historic_range, 100), 0)]
-
-      param_name <- data$parameters[data$parameters$parameter_id == input$param,  get(translations[id == "param_name_col", get(language$language)])]
-      param_unit <- data$parameters[data$parameters$parameter_id == input$param,  "unit_default"]
-      # Need help here. The markers should have a color that varies in intensity based on the percent_historic_range value. USe value_palette to set the color. NA values should be grey.
+      
       leaflet::leafletProxy("map", session) %>%
         leaflet::clearMarkers() %>%
         leaflet::addCircleMarkers(
@@ -209,8 +275,6 @@ mapParamServer <- function(id, AquaCache, data, language) {
           labFormat = leaflet::labelFormat(suffix = "%"),
           opacity = 1
         )
-      
-      
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
   })
 }
