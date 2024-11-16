@@ -71,7 +71,19 @@ mapParamServer <- function(id, AquaCache, data, language) {
       req(data, language$language, language$abbrev)
       
       tagList(
+        
+        #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
         selectizeInput(
+          ns("mapType"),
+          label = NULL,
+          choices = stats::setNames(
+            c("range", "abs"),
+            c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolue", get(language$language)][[1]])
+          ),
+          selected = "range",
+          multiple = FALSE
+        ),
+        selectizeInput(  # Allows user to select a secondary map parameter, to be used for locations where a parameter is missing. Allows having streams and lake levels on the same map, for example.
           ns("params"),
           label = NULL,
           choices = stats::setNames(
@@ -101,6 +113,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
           selected = 1165, # Water level (for places where flow does not exist)
           multiple = FALSE
         ),
+        checkboxInput(ns("latest"), translations[id == "map_latest_measurement", get(language$language)][[1]], value = TRUE),
         dateInput(ns("target"),
                   label = translations[id == "map_target_date", get(language$language)][[1]],
                   value = Sys.Date(),
@@ -123,16 +136,46 @@ mapParamServer <- function(id, AquaCache, data, language) {
       )
     })
     
+    observeEvent(input$mapType, {
+      if (input$mapType == "abs") {
+        shinyjs::hide("param2")
+        shinyjs::hide("yrs")
+        updateSelectizeInput(session,
+                             "params",
+                             selected = 1
+        )
+      } else {
+        shinyjs::show("param2")
+        shinyjs::show("yrs")
+      }
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$latest, {
+      if (input$latest) {
+        shinyjs::hide("target")
+      } else {
+        shinyjs::show("target")
+      }
+    }, ignoreInit = TRUE)
+  
     observeEvent(input$params, {
       if (input$params == 1) {
-        shinyjs::hide(ns("param2"))
+        shinyjs::hide("param2")
       } else {
-        shinyjs::show(ns("param2"))
+        shinyjs::show("param2")
       }
-    })
+    }, ignoreInit = TRUE)
     
     # Update the filter text based on the selected language ############################
     observeEvent(language$language, {
+      updateSelectizeInput(session,
+                           "mapType",
+                           label = NULL,
+                           choices = stats::setNames(
+                             c("range", "abs"),
+                             c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolue", get(language$language)][[1]])
+                           )
+      )
       updateSelectizeInput(session,
                            "params",
                            label = NULL,
@@ -157,6 +200,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
                                                      )
                            )
       )
+      updateCheckboxInput(session, "latest", label = translations[id == "map_latest_measurement", get(language$language)][[1]])
       updateDateInput(session, "target", label = translations[id == "map_target_date", get(language$language)][[1]])
       updateNumericInput(session, "days", label = translations[id == "map_date_within_select", get(language$language)][[1]])
       updateNumericInput(session, "yrs", label = translations[id == "map_min_yrs", get(language$language)][[1]])
