@@ -132,39 +132,10 @@ mapParamServer <- function(id, AquaCache, data, language) {
                      min = 0, 
                      max = 365, 
                      step = 1),
+        actionButton(ns("bins"), "Modify legend bins"),
         actionButton(ns("go"), translations[id == "render_map", get(language$language)][[1]])
       )
     })
-    
-    observeEvent(input$mapType, {
-      if (input$mapType == "abs") {
-        shinyjs::hide("param2")
-        shinyjs::hide("yrs")
-        updateSelectizeInput(session,
-                             "params",
-                             selected = 1
-        )
-      } else {
-        shinyjs::show("param2")
-        shinyjs::show("yrs")
-      }
-    }, ignoreInit = TRUE)
-    
-    observeEvent(input$latest, {
-      if (input$latest) {
-        shinyjs::hide("target")
-      } else {
-        shinyjs::show("target")
-      }
-    }, ignoreInit = TRUE)
-  
-    observeEvent(input$params, {
-      if (input$params == 1) {
-        shinyjs::hide("param2")
-      } else {
-        shinyjs::show("param2")
-      }
-    }, ignoreInit = TRUE)
     
     # Update the filter text based on the selected language ############################
     observeEvent(language$language, {
@@ -206,6 +177,46 @@ mapParamServer <- function(id, AquaCache, data, language) {
       updateNumericInput(session, "yrs", label = translations[id == "map_min_yrs", get(language$language)][[1]])
       updateActionButton(session, "go", label = translations[id == "render_map", get(language$language)][[1]])
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    
+    observeEvent(input$mapType, {
+      if (input$mapType == "abs") {
+        shinyjs::hide("param2")
+        shinyjs::hide("yrs")
+        shinyjs::show("bins")
+        updateSelectizeInput(session,
+                             "params",
+                             selected = 1
+        )
+      } else {
+        shinyjs::show("param2")
+        shinyjs::show("yrs")
+        shinyjs::hide("bins")
+      }
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$latest, {
+      if (input$latest) {
+        shinyjs::hide("target")
+      } else {
+        shinyjs::show("target")
+      }
+    }, ignoreInit = TRUE)
+  
+    observeEvent(input$params, {
+      if (input$params == 1) {
+        shinyjs::hide("param2")
+      } else {
+        shinyjs::show("param2")
+      }
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$bins, {
+      showModal(
+        modalDialog(
+          title = 
+        )
+      )
+    }, ignoreInit = TRUE)
     
     # Listen for the user's selection of a parameter and update the map markers and popups ########
     observeEvent(input$go, {
