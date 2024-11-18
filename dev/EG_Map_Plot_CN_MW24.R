@@ -25,7 +25,7 @@ for(i in names(master)) {
     param <- sub(" .*", "", j)
     plotdf <- df %>%
       dplyr::filter(stringr::str_detect(name, param)) %>%
-      dplyr::mutate(CollectDateTime = as.Date(CollectDateTime, format = "%Y-%m-%d"))
+      dplyr::mutate(.data$CollectDateTime = as.Date(.data$CollectDateTime, format = "%Y-%m-%d"))
     p <- ggplot2::ggplot() +
       ggplot2::geom_line(data = plotdf, mapping = ggplot2::aes(x = CollectDateTime, y = value), colour = "orange", linewidth = 0.5) +
       ggplot2::geom_point(data = plotdf, mapping = ggplot2::aes(x = CollectDateTime, y = value), colour = "orange", size = 1) +
