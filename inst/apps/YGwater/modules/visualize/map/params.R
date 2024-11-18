@@ -78,7 +78,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
           label = NULL,
           choices = stats::setNames(
             c("range", "abs"),
-            c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolue", get(language$language)][[1]])
+            c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolute", get(language$language)][[1]])
           ),
           selected = "range",
           multiple = FALSE
