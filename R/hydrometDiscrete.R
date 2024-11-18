@@ -5,7 +5,7 @@
 #'
 #' Generate plots of snow survey data (snow water equivalent and snow depth) or other variables sampled at regular intervals (weekly or monthly).
 #'
-#' Notice: in many cases, you're better off using the Shiny app at [hydroApp()] to generate and export your plot. Read on if you need additional control over the final product.
+#' Notice: in many cases, you're better off using the Shiny app at [YGwater()] to generate and export your plot. Read on if you need additional control over the final product.
 #'
 #' This function plots data from the local hydrometric database (maintained by the AquaCache package) and yields consistent-looking plots for discrete data. This function can only plot what's in the database. Data can be represented as violin plots, as regular box plots or as a 'linedbox' plot (imitates plots currently used in the snow bulletin).
 #'

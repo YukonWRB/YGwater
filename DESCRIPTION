@@ -1,7 +1,7 @@
 Package: YGwater
 Title: Utility functions for the Yukon Water Science and Stewardship
     Branch
-Version: 1.4.9
+Version: 1.4.13
 Authors@R: c(
     person("Ghislain", "de Laplante", , "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -58,10 +58,10 @@ Imports:
     xml2,
     zoo
 Suggests:
+    AquaCache,
     DT,
     flextable,
     fuzzyjoin,
-    AquaCache,
     imager,
     knitr,
     glue,
@@ -94,4 +94,4 @@ Remotes:
 Config/testthat/edition: 3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2

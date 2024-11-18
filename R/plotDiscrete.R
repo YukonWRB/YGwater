@@ -54,13 +54,13 @@ plotDiscrete <- function(start,
   #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
 
   # testing parameters for EQWIN direct
-  # start <- "2024-07-09"
-  # end <- "2024-08-28"
-  # locations <- NULL
-  # parameters <- NULL
-  # locGrp <- "A EG Selec"
-  # paramGrp <- "EG-HLF-failure"
-  # standard = c("CCME_ST")
+  # start <- "2024-06-24"
+  # end <- "2024-11-07"
+  # locations <- c("(EG)W29", "(EG)W99", "(EG)MW24-10")
+  # parameters <- c("Co-D", "CN-WAD", "CN-SAD", "CN-Fre", "Hg-D", "N-NO3", "N-NO2", "Ag-D", "N-NH4")
+  # locGrp <- NULL
+  # paramGrp <- NULL
+  # standard = NULL
   # loc_code = TRUE
   # log = FALSE
   # facet_on = 'params'
@@ -71,6 +71,8 @@ plotDiscrete <- function(start,
   # axis_scale = 1
   # legend_scale = 1
   # guideline_scale = 1
+  # gridx = FALSE
+  # gridy = FALSE
   # dbSource = "EQ"
   # lang = "en"
   # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
@@ -597,7 +599,7 @@ plotDiscrete <- function(start,
           if (color_by %in% c("location", "location_name")) {
             unit_text <- unique(df$units)
             to_bind <- data.frame(value = -Inf, datetime = min(df$datetime), param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA)
-            dplyr::bind_rows(df, to_bind)  # used instead of rbind because it automatically adds columns with NA values
+            df <- dplyr::bind_rows(df, to_bind)  # used instead of rbind because it automatically adds columns with NA values
           } else {
             unit_text <- unique(data[data$param_name == m, "units"])
             loc_text <- unique(data[data$location_name == facet_value, "location"])

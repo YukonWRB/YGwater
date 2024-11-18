@@ -29,6 +29,7 @@ ui <- function(request) {
                             actionButton("loginBtn", "Login", class = "btn btn-primary")
                     ),
                     class = "right-aligned-aurora")
+             )
     ),
     navbarPage("",
                id = "navbar",

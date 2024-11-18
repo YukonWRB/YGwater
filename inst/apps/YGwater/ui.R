@@ -11,7 +11,7 @@ app_ui <- function(request) {
     shinyjs::useShinyjs(),
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # Include the JavaScript file for full screen button
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css") # Fonts
       # css for z index control is at the bottom because it must come after the css passed on silently by navbarPage
     ),
     # Add custom CSS to adjust tab font sizes
@@ -30,6 +30,10 @@ app_ui <- function(request) {
                     div(class = "aurora-container",
                         htmltools::img(src = "imgs/YG_Aurora_resized_flipped.png", .noWS = "outside", alt = "Aurora")),
                     div(class = "lang-login-container",
+                        div(class = "language-select-container",
+                            selectizeInput(inputId = "langSelect", label = NULL, 
+                                           choices = names(translations)[-c(1,2)], 
+                                           selected = "English")),
                         div(class = "login-btn-container",
                             actionButton("loginBtn", "Login", class = "btn btn-primary"),
                             actionButton("logoutBtn", "Logout", class = "btn btn-primary", style = "display: none;")) # Initially hidden
@@ -43,25 +47,18 @@ app_ui <- function(request) {
                collapsible = TRUE,
                fluid = TRUE,
                lang = "en",
-               tabPanel(title = "Viewer Mode", value = "visualize",
-                        visualizeUI("visualize")),
-               tabPanel(title = "Admin Mode", value = "admin",
-                        adminUI("data")),
-               
+               tabPanel(title = "Viewer Mode", value = "viz",
+                        uiOutput("visualize_ui")),
                tabPanel(title = "Plot", value = "plot", 
-                        plotUI("plot")),
+                        uiOutput("plot_ui")),
                tabPanel(title = "Map", value = "map",
-                        mapUI("map")),
+                        uiOutput("map_ui")),
                tabPanel(title = "FOD Comments", value = "FOD",
-                        FODUI("FOD")),
-               tabPanel(title = "Generate", value = "generate",
-                        generateUI("generate")),
-               tabPanel(title = "View/Edit metadata", value = "metadata",
-                        metadataUI("metadata")),
-               tabPanel(title = "Add location/timeseries", value = "new_ts_loc",
-                        new_ts_locUI("new_ts_loc")),
-               tabPanel(title = "Create basins", value = "basins",
-                        basinsUI("basins"))
+                        uiOutput("fod_ui")),
+               tabPanel(title = "Generate", value = "gen",
+                        uiOutput("gen_ui")),
+               tabPanel(title = "View images", value = "img",
+                        uiOutput("img_ui")),
     ), # End navbarPage
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
