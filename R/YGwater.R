@@ -19,15 +19,13 @@
 #' @return Opens a Shiny application.
 #' @export
 
-YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbName = "AquaCache", dbHost = Sys.getenv("AquaCacheHost"), dbPort = Sys.getenv("AquaCachePort"), dbUser = Sys.getenv("AquaCacheUser"), dbPass = Sys.getenv("AquaCachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), accessPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"){
+YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbName = "AquaCache", dbHost = Sys.getenv("AquaCacheHost"), dbPort = Sys.getenv("AquaCachePort"), dbUser = Sys.getenv("AquaCacheUser"), dbPass = Sys.getenv("AquaCachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), accessPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResourcesEG.mdb"){
   
   rlang::check_installed("shiny", reason = "required to use YGwater app")
   rlang::check_installed("shinyjs", reason = "required to use YGwater app")
+  rlang::check_installed("shinythemes", reason = "required to use YGwater app")
   rlang::check_installed("DT", reason = "required to use YGwater app")
-  rlang::check_installed("shinyWidgets", reason = "required to use YGwater app")
-  rlang::check_installed("jsonlite", reason = "required to store application state between sessions")
-  rlang::check_installed("uuid", reason = "required to store application state between sessions")
-  
+
   appDir <- system.file("apps/YGwater", package = "YGwater")
   
   if (appDir == "") {

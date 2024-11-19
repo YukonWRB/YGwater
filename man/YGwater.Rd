@@ -15,7 +15,7 @@ YGwater(
   RLS_user = Sys.getenv("RLS_user"),
   RLS_pass = Sys.getenv("RLS_pass"),
   accessPath =
-    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
+    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResourcesEG.mdb"
 )
 }
 \arguments{

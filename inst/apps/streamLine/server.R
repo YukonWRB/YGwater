@@ -154,7 +154,7 @@ console.log(language);")
       textInput("username", translations[id == "un", get(languageSelection$language)][[1]]),
       passwordInput("password", translations[id == "pwd", get(languageSelection$language)][[1]]),
       footer = tagList(
-        modalButton(translations[id == "login_close", get(languageSelection$language)][[1]]),
+        modalButton(translations[id == "close", get(languageSelection$language)][[1]]),
         actionButton("confirmLogin", translations[id == "login_confirm", get(languageSelection$language)][[1]], class = "btn-primary")
       )
     ))
@@ -168,7 +168,7 @@ console.log(language);")
         title = translations[id == "login_fail", get(languageSelection$language)][[1]],
         translations[id == "login_fail_attempts", get(languageSelection$language)][[1]],
         easyClose = TRUE,
-        footer = modalButton(translations[id == "login_close", get(languageSelection$language)][[1]])
+        footer = modalButton(translations[id == "close", get(languageSelection$language)][[1]])
       ))
       return()
     } else {
@@ -184,7 +184,7 @@ console.log(language);")
           title = translations[id == "login_success", get(languageSelection$language)][[1]],
           paste0(translations[id == "login_success_msg", get(languageSelection$language)][[1]], " '", input$username, "'."),
           easyClose = TRUE,
-          footer = modalButton(translations[id == "login_close", get(languageSelection$language)][[1]])
+          footer = modalButton(translations[id == "close", get(languageSelection$language)][[1]])
         ))
         
         # Re-fetch data from the database after successful login
@@ -210,7 +210,7 @@ console.log(language);")
           title = translations[id == "login_fail", get(languageSelection$language)][[1]],
           translations[id == "login_fail_msg", get(languageSelection$language)][[1]],
           easyClose = TRUE,
-          footer = modalButton(translations[id == "login_close", get(languageSelection$language)][[1]])
+          footer = modalButton(translations[id == "close", get(languageSelection$language)][[1]])
         ))
       } 
     }

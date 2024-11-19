@@ -11,7 +11,7 @@
 #' @param standard A standard or guideline name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if `dbSource` is 'EQ'.
 #' @param log Should the y-axis be log-transformed?
 #' @param facet_on Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.
-#' @param loc_code Should the location code be used instead of the full location name?
+#' @param loc_code Should the location code be used instead of the full location name? Options are 'code', 'name', 'codeName', 'nameCode'. Default is 'name'.
 #' @param rows The number of rows to use in the facet grid. Default is 'auto' to automatically determine the number of rows based on the number of facets.
 #' @param target_datetime Should the plot datetime use the 'target' datetime instead of the 'actual' datetime? Default is TRUE. This is only applicable is dbSource == 'AC'.
 #' @param colorblind Should the plot be colorblind-friendly? Default is FALSE.
@@ -37,7 +37,7 @@ plotDiscrete <- function(start,
                          standard = NULL, 
                          log = FALSE, 
                          facet_on = 'params', 
-                         loc_code = FALSE, 
+                         loc_code = 'name', 
                          rows = 'auto', 
                          target_datetime = TRUE, 
                          colorblind = FALSE, 
@@ -61,7 +61,7 @@ plotDiscrete <- function(start,
   # locGrp <- NULL
   # paramGrp <- NULL
   # standard = NULL
-  # loc_code = TRUE
+  # loc_code = 'name'
   # log = FALSE
   # facet_on = 'params'
   # rows = 'auto'
@@ -84,7 +84,7 @@ plotDiscrete <- function(start,
   # locGrp <- NULL
   # paramGrp <- NULL
   # standard = "CSR_s3_fAL"
-  # loc_code = TRUE
+  # loc_code = 'name'
   # log = FALSE
   # facet_on = 'locs'
   # rows = 'auto'
@@ -106,6 +106,7 @@ plotDiscrete <- function(start,
   # locGrp <- NULL
   # paramGrp <- NULL
   # log = FALSE
+  # loc_code= 'name'
   # facet_on = 'locs'
   # rows = 'auto'
   # colorblind = FALSE
@@ -122,6 +123,9 @@ plotDiscrete <- function(start,
   # initial checks, connection, and validations #######################################################################################
   
   if (!dbSource %in% c("AC", "EQ")) stop("dbSource must be either 'AC' or 'EQ'")
+  
+  # Check on loc_code
+  if (!loc_code %in% c("code", "name", "codeName", "nameCode")) stop("loc_code must be either 'code', 'name', 'codeName', or 'nameCode'")
   
   if (dbSource == 'AC') {
     if (is.null(locations)) stop("You must specify locations when 'dbSource' is 'AC'")
@@ -572,7 +576,7 @@ plotDiscrete <- function(start,
     # Split data based on the facet_by column
     df_list <- split(data, data[[facet_by]])
 
-    color_by <- if (facet_by == "param_name") if (loc_code) "location" else "location_name" else "param_name"
+    color_by <- if (facet_by == "param_name") if (loc_code %in% c('code', 'codeName')) "location" else "location_name" else "param_name"
 
 
     # Define custom color scale
@@ -613,11 +617,7 @@ plotDiscrete <- function(start,
       y_axis_label <- if (facet_by == "param_name") {
         paste(facet_value, " (", unique(df$units), ")", sep = "")
       } else {
-        if (loc_code) {
-          paste(unique(df$location))
-        } else {
-          paste(unique(df$location_name))
-        }
+        paste(unique(df$location_name))
       }
       
       # Determine what can be added to the hover labels
@@ -810,8 +810,18 @@ plotDiscrete <- function(start,
   } # End of plot creation function
   
   facet_by <- if (facet_on == "params") "param_name" else "location_name" # key to the correct column name
-  data$param_name <- data$param_name
-  data$location_name <- titleCase(data$location_name, lang)
+
+  if (loc_code == 'code') {
+    data$location_name <- data$location
+  } else if (loc_code == 'name') {
+    data$location_name <- titleCase(data$location_name, lang)
+  } else if (loc_code == 'codeName') {
+    data$location_name <- paste(data$location, " (", titleCase(data$location_name, lang), ")", sep = "")
+  } else if (loc_code == 'nameCode') {
+    data$location_name <- paste(titleCase(data$location_name, lang), " (", data$location, ")", sep = "")
+  }
+
+  data <- data[order(data$location_name),]
     
   plot <- create_facet_plot(data, facet_by, targ_dt = target_datetime, loc_code = loc_code)
   plot
