@@ -14,7 +14,7 @@ plotDiscrete(
   standard = NULL,
   log = FALSE,
   facet_on = "params",
-  loc_code = FALSE,
+  loc_code = "name",
   rows = "auto",
   target_datetime = TRUE,
   colorblind = FALSE,
@@ -49,7 +49,7 @@ plotDiscrete(
 
 \item{facet_on}{Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.}
 
-\item{loc_code}{Should the location code be used instead of the full location name?}
+\item{loc_code}{Should the location code be used instead of the full location name? Options are 'code', 'name', 'codeName', 'nameCode'. Default is 'name'.}
 
 \item{rows}{The number of rows to use in the facet grid. Default is 'auto' to automatically determine the number of rows based on the number of facets.}
 

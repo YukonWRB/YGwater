@@ -32,7 +32,7 @@ mapParamUI <- function(id) {
     ),
     leaflet::leafletOutput(ns("map"), height = '80vh'),
     absolutePanel(id = ns("controls"), class = "panel panel-default", fixed = TRUE,
-                  draggable = TRUE, top = 240, left = "auto", width = "200px",
+                  draggable = TRUE, top = 210, left = "auto", width = "240px",
                   # Panel content
                   uiOutput(ns("controls_ui")),
                   style = "opacity: 1; z-index: 400;"  # Adjust styling
@@ -43,40 +43,18 @@ mapParamUI <- function(id) {
 mapParamServer <- function(id, AquaCache, data, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    
-    palette <- c("#d8b365", "#FEE090", "#74ADD1", "#4575D2", "#313695",  "#A50026")
-  
-    value_palette <- leaflet::colorBin(
-      palette = palette,
-      domain = c(0, 100),
-      bins = c(0, 20, 40, 60, 80, 100),
-      na.color = "#808080"
-    )
-    
-    
-    # Create the basic map ###########################################################
-    output$map <- leaflet::renderLeaflet({
-      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 18)) %>%
-        leaflet::addTiles() %>%
-        leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographic") %>%
-        leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
-        leaflet::addLayersControl(baseGroups = c("Topographic", "Satellite")) %>%
-        leaflet::addScaleBar(position = "bottomleft", options = leaflet::scaleBarOptions(imperial = FALSE)) %>%
-        leaflet::setView(lng = -135.05, lat = 65.00, zoom = 5) # Center on Yukon
-    })
-    
+
     # Create the filter inputs ############################################################################
-    
     map_params <- reactiveValues(
-      param1 = 1165,  # Water flow
-      param2 = 1150,  # Water flow
+      param1 = 1150,  # Water flow
+      param2 = 1165,  # Water level
       yrs1 = 10,
       yrs2 = 10,
       days1 = 1,
       days2 = 1,
       latest = TRUE,
       target = Sys.Date(),
-      params = 1,
+      params = 2,
       bins = c(0, 20, 40, 60, 80, 100),
       colors = c("#d8b365", "#FEE090", "#74ADD1", "#4575D2", "#313695",  "#A50026")
     )
@@ -104,11 +82,10 @@ mapParamServer <- function(id, AquaCache, data, language) {
                   language = language$abbrev),
         checkboxInput(ns("latest"), translations[id == "map_latest_measurements", get(language$language)][[1]], value = TRUE),
         htmlOutput(ns("primary_param")),  # This will be text showing details of the selected parameter, the min yrs, within how many days, etc.
-        actionButton(ns("edit_primary_param"), translations[id == "map_edit_primary_param", get(language$language)][[1]]),
+        actionButton(ns("edit_primary_param"), translations[id == "map_edit_primary_param", get(language$language)][[1]], style = "display: block; width: 100%"),
         htmlOutput(ns("secondary_param")),
-        actionButton(ns("edit_secondary_param"), translations[id == "map_add_second_param", get(language$language)][[1]]),
-        actionButton(ns("edit_aes"), translations[id == "map_edit_aes", get(language$language)][[1]]),
-        actionButton(ns("go"), translations[id == "render_map", get(language$language)][[1]])
+        actionButton(ns("edit_secondary_param"), translations[id == "map_edit_second_param", get(language$language)][[1]], style = "display: block; width: 100%"),
+        actionButton(ns("go"), translations[id == "render_map", get(language$language)][[1]], style = "display: block; width: 100%; margin-top: 10px;")
       )
     })
     
@@ -268,8 +245,9 @@ mapParamServer <- function(id, AquaCache, data, language) {
       }
     }, ignoreInit = TRUE)
     
-    # Listen for input$go and update the map ########################################################
-    observeEvent(input$go, {
+    # Listen for input changes and update the map ########################################################
+    updateMap <- function() {
+      req(data, AquaCache, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$latest, map_params$target, map_params$params)
       
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
@@ -295,14 +273,61 @@ mapParamServer <- function(id, AquaCache, data, language) {
       
       if (map_params$latest) {
         # Pull the most recent measurement in table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days1 days
-
-        # For timeseries where there was a measurement above, get historical range data and add
+        closest_measurements1 <- dbGetQueryDT(AquaCache, 
+                                              paste0("WITH ranked_data AS (
+                    SELECT 
+                        timeseries_id, 
+                        datetime, 
+                        value_corrected AS value,
+                        ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY datetime DESC) AS row_num
+                    FROM 
+                        measurements_continuous_corrected
+                    WHERE 
+                        timeseries_id IN (", paste(tsids1, collapse = ","), ") 
+                        AND datetime > '", as.POSIXct(Sys.time(), tz = "UTC") - as.numeric(map_params$days1) - 60*60*24, "'
+                )
+                SELECT 
+                    timeseries_id, datetime, value
+                FROM 
+                    ranked_data
+                WHERE 
+                    row_num = 1;")
+        )
         
-      } else {
+        # For timeseries where there was a measurement above, get historical range data and add
+        range1 <- dbGetQueryDT(AquaCache, 
+                               paste0("WITH ranked_data AS (
+                                          SELECT
+                                              timeseries_id, 
+                                              max, 
+                                              min, 
+                                              doy_count,
+                                              ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
+                                          FROM 
+                                              measurements_calculated_daily 
+                                          WHERE 
+                                              doy_count >= ", as.numeric(map_params$yrs1), " 
+                                          AND timeseries_id IN (", paste(closest_measurements1$timeseries_id, collapse = ","), ") 
+                                          AND date > '", Sys.Date() - 1, "'
+                                      )
+                                      SELECT 
+                                          timeseries_id, max, min, doy_count 
+                                      FROM 
+                                          ranked_data
+                                      WHERE 
+                                          row_num = 1;")
+        )
+        
+        # Merge the two sets on timeseries_id so as to get historic range data for each timeseries (this will drop records where there were not enough years of record)
+        closest_measurements1 <- merge(closest_measurements1, range1, by = "timeseries_id", all.y = TRUE)
+        # Calculate the percent of the historic range using the value, max and min
+        closest_measurements1[, percent_historic_range := 100 * (value - min) / (max - min)]
+        
+      } else { # not requesting latest measurements
         range1 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ", as.numeric(map_params$yrs1), " AND timeseries_id IN (", paste(tsids1, collapse = ","), ") AND date BETWEEN '", map_params$target - as.numeric(map_params$days1), "' AND '", map_params$target + as.numeric(map_params$days1), "';"))
         
         # Calculate the absolute difference in days between each date and the target date
-        range1[, date_diff := abs(date - as.Date(map_params$target))]
+        range1[, date_diff := abs(date - map_params$target)]
         
         # Order the data by 'timeseries_id' and 'date_diff'
         data.table::setorder(range1, timeseries_id, date_diff)
@@ -310,7 +335,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
         # For each 'timeseries_id', select the row with the smallest 'date_diff'
         closest_measurements1 <- range1[, .SD[1], by = timeseries_id]
       }
-
+      
       
       locs_tsids1 <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements1$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
       
@@ -320,23 +345,77 @@ mapParamServer <- function(id, AquaCache, data, language) {
       
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
       if (map_params$params == 2) {
-        tsids2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id FROM timeseries WHERE parameter_id = ", map_params$param2, " AND timeseries_id NOT IN (", paste(locs_tsids1$timeseries_id, sep = ", "), ";"))$timeseries_id
+        tsids2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id FROM timeseries WHERE parameter_id = ", map_params$param2, " AND location_id NOT IN (", paste(locs_tsids1$location_id, collapse = ", "), ");"))$timeseries_id
         
-        range2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ", as.numeric(map_params$yrs2), " AND timeseries_id IN (", paste(tsids2, collapse = ","), ") AND date BETWEEN '", map_params$target - as.numeric(map_params$days2), "' AND '", map_params$target + as.numeric(map_params$days2), "';"))
-        
-        # Calculate the absolute difference in days between each date and the target date
-        range2[, date_diff := abs(date - as.Date(map_params$target))]
-        
-        # Order the data by 'timeseries_id' and 'date_diff'
-        data.table::setorder(range2, timeseries_id, date_diff)
-        
-        # For each 'timeseries_id', select the row with the smallest 'date_diff'
-        closest_measurements2 <- range2[, .SD[1], by = timeseries_id]
+        if (map_params$latest) {
+          # Pull the most recent measurement in table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days2 days
+          closest_measurements2 <- dbGetQueryDT(AquaCache, 
+                                                paste0("WITH ranked_data AS (
+                      SELECT 
+                          timeseries_id, 
+                          datetime, 
+                          value_corrected AS value,
+                          ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY datetime DESC) AS row_num
+                      FROM 
+                          measurements_continuous_corrected
+                      WHERE 
+                          timeseries_id IN (", paste(tsids2, collapse = ","), ") 
+                          AND datetime > '", as.POSIXct(Sys.time(), tz = "UTC") - as.numeric(map_params$days2) - 60*60*24, "'
+                  )
+                  SELECT 
+                      timeseries_id, datetime, value
+                  FROM 
+                      ranked_data
+                  WHERE 
+                      row_num = 1;")
+          )
+          
+          # For timeseries where there was a measurement above, get historical range data and add
+          range2 <- dbGetQueryDT(AquaCache, 
+                                 paste0("WITH ranked_data AS (
+                                            SELECT
+                                                timeseries_id, 
+                                                max, 
+                                                min, 
+                                                doy_count,
+                                                ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
+                                            FROM 
+                                                measurements_calculated_daily 
+                                            WHERE 
+                                                doy_count >= ", as.numeric(map_params$yrs2), " 
+                                            AND timeseries_id IN (", paste(closest_measurements2$timeseries_id, collapse = ","), ") \
+                                            AND date > '", Sys.Date() - 1, "'
+                                        )
+                                        SELECT 
+                                            timeseries_id, max, min, doy_count 
+                                        FROM 
+                                            ranked_data
+                                        WHERE 
+                                            row_num = 1;")
+          )
+          
+          # Merge the two sets on timeseries_id so as to get historic range data for each timeseries (this will drop records where there were not enough years of record)
+          closest_measurements2 <- merge(closest_measurements2, range2, by = "timeseries_id", all.y = TRUE)
+          # Calculate the percent of the historic range using the value, max and min
+          closest_measurements2[, percent_historic_range := 100 * (value - min) / (max - min)]
+          
+        } else {
+          range2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ", as.numeric(map_params$yrs2), " AND timeseries_id IN (", paste(tsids2, collapse = ","), ") AND date BETWEEN '", map_params$target - as.numeric(map_params$days2), "' AND '", map_params$target + as.numeric(map_params$days2), "';"))
+          
+          # Calculate the absolute difference in days between each date and the target date
+          range2[, date_diff := abs(date - map_params$target)]
+          
+          # Order the data by 'timeseries_id' and 'date_diff'
+          data.table::setorder(range2, timeseries_id, date_diff)
+          
+          # For each 'timeseries_id', select the row with the smallest 'date_diff'
+          closest_measurements2 <- range2[, .SD[1], by = timeseries_id]
+        }
         
         locs_tsids2 <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements2$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
         
         locs_tsids2$param_name <- data$parameters[data$parameters$parameter_id == map_params$param2,  get(translations[id == "param_name_col", get(language$language)])]
-        locs_tsid2$param_unit <- data$parameters[data$parameters$parameter_id == map_params$param1,  "unit_default"]
+        locs_tsids2$param_unit <- data$parameters[data$parameters$parameter_id == map_params$param2,  "unit_default"]
         
         
         # Merge the two sets of locations and timeseries IDs
@@ -356,6 +435,13 @@ mapParamServer <- function(id, AquaCache, data, language) {
       # Cap values at 0 and 100% (above or below use symbology of 0 or 100)
       mapping_data[, percent_historic_range_capped := pmax(pmin(percent_historic_range, 100), 0)]
       
+      value_palette <- leaflet::colorBin(
+        palette = map_params$colors,
+        domain = c(0, 100),
+        bins = c(0, 20, 40, 60, 80, 100),
+        na.color = "#808080"
+      )
+      
       leaflet::leafletProxy("map", session) %>%
         leaflet::clearMarkers() %>%
         leaflet::addCircleMarkers(
@@ -371,10 +457,10 @@ mapParamServer <- function(id, AquaCache, data, language) {
           popup = ~paste0(
             "<strong>", get(translations[id == "generic_name_col", get(language$language)][[1]]),  "</strong><br/>",
             titleCase(param_name, language$abbrev), "<br>",
-            translations[id == "map_actual_date", get(language$language)][[1]], ": ", date, "<br/>",
-            translations[id == "map_relative", get(language$language)][[1]], ": ", round(percent_historic_range, 0), "% <br/>",
-            translations[id == "map_absolute", get(language$language)][[1]], ": ", round(value, 0), " ", param_unit, "<br/>",
-            translations[id == "map_actual_hist_range", get(language$language)][[1]], ": ", round(min, 0), " ", translations[id == "to", get(language$language)][[1]], " ", round(max, 0)," ", param_unit, "<br/>",
+            translations[id == "map_actual_date", get(language$language)][[1]], ": ", if (map_params$latest) datetime else date, "<br/>",
+            translations[id == "map_relative", get(language$language)][[1]], ": ", round(percent_historic_range, 2), "% <br/>",
+            translations[id == "map_absolute", get(language$language)][[1]], ": ", round(value, 2), " ", param_unit, "<br/>",
+            translations[id == "map_actual_hist_range", get(language$language)][[1]], ": ", round(min, 2), " ", translations[id == "to", get(language$language)][[1]], " ", round(max, 2)," ", param_unit, "<br/>",
             translations[id == "map_actual_yrs", get(language$language)][[1]], ": ", doy_count
           )
         ) %>%
@@ -387,6 +473,26 @@ mapParamServer <- function(id, AquaCache, data, language) {
           labFormat = leaflet::labelFormat(suffix = "%"),
           opacity = 1
         )
+    }
+    
+    # Create the basic map
+    output$map <- leaflet::renderLeaflet({
+      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 18)) %>%
+        leaflet::addTiles() %>%
+        leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographic") %>%
+        leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
+        leaflet::addLayersControl(baseGroups = c("Topographic", "Satellite")) %>%
+        leaflet::addScaleBar(position = "bottomleft", 
+                             options = leaflet::scaleBarOptions(imperial = FALSE)) %>%
+        leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
+    })
+
+    observeEvent(reactiveValuesToList(map_params), {
+      updateMap()
+    }, ignoreInit = FALSE)
+    
+    observeEvent(input$go, { # Reloads the map when the user requests it
+      updateMap()
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
   })
 }

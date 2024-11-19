@@ -2,7 +2,7 @@
 % Please edit documentation in R/EQWinData.R
 \name{EQWinData}
 \alias{EQWinData}
-\title{Extract EQWin data to an Excel report or .csv}
+\title{Extract EQWin data to an Excel workbook or .csv}
 \usage{
 EQWinData(
   start,

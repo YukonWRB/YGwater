@@ -349,7 +349,7 @@ mapLocsServer <- function(id, AquaCache, data, language) {
         leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
         leaflet::addLayersControl(baseGroups = c("Topographic", "Satellite")) %>%
         leaflet::addScaleBar(position = "bottomleft", options = leaflet::scaleBarOptions(imperial = FALSE)) %>%
-        leaflet::setView(lng = -135.05, lat = 65.00, zoom = 5) %>% # Center on Yukon
+        leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5) %>% # Center on Yukon
         htmlwidgets::onRender(
           "function(el, x) {
           L.control.zoom({position:'bottomright'}).addTo(this);

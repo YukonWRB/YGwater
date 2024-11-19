@@ -96,7 +96,7 @@ discretePlotUI <- function(id) {
           style = "margin-right: 5px;"
         ),
         span(
-          id = ns("facet_into"),
+          id = ns("facet_info"),
           `data-toggle` = "tooltip",
           `data-placement` = "right",
           `data-trigger` = "click hover",
@@ -129,17 +129,16 @@ discretePlotUI <- function(id) {
       ),
       
       div(
-        checkboxInput(ns("loc_code"),
-                      label = NULL,
-                      value = TRUE),
-        style = "display: flex; align-items: center;",
-        tags$label(
-          "Use location code instead of name", 
-          class = "control-label",
-          style = "margin-right: 5px;"
-        )
-      ),
-      
+        selectizeInput(ns("loc_code"),
+                       label = "Choose how to display location codes/names",
+                       choices = stats::setNames(
+                         c("name", "code", "nameCode", "codeName"),
+                         c("Name", "Code", "Name (Code)", "Code (Name)")
+                       ),
+                       selected = "Name"),
+                       style = "display: flex; align-items: center;"
+        ),
+        
       div(
         checkboxInput(ns("target_datetime"),
                     label = NULL),
@@ -188,11 +187,11 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
     data <- reactiveValues()
     observe({
       if (!is.null(EQWin)) {
-        EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns;"))
-        EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns'")
-        EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams;"))
-        EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams'")
-        EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds")
+        EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns ORDER BY StnCode;"))
+        EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns' ORDER BY groupname;")
+        EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams ORDER BY ParamDesc;"))
+        EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams' ORDER BY groupname;")
+        EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds ORDER BY StdName;")
         
         # Check encoding and if necessary convert to UTF-8
         locale_info <- Sys.getlocale("LC_CTYPE")
@@ -214,8 +213,8 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
         updateRadioButtons(session, "data_source", choices = stats::setNames(c("AC"), c("AquaCache")), selected = "AC")
       }
       
-      AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete'")
-      AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete'")
+      AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete' ORDER BY loc.name ASC")
+      AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete' ORDER BY p.param_name ASC")
       
 
       data$AC_locs <- AC_locs

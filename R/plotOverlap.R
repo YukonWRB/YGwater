@@ -699,6 +699,7 @@ plotOverlap <- function(location,
     }
   }
 
+  # realtime <- realtime[order(realtime$year),]
   plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = .data$fake_datetime, y = .data$value)) +
       ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0,0.05)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
     ggplot2::scale_x_datetime(date_breaks = date_breaks, date_labels = labs, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
