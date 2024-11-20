@@ -2,22 +2,21 @@
 #'
 #' @param html_file File name of .html file, must be in the logger dropbox folder 
 #'
-#' @return
+#' @return Uploaded file to Aquarius and logger files sorted
 #' @export
 #' @description
-#' # Parse YOWN html logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Used "Pressure" column after converting to m water column. If pressure column does not exist, converts from deth using formula supplied by In Situ
+#'  Parse YOWN html logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Used "Pressure" column after converting to m water column. If pressure column does not exist, converts from depth using formula supplied by In Situ
 
-
-html_processing <- function(html_file) {
+html_processing <- function(html_file,
+                            master = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
+                            logger_tracking = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
+                            YOWN_logger_folder = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX" 
+                            ) {
   
   #### Setup and common function definitions ####
   #Read in reference sheets and logger drop folder
-  master <- openxlsx::read.xlsx("G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx", sheet = "YOWN_MASTER")
+  master <- openxlsx::read.xlsx(master, sheet = "YOWN_MASTER")
   YOWNIDs <- master$YOWN.Code
-  
-  logger_tracking <- "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
-  
-  YOWN_logger_folder <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
   
   #### Define pressure conversion function ####
   convert_pressure <- function(column, pressure_unit) {
