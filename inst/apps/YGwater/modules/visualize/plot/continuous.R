@@ -158,8 +158,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
         updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
         try({
           possible_years <- seq(
-            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "start_datetime"], 1, 4)),
-            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "end_datetime"], 1, 4))
+            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "end_datetime"], 1, 4)),
+            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "start_datetime"], 1, 4))
             )
           updateSelectizeInput(session, "years", choices = possible_years)
         })

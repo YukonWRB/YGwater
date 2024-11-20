@@ -35,7 +35,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   
   # Load translations infrastructure
-  translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/streamLine/translations.xlsx", package = "YGwater"), sheet = 1))
+  translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1))
   
   # Establish database connection parameters
   # The actual connection is being done at the server level for YGwater. This allows using a login input form to connect to the database with edit privileges.
@@ -49,25 +49,5 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     RLS_pass = RLS_pass,
     accessPath = accessPath
   )
-}
-
-
-# Create a function to save the application state bookmarks to a database table
-
-# Function to save app state to the database
-save_app_state <<- function(con, state_data, ip_address, permanent = FALSE) {
-  # Generate a unique token
-  token <- uuid::UUIDgenerate()
-  
-  # Serialize the state data to JSON
-  state_json <- jsonlite::toJSON(state_data, auto_unbox = TRUE)
-  
-  # Insert the state into the database
-  DBI::dbExecute(con, "
-    INSERT INTO web.url_states_ygwater (token, state_data, ip_address, permanent)
-    VALUES ($1, $2, $3, $4)",
-            params = list(token, state_json, ip_address, permanent))
-  
-  return(token)
 }
 
