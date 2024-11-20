@@ -1,4 +1,12 @@
-# Parse YOWN logger files, upload to Aquarius, and sort into respective folder. Processes files to include at least tiemstamp, pressure, and temperature. Some files include depth, which is only used t convert to pressure if pressure coumn doesnt exist.
+#' html logger file processing
+#'
+#' @param html_file File name of .html file, must be in the logger dropbox folder 
+#'
+#' @return
+#' @export
+#' @description
+#' # Parse YOWN html logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Used "Pressure" column after converting to m water column. If pressure column does not exist, converts from deth using formula supplied by In Situ
+
 
 html_processing <- function(html_file) {
   
@@ -29,7 +37,7 @@ html_processing <- function(html_file) {
       )
     )
     
-    # Check if the unit is "m H2O" already
+    # Check if the unit is "m H2O"
     if (pressure_unit == "m") {
       return(column)
     } else {
@@ -110,11 +118,11 @@ html_processing <- function(html_file) {
   
   # Extract units for check against conversion tables
   if ("Pressure" %in% headers_trim) {
-  pressure_unit <- sub(".*Pressure \\(([^)]+)\\).*", "\\1", html_text)}
+    pressure_unit <- sub(".*Pressure \\(([^)]+)\\).*", "\\1", html_text)}
   if ("Temperature" %in% headers_trim) {
-  temperature_unit <-  sub(".*Temperature \\(([^)]+)\\).*", "\\1", html_text)}
+    temperature_unit <-  sub(".*Temperature \\(([^)]+)\\).*", "\\1", html_text)}
   if ("Depth" %in% headers_trim) {
-  depth_unit <-  sub(".*Depth \\(([^)]+)\\).*", "\\1", html_text)
+    depth_unit <-  sub(".*Depth \\(([^)]+)\\).*", "\\1", html_text)
   }
   
   # Create separate data frames for each property section using property parsing function
@@ -147,7 +155,7 @@ html_processing <- function(html_file) {
   
   
   data_rows <- html %>%
-   rvest::html_nodes("tr.data") %>%  # Select rows with the "data" class
+    rvest::html_nodes("tr.data") %>%  # Select rows with the "data" class
     rvest::html_nodes("td") %>%       # Extract table cell elements
     rvest::html_text(trim = TRUE)     # Get text content and trim whitespace
   
@@ -158,8 +166,8 @@ html_processing <- function(html_file) {
   df <- as.data.frame(matrix(data_rows, ncol = n_cols, byrow = TRUE), stringsAsFactors = FALSE) %>%
     dplyr::mutate(
       V1 = lubridate::as_datetime(.data$V1, tz = "MST") %>% lubridate::round_date(unit = "second"),
-      dplyr::across(-V1, as.numeric)) %>%
-    lubridate::with_tz(V1, tzone = "UTC")
+      dplyr::across(-"V1", as.numeric)) %>%
+    lubridate::with_tz("V1", tzone = "UTC")
   colnames(df) <- headers_trim
   
   df <- df[, colnames(df) != "" & !is.na(colnames(df))] # Remove blank columns
@@ -182,7 +190,7 @@ html_processing <- function(html_file) {
     depth_unit <- "m"}
   
   final_data <- final_data %>%
-    rename_with(
+    dplyr::rename_with(
       ~ ifelse(. == "date", "timestamp_MST",
                ifelse(. %in% c("Pressure", "Depth"), paste0(., " (m)"),
                       ifelse(. == "Temperature", paste0(., " (°C)"), .)))
@@ -263,4 +271,5 @@ html_processing <- function(html_file) {
     write("The html file was successfully moved to its final resting places", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
   }, error = function(e) { 
     write("Moving the file to its final resting place FAILED", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
+  
 }
