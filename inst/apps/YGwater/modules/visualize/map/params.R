@@ -69,7 +69,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
           label = translations[id == "map_mapType", get(language$language)][[1]],
           choices = stats::setNames(
             c("range", "abs"),
-            c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolute", get(language$language)][[1]])
+            c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolute1", get(language$language)][[1]])
           ),
           selected = "range",
           multiple = FALSE
@@ -226,7 +226,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
                            label = NULL,
                            choices = stats::setNames(
                              c("range", "abs"),
-                             c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolute", get(language$language)][[1]])
+                             c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolute1", get(language$language)][[1]])
                            )
       )
       updateCheckboxInput(session, "latest", label = translations[id == "map_latest_measurements", get(language$language)][[1]])
@@ -245,9 +245,13 @@ mapParamServer <- function(id, AquaCache, data, language) {
       }
     }, ignoreInit = TRUE)
     
+    observeEvent(input$target, {
+      map_params$target <- input$target
+    })
+    
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
-      req(data, AquaCache, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$latest, map_params$target, map_params$params)
+      req(data, AquaCache, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$latest, map_params$target, map_params$params, input$map_zoom)
       
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
@@ -459,7 +463,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
             titleCase(param_name, language$abbrev), "<br>",
             translations[id == "map_actual_date", get(language$language)][[1]], ": ", if (map_params$latest) datetime else date, "<br/>",
             translations[id == "map_relative", get(language$language)][[1]], ": ", round(percent_historic_range, 2), "% <br/>",
-            translations[id == "map_absolute", get(language$language)][[1]], ": ", round(value, 2), " ", param_unit, "<br/>",
+            translations[id == "map_absolute2", get(language$language)][[1]], ": ", round(value, 2), " ", param_unit, "<br/>",
             translations[id == "map_actual_hist_range", get(language$language)][[1]], ": ", round(min, 2), " ", translations[id == "to", get(language$language)][[1]], " ", round(max, 2)," ", param_unit, "<br/>",
             translations[id == "map_actual_yrs", get(language$language)][[1]], ": ", doy_count
           )
@@ -486,10 +490,11 @@ mapParamServer <- function(id, AquaCache, data, language) {
                              options = leaflet::scaleBarOptions(imperial = FALSE)) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
     })
-
+    
     observeEvent(reactiveValuesToList(map_params), {
       updateMap()
     }, ignoreInit = FALSE)
+    
     
     observeEvent(input$go, { # Reloads the map when the user requests it
       updateMap()
