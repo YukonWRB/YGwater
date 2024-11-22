@@ -251,8 +251,8 @@ mapParamServer <- function(id, AquaCache, data, language) {
     
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
-      req(data, AquaCache, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$latest, map_params$target, map_params$params, input$map_zoom)
-      
+      req(data, AquaCache, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$target, map_params$params, input$map_zoom)
+
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
         return()

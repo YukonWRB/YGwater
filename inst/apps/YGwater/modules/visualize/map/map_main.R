@@ -7,7 +7,18 @@ mapUI <- function(id) {
                    label = NULL,
                    choices = stats::setNames(c("locs", "precip", "params"), c("Monitoring locations", "Precipitation", "Other parameter values")),
                    selected = "Monitoring locations"),
-    uiOutput(ns("submoduleUI"))
+    conditionalPanel(ns = ns,
+      condition = "input.map_type == 'locs'",
+      mapLocsUI(ns("locs"))
+    ),
+    conditionalPanel(ns = ns,
+      condition = "input.map_type == 'precip'",
+      mapPrecipUI(ns("precip"))
+    ),
+    conditionalPanel(ns = ns,
+      condition = "input.map_type == 'params'",
+      mapParamUI(ns("params"))
+    )
   )
 }
 
@@ -38,68 +49,38 @@ map <- function(id, AquaCache, language) {
     # Store information to pass between modules
     subModuleOutputs <- reactiveValues() # Holds the stuff that needs to be output from the sub-modules back tot this server
     mainModuleOutputs <- reactiveValues() # Hold the stuff that needs to be output from this module back to the main server
-
+    
     # Reactive value to store the selected submodule type
-    submodule <- reactiveVal(NULL)
+    submodules <- reactiveValues(precip = FALSE,
+                                 params = FALSE,
+                                 locs = FALSE)
     
     # Load the submodule server and UI based on the plot type selected
     observeEvent(input$map_type, {
-      if (is.null(submodule())) { # Nothing has been loaded yet and submodule is NULL
-        if (input$map_type == "precip") {
-          output$submoduleUI <- renderUI({
-            mapPrecipUI(ns("precip"))
-          })
-          submodule("precip")
+      if (input$map_type == "precip") {
+        if (!submodules$precip) {
+          submodules$precip <- TRUE
           mapPrecipServer("precip", AquaCache, data, language)
-        } else if (input$map_type == "params") {
-          output$submoduleUI <- renderUI({
-            mapParamUI(ns("params"))
-          })
-          mapParamServer("params", AquaCache, data, language)
-          submodule("params")
-        } else if (input$map_type == "locs") {
-          output$submoduleUI <- renderUI({
-            mapLocsUI(ns("locs"))
-          })
-          subModuleOutputs$locs <- mapLocsServer("locs", AquaCache, data, language)
-          submodule("locs")
-          observe({
-            if (!is.null(subModuleOutputs$locs$change_tab)) {
-              mainModuleOutputs$change_tab <- subModuleOutputs$locs$change_tab
-            }
-          })
-          
         }
-      } else { # Submodule has been loaded already, so only redo if we are calling a different submodule
-        if (input$map_type == "precip" && submodule() != "precip") {
-          output$submoduleUI <- renderUI({
-            mapPrecipUI(ns("precip"))
-          })
-          submodule("precip")
-          mapPrecipServer("precip", AquaCache, data, language)
-        } else if (input$map_type == "params" && submodule() != "params") {
-          output$submoduleUI <- renderUI({
-            mapParamUI(ns("params"))
-          })
+      } else if (input$map_type == "params") {
+        if (!submodules$params) {
+          submodules$params <- TRUE
           mapParamServer("params", AquaCache, data, language)
-          submodule("params")
-        } else if (input$map_type == "locs" && submodule() != "locs") {
-          output$submoduleUI <- renderUI({
-            mapLocsUI(ns("locs"))
-          })
-          subModuleOutputs$locs <- mapLocsServer("locs", AquaCache, data, language)
-          submodule("locs")
+        }
+      } else if (input$map_type == "locs") {
+        if (!submodules$locs) {
+          submodules$locs <- TRUE
+          mapLocsServer("locs", AquaCache, data, language)
           observe({
             if (!is.null(subModuleOutputs$locs$change_tab)) {
               mainModuleOutputs$change_tab <- subModuleOutputs$locs$change_tab
             }
           })
-          
         }
       }
     }) # End of observeEvent that loads submodules
-
+    
     return(mainModuleOutputs)
-
+    
   }) # End of moduleServer
 }

@@ -284,7 +284,7 @@ console.log(language);")
   # Store information to pass between modules
   primary_outputs <- reactiveValues()
   
-    # Initialize a flag to track programmatic tab changes
+  # Initialize a flag to track programmatic tab changes
   programmatic_change <- reactiveVal(FALSE)
   
   # Initialize reactive values to store last tabs for each mode
