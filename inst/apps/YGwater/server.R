@@ -366,15 +366,15 @@ console.log(language);")
       if (ui_loaded$plot == FALSE) {
         output$plot_ui <- renderUI(plotUI("plot"))
         ui_loaded$plot <- TRUE
+        plot("plot", EQWin, AquaCache)
       }
-      plot("plot", EQWin, AquaCache)
     }
     if (input$navbar == "map") {
       if (ui_loaded$map == FALSE) {
         output$map_ui <- renderUI(mapUI("map"))
         ui_loaded$map <- TRUE
+        primary_outputs$map_main <- map("map", AquaCache, language = languageSelection)
       }
-      primary_outputs$map_main <- map("map", AquaCache, language = languageSelection)
       observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
         if (!is.null(primary_outputs$map_main$change_tab)) {
           updateNavbarPage(session, "navbar", selected = (primary_outputs$map_main$change_tab))
@@ -386,36 +386,36 @@ console.log(language);")
       if (ui_loaded$FOD == FALSE) {
         output$fod_ui <- renderUI(FODUI("FOD"))
         ui_loaded$FOD <- TRUE
+        FOD("FOD")
       }
-      FOD("FOD")
     }
     if (input$navbar == "img") {
       if (ui_loaded$img == FALSE) {
         output$img_ui <- renderUI(imgUI("img"))
         ui_loaded$img <- TRUE
+        img("img", con = AquaCache, language = languageSelection, restoring = isRestoring_img)
       }
-      img("img", con = AquaCache, language = languageSelection, restoring = isRestoring_img)
     }
     if (input$navbar == "gen") {
       if (ui_loaded$gen == FALSE) {
         output$gen_ui <- renderUI(genUI("gen"))
         ui_loaded$gen <- TRUE
+        gen("gen", EQWin, AquaCache)
       }
-      gen("gen", EQWin, AquaCache)
     }
     if (input$navbar == "basins") {
       if (ui_loaded$basins == FALSE) {
         output$basins_ui <- renderUI(basinsUI("basins"))
         ui_loaded$basins <- TRUE
+        basins("basins", AquaCache)
       }
-      basins("basins", AquaCache)
     }
     if (input$navbar == "metadata") {
       if (ui_loaded$metadata == FALSE) {
         output$metadata_ui <- renderUI(metadataUI("metadata"))
         ui_loaded$metadata <- TRUE
+        metadata("metadata", AquaCache)
       }
-      metadata("metadata", AquaCache)
     }
   }) # End of observeEvent for loading modules based on navbar
   

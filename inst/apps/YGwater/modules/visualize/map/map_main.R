@@ -3,24 +3,24 @@
 mapUI <- function(id) {
   ns <- NS(id)
   fluidPage(
-    selectizeInput(ns("map_type"),
-                   label = NULL,
-                   choices = stats::setNames(c("locs", "precip", "params"), c("Monitoring locations", "Precipitation", "Other parameter values")),
-                   selected = "Monitoring locations"),
-    conditionalPanel(ns = ns,
-      condition = "input.map_type == 'locs'",
-      mapLocsUI(ns("locs"))
+    selectizeInput(
+      ns("map_type"),
+      label = NULL,
+      choices = stats::setNames(
+        # c("params", "locs", "precip"),
+        # c("Parameter values", "Monitoring locations", "Precipitation")
+        c("params", "locs"),
+        c("Parameter values", "Monitoring locations")
+      ),
+      selected = "params"
     ),
-    conditionalPanel(ns = ns,
-      condition = "input.map_type == 'precip'",
-      mapPrecipUI(ns("precip"))
-    ),
-    conditionalPanel(ns = ns,
-      condition = "input.map_type == 'params'",
-      mapParamUI(ns("params"))
-    )
+    # Placeholder divs for dynamically loaded UIs
+    div(id = ns("locs_placeholder"), style = "display: none;"),
+    # div(id = ns("precip_placeholder"), style = "display: none;"),
+    div(id = ns("params_placeholder"), style = "display: none;")
   )
 }
+
 
 map <- function(id, AquaCache, language) {
   
@@ -51,34 +51,58 @@ map <- function(id, AquaCache, language) {
     mainModuleOutputs <- reactiveValues() # Hold the stuff that needs to be output from this module back to the main server
     
     # Reactive value to store the selected submodule type
-    submodules <- reactiveValues(precip = FALSE,
+    submodules <- reactiveValues(#precip = FALSE,
                                  params = FALSE,
                                  locs = FALSE)
     
-    # Load the submodule server and UI based on the plot type selected
+    
+    # Observe input to dynamically load UI and server logic
     observeEvent(input$map_type, {
-      if (input$map_type == "precip") {
-        if (!submodules$precip) {
-          submodules$precip <- TRUE
-          mapPrecipServer("precip", AquaCache, data, language)
-        }
-      } else if (input$map_type == "params") {
-        if (!submodules$params) {
-          submodules$params <- TRUE
-          mapParamServer("params", AquaCache, data, language)
-        }
-      } else if (input$map_type == "locs") {
-        if (!submodules$locs) {
-          submodules$locs <- TRUE
-          mapLocsServer("locs", AquaCache, data, language)
-          observe({
-            if (!is.null(subModuleOutputs$locs$change_tab)) {
-              mainModuleOutputs$change_tab <- subModuleOutputs$locs$change_tab
-            }
-          })
-        }
+      # Monitor locations module
+      if (input$map_type == "locs" && !submodules$locs) {
+        submodules$locs <- TRUE
+        # Dynamically insert the UI
+        insertUI(
+          selector = paste0("#", ns("locs_placeholder")),
+          where = "beforeEnd",
+          ui = mapLocsUI(ns("locs"))
+        )
+        subModuleOutputs <- mapLocsServer("locs", AquaCache, data, language)
+        observe({
+          if (!is.null(subModuleOutputs$locs$change_tab)) {
+            mainModuleOutputs$change_tab <- subModuleOutputs$locs$change_tab
+          }
+        })
       }
-    }) # End of observeEvent that loads submodules
+      
+      # # Precipitation module
+      # if (input$map_type == "precip" && !submodules$precip) {
+      #   submodules$precip <- TRUE
+      #   insertUI(
+      #     selector = paste0("#", ns("precip_placeholder")),
+      #     where = "beforeEnd",
+      #     ui = mapPrecipUI(ns("precip"))
+      #   )
+      #   mapPrecipServer("precip", AquaCache, data, language)
+      # }
+      
+      # Parameter module
+      if (input$map_type == "params" && !submodules$params) {
+        submodules$params <- TRUE
+        insertUI(
+          selector = paste0("#", ns("params_placeholder")),
+          where = "beforeEnd",
+          ui = mapParamUI(ns("params"))
+        )
+        mapParamServer("params", AquaCache, data, language)
+      }
+      
+      # Show only the relevant module using shinyjs
+      shinyjs::hide(selector = paste0("#", ns("locs_placeholder")))
+      # shinyjs::hide(selector = paste0("#", ns("precip_placeholder")))
+      shinyjs::hide(selector = paste0("#", ns("params_placeholder")))
+      shinyjs::show(selector = paste0("#", ns(paste0(input$map_type, "_placeholder"))))
+    })
     
     return(mainModuleOutputs)
     

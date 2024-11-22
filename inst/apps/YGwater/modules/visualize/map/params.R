@@ -84,8 +84,8 @@ mapParamServer <- function(id, AquaCache, data, language) {
         htmlOutput(ns("primary_param")),  # This will be text showing details of the selected parameter, the min yrs, within how many days, etc.
         actionButton(ns("edit_primary_param"), translations[id == "map_edit_primary_param", get(language$language)][[1]], style = "display: block; width: 100%"),
         htmlOutput(ns("secondary_param")),
-        actionButton(ns("edit_secondary_param"), translations[id == "map_edit_second_param", get(language$language)][[1]], style = "display: block; width: 100%"),
-        actionButton(ns("go"), translations[id == "render_map", get(language$language)][[1]], style = "display: block; width: 100%; margin-top: 10px;")
+        actionButton(ns("edit_secondary_param"), translations[id == "map_edit_second_param", get(language$language)][[1]], style = "display: block; width: 100%")
+        # actionButton(ns("go"), translations[id == "render_map", get(language$language)][[1]], style = "display: block; width: 100%; margin-top: 10px;")
       )
     })
     
@@ -480,7 +480,10 @@ mapParamServer <- function(id, AquaCache, data, language) {
     }
     
     # Create the basic map
+    mapCreated <- reactiveVal(FALSE) # Used to track map creation so that points show up right away with defaults
     output$map <- leaflet::renderLeaflet({
+      mapCreated(TRUE)
+      
       leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 18)) %>%
         leaflet::addTiles() %>%
         leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographic") %>%
@@ -491,13 +494,15 @@ mapParamServer <- function(id, AquaCache, data, language) {
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
     })
     
-    observeEvent(reactiveValuesToList(map_params), {
+    # Observe the map being created and update it when the parameters change
+    observe({
+      req(mapCreated())  # Ensure the map has been created before updating
+      reactiveValuesToList(map_params)  # Triggers whenever map_params changes
       updateMap()
-    }, ignoreInit = FALSE)
+    })
     
-    
-    observeEvent(input$go, { # Reloads the map when the user requests it
-      updateMap()
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    # observeEvent(input$go, { # Reloads the map when the user requests it
+    #   updateMap()
+    # }, ignoreInit = TRUE, ignoreNULL = TRUE)
   })
 }
