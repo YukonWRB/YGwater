@@ -2,11 +2,11 @@
 % Please edit documentation in R/html_processing.R
 \name{html_processing}
 \alias{html_processing}
-\title{html logger file processing}
+\title{In Situ html logger file processing}
 \usage{
 html_processing(
   html_file,
-  master =
+  master_sheet =
     "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
   logger_tracking =
     "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
@@ -16,10 +16,16 @@ html_processing(
 }
 \arguments{
 \item{html_file}{File name of .html file, must be in the logger dropbox folder}
+
+\item{master_sheet}{Path to YOWN master sheet}
+
+\item{logger_tracking}{Path to YOWN logger tracking sheet}
+
+\item{YOWN_logger_folder}{Path to YOWN logger dropbox folder}
 }
 \value{
-Uploaded file to Aquarius and logger files sorted
+Moves YOWN html file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions. Adds pressure column if missing, based on depth column and conversions calcs on In Situ website
 }
 \description{
-Parse YOWN html logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Used "Pressure" column after converting to m water column. If pressure column does not exist, converts from depth using formula supplied by In Situ
+# Parse YOWN html logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Used "Pressure" column after converting to m water column. If pressure column does not exist, converts from deth using formula supplied by In Situ
 }
