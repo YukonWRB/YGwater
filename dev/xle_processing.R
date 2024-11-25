@@ -1,22 +1,22 @@
-#' Solinst xle file processing
+#' Sollinst xle logger file processing
 #'
-#' @param xle_file Filename of the .xle file, must be located in the dropbox folder. Looks something like "1083573_YOWN-1706 Yukon University_2024_05_08_113730.xle"
-#' @param master_sheet Path to YOWN master sheet, for reaing station names to verify location specified in logger file
-#' @param logger_tracking Path to logger tracking sheet
-#' @param YOWN_logger_folder Path to logger dropbox folder
+#' @param html_file File name of .xle file, must be in the logger dropbox folder 
+#' @param master_sheet Path to YOWN master sheet
+#' @param logger_tracking Path to YOWN logger tracking sheet
+#' @param YOWN_logger_folder Path to YOWN logger dropbox folder
 #'
-#' @return Formated xle file into data frame, run and apply unit checks and conversions, uploiaded file to aquarius and move to final resting locations
+#' @return Moves YOWN xle file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions.
+#' 
+#' @description Parse YOWN xle logger files, upload to Aquarius, sort into respective folder, and track logger metadata.
 
 xle_processing <- function(xle_file,
                            master_sheet = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
                            logger_tracking = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
                            YOWN_logger_folder = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX") {
   
-  xle_file <- paste0("1083573_YOWN-1706 Yukon University_2024_05_08_113730.xle")
-  
-
+  #Read in reference sheets and logger drop folder
   master <- openxlsx::read.xlsx(master_sheet, sheet = "YOWN_MASTER")
-  YOWNIDs <- master$YOWN.Code
+  YOWNIDs <- master$YOWN.Code 
   
   #### Define helper functions ####
   # Define pressure conversion function
@@ -59,7 +59,7 @@ xle_processing <- function(xle_file,
     # Define conversion factors for pressure units to meters of water column
     conductivity_conversion_factors <- data.frame(
       unit = c("ms/cm"),
-      `to_uS/cm` = c(0.1) # ms/cm
+      'to_\u00B5S/cm' = c(0.1) # ms/cm
     )
     
     # Check if the unit is "uS/cm" already
@@ -217,15 +217,15 @@ xle_processing <- function(xle_file,
         start <- Sys.time()
         result <- YGwater::aq_upload(well_loc, i, temp)
         end <- Sys.time() - start
-        write(paste0("Temperature append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+        write(paste0("Conductivity append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
       }, error = function(e) {
-        write("Temperature append FAILED", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
+        write("Conductivity append FAILED", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
     }
   }
   
-   #### Track metadata ####
+  #### Track metadata ####
   existing_data <- openxlsx::read.xlsx(logger_tracking, sheet = "Sheet 1")
- 
+  
   # Format data to be added
   new_data <- c(well_loc,
                 "Solinst",
@@ -236,11 +236,12 @@ xle_processing <- function(xle_file,
                 as.character(max(final_data$Time)))
   
   # Append the new data
-  updated_data <- rbind(existing_data, new_data)
+  updated_data <- rbind(existing_data, new_data) %>%
+    dplyr::distinct()
   
   # Write the updated data back to the Excel file
   tryCatch({
-    openxlsx::write.xlsx(updated_data, "logger_tracking", rowNames = FALSE)
+    openxlsx::write.xlsx(x = updated_data, file = logger_tracking, rowNames = FALSE)
     write("Logger tracking successful", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
   }, error = function(e) { 
     write("Logger tracking FAILED, make sure nobody has the logger tracking sheet open", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
@@ -268,5 +269,6 @@ xle_processing <- function(xle_file,
     write("The xle file was successfully moved to its final resting places", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
   }, error = function(e) { 
     write("Moving the file to its final resting place FAILED", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
+  
 }
 

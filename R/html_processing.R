@@ -18,7 +18,6 @@ html_processing <- function(html_file,
   #### Setup and common function definitions ####
   #Read in reference sheets and logger drop folder
   master <- openxlsx::read.xlsx(master_sheet, sheet = "YOWN_MASTER")
-  tracker <- openxlsx::loadWorkbook(logger_tracking)
   YOWNIDs <- master$YOWN.Code 
   
   #### Define pressure conversion function ####
@@ -241,8 +240,7 @@ html_processing <- function(html_file,
                 as.character(max(final_data$Date)))
   
   # Append the new data
-  updated_data <- rbind(existing_data, new_data)
-  updated_data <- updated_data %>%
+  updated_data <- rbind(existing_data, new_data) %>%
     dplyr::distinct()
   
   # Write the updated data back to the Excel file
