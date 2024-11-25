@@ -1,22 +1,25 @@
-#' html logger file processing
+#' In Situ html logger file processing
 #'
 #' @param html_file File name of .html file, must be in the logger dropbox folder 
+#' @param master_sheet Path to YOWN master sheet
+#' @param logger_tracking Path to YOWN logger tracking sheet
+#' @param YOWN_logger_folder Path to YOWN logger dropbox folder
 #'
-#' @return Uploaded file to Aquarius and logger files sorted
-#' @export
+#' @return Moves YOWN html file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions. Adds pressure column if missing, based on depth column and conversions calcs on In Situ website
 #' @description
-#'  Parse YOWN html logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Used "Pressure" column after converting to m water column. If pressure column does not exist, converts from depth using formula supplied by In Situ
+#' # Parse YOWN html logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Used "Pressure" column after converting to m water column. If pressure column does not exist, converts from deth using formula supplied by In Situ
+
 
 html_processing <- function(html_file,
-                            master = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
+                            master_sheet = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
                             logger_tracking = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
-                            YOWN_logger_folder = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX" 
-                            ) {
+                            YOWN_logger_folder = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX") {
   
   #### Setup and common function definitions ####
   #Read in reference sheets and logger drop folder
-  master <- openxlsx::read.xlsx(master, sheet = "YOWN_MASTER")
-  YOWNIDs <- master$YOWN.Code
+  master <- openxlsx::read.xlsx(master_sheet, sheet = "YOWN_MASTER")
+  tracker <- openxlsx::loadWorkbook(logger_tracking)
+  YOWNIDs <- master$YOWN.Code 
   
   #### Define pressure conversion function ####
   convert_pressure <- function(column, pressure_unit) {
@@ -83,15 +86,15 @@ html_processing <- function(html_file,
   
   #### Define temperature conversion function ####
   convert_temp <- function(column, temperature_unit) {
-    if (temperature_unit == "°C") {
+    if (temperature_unit == "\u00B0C") {
       # No conversion needed
       return(column)
-    } else if (temperature_unit == "°F") {
+    } else if (temperature_unit == "\u00B0F") {
       # Convert Fahrenheit to Celsius
       column <- (column - 32) * 5/9
       return(column)
     } else {
-      stop("Unsupported temperature unit. Please use '°C' or '°F'.")
+      stop("Unsupported temperature unit. Please use \u00B0C or '\u00B0F'.")
     }
   }
   
@@ -111,7 +114,7 @@ html_processing <- function(html_file,
   
   # Extract headers without units (parameter only) for compatibility with unit check functions
   headers <- html %>% # Create character vector of headers, for use in renaming data columns later
-    rvest::html_elements(".dataHeader td") %>% # Locate the header row
+    rvest::html_elements(css = ".dataHeader td") %>% # Locate the header row
     rvest::html_text(trim = TRUE) # Extract text and trim whitespace
   headers_trim <- sub(" .*", "", headers)
   
@@ -180,11 +183,11 @@ html_processing <- function(html_file,
     final_data$Pressure <- convert_pressure(column = final_data$Pressure, pressure_unit)
     pressure_unit <- "m"}
   
-  if ("Temperature" %in% colnames(df)) {
+  if ("Temperature" %in% colnames(final_data)) {
     final_data$Temperature <- convert_temp(final_data$Temperature, temperature_unit)
-    temperature_unit <- "°C"}
+    temperature_unit <- "\u00B0C"}
   
-  if ("Depth" %in% colnames(df)) {
+  if ("Depth" %in% colnames(final_data)) {
     final_data$Depth <- convert_depth(final_data$Depth, depth_unit)
     depth_unit <- "m"}
   
@@ -192,7 +195,7 @@ html_processing <- function(html_file,
     dplyr::rename_with(
       ~ ifelse(. == "date", "timestamp_MST",
                ifelse(. %in% c("Pressure", "Depth"), paste0(., " (m)"),
-                      ifelse(. == "Temperature", paste0(., " (°C)"), .)))
+                      ifelse(. == "Temperature", paste0(., " (\u00B0C)"), .)))
     )
   # Add pressure column
   if (!"Pressure (m)" %in% colnames(final_data)) {
@@ -212,7 +215,7 @@ html_processing <- function(html_file,
         write("Level append FAILED", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
       })
     } else if (i == "Water Temp.TEMPERATURE") {
-      temp <- data.frame(Time = final_data$Date, Value = final_data$`Temperature (°C)`)
+      temp <- data.frame(Time = final_data$Date, Value = final_data$'Temperature (\u00B0C)')
       tryCatch({
         start <- Sys.time()
         result <- YGwater::aq_upload(well_loc, i, temp)
@@ -239,10 +242,12 @@ html_processing <- function(html_file,
   
   # Append the new data
   updated_data <- rbind(existing_data, new_data)
+  updated_data <- updated_data %>%
+    dplyr::distinct()
   
   # Write the updated data back to the Excel file
   tryCatch({
-    openxlsx::write.xlsx(updated_data, "logger_tracking", rowNames = FALSE)
+    openxlsx::write.xlsx(x = updated_data, file = logger_tracking, rowNames = FALSE)
     write("Logger tracking successful", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
   }, error = function(e) { 
     write("Logger tracking FAILED, make sure nobody has the logger tracking sheet open", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
@@ -267,7 +272,7 @@ html_processing <- function(html_file,
   tryCatch({file.rename(from = paste0(YOWN_logger_folder, "/", html_file), 
                         to = paste0("//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS/", dir, "/Logger files and notes/", year, "/", html_file)
   )
-    write("The html file was successfully moved to its final resting places", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+    write("The html file was successfully moved to its final resting places (Backup folder and appropriate YOWN folder)", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
   }, error = function(e) { 
     write("Moving the file to its final resting place FAILED", file = paste0(YOWN_logger_folder, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
   
