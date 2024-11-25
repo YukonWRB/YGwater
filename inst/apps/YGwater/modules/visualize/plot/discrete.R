@@ -404,7 +404,8 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                  legend_scale = plot_aes$legend_scale,
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
-                                 dbSource = input$data_source)
+                                 dbSource = input$data_source,
+                                 dbPath = config$accessPath)
           } else if (input$data_source == "AC") {
             plot <- plotDiscrete(start = input$date_range[1],
                                  end = input$date_range[2],

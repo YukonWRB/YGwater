@@ -54,10 +54,10 @@ plotDiscrete <- function(start,
   #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
 
   # testing parameters for EQWIN direct
-  # start <- "2024-06-24"
-  # end <- "2024-11-07"
-  # locations <- c("(EG)W29", "(EG)W99", "(EG)MW24-10")
-  # parameters <- c("Co-D", "CN-WAD", "CN-SAD", "CN-Fre", "Hg-D", "N-NO3", "N-NO2", "Ag-D", "N-NH4")
+  # start <- "2024-11-01"
+  # end <- "2024-11-24"
+  # locations <- c("(EG)W4-mix")
+  # parameters <- c("N-NO2")
   # locGrp <- NULL
   # paramGrp <- NULL
   # standard = NULL
@@ -75,8 +75,8 @@ plotDiscrete <- function(start,
   # gridy = FALSE
   # dbSource = "EQ"
   # lang = "en"
-  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
-  
+  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResourcesEG.mdb"
+
   # start <- "2024-06-09"
   # end <- "2024-10-09"
   # locations <- "(EG)W4-mix"
