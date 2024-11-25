@@ -40,7 +40,8 @@ app_server <- function(input, output, session) {
     img = FALSE,
     gen = FALSE,
     metadata = FALSE,
-    new_ts_loc = FALSE,
+    addTsLoc = FALSE,
+    addImg = FALSE,
     basins = FALSE)
   
   ## database connections ###########
@@ -199,13 +200,17 @@ console.log(language);")
                            uiOutput("metadata_ui")),
                   target = "gen", position = "after")
         insertTab("navbar",
-                  tabPanel(title = "Add location/timeseries", value = "new_ts_loc",
-                           uiOutput("new_ts_loc_ui")),
+                  tabPanel(title = "Add images", value = "addImg",
+                           uiOutput("addImg_ui")),
                   target = "metadata", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "Add location/timeseries", value = "addTsLoc",
+                           uiOutput("addTsLoc_ui")),
+                  target = "addImg", position = "after")
         insertTab("navbar",
                   tabPanel(title = "Create basins", value = "basins",
                            uiOutput("basins_ui")),
-                  target = "new_ts_loc", position = "after")
+                  target = "addTsLoc", position = "after")
         
         updateTabsetPanel(session, "navbar", selected = "admin")
         return()
@@ -276,7 +281,8 @@ console.log(language);")
     # Remove admin-related tabs on logout
     removeTab("navbar", "admin", session = session)
     removeTab("navbar", "metadata", session = session)
-    removeTab("navbar", "new_ts_loc", session = session)
+    removeTab("navbar", "addImg", session = session)
+    removeTab("navbar", "addTsLoc", session = session)
     removeTab("navbar", "basins", session = session)
   })
   
@@ -322,7 +328,8 @@ console.log(language);")
       
       # Hide irrelevant tabs
       hideTab(inputId = "navbar", target = "metadata")
-      hideTab(inputId = "navbar", target = "new_ts_loc")
+      hideTab(inputId = "navbar", target = "addImg")
+      hideTab(inputId = "navbar", target = "addTsLoc")
       hideTab(inputId = "navbar", target = "basins")
       hideTab(inputId = "navbar", target = "viz")
       
@@ -334,7 +341,8 @@ console.log(language);")
       
       # Show relevant tabs for admin mode
       showTab(inputId = "navbar", target = "metadata")
-      showTab(inputId = "navbar", target = "new_ts_loc")
+      showTab(inputId = "navbar", target = "addImg")
+      showTab(inputId = "navbar", target = "addTsLoc")
       showTab(inputId = "navbar", target = "basins")
       showTab(inputId = "navbar", target = "viz")
       
@@ -355,25 +363,25 @@ console.log(language);")
       if (input$navbar %in% c("plot", "map", "FOD", "gen", "img")) {
         # User is in viz mode
         last_viz_tab(input$navbar)
-      } else if (input$navbar %in% c("metadata", "new_ts_loc", "basins")) {
+      } else if (input$navbar %in% c("metadata", "addImg", "addTsLoc", "basins")) {
         # User is in admin mode
-        last_admin_tab(input$navbar)
+        last_admin_tab(input$navbar) 
       }
     }
     
     # Load modules when the corresponding tabs are selected
     if (input$navbar == "plot") {
-      if (ui_loaded$plot == FALSE) {
+      if (!ui_loaded$plot) {
         output$plot_ui <- renderUI(plotUI("plot"))
         ui_loaded$plot <- TRUE
-        plot("plot", EQWin, AquaCache)
+        plot("plot", EQWin, AquaCache) # Call the server
       }
     }
     if (input$navbar == "map") {
-      if (ui_loaded$map == FALSE) {
+      if (!ui_loaded$map) {
         output$map_ui <- renderUI(mapUI("map"))
         ui_loaded$map <- TRUE
-        primary_outputs$map_main <- map("map", AquaCache, language = languageSelection)
+        primary_outputs$map_main <- map("map", AquaCache, language = languageSelection) # Call the server
       }
       observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
         if (!is.null(primary_outputs$map_main$change_tab)) {
@@ -383,38 +391,45 @@ console.log(language);")
       })
     }
     if (input$navbar == "FOD") {
-      if (ui_loaded$FOD == FALSE) {
+      if (!ui_loaded$FOD) {
         output$fod_ui <- renderUI(FODUI("FOD"))
         ui_loaded$FOD <- TRUE
-        FOD("FOD")
+        FOD("FOD") # Call the server
       }
     }
     if (input$navbar == "img") {
-      if (ui_loaded$img == FALSE) {
+      if (!ui_loaded$img) {
         output$img_ui <- renderUI(imgUI("img"))
         ui_loaded$img <- TRUE
-        img("img", con = AquaCache, language = languageSelection, restoring = isRestoring_img)
+        img("img", con = AquaCache, language = languageSelection, restoring = isRestoring_img) # Call the server
       }
     }
     if (input$navbar == "gen") {
-      if (ui_loaded$gen == FALSE) {
+      if (!ui_loaded$gen) {
         output$gen_ui <- renderUI(genUI("gen"))
         ui_loaded$gen <- TRUE
-        gen("gen", EQWin, AquaCache)
+        gen("gen", EQWin, AquaCache) # Call the server
       }
     }
     if (input$navbar == "basins") {
-      if (ui_loaded$basins == FALSE) {
+      if (!ui_loaded$basins) {
         output$basins_ui <- renderUI(basinsUI("basins"))
         ui_loaded$basins <- TRUE
-        basins("basins", AquaCache)
+        basins("basins", AquaCache) # Call the server
       }
     }
     if (input$navbar == "metadata") {
-      if (ui_loaded$metadata == FALSE) {
+      if (!ui_loaded$metadata) {
         output$metadata_ui <- renderUI(metadataUI("metadata"))
         ui_loaded$metadata <- TRUE
-        metadata("metadata", AquaCache)
+        metadata("metadata", AquaCache) # Call the server
+      }
+    }
+    if (input$navbar == "addImg") {
+      if (!ui_loaded$addImg) {
+        output$addImg_ui <- renderUI(addImgUI("addImg"))  # Render the UI
+        ui_loaded$addImg <- TRUE
+        addImg("addImg", AquaCache)  # Call the server
       }
     }
   }) # End of observeEvent for loading modules based on navbar
