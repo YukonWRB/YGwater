@@ -1,4 +1,4 @@
-#' Sollinst xle logger file processing
+#' Solinst xle logger file processing
 #' 
 #' @description 
 #' Parse xle (Solinst) logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Created to work within the Yukon Water Resources Branch's folder structure.
@@ -12,7 +12,6 @@
 #'
 #' @return Moves YOWN xle file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions if aq_upload is TRUE, else returns a data.frame.
 #' @export
-#' 
 
 xle_processing <- function(file,
                            aq_upload = TRUE,
@@ -151,6 +150,10 @@ xle_processing <- function(file,
     conductivity_unit <- channel_data_header$Unit[3]
   }
   
+  # Initiate log entry
+  write(c("\n", as.character(Sys.time())), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+  write(paste0("File ", file), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+  
   # Check location ID against master sheet, throw error if not found and move file to "FAILED" folder
   well_loc <- stringr::str_extract(instrument_data_header$Value[instrument_data_header$Property == "Location"], "(?<=YOWN).{4,6}"  ) # Gets the 5 characters after YOWN-
   well_loc <- sub("_", "", well_loc)
@@ -167,6 +170,7 @@ xle_processing <- function(file,
     stop("The YOWN code specified in the file name does not exist") 
   }
   
+  write(paste0(well_loc, " detected in file name"), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
   
   # Extract Logs into a Data Frame
   data <- xml_file %>%
