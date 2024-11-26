@@ -54,7 +54,6 @@ Imports:
     tidyr,
     tidyselect,
     utils,
-    XML,
     xml2,
     zoo
 Suggests:
@@ -85,6 +84,7 @@ Suggests:
     shinyWidgets,
     testthat (>= 3.0.0),
     tidyhydat,
+    tibble,
     vdiffr,
     weathercan,
     withr

@@ -5,26 +5,34 @@
 \title{In Situ html logger file processing}
 \usage{
 html_processing(
-  html_file,
+  file,
+  aq_upload = TRUE,
   master_sheet =
-    "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
+    "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
   logger_tracking =
-    "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
-  YOWN_logger_folder =
-    "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
+    "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
+  dropbox =
+    "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
+  repo =
+    "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
 )
 }
 \arguments{
-\item{html_file}{File name of .html file, must be in the logger dropbox folder}
+\item{file}{Full path to the .html file. This must be an html file from an In Situ logger.}
 
-\item{master_sheet}{Path to YOWN master sheet}
+\item{aq_upload}{Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned.}
 
-\item{logger_tracking}{Path to YOWN logger tracking sheet}
+\item{master_sheet}{Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.}
 
-\item{YOWN_logger_folder}{Path to YOWN logger dropbox folder}
+\item{logger_tracking}{Path to YOWN logger tracking sheet (.xlsx), used to track logger metadata. This part is done within a tryCatch block to enable this function to run even if the logger tracking sheet is open, missing, or otherwise inaccessible.}
+
+\item{dropbox}{Path to YOWN logger dropbox folder, where the html file is located. This is used to move the file to the appropriate folder after processing.}
+
+\item{repo}{Path to YOWN Active Wells folder, which will be concatenated with the YOWN ID to create the final resting place for the html file. If NULL the file will not get moved.}
 }
 \value{
 Moves YOWN html file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions. Adds pressure column if missing, based on depth column and conversions calcs on In Situ website
+#' @export
 }
 \description{
 Parse YOWN html logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Used "Pressure" column after converting to m water column. If pressure column does not exist, converts from deth using formula supplied by In Situ
