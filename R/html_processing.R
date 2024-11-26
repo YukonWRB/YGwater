@@ -24,7 +24,6 @@ html_processing <- function(file,
     stop("The file must have the extension .html")
   }
   
-  
   # Read in reference sheets and logger drop folder
   master <- openxlsx::read.xlsx(master_sheet, sheet = "YOWN_MASTER")
   YOWNIDs <- master$YOWN.Code 
