@@ -53,11 +53,16 @@ app_server <- function(input, output, session) {
       if (nrow(valid) == 0) {
         EQWin <- NULL
       }
+      print("Connected to EQWin")
     }, error = function(e) {
       EQWin <<- NULL
     })
   } else {
     EQWin <- NULL
+  }
+  
+  if (is.null(EQWin)) {
+    print("Failed to connect to EQWin")
   }
   
   AquaCache <- AquaConnect(name = config$dbName, 
@@ -68,8 +73,6 @@ app_server <- function(input, output, session) {
                            RLS_user = config$RLS_user,
                            RLS_pass = config$RLS_pass,
                            silent = TRUE)
-  
-  print("Connected to EQWin")
   print("Connected to AquaCache")
   
   session$onUnhandledError(function() {
