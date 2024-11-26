@@ -153,7 +153,7 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
   
   # Fetch the data #######################################################################################
   write_time <- format(Sys.time(), "%Y%m%d %H%M")
-  sampleIds <- DBI::dbGetQuery(EQWin, paste0("SELECT eqsampls.StnId, eqsampls.SampleId, eqsampls.CollectDateTime, eqcodes.CodeDesc FROM eqsampls INNER JOIN eqcodes ON eqsampls.SampleClass = eqcodes.CodeValue WHERE eqcodes.CodeField = 'eqsampls.SampleClass' AND eqsampls.StnId IN (", paste0(StnIds, collapse = ", "), ") AND eqsampls.CollectDateTime > #", as.character(start), "# AND eqsampls.CollectDateTime < #", as.character(end), "#;"))
+  sampleIds <- DBI::dbGetQuery(EQWin, paste0("SELECT eqsampls.StnId, eqsampls.SampleId, eqsampls.CollectDateTime, eqsampls.SampleClass, eqcodes.CodeDesc FROM eqsampls INNER JOIN eqcodes ON eqsampls.SampleClass = eqcodes.CodeValue WHERE eqcodes.CodeField = 'eqsampls.SampleClass' AND eqsampls.StnId IN (", paste0(StnIds, collapse = ", "), ") AND eqsampls.CollectDateTime > #", as.character(start), "# AND eqsampls.CollectDateTime < #", as.character(end), "#;"))
   
   if (nrow(sampleIds) == 0) {
     stop("No samples found for the date range and stations specified.")
@@ -245,7 +245,7 @@ EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NUL
     
   } else if (format == 'long') {
     datalist <- list()
-    datalist[["data"]] <- merge(results[, c("SampleId", "ParamId", "Result")], samps_locs[, c("SampleId", "StnId", "CollectDateTime")])
+    datalist[["data"]] <- merge(results[, c("SampleId", "ParamId", "Result")], samps_locs[, c("SampleId", "StnId", "CollectDateTime", "SampleClass")]) # added SampleClass
     if (!is.null(DL1)) {
       if (DL1 == "negative") {
         datalist[["data"]]$Result <- sapply(datalist[["data"]]$Result, function(x) {
