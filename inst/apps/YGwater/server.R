@@ -435,6 +435,13 @@ console.log(language);")
         addImg("addImg", AquaCache)  # Call the server
       }
     }
+    if (input$navbar == "addTsLoc") {
+      if (!ui_loaded$addTsLoc) {
+        output$addTsLoc_ui <- renderUI(addTsLocUI("addTsLoc"))  # Render the UI
+        ui_loaded$addTsLoc <- TRUE
+        addTsLoc("addTsLoc", AquaCache)  # Call the server
+      }
+    }
   }) # End of observeEvent for loading modules based on navbar
   
 } # End of main server
