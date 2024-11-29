@@ -25,6 +25,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   rlang::check_installed("shinyjs", reason = "required to use YGwater app")
   rlang::check_installed("shinythemes", reason = "required to use YGwater app")
   rlang::check_installed("DT", reason = "required to use YGwater app")
+  rlang::check_installed("tidyhydat", reason = "required to use YGwater app")
   # rlang::check_installed("exifr", reason = "required to use YGwater app")
   # rlang::check_installed("magick", reason = "required to use YGwater app")
 
