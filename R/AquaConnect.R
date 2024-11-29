@@ -23,7 +23,7 @@
 AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), port = Sys.getenv("aquacachePort"), username = Sys.getenv("aquacacheUser"), password = Sys.getenv("aquacachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), silent = FALSE){
 
   tryCatch({
-    hydro <- DBI::dbConnect(drv = RPostgres::Postgres(),
+    con <- DBI::dbConnect(drv = RPostgres::Postgres(),
                             dbname = name,
                             host = host,
                             port = port,
@@ -36,11 +36,11 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
     user <- DBI::dbGetQuery(con, "SELECT current_user;")
     if (!user[1,1] %in% c("postgres", "admin")) {
       if (nchar(RLS_user) > 0 && nchar(RLS_pass) > 0) { # If the credentials exist, try them
-        res <- validateACUser(RLS_user, RLS_pass, hydro)
+        res <- validateACUser(RLS_user, RLS_pass, con)
         if (res) {
-          DBI::dbExecute(hydro, paste0("SET logged_in_user.username = '", RLS_user, "';"))
+          DBI::dbExecute(con, paste0("SET logged_in_user.username = '", RLS_user, "';"))
         } else { # If the credentials fail, log in as public and warn the user
-          DBI::dbExecute(hydro, "SET logged_in_user.username = 'public';")
+          DBI::dbExecute(con, "SET logged_in_user.username = 'public';")
           message("Row-level security username or password failed when pulling from you .Renviron file. You are now logged in as 'public'.")
         }
       } else { # no credentials in the .renviron file
@@ -50,20 +50,20 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
           username <- readline("Username: ")
           if (nchar(username) > 0) {
             password <- readline("Password: ")
-            res <- validateACUser(username, password, hydro)
+            res <- validateACUser(username, password, con)
             if (res) {
-              DBI::dbExecute(hydro, paste0("SET logged_in_user.username = '", username, "';"))
+              DBI::dbExecute(con, paste0("SET logged_in_user.username = '", username, "';"))
               message("You are now logged in as '", username, "'.")
             } else {
-              DBI::dbExecute(hydro, "SET logged_in_user.username = 'public';")
+              DBI::dbExecute(con, "SET logged_in_user.username = 'public';")
               message("Username or password failed. You are now logged in as 'public'.")
             }
           } else {
-            DBI::dbExecute(hydro, "SET logged_in_user.username = 'public';")
+            DBI::dbExecute(con, "SET logged_in_user.username = 'public';")
             message("You are now logged in as 'public'.")
           }
         } else {
-          DBI::dbExecute(hydro, "SET logged_in_user.username = 'public';")
+          DBI::dbExecute(con, "SET logged_in_user.username = 'public';")
           message("You are now logged in as 'public'. If you need to change this either connect using an interactive session or use superuser credentials.")
         }
       }
@@ -73,7 +73,7 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
       message("Connected to the aquacache database with the timezone set to UTC.")
       message("Remember to disconnect using DBI::dbDisconnect() when finished.")
     }
-    return(hydro)
+    return(con)
   }, error = function(e){
     stop("Connection failed.")
   })
