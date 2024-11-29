@@ -3,14 +3,14 @@
 #' @description
 #' `r lifecycle::badge("stable")`
 #'
-#' This function exists to facilitate connecting to the AquaCache database. You can pass your own database connection parameters, for example to connect to a dev instance instead of the default production instance.
-#' Database superusers will have access to all database records, but other users will be asked to provide their username and password to access records other than the 'public' ones. Note that this is *not necessarily* the same username and password as the one used to log into the database itself.
+#' This function exists to facilitate connecting to the aquacache database. You can pass your own database connection parameters, for example to connect to a dev instance instead of the default production instance.
+#' Database superusers or admins will have access to all database records (unless your instance of aquacache was set up differently), but other users will be asked to provide their row level security username and password to access records other than the 'public' ones. Note that this is *not necessarily* the same username and password as the one used to log into the database itself.
 #'
 #' @param name Database name.
-#' @param host Database host address. By default searches the .Renviron file for parameter:value pair of form AquaCacheHost="hostname".
-#' @param port Connection port. By default searches the .Renviron file for parameter=value pair of form AquaCachePort="1234".
-#' @param username Username. By default searches the .Renviron file for parameter=value pair of form AquaCacheUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.
-#' @param password Password. By default searches the .Renviron file for parameter=value pair of form AquaCachePass="password".
+#' @param host Database host address. By default searches the .Renviron file for parameter:value pair of form aquacacheHost="hostname".
+#' @param port Connection port. By default searches the .Renviron file for parameter=value pair of form aquacachePort="1234".
+#' @param username Username. By default searches the .Renviron file for parameter=value pair of form aquacacheUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.
+#' @param password Password. By default searches the .Renviron file for parameter=value pair of form aquacachePass="password".
 #' @param RLS_user Username for row-level security. Default searches the .Renviron file for parameter=value pair of form RLS_user="username" and if not found either prompts the user for input or logs in as 'public' if not interactive.
 #' @param RLS_pass Password for row-level security. Default searches the .Renviron file for parameter=value pair of form RLS_pass="password" and if not found either prompts the user for input or logs in as 'public' if not interactive.
 #' @param silent TRUE suppresses messages except for errors.
@@ -20,7 +20,7 @@
 #' @export
 #'
 
-AquaConnect <- function(name = "AquaCache", host = Sys.getenv("AquaCacheHost"), port = Sys.getenv("AquaCachePort"), username = Sys.getenv("AquaCacheUser"), password = Sys.getenv("AquaCachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), silent = FALSE){
+AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), port = Sys.getenv("aquacachePort"), username = Sys.getenv("aquacacheUser"), password = Sys.getenv("aquacachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), silent = FALSE){
 
   tryCatch({
     hydro <- DBI::dbConnect(drv = RPostgres::Postgres(),
@@ -30,7 +30,11 @@ AquaConnect <- function(name = "AquaCache", host = Sys.getenv("AquaCacheHost"), 
                             user = username,
                             password = password)
     
-    if (!DBI::dbGetQuery(hydro, "SELECT rolsuper FROM pg_roles WHERE rolname = current_user;")[1,1]) { # If the user is not a superuser, check for row-level security credentials
+    # Explicitly set the timezone to UTC as all functions in this package work with UTC timezones
+    DBI::dbExecute(con, "SET timezone = 'UTC'")
+    
+    user <- DBI::dbGetQuery(con, "SELECT current_user;")
+    if (!user[1,1] %in% c("postgres", "admin")) {
       if (nchar(RLS_user) > 0 && nchar(RLS_pass) > 0) { # If the credentials exist, try them
         res <- validateACUser(RLS_user, RLS_pass, hydro)
         if (res) {
@@ -66,6 +70,7 @@ AquaConnect <- function(name = "AquaCache", host = Sys.getenv("AquaCacheHost"), 
     }
     
     if (!silent) {
+      message("Connected to the aquacache database with the timezone set to UTC.")
       message("Remember to disconnect using DBI::dbDisconnect() when finished.")
     }
     return(hydro)

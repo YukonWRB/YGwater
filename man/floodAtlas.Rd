@@ -7,11 +7,11 @@
 floodAtlas(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
-  dbPort = Sys.getenv("AquaCachePort"),
+  dbPort = Sys.getenv("aquacachePort"),
   dbName = "AquaCache",
-  dbHost = Sys.getenv("AquaCacheHost"),
-  dbUser = Sys.getenv("AquaCacheUser"),
-  dbPass = Sys.getenv("AquaCachePass")
+  dbHost = Sys.getenv("aquacacheHost"),
+  dbUser = Sys.getenv("aquacacheUser"),
+  dbPass = Sys.getenv("aquacachePass")
 )
 }
 \arguments{

@@ -7,11 +7,11 @@
 YGwater(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
-  dbName = "AquaCache",
-  dbHost = Sys.getenv("AquaCacheHost"),
-  dbPort = Sys.getenv("AquaCachePort"),
-  dbUser = Sys.getenv("AquaCacheUser"),
-  dbPass = Sys.getenv("AquaCachePass"),
+  dbName = "aquacache",
+  dbHost = Sys.getenv("aquacacheHost"),
+  dbPort = Sys.getenv("aquacachePort"),
+  dbUser = Sys.getenv("aquacacheUser"),
+  dbPass = Sys.getenv("aquacachePass"),
   RLS_user = Sys.getenv("RLS_user"),
   RLS_pass = Sys.getenv("RLS_pass"),
   accessPath =
@@ -23,15 +23,15 @@ YGwater(
 
 \item{port}{Port number (numeric) on which to serve the app. Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network.}
 
-\item{dbName}{Name of the AquaCache database. Default is "AquaCache".}
+\item{dbName}{Name of the aquacache database. Default is "aquacache".}
 
-\item{dbHost}{Host address of the AquaCache database. Default is pulled from the .Renviron file.}
+\item{dbHost}{Host address of the aquacache database. Default is pulled from the .Renviron file.}
 
-\item{dbPort}{Port number of the AquaCache database. Default is pulled from the .Renviron file.}
+\item{dbPort}{Port number of the aquacache database. Default is pulled from the .Renviron file.}
 
-\item{dbUser}{Username for the AquaCache database. Default is pulled from the .Renviron file.}
+\item{dbUser}{Username for the aquacache database. Default is pulled from the .Renviron file.}
 
-\item{dbPass}{Password for the AquaCache database. Default is pulled from the .Renviron file.}
+\item{dbPass}{Password for the aquacache database. Default is pulled from the .Renviron file.}
 
 \item{RLS_user}{Username for row-level security. Default is pulled from the .Renviron file.}
 
@@ -45,5 +45,5 @@ Opens a Shiny application.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
 
-This application is designed for use by WRB or other YG staff, and is designed to allow greater flexibility and tune ability of plots and outputs than the public facing app (Streamline). In addition, certain portions of the application interface with databases other than AquaCache such as EQWin or the snow database, and may allow for edit privileges to these databases. This app is also used to roll out new, experimental features before they are added to Streamline.
+This application is designed for use by WRB or other YG staff, and is designed to allow greater flexibility and tune ability of plots and outputs than the public facing app (Streamline). In addition, certain portions of the application interface with databases other than aquacache such as EQWin or the snow database, and may allow for edit privileges to these databases. This app is also used to roll out new, experimental features before they are added to Streamline.
 }

@@ -16,7 +16,7 @@
 #' @return Opens a Shiny application.
 #' @export
 
-floodAtlas <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbPort = Sys.getenv("AquaCachePort"), dbName = "AquaCache", dbHost = Sys.getenv("AquaCacheHost"), dbUser = Sys.getenv("AquaCacheUser"), dbPass = Sys.getenv("AquaCachePass")) {
+floodAtlas <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbPort = Sys.getenv("aquacachePort"), dbName = "AquaCache", dbHost = Sys.getenv("aquacacheHost"), dbUser = Sys.getenv("aquacacheUser"), dbPass = Sys.getenv("aquacachePass")) {
   
   rlang::check_installed("shiny", reason = "required to use floodAtlas app")
   rlang::check_installed("shinyjs", reason = "required to use floodAtlas app")

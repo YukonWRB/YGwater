@@ -214,23 +214,146 @@ addTsLoc <- function(id, AquaCache) {
       }
     })
     
+    ## Allow users to add a few things to the DB ###################################
     ## If user types in their own network/project/owner/share_with, bring up a modal to add it to the database. This requires updating moduleData and the selectizeInput choices
-    # Observe the network click
+    ### Observe the network selectizeInput for new networks #######################
     observeEvent(input$network, {
       if (input$network %in% moduleData$networks$network_id) {
         return()
       }
+      net_types <- dbGetQueryDT(AquaCache, "SELECT id, name FROM network_project_types")
       showModal(modalDialog(
-        textInput("network_name", "Network name"),
-        actionButton("add_network", "Add network")
+        textInput(ns("network_name"), "Network name"),
+        textInput(ns("network_name_fr"), "Network name French (optional)"),
+        textInput(ns("network_description"), "Network description"),
+        textInput(ns("network_description_fr"), "Network description French (optional)"),
+        selectizeInput(ns("network_type"), "Network type", stats::setNames(net_types$id, net_types$name), multiple = FALSE),
+        actionButton(ns("add_network"), "Add network")
       ))
-    })
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
     observeEvent("add_network", {
+      # Check that mandatory fields are filled in
+      if (!isTruthy(input$network_name)) {
+        showModal(modalDialog(
+          "Network name is mandatory"
+        ))
+        return()
+      }
+      if (!isTruthy(input$network_description)) {
+        showModal(modalDialog(
+          "Network description is mandatory"
+        ))
+        return()
+      }
       # Add the network to the database
-      # Update moduleData$networks
-      # Update the selectizeInput choices
+      df <- data.frame(name = input$network_name,
+                       name_fr = if (isTruthy(input$network_name_fr)) input$network_name_fr else NA,
+                       description = input$network_description,
+                       description_fr = if (isTruthy(input$network_description_fr)) input$network_description_fr else NA,
+                       type = input$network_type)
+      DBI::dbAppendTable(AquaCache, "networks", df, append = TRUE)
     })
-
+    ### Observe the project selectizeInput for new projects #######################
+    observeEvent(input$project, {
+      if (input$project %in% moduleData$projects$project_id) {
+        return()
+      }
+      proj_types <- dbGetQueryDT(AquaCache, "SELECT id, name FROM network_project_types")
+      
+      showModal(modalDialog(
+        textInput(ns("project_name"), "Project name"),
+        textInput(ns("project_name_fr"), "Project name French (optional)"),
+        textInput(ns("project_description"), "Project description"),
+        textInput(ns("project_description_fr"), "Project description French (optional)"),
+        selectizeInput(ns("project_type"), "Project type", stats::setNames(proj_types$id, proj_types$name), multiple = FALSE),
+        actionButton(ns("add_project"), "Add project")
+      ))
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    observeEvent("add_project", {
+      # Check that mandatory fields are filled in
+      if (!isTruthy(input$project_name)) {
+        showModal(modalDialog(
+          "Project name is mandatory"
+        ))
+        return()
+      }
+      if (!isTruthy(input$project_description)) {
+        showModal(modalDialog(
+          "Project description is mandatory"
+        ))
+        return()
+      }
+      # Add the project to the database
+      df <- data.frame(name = input$project_name,
+                       name_fr = if (isTruthy(input$project_name_fr)) input$project_name_fr else NA,
+                       description = input$project_description,
+                       description_fr = if (isTruthy(input$project_description_fr)) input$project_description_fr else NA,
+                       type = input$project_type)
+      DBI::dbAppendTable(AquaCache, "projects", df, append = TRUE)
+    })
+    ### Observe the owner selectizeInput for new owners ############
+    observeEvent(input$loc_owner, {
+      if (input$loc_owner %in% moduleData$owners_contributors$owner_contributor_id) {
+        return()
+      }
+      showModal(modalDialog(
+        textInput(ns("owner_name"), "Owner name"),
+        textInput(ns("owner_name_fr"), "Owner name French (optional)"),
+        textInput(ns("contact_name"), "Contact name (optional)"),
+        textInput(ns("contact_phone"), "Contact phone (optional)"),
+        textInput(ns("contact_email"), "Contact email (optional)"),
+        textInput(ns("contact_note"), "Contact note (optional, for context)"),
+        actionButton(ns("add_owner"), "Add owner")
+      ))
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    observeEvent("add_owner", {
+      # Check that mandatory fields are filled in
+      if (!isTruthy(input$owner_name)) {
+        showModal(modalDialog(
+          "Owner name is mandatory"
+        ))
+        return()
+      }
+      # Add the owner to the database
+      df <- data.frame(name = input$owner_name,
+                       name_fr = if (isTruthy(input$owner_name_fr)) input$owner_name_fr else NA,
+                       contact_name = if (isTruthy(input$contact_name)) input$contact_name else NA,
+                       contact_phone = if (isTruthy(input$contact_phone)) input$contact_phone else NA,
+                       contact_email = if (isTruthy(input$contact_email)) input$contact_email else NA,
+                       contact_note = if (isTruthy(input$contact_note)) input$contact_note else NA)
+      DBI::dbAppendTable(AquaCache, "owners_contributors", df, append = TRUE)
+    })
+    ### Observe the share_with selectizeInput for new user groups ##############################
+    observeEvent(input$share_with, {
+      if (input$share_with %in% moduleData$user_groups$group_id) {
+        return()
+      }
+      showModal(modalDialog(
+        textInput(ns("group_name"), "Group name"),
+        textInput(ns("group_description"), "Group description"),
+        actionButton(ns("add_group"), "Add group")
+      ))
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    observeEvent("add_group", {
+      # Check that mandatory fields are filled in
+      if (!isTruthy(input$group_name)) {
+        showModal(modalDialog(
+          "Group name is mandatory"
+        ))
+        return()
+      }
+      if (!isTruthy(input$group_description)) {
+        showModal(modalDialog(
+          "Group description is mandatory"
+        ))
+        return()
+      }
+      # Add the group to the database
+      df <- data.frame(name = input$group_name,
+                       description = input$group_description)
+      DBI::dbAppendTable(AquaCache, "user_groups", df, append = TRUE)
+    })
+    
     ## Observe the add_location click #################
     # Run checks, if everything passes call AquaCache::addACLocation
     observeEvent(input$add_loc, {

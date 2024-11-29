@@ -5,11 +5,11 @@
 \title{Connect to the AquaCache database}
 \usage{
 AquaConnect(
-  name = "AquaCache",
-  host = Sys.getenv("AquaCacheHost"),
-  port = Sys.getenv("AquaCachePort"),
-  username = Sys.getenv("AquaCacheUser"),
-  password = Sys.getenv("AquaCachePass"),
+  name = "aquacache",
+  host = Sys.getenv("aquacacheHost"),
+  port = Sys.getenv("aquacachePort"),
+  username = Sys.getenv("aquacacheUser"),
+  password = Sys.getenv("aquacachePass"),
   RLS_user = Sys.getenv("RLS_user"),
   RLS_pass = Sys.getenv("RLS_pass"),
   silent = FALSE
@@ -18,13 +18,13 @@ AquaConnect(
 \arguments{
 \item{name}{Database name.}
 
-\item{host}{Database host address. By default searches the .Renviron file for parameter:value pair of form AquaCacheHost="hostname".}
+\item{host}{Database host address. By default searches the .Renviron file for parameter:value pair of form aquacacheHost="hostname".}
 
-\item{port}{Connection port. By default searches the .Renviron file for parameter=value pair of form AquaCachePort="1234".}
+\item{port}{Connection port. By default searches the .Renviron file for parameter=value pair of form aquacachePort="1234".}
 
-\item{username}{Username. By default searches the .Renviron file for parameter=value pair of form AquaCacheUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.}
+\item{username}{Username. By default searches the .Renviron file for parameter=value pair of form aquacacheUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.}
 
-\item{password}{Password. By default searches the .Renviron file for parameter=value pair of form AquaCachePass="password".}
+\item{password}{Password. By default searches the .Renviron file for parameter=value pair of form aquacachePass="password".}
 
 \item{RLS_user}{Username for row-level security. Default searches the .Renviron file for parameter=value pair of form RLS_user="username" and if not found either prompts the user for input or logs in as 'public' if not interactive.}
 
@@ -38,6 +38,6 @@ A connection to the database.
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function exists to facilitate connecting to the AquaCache database. You can pass your own database connection parameters, for example to connect to a dev instance instead of the default production instance.
-Database superusers will have access to all database records, but other users will be asked to provide their username and password to access records other than the 'public' ones. Note that this is \emph{not necessarily} the same username and password as the one used to log into the database itself.
+This function exists to facilitate connecting to the aquacache database. You can pass your own database connection parameters, for example to connect to a dev instance instead of the default production instance.
+Database superusers or admins will have access to all database records (unless your instance of aquacache was set up differently), but other users will be asked to provide their row level security username and password to access records other than the 'public' ones. Note that this is \emph{not necessarily} the same username and password as the one used to log into the database itself.
 }
