@@ -2,7 +2,7 @@
 % Please edit documentation in R/AquaConnect.R
 \name{AquaConnect}
 \alias{AquaConnect}
-\title{Connect to the AquaCache database}
+\title{Connect to the aquacache}
 \usage{
 AquaConnect(
   name = "aquacache",

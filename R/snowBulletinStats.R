@@ -5,10 +5,10 @@
 #'
 #' This function generates the statistics associated with the snow bulletin for a specified date. The output is list of tables (in R), or a number of excel workbooks.
 #'
-#' This function fetches data from the local postgresql AquaCache database created/maintained by the AquaCache package.
+#' This function fetches data from the local postgresql aquacache created/maintained by the AquaCache package.
 #'
 #' @details
-#' To download data, you MUST have your AquaCache credentials added to your .Renviron file. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
+#' To download data, you MUST have your aquacache credentials added to your .Renviron file. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
 #'
 #' @param year Year for which the snow bulletin stats are calculated.
 #' @param month Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5.

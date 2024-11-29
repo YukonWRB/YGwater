@@ -33,7 +33,7 @@ snowInfo(
 
 \item{quiet}{Suppresses most messages and warnings.}
 
-\item{con}{A connection to the AquaCache database. Leave as NULL to use \code{\link[=AquaConnect]{AquaConnect()}} to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.}
+\item{con}{A connection to the aquacache. Leave as NULL to use \code{\link[=AquaConnect]{AquaConnect()}} to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.}
 }
 \value{
 A list with four data.frames: location metadata, basic statistics, trend information, and snow course measurements is returned to the R environment. In addition, an Excel workbook is saved to the save_path with the four data.frames, and a new folder created to hold SWE and depth plots for each station requested.

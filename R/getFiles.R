@@ -3,7 +3,7 @@
 #' @description
 #' lifecycle::badge("stable")
 #' 
-#' Extracts an image stored in the AquaCache database as BYTEA type. For extracting documents see [getDocument()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
+#' Extracts an image stored in the aquacache as BYTEA type. For extracting documents see [getDocument()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
 #' 
 #' @details
 #' If you need additional flexibility use function [getFile()] instead. This should not normally be needed with a database created by the AquaCache package but is made available for use with other databases.
@@ -33,7 +33,7 @@ getImage <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
 #' @description
 #' lifecycle::badge("stable")
 
-#' Extracts a document stored in the AquaCache database as BYTEA type. For extracting images see [getImage()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
+#' Extracts a document stored in the aquacache as BYTEA type. For extracting images see [getImage()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
 #'
 #'@details
 #' If you need additional flexibility use function [getFile()] instead. This should not normally be needed with a database created by the AquaCache package but is made available for use with other databases.

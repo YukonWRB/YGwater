@@ -1,4 +1,4 @@
-#' Connect to the AquaCache database
+#' Connect to the aquacache
 #'
 #' @description
 #' `r lifecycle::badge("stable")`
