@@ -11,7 +11,7 @@ SWE_station(
   csv = FALSE,
   return_missing = FALSE,
   active = TRUE,
-  source = "AquaCache",
+  source = "aquacache",
   summarise = TRUE,
   save_path = "choose"
 )
@@ -29,7 +29,7 @@ SWE_station(
 
 \item{active}{TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.}
 
-\item{source}{Database from which to fetch this data. Options are: AquaCache or snow.}
+\item{source}{Database from which to fetch this data. Options are: aquacache or snow.}
 
 \item{summarise}{TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.}
 

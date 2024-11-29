@@ -35,7 +35,7 @@ basinPrecip(
 
 \item{silent}{If TRUE, no output is printed to the console.}
 
-\item{con}{A connection to the AquaCache/hydromet database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
+\item{con}{A connection to the aquacache database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 
 \item{hrdpa_loc}{The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.}
 

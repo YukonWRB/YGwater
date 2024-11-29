@@ -33,7 +33,7 @@ tabularReport(
 
 \item{archive_path}{The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including extension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.}
 
-\item{con}{A connection to the AquaCache/hydromet database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
+\item{con}{A connection to the aquacache database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }
 \value{
 An Excel workbook containing the report with one tab per timeseries type.

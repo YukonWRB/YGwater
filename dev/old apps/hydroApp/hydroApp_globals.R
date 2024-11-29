@@ -7,10 +7,10 @@ hydroApp_globals <- function(dev) {
       pool <<- pool::dbPool(
         drv = RPostgres::Postgres(),
         dbname = "AquaCache",
-        host = Sys.getenv("AquaCacheHost"),
-        port = Sys.getenv("AquaCachePort"),
-        user = Sys.getenv("AquaCacheUser"),
-        password = Sys.getenv("AquaCachePass")
+        host = Sys.getenv("aquacacheHost"),
+        port = Sys.getenv("aquacachePort"),
+        user = Sys.getenv("aquacacheUser"),
+        password = Sys.getenv("aquacachePass")
       )
     }
   } else {
@@ -18,10 +18,10 @@ hydroApp_globals <- function(dev) {
       pool <<- pool::dbPool(
         drv = RPostgres::Postgres(),
         dbname = "AquaCache_dev",
-        host = Sys.getenv("AquaCacheHost"),
-        port = Sys.getenv("AquaCachePort"),
-        user = Sys.getenv("AquaCacheUser"),
-        password = Sys.getenv("AquaCachePass")
+        host = Sys.getenv("aquacacheHost"),
+        port = Sys.getenv("aquacachePort"),
+        user = Sys.getenv("aquacacheUser"),
+        password = Sys.getenv("aquacachePass")
       )
     }
   }

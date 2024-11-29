@@ -185,12 +185,9 @@ WQReportUI <- function(id) {
                                       multiple = TRUE,
                                       width = "100%")
       ),
-      
       downloadButton(ns("create_report"), "Create Report")
       )
     )
-
-  
 }
 
 WQReportServer <- function(id, EQWin, AquaCache) {

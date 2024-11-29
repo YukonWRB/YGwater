@@ -70,7 +70,7 @@ snowBulletin <-
     ## Synchronize time series of interest
     # Check for credentials with read/write authority
     if (synchronize) {
-      # Make sure most recent version of AquaCache is downloaded
+      # Make sure most recent version of AquaCache R packageis downloaded
       remotes::install_github("YukonWRB/AquaCache")
       if (DBI::dbIsReadOnly(AquaCache::AquaConnect(silent = TRUE))) {
         message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")

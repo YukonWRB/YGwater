@@ -17,6 +17,11 @@ gen <- function(id, EQWin, AquaCache) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
+    
+    # Hide the water quality report if EQWin is not available (at least until that data goes to AquaCache)
+    if (is.null(EQWin)) {
+      updateSelectizeInput(session, "report_type", choices = c("Snowpack Info Report", "Water Info Report", "Drainage Basins"))
+    }
 
     # Load the submodule server and UI based on the report type selected
     observeEvent(input$report_type, {

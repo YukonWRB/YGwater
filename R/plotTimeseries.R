@@ -1,9 +1,9 @@
-#' Plot a continous timeseries from the AquaCache database
+#' Plot a continous timeseries from the aquacache
 #'
 #' @description
 #' `r lifecycle::badge('stable')`
 #' 
-#' This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
+#' This function plots continuous timeseries from the aquacache. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
 #' 
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter name (text) or code (numeric) that you wish to plot. The location:parameter combo must be in the local database.
