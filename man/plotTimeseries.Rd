@@ -2,7 +2,7 @@
 % Please edit documentation in R/plotTimeseries.R
 \name{plotTimeseries}
 \alias{plotTimeseries}
-\title{Plot a continous timeseries from the AquaCache database}
+\title{Plot a continous timeseries from the aquacache}
 \usage{
 plotTimeseries(
   location,
@@ -86,5 +86,5 @@ A plotly object
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function plots continuous timeseries from the AquaCache database. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
+This function plots continuous timeseries from the aquacache. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
 }

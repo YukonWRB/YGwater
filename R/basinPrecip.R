@@ -19,7 +19,7 @@
 #' @param title Should a title be added to the map? Only used if map = TRUE.
 #' @param raster_col The color palette to use for the raster plot. Default is terra::map.pal("elevation", 10), **not** the terra::plot default. In all cases a very light blue-grey is the lowest precip amount color. Refer to [terra::map.pal()] for other color options. Only used if map = TRUE.
 #' @param silent If TRUE, no output is printed to the console.
-#' @param con A connection to the AquaCache/hydromet database. NULL uses [AquaConnect()] and automatically disconnects.
+#' @param con A connection to the aquacache database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param hrdpa_loc The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.
 #' @param hrdps_loc The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.
 #'

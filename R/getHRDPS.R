@@ -3,7 +3,7 @@
 #' @description
 #' `r lifecycle::badge("stable")`
 #'
-#' NOTE: If you have access to the WRB AquaCache database these rasters are already in there. Use function [getRaster()] to extract what you need to a .tiff file.
+#' NOTE: If you have access to the WRB aquacache these rasters are already in there. Use function [getRaster()] to extract what you need to a .tiff file.
 #'
 #' Utility function to retrieve gridded predictions output from the [HRDPS model](https://collaboration.cmc.ec.gc.ca/cmc/cmoi/product_guide/docs/tech_notes/technote_hrdps_e.pdf). In current form will delete all old files in the save directory.
 #'

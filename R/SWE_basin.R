@@ -9,7 +9,7 @@
 #' @param threshold A number between 1 and 10 giving the threshold below which the SWE for that basin and year are ignored. These numbers represent the sum of the factors of the stations for a basin which are not missing data for that year. 10 means that the swe values calculated from less than all the stations of that basin are ignored. 1 means that only the swe calculated from less than 1 out of 10 are ignored.
 #' @param summarise Summarises the data into a dataframe with the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
-#' @param source Database from which to fetch this data. Options are: AquaCache or snow.
+#' @param source Database from which to fetch this data. Options are: aquacache or snow.
 #' @return A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
 #' @export
 
@@ -19,10 +19,10 @@ SWE_basin <-
            threshold = 7,
            csv = FALSE,
            summarise = FALSE,
-           source = "AquaCache") {
+           source = "aquacache") {
 
-    ### Retrieve data from AquaCache db
-    if (source == "AquaCache") {
+    ### Retrieve data from aquacache db
+    if (source == "aquacache") {
       con <- AquaConnect(silent = TRUE)
       Meas <-
         DBI::dbGetQuery(con,
@@ -43,7 +43,7 @@ SWE_basin <-
       DBI::dbDisconnect(con)
       # Rename columns:
       colnames(Meas) <- c("location_id", "SWE", "target_date")
-    } else {stop("Parameter 'source' must be either 'AquaCache' or 'snow'")}
+    } else {stop("Parameter 'source' must be either 'aquacache' or 'snow'")}
 
     ###### PART 1. Aggregate SWE by basin and year ######
     # 1. Import the Factors table: To use location_numS and Weights for basin-scale SWE estimates:

@@ -11,7 +11,7 @@
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
 #' @param return_missing TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.
 #' @param active TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.
-#' @param source Database from which to fetch this data. Options are: AquaCache or snow.
+#' @param source Database from which to fetch this data. Options are: aquacache or snow.
 #' @param summarise TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.
 #' @param save_path The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.
 #' 
@@ -46,7 +46,7 @@ SWE_station <- function(stations = "all",
                         csv = FALSE,
                         return_missing = FALSE,
                         active = TRUE,
-                        source = "AquaCache",
+                        source = "aquacache",
                         summarise = TRUE, 
                         save_path = "choose") 
 {
@@ -78,8 +78,8 @@ SWE_station <- function(stations = "all",
   }
   
   #### --------------------------- Retrieve data ---------------------------- ####
-  ## From AquaCache db ##
-  if (source == "AquaCache") {
+  ## From aquacache db ##
+  if (source == "aquacache") {
     # Retrieve data from db
     con <- AquaConnect(silent = TRUE)
     
@@ -149,7 +149,7 @@ SWE_station <- function(stations = "all",
     # Extract date from sample_datetime
     Meas$sample_date <- as.Date(Meas$sample_date)
     
-  } else {stop("Parameter 'source' must be either 'AquaCache' or 'snow'")}
+  } else {stop("Parameter 'source' must be either 'aquacache' or 'snow'")}
   
   
   # Add Day, Month and Year columns to the Meas dataframe:
@@ -305,7 +305,7 @@ SWE_station <- function(stations = "all",
     tabl <- swe_station_summary
     
     # Add column for french name
-    if (source == "AquaCache") {
+    if (source == "aquacache") {
       tabl <- merge(tabl, unique(Meas[, c("location_id", "name_fr")]), by = "location_id", all.x = TRUE)
     }
   }
