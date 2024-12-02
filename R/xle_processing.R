@@ -246,7 +246,7 @@ xle_processing <- function(file,
           write("Level append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
         })
       } else if (i == "Water Temp.TEMPERATURE") {
-        temp <- data.frame(Time = final_data$Time, Value = final_data$'Temperature (°C)')
+        temp <- data.frame(Time = final_data$Time, Value = final_data$'Temperature (\u00B0C)')
         tryCatch({
           start <- Sys.time()
           result <- aq_upload(well_loc, i, temp)
@@ -256,7 +256,7 @@ xle_processing <- function(file,
           write("Temperature append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
       } else if (i == "Conductivity Field.Econdy-F") {
         tryCatch({
-          temp <- data.frame(Time = final_data$Time, Value = final_data$'Conductivity (µS/cm)')
+          temp <- data.frame(Time = final_data$Time, Value = final_data$'Conductivity (\u00B5S/cm)')
           start <- Sys.time()
           result <- aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
