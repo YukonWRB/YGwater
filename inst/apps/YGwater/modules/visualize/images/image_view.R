@@ -55,7 +55,7 @@ img <- function(id, con, language, restoring) {
       loc_choices <- stats::setNames(c("All", imgs$img_meta$location_id), c(translations[id == "all", get(language$language)][[1]], titleCase(imgs$img_meta[[translations[id == "generic_name_col", get(language$language)][[1]]]], language$abbrev)))
       loc_choices <- c(loc_choices[1], loc_choices[-1][order(names(loc_choices)[-1])]) # Order but keep "All" at the top
       output$loc <- renderUI({
-        selectizeInput(ns("loc"), label = titleCase(translations[id == "loc", get(language$language)][[1]], language$abbrev), choices = loc_choices, selected = input$loc)
+        selectizeInput(ns("loc"), label = titleCase(translations[id == "loc", get(language$language)][[1]], language$abbrev), choices = loc_choices, selected = input$loc, multiple = FALSE)
       })
     })
     

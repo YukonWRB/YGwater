@@ -144,6 +144,13 @@ console.log(language);")
       return()
     } else {
       showModal(modalDialog(
+        tags$script(HTML('
+$(document).keyup(function(event) {
+  if ($("#password").is(":focus") && (event.keyCode == 13)) {
+                         $("#confirmLogin").click();
+    }
+  });
+  ')),
         title = "Login",
         renderUI(HTML("Log in to add/modify data and administer assets.", "<br> <br>")),
         textInput("username", "Username"),
@@ -242,8 +249,7 @@ console.log(language);")
         footer = modalButton("Close")
       ))
       # Check to see if the connection is still open, if not reconnect
-      test <- DBI::dbGetQuery(AquaCache, "SELECT 1;")
-      if (nrow(test) == 0) {
+      if (!DBI::dbIsValid(AquaCache)) {
         AquaCache <<- AquaConnect(name = config$dbName, 
                                   host = config$dbHost,
                                   port = config$dbPort,

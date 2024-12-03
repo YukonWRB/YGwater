@@ -8,7 +8,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/admin/addTsLoc/addTsLoc.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/metadata/metadata_main.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/basins/basins_main.R", package = "YGwater"))
-  # source(system.file("apps/YGwater/modules/admin/images/addImg.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/images/addImg.R", package = "YGwater"))
 
   
   source(system.file("apps/YGwater/modules/visualize/visualize.R", package = "YGwater"))
