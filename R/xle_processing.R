@@ -15,8 +15,8 @@
 
 xle_processing <- function(file,
                            aq_upload = TRUE,
-                           master_sheet = "/env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
-                           logger_tracking = "/env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
+                           master_sheet = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
+                           logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
                            dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
                            repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
   
@@ -246,7 +246,7 @@ xle_processing <- function(file,
           write("Level append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
         })
       } else if (i == "Water Temp.TEMPERATURE") {
-        temp <- data.frame(Time = final_data$Time, Value = final_data[ , which(names(final_data) == "Temperature (\u00B0C)")])
+        temp <- data.frame(Time = final_data$Time, Value = final_data$'Temperature (\u00B0C)')
         tryCatch({
           start <- Sys.time()
           result <- aq_upload(well_loc, i, temp)
@@ -256,7 +256,7 @@ xle_processing <- function(file,
           write("Temperature append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
       } else if (i == "Conductivity Field.Econdy-F") {
         tryCatch({
-          temp <- data.frame(Time = final_data$Time, Value = final_data[ , which(names(final_data) == "Conductivity (\u00B5S/cm)")])
+          temp <- data.frame(Time = final_data$Time, Value = final_data$'Conductivity (\u00B5S/cm)')
           start <- Sys.time()
           result <- aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
