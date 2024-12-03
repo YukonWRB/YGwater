@@ -26,7 +26,8 @@ getRaster <- function() {
 #' @param geom_type One of c('ST_Point', 'ST_MultiPoint', 'ST_LineString', 'ST_MultiLineString', 'ST_Polygon', 'ST_MultiPolygon').
 #' @param return_cols The names of columns to return.
 #' @param bounds Optional bounds by which to limit the spatial extent returned. Currently returns the full extent of every feature intersecting the bounds. Refer to parameter 'boundary' of [rpostgis::pgGetGeom()] for details of how to specify this parameter.
-#' @param table The target table in the database (as character string). If not under the public schema, use format c("schema", "table").
+#' @param table The target table in the database (as character string). See 'schema' if not under the 'spatial' schema.
+#' @param schema The schema in which the target 'table' is located. Default is 'spatial'. Note that this is NOT the default for [rpostgis::pgGetGeom()].
 #' @param geom_col The name of the database table column in which to insert the geometry object.
 #' @param silent Should the function suppress all messages?
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
@@ -35,7 +36,7 @@ getRaster <- function() {
 #' @export
 #'
 
-getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, geom_type = NULL, return_cols = c("geom_id", "geom_type", "layer_name", "feature_name", "description"), bounds = NULL, table = "vectors", geom_col = "geom", silent = FALSE, con = NULL) {
+getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, geom_type = NULL, return_cols = c("geom_id", "geom_type", "layer_name", "feature_name", "description"), bounds = NULL, table = "vectors", schema = "spatial", geom_col = "geom", silent = FALSE, con = NULL) {
   
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
@@ -45,7 +46,7 @@ getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, ge
   rlang::check_installed("rpostgis", reason = "required to use function getVector.")
   
   if (is.null(geom_id) & is.null(layer_name) & is.null(feature_name) & is.null(geom_type)) {
-    stop("You need to specify at least one of the NULL parameters.")
+    stop("You need to specify at least one of the geom_id, layer_name, feature_name, or geom_type.")
   }
   if (!is.null(geom_type)) {
     if (length(geom_type) > 1) {
@@ -56,7 +57,7 @@ getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, ge
   }
   
   # build the query to see if data exists in the table
-  query <- paste0("SELECT geom_id, layer_name, feature_name, geom_type FROM ", table, " WHERE")
+  query <- paste0("SELECT geom_id, layer_name, feature_name, geom_type FROM ", schema, ".", table, " WHERE")
   
   if (!is.null(geom_id)) {
     query <- paste0(query,  " geom_id IN (", paste(geom_id, collapse = ", "), ") AND")
@@ -101,9 +102,9 @@ getVector <- function(geom_id = NULL, layer_name = NULL, feature_name = NULL, ge
   subquery <- gsub("\\s+AND$", "", subquery)
   
   if (silent) {
-    res <- suppressMessages(rpostgis::pgGetGeom(con, name = "vectors", geom = "geom", gid = "geom_id", other.cols = TRUE, clauses = subquery, returnclass = "terra", boundary = bounds))
+    res <- suppressMessages(rpostgis::pgGetGeom(con, name = c(schema, table), geom = "geom", gid = "geom_id", other.cols = TRUE, clauses = subquery, returnclass = "terra", boundary = bounds))
   } else {
-    res <- rpostgis::pgGetGeom(con, name = "vectors", geom = "geom", gid = "geom_id", other.cols = TRUE, clauses = subquery, returnclass = "terra", boundary = bounds)
+    res <- rpostgis::pgGetGeom(con, name = c(schema, table), geom = "geom", gid = "geom_id", other.cols = TRUE, clauses = subquery, returnclass = "terra", boundary = bounds)
   }
   return(res)
 }

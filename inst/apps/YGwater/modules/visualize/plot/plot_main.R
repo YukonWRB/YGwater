@@ -11,7 +11,7 @@ plotUI <- function(id) {
   )
 }
 
-plot <- function(id, EQWin, AquaCache) {
+plot <- function(id, mdb_files, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
 
@@ -37,7 +37,7 @@ plot <- function(id, EQWin, AquaCache) {
         output$submoduleUI <- renderUI({
           discretePlotUI(ns("discretePlot"))
         })
-        discretePlotServer("discretePlot", EQWin, AquaCache)
+        discretePlotServer("discretePlot", mdb_files, AquaCache)
         
       } else if (input$plot_type == "Continuous") {
         
@@ -57,7 +57,7 @@ plot <- function(id, EQWin, AquaCache) {
         output$submoduleUI <- renderUI({
           mixPlotUI(ns("mixPlot"))
         })
-        mixPlotServer("mixPlot", EQWin, AquaCache)
+        mixPlotServer("mixPlot", mdb_files, AquaCache)
       }
     })
   }) # End of moduleServer

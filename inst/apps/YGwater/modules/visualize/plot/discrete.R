@@ -7,6 +7,7 @@ discretePlotUI <- function(id) {
                    NULL,
                    choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
                    selected = "AC"),
+      uiOutput(ns("EQWin_source_ui")),
       # start and end datetime
       dateRangeInput(ns("date_range"),
                      "Select date range",
@@ -177,57 +178,75 @@ discretePlotUI <- function(id) {
   )
 }
 
-discretePlotServer <- function(id, EQWin, AquaCache) {
+discretePlotServer <- function(id, mdb_files, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements within the server code
-
+    
+    EQWin_selector <- reactiveVal(FALSE)
+    observeEvent(input$data_source, {
+      if (input$data_source == "AC") {
+        shinyjs::hide("EQWin_source")
+      } else {
+        if (!EQWin_selector()) {
+          EQWin_selector(TRUE)
+          output$EQWin_source_ui <- renderUI({
+            selectizeInput(ns("EQWin_source"), "EQWin database", choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
+          })
+        }
+        shinyjs::show("EQWin_source")
+      }
+    })
+    
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
+    
+    data$AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete' ORDER BY loc.name ASC")
+    data$AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete' ORDER BY p.param_name ASC")
+    
+    observeEvent(input$EQWin_source, {
+      EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
+      EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns ORDER BY StnCode;"))
+      EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns' ORDER BY groupname;")
+      EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams ORDER BY ParamDesc;"))
+      EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams' ORDER BY groupname;")
+      EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds ORDER BY StdName;")
+      DBI::dbDisconnect(EQWin)
+      
+      # Check encoding and if necessary convert to UTF-8
+      locale_info <- Sys.getlocale("LC_CTYPE")
+      encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
+      tryCatch({
+        grepl("[^\x01-\x7F]", EQ_locs$StnDesc)
+      }, warning = function(w) {
+        if (encoding != "utf8") {
+          EQ_locs$StnDesc <<- iconv(EQ_locs$StnDesc, from = encoding, to = "UTF-8")
+        }
+      })
+      
+      data$EQ_locs <- EQ_locs
+      data$EQ_loc_grps <- EQ_loc_grps
+      data$EQ_params <- EQ_params
+      data$EQ_param_grps <- EQ_param_grps
+      data$EQ_stds <- EQ_stds
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
+
     observe({
-      print("observing")
-      if (!is.null(EQWin)) {
-        EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns ORDER BY StnCode;"))
-        EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns' ORDER BY groupname;")
-        EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams ORDER BY ParamDesc;"))
-        EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams' ORDER BY groupname;")
-        EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds ORDER BY StdName;")
-        
-        # Check encoding and if necessary convert to UTF-8
-        locale_info <- Sys.getlocale("LC_CTYPE")
-        encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
-        tryCatch({
-          grepl("[^\x01-\x7F]", EQ_locs$StnDesc)
-        }, warning = function(w) {
-          if (encoding != "utf8") {
-            EQ_locs$StnDesc <<- iconv(EQ_locs$StnDesc, from = encoding, to = "UTF-8")
-          }
-        })
-        
-        data$EQ_locs <- EQ_locs
-        data$EQ_loc_grps <- EQ_loc_grps
-        data$EQ_params <- EQ_params
-        data$EQ_param_grps <- EQ_param_grps
-        data$EQ_stds <- EQ_stds
-      } else {
-        print(input$data_source)
+      if (is.null(mdb_files)) {
         shinyjs::hide("data_source")
+        shinyjs::hide("EQWin_source")
         updateRadioButtons(session, "data_source", selected = "AC")
       }
-      
-      AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete' ORDER BY loc.name ASC")
-      AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete' ORDER BY p.param_name ASC")
-      
-
-      data$AC_locs <- AC_locs
-      data$AC_params <- AC_params
     })
     
     
     
-    observeEvent(input$data_source, {
+    observe({
+      req(input$data_source, data)
       if (input$data_source == "EQ") {
+        req(data$EQ_params)
         updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
         updateSelectizeInput(session, "parameter_groups", choices = data$EQ_param_grps$groupname, server = TRUE)
         updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)

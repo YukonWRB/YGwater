@@ -12,6 +12,7 @@ getVector(
   return_cols = c("geom_id", "geom_type", "layer_name", "feature_name", "description"),
   bounds = NULL,
   table = "vectors",
+  schema = "spatial",
   geom_col = "geom",
   silent = FALSE,
   con = NULL
@@ -30,7 +31,9 @@ getVector(
 
 \item{bounds}{Optional bounds by which to limit the spatial extent returned. Currently returns the full extent of every feature intersecting the bounds. Refer to parameter 'boundary' of \code{\link[rpostgis:pgGetGeom]{rpostgis::pgGetGeom()}} for details of how to specify this parameter.}
 
-\item{table}{The target table in the database (as character string). If not under the public schema, use format c("schema", "table").}
+\item{table}{The target table in the database (as character string). See 'schema' if not under the 'spatial' schema.}
+
+\item{schema}{The schema in which the target 'table' is located. Default is 'spatial'. Note that this is NOT the default for \code{\link[rpostgis:pgGetGeom]{rpostgis::pgGetGeom()}}.}
 
 \item{geom_col}{The name of the database table column in which to insert the geometry object.}
 
