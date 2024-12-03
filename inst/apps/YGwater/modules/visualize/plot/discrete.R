@@ -427,7 +427,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
                                  dbSource = input$data_source,
-                                 dbPath = config$accessPath)
+                                 dbPath = input$EQWin_source)
           } else if (input$data_source == "AC") {
             plot <- plotDiscrete(start = input$date_range[1],
                                  end = input$date_range[2],

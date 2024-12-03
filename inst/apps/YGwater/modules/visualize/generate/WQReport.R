@@ -215,7 +215,7 @@ WQReportServer <- function(id, mdb_files, AquaCache) {
     output$standard_note <- renderUI({
       HTML("<p>
       <i><b>Optional:</b> Select standards/guidelines and station specific standards/guidelines to apply.<br>
-      General standards show up as an additional column in the report with values for each parameter <br>
+      General standards show up as an additional column in the report with values for each parameter. <br>
       Station-specific standards show up as notes in the report for each station.<br>
       Reported values which exceed standards/guidelines are highlighted in red with a note provided.
       </p>")
@@ -224,8 +224,8 @@ WQReportServer <- function(id, mdb_files, AquaCache) {
     output$SD_note <- renderUI({
       HTML("<p>
       <i><b>Optional:</b> Select a standard deviation threshold to flag outlier values.<br>
-      A mean and standard deviation will be calculated using past measurements if the exist.<br>
-      <b>This can add a lot of time to the report generation process, be patient!.</b>
+      A mean and standard deviation will be calculated using past measurements if they exist.<br>
+      <b>This can add a lot of time to the report generation process, be patient!</b>
       </p>")
     })
     
@@ -326,7 +326,7 @@ WQReportServer <- function(id, mdb_files, AquaCache) {
           } else {
             SD_doy_range <- NULL
           }
-          
+          EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
           EQWinReport(date = input$date,
                       date_approx = as.numeric(input$date_approx),
                       stations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
@@ -341,6 +341,7 @@ WQReportServer <- function(id, mdb_files, AquaCache) {
                       SD_doy = SD_doy_range,
                       shiny_file_path = file,
                       con = EQWin)
+          DBI::dbDisconnect(EQWin)
           
           incProgress(1)
         }) # End withProgress\
