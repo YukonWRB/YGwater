@@ -46,23 +46,29 @@ app_server <- function(input, output, session) {
   
   ## database connections ###########
   # Initial database connections without edit privileges
-  if (file.exists(config$accessPath)) {
-    tryCatch({
-      EQWin <- AccessConnect(config$accessPath)
-      valid <- DBI::dbGetQuery(EQWin, "SELECT 1;")
-      if (nrow(valid) == 0) {
-        EQWin <- NULL
-      }
-      print("Connected to EQWin")
-    }, error = function(e) {
-      EQWin <<- NULL
-    })
+  if (dir.exists(config$accessPath)) {
+    # List the *.mdb files in the directory
+    mdb_files <- list.files(config$accessPath, pattern = "*.mdb", full.names = TRUE)
+    if (length(mdb_files) == 0) {
+      mdb_files <- NULL
+    }
+    # # Try to connect 
+    # tryCatch({
+    #   EQWin <- AccessConnect(config$accessPath)
+    #   valid <- DBI::dbGetQuery(EQWin, "SELECT 1;")
+    #   if (nrow(valid) == 0) {
+    #     EQWin <- NULL
+    #   }
+    #   print("Connected to EQWin")
+    # }, error = function(e) {
+    #   EQWin <<- NULL
+    # })
   } else {
-    EQWin <- NULL
+    mdb_files <- NULL
   }
   
-  if (is.null(EQWin)) {
-    print("Failed to connect to EQWin")
+  if (is.null(mdb_files)) {
+    print("No .mdb files found in the AccessPath directory.")
   }
   
   AquaCache <- AquaConnect(name = config$dbName, 
@@ -76,16 +82,12 @@ app_server <- function(input, output, session) {
   print("Connected to AquaCache")
   
   session$onUnhandledError(function() {
-    DBI::dbDisconnect(EQWin)
     DBI::dbDisconnect(AquaCache)
-    print("Disconnected from EQWin after unhandled error")
     print("Disconnected from AquaCache after unhandled error")
   })
   
   session$onSessionEnded(function() {
-    DBI::dbDisconnect(EQWin)
     DBI::dbDisconnect(AquaCache)
-    print("Disconnected from EQWin after session end")
     print("Disconnected from AquaCache after session end")
   })
   
@@ -383,7 +385,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$plot) {
         output$plot_ui <- renderUI(plotUI("plot"))
         ui_loaded$plot <- TRUE
-        plot("plot", EQWin, AquaCache) # Call the server
+        plot("plot", mdb_files, AquaCache) # Call the server
       }
     }
     if (input$navbar == "map") {
@@ -417,7 +419,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$gen) {
         output$gen_ui <- renderUI(genUI("gen"))
         ui_loaded$gen <- TRUE
-        gen("gen", EQWin, AquaCache) # Call the server
+        gen("gen", mdb_files, AquaCache) # Call the server
       }
     }
     if (input$navbar == "basins") {

@@ -3,7 +3,7 @@
 #' @description
 #' `r lifecycle::badge('experimental')`
 #' 
-#' This application is designed for use by WRB or other YG staff, and is designed to allow greater flexibility and tune ability of plots and outputs than the public facing app (Streamline). In addition, certain portions of the application interface with databases other than aquacache such as EQWin or the snow database, and may allow for edit privileges to these databases. This app is also used to roll out new, experimental features before they are added to Streamline.
+#' This application is designed for use by WRB or other YG staff, and is designed to allow greater flexibility and tune ability of plots and outputs than the public facing app (Streamline). In addition, certain portions of the application interface with databases other than aquacache such as EQWin or the snow database, and may allow for edit privileges to these databases. This app is also used to roll out new, experimental features before they are added to public applications
 #'
 #' @param host Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in `port` to be open on the host machine.
 #' @param port Port number (numeric) on which to serve the app. Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network.
@@ -14,12 +14,12 @@
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
 #' @param RLS_user Username for row-level security. Default is pulled from the .Renviron file.
 #' @param RLS_pass Password for row-level security. Default is pulled from the .Renviron file.
-#' @param accessPath Path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb".
+#' @param accessPath Path to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.
 #' 
 #' @return Opens a Shiny application.
 #' @export
 
-YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbName = "aquacache", dbHost = Sys.getenv("aquacacheHost"), dbPort = Sys.getenv("aquacachePort"), dbUser = Sys.getenv("aquacacheUser"), dbPass = Sys.getenv("aquacachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), accessPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResourcesEG.mdb"){
+YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbName = "aquacache", dbHost = Sys.getenv("aquacacheHost"), dbPort = Sys.getenv("aquacachePort"), dbUser = Sys.getenv("aquacacheUser"), dbPass = Sys.getenv("aquacachePass"), RLS_user = Sys.getenv("RLS_user"), RLS_pass = Sys.getenv("RLS_pass"), accessPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB"){
   
   rlang::check_installed("shiny", reason = "required to use YGwater app")
   rlang::check_installed("shinyjs", reason = "required to use YGwater app")
