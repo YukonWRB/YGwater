@@ -349,7 +349,7 @@ plotTimeseries <- function(location,
       }
     } else if (rate == "max") {
       if (corrections_apply) {
-        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
+        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
       } else {
         trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
       }
@@ -358,7 +358,7 @@ plotTimeseries <- function(location,
           if (corrections_apply) {
             infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
           } else {            
-            infill <- dbGetQueryDT(con, paste0("SELECT datetime, valueFROM measurements_continuous_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
+            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
           }
           trace_data <- rbind(infill, trace_data)
         }
