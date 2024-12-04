@@ -12,6 +12,8 @@
 #' @param log Should the y-axis be log-transformed?
 #' @param facet_on Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.
 #' @param loc_code Should the location code be used instead of the full location name? Options are 'code', 'name', 'codeName', 'nameCode'. Default is 'name'.
+#' @param shareX Should the x-axis be shared across facets? Default is TRUE (dates are shared).
+#' @param shareY Should the y-axis be shared across facets? Default is FALSE (values are not shared).
 #' @param rows The number of rows to use in the facet grid. Default is 'auto' to automatically determine the number of rows based on the number of facets.
 #' @param target_datetime Should the plot datetime use the 'target' datetime instead of the 'actual' datetime? Default is TRUE. This is only applicable is dbSource == 'AC'.
 #' @param colorblind Should the plot be colorblind-friendly? Default is FALSE.
@@ -37,7 +39,9 @@ plotDiscrete <- function(start,
                          standard = NULL, 
                          log = FALSE, 
                          facet_on = 'params', 
-                         loc_code = 'name', 
+                         loc_code = 'name',
+                         shareX = TRUE,
+                         shareY = FALSE,
                          rows = 'auto', 
                          target_datetime = TRUE, 
                          colorblind = FALSE, 
@@ -57,11 +61,13 @@ plotDiscrete <- function(start,
   # start <- "2024-11-01"
   # end <- "2024-11-24"
   # locations <- c("(EG)W4-mix")
-  # parameters <- c("N-NO2")
+  # parameters <- c("N-NO2", "Cu-D", "Ni-D", "Zn-D")
   # locGrp <- NULL
   # paramGrp <- NULL
   # standard = NULL
   # loc_code = 'name'
+  # shareX = TRUE
+  # shareY = FALSE
   # log = FALSE
   # facet_on = 'params'
   # rows = 'auto'
@@ -797,16 +803,39 @@ plotDiscrete <- function(start,
     if (rows == "auto") {
       nrows <- ceiling(sqrt(length(plots)))
     } else {
-      nrows <- rows
+      nrows <- min(rows, length(plots))
     }
     
-    plotly::subplot(plots, 
-                    nrows = nrows, 
-                    shareX = FALSE, 
-                    titleX = FALSE, 
-                    titleY = TRUE,
-                    margin = c(0, (0.08 * axis_scale), 0, (0.08 * axis_scale))) %>%
+    # Apply the layout settings to the final plot
+    final_plot <- plotly::subplot(plots, 
+                                  nrows = nrows, 
+                                  shareX = FALSE,
+                                  shareY = FALSE,
+                                  titleX = FALSE, 
+                                  titleY = TRUE,
+                                  margin = c(0, (0.08 * axis_scale), 0, (0.08 * axis_scale))) %>%
       plotly::layout(showlegend = TRUE)
+    
+    # Link axes if desired
+    if (shareX || shareY) {
+      layout_settings <- list()
+      
+      if (shareX) {
+        for (i in seq_along(plots)) {
+          layout_settings[[paste0("xaxis", if (i > 1) i else "")]] <- list(matches = "x")
+        }
+      }
+      
+      if (shareY) {
+        for (i in seq_along(plots)) {
+          layout_settings[[paste0("yaxis", if (i > 1) i else "")]] <- list(matches = "y")
+        }
+      }
+      
+      final_plot <- do.call(plotly::layout, c(list(final_plot), layout_settings))
+    }
+
+    return(final_plot)
   } # End of plot creation function
   
   facet_by <- if (facet_on == "params") "param_name" else "location_name" # key to the correct column name

@@ -18,6 +18,8 @@ plotMultiTimeseries(
   log = FALSE,
   invert = NULL,
   slider = FALSE,
+  shareX = TRUE,
+  shareY = FALSE,
   datum = TRUE,
   title = TRUE,
   custom_title = NULL,
@@ -60,6 +62,10 @@ plotMultiTimeseries(
 \item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.}
 
 \item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.}
+
+\item{shareX}{Should the x-axis be shared across facets? Default is TRUE (dates are shared).}
+
+\item{shareY}{Should the y-axis be shared across facets? Default is FALSE (values are not shared).}
 
 \item{datum}{Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists, only for water level and distance. Default is TRUE.}
 

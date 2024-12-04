@@ -461,7 +461,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
           popup = ~paste0(
             "<strong>", get(translations[id == "generic_name_col", get(language$language)][[1]]),  "</strong><br/>",
             titleCase(param_name, language$abbrev), "<br>",
-            translations[id == "map_actual_date", get(language$language)][[1]], ": ", if (map_params$latest) datetime else date, "<br/>",
+            translations[id == "map_actual_date", get(language$language)][[1]], ": ", if (map_params$latest) paste0(datetime, " UTC") else paste0(date, " (daily mean)"), "<br/>",
             translations[id == "map_relative", get(language$language)][[1]], ": ", round(percent_historic_range, 2), "% <br/>",
             translations[id == "map_absolute2", get(language$language)][[1]], ": ", round(value, 2), " ", param_unit, "<br/>",
             translations[id == "map_actual_hist_range", get(language$language)][[1]], ": ", round(min, 2), " ", translations[id == "to", get(language$language)][[1]], " ", round(max, 2)," ", param_unit, "<br/>",
