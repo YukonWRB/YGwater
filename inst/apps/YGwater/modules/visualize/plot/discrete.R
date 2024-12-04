@@ -72,7 +72,7 @@ discretePlotUI <- function(id) {
                                       choices = "Placeholder",
                                       multiple = TRUE,
                                       options = list(maxItems = 1)) # This is to be able to use the default no selection upon initialization but only have one possible selection anyways.
-                       ),
+      ),
       
       conditionalPanel(ns = ns,
                        condition = "input.data_source == 'AC'",
@@ -86,7 +86,7 @@ discretePlotUI <- function(id) {
                                       "Select parameters",
                                       choices = "Placeholder",
                                       multiple = TRUE)
-                       ),
+      ),
       
       # Below inputs are not conditional on data source
       div(
@@ -112,7 +112,7 @@ discretePlotUI <- function(id) {
       
       div(
         checkboxInput(ns("log_scale"),
-                    NULL),
+                      NULL),
         style = "display: flex; align-items: center;",
         tags$label(
           "Use log scale", 
@@ -128,7 +128,28 @@ discretePlotUI <- function(id) {
           icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
         )
       ),
-      
+      div(
+        checkboxInput(ns("shareX"),
+                      NULL,
+                      value = TRUE),
+        style = "display: flex; align-items: center;",
+        tags$label(
+          "Share X axis between subplots (dates are aligned)", 
+          class = "control-label",
+          style = "margin-right: 5px;"
+        )
+      ),
+      div(
+        checkboxInput(ns("shareY"),
+                      NULL,
+                      value = FALSE),
+        style = "display: flex; align-items: center;",
+        tags$label(
+          "Share Y axis between subplots (values are aligned)", 
+          class = "control-label",
+          style = "margin-right: 5px;"
+        )
+      ),
       div(
         selectizeInput(ns("loc_code"),
                        label = "Choose how to display location codes/names",
@@ -137,12 +158,12 @@ discretePlotUI <- function(id) {
                          c("Name", "Code", "Name (Code)", "Code (Name)")
                        ),
                        selected = "Name"),
-                       style = "display: flex; align-items: center;"
-        ),
-        
+        style = "display: flex; align-items: center;"
+      ),
+      
       div(
         checkboxInput(ns("target_datetime"),
-                    label = NULL),
+                      label = NULL),
         style = "display: flex; align-items: center;",
         tags$label(
           "Use target instead of actual datetime", 
@@ -286,6 +307,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
                                showgridx = FALSE,
                                showgridy = FALSE,
                                colorblind = FALSE,
+                               nrows = NULL,
                                point_scale = 1,
                                guideline_scale = 1,
                                axis_scale = 1,
@@ -307,6 +329,10 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
           checkboxInput(ns("showgridy"),
                         "Show y-axis gridlines",
                         value = plot_aes$showgridy),
+          numericInput(ns("nrows"),
+                       "Number of rows (leave blank for auto)",
+                       value = plot_aes$nrows,
+                       min = 1),
           checkboxInput(ns("colorblind"),
                         "Colorblind friendly",
                         value = plot_aes$colorblind),
@@ -349,6 +375,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
       plot_aes$colorblind <- input$colorblind
       plot_aes$showgridx <- input$showgridx
       plot_aes$showgridy <- input$showgridy
+      plot_aes$nrows <- input$nrows
       plot_aes$point_scale <- input$point_scale
       plot_aes$guideline_scale <- input$guideline_scale
       plot_aes$axis_scale <- input$axis_scale
@@ -404,7 +431,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
 
       tryCatch({
         withProgress(message = "Generating plot... please be patient", value = 0, {
-          
+          print(plot_aes$nrows)
           incProgress(0.5)
           if (input$data_source == "EQ") {
             plot <- plotDiscrete(start = input$date_range[1],
@@ -417,6 +444,9 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
                                  log = input$log_scale,
                                  facet_on = input$facet_on,
                                  loc_code = input$loc_code,
+                                 shareX = input$shareX,
+                                 shareY = input$shareY,
+                                 rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
                                  target_datetime = input$target_datetime,
                                  colorblind = plot_aes$colorblind,
                                  lang = plot_aes$lang,
@@ -438,6 +468,9 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
                                  log = input$log_scale,
                                  facet_on = input$facet_on,
                                  loc_code = input$loc_code,
+                                 shareX = input$shareX,
+                                 shareY = input$shareY,
+                                 rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
                                  target_datetime = input$target_datetime,
                                  colorblind = plot_aes$colorblind,
                                  lang = plot_aes$lang,
