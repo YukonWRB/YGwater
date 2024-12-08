@@ -1,12 +1,12 @@
 # UI and server code for new timeseries/location creation module
 
 
-addTsLocUI <- function(id) {
+addUI <- function(id) {
   ns <- NS(id)
   fluidPage(
     selectizeInput(ns("ts_loc"),
                    NULL,
-                   choices = stats::setNames(c("loc", "ts"), c("Add new location", "Add new timeseries")),
+                   choices = stats::setNames(c("loc", "ts", "users"), c("Add/edit location", "Add/edit timeseries", "Add users/user groups")),
                    selected = "loc"),
     
     # Use a different sidebar and main panel depending on the selection. Sidebar allows user to create new locations/timeseries, mainpanel to see what already exists in tables
@@ -40,7 +40,7 @@ addTsLocUI <- function(id) {
   )
 }
 
-addTsLoc <- function(id, AquaCache) {
+add <- function(id, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -225,7 +225,7 @@ addTsLoc <- function(id, AquaCache) {
         updateSelectizeInput(session, "datum_id_to", selected = datum$DATUM_TO_ID[nrow(datum)])
         updateNumericInput(session, "elev", value = datum$CONVERSION_FACTOR[nrow(datum)])
       }
-
+      
       updateSelectizeInput(session, "loc_owner", selected = moduleData$owners_contributors[moduleData$owners_contributors$name == "Water Survey of Canada", "owner_contributor_id"])
       updateTextInput(session, "loc_note", value = paste0("Station metadata from HYDAT version ", substr(tidyhydat::hy_version()$Date[1], 1, 10)))
     }, ignoreInit = TRUE)
@@ -340,7 +340,7 @@ addTsLoc <- function(id, AquaCache) {
     observeEvent(input$add_project, {
       # Check that mandatory fields are filled in
       if (!isTruthy(input$project_name)) {
-
+        
         return()
       }
       if (!isTruthy(input$project_description)) {
@@ -506,8 +506,8 @@ addTsLoc <- function(id, AquaCache) {
         return()
       }
       
-
-# Make a data.frame to pass to addACLocation
+      
+      # Make a data.frame to pass to addACLocation
       df <- data.frame(location = input$loc_code,
                        name = input$loc_name,
                        name_fr = input$loc_name_fr,
@@ -527,7 +527,7 @@ addTsLoc <- function(id, AquaCache) {
                        network = if (isTruthy(input$network)) as.numeric(input$network) else NA,
                        project = if (isTruthy(input$project)) as.numeric(input$project) else NA)                
       print(df)
-
+      
       tryCatch( {
         AquaCache::addACLocation(con = AquaCache,
                                  df = df)
