@@ -12,14 +12,14 @@ genUI <- function(id) {
   )
 }
 
-gen <- function(id, EQWin, AquaCache) {
+gen <- function(id, mdb_files, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
     
-    # Hide the water quality report if EQWin is not available (at least until that data goes to AquaCache)
-    if (is.null(EQWin)) {
+    # Hide the water quality report if mdb_files is not available (at least until that data goes to AquaCache)
+    if (is.null(mdb_files)) {
       updateSelectizeInput(session, "report_type", choices = c("Snowpack Info Report", "Water Info Report", "Drainage Basins"))
     }
 
@@ -29,7 +29,7 @@ gen <- function(id, EQWin, AquaCache) {
         output$submoduleUI <- renderUI({
           WQReportUI(ns("WQReport"))
         })
-        WQReportServer("WQReport", EQWin, AquaCache)
+        WQReportServer("WQReport", mdb_files, AquaCache)
         
       } else if (input$report_type == "Snowpack Info Report") {
         

@@ -37,7 +37,6 @@ addTsLocUI <- function(id) {
         )
       )
     )
-
   )
 }
 
@@ -47,7 +46,7 @@ addTsLoc <- function(id, AquaCache) {
     
     ns <- session$ns # Use to create UI elements within the server function
     
-    # Get some data from the AquaCache
+    # Get some data from the aquacache
     moduleData <- reactiveValues(
       exist_locs = dbGetQueryDT(AquaCache, "SELECT location_id, location, name, name_fr FROM locations"),
       loc_types = dbGetQueryDT(AquaCache, "SELECT * FROM location_types"),
@@ -70,8 +69,12 @@ addTsLoc <- function(id, AquaCache) {
     # Location add portion ######################################################
     output$locSidebarUI <- renderUI({
       tagList(
+        textOutput(ns("hydat_note")
+        ),
         textInput(ns("loc_code"), 
                   "Location code (must not exist already)"
+        ),
+        actionButton(ns("hydat_fill"), "Auto-fill from HYDAT"
         ),
         textInput(ns("loc_name"), 
                   "Location name (must not exist already)"
@@ -156,7 +159,7 @@ addTsLoc <- function(id, AquaCache) {
                        options = list(create = TRUE, 
                                       placeholder = "Optional")  # With a choice to allow users to add a project
         ),
-        textInput(ns("note"), 
+        textInput(ns("loc_note"), 
                   "Location note"
         ),
         actionButton(ns("add_loc"), 
@@ -164,6 +167,68 @@ addTsLoc <- function(id, AquaCache) {
         )
       )
     })
+    
+    shinyjs::hide("hydat_fill") # Hide the button right away, it's show if applicable
+    
+    ## Hydat fill ###############################################################
+    # Detect if the user's location code is present in hydat. If so, show a button to enable them to auto-populate fields with hydat info
+    hydat_note <- renderText("Entering a WSC code will allow you to auto-populate fields with HYDAT information.")
+    hydat <- reactiveValues(exists = FALSE,
+                            stns = NULL)
+    if ((file.exists(tidyhydat::hy_downloaded_db()))) {
+      hydat$exists <- TRUE
+      hydat$stns <- tidyhydat::hy_stations()$STATION_NUMBER
+    } else {
+      shinyjs::hide(hydat_note)
+    }
+    
+    observeEvent(input$loc_code, {# Observe loc_code inputs and, if possible, show the button to auto-populate fields
+      if (!hydat$exists) {  # obviously can't do anything here...
+        return()
+      }
+      if (input$loc_code %in% hydat$stns) {
+        shinyjs::show("hydat_fill")
+      } else {
+        shinyjs::hide("hydat_fill")
+      }
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$hydat_fill, {
+      # Get the station info from hydat
+      stn <- tidyhydat::hy_stations(input$loc_code)
+      if (nrow(stn) == 0) {
+        return()
+      }
+      datum <- tidyhydat::hy_stn_datum_conv(input$loc_code)
+      datum_list <- tidyhydat::hy_datum_list()
+      # Replace DATUM_FROM with DATUM_ID
+      datum$DATUM_FROM_ID <- datum_list$DATUM_ID[match(datum$DATUM_FROM, datum_list$DATUM_EN)]
+      # Replace DATUM_TO with DATUM_ID
+      datum$DATUM_TO_ID <- datum_list$DATUM_ID[match(datum$DATUM_TO, datum_list$DATUM_EN)]
+      print(datum)
+      
+      # Drop original DATUM_FROM and DATUM_TO columns
+      datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
+      
+      updateTextInput(session, "loc_name", value = titleCase(stn$STATION_NAME, "en"))
+      updateNumericInput(session, "lat", value = stn$LATITUDE)
+      updateNumericInput(session, "lon", value = stn$LONGITUDE)
+      if (nrow(datum) == 0) {
+        showModal(modalDialog(
+          "No datum conversion found for this station in HYDAT."
+        ))
+        updateSelectizeInput(session, "datum_id_from", selected = 10)
+        updateSelectizeInput(session, "datum_id_to", selected = 10)
+        updateNumericInput(session, "elev", value = 0)
+      } else {
+        updateSelectizeInput(session, "datum_id_from", selected = datum$DATUM_FROM_ID[nrow(datum)])
+        updateSelectizeInput(session, "datum_id_to", selected = datum$DATUM_TO_ID[nrow(datum)])
+        updateNumericInput(session, "elev", value = datum$CONVERSION_FACTOR[nrow(datum)])
+      }
+
+      updateSelectizeInput(session, "loc_owner", selected = moduleData$owners_contributors[moduleData$owners_contributors$name == "Water Survey of Canada", "owner_contributor_id"])
+      updateTextInput(session, "loc_note", value = paste0("Station metadata from HYDAT version ", substr(tidyhydat::hy_version()$Date[1], 1, 10)))
+    }, ignoreInit = TRUE)
     
     
     ## Make messages for lat/lon warnings #########################################
@@ -216,9 +281,10 @@ addTsLoc <- function(id, AquaCache) {
     
     ## Allow users to add a few things to the DB ###################################
     ## If user types in their own network/project/owner/share_with, bring up a modal to add it to the database. This requires updating moduleData and the selectizeInput choices
+    
     ### Observe the network selectizeInput for new networks #######################
     observeEvent(input$network, {
-      if (input$network %in% moduleData$networks$network_id) {
+      if (input$network %in% moduleData$networks$network_id || nchar(input$network) == 0) {
         return()
       }
       net_types <- dbGetQueryDT(AquaCache, "SELECT id, name FROM network_project_types")
@@ -231,18 +297,12 @@ addTsLoc <- function(id, AquaCache) {
         actionButton(ns("add_network"), "Add network")
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent("add_network", {
+    observeEvent(input$add_network, {
       # Check that mandatory fields are filled in
       if (!isTruthy(input$network_name)) {
-        showModal(modalDialog(
-          "Network name is mandatory"
-        ))
         return()
       }
       if (!isTruthy(input$network_description)) {
-        showModal(modalDialog(
-          "Network description is mandatory"
-        ))
         return()
       }
       # Add the network to the database
@@ -252,10 +312,18 @@ addTsLoc <- function(id, AquaCache) {
                        description_fr = if (isTruthy(input$network_description_fr)) input$network_description_fr else NA,
                        type = input$network_type)
       DBI::dbAppendTable(AquaCache, "networks", df, append = TRUE)
-    })
+      # Update the moduleData reactiveValues
+      moduleData$networks <- dbGetQueryDT(AquaCache, "SELECT network_id, name FROM networks")
+      # Update the selectizeInput to the new value
+      updateSelectizeInput(session, "network", choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name), selected = moduleData$networks[moduleData$networks$name == df$name, "network_id"])
+      showModal(modalDialog(
+        "New network added."
+      ))
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    
     ### Observe the project selectizeInput for new projects #######################
     observeEvent(input$project, {
-      if (input$project %in% moduleData$projects$project_id) {
+      if (input$project %in% moduleData$projects$project_id || nchar(input$project) == 0) {
         return()
       }
       proj_types <- dbGetQueryDT(AquaCache, "SELECT id, name FROM network_project_types")
@@ -269,12 +337,10 @@ addTsLoc <- function(id, AquaCache) {
         actionButton(ns("add_project"), "Add project")
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent("add_project", {
+    observeEvent(input$add_project, {
       # Check that mandatory fields are filled in
       if (!isTruthy(input$project_name)) {
-        showModal(modalDialog(
-          "Project name is mandatory"
-        ))
+
         return()
       }
       if (!isTruthy(input$project_description)) {
@@ -290,14 +356,22 @@ addTsLoc <- function(id, AquaCache) {
                        description_fr = if (isTruthy(input$project_description_fr)) input$project_description_fr else NA,
                        type = input$project_type)
       DBI::dbAppendTable(AquaCache, "projects", df, append = TRUE)
-    })
+      # Update the moduleData reactiveValues
+      moduleData$projects <- dbGetQueryDT(AquaCache, "SELECT project_id, name FROM projects")
+      # Update the selectizeInput to the new value
+      updateSelectizeInput(session, "project", choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), selected = moduleData$projects[moduleData$projects$name == df$name, "project_id"])
+      showModal(modalDialog(
+        "New project added."
+      ))
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    
     ### Observe the owner selectizeInput for new owners ############
     observeEvent(input$loc_owner, {
-      if (input$loc_owner %in% moduleData$owners_contributors$owner_contributor_id) {
+      if (input$loc_owner %in% moduleData$owners_contributors$owner_contributor_id || nchar(input$loc_owner) == 0) {
         return()
       }
       showModal(modalDialog(
-        textInput(ns("owner_name"), "Owner name"),
+        textInput(ns("owner_name"), "Owner name"), value = input$loc_owner,
         textInput(ns("owner_name_fr"), "Owner name French (optional)"),
         textInput(ns("contact_name"), "Contact name (optional)"),
         textInput(ns("contact_phone"), "Contact phone (optional)"),
@@ -306,26 +380,31 @@ addTsLoc <- function(id, AquaCache) {
         actionButton(ns("add_owner"), "Add owner")
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent("add_owner", {
+    observeEvent(input$add_owner, {
       # Check that mandatory fields are filled in
       if (!isTruthy(input$owner_name)) {
-        showModal(modalDialog(
-          "Owner name is mandatory"
-        ))
         return()
       }
       # Add the owner to the database
       df <- data.frame(name = input$owner_name,
                        name_fr = if (isTruthy(input$owner_name_fr)) input$owner_name_fr else NA,
                        contact_name = if (isTruthy(input$contact_name)) input$contact_name else NA,
-                       contact_phone = if (isTruthy(input$contact_phone)) input$contact_phone else NA,
-                       contact_email = if (isTruthy(input$contact_email)) input$contact_email else NA,
-                       contact_note = if (isTruthy(input$contact_note)) input$contact_note else NA)
+                       phone = if (isTruthy(input$contact_phone)) input$contact_phone else NA,
+                       email = if (isTruthy(input$contact_email)) input$contact_email else NA,
+                       note = if (isTruthy(input$contact_note)) input$contact_note else NA)
       DBI::dbAppendTable(AquaCache, "owners_contributors", df, append = TRUE)
-    })
+      # Update the moduleData reactiveValues
+      moduleData$owners_contributors <- dbGetQueryDT(AquaCache, "SELECT owner_contributor_id, name FROM owners_contributors")
+      # Update the selectizeInput to the new value
+      updateSelectizeInput(session, "loc_owner", choices = stats::setNames(moduleData$owners_contributors$owner_contributor_id, moduleData$owners_contributors$name), selected = moduleData$owners_contributors[moduleData$owners_contributors$name == df$name, "owner_contributor_id"])
+      showModal(modalDialog(
+        "New owner added."
+      ))
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    
     ### Observe the share_with selectizeInput for new user groups ##############################
     observeEvent(input$share_with, {
-      if (input$share_with %in% moduleData$user_groups$group_id) {
+      if (input$share_with[length(input$share_with)] %in% moduleData$user_groups$group_id || nchar(input$share_with[length(input$share_with)]) == 0) {
         return()
       }
       showModal(modalDialog(
@@ -334,25 +413,27 @@ addTsLoc <- function(id, AquaCache) {
         actionButton(ns("add_group"), "Add group")
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent("add_group", {
+    observeEvent(input$add_group, {
       # Check that mandatory fields are filled in
       if (!isTruthy(input$group_name)) {
-        showModal(modalDialog(
-          "Group name is mandatory"
-        ))
         return()
       }
       if (!isTruthy(input$group_description)) {
-        showModal(modalDialog(
-          "Group description is mandatory"
-        ))
         return()
       }
       # Add the group to the database
-      df <- data.frame(name = input$group_name,
-                       description = input$group_description)
+      df <- data.frame(group_name = input$group_name,
+                       group_description = input$group_description)
       DBI::dbAppendTable(AquaCache, "user_groups", df, append = TRUE)
-    })
+      # Update the moduleData reactiveValues
+      moduleData$user_groups <- dbGetQueryDT(AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
+      # Update the selectizeInput to the new value
+      updateSelectizeInput(session, "share_with", choices = stats::setNames(moduleData$user_groups$group_id, paste0(moduleData$user_groups$group_name, " (", moduleData$user_groups$group_description, ")")), selected = c(input$share_with, moduleData$user_groups[moduleData$user_groups$group_name == df$group_name, "group_id"]))
+      showModal(modalDialog(
+        "New group added."
+      ))
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    
     
     ## Observe the add_location click #################
     # Run checks, if everything passes call AquaCache::addACLocation
@@ -425,61 +506,93 @@ addTsLoc <- function(id, AquaCache) {
         return()
       }
       
-      print("Checks passed!")
-      return()  # Remove this line to actually run the function
-      
-      AquaCache::addACLocation(con = AquaCache,
-                               df = NULL,
-                               location = input$loc_code,
-                               name = input$loc_name,
-                               name_fr = input$loc_name_fr,
-                               latitude = input$lat,
-                               longitude = input$lon,
-                               visibility_public = input$viz,
-                               share_with = input$share_with,
-                               owner = if (isTruthy(input$loc_owner)) input$loc_owner else NA,
-                               data_sharing_agreement_id = if (isTruthy(input$data_sharing_agreement)) input$data_sharing_agreement else NA,
-                               location_type = input$loc_type,
-                               note = if (isTruthy(input$note)) input$note else NA,
-                               contact = if (isTruthy(input$loc_contact)) input$loc_contact else NA,
-                               datum_id_from = input$datum_id_from,
-                               datum_id_to = input$datum_id_to,
-                               conversion_m = input$elev,
-                               current = TRUE,
-                               network = if (isTruthy(input$network)) input$network else NA,
-                               project = if (isTruthy(input$project)) input$project else NA)
-      
+
+# Make a data.frame to pass to addACLocation
+      df <- data.frame(location = input$loc_code,
+                       name = input$loc_name,
+                       name_fr = input$loc_name_fr,
+                       latitude = input$lat,
+                       longitude = input$lon,
+                       visibility_public = input$viz,
+                       share_with = input$share_with,
+                       owner = if (isTruthy(input$loc_owner)) as.numeric(input$loc_owner) else NA,
+                       data_sharing_agreement_id = if (isTruthy(input$data_sharing_agreement)) as.numeric(input$data_sharing_agreement) else NA,
+                       location_type = as.numeric(input$loc_type),
+                       note = if (isTruthy(input$loc_note)) input$loc_note else NA,
+                       contact = if (isTruthy(input$loc_contact)) input$loc_contact else NA,
+                       datum_id_from = as.numeric(input$datum_id_from),
+                       datum_id_to = as.numeric(input$datum_id_to),
+                       conversion_m = input$elev,
+                       current = TRUE,
+                       network = if (isTruthy(input$network)) as.numeric(input$network) else NA,
+                       project = if (isTruthy(input$project)) as.numeric(input$project) else NA)                
+      print(df)
+
+      tryCatch( {
+        AquaCache::addACLocation(con = AquaCache,
+                                 df = df)
+        # Update the moduleData reactiveValues
+        moduleData$exist_locs <- dbGetQueryDT(AquaCache, "SELECT location_id, location, name, name_fr FROM locations")
+        
+        # Show a modal to the user that the location was added
+        showModal(modalDialog(
+          "Location added successfully"
+        ))
+        
+        # Reset all fields
+        updateTextInput(session, "loc_code", value = NULL)
+        updateTextInput(session, "loc_name", value = NULL)
+        updateTextInput(session, "loc_name_fr", value = NULL)
+        updateSelectizeInput(session, "loc_type", selected = NULL)
+        updateNumericInput(session, "lat", value = NULL)
+        updateNumericInput(session, "lon", value = NULL)
+        updateSelectizeInput(session, "viz", selected = "exact")
+        updateSelectizeInput(session, "share_with", selected = 1)
+        updateSelectizeInput(session, "loc_owner", selected = NULL)
+        updateTextInput(session, "loc_contact", value = NULL)
+        updateSelectizeInput(session, "data_sharing_agreement", selected = NULL)
+        updateSelectizeInput(session, "datum_id_from", selected = 10)
+        updateSelectizeInput(session, "datum_id_to", selected = NULL)
+        updateNumericInput(session, "elev", value = NULL)
+        updateSelectizeInput(session, "network", selected = NULL)
+        updateSelectizeInput(session, "project", selected = NULL)
+        updateTextInput(session, "loc_note", value = NULL)
+      }, error = function(e) {
+        showModal(modalDialog(
+          "Error adding location: ", e$message
+        ))
+      })
     })
     
     # Timeseries add portion ########################################################
     output$tsSidebarUI <- renderUI({
       tagList(
-        selectizeInput(ns("loc_code_select"), 
+        selectizeInput(ns("loc_code_ts"), 
                        "Location code", 
                        choices = stats::setNames(moduleData$exist_locs$location_id, moduleData$exist_locs$location),
                        multiple = TRUE, # This is to force a default of nothing selected - overridden with options
                        options = list(maxItems = 1)
         ), 
-        selectizeInput(ns("loc_name_select"), 
+        selectizeInput(ns("loc_name_ts"), 
                        "Location name", 
                        choices = stats::setNames(moduleData$exist_locs$location_id, moduleData$exist_locs$name),
                        multiple = TRUE, # This is to force a default of nothing selected - overridden with options
                        options = list(maxItems = 1)
         ),
-        dateInput(ns("start_date"), 
+        dateInput(ns("start_date_ts"), 
                   "Start date to look for data", 
                   value = "1900-01-01"
         ),
-        selectizeInput(ns("param"), 
+        selectizeInput(ns("param_ts"), 
                        "Parameter", 
                        choices = stats::setNames(moduleData$parameters$parameter_id, moduleData$parameters$param_name),
                        multiple = TRUE, # This is to force a default of nothing selected - overridden with options
                        options = list(maxItems = 1)
         ),
         actionButton(ns("param_modal"), 
-                     "Use filters to select parameter"  # Loads a modal where the user can filter parameters based on their group and sub-group, On save, input$param is updated
+                     "Filter parameters by group/sub group"  # Loads a modal where the user can filter parameters based on their group and sub-group
         ),
-        selectizeInput(ns("media"),
+        selectizeInput(ns("media_ts"),
                        "Media", 
                        stats::setNames(moduleData$media$media_id, moduleData$media$media_type),
                        multiple = TRUE, # This is to force a default of nothing selected - overridden with options
@@ -491,10 +604,57 @@ addTsLoc <- function(id, AquaCache) {
       )
     })
     
-    # observeEvent for parameter filter
+    ## observeEvent for parameter filter modal ###########
+    observeEvent(input$param_modal, {
+      showModal(modalDialog(
+        selectizeInput(ns("param_group"), 
+                       "Parameter group", 
+                       stats::setNames(moduleData$parameter_groups$group_id, moduleData$parameter_groups$group_name),
+                       multiple = TRUE
+        ),
+        selectizeInput(ns("param_sub_group"), 
+                       "Parameter sub-group", 
+                       stats::setNames(moduleData$parameter_sub_groups$sub_group_id, moduleData$parameter_sub_groups$sub_group_name),
+                       multiple = TRUE
+        ),
+        actionButton(ns("param_filter"), 
+                     "Filter parameters"
+        )
+      ))
+    })
+    
+    # Filter sub-group based on group selection
+    observeEvent(input$param_group, {
+      if (!isTruthy(input$param_group)) {
+        return()
+      }
+      valid_sub_groups <- unique(moduleData$parameter_relationships[moduleData$parameter_relationships$group_id %in% input$param_group, c("group_id", "sub_group_id")])
+      choices <- stats::setNames(moduleData$parameter_sub_groups[moduleData$parameter_sub_groups$sub_group_id %in% valid_sub_groups$sub_group_id, ]$sub_group_id, moduleData$parameter_sub_groups[moduleData$parameter_sub_groups$sub_group_id %in% valid_sub_groups$sub_group_id, ]$sub_group_name)
+      updateSelectizeInput(session, "param_sub_group", choices = choices)
+      
+    }, ignoreInit = TRUE)
+    
+    # observeEvent for param_filter button
+    observeEvent(input$param_filter, {
+      # Get the parameters that match the filter
+      params <- moduleData$parameters
+      if (isTruthy(input$param_group)) {
+        params <- params[params$parameter_id %in% moduleData$parameter_relationships$parameter_id[moduleData$parameter_relationships$group_id %in% input$param_group], ]
+      }
+      if (isTruthy(input$param_sub_group)) {
+        params <- params[params$parameter_id %in% moduleData$parameter_relationships$parameter_id[moduleData$parameter_relationships$sub_group_id %in% input$param_sub_group], ]
+      }
+      updateSelectizeInput(session, "param_ts", choices = stats::setNames(params$parameter_id, params$param_name))
+      removeModal()
+    })
     
     # observeEvent for location name/code cross-selection
-    
+    observeEvent(input$loc_code_ts, {
+      updateSelectizeInput(session, "loc_name_ts", selected = input$loc_code_ts)
+    }, ignoreInit = TRUE)
+    observeEvent(input$loc_name_ts, {
+      updateSelectizeInput(session, "loc_code_ts", selected = input$loc_name_ts)
+    }, ignoreInit = TRUE)
     
   }) # End of moduleServer
 }

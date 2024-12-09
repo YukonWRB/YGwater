@@ -7,6 +7,7 @@ discretePlotUI <- function(id) {
                    NULL,
                    choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
                    selected = "AC"),
+      uiOutput(ns("EQWin_source_ui")),
       # start and end datetime
       dateRangeInput(ns("date_range"),
                      "Select date range",
@@ -71,7 +72,7 @@ discretePlotUI <- function(id) {
                                       choices = "Placeholder",
                                       multiple = TRUE,
                                       options = list(maxItems = 1)) # This is to be able to use the default no selection upon initialization but only have one possible selection anyways.
-                       ),
+      ),
       
       conditionalPanel(ns = ns,
                        condition = "input.data_source == 'AC'",
@@ -85,7 +86,7 @@ discretePlotUI <- function(id) {
                                       "Select parameters",
                                       choices = "Placeholder",
                                       multiple = TRUE)
-                       ),
+      ),
       
       # Below inputs are not conditional on data source
       div(
@@ -111,7 +112,7 @@ discretePlotUI <- function(id) {
       
       div(
         checkboxInput(ns("log_scale"),
-                    NULL),
+                      NULL),
         style = "display: flex; align-items: center;",
         tags$label(
           "Use log scale", 
@@ -127,7 +128,28 @@ discretePlotUI <- function(id) {
           icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
         )
       ),
-      
+      div(
+        checkboxInput(ns("shareX"),
+                      NULL,
+                      value = TRUE),
+        style = "display: flex; align-items: center;",
+        tags$label(
+          "Share X axis between subplots (dates are aligned)", 
+          class = "control-label",
+          style = "margin-right: 5px;"
+        )
+      ),
+      div(
+        checkboxInput(ns("shareY"),
+                      NULL,
+                      value = FALSE),
+        style = "display: flex; align-items: center;",
+        tags$label(
+          "Share Y axis between subplots (values are aligned)", 
+          class = "control-label",
+          style = "margin-right: 5px;"
+        )
+      ),
       div(
         selectizeInput(ns("loc_code"),
                        label = "Choose how to display location codes/names",
@@ -136,12 +158,12 @@ discretePlotUI <- function(id) {
                          c("Name", "Code", "Name (Code)", "Code (Name)")
                        ),
                        selected = "Name"),
-                       style = "display: flex; align-items: center;"
-        ),
-        
+        style = "display: flex; align-items: center;"
+      ),
+      
       div(
         checkboxInput(ns("target_datetime"),
-                    label = NULL),
+                      label = NULL),
         style = "display: flex; align-items: center;",
         tags$label(
           "Use target instead of actual datetime", 
@@ -177,57 +199,75 @@ discretePlotUI <- function(id) {
   )
 }
 
-discretePlotServer <- function(id, EQWin, AquaCache) {
+discretePlotServer <- function(id, mdb_files, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements within the server code
-
+    
+    EQWin_selector <- reactiveVal(FALSE)
+    observeEvent(input$data_source, {
+      if (input$data_source == "AC") {
+        shinyjs::hide("EQWin_source")
+      } else {
+        if (!EQWin_selector()) {
+          EQWin_selector(TRUE)
+          output$EQWin_source_ui <- renderUI({
+            selectizeInput(ns("EQWin_source"), "EQWin database", choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
+          })
+        }
+        shinyjs::show("EQWin_source")
+      }
+    })
+    
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
+    
+    data$AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete' ORDER BY loc.name ASC")
+    data$AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete' ORDER BY p.param_name ASC")
+    
+    observeEvent(input$EQWin_source, {
+      EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
+      EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns ORDER BY StnCode;"))
+      EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns' ORDER BY groupname;")
+      EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams ORDER BY ParamDesc;"))
+      EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams' ORDER BY groupname;")
+      EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds ORDER BY StdName;")
+      DBI::dbDisconnect(EQWin)
+      
+      # Check encoding and if necessary convert to UTF-8
+      locale_info <- Sys.getlocale("LC_CTYPE")
+      encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
+      tryCatch({
+        grepl("[^\x01-\x7F]", EQ_locs$StnDesc)
+      }, warning = function(w) {
+        if (encoding != "utf8") {
+          EQ_locs$StnDesc <<- iconv(EQ_locs$StnDesc, from = encoding, to = "UTF-8")
+        }
+      })
+      
+      data$EQ_locs <- EQ_locs
+      data$EQ_loc_grps <- EQ_loc_grps
+      data$EQ_params <- EQ_params
+      data$EQ_param_grps <- EQ_param_grps
+      data$EQ_stds <- EQ_stds
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
+
     observe({
-      print("observing")
-      if (!is.null(EQWin)) {
-        EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns ORDER BY StnCode;"))
-        EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns' ORDER BY groupname;")
-        EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams ORDER BY ParamDesc;"))
-        EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams' ORDER BY groupname;")
-        EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds ORDER BY StdName;")
-        
-        # Check encoding and if necessary convert to UTF-8
-        locale_info <- Sys.getlocale("LC_CTYPE")
-        encoding <- sub(".*\\.([^@]+).*", "\\1", locale_info)
-        tryCatch({
-          grepl("[^\x01-\x7F]", EQ_locs$StnDesc)
-        }, warning = function(w) {
-          if (encoding != "utf8") {
-            EQ_locs$StnDesc <<- iconv(EQ_locs$StnDesc, from = encoding, to = "UTF-8")
-          }
-        })
-        
-        data$EQ_locs <- EQ_locs
-        data$EQ_loc_grps <- EQ_loc_grps
-        data$EQ_params <- EQ_params
-        data$EQ_param_grps <- EQ_param_grps
-        data$EQ_stds <- EQ_stds
-      } else {
-        print(input$data_source)
+      if (is.null(mdb_files)) {
         shinyjs::hide("data_source")
+        shinyjs::hide("EQWin_source")
         updateRadioButtons(session, "data_source", selected = "AC")
       }
-      
-      AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete' ORDER BY loc.name ASC")
-      AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete' ORDER BY p.param_name ASC")
-      
-
-      data$AC_locs <- AC_locs
-      data$AC_params <- AC_params
     })
     
     
     
-    observeEvent(input$data_source, {
+    observe({
+      req(input$data_source, data)
       if (input$data_source == "EQ") {
+        req(data$EQ_params)
         updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
         updateSelectizeInput(session, "parameter_groups", choices = data$EQ_param_grps$groupname, server = TRUE)
         updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)
@@ -267,6 +307,7 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                showgridx = FALSE,
                                showgridy = FALSE,
                                colorblind = FALSE,
+                               nrows = NULL,
                                point_scale = 1,
                                guideline_scale = 1,
                                axis_scale = 1,
@@ -288,6 +329,10 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
           checkboxInput(ns("showgridy"),
                         "Show y-axis gridlines",
                         value = plot_aes$showgridy),
+          numericInput(ns("nrows"),
+                       "Number of rows (leave blank for auto)",
+                       value = plot_aes$nrows,
+                       min = 1),
           checkboxInput(ns("colorblind"),
                         "Colorblind friendly",
                         value = plot_aes$colorblind),
@@ -330,6 +375,7 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
       plot_aes$colorblind <- input$colorblind
       plot_aes$showgridx <- input$showgridx
       plot_aes$showgridy <- input$showgridy
+      plot_aes$nrows <- if (input$nrows > 0) input$nrows else NULL
       plot_aes$point_scale <- input$point_scale
       plot_aes$guideline_scale <- input$guideline_scale
       plot_aes$axis_scale <- input$axis_scale
@@ -385,7 +431,7 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
 
       tryCatch({
         withProgress(message = "Generating plot... please be patient", value = 0, {
-          
+          print(plot_aes$nrows)
           incProgress(0.5)
           if (input$data_source == "EQ") {
             plot <- plotDiscrete(start = input$date_range[1],
@@ -398,6 +444,9 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                  log = input$log_scale,
                                  facet_on = input$facet_on,
                                  loc_code = input$loc_code,
+                                 shareX = input$shareX,
+                                 shareY = input$shareY,
+                                 rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
                                  target_datetime = input$target_datetime,
                                  colorblind = plot_aes$colorblind,
                                  lang = plot_aes$lang,
@@ -408,7 +457,7 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
                                  dbSource = input$data_source,
-                                 dbPath = config$accessPath)
+                                 dbPath = input$EQWin_source)
           } else if (input$data_source == "AC") {
             plot <- plotDiscrete(start = input$date_range[1],
                                  end = input$date_range[2],
@@ -419,6 +468,9 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
                                  log = input$log_scale,
                                  facet_on = input$facet_on,
                                  loc_code = input$loc_code,
+                                 shareX = input$shareX,
+                                 shareY = input$shareY,
+                                 rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
                                  target_datetime = input$target_datetime,
                                  colorblind = plot_aes$colorblind,
                                  lang = plot_aes$lang,
