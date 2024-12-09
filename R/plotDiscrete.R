@@ -1,12 +1,12 @@
 #' Discrete (lab or field point data) plotting function
 #' 
-#' Plots data directly from EQWin or from the AquaCache for one or more location (station) and one or more parameter. Depending on the setting for argument 'facet_on', the function can either make a facet plot where each station is a facet (with parameters as distinct traces) or where each parameter is a facet (with locations as distinct traces). Values above or below the detection limit are shown as the detection limit but symbolized differently (open circles). 
+#' Plots data directly from EQWin or from the aquacache for one or more location (station) and one or more parameter. Depending on the setting for argument 'facet_on', the function can either make a facet plot where each station is a facet (with parameters as distinct traces) or where each parameter is a facet (with locations as distinct traces). Values above or below the detection limit are shown as the detection limit but symbolized differently (open circles). 
 #' 
 #' @param start The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'.
 #' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Default is the current date.
-#' @param locations A vector of station names or codes. If dbSource == 'AC': from AquaCache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use `locGrp` instead.
+#' @param locations A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use `locGrp` instead.
 #' @param locGrp Only used if `dbSource` is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use `locations` instead.
-#' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from AquaCache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
+#' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
 #' @param paramGrp Only used if `dbSource` is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use `parameters` instead.
 #' @param standard A standard or guideline name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if `dbSource` is 'EQ'.
 #' @param log Should the y-axis be log-transformed?
@@ -22,7 +22,7 @@
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
-#' @param dbSource The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
+#' @param dbSource The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
 #' databases/EQWinDB/WaterResources.mdb".
 #'
@@ -98,7 +98,7 @@ plotDiscrete <- function(start,
   # lang = "en"
   # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   
-  # testing parameters for AquaCache
+  # testing parameters for aquacache
   # start <- "2020-01-01"
   # end <- "2024-05-05"
   # locations <- c("09AD-SC01", "08AA-SC01", "09AK-SC01", "09DC-SC01B")
@@ -194,8 +194,8 @@ plotDiscrete <- function(start,
   }
   
   
-  # Create a data.frame to hold the plotting data. EQWin and AquaCache fill this list in differently, but the end result is the same to pass on to the plotting portion.
-  # 'data' should contain columns named location, location_name, parameter, datetime, value, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by AquaCache) are sample_type, collection_method, sample_fraction, result_speciation.
+  # Create a data.frame to hold the plotting data. EQWin and aquacache fill this list in differently, but the end result is the same to pass on to the plotting portion.
+  # 'data' should contain columns named location, location_name, parameter, datetime, value, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, result_speciation.
   data <- data.frame()
   
   # Fetch the data ##############################################################################################################
@@ -290,7 +290,7 @@ plotDiscrete <- function(start,
     data <- merge(results[, c("SampleId", "ParamId", "Result")], samps_locs[, c("SampleId", "StnId", "CollectDateTime")])
     data <- merge(data, params)
     data <- merge(data, locations)
-    data <- data[, -which(names(data) %in% c("StnId"))]  # Drop unnecessary column   ! Note that this leaves some columns that are not output from the AquaCache data fetch; thse are only for adding standard values to the plot and AquaCache will need to work differently.
+    data <- data[, -which(names(data) %in% c("StnId"))]  # Drop unnecessary column   ! Note that this leaves some columns that are not output from the aquacache data fetch; thse are only for adding standard values to the plot and aquacache will need to work differently.
     names(data) <- c("ParamId", "SampleId", "value", "datetime", "param_name", "units", "location", "location_name")
     
     # Now add the result_condition and result_condition_value columns
@@ -432,7 +432,7 @@ plotDiscrete <- function(start,
     
   } else { # dbSource == "AC"
     
-    # Fetch data from AquaCache ##################################################################################################
+    # Fetch data from aquacache ##################################################################################################
     # Connect to AC
     AC <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(AC), add = TRUE)
@@ -452,16 +452,16 @@ plotDiscrete <- function(start,
       
       locIds <- DBI::dbGetQuery(AC, query)
       if (nrow(locIds) == 0) {
-        stop("No locations found in the AquaCache database with the names '", paste0(locations, collapse = "', '"), "'")
+        stop("No locations found in the aquacache with the names '", paste0(locations, collapse = "', '"), "'")
       }
       if (nrow(locIds) < length(locations)) {
         # Find the missing locations and tell the user which ones are missing
         combined_locIds <- unique(c(locIds$location_id, locIds$location, locIds$name, locIds$name_fr))
         missing <- setdiff(locations, combined_locIds)
         if (inherits(locations, "character")) {
-          warning("The following locations were not found in the AquaCache database despite searching the 'location', 'name', and 'name_fr' columns: ", paste0(missing, collapse = ", "))
+          warning("The following locations were not found in the aquacache despite searching the 'location', 'name', and 'name_fr' columns: ", paste0(missing, collapse = ", "))
         } else {
-          warning("The following locations were not found in the AquaCache database: ", paste0(missing, collapse = ", "))
+          warning("The following locations were not found in the aquacache: ", paste0(missing, collapse = ", "))
         }
       }
     }
@@ -479,16 +479,16 @@ plotDiscrete <- function(start,
       
       paramIds <- DBI::dbGetQuery(AC, query)
       if (nrow(paramIds) == 0) {
-        stop("No parameters found in the AquaCache database with the names '", paste0(parameters, collapse = "', '"), "'")
+        stop("No parameters found in the aquacache with the names '", paste0(parameters, collapse = "', '"), "'")
       }
       if (nrow(paramIds) < length(parameters)) {
         # Find the missing parameters and tell the user which ones are missing
         combined_paramIds <- unique(c(paramIds$parameter_id, paramIds$param_name, paramIds$param_name_fr))
         missing <- setdiff(parameters, combined_paramIds)
         if (inherits(parameters, "character")) {
-          warning("The following parameters were not found in the AquaCache database despite searching the 'param_name' and 'param_name_fr' columns: ", paste0(missing, collapse = ", "))
+          warning("The following parameters were not found in the aquacache despite searching the 'param_name' and 'param_name_fr' columns: ", paste0(missing, collapse = ", "))
         } else {
-          warning("The following parameters were not found in the AquaCache database: ", paste0(missing, collapse = ", "))
+          warning("The following parameters were not found in the aquacache: ", paste0(missing, collapse = ", "))
         }
       }
     }

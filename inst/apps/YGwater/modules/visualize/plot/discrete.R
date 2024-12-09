@@ -182,10 +182,11 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements within the server code
-    
+
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
     observe({
+      print("observing")
       if (!is.null(EQWin)) {
         EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns ORDER BY StnCode;"))
         EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns' ORDER BY groupname;")
@@ -210,7 +211,9 @@ discretePlotServer <- function(id, EQWin, AquaCache) {
         data$EQ_param_grps <- EQ_param_grps
         data$EQ_stds <- EQ_stds
       } else {
-        updateRadioButtons(session, "data_source", choices = stats::setNames(c("AC"), c("AquaCache")), selected = "AC")
+        print(input$data_source)
+        shinyjs::hide("data_source")
+        updateRadioButtons(session, "data_source", selected = "AC")
       }
       
       AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete' ORDER BY loc.name ASC")

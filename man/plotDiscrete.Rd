@@ -35,11 +35,11 @@ plotDiscrete(
 
 \item{end}{The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Default is the current date.}
 
-\item{locations}{A vector of station names or codes. If dbSource == 'AC': from AquaCache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use \code{locGrp} instead.}
+\item{locations}{A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use \code{locGrp} instead.}
 
 \item{locGrp}{Only used if \code{dbSource} is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{locations} instead.}
 
-\item{parameters}{A vector of parameter names or codes. If dbSource == 'AC': from AquaCache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use \code{paramGrp} instead.}
+\item{parameters}{A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use \code{paramGrp} instead.}
 
 \item{paramGrp}{Only used if \code{dbSource} is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{parameters} instead.}
 
@@ -71,7 +71,7 @@ plotDiscrete(
 
 \item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
 
-\item{dbSource}{The database source to use, 'AC' for AquaCache or 'EQ' for EQWin. Default is 'EQ'. Connections to AquaCache are made using function \code{\link[=AquaConnect]{AquaConnect()}} while EQWin connections use \code{\link[=AccessConnect]{AccessConnect()}}.}
+\item{dbSource}{The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function \code{\link[=AquaConnect]{AquaConnect()}} while EQWin connections use \code{\link[=AccessConnect]{AccessConnect()}}.}
 
 \item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
 databases/EQWinDB/WaterResources.mdb".}
@@ -80,5 +80,5 @@ databases/EQWinDB/WaterResources.mdb".}
 An interactive HTML plot of the data from EQWin.
 }
 \description{
-Plots data directly from EQWin or from the AquaCache for one or more location (station) and one or more parameter. Depending on the setting for argument 'facet_on', the function can either make a facet plot where each station is a facet (with parameters as distinct traces) or where each parameter is a facet (with locations as distinct traces). Values above or below the detection limit are shown as the detection limit but symbolized differently (open circles).
+Plots data directly from EQWin or from the aquacache for one or more location (station) and one or more parameter. Depending on the setting for argument 'facet_on', the function can either make a facet plot where each station is a facet (with parameters as distinct traces) or where each parameter is a facet (with locations as distinct traces). Values above or below the detection limit are shown as the detection limit but symbolized differently (open circles).
 }

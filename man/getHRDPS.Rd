@@ -19,7 +19,7 @@ Up to 48 rasters (one per hour) representing the HRDPS modeled output for the pa
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-NOTE: If you have access to the WRB AquaCache database these rasters are already in there. Use function \code{\link[=getRaster]{getRaster()}} to extract what you need to a .tiff file.
+NOTE: If you have access to the WRB aquacache these rasters are already in there. Use function \code{\link[=getRaster]{getRaster()}} to extract what you need to a .tiff file.
 
 Utility function to retrieve gridded predictions output from the \href{https://collaboration.cmc.ec.gc.ca/cmc/cmoi/product_guide/docs/tech_notes/technote_hrdps_e.pdf}{HRDPS model}. In current form will delete all old files in the save directory.
 }

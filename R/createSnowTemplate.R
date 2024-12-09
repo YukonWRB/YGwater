@@ -71,14 +71,14 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
       courses <- c("Old Crow")
     } else if (circuit == "pellyfarm") {
       courses <- c("Pelly Farm")
-    } else if (circuit == "ross") { # Snow scale/pillow locations not in  snow db. Twin Creeks A not in AquaCache, but is in snow db
+    } else if (circuit == "ross") { # Snow scale/pillow locations not in  snow db. Twin Creeks A not in aquacache, but is in snow db
       courses <- c("Bonnet Plume Lake", "Burns Lake", "Edwards Lake", "Finlayson Airstrip", "Ford Lake", "Fuller Lake", "Hoole River", "Jordan Lake", "Plata Airstrip", "Rackla Lake", "Rose Creek", "Russell Lake", "Tintina Airstrip", "Twin Creeks A", "Twin Creeks B", "Withers Lake", "Twin Creeks B Snow Scale", "Withers Pillow", "Withers Scale") #
     } else if (circuit == "slakes") { # Snow scale/pillow locations not in db.
       courses <- c("Atlin (B.C.)", "Log Cabin (B.C.)", "Log Cabin Pillow (B.C.)", "Montana Mountain", "Montana Mountain Pillow", "Tagish", "Tagish Snow Scale", "Tagish Snow Pillow")
     } else if (circuit == "teslin") {
       courses <- c("Meadow Creek", "Morley Lake", "Pine Lake Airstrip")
     } else if (circuit == "watson") {
-      courses <- c("Frances River", "Hyland River B", "Hyland Snow Scale", "Watson Lake Airport") # Hyland River does not exist in AquaCache db, but is in snow db
+      courses <- c("Frances River", "Hyland River B", "Hyland Snow Scale", "Watson Lake Airport") # Hyland River does not exist in aquacache db, but is in snow db
     } else if (circuit == "whitehorse") { # Buckbrush snow scales is not in snow db. Whitehorse Airport is actually Whitehorse Airport A
       courses <- c("Buckbrush Snow Pillow", "Mt McIntyre B", "Whitehorse Airport", "Whitehorse Airport B")
     } else if (circuit == "yec") {

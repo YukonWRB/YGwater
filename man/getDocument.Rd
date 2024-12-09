@@ -20,7 +20,7 @@ A data.frame containing the row(s) identified by the specified ID. One of the co
 }
 \description{
 lifecycle::badge("stable")
-Extracts a document stored in the AquaCache database as BYTEA type. For extracting images see \code{\link[=getImage]{getImage()}}, for extracting vector files as \emph{terra} rasters (points, lines polygons) see \code{\link[=getVector]{getVector()}}, and for extracting rasters to R as \emph{terra} objects see \code{\link[=getRaster]{getRaster()}}.
+Extracts a document stored in the aquacache as BYTEA type. For extracting images see \code{\link[=getImage]{getImage()}}, for extracting vector files as \emph{terra} rasters (points, lines polygons) see \code{\link[=getVector]{getVector()}}, and for extracting rasters to R as \emph{terra} objects see \code{\link[=getRaster]{getRaster()}}.
 }
 \details{
 If you need additional flexibility use function \code{\link[=getFile]{getFile()}} instead. This should not normally be needed with a database created by the AquaCache package but is made available for use with other databases.

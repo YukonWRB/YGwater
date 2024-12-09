@@ -16,7 +16,7 @@
 #' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
 #' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including extension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.
 
-#' @param con A connection to the AquaCache/hydromet database. NULL uses [AquaConnect()] and automatically disconnects.
+#' @param con A connection to the aquacache database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return An Excel workbook containing the report with one tab per timeseries type.
 #' @export
