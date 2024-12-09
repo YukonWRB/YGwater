@@ -4,7 +4,7 @@ mapUI <- function(id) {
   ns <- NS(id)
   fluidPage(
     selectizeInput(
-      ns("map_type"),
+      ns("type"),
       label = NULL,
       choices = stats::setNames(
         # c("params", "locs", "precip"),
@@ -50,16 +50,16 @@ map <- function(id, AquaCache, language) {
     subModuleOutputs <- reactiveValues() # Holds the stuff that needs to be output from the sub-modules back tot this server
     mainModuleOutputs <- reactiveValues() # Hold the stuff that needs to be output from this module back to the main server
     
-    # Reactive value to store the selected submodule type
+    # Reactive value to track if submodule has been loaded
     submodules <- reactiveValues(#precip = FALSE,
                                  params = FALSE,
                                  locs = FALSE)
     
     
     # Observe input to dynamically load UI and server logic
-    observeEvent(input$map_type, {
+    observeEvent(input$type, {
       # Monitor locations module
-      if (input$map_type == "locs" && !submodules$locs) {
+      if (input$type == "locs" && !submodules$locs) {
         submodules$locs <- TRUE
         # Dynamically insert the UI
         insertUI(
@@ -76,7 +76,7 @@ map <- function(id, AquaCache, language) {
       }
       
       # # Precipitation module
-      # if (input$map_type == "precip" && !submodules$precip) {
+      # if (input$type == "precip" && !submodules$precip) {
       #   submodules$precip <- TRUE
       #   insertUI(
       #     selector = paste0("#", ns("precip_placeholder")),
@@ -87,7 +87,7 @@ map <- function(id, AquaCache, language) {
       # }
       
       # Parameter module
-      if (input$map_type == "params" && !submodules$params) {
+      if (input$type == "params" && !submodules$params) {
         submodules$params <- TRUE
         insertUI(
           selector = paste0("#", ns("params_placeholder")),
@@ -101,7 +101,7 @@ map <- function(id, AquaCache, language) {
       shinyjs::hide(selector = paste0("#", ns("locs_placeholder")))
       # shinyjs::hide(selector = paste0("#", ns("precip_placeholder")))
       shinyjs::hide(selector = paste0("#", ns("params_placeholder")))
-      shinyjs::show(selector = paste0("#", ns(paste0(input$map_type, "_placeholder"))))
+      shinyjs::show(selector = paste0("#", ns(paste0(input$type, "_placeholder"))))
     })
     
     return(mainModuleOutputs)

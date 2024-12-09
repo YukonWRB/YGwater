@@ -7,7 +7,10 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/admin/admin.R", package = "YGwater"))
   
   source(system.file("apps/YGwater/modules/admin/locations/loc_main.R", package = "YGwater"))
-  # locations sub-modules
+  source(system.file("apps/YGwater/modules/admin/locations/main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/locations/meta.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/locations/new.R", package = "YGwater"))
+  
   source(system.file("apps/YGwater/modules/admin/timeseries/ts_main.R", package = "YGwater"))
   # timeseries sub-modules
   source(system.file("apps/YGwater/modules/admin/equipment/equip_main.R", package = "YGwater"))

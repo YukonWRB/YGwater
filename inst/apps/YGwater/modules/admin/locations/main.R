@@ -1,0 +1,19 @@
+# UI and server code for main locations view/edit module
+
+locsMainUI <- function(id) {
+  ns <- NS(id)
+  fluidPage(
+    textOutput(ns("placeholder"))
+  )
+}
+
+locsMainServer <- function(id, AquaCache, data) {
+  
+  moduleServer(id, function(input, output, session) {
+    
+    ns <- session$ns
+    
+    output$placeholder <- renderText("Placeholder for main locations view/edit module")
+    
+  }) # End of moduleServer
+}
