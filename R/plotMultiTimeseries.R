@@ -18,6 +18,8 @@
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
+#' @param shareX Should the x-axis be shared across facets? Default is TRUE (dates are shared).
+#' @param shareY Should the y-axis be shared across facets? Default is FALSE (values are not shared).
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists, only for water level and distance. Default is TRUE.
 #' @param title Should a title be included? TRUE/FALSE.
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
@@ -50,6 +52,8 @@ plotMultiTimeseries <- function(type = 'traces',
                                 log = FALSE,
                                 invert = NULL,
                                 slider = FALSE,
+                                shareX = TRUE,
+                                shareY = FALSE,
                                 datum = TRUE,
                                 title = TRUE,
                                 custom_title = NULL,
@@ -928,18 +932,6 @@ plotMultiTimeseries <- function(type = 'traces',
       # Adjust x and y based on row and col
       x_pos <- (col - 0.5) / ncols  # Center of the subplot column
       y_pos <- 1 - ((row - 1) / nrows)  # Slightly above the top of the subplot
-      
-      if (row != nrows) {  # This adds in a horizontal line to separate the subplots as it's otherwise not present if shareX = TRUE
-        subplot <- subplot %>%
-          plotly::layout(shapes = list(list(type = "line", 
-                                            x0 = 0, 
-                                            x1 = 1, 
-                                            y0 = 0, 
-                                            y1 = 0, 
-                                            xref = "paper", 
-                                            yref = "paper", 
-                                            line = list(color = "black", width = 0.6))))
-      }
       subplots[[i]] <- subplot
       
       subtitles[[i]] <- list(
@@ -956,12 +948,32 @@ plotMultiTimeseries <- function(type = 'traces',
     }
     plot <- plotly::subplot(subplots, 
                             nrows = nrows, 
-                            shareX = TRUE, 
+                            shareX = FALSE, 
                             shareY = FALSE, 
                             titleX = FALSE, 
                             titleY = TRUE, 
-                            margin = c(0, (0.05 * axis_scale), 0, (0.05 * axis_scale))) %>%
+                            margin = c(0, (0.07 * axis_scale), 0, (0.07 * axis_scale))) %>%
       plotly::layout(annotations = subtitles)
+    
+    # Link axes if desired
+    if (shareX || shareY) {
+      layout_settings <- list()
+      
+      if (shareX) {
+        for (i in seq_along(subplots)) {
+          layout_settings[[paste0("xaxis", if (i > 1) i else "")]] <- list(matches = "x")
+        }
+      }
+      
+      if (shareY) {
+        for (i in seq_along(subplots)) {
+          layout_settings[[paste0("yaxis", if (i > 1) i else "")]] <- list(matches = "y")
+        }
+      }
+      
+      plot <- do.call(plotly::layout, c(list(plot), layout_settings))
+    }
+    
   }
   
   return(plot)

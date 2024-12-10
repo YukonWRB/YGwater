@@ -11,6 +11,7 @@ WQReportUI <- function(id) {
                    NULL,
                    choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
                    selected = "EQ"),
+      uiOutput(ns("EQWin_source_ui")),
       dateInput(ns("date"), "Report Date", value = Sys.Date() - 30,
                 width = "100%"),
       div(
@@ -190,16 +191,31 @@ WQReportUI <- function(id) {
     )
 }
 
-WQReportServer <- function(id, EQWin, AquaCache) {
+WQReportServer <- function(id, mdb_files, AquaCache) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
+    
+    EQWin_selector <- reactiveVal(FALSE)
+    observeEvent(input$data_source, {
+      if (input$data_source == "AC") {
+        shinyjs::hide("EQWin_source")
+      } else {
+        if (!EQWin_selector()) {
+          EQWin_selector(TRUE)
+          output$EQWin_source_ui <- renderUI({
+            selectizeInput(ns("EQWin_source"), "EQWin database", choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
+          })
+        }
+        shinyjs::show("EQWin_source")
+      }
+    })
     
     # Fill in some htmlOutputs
     output$standard_note <- renderUI({
       HTML("<p>
       <i><b>Optional:</b> Select standards/guidelines and station specific standards/guidelines to apply.<br>
-      General standards show up as an additional column in the report with values for each parameter <br>
+      General standards show up as an additional column in the report with values for each parameter. <br>
       Station-specific standards show up as notes in the report for each station.<br>
       Reported values which exceed standards/guidelines are highlighted in red with a note provided.
       </p>")
@@ -208,21 +224,24 @@ WQReportServer <- function(id, EQWin, AquaCache) {
     output$SD_note <- renderUI({
       HTML("<p>
       <i><b>Optional:</b> Select a standard deviation threshold to flag outlier values.<br>
-      A mean and standard deviation will be calculated using past measurements if the exist.<br>
-      <b>This can add a lot of time to the report generation process, be patient!.</b>
+      A mean and standard deviation will be calculated using past measurements if they exist.<br>
+      <b>This can add a lot of time to the report generation process, be patient!</b>
       </p>")
     })
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
-    observe({
+      # data$AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete'")
+      # data$AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete'")
+    
+    observeEvent(input$EQWin_source, {
+      EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
       EQ_locs <- DBI::dbGetQuery(EQWin, paste0("SELECT StnCode, StnDesc FROM eqstns;"))
       EQ_loc_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns'")
       EQ_params <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode, ParamDesc, Units AS unit FROM eqparams;"))
       EQ_param_grps <- DBI::dbGetQuery(EQWin, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqparams'")
       EQ_stds <- DBI::dbGetQuery(EQWin, "SELECT StdName, StdCode FROM eqstds")
-      # AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete'")
-      # AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete'")
+      DBI::dbDisconnect(EQWin)
       
       # Check encoding and if necessary convert to UTF-8
       locale_info <- Sys.getlocale("LC_CTYPE")
@@ -240,13 +259,21 @@ WQReportServer <- function(id, EQWin, AquaCache) {
       data$EQ_params <- EQ_params
       data$EQ_param_grps <- EQ_param_grps
       data$EQ_stds <- EQ_stds
-      # data$AC_locs <- AC_locs
-      # data$AC_params <- AC_params
+    }, ignoreNULL = FALSE, ignoreInit = TRUE)
+    
+    observe({
+      if (is.null(mdb_files)) {
+        shinyjs::hide("data_source")
+        shinyjs::hide("EQWin_source")
+        updateRadioButtons(session, "data_source", selected = "AC")
+      }
     })
     
-    observeEvent(input$data_source, {
+    observe({
+      req(input$data_source, data)
       # !Since the report generation function is not yet compatible with AC, a modal is shown to the user and the data source is reset to EQ.
       if (input$data_source == "EQ") {
+        req(data$EQ_params)
         updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
         updateSelectizeInput(session, "parameter_groups", choices = data$EQ_param_grps$groupname, server = TRUE)
         updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)
@@ -299,7 +326,7 @@ WQReportServer <- function(id, EQWin, AquaCache) {
           } else {
             SD_doy_range <- NULL
           }
-          
+          EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
           EQWinReport(date = input$date,
                       date_approx = as.numeric(input$date_approx),
                       stations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
@@ -314,6 +341,7 @@ WQReportServer <- function(id, EQWin, AquaCache) {
                       SD_doy = SD_doy_range,
                       shiny_file_path = file,
                       con = EQWin)
+          DBI::dbDisconnect(EQWin)
           
           incProgress(1)
         }) # End withProgress\

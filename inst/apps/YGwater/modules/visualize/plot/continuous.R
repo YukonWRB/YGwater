@@ -89,6 +89,7 @@ continuousPlotUI <- function(id) {
                        "Add subplot")
         ),
         checkboxInput(ns("log_y"), "Log scale y-axis?"),
+        uiOutput(ns("share_axes")),
         checkboxInput(ns("historic_range"), "Plot historic range?")
       ),
       checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
@@ -555,9 +556,28 @@ continuousPlotServer <- function(id, AquaCache, data) {
       updateSelectizeInput(session, "subplotNew_loc_code", selected = unique(data$all_ts[data$all_ts$name == input$subplotNew_loc_name, "location"]))
     }, ignoreInit = TRUE)
     
+    share_axes_run <- reactiveVal(FALSE)
     observeEvent(input$add_new_subplot, {
       shinyjs::hide("add_trace")
       if (subplotCount() == 1) {
+        if (!share_axes_run()) {
+          output$share_axes <- renderUI({
+            div(
+              checkboxInput(ns("shareX"),
+                            "Share X axis between subplots (dates are aligned)",
+                            value = TRUE),
+              
+              checkboxInput(ns("shareY"),
+                            "Share Y axis between subplots (values are aligned)",
+                            value = FALSE)
+            )
+          })
+          share_axes_run(TRUE)
+        } else {
+          shinyjs::show("shareX")
+          shinyjs::show("shareY")
+        }
+
         subplots$subplot1 <- list(subplot = "subplot1",
                               parameter = as.numeric(input$param),
                               location = input$loc_code)
@@ -717,6 +737,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
       if (subplotCount() == 1) {
         # Remove the remaining subplot button and show the param and location selectors
         shinyjs::hide("subplot1_ui")
+        shinyjs::hide("shareX")
+        shinyjs::hide("shareY")
         shinyjs::show("param")
         shinyjs::show("loc_code")
         shinyjs::show("loc_name")
@@ -792,6 +814,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                             legend_scale = plot_aes$legend_scale,
                                             gridx = plot_aes$showgridx,
                                             gridy = plot_aes$showgridy,
+                                            shareX = input$shareX,
+                                            shareY = input$shareY,
                                             con = AquaCache)
               } else {
                 plot <- plotTimeseries(location = input$loc_code,
@@ -828,6 +852,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                         legend_scale = plot_aes$legend_scale,
                                         gridx = plot_aes$showgridx,
                                         gridy = plot_aes$showgridy,
+                                        shareX = input$shareX,
+                                        shareY = input$shareY,
                                         con = AquaCache)
             }        
             output$plot_plotly <- plotly::renderPlotly(plot)
