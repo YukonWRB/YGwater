@@ -10,7 +10,7 @@
 #' @param repo Path to YOWN Active Wells folder, which will be concatenated with the YOWN ID to create the final resting place for the html file. If NULL the file will not get moved.
 #'
 #' @return Moves YOWN html file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions. Adds pressure column if missing, based on depth column and conversions calcs on In Situ website
-#' #' @export
+#' @export
 
 html_processing <- function(file,
                             aq_upload = TRUE,
