@@ -151,11 +151,11 @@ return(plot)
 
 snowbullpillow2 <- function(location_pil, location_surv, custom_title, language=language_param, year=year_param, scale=scale_param, month=month_param) {
   # Get this years snow pillow
-# snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily ",
+# snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily_corrected ",
 #                             "WHERE timeseries_id = ", location_pil,
 #                             " AND date >= '", year-1, "-09-01' ", #year_param
 #                             "AND date <= '", year, "-07-01' ")) #year_param
-snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily ",
+snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily_corrected ",
                             "WHERE timeseries_id = ", location_pil,
                             " AND date >= '", year - 1, "-09-01' ", #year_param
                             "AND date <= '", year, "-0", month, "-01' ")) #year_param
@@ -229,7 +229,7 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale=scale_
 
 #### ------------- C: Function to create monthly precip plots ------------- ####
 snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language, month = month_param) {
-  tab <- DBI::dbGetQuery(con, paste0("SELECT * FROM measurements_continuous WHERE timeseries_id = ", tsid,
+  tab <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, datetime, value_corrected AS value, period, imputed FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid,
                                      " AND datetime >= '", year-40, "-10-01'",
                                      " AND datetime <= '", year, "-0", month_param, "-02'"))
 
@@ -324,8 +324,8 @@ return(cddf)
 # Function to create CDDF plots
 snowbullCDDF <- function(timeseries_id, custom_title, language="en", 
                          year=year_param, month=month_param, scale=scale_param) {
-  location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value 
-                                          FROM measurements_continuous 
+  location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value
+                                          FROM measurements_continuous_corrected
                                           WHERE timeseries_id = ", timeseries_id, 
                                            " AND datetime <= '", year, "-0", month, "-01' "))
 

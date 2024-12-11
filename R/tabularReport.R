@@ -221,14 +221,14 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     level_rt <- list()
     names_level <- NULL
     for (i in 1:nrow(level_locations)) {
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date(), "' AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         level_daily[[level_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", level_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", level_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         level_rt[[level_locations[i, "location"]]] <- rt
       }
@@ -243,14 +243,14 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     flow_rt <- list()
     names_flow <- NULL
     for (i in 1:nrow(flow_locations)) {
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date(), "' AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         flow_daily[[flow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         flow_rt[[flow_locations[i, "location"]]] <- rt
       }
@@ -264,14 +264,14 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     snow_rt <- list()
     names_snow <- NULL
     for (i in 1:nrow(snow_locations)) {
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date(), "' AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         snow_daily[[snow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         snow_rt[[snow_locations[i, "location"]]] <- rt
       }
@@ -285,14 +285,14 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     bridges_rt <- list()
     names_bridges <- NULL
     for (i in 1:nrow(bridge_locations)) {
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '", Sys.Date(), "' AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date(), "' AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         bridges_daily[[bridge_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
       if (nrow(rt) > 0) {
         bridges_rt[[bridge_locations[i, "location"]]] <- rt
       }

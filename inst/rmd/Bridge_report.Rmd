@@ -22,8 +22,8 @@ bridge_daily <- list()
 bridge_rt <- list()
 
 for (i in 1:nrow(tsid)) {
-  bridge_daily[[tsid$location[i]]] <- DBI::dbGetQuery(con, paste0("SELECT value, date FROM measurements_calculated_daily WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND date BETWEEN '", Sys.Date()-365, "' AND '", Sys.Date(), "'" ))
-  bridge_rt[[tsid$location[i]]] <-  DBI::dbGetQuery(con, paste0("SELECT value, datetime FROM measurements_continuous WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-zoom_days * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+  bridge_daily[[tsid$location[i]]] <- DBI::dbGetQuery(con, paste0("SELECT value, date FROM measurements_calculated_daily_corrected WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND date BETWEEN '", Sys.Date()-365, "' AND '", Sys.Date(), "'" ))
+  bridge_rt[[tsid$location[i]]] <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC")-zoom_days * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
 }
 
 ```

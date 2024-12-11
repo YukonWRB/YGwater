@@ -457,7 +457,8 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
                                  dbSource = input$data_source,
-                                 dbPath = input$EQWin_source)
+                                 dbPath = input$EQWin_source,
+                                 dbCon = NULL)
           } else if (input$data_source == "AC") {
             plot <- plotDiscrete(start = input$date_range[1],
                                  end = input$date_range[2],
@@ -480,7 +481,8 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
                                  legend_scale = plot_aes$legend_scale,
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
-                                 dbSource = input$data_source)
+                                 dbSource = input$data_source,
+                                 dbCon = AquaCache)
           }
           
           

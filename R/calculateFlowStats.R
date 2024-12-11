@@ -41,9 +41,9 @@ calculateFlowStats <- function(stations = NULL, data = NULL, perc = 95, record_l
     
     flow_paramId <- DBI::dbGetQuery(con, "SELECT parameter_id FROM parameters WHERE param_name = 'discharge, river/stream'")$parameter_id
     flow_all <- DBI::dbGetQuery(con, 
-                                paste0("SELECT locations.name, timeseries.location, measurements_calculated_daily.date, measurements_calculated_daily.value ",
-                                       "FROM measurements_calculated_daily ",
-                                       "INNER JOIN timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id ",
+                                paste0("SELECT locations.name, timeseries.location, measurements_calculated_daily_corrected.date, measurements_calculated_daily_corrected.value ",
+                                       "FROM measurements_calculated_daily_corrected ",
+                                       "INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id ",
                                        "INNER JOIN locations ON timeseries.location = locations.location ",
                                        "WHERE timeseries.location IN ('", paste0(stations, collapse = "', '"), "') AND parameter_id = ", flow_paramId, ";"))
     

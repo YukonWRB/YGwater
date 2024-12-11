@@ -276,7 +276,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
       ))$timeseries_id
       
       if (map_params$latest) {
-        # Pull the most recent measurement in table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days1 days
+        # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days1 days
         closest_measurements1 <- dbGetQueryDT(AquaCache, 
                                               paste0("WITH ranked_data AS (
                     SELECT 
@@ -308,7 +308,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
                                               doy_count,
                                               ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                           FROM 
-                                              measurements_calculated_daily 
+                                              measurements_calculated_daily_corrected 
                                           WHERE 
                                               doy_count >= ", as.numeric(map_params$yrs1), " 
                                           AND timeseries_id IN (", paste(closest_measurements1$timeseries_id, collapse = ","), ") 
@@ -328,7 +328,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
         closest_measurements1[, percent_historic_range := 100 * (value - min) / (max - min)]
         
       } else { # not requesting latest measurements
-        range1 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ", as.numeric(map_params$yrs1), " AND timeseries_id IN (", paste(tsids1, collapse = ","), ") AND date BETWEEN '", map_params$target - as.numeric(map_params$days1), "' AND '", map_params$target + as.numeric(map_params$days1), "';"))
+        range1 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily_corrected WHERE doy_count >= ", as.numeric(map_params$yrs1), " AND timeseries_id IN (", paste(tsids1, collapse = ","), ") AND date BETWEEN '", map_params$target - as.numeric(map_params$days1), "' AND '", map_params$target + as.numeric(map_params$days1), "';"))
         
         # Calculate the absolute difference in days between each date and the target date
         range1[, date_diff := abs(date - map_params$target)]
@@ -352,7 +352,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
         tsids2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id FROM timeseries WHERE parameter_id = ", map_params$param2, " AND location_id NOT IN (", paste(locs_tsids1$location_id, collapse = ", "), ");"))$timeseries_id
         
         if (map_params$latest) {
-          # Pull the most recent measurement in table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days2 days
+          # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days2 days
           closest_measurements2 <- dbGetQueryDT(AquaCache, 
                                                 paste0("WITH ranked_data AS (
                       SELECT 
@@ -384,7 +384,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
                                                 doy_count,
                                                 ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                             FROM 
-                                                measurements_calculated_daily 
+                                                measurements_calculated_daily_corrected 
                                             WHERE 
                                                 doy_count >= ", as.numeric(map_params$yrs2), " 
                                             AND timeseries_id IN (", paste(closest_measurements2$timeseries_id, collapse = ","), ") \
@@ -404,7 +404,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
           closest_measurements2[, percent_historic_range := 100 * (value - min) / (max - min)]
           
         } else {
-          range2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ", as.numeric(map_params$yrs2), " AND timeseries_id IN (", paste(tsids2, collapse = ","), ") AND date BETWEEN '", map_params$target - as.numeric(map_params$days2), "' AND '", map_params$target + as.numeric(map_params$days2), "';"))
+          range2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily_corrected WHERE doy_count >= ", as.numeric(map_params$yrs2), " AND timeseries_id IN (", paste(tsids2, collapse = ","), ") AND date BETWEEN '", map_params$target - as.numeric(map_params$days2), "' AND '", map_params$target + as.numeric(map_params$days2), "';"))
           
           # Calculate the absolute difference in days between each date and the target date
           range2[, date_diff := abs(date - map_params$target)]

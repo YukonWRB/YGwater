@@ -14,7 +14,7 @@ app_ui <- function(request) {
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css") # Fonts
       # css for z index control is at the bottom because it must come after the css passed on silently by navbarPage
     ),
-    # Add custom CSS to adjust tab font sizes
+    # Add custom CSS to adjust tab font sizes: 'admin' and 'visualize' tabs are larger
     tags$style(HTML("
         /* Reduce font size for all tabs except 'visualize' and 'admin' */
         .navbar .nav > li > a:not([data-value='visualize']):not([data-value='admin']) {
@@ -47,12 +47,12 @@ app_ui <- function(request) {
                collapsible = TRUE,
                fluid = TRUE,
                lang = "en",
-               tabPanel(title = "Viewer Mode", value = "viz"),
+               tabPanel(title = "Switch to View mode", value = "viz"),
                tabPanel(title = "Map", value = "map",
                         uiOutput("map_ui")),
                tabPanel(title = "Plot", value = "plot", 
                         uiOutput("plot_ui")),
-               tabPanel(title = "FOD Comments", value = "FOD",
+               tabPanel(title = "FOD comments", value = "FOD",
                         uiOutput("fod_ui")),
                tabPanel(title = "Generate", value = "gen",
                         uiOutput("gen_ui")),
