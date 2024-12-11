@@ -325,28 +325,29 @@ plotTimeseries <- function(location,
   tsid <- exist_check$timeseries_id
   
   # Check if we should spend the extra time to get corrected measurements
-  corrections_apply <- DBI::dbGetQuery(con, paste0("SELECT correction_id FROM corrections WHERE timeseries_id = ", tsid, " AND start_dt <= '", end_date, "' AND end_dt >= '", start_date, "' LIMIT 1;"))
-  if (nrow(corrections_apply) == 1) {
+  if (!DBI::dbExistsTable(con, "measurements_continuous")) { # IF this table can't be found it means the user doesn't have direct access to it and needs to use the views
     corrections_apply <- TRUE
   } else {
-    corrections_apply <- FALSE
+    corrections_apply <- DBI::dbGetQuery(con, paste0("SELECT correction_id FROM corrections WHERE timeseries_id = ", tsid, " AND start_dt <= '", end_date, "' AND end_dt >= '", start_date, "' LIMIT 1;"))
+    if (nrow(corrections_apply) == 1) {
+      corrections_apply <- TRUE
+    } else {
+      corrections_apply <- FALSE
+    }
   }
+
   
-  if (historic_range) { # get data from the measurements_calculated_daily table for historic ranges plus values from measurements_continuous. Where there isn't any data in measurements_continuous fill in with the value from the daily table.
+  if (historic_range) { # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous (corrected view or not). Where there isn't any data in the table fill in with the value from the daily table.
     range_end <- end_date + 1*24*60*60
     range_start <- start_date - 1*24*60*60
-    range_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", range_start, "' AND '", range_end, "' ORDER BY date ASC;"))
+    range_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", range_start, "' AND '", range_end, "' ORDER BY date ASC;"))
     range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
     attr(range_data$datetime, "tzone") <- tzone
     if (rate == "day") {
-      trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY date DESC;"))
+      trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY date DESC;"))
       trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     } else if (rate == "hour") {
-      if (corrections_apply) {
-        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC;"))
-      } else {
-        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC;"))
-      }
+      trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC;"))
     } else if (rate == "max") {
       if (corrections_apply) {
         trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
@@ -355,11 +356,7 @@ plotTimeseries <- function(location,
       }
       if (nrow(trace_data) > 0) {
         if (min(trace_data$datetime) > start_date) {
-          if (corrections_apply) {
-            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
-          } else {            
-            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
-          }
+          infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
           trace_data <- rbind(infill, trace_data)
         }
       }
@@ -367,14 +364,10 @@ plotTimeseries <- function(location,
     attr(trace_data$datetime, "tzone") <- tzone
   } else { #No historic range requested
     if (rate == "day") {
-      trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY date DESC;"))
+      trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY date DESC;"))
       trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     } else if (rate == "hour") {
-      if (corrections_apply) {
-        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC;"))
-      } else {
-        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC;"))
-      }
+        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC;"))
     } else if (rate == "max") {
       if (corrections_apply) {
         trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
@@ -383,11 +376,7 @@ plotTimeseries <- function(location,
       }
       if (nrow(trace_data) > 0) {
         if (min(trace_data$datetime) > start_date) {
-          if (corrections_apply) {
-            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
-          } else {
-            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous_hourly WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
-          }
+            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
           trace_data <- rbind(infill, trace_data)
         }
       }
@@ -417,13 +406,13 @@ plotTimeseries <- function(location,
     
     # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
     if (min_trace > start_date) {
-      extra <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date < '", min(trace_data$datetime), "' AND date >= '", start_date, "';"))
+      extra <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date < '", min(trace_data$datetime), "' AND date >= '", start_date, "';"))
       extra$datetime <- as.POSIXct(extra$datetime, tz = "UTC")
       attr(extra$datetime, "tzone") <- tzone
       trace_data <- rbind(trace_data, extra)
     }
   } else { #this means that no trace data could be had because there are no measurements in measurements_continuous or the hourly views table
-    trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ", tsid, " AND date >= '", start_date, "' AND date <= '", end_date, "';"))
+    trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date >= '", start_date, "' AND date <= '", end_date, "';"))
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     attr(trace_data$datetime, "tzone") <- tzone
     trace_data <- rbind(trace_data, trace_data)

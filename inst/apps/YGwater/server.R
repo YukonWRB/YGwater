@@ -81,8 +81,6 @@ app_server <- function(input, output, session) {
                            port = config$dbPort,
                            username = config$dbUser,
                            password = config$dbPass,
-                           RLS_user = config$RLS_user,
-                           RLS_pass = config$RLS_pass,
                            silent = TRUE)
   print("Connected to AquaCache")
   

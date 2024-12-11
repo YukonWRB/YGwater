@@ -3,11 +3,13 @@
 locsUI <- function(id) {
   ns <- NS(id)
   fluidPage(
-    selectizeInput(ns("select"), NULL, choices = stats::setNames(c("main", "meta", "new"), c("View/edit location data", "View/edit location metadata", "Add new location")), selected = "main"),
+    selectizeInput(ns("select"), NULL, choices = stats::setNames(c("main", "meta", "new_loc", "new_ts"), c("View/edit location data", "View/edit location metadata", "Add new location", "Add new timeseries at a location")), selected = "main"),
+    hr(style = "border-top: 1px solid #000000;"),
     # Placeholder divs for dynamically loaded UIs
     div(id = ns("main_placeholder"), style = "display: none;"),
     div(id = ns("meta_placeholder"), style = "display: none;"),
-    div(id = ns("new_placeholder"), style = "display: none;")
+    div(id = ns("new_loc_placeholder"), style = "display: none;"),
+    div(id = ns("new_ts_placeholder"), style = "display: none;")
     
   )
 }
@@ -33,7 +35,8 @@ locs <- function(id, AquaCache) {
     # Reactive value to track if submodule has been loaded
     submodules <- reactiveValues(main = FALSE,
                                  meta = FALSE,
-                                 new = FALSE)
+                                 new_loc = FALSE,
+                                 new_ts = FALSE)
     
     # Observe input to dynamically load UI and server logic
     observeEvent(input$select, {
@@ -61,20 +64,19 @@ locs <- function(id, AquaCache) {
       }
       
       # Add new location module
-      if (input$select == "new" && !submodules$new) {
-        submodules$new <- TRUE
+      if (input$select == "new_loc" && !submodules$new_loc) {
+        submodules$new_loc <- TRUE
         insertUI(
-          selector = paste0("#", ns("new_placeholder")),
+          selector = paste0("#", ns("new_loc_placeholder")),
           where = "beforeEnd",
-          ui = locsNewUI(ns("new"))
+          ui = locsNewLocUI(ns("new_loc"))
         )
-        submoduleOutputs <- locsNewServer("new", AquaCache, data)
+        submoduleOutputs <- locsNewLocServer("new_loc", AquaCache)
         
-        print(submoduleOutputs$new$added)
-        
+
         observe({
-          req(submoduleOutputs$new$added)
-          if (subModuleOutputs$new$added) { # If a new location has been added, refresh the data
+          req(submoduleOutputs$new_loc$added)
+          if (subModuleOutputs$new_loc$added) { # If a new location has been added, refresh the data
             data <- reactiveValues(locs = DBI::dbGetQuery(AquaCache, "SELECT * FROM locations"),
                                    networks = DBI::dbGetQuery(AquaCache, "SELECT * FROM networks"),
                                    projects = DBI::dbGetQuery(AquaCache, "SELECT * FROM projects"),
@@ -85,10 +87,23 @@ locs <- function(id, AquaCache) {
         })
       }
       
+      # Add new timeseries module
+      if (input$select == "new_ts" && !submodules$new_ts) {
+        submodules$new_ts <- TRUE
+        insertUI(
+          selector = paste0("#", ns("new_ts_placeholder")),
+          where = "beforeEnd",
+          ui = locsNewTSUI(ns("new_ts"))
+        )
+        locsNewTSServer("new_ts", AquaCache)
+
+      }
+      
       # Show only the relevant module using shinyjs
       shinyjs::hide(selector = paste0("#", ns("main_placeholder")))
       shinyjs::hide(selector = paste0("#", ns("meta_placeholder")))
-      shinyjs::hide(selector = paste0("#", ns("new_placeholder")))
+      shinyjs::hide(selector = paste0("#", ns("new_loc_placeholder")))
+      shinyjs::hide(selector = paste0("#", ns("new_ts_placeholder")))
       shinyjs::show(selector = paste0("#", ns(paste0(input$select, "_placeholder"))))
     })
     

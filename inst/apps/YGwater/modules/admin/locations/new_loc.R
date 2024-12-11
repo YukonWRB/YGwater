@@ -1,6 +1,6 @@
 # UI and server code for add new location module
 
-locsNewUI <- function(id) {
+locsNewLocUI <- function(id) {
   ns <- NS(id)
   fluidPage(
     fluidRow(
@@ -128,7 +128,7 @@ locsNewUI <- function(id) {
   )
 }
 
-locsNewServer <- function(id, AquaCache, data) {
+locsNewLocServer <- function(id, AquaCache) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -192,8 +192,7 @@ locsNewServer <- function(id, AquaCache, data) {
       datum$DATUM_FROM_ID <- datum_list$DATUM_ID[match(datum$DATUM_FROM, datum_list$DATUM_EN)]
       # Replace DATUM_TO with DATUM_ID
       datum$DATUM_TO_ID <- datum_list$DATUM_ID[match(datum$DATUM_TO, datum_list$DATUM_EN)]
-      print(datum)
-      
+
       # Drop original DATUM_FROM and DATUM_TO columns
       datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
       
@@ -515,8 +514,7 @@ locsNewServer <- function(id, AquaCache, data) {
                        current = TRUE,
                        network = if (isTruthy(input$network)) as.numeric(input$network) else NA,
                        project = if (isTruthy(input$project)) as.numeric(input$project) else NA)                
-      print(df)
-      
+
       tryCatch( {
         AquaCache::addACLocation(con = AquaCache,
                                  df = df)

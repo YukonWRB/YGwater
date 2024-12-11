@@ -12,8 +12,6 @@ YGwater(
   dbPort = Sys.getenv("aquacachePort"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
-  RLS_user = Sys.getenv("RLS_user"),
-  RLS_pass = Sys.getenv("RLS_pass"),
   accessPath =
     "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB"
 )
@@ -32,10 +30,6 @@ YGwater(
 \item{dbUser}{Username for the aquacache database. Default is pulled from the .Renviron file.}
 
 \item{dbPass}{Password for the aquacache database. Default is pulled from the .Renviron file.}
-
-\item{RLS_user}{Username for row-level security. Default is pulled from the .Renviron file.}
-
-\item{RLS_pass}{Password for row-level security. Default is pulled from the .Renviron file.}
 
 \item{accessPath}{Path to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.}
 }
