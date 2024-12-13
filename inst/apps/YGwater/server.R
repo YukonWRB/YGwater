@@ -186,8 +186,6 @@ $(document).keyup(function(event) {
       AquaCache <<- AquaConnect(name = config$dbName, 
                                 host = config$dbHost,
                                 port = config$dbPort,
-                                RLS_user = config$RLS_user,
-                                RLS_pass = config$RLS_pass,
                                 username = input$username, 
                                 password = input$password, 
                                 silent = TRUE)
@@ -261,8 +259,6 @@ $(document).keyup(function(event) {
                                   port = config$dbPort,
                                   username = config$dbUser,
                                   password = config$dbPass,
-                                  RLS_user = config$RLS_user,
-                                  RLS_pass = config$RLS_pass,
                                   silent = TRUE)
         return()
       }
@@ -280,8 +276,6 @@ $(document).keyup(function(event) {
                                   port = config$dbPort,
                                   username = config$dbUser,
                                   password = config$dbPass,
-                                  RLS_user = config$RLS_user,
-                                  RLS_pass = config$RLS_pass,
                                   silent = TRUE)
       }
       return()
@@ -307,8 +301,6 @@ $(document).keyup(function(event) {
                               port = config$dbPort,
                               username = config$dbUser,
                               password = config$dbPass,
-                              RLS_user = config$RLS_user,
-                              RLS_pass = config$RLS_pass,
                               silent = TRUE)
     # Redirect to 'viz' tab
     updateTabsetPanel(session, "navbar", selected = "viz")
