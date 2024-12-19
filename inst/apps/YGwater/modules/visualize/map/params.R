@@ -311,8 +311,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
                                               measurements_calculated_daily_corrected 
                                           WHERE 
                                               doy_count >= ", as.numeric(map_params$yrs1), " 
-                                          AND timeseries_id IN (", paste(closest_measurements1$timeseries_id, collapse = ","), ") 
-                                          AND date > '", Sys.Date() - 1, "'
+                                          AND timeseries_id IN (", paste(closest_measurements1$timeseries_id, collapse = ","), ")
                                       )
                                       SELECT 
                                           timeseries_id, max, min, doy_count 
@@ -387,8 +386,7 @@ mapParamServer <- function(id, AquaCache, data, language) {
                                                 measurements_calculated_daily_corrected 
                                             WHERE 
                                                 doy_count >= ", as.numeric(map_params$yrs2), " 
-                                            AND timeseries_id IN (", paste(closest_measurements2$timeseries_id, collapse = ","), ") \
-                                            AND date > '", Sys.Date() - 1, "'
+                                            AND timeseries_id IN (", paste(closest_measurements2$timeseries_id, collapse = ","), ")
                                         )
                                         SELECT 
                                             timeseries_id, max, min, doy_count 
