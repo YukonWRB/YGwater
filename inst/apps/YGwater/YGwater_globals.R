@@ -28,10 +28,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # Document sub-modules
   source(system.file("apps/YGwater/modules/admin/images/imgs_main.R", package = "YGwater"))
   # Document sub-modules
-  
-  # The two file references below need to be removed when their code is incorporated into the new structure:
-  # source(system.file("apps/YGwater/modules/admin/add/add_main.R", package = "YGwater"))
-  # source(system.file("apps/YGwater/modules/admin/images/addImg.R", package = "YGwater"))
 
 
   

@@ -7,122 +7,7 @@ locsNewLocUI <- function(id) {
       # On larger screens, a 6-column width centered with offset
       # On smaller screens, it naturally adjusts to full width
       column(width = 6,
-             textOutput(ns("hydat_note")
-             ),
-             textInput(ns("loc_code"), 
-                       "Location code (must not exist already)",
-                       width = "100%"
-                       
-             ),
-             actionButton(ns("hydat_fill"), "Auto-fill from HYDAT",
-                          width = "100%"
-             ),
-             textInput(ns("loc_name"), 
-                       "Location name (must not exist already)",
-                       width = "100%"
-             ),
-             textInput(ns("loc_name_fr"), 
-                       "French location name (must not exist already)",
-                       width = "100%"
-             ),
-             selectizeInput(ns("loc_type"), 
-                            "Location type",
-                            choices = stats::setNames(moduleData$loc_types$type_id, moduleData$loc_types$type),
-                            multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-                            options = list(maxItems = 1),
-                            width = "100%"
-             ),
-             numericInput(ns("lat"), 
-                          "Latitude (decimal degrees)", 
-                          value = NULL,
-                          width = "100%"
-             ),
-             uiOutput(ns("lat_warning")),
-             numericInput(ns("lon"), 
-                          "Longitude (decimal degrees)", 
-                          value = NULL,
-                          width = "100%"
-             ),
-             uiOutput(ns("lon_warning")),
-             selectizeInput(ns("viz"), 
-                            "Public visibility", 
-                            choices = stats::setNames(c("exact", "region", "jitter"), 
-                                                      c("Exact", "Within general region", "At random within a 5 km radius of true location")),
-                            width = "100%"
-             ),
-             selectizeInput(ns("share_with"), 
-                            "Share with groups (1 or more, type your own if not in list)", 
-                            choices = stats::setNames(moduleData$user_groups$group_id,
-                                                      paste0(moduleData$user_groups$group_name, " (", moduleData$user_groups$group_description, ")")),
-                            multiple = TRUE,
-                            selected = 1,
-                            options = list(create = TRUE),
-                            width = "100%"
-             ),
-             selectizeInput(ns("loc_owner"), 
-                            "Owner (type your own if not in list)", 
-                            choices = stats::setNames(moduleData$owners_contributors$owner_contributor_id, 
-                                                      moduleData$owners_contributors$name),
-                            multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-                            options = list(maxItems = 1,
-                                           create = TRUE),
-                            width = "100%"
-             ),
-             textInput(ns("loc_contact"),
-                       "Contact details if different than owner default (optional)",
-                       width = "100%"
-             ),
-             selectizeInput(ns("data_sharing_agreement"), 
-                            "Data sharing agreement", 
-                            choices = stats::setNames(moduleData$agreements$document_id, 
-                                                      moduleData$agreements$name),
-                            options = list(placeholder = "Optional - add the document first if needed"),
-                            width = "100%"
-             ),
-             selectizeInput(ns("datum_id_from"), 
-                            "Datum ID from (Assumed datum is station 0)", 
-                            choices = stats::setNames(moduleData$datums$datum_id, 
-                                                      titleCase(moduleData$datums$datum_name_en, "en")), 
-                            selected = 10,
-                            width = "100%"
-             ),
-             selectizeInput(ns("datum_id_to"), 
-                            "Datum ID to (Use assumed datum if no conversion to apply)",
-                            multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-                            choices = stats::setNames(moduleData$datums$datum_id, 
-                                                      titleCase(moduleData$datums$datum_name_en, "en")),
-                            options = list(maxItems = 1), # Overrides multiple selection
-                            width = "100%"
-             ), 
-             numericInput(ns("elev"), 
-                          "Elevation conversion (meters, use 0 if not converting)", 
-                          value = NULL,
-                          width = "100%"
-             ),
-             selectizeInput(ns("network"), 
-                            "Network (type your own if not in list)", 
-                            choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name),
-                            multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-                            options = list(create = TRUE, 
-                                           placeholder = "Optional but recommended",
-                                           maxItems = 1),  # With a choice to allow users to add a network
-                            width = "100%"
-             ),
-             selectizeInput(ns("project"), 
-                            "Project (type your own if not in list)", 
-                            choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), 
-                            options = list(create = TRUE, 
-                                           placeholder = "Optional"),  # With a choice to allow users to add a project
-                            width = "100%"
-             ),
-             textInput(ns("loc_note"), 
-                       "Location note",
-                       width = "100%"
-             ),
-             actionButton(ns("add_loc"), 
-                          "Add location",
-                          width = "100%"
-             )
+             uiOutput(ns("new_locUI"))
       ) 
     )
   )
@@ -154,8 +39,128 @@ locsNewLocServer <- function(id, AquaCache) {
       datums = dbGetQueryDT(AquaCache, "SELECT datum_id, datum_name_en FROM datum_list"),
       networks = dbGetQueryDT(AquaCache, "SELECT network_id, name FROM networks"),
       projects = dbGetQueryDT(AquaCache, "SELECT project_id, name FROM projects"),
-      user_groups = dbGetQueryDT(AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
+      users = dbGetQueryDT(AquaCache, "SELECT * FROM get_roles_with_select_on_locations();")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all users with 
     )
+    
+    output$new_locUI <- renderUI({
+      tagList(
+        textOutput(ns("hydat_note")
+        ),
+        textInput(ns("loc_code"), 
+                  "Location code (must not exist already)",
+                  width = "100%"
+                  
+        ),
+        actionButton(ns("hydat_fill"), "Auto-fill from HYDAT",
+                     width = "100%"
+        ),
+        textInput(ns("loc_name"), 
+                  "Location name (must not exist already)",
+                  width = "100%"
+        ),
+        textInput(ns("loc_name_fr"), 
+                  "French location name (must not exist already)",
+                  width = "100%"
+        ),
+        selectizeInput(ns("loc_type"), 
+                       "Location type",
+                       choices = stats::setNames(moduleData$loc_types$type_id, moduleData$loc_types$type),
+                       multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+                       options = list(maxItems = 1),
+                       width = "100%"
+        ),
+        numericInput(ns("lat"), 
+                     "Latitude (decimal degrees)", 
+                     value = NULL,
+                     width = "100%"
+        ),
+        uiOutput(ns("lat_warning")),
+        numericInput(ns("lon"), 
+                     "Longitude (decimal degrees)", 
+                     value = NULL,
+                     width = "100%"
+        ),
+        uiOutput(ns("lon_warning")),
+        selectizeInput(ns("viz"), 
+                       "Public visibility", 
+                       choices = stats::setNames(c("exact", "region", "jitter"), 
+                                                 c("Exact", "Within general region", "At random within a 5 km radius of true location")),
+                       width = "100%"
+        ),
+        selectizeInput(ns("share_with"), 
+                       "Share with groups (1 or more, type your own if not in list)", 
+                       choices = moduleData$users$role_name,
+                       selected = "public_reader",
+                       multiple = TRUE,
+                       options = list(create = TRUE),
+                       width = "100%"
+        ),
+        selectizeInput(ns("loc_owner"), 
+                       "Owner (type your own if not in list)", 
+                       choices = stats::setNames(moduleData$owners_contributors$owner_contributor_id, 
+                                                 moduleData$owners_contributors$name),
+                       multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+                       options = list(maxItems = 1,
+                                      create = TRUE),
+                       width = "100%"
+        ),
+        textInput(ns("loc_contact"),
+                  "Contact details if different than owner default (optional)",
+                  width = "100%"
+        ),
+        selectizeInput(ns("data_sharing_agreement"), 
+                       "Data sharing agreement", 
+                       choices = stats::setNames(moduleData$agreements$document_id, 
+                                                 moduleData$agreements$name),
+                       options = list(placeholder = "Optional - add the document first if needed"),
+                       width = "100%"
+        ),
+        selectizeInput(ns("datum_id_from"), 
+                       "Datum ID from (Assumed datum is station 0)", 
+                       choices = stats::setNames(moduleData$datums$datum_id, 
+                                                 titleCase(moduleData$datums$datum_name_en, "en")), 
+                       selected = 10,
+                       width = "100%"
+        ),
+        selectizeInput(ns("datum_id_to"), 
+                       "Datum ID to (Use assumed datum if no conversion to apply)",
+                       multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+                       choices = stats::setNames(moduleData$datums$datum_id, 
+                                                 titleCase(moduleData$datums$datum_name_en, "en")),
+                       options = list(maxItems = 1), # Overrides multiple selection
+                       width = "100%"
+        ), 
+        numericInput(ns("elev"), 
+                     "Elevation conversion (meters, use 0 if not converting)", 
+                     value = NULL,
+                     width = "100%"
+        ),
+        selectizeInput(ns("network"), 
+                       "Network (type your own if not in list)", 
+                       choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name),
+                       multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+                       options = list(create = TRUE, 
+                                      placeholder = "Optional but recommended",
+                                      maxItems = 1),  # With a choice to allow users to add a network
+                       width = "100%"
+        ),
+        selectizeInput(ns("project"), 
+                       "Project (type your own if not in list)", 
+                       choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), 
+                       options = list(create = TRUE, 
+                                      placeholder = "Optional"),  # With a choice to allow users to add a project
+                       width = "100%"
+        ),
+        textInput(ns("loc_note"), 
+                  "Location note",
+                  width = "100%"
+        ),
+        actionButton(ns("add_loc"), 
+                     "Add location",
+                     width = "100%"
+        )
+      )
+    })
     
     ## Hydat fill ###############################################################
     # Detect if the user's location code is present in hydat. If so, show a button to enable them to auto-populate fields with hydat info
@@ -390,35 +395,45 @@ locsNewLocServer <- function(id, AquaCache) {
     
     ### Observe the share_with selectizeInput for new user groups ##############################
     observeEvent(input$share_with, {
-      if (input$share_with[length(input$share_with)] %in% moduleData$user_groups$group_id || nchar(input$share_with[length(input$share_with)]) == 0) {
+      if (length(input$share_with) > 1 & 'public_reader' %in% input$share_with) {
+        showModal(modalDialog(
+          "If public_reader is selected it must be the only group selected."
+        ))
+        updateSelectizeInput(session, "share_with", selected = "public_reader")
+      }
+      
+      if (input$share_with[length(input$share_with)] %in% moduleData$users$role_name || nchar(input$share_with[length(input$share_with)]) == 0) {
         return()
       }
       showModal(modalDialog(
-        textInput(ns("group_name"), "Group name"),
-        textInput(ns("group_description"), "Group description"),
-        actionButton(ns("add_group"), "Add group")
+        "Ask a database admin to create a new user"
       ))
+      # showModal(modalDialog(
+      #   textInput(ns("group_name"), "Group name"),
+      #   textInput(ns("group_description"), "Group description"),
+      #   actionButton(ns("add_group"), "Add group")
+      # ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent(input$add_group, {
-      # Check that mandatory fields are filled in
-      if (!isTruthy(input$group_name)) {
-        return()
-      }
-      if (!isTruthy(input$group_description)) {
-        return()
-      }
-      # Add the group to the database
-      df <- data.frame(group_name = input$group_name,
-                       group_description = input$group_description)
-      DBI::dbAppendTable(AquaCache, "user_groups", df, append = TRUE)
-      # Update the moduleData reactiveValues
-      moduleData$user_groups <- dbGetQueryDT(AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
-      # Update the selectizeInput to the new value
-      updateSelectizeInput(session, "share_with", choices = stats::setNames(moduleData$user_groups$group_id, paste0(moduleData$user_groups$group_name, " (", moduleData$user_groups$group_description, ")")), selected = c(input$share_with, moduleData$user_groups[moduleData$user_groups$group_name == df$group_name, "group_id"]))
-      showModal(modalDialog(
-        "New group added."
-      ))
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    # observeEvent(input$add_group, {
+    #   # Check that mandatory fields are filled in
+    #   if (!isTruthy(input$group_name)) {
+    #     return()
+    #   }
+    #   if (!isTruthy(input$group_description)) {
+    #     return()
+    #   }
+    #   # Add the group to the database
+    #   df <- data.frame(group_name = input$group_name,
+    #                    group_description = input$group_description)
+    #   DBI::dbAppendTable(AquaCache, "user_groups", df, append = TRUE)
+    #   # Update the moduleData reactiveValues
+    #   moduleData$user_groups <- dbGetQueryDT(AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
+    #   # Update the selectizeInput to the new value
+    #   updateSelectizeInput(session, "share_with", choices = stats::setNames(moduleData$user_groups$group_id, paste0(moduleData$user_groups$group_name, " (", moduleData$user_groups$group_description, ")")), selected = c(input$share_with, moduleData$user_groups[moduleData$user_groups$group_name == df$group_name, "group_id"]))
+    #   showModal(modalDialog(
+    #     "New group added."
+    #   ))
+    # }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     
     ## Observe the add_location click #################

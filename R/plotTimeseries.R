@@ -62,7 +62,7 @@ plotTimeseries <- function(location,
 
   # location <- "29AB-M3"
   # parameter = "Snow Water Equivalent"
-  # start_date <- "2023-08-30"
+  # start_date <- "2020-08-30"
   # end_date <- "2024-12-31"
   # record_rate = NULL
   # period_type = NULL
@@ -79,7 +79,7 @@ plotTimeseries <- function(location,
   # line_scale = 1
   # axis_scale = 1
   # legend_scale = 1
-  # rate = NULL
+  # rate = max
   # tzone = "auto"
   # con = NULL
 
