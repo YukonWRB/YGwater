@@ -348,7 +348,6 @@ mapParamServer <- function(id, AquaCache, data, language) {
       
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
       if (map_params$params == 2) {
-        print(locs_tsids1)
         tsids2 <- dbGetQueryDT(AquaCache, paste0("SELECT timeseries_id FROM timeseries WHERE parameter_id = ", map_params$param2, " AND location_id NOT IN (", paste(locs_tsids1$location_id, collapse = ", "), ");"))$timeseries_id
         
         if (map_params$latest) {
@@ -497,9 +496,11 @@ mapParamServer <- function(id, AquaCache, data, language) {
     observe({
       req(mapCreated())  # Ensure the map has been created before updating
       reactiveValuesToList(map_params)  # Triggers whenever map_params changes
-      try{
-       updateMap() 
-      }
+      
+      try({
+        updateMap() 
+      })
+       
     })
     
     # observeEvent(input$go, { # Reloads the map when the user requests it
