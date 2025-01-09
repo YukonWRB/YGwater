@@ -1,6 +1,5 @@
 # UI and server code for new timeseries/location creation module
 
-
 addUI <- function(id) {
   ns <- NS(id)
   fluidPage(
@@ -50,7 +49,7 @@ add <- function(id, AquaCache) {
     moduleData <- reactiveValues(
       exist_locs = dbGetQueryDT(AquaCache, "SELECT location_id, location, name, name_fr FROM locations"),
       loc_types = dbGetQueryDT(AquaCache, "SELECT * FROM location_types"),
-      owners_contributors = dbGetQueryDT(AquaCache, "SELECT * FROM owners_contributors"),
+      owners_contributors_operators = dbGetQueryDT(AquaCache, "SELECT * FROM owners_contributors_operators"),
       # limit documents to those that are data sharing agreements, which requires a join on table document_types
       agreements = dbGetQueryDT(AquaCache, "SELECT document_id, name, description FROM documents WHERE type = (SELECT document_type_id FROM document_types WHERE document_type_en = 'data sharing agreement')"),
       # parameters are linked to parameter_groups and parameter_sub_groups via parameter_relationships (to allow a many to many relationships)
@@ -113,8 +112,8 @@ add <- function(id, AquaCache) {
         ),
         selectizeInput(ns("loc_owner"), 
                        "Owner (type your own if not in list)", 
-                       choices = stats::setNames(moduleData$owners_contributors$owner_contributor_id, 
-                                                 moduleData$owners_contributors$name),
+                       choices = stats::setNames(moduleData$owners_contributors_operators$owner_contributor_id, 
+                                                 moduleData$owners_contributors_operators$name),
                        multiple = TRUE, # This is to force a default of nothing selected - overridden with options
                        options = list(maxItems = 1,
                                       create = TRUE)
@@ -226,7 +225,7 @@ add <- function(id, AquaCache) {
         updateNumericInput(session, "elev", value = datum$CONVERSION_FACTOR[nrow(datum)])
       }
       
-      updateSelectizeInput(session, "loc_owner", selected = moduleData$owners_contributors[moduleData$owners_contributors$name == "Water Survey of Canada", "owner_contributor_id"])
+      updateSelectizeInput(session, "loc_owner", selected = moduleData$owners_contributors_operators[moduleData$owners_contributors_operators$name == "Water Survey of Canada", "owner_contributor_id"])
       updateTextInput(session, "loc_note", value = paste0("Station metadata from HYDAT version ", substr(tidyhydat::hy_version()$Date[1], 1, 10)))
     }, ignoreInit = TRUE)
     
@@ -367,7 +366,7 @@ add <- function(id, AquaCache) {
     
     ### Observe the owner selectizeInput for new owners ############
     observeEvent(input$loc_owner, {
-      if (input$loc_owner %in% moduleData$owners_contributors$owner_contributor_id || nchar(input$loc_owner) == 0) {
+      if (input$loc_owner %in% moduleData$owners_contributors_operators$owner_contributor_id || nchar(input$loc_owner) == 0) {
         return()
       }
       showModal(modalDialog(
@@ -392,11 +391,11 @@ add <- function(id, AquaCache) {
                        phone = if (isTruthy(input$contact_phone)) input$contact_phone else NA,
                        email = if (isTruthy(input$contact_email)) input$contact_email else NA,
                        note = if (isTruthy(input$contact_note)) input$contact_note else NA)
-      DBI::dbAppendTable(AquaCache, "owners_contributors", df, append = TRUE)
+      DBI::dbAppendTable(AquaCache, "owners_contributors_operators", df, append = TRUE)
       # Update the moduleData reactiveValues
-      moduleData$owners_contributors <- dbGetQueryDT(AquaCache, "SELECT owner_contributor_id, name FROM owners_contributors")
+      moduleData$owners_contributors_operators <- dbGetQueryDT(AquaCache, "SELECT owner_contributor_id, name FROM owners_contributors_operators")
       # Update the selectizeInput to the new value
-      updateSelectizeInput(session, "loc_owner", choices = stats::setNames(moduleData$owners_contributors$owner_contributor_id, moduleData$owners_contributors$name), selected = moduleData$owners_contributors[moduleData$owners_contributors$name == df$name, "owner_contributor_id"])
+      updateSelectizeInput(session, "loc_owner", choices = stats::setNames(moduleData$owners_contributors_operators$owner_contributor_id, moduleData$owners_contributors_operators$name), selected = moduleData$owners_contributors_operators[moduleData$owners_contributors_operators$name == df$name, "owner_contributor_id"])
       showModal(modalDialog(
         "New owner added."
       ))

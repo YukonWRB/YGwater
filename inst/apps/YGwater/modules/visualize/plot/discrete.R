@@ -430,7 +430,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
       }
 
       tryCatch({
-        withProgress(message = "Generating plot... please be patient", value = 0, {
+        withProgress(message = translations[id == "generating_working", get(language$language)][[1]], value = 0, {
           print(plot_aes$nrows)
           incProgress(0.5)
           if (input$data_source == "EQ") {

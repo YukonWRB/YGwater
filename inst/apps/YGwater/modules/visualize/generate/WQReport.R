@@ -3,195 +3,196 @@ WQReportUI <- function(id) {
   fluidPage(
     # Custom CSS below is for consistency with the sidebarPanel look elsewhere in the app.
     tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/background_style.css")),
-      div(class = "custom-panel container",
-          
-                # Toggle for data source
-          # ! Data source 'AC' is not implemented in the report generation function yet; the code is here but a modal dialogue will appear if AC is selected and the user will get shunted back to EQ.
-      radioButtons(ns("data_source"),
-                   NULL,
-                   choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
-                   selected = "EQ"),
-      uiOutput(ns("EQWin_source_ui")),
-      dateInput(ns("date"), "Report Date", value = Sys.Date() - 30,
-                width = "100%"),
-      div(
-        style = "display: flex; align-items: center;",
-        tags$label(
-          "Look for data within this many days of the report date", 
-          class = "control-label",
-          style = "margin-right: 5px;"
+    div(class = "custom-panel container",   # This div holds all UI elements for the menu
+        
+        # Toggle for data source
+        # ! Data source 'AC' is not implemented in the report generation function yet; the code is here but a modal dialogue will appear if AC is selected and the user will get shunted back to EQ.
+        radioButtons(ns("data_source"),
+                     NULL,
+                     choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
+                     selected = "EQ"),
+        uiOutput(ns("EQWin_source_ui")),
+        dateInput(ns("date"), "Report Date", value = Sys.Date() - 30,
+                  width = "100%"),
+        div(
+          style = "display: flex; align-items: center;",
+          tags$label(
+            "Look for data within this many days of the report date", 
+            class = "control-label",
+            style = "margin-right: 5px;"
+          ),
+          span(
+            id = ns("date_approx_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "Use this to include data up to a certain number of days of the report date. For example, you may want a single report with data from multiple locations sampled within 2-3 days. If multiple samples for a location fall within the date range, the one closest to the report date will be used.",
+            icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+          )
         ),
-        span(
-          id = ns("date_approx_info"),
-          `data-toggle` = "tooltip",
-          `data-placement` = "right",
-          `data-trigger` = "click hover",
-          title = "Use this to include data up to a certain number of days of the report date. For example, you may want a single report with data from multiple locations sampled within 2-3 days. If multiple samples for a location fall within the date range, the one closest to the report date will be used.",
-          icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
-        )
-      ),
-      numericInput(ns("date_approx"), NULL, value = 1,
-                   width = "100%"),
-      conditionalPanel(ns = ns,
-                       condition = "input.data_source == 'EQ'",
-                       # Toggle button for locations or location groups (only show if data source  == EQWin)
-                       radioButtons(ns("locs_groups"),
-                                    NULL,
-                                    choices = c("Locations", "Location Groups"),
-                                    selected = "Locations",
-                                    width = "100%"),
-                       # Selectize input for locations, populated once connection is established
-                       selectizeInput(ns("locations_EQ"),
-                                      "Select locations",
-                                      choices = "Placeholder",
-                                      multiple = TRUE,
+        numericInput(ns("date_approx"), NULL, value = 1,
+                     width = "100%"),
+        conditionalPanel(ns = ns,
+                         condition = "input.data_source == 'EQ'",
+                         # Toggle button for locations or location groups (only show if data source  == EQWin)
+                         radioButtons(ns("locs_groups"),
+                                      NULL,
+                                      choices = c("Locations", "Location Groups"),
+                                      selected = "Locations",
                                       width = "100%"),
-                       # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
-                       selectizeInput(ns("location_groups"),
-                                      "Select a location group",
-                                      choices = "Placeholder",
-                                      multiple = FALSE,
+                         # Selectize input for locations, populated once connection is established
+                         selectizeInput(ns("locations_EQ"),
+                                        "Select locations",
+                                        choices = "Placeholder",
+                                        multiple = TRUE,
+                                        width = "100%"),
+                         # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
+                         selectizeInput(ns("location_groups"),
+                                        "Select a location group",
+                                        choices = "Placeholder",
+                                        multiple = FALSE,
+                                        width = "100%"),
+                         
+                         # Toggle button for parameters or parameter groups (only show if data source == EQWin)
+                         radioButtons(ns("params_groups"),
+                                      NULL,
+                                      choices = c("Parameters", "Parameter Groups"),
+                                      selected = "Parameters",
                                       width = "100%"),
-                       
-                       # Toggle button for parameters or parameter groups (only show if data source == EQWin)
-                       radioButtons(ns("params_groups"),
-                                    NULL,
-                                    choices = c("Parameters", "Parameter Groups"),
-                                    selected = "Parameters",
-                                    width = "100%"),
-                       # Selectize input for parameters, populated once connection is established
-                       selectizeInput(ns("parameters_EQ"),
-                                      "Select parameters",
-                                      choices = "Placeholder",
-                                      multiple = TRUE,
-                                      width = "100%"),
-                       # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
-                       selectizeInput(ns("parameter_groups"),
-                                      "Select a parameter group",
-                                      choices = "Placeholder",
-                                      multiple = FALSE,
-                                      width = "100%"),
-                       
-                       # Add a bit of space between the mandatory inputs and the optional ones
-                       tags$br(),
-                       
-                       # Selectize input for standards, populated once connection is established
-                       htmlOutput(ns("standard_note")),
-                       selectizeInput(ns("stds"),
-                                      "Select one or more standards to apply (optional)",
-                                      choices = "Placeholder",
-                                      multiple = TRUE,
-                                      width = "100%"),
-                       # TRUE/FALSE selection for station-specific standards
-                       checkboxInput(ns("stnStds"), "Apply station-specific standards?", value = FALSE),
-                       
-                       tags$br(),
-                       
-                       # inputs for values outside a given SD
-                       htmlOutput(ns("SD_note")),
-                       div(
-                         style = "display: flex; align-items: center;",
-                         tags$label(
-                           "Standard deviation threshold (leave empty to not calculate)", 
-                           class = "control-label",
-                           style = "margin-right: 5px;"
+                         # Selectize input for parameters, populated once connection is established
+                         selectizeInput(ns("parameters_EQ"),
+                                        "Select parameters",
+                                        choices = "Placeholder",
+                                        multiple = TRUE,
+                                        width = "100%"),
+                         # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
+                         selectizeInput(ns("parameter_groups"),
+                                        "Select a parameter group",
+                                        choices = "Placeholder",
+                                        multiple = FALSE,
+                                        width = "100%"),
+                         
+                         # Add a bit of space between the mandatory inputs and the optional ones
+                         tags$br(),
+                         
+                         # Selectize input for standards, populated once connection is established
+                         htmlOutput(ns("standard_note")),
+                         selectizeInput(ns("stds"),
+                                        "Select one or more standards to apply (optional)",
+                                        choices = "Placeholder",
+                                        multiple = TRUE,
+                                        width = "100%"),
+                         # TRUE/FALSE selection for station-specific standards
+                         checkboxInput(ns("stnStds"), "Apply station-specific standards?", value = FALSE),
+                         
+                         tags$br(),
+                         
+                         # inputs for values outside a given SD
+                         htmlOutput(ns("SD_note")),
+                         div(
+                           style = "display: flex; align-items: center;",
+                           tags$label(
+                             "Standard deviation threshold (leave empty to not calculate)", 
+                             class = "control-label",
+                             style = "margin-right: 5px;"
+                           ),
+                           span(
+                             id = ns("SD_info"),
+                             `data-toggle` = "tooltip",
+                             `data-placement` = "right",
+                             `data-trigger` = "click hover",
+                             title = "1 SD = 68% of data distribution, 2 SD = 95%, 3 SD = 99.7%. etc.",
+                             icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                           )
+                           
                          ),
-                         span(
-                           id = ns("SD_info"),
-                           `data-toggle` = "tooltip",
-                           `data-placement` = "right",
-                           `data-trigger` = "click hover",
-                           title = "1 SD = 68% of data distribution, 2 SD = 95%, 3 SD = 99.7%. etc.",
-                           icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                         numericInput(ns("SD_SD"), NULL, value = NULL, width = "100%"),
+                         
+                         div(
+                           style = "display: flex; align-items: center;",
+                           tags$label(
+                             "Start date for SD calculation", 
+                             class = "control-label",
+                             style = "margin-right: 5px;"
+                           ),
+                           span(
+                             id = ns("SD_start_info"),
+                             `data-toggle` = "tooltip",
+                             `data-placement` = "right",
+                             `data-trigger` = "click hover",
+                             title = "Leave empty to use data from the start of records.",
+                             icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                           )
+                         ),
+                         dateInput(ns("SD_start"), NULL, value = NA,
+                                   width = "100%"),
+                         
+                         div(
+                           style = "display: flex; align-items: center;",
+                           tags$label(
+                             "End date for SD calculation", 
+                             class = "control-label",
+                             style = "margin-right: 5px;"
+                           ),
+                           span(
+                             id = ns("SD_end_info"),
+                             `data-toggle` = "tooltip",
+                             `data-placement` = "right",
+                             `data-trigger` = "click hover",
+                             title = "Leave empty to use data to the end of records.",
+                             icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                           )
+                         ),
+                         dateInput(ns("SD_end"), NULL, value = NA,
+                                   width = "100%"),
+                         div(
+                           style = "display: flex; align-items: center;",
+                           tags$label(
+                             "Select date range (year is ignored)", 
+                             class = "control-label",
+                             style = "margin-right: 5px;"
+                           ),
+                           span(
+                             id = ns("SD_end_info"),
+                             `data-toggle` = "tooltip",
+                             `data-placement` = "right",
+                             `data-trigger` = "click hover",
+                             title = "Use this to exclude data outside of a certain range. For example, if you only want to include data from May to September, select May 1st and September 30th. The year is ignored.",
+                             icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
+                           )
+                         ),
+                         dateRangeInput(
+                           ns("SD_date_range"), 
+                           label = NULL, 
+                           start = "2000-01-01", 
+                           end = "2000-12-31", 
+                           width = "100%"
                          )
                          
-                       ),
-                       numericInput(ns("SD_SD"), NULL, value = NULL, width = "100%"),
-                       
-                       div(
-                         style = "display: flex; align-items: center;",
-                         tags$label(
-                           "Start date for SD calculation", 
-                           class = "control-label",
-                           style = "margin-right: 5px;"
-                         ),
-                         span(
-                           id = ns("SD_start_info"),
-                           `data-toggle` = "tooltip",
-                           `data-placement` = "right",
-                           `data-trigger` = "click hover",
-                           title = "Leave empty to use data from the start of records.",
-                           icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
-                         )
-                       ),
-                       dateInput(ns("SD_start"), NULL, value = NA,
-                                 width = "100%"),
-                       
-                       div(
-                         style = "display: flex; align-items: center;",
-                         tags$label(
-                           "End date for SD calculation", 
-                           class = "control-label",
-                           style = "margin-right: 5px;"
-                         ),
-                         span(
-                           id = ns("SD_end_info"),
-                           `data-toggle` = "tooltip",
-                           `data-placement` = "right",
-                           `data-trigger` = "click hover",
-                           title = "Leave empty to use data to the end of records.",
-                           icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
-                         )
-                       ),
-                       dateInput(ns("SD_end"), NULL, value = NA,
-                                 width = "100%"),
-                       div(
-                         style = "display: flex; align-items: center;",
-                         tags$label(
-                           "Select date range (year is ignored)", 
-                           class = "control-label",
-                           style = "margin-right: 5px;"
-                         ),
-                         span(
-                           id = ns("SD_end_info"),
-                           `data-toggle` = "tooltip",
-                           `data-placement` = "right",
-                           `data-trigger` = "click hover",
-                           title = "Use this to exclude data outside of a certain range. For example, if you only want to include data from May to September, select May 1st and September 30th. The year is ignored.",
-                           icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
-                         )
-                       ),
-                       dateRangeInput(
-                         ns("SD_date_range"), 
-                         label = NULL, 
-                         start = "2000-01-01", 
-                         end = "2000-12-31", 
-                         width = "100%"
-                       )
-                       
-      ),
-      
-      conditionalPanel(ns = ns,
-                       condition = "input.data_source == 'AC'",
-                       # Selectize input for locations, populated once connection is established
-                       selectizeInput(ns("locations_AC"),
-                                      "Select locations",
-                                      choices = "Placeholder",
-                                      multiple = TRUE,
-                                      width = "100%"),
-                       # Selectize input for parameters, populated once connection is established
-                       selectizeInput(ns("parameters_AC"),
-                                      "Select parameters",
-                                      choices = "Placeholder",
-                                      multiple = TRUE,
-                                      width = "100%")
-      ),
-      downloadButton(ns("create_report"), "Create Report")
-      )
-    )
-}
+        ),
+        
+        conditionalPanel(ns = ns,
+                         condition = "input.data_source == 'AC'",
+                         # Selectize input for locations, populated once connection is established
+                         selectizeInput(ns("locations_AC"),
+                                        "Select locations",
+                                        choices = "Placeholder",
+                                        multiple = TRUE,
+                                        width = "100%"),
+                         # Selectize input for parameters, populated once connection is established
+                         selectizeInput(ns("parameters_AC"),
+                                        "Select parameters",
+                                        choices = "Placeholder",
+                                        multiple = TRUE,
+                                        width = "100%")
+        ),
+        actionButton(ns("go"), translations[id == "create_report", get(language$language)][[1]]),
+        downloadButton(ns("download"), "download", style = "visibility: hidden;") # Hidden; triggered automatically if 'go' is successful
+    ) # End div that holds all UI buttons/selectors
+  ) # End fluidPage
+} # End WQReportUI
 
-WQReportServer <- function(id, mdb_files, AquaCache) {
+WQReportServer <- function(id, mdb_files, con, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
@@ -231,8 +232,8 @@ WQReportServer <- function(id, mdb_files, AquaCache) {
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
-      # data$AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete'")
-      # data$AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete'")
+    # data$AC_locs <- DBI::dbGetQuery(con, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete'")
+    # data$AC_params <- DBI::dbGetQuery(con, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete'")
     
     observeEvent(input$EQWin_source, {
       EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
@@ -311,41 +312,72 @@ WQReportServer <- function(id, mdb_files, AquaCache) {
       }
     })
     
-    # Create the download!!!
-    output$create_report <- downloadHandler(
+    outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
+
+    observeEvent(input$go, {
+      tryCatch({
+        
+        withProgress(
+          message = translations[id == "generating_working", get(language$language)][[1]], value = 0, 
+          {
+            incProgress(0.5)
+            
+            if (!is.na(input$SD_SD)) {
+              SD_doy_range <- c(lubridate::yday(input$SD_date_range[1]), lubridate::yday(input$SD_date_range[2]))
+            } else {
+              SD_doy_range <- NULL
+            }
+            
+            dir <- paste0(tempdir(), "/WQReport")
+            
+            dir.create(dir, showWarnings = FALSE)
+
+            EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
+            EQWinReport(date = input$date,
+                        date_approx = as.numeric(input$date_approx),
+                        stations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
+                        stnGrp = if (input$locs_groups == "Location Groups") input$location_groups else NULL,
+                        parameters = if (input$params_groups == "Parameters") input$parameters_EQ else NULL,
+                        paramGrp = if (input$params_groups == "Parameter Groups") input$parameter_groups else NULL,
+                        stds = input$stds,
+                        stnStds = input$stnStds,
+                        SD_exceed = if (!is.na(input$SD_SD)) input$SD_SD else NULL,
+                        SD_start = if (length(input$SD_start) > 0) input$SD_start else NULL,
+                        SD_end = if (length(input$SD_end) > 0) input$SD_end else NULL,
+                        SD_doy = SD_doy_range,
+                        save_path = dir,
+                        con = EQWin)
+            DBI::dbDisconnect(EQWin)
+            
+            tmpfile <- list.files(dir, full.names = TRUE)
+            outputFile(tmpfile)
+            
+            # Now programmatically click the hidden download button
+            shinyjs::click("download")
+            
+            incProgress(1)
+          } # End withProgress content
+        ) # End withProgress
+        
+      }, error = function(e) {
+        showNotification(
+          paste("Error generating water quality report:", e$message),
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+      })
+    })
+    # Create the download
+    output$download <- downloadHandler(
+
       filename = function() {
-        paste0("EQWin Report for ", input$date, " Issued ", Sys.Date(), ".xlsx")
+        paste0("water quality report for ", input$date, " Issued ", Sys.Date(), ".xlsx")
       },
       content = function(file) {
-        withProgress(message = "Generating report...", value = 0, {
-
-          incProgress(0.5)
-          
-          if (!is.na(input$SD_SD)) {
-            SD_doy_range <- c(lubridate::yday(input$SD_date_range[1]), lubridate::yday(input$SD_date_range[2]))
-          } else {
-            SD_doy_range <- NULL
-          }
-          EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
-          EQWinReport(date = input$date,
-                      date_approx = as.numeric(input$date_approx),
-                      stations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
-                      stnGrp = if (input$locs_groups == "Location Groups") input$location_groups else NULL,
-                      parameters = if (input$params_groups == "Parameters") input$parameters_EQ else NULL,
-                      paramGrp = if (input$params_groups == "Parameter Groups") input$parameter_groups else NULL,
-                      stds = input$stds,
-                      stnStds = input$stnStds,
-                      SD_exceed = if (!is.na(input$SD_SD)) input$SD_SD else NULL,
-                      SD_start = if (length(input$SD_start) > 0) input$SD_start else NULL,
-                      SD_end = if (length(input$SD_end) > 0) input$SD_end else NULL,
-                      SD_doy = SD_doy_range,
-                      shiny_file_path = file,
-                      con = EQWin)
-          DBI::dbDisconnect(EQWin)
-          
-          incProgress(1)
-        }) # End withProgress\
-      } # End content
+        file.copy(outputFile(), file)
+      }, # End content
+      contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     ) # End downloadHandler
     
   }) # End moduleServer
