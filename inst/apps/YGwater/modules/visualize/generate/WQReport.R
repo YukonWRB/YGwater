@@ -186,7 +186,7 @@ WQReportUI <- function(id) {
                                         multiple = TRUE,
                                         width = "100%")
         ),
-        actionButton(ns("go"), translations[id == "create_report", get(language$language)][[1]]),
+        actionButton(ns("go"), "Create report"),
         downloadButton(ns("download"), "download", style = "visibility: hidden;") # Hidden; triggered automatically if 'go' is successful
     ) # End div that holds all UI buttons/selectors
   ) # End fluidPage

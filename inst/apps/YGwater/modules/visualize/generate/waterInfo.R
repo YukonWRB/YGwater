@@ -170,8 +170,6 @@ waterInfoServer <- function(id, con, language) {
       outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
       
       observeEvent(input$go, {
-        print(reactiveValuesToList(selections))
-        outputs <<- reactiveValuesToList(selections)
         tryCatch({
           withProgress(
             message = translations[id == "generating_working", get(language$language)][[1]], value = 0, 
@@ -183,7 +181,7 @@ waterInfoServer <- function(id, con, language) {
               dir.create(dir, showWarnings = FALSE)
               # Delete all files in the folder (if any)
               files <- list.files(dir, full.names = TRUE)
-              if (length(files) > 0) file.remove(files)
+              if (length(files) > 0) unlink(files, recursive = TRUE, force = TRUE)
               
               # 3. Call waterInfo() so it writes all files to 'dir'
               suppressWarnings(waterInfo(
@@ -205,16 +203,22 @@ waterInfoServer <- function(id, con, language) {
               # 4. Zip up everything in 'dir' and write the zip to `file`
               files <- list.files(dir, full.names = TRUE)
               
-              zip::zipr(zipfile = paste0(dir, "report.zip"), files = files)
+              zip::zipr(zipfile = paste0(dir, "/report.zip"), files = files)
               outputFile(paste0(dir, "/report.zip"))
               
-              # 5. Delete subdir and its contents
-              if (dir.exists(dir)) unlink(dir, recursive = TRUE, force = TRUE)
+              # Delete everything in the 'dir' except for the .zip file
+              files <- list.files(dir, full.names = TRUE)
+              files <- files[!grepl("report.zip", files)]
+              if (length(files) > 0) unlink(files, recursive = TRUE, force = TRUE)
               
-              incProgress(1)              
+              # 5. Now programmatically click the hidden download button
+              shinyjs::click("download")
+              
+              incProgress(1)
               
             } # End withProgress content
           ) # End withProgress
+          
         }, error = function(e) {
           showNotification(
             paste("Error generating water quantity/info report:", e$message),
@@ -232,7 +236,10 @@ waterInfoServer <- function(id, con, language) {
         },
         content = function(file) {
           file.copy(outputFile(), file)
-        } # End content
+          # Now delete the zip file and the directory it's in
+          unlink(dirname(outputFile()), recursive = TRUE, force = TRUE)
+        }, # End content
+        contentType = "application/zip"
       ) # End downloadHandler
       
   }) # End moduleServer
