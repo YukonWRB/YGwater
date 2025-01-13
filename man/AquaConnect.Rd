@@ -10,8 +10,6 @@ AquaConnect(
   port = Sys.getenv("aquacachePort"),
   username = Sys.getenv("aquacacheUser"),
   password = Sys.getenv("aquacachePass"),
-  RLS_user = Sys.getenv("RLS_user"),
-  RLS_pass = Sys.getenv("RLS_pass"),
   silent = FALSE
 )
 }
@@ -25,10 +23,6 @@ AquaConnect(
 \item{username}{Username. By default searches the .Renviron file for parameter=value pair of form aquacacheUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.}
 
 \item{password}{Password. By default searches the .Renviron file for parameter=value pair of form aquacachePass="password".}
-
-\item{RLS_user}{Username for row-level security. Default searches the .Renviron file for parameter=value pair of form RLS_user="username" and if not found either prompts the user for input or logs in as 'public' if not interactive.}
-
-\item{RLS_pass}{Password for row-level security. Default searches the .Renviron file for parameter=value pair of form RLS_pass="password" and if not found either prompts the user for input or logs in as 'public' if not interactive.}
 
 \item{silent}{TRUE suppresses messages except for errors.}
 }

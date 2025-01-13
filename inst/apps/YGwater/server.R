@@ -39,10 +39,15 @@ app_server <- function(input, output, session) {
     FOD = FALSE,
     img = FALSE,
     gen = FALSE,
-    metadata = FALSE,
-    addTsLoc = FALSE,
-    addImg = FALSE,
-    basins = FALSE)
+    locs = FALSE,
+    ts = FALSE,
+    equip = FALSE,
+    cal = FALSE,
+    contData = FALSE,
+    discData = FALSE,
+    addDocs = FALSE,
+    addImgs = FALSE,
+    visit = FALSE)
   
   ## database connections ###########
   # Initial database connections without edit privileges
@@ -76,8 +81,6 @@ app_server <- function(input, output, session) {
                            port = config$dbPort,
                            username = config$dbUser,
                            password = config$dbPass,
-                           RLS_user = config$RLS_user,
-                           RLS_pass = config$RLS_pass,
                            silent = TRUE)
   print("Connected to AquaCache")
   
@@ -183,8 +186,6 @@ $(document).keyup(function(event) {
       AquaCache <<- AquaConnect(name = config$dbName, 
                                 host = config$dbHost,
                                 port = config$dbPort,
-                                RLS_user = config$RLS_user,
-                                RLS_pass = config$RLS_pass,
                                 username = input$username, 
                                 password = input$password, 
                                 silent = TRUE)
@@ -204,25 +205,45 @@ $(document).keyup(function(event) {
         # Create the new tabs for the 'admin' mode
         # In the login success handler, after user_logged_in(TRUE):
         insertTab("navbar",
-                  tabPanel(title = "Admin mode", value = "admin",
+                  tabPanel(title = "Switch to Admin mode", value = "admin",
                            uiOutput("admin_ui")),
                   target = "map", position = "before")
         insertTab("navbar",
-                  tabPanel(title = "View/edit metadata", value = "metadata",
-                           uiOutput("metadata_ui")),
+                  tabPanel(title = "Manage locations", value = "locs",
+                           uiOutput("locs_ui")),
                   target = "gen", position = "after")
         insertTab("navbar",
-                  tabPanel(title = "Add images", value = "addImg",
-                           uiOutput("addImg_ui")),
-                  target = "metadata", position = "after")
+                  tabPanel(title = "Manage timeseries", value = "ts",
+                           uiOutput("ts_ui")),
+                  target = "locs", position = "after")
         insertTab("navbar",
-                  tabPanel(title = "Add location/timeseries", value = "addTsLoc",
-                           uiOutput("addTsLoc_ui")),
-                  target = "addImg", position = "after")
+                  tabPanel(title = "Manage equipment", value = "equip",
+                           uiOutput("equip_ui")),
+                  target = "ts", position = "after")
         insertTab("navbar",
-                  tabPanel(title = "Create basins", value = "basins",
-                           uiOutput("basins_ui")),
-                  target = "addTsLoc", position = "after")
+                  tabPanel(title = "Enter checks/calibrations", value = "cal",
+                           uiOutput("cal_ui")),
+                  target = "equip", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "Manage continuous data", value = "contData",
+                           uiOutput("contData_ui")),
+                  target = "cal", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "Manage discrete data", value = "discData",
+                           uiOutput("discData_ui")),
+                  target = "contData", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "Manage docs", value = "addDocs",
+                           uiOutput("addDocs_ui")),
+                  target = "discData", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "Manage images", value = "addImgs",
+                           uiOutput("addImgs_ui")),
+                  target = "addDocs", position = "after")
+        insertTab("navbar",
+                  tabPanel(title = "Add/modify field visit", value = "visit",
+                           uiOutput("visit_ui")),
+                  target = "addImgs", position = "after")
         
         updateTabsetPanel(session, "navbar", selected = "admin")
         return()
@@ -238,8 +259,6 @@ $(document).keyup(function(event) {
                                   port = config$dbPort,
                                   username = config$dbUser,
                                   password = config$dbPass,
-                                  RLS_user = config$RLS_user,
-                                  RLS_pass = config$RLS_pass,
                                   silent = TRUE)
         return()
       }
@@ -257,8 +276,6 @@ $(document).keyup(function(event) {
                                   port = config$dbPort,
                                   username = config$dbUser,
                                   password = config$dbPass,
-                                  RLS_user = config$RLS_user,
-                                  RLS_pass = config$RLS_pass,
                                   silent = TRUE)
       }
       return()
@@ -284,17 +301,20 @@ $(document).keyup(function(event) {
                               port = config$dbPort,
                               username = config$dbUser,
                               password = config$dbPass,
-                              RLS_user = config$RLS_user,
-                              RLS_pass = config$RLS_pass,
                               silent = TRUE)
     # Redirect to 'viz' tab
     updateTabsetPanel(session, "navbar", selected = "viz")
     # Remove admin-related tabs on logout
     removeTab("navbar", "admin", session = session)
-    removeTab("navbar", "metadata", session = session)
-    removeTab("navbar", "addImg", session = session)
-    removeTab("navbar", "addTsLoc", session = session)
-    removeTab("navbar", "basins", session = session)
+    removeTab("navbar", "locs", session = session)
+    removeTab("navbar", "ts", session = session)
+    removeTab("navbar", "equip", session = session)
+    removeTab("navbar", "cal", session = session)
+    removeTab("navbar", "contData", session = session)
+    removeTab("navbar", "discData", session = session)
+    removeTab("navbar", "addDocs", session = session)
+    removeTab("navbar", "addImgs", session = session)
+    removeTab("navbar", "visit", session = session)
   })
   
   # Load modules based on input$navbar ################################
@@ -306,7 +326,7 @@ $(document).keyup(function(event) {
   
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("map")      # Default tab for viz mode
-  last_admin_tab <- reactiveVal("metadata")      # Default tab for admin mode
+  last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
   initial_tab <- reactiveVal(NULL)
     
   # Move between tabs/modules
@@ -332,17 +352,22 @@ $(document).keyup(function(event) {
       showTab(inputId = "navbar", target = "FOD")
       showTab(inputId = "navbar", target = "gen")
       showTab(inputId = "navbar", target = "img")
-      # Hide 'admin' tab unless logged in
+      # don't show 'admin' tab unless logged in
       if (user_logged_in()) {  # this UI element is generated upon successful login
         showTab(inputId = "navbar", target = "admin")
       }
       
-      # Hide irrelevant tabs
-      hideTab(inputId = "navbar", target = "metadata")
-      hideTab(inputId = "navbar", target = "addImg")
-      hideTab(inputId = "navbar", target = "addTsLoc")
-      hideTab(inputId = "navbar", target = "basins")
+      # Hide irrelevant tabs for viz mode
       hideTab(inputId = "navbar", target = "viz")
+      hideTab(inputId = "navbar", target = "locs")
+      hideTab(inputId = "navbar", target = "ts")
+      hideTab(inputId = "navbar", target = "equip")
+      hideTab(inputId = "navbar", target = "cal")
+      hideTab(inputId = "navbar", target = "contData")
+      hideTab(inputId = "navbar", target = "discData")
+      hideTab(inputId = "navbar", target = "addDocs")
+      hideTab(inputId = "navbar", target = "addImgs")
+      hideTab(inputId = "navbar", target = "visit")
       
       # Select the last tab the user was on in viz mode
       updateTabsetPanel(session, "navbar", selected = last_viz_tab())
@@ -351,18 +376,22 @@ $(document).keyup(function(event) {
       programmatic_change(TRUE)
       
       # Show relevant tabs for admin mode
-      showTab(inputId = "navbar", target = "metadata")
-      showTab(inputId = "navbar", target = "addImg")
-      showTab(inputId = "navbar", target = "addTsLoc")
-      showTab(inputId = "navbar", target = "basins")
       showTab(inputId = "navbar", target = "viz")
-      
+      showTab(inputId = "navbar", target = "locs")
+      showTab(inputId = "navbar", target = "ts")
+      showTab(inputId = "navbar", target = "equip")
+      showTab(inputId = "navbar", target = "cal")
+      showTab(inputId = "navbar", target = "contData")
+      showTab(inputId = "navbar", target = "discData")
+      showTab(inputId = "navbar", target = "addDocs")
+      showTab(inputId = "navbar", target = "addImgs")
+      showTab(inputId = "navbar", target = "visit")
       
       # Hide irrelevant tabs
+      hideTab(inputId = "navbar", target = "admin")
       hideTab(inputId = "navbar", target = "plot")
       hideTab(inputId = "navbar", target = "map")
       hideTab(inputId = "navbar", target = "FOD")
-      hideTab(inputId = "navbar", target = "admin")
       hideTab(inputId = "navbar", target = "gen")
       hideTab(inputId = "navbar", target = "img")
       
@@ -374,7 +403,7 @@ $(document).keyup(function(event) {
       if (input$navbar %in% c("plot", "map", "FOD", "gen", "img")) {
         # User is in viz mode
         last_viz_tab(input$navbar)
-      } else if (input$navbar %in% c("metadata", "addImg", "addTsLoc", "basins")) {
+      } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "contData", "discData", "addDocs", "addImgs", "visit")) {
         # User is in admin mode
         last_admin_tab(input$navbar) 
       }
@@ -422,32 +451,67 @@ $(document).keyup(function(event) {
         gen("gen", mdb_files, AquaCache) # Call the server
       }
     }
-    if (input$navbar == "basins") {
-      if (!ui_loaded$basins) {
-        output$basins_ui <- renderUI(basinsUI("basins"))
-        ui_loaded$basins <- TRUE
-        basins("basins", AquaCache) # Call the server
+    if (input$navbar == "locs") {
+      if (!ui_loaded$locs) {
+        output$locs_ui <- renderUI(locsUI("locs"))
+        ui_loaded$locs <- TRUE
+        locs("locs", AquaCache) # Call the server
       }
     }
-    if (input$navbar == "metadata") {
-      if (!ui_loaded$metadata) {
-        output$metadata_ui <- renderUI(metadataUI("metadata"))
-        ui_loaded$metadata <- TRUE
-        metadata("metadata", AquaCache) # Call the server
+    if (input$navbar == "ts") {
+      if (!ui_loaded$ts) {
+        output$ts_ui <- renderUI(tsUI("ts"))
+        ui_loaded$ts <- TRUE
+        ts("ts", AquaCache) # Call the server
       }
     }
-    if (input$navbar == "addImg") {
-      if (!ui_loaded$addImg) {
-        output$addImg_ui <- renderUI(addImgUI("addImg"))  # Render the UI
-        ui_loaded$addImg <- TRUE
-        addImg("addImg", AquaCache)  # Call the server
+    if (input$navbar == "equip") {
+      if (!ui_loaded$equip) {
+        output$equip_ui <- renderUI(equipUI("equip"))  # Render the UI
+        ui_loaded$equip <- TRUE
+        equip("equip", AquaCache)  # Call the server
       }
     }
-    if (input$navbar == "addTsLoc") {
-      if (!ui_loaded$addTsLoc) {
-        output$addTsLoc_ui <- renderUI(addTsLocUI("addTsLoc"))  # Render the UI
-        ui_loaded$addTsLoc <- TRUE
-        addTsLoc("addTsLoc", AquaCache)  # Call the server
+    if (input$navbar == "cal") {
+      if (!ui_loaded$cal) {
+        output$cal_ui <- renderUI(calUI("cal"))  # Render the UI
+        ui_loaded$cal <- TRUE
+        cal("cal", AquaCache)  # Call the server
+      }
+    }
+    if (input$navbar == "contData") {
+      if (!ui_loaded$contData) {
+        output$contData_ui <- renderUI(contDataUI("contData"))  # Render the UI
+        ui_loaded$contData <- TRUE
+        contData("contData", AquaCache)  # Call the server
+      }
+    }
+    if (input$navbar == "discData") {
+      if (!ui_loaded$discData) {
+        output$discData_ui <- renderUI(discDataUI("discData"))  # Render the UI
+        ui_loaded$discData <- TRUE
+        discData("discData", AquaCache)  # Call the server
+      }
+    }
+    if (input$navbar == "addDocs") {
+      if (!ui_loaded$addDocs) {
+        output$addDocs_ui <- renderUI(addDocsUI("addDocs"))  # Render the UI
+        ui_loaded$addDocs <- TRUE
+        addDocs("addDocs", AquaCache)  # Call the server
+      }
+    }
+    if (input$navbar == "addImgs") {
+      if (!ui_loaded$addImgs) {
+        output$addImgs_ui <- renderUI(addImgsUI("addImgs"))  # Render the UI
+        ui_loaded$addImgs <- TRUE
+        addImgs("addImgs", AquaCache)  # Call the server
+      }
+    }
+    if (input$navbar == "visit") {
+      if (!ui_loaded$visit) {
+        output$visit_ui <- renderUI(visitUI("visit"))  # Render the UI
+        ui_loaded$visit <- TRUE
+        visit("visit", AquaCache)  # Call the server
       }
     }
   }) # End of observeEvent for loading modules based on navbar

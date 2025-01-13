@@ -28,6 +28,7 @@ plotDiscrete(
   gridx = FALSE,
   gridy = FALSE,
   dbSource = "EQ",
+  dbCon = NULL,
   dbPath =
     "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
 )
@@ -78,6 +79,8 @@ plotDiscrete(
 \item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
 
 \item{dbSource}{The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function \code{\link[=AquaConnect]{AquaConnect()}} while EQWin connections use \code{\link[=AccessConnect]{AccessConnect()}}.}
+
+\item{dbCon}{A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.}
 
 \item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
 databases/EQWinDB/WaterResources.mdb".}

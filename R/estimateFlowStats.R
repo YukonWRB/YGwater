@@ -40,9 +40,9 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   flow_paramId <- DBI::dbGetQuery(con, "SELECT parameter_id FROM parameters WHERE param_name = 'discharge, river/stream'")$parameter_id
   
   flow_all <- DBI::dbGetQuery(con, 
-                              paste0("SELECT locations.name, timeseries.location, measurements_calculated_daily.date, measurements_calculated_daily.value, locations.geom_id ",
-                                     "FROM measurements_calculated_daily ",
-                                     "INNER JOIN timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id ",
+                              paste0("SELECT locations.name, timeseries.location, measurements_calculated_daily_corrected.date, measurements_calculated_daily_corrected.value, locations.geom_id ",
+                                     "FROM measurements_calculated_daily_corrected ",
+                                     "INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id ",
                                      "INNER JOIN locations ON timeseries.location = locations.location ",
                                      "WHERE timeseries.location IN ('", paste0(gauged_stations, collapse = "', '"), "') AND timeseries.parameter_id = ", flow_paramId, ";"))
   

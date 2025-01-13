@@ -63,11 +63,11 @@ snowBulletinStats <-
       # Should also bring in location ID and name
       tab <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name, 
                                            locations.location AS location_id, 
-                                           datetime, value
-                                           FROM measurements_continuous 
-                                           INNER JOIN timeseries ON measurements_continuous.timeseries_id = timeseries.timeseries_id
+                                           datetime, value_corrected AS value
+                                           FROM measurements_continuous_corrected 
+                                           INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
                                            INNER JOIN locations ON timeseries.location = locations.location
-                                           WHERE measurements_continuous.timeseries_id IN ('", paste0(tsid, collapse = "', '"),
+                                           WHERE measurements_continuous_corrected.timeseries_id IN ('", paste0(tsid, collapse = "', '"),
                                          "')"))
       #AND datetime >= '", year_param-40, "-10-01'"))
       attr(tab$datetime, "tzone") <- "MST"
@@ -266,11 +266,11 @@ snowBulletinStats <-
       tsid <- c(484, 532, 540, 500, 548, 492, 556, 508)
       tabl <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name, 
                                                 locations.location AS location_id,
-                                                datetime, value 
-                                                FROM measurements_continuous 
-                                                INNER JOIN timeseries ON measurements_continuous.timeseries_id = timeseries.timeseries_id
+                                                datetime, value_corrected AS value
+                                                FROM measurements_continuous_corrected 
+                                                INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
                                                 INNER JOIN locations ON timeseries.location = locations.location
-                                                WHERE measurements_continuous.timeseries_id IN ('", paste0(tsid, collapse="', '"),
+                                                WHERE measurements_continuous_corrected.timeseries_id IN ('", paste0(tsid, collapse="', '"),
                                           "')"))# ", timeseries_id))
       
       attr(tabl$datetime, "tzone") <- "MST"
@@ -391,11 +391,11 @@ snowBulletinStats <-
     #### ----------------- Pillows with historical record ----------------- ####
       pillow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
                     locations.location AS location_id, date, parameters.param_name AS variable, 
-                    value, q50 AS median, min, max, doy_count AS years FROM measurements_calculated_daily 
-                    INNER JOIN timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id
+                    value, q50 AS median, min, max, doy_count AS years FROM measurements_calculated_daily_corrected 
+                    INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id
                     INNER JOIN locations ON timeseries.location = locations.location
                     INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
-                    WHERE measurements_calculated_daily.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
+                    WHERE measurements_calculated_daily_corrected.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
                     AND date = '", year, "-0", month, "-01'"))
       pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$median * 100)
     
@@ -465,11 +465,11 @@ snowBulletinStats <-
         
         flow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
                     locations.location AS location_id, date, parameters.param_name AS variable, 
-                    value, q50 AS median, min, max, doy_count AS years FROM measurements_calculated_daily 
-                    INNER JOIN timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id
+                    value, q50 AS median, min, max, doy_count AS years FROM measurements_calculated_daily_corrected 
+                    INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id
                     INNER JOIN locations ON timeseries.location = locations.location
                     INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
-                    WHERE measurements_calculated_daily.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
+                    WHERE measurements_calculated_daily_corrected.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
                     AND date = '", year, "-0", month, "-01'"))
         flow_stats$perc_hist_med <- round(flow_stats$value / flow_stats$median * 100)
         # Add description of % median

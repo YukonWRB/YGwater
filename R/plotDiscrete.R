@@ -25,6 +25,7 @@
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param dbSource The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
+#' @param dbCon A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
 #' databases/EQWinDB/WaterResources.mdb".
 #'
@@ -53,6 +54,7 @@ plotDiscrete <- function(start,
                          gridx = FALSE,
                          gridy = FALSE,
                          dbSource = "EQ", 
+                         dbCon = NULL,
                          dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
   
   #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
@@ -208,8 +210,12 @@ plotDiscrete <- function(start,
   if (dbSource == "EQ") {
     ## Fetch data from EQWin #####################################################################################################
     # Connect to EQWin
-    EQWin <- AccessConnect(dbPath, silent = TRUE)
-    on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+    if (!is.null(dbCon)) {
+      EQWin <- dbCon
+    } else {
+      EQWin <- AccessConnect(dbPath, silent = TRUE)
+      on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+    }
     
     # Validate existence of standards
     if (!is.null(standard)) {
@@ -440,8 +446,12 @@ plotDiscrete <- function(start,
     
     # Fetch data from aquacache ##################################################################################################
     # Connect to AC
-    AC <- AquaConnect(silent = TRUE)
-    on.exit(DBI::dbDisconnect(AC), add = TRUE)
+    if (!is.null(dbCon)) {
+      AC <- dbCon
+    } else {
+      AC <- AquaConnect(silent = TRUE)
+      on.exit(DBI::dbDisconnect(AC), add = TRUE)
+    }
     
     # Validate existence of parameters and/or locations
     if (!is.null(locations)) {

@@ -90,7 +90,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
   data <- list()
   extremes <- list()
   for (i in 1:nrow(locs)) {
-    daily <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily WHERE timeseries_id = '", locs[i, "timeseries_id"], "' AND date < '", as.character(end_date), "'"))
+    daily <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = '", locs[i, "timeseries_id"], "' AND date < '", as.character(end_date), "'"))
     daily$year <- lubridate::year(daily$date)
     daily$month <- lubridate::month(daily$date)
     tryCatch({

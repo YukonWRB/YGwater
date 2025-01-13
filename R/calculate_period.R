@@ -54,7 +54,13 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
     if (is.null(timeseries_id)) {
       stop("There are too few measurements to conclusively determine a period, and no timeseries_id was provided to fetch more data.")
     }
-    no_period <- dbGetQueryDT(con, paste0("SELECT ", paste(names, collapse = ', '), " FROM measurements_continuous WHERE timeseries_id = ", timeseries_id, " ORDER BY datetime DESC LIMIT 10;"))
+    # Check if user can access the measurements_continuous table
+    if (!DBI::dbExistsTable(con, "measurements_continuous")) {
+      tbl <- 'measurements_continuous_calculated'
+    } else {
+      tbl <- 'measurements_continuous'
+    }
+    no_period <- dbGetQueryDT(con, paste0("SELECT ", paste(names, collapse = ', '), " FROM ", tbl, " WHERE timeseries_id = ", timeseries_id, " ORDER BY datetime DESC LIMIT 10;"))
     no_period$period <- NA
     data <- rbind(data, no_period)
     data <- data[order(data[[datetime_col]]), ]
