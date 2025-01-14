@@ -414,7 +414,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$plot) {
         output$plot_ui <- renderUI(plotUI("plot"))
         ui_loaded$plot <- TRUE
-        plot("plot", mdb_files, AquaCache) # Call the server
+        plot("plot", mdb_files, AquaCache, language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "map") {

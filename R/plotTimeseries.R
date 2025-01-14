@@ -6,9 +6,10 @@
 #' This function plots continuous timeseries from the aquacache. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
 #' 
 #' @param location The location for which you want a plot.
+#' @param sub_location Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).
 #' @param parameter The parameter name (text) or code (numeric) that you wish to plot. The location:parameter combo must be in the local database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
-#' @param period_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order.
+#' @param period_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max'.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.
 #' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
@@ -35,6 +36,7 @@
 #' @export
 
 plotTimeseries <- function(location,
+                           sub_location = NULL,
                            parameter,
                            record_rate = NULL,
                            period_type = NULL,
@@ -61,9 +63,10 @@ plotTimeseries <- function(location,
 {
 
   # location <- "29AB-M3"
+  # sub_location <- NULL
   # parameter = "Snow Water Equivalent"
   # start_date <- "2020-08-30"
-  # end_date <- "2024-12-31"
+  # end_date <- Sys.time()
   # record_rate = NULL
   # period_type = NULL
   # z = NULL
@@ -79,7 +82,7 @@ plotTimeseries <- function(location,
   # line_scale = 1
   # axis_scale = 1
   # legend_scale = 1
-  # rate = max
+  # rate = "max"
   # tzone = "auto"
   # con = NULL
 
@@ -194,17 +197,60 @@ plotTimeseries <- function(location,
   } else if (lang == "en" || is.na(parameter_name)) {
     parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
   }
+  
+  if (is.null(sub_location)) {
+    # Check if there are multiple sub_locations for this parameter_code, location regardless of sub_location. If so, throw a stop
+    sub_loc_check <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+    if (nrow(sub_loc_check) > 1) {
+      stop("There are multiple sub-locations for this location and parameter. Please specify a sub-location.")
+    }
+    
+    if (is.null(record_rate)) { # period_type may or may not be NULL
+      if (is.null(period_type)) { #both record_rate and period_type are NULL
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+      } else { #period_type is not NULL but record_rate is
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = '", period_type, "';"))
+      }
+    } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+    } else { #both record_rate and period_type are not NULL
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+    }
+  } else {  #sub location was specified
+    # Find the sub location_id
+    if (inherits(sub_location, "character")) {
+      escaped_sub_location <- gsub("'", "''", sub_location)
+      sub_location_tbl <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = '", escaped_sub_location, "';"))
+      if (nrow(sub_location_tbl) == 0) {
+        stop("The sub-location you entered does not exist in the database.")
+      }
+      sub_location_id <- sub_location_tbl$sub_location_id[1]
+    } else if (inherits(sub_location, "numeric")) {
+      sub_location_id <- sub_location
+    }
+    if (is.null(record_rate)) { # period_type may or may not be NULL
+      if (is.null(period_type)) { #both record_rate and period_type are NULL
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, ";"))
+      } else { #period_type is not NULL but record_rate is
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND period_type = '", period_type, "';"))
+      }
+    } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+    } else { #both record_rate and period_type are not NULL
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+    }
+  }
 
   if (is.null(record_rate)) { # period_type may or may not be NULL
     if (is.null(period_type)) { #both record_rate and period_type are NULL
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
     } else { #period_type is not NULL but record_rate is
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND period_type = '", period_type, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = '", period_type, "';"))
     }
   } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "';"))
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
   } else { #both record_rate and period_type are not NULL
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
   }
   
   # Narrow down by z if necessary
@@ -362,6 +408,12 @@ plotTimeseries <- function(location,
       }
     }
     attr(trace_data$datetime, "tzone") <- tzone
+    
+    # Check if the range data extends to the end of trace data. Because range is taken from calculated daily means, it's possible that there's no data yet for the current day. In this case we'll just use the values from the last available range_data$datetime, incrementing it by a day
+    if (max(range_data$datetime) < max(trace_data$datetime)) {
+      last <- range_data[nrow(range_data), ]
+      range_data <- rbind(range_data, data.table(datetime = last$datetime + 1*24*60*60, min = last$min, max = last$max, q25 = last$q25, q75 = last$q75))
+    }
   } else { #No historic range requested
     if (rate == "day") {
       trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY date DESC;"))
@@ -476,7 +528,7 @@ plotTimeseries <- function(location,
                       mode = "lines",
                       line = list(width = 2.5 * line_scale),
                       name = parameter_name, 
-                      color = I("#0097A9"), 
+                      color = I("#206976"), 
                       hoverinfo = "text", 
                       text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
     plotly::layout(

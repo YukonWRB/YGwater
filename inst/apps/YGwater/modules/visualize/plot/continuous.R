@@ -114,7 +114,7 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlotServer <- function(id, AquaCache, data) {
+continuousPlotServer <- function(id, AquaCache, data, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server

@@ -199,7 +199,7 @@ discretePlotUI <- function(id) {
   )
 }
 
-discretePlotServer <- function(id, mdb_files, AquaCache) {
+discretePlotServer <- function(id, mdb_files, AquaCache, language) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -223,8 +223,8 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
     
-    data$AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete' ORDER BY loc.name ASC")
-    data$AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete' ORDER BY p.param_name ASC")
+    data$AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id ORDER BY loc.name ASC")
+    data$AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id ORDER BY p.param_name ASC")
     
     observeEvent(input$EQWin_source, {
       EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)

@@ -287,9 +287,9 @@ plotOverlap <- function(location,
     }
 
     if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous';"))
     } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
     }
     if (nrow(exist_check) == 0) {
       if (is.null(record_rate)) {
@@ -750,7 +750,7 @@ plotOverlap <- function(location,
   if (snowbulletin == FALSE) {
     plot <- plot +
       ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
-      ggplot2::scale_colour_manual(name = if (lang == "en") "Year" else "Ann\u00E9e", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks = rev(unique(realtime$plot_year)))
+      ggplot2::scale_colour_manual(name = if (lang == "en") "Year" else "Ann\u00E9e", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#206976", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks = rev(unique(realtime$plot_year)))
   } else {
     plot <- plot +
       ggplot2::geom_line(ggplot2::aes(y = max), colour = "#0097A9", size = 1) +
