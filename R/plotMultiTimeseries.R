@@ -732,7 +732,7 @@ plotMultiTimeseries <- function(type = 'traces',
   }
   
   # Make the plot ###################################
-  colors <- grDevices::colorRampPalette(c("#206976", "#7A9A01", "#F2A900","#DC4405"))(length(data))
+  colors <- grDevices::colorRampPalette(c("#00454e", "#7A9A01", "#F2A900","#DC4405"))(length(data))
   
   # Function to add an opacity value to a hex color
   add_opacity_to_color <- function(hex_color, opacity) {
@@ -898,23 +898,6 @@ plotMultiTimeseries <- function(type = 'traces',
       subplot <- plotly::plot_ly()
       if (historic_range) {
         subplot <- subplot %>%
-          plotly::add_ribbons(data = data[[i]]$range_data[!is.na(data[[i]]$range_data$q25) & !is.na(data[[i]]$range_data$q75), ], 
-                              x = ~datetime, 
-                              ymin = ~q25, 
-                              ymax = ~q75, 
-                              name = if (lang == "en") "IQR" else "EIQ",
-                              legendgroup = if (lang == "en") "IQR" else "EIQ",
-                              showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
-                              color = I("grey40"), 
-                              line = list(width = 0.2), 
-                              hoverinfo = "text", 
-                              text = ~paste0("q25: ", 
-                                             round(q25, 2), 
-                                             " q75: ", 
-                                             round(q75, 2), 
-                                             " (", as.Date(datetime), 
-                                             ")")
-                              ) %>%
           plotly::add_ribbons(data = data[[i]]$range_data[!is.na(data[[i]]$range_data$min) & !is.na(data[[i]]$range_data$max), ], 
                               x = ~datetime, 
                               ymin = ~min, 
@@ -922,16 +905,33 @@ plotMultiTimeseries <- function(type = 'traces',
                               name = "Min-Max",
                               legendgroup = "Min-Max",
                               showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
-                              color = I("grey80"), 
+                              color = I("#D4ECEF"), 
                               line = list(width = 0.2), 
                               hoverinfo = "text", 
                               text = ~paste0("Min: ", 
                                              round(min, 2), 
-                                             " Max: ", 
+                                             ", Max: ", 
                                              round(max, 2), 
                                              " (", as.Date(datetime), 
                                              ")")
-                              ) 
+          )  %>%
+          plotly::add_ribbons(data = data[[i]]$range_data[!is.na(data[[i]]$range_data$q25) & !is.na(data[[i]]$range_data$q75), ], 
+                              x = ~datetime, 
+                              ymin = ~q25, 
+                              ymax = ~q75, 
+                              name = if (lang == "en") "IQR" else "EIQ",
+                              legendgroup = if (lang == "en") "IQR" else "EIQ",
+                              showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
+                              color = I("#FFE9C3"), 
+                              line = list(width = 0.2), 
+                              hoverinfo = "text", 
+                              text = ~paste0("Q25: ", 
+                                             round(q25, 2), 
+                                             ", Q75: ", 
+                                             round(q75, 2), 
+                                             " (", as.Date(datetime), 
+                                             ")")
+          )
       }
       subplot <- subplot %>%
         plotly::add_trace(data = data[[i]]$trace_data, 
@@ -948,7 +948,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                          round(value, 4), 
                                          " (", datetime, 
                                          ")")
-                          ) %>%
+        ) %>%
         plotly::layout(
           title = NULL, 
           xaxis = list(title = list(standoff = 0), 

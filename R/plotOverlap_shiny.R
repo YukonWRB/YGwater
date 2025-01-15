@@ -475,73 +475,15 @@ plotOverlap_shiny <- function(location,
   }
   
   #### ----------------------------- Make the plot -------------------------- ####
-  line_size = 1
-  minHist <- min(realtime$min, na.rm = TRUE)
-  maxHist <- max(realtime$max, na.rm = TRUE)
-  minLines <- min(realtime$value, na.rm = TRUE)
-  maxLines <- max(realtime$value, na.rm = TRUE)
-  min <- if (minHist < minLines) minHist else minLines
-  max <- if (maxHist > maxLines) maxHist else maxLines
-
-  # x axis settings
-  if  (length(day_seq) > 200) {
-    date_breaks = "2 months"
-    if (lang == "fr") {
-      labs = "%d %b"
-    } else {
-      labs = "%b %d"
-    }
-  } else if (length(day_seq) > 60) {
-    date_breaks = "1 month"
-    if (lang == "fr") {
-      labs = "%d %b"
-    } else {
-      labs = "%b %d"
-    }
-  } else if (length(day_seq) > 14) {
-    date_breaks = "1 week"
-    if (lang == "fr") {
-      labs = "%d %b"
-    } else {
-      labs = "%b %d"
-    }
-  } else if (length(day_seq) > 7) {
-    date_breaks = "2 days"
-    if (lang == "fr") {
-      labs = "%d %b"
-    } else {
-      labs = "%b %d"
-    }
-  } else if (length(day_seq) >= 2) {
-    date_breaks = "1 days"
-    if (lang == "fr") {
-      labs = "%d %b"
-    } else {
-      labs = "%b %d"
-    }
-  } else if (length(day_seq) > 1) {
-    date_breaks = "24 hours"
-    if (lang == "fr") {
-      labs = "%H:%M"
-    } else {
-      labs = "%H:%M"
-    }
-  } else if (length(day_seq) == 1) {
-    date_breaks = "12 hour"
-    if (lang == "fr") {
-      labs = "%H:%M"
-    } else {
-      labs = "%H:%M"
-    }
-  }
-  
   # Create basic plot with historic range
   
   # See this page for blue flavors: https://encycolorpedia.com/86b4bc
   plot <- plotly::plot_ly() %>%
-    plotly::add_ribbons(data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#78b9c5"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
-    plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("#c3d9dd"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"))
-  
+    # plotly::add_ribbons(data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#78b9c5"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
+    # plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("#c3d9dd"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"))
+    
+    plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = if (lang == "en") "Historic Range" else "Plage historique", color = I("#D4ECEF"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) %>%
+  plotly::add_ribbons(data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "Typical Range" else "Plage typique", color = I("#FFE9C3"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) 
   # Add traces
   col_idx <- 1
   for (i in rev(unique(realtime$plot_year))) {
@@ -554,7 +496,7 @@ plotOverlap_shiny <- function(location,
                               mode = "lines",
                               line = list(width = 2.5 * line_scale),
                               name = i,
-                              color = I(grDevices::colorRampPalette(c("#206976", "#7A9A01", "#FFA900", "#DC4405"))(length(unique(realtime$plot_year)))[col_idx]),
+                              color = I(grDevices::colorRampPalette(c("#00454e", "#7A9A01", "#FFA900", "#DC4405"))(length(unique(realtime$plot_year)))[col_idx]),
                               hoverinfo = "text", 
                               text = ~paste0(i, ": ", round(value, 4), " (", datetime, ")"))
     col_idx <- col_idx + 1
@@ -582,7 +524,7 @@ plotOverlap_shiny <- function(location,
       xaxis = list(title = list(standoff = 0), 
                    showgrid = gridx, 
                    showline = TRUE, 
-                   tickformat = if (lang == "en") "%b %d '%y" else "%d %b '%y",
+                   tickformat = if (lang == "en") "%b %d" else "%d %b",
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
                    rangeslider = list(visible = FALSE)), 

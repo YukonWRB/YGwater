@@ -516,8 +516,8 @@ plotTimeseries <- function(location,
   plot <- plotly::plot_ly()
   if (historic_range) {
     plot <- plot %>%
-      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("grey40"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), " q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
-      plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("grey80"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), " Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
+      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#FFE9C3"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
+      plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("#D4ECEF"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
   
   plot <- plot %>%
@@ -528,7 +528,7 @@ plotTimeseries <- function(location,
                       mode = "lines",
                       line = list(width = 2.5 * line_scale),
                       name = parameter_name, 
-                      color = I("#206976"), 
+                      color = I("#00454e"), 
                       hoverinfo = "text", 
                       text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
     plotly::layout(
