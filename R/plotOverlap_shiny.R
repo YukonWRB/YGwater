@@ -201,7 +201,8 @@ plotOverlap_shiny <- function(location,
   
   if (lang == "fr") {
     parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
-  } else if (lang == "en" || is.na(parameter_name)) {
+  }
+  if (lang == "en" || is.na(parameter_name)) { # Some parameters don't have a french name in the DB
     parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
   }
   
