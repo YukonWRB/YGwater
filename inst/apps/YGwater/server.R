@@ -414,7 +414,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$plot) {
         output$plot_ui <- renderUI(plotUI("plot"))
         ui_loaded$plot <- TRUE
-        plot("plot", mdb_files, AquaCache) # Call the server
+        plot("plot", mdb_files, AquaCache, language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "map") {
@@ -448,7 +448,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$gen) {
         output$gen_ui <- renderUI(genUI("gen"))
         ui_loaded$gen <- TRUE
-        gen("gen", mdb_files, AquaCache) # Call the server
+        gen("gen", mdb_files, con = AquaCache, language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "locs") {

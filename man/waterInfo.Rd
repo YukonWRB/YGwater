@@ -21,7 +21,7 @@ waterInfo(
 \arguments{
 \item{con}{A connection to the database. Default uses function \code{\link[=AquaConnect]{AquaConnect()}} with default settings.}
 
-\item{locations}{The list of locations requested, as either a vector of location IDs or one of "WRB" (only WRB stations selected), "WSC" (only), or "all". Default "all" fetches all stations.}
+\item{locations}{The list of locations requested, as either a vector of location IDs/codes from table 'locations'. Default "all" fetches all stations.}
 
 \item{level_flow}{Default 'both' will get and calculate level and flow information wherever possible. 'one' will pick flow where it exists, otherwise level. Exception to this is if there is no flow on the end_date requested AND most recent flow is > 1 month older than level ; in this case flow is assumed to be discontinued and level is used.}
 
@@ -47,7 +47,7 @@ A list with four data.frames: location metadata, basic statistics, trend informa
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations. At its most basic (parameters to FALSE or NULL where applicable), the result is a list of two data.frames to the R environment with location metadata and field measurements.
+This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations.
 }
 \details{
 Sites that routinely see 0 values for flow or level in mid-winter may report a negative annual percent change \emph{even if} the sens's slope is positive. This is due to the intercept of a linear model calculated using minimum flows and years being below 0 at the first year of record. Unfortunately there is no fix, but the Sen's value is still valid.

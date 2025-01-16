@@ -61,8 +61,8 @@ locsNewTSUI <- function(id) {
              ),
              selectizeInput(ns("loc_owner"), 
                             "Owner (type your own if not in list)", 
-                            choices = stats::setNames(moduleData$owners_contributors$owner_contributor_id, 
-                                                      moduleData$owners_contributors$name),
+                            choices = stats::setNames(moduleData$organizations$organization_id, 
+                                                      moduleData$organizations$name),
                             multiple = TRUE, # This is to force a default of nothing selected - overridden with options
                             options = list(maxItems = 1,
                                            create = TRUE),

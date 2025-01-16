@@ -11,7 +11,7 @@ plotUI <- function(id) {
   )
 }
 
-plot <- function(id, mdb_files, AquaCache) {
+plot <- function(id, mdb_files, AquaCache, language) {
   
   moduleServer(id, function(input, output, session) {
 
@@ -31,27 +31,27 @@ plot <- function(id, mdb_files, AquaCache) {
       
       if (input$plot_type == "Discrete") {
         
-        # discData$parameters_discrete <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id WHERE timeseries.category = 'discrete';")
+        # discData$parameters_discrete <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
         # discData$parameters_discrete <- discData$parameters_discrete[order(discData$parameters_discrete$param_name), ]
         
         output$submoduleUI <- renderUI({
           discretePlotUI(ns("discretePlot"))
         })
-        discretePlotServer("discretePlot", mdb_files, AquaCache)
+        discretePlotServer("discretePlot", mdb_files, AquaCache, language)
         
       } else if (input$plot_type == "Continuous") {
         
-        contData$all_ts <- DBI::dbGetQuery(AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location WHERE ts.category = 'continuous';")
+        contData$all_ts <- DBI::dbGetQuery(AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         contData$all_ts <- contData$all_ts[order(contData$all_ts$name), ]
         
-        contData$parameters <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id WHERE timeseries.category = 'continuous';")
+        contData$parameters <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
         contData$parameters <- contData$parameters[order(contData$parameters$param_name), ]
         contData$datums <- shareData$datums
         
         output$submoduleUI <- renderUI({
           continuousPlotUI(ns("continuousPlot"))
         })
-        continuousPlotServer("continuousPlot", AquaCache = AquaCache, data = contData)
+        continuousPlotServer("continuousPlot", AquaCache = AquaCache, data = contData, language = language)
         
       } else if (input$plot_type == "Mix") {
         output$submoduleUI <- renderUI({

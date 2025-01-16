@@ -7,6 +7,7 @@
 plotMultiTimeseries(
   type = "traces",
   locations,
+  sub_locations = NULL,
   parameters,
   record_rates = NULL,
   period_types = NULL,
@@ -40,6 +41,8 @@ plotMultiTimeseries(
 \item{type}{Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.}
 
 \item{locations}{The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.}
+
+\item{sub_locations}{Your desired sub-locations, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-locations (character) or the sub-location IDs (numeric). Matched one to one to the locations and parameters or recycled if specified as length one.}
 
 \item{parameters}{The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.}
 

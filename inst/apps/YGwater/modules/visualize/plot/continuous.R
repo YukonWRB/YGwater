@@ -114,7 +114,7 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlotServer <- function(id, AquaCache, data) {
+continuousPlotServer <- function(id, AquaCache, data, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server
@@ -758,7 +758,7 @@ continuousPlotServer <- function(id, AquaCache, data) {
       shinyjs::hide("full_screen")
       
       tryCatch({
-        withProgress(message = "Generating plot... please be patient", value = 0, {
+        withProgress(message = translations[id == "generating_working", get(language$language)][[1]], value = 0, {
           
           incProgress(0.5)
           filter <- if (input$plot_filter) 20 else NULL
