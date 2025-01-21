@@ -135,7 +135,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
     observeEvent(input$param, {
       # Update the location choices
       updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]))
-      updateSelectizeInput(session, "loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))
+      updateSelectizeInput(session, "loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))])
       if (input$param %in% c(values$swe, values$snow_depth)) {
         updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
         updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
@@ -493,7 +493,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
         shinyjs::show("loc_name")
         shinyjs::show("add_subplot")
         updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter)
-        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]), selected = traces$trace1$location)
+        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], selected = traces$trace1$location)
         updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"]))
       } else {
         shinyjs::show("trace1_ui")
@@ -744,7 +744,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
         shinyjs::show("loc_name")
         shinyjs::show("add_trace")
         updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot1$parameter)
-        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]), selected = subplots$subplot1$location)
+        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], selected = subplots$subplot1$location)
         updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"]))
       } else {
         shinyjs::show("subplot1_ui")

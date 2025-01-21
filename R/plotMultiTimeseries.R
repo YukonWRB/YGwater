@@ -922,7 +922,7 @@ plotMultiTimeseries <- function(type = 'traces',
                               name = if (lang == "en") "IQR" else "EIQ",
                               legendgroup = if (lang == "en") "IQR" else "EIQ",
                               showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
-                              color = I("#FFE9C3"), 
+                              color = I("#5f9da6"), 
                               line = list(width = 0.2), 
                               hoverinfo = "text", 
                               text = ~paste0("Q25: ", 

@@ -27,6 +27,24 @@
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @export
 #'
+# 
+# location <- "09EA004"
+# sub_location <- NULL
+# parameter <- "water level"
+# record_rate = NULL
+# startDay <- "2023-01-01"
+# endDay <- "2023-12-30"
+# tzone <- "MST"
+# years <- c("2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015")
+# datum <- TRUE
+# title <- TRUE
+# filter <- NULL
+# plot_scale <- 1
+# legend <- TRUE
+# con <- NULL
+# lang <- "en"
+# gridx = FALSE
+# gridy = FALSE
 
 # location <- "29AB-M3"
 # sub_location <- NULL
@@ -316,28 +334,25 @@ plotOverlap_shiny <- function(location,
     }
     end_UTC <- end
     attr(end_UTC, "tzone") <- "UTC"
-    if (length(day_seq) < 90) { # 90 days at 5 minute data points is 25920 rows.
-      if (nrow(realtime) < 20000) { # if plotting 70-90 days of 5 minute data will only have the greatest year with 5 minute points
-        new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-        if (nrow(new_realtime) > 20000) {
-          new_realtime <- new_realtime[order(new_realtime$datetime) , ]
-          new_realtime <- utils::tail(new_realtime, 20000) #Retain only max 20000 data points for plotting performance
-          end_new_dates <- min(new_realtime$datetime)
-          new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
-          dates <- c(dates, new_dates)
-        }
-        if (nrow(new_realtime) > 0) {
-          realtime <- rbind(realtime, new_realtime)
-          get_daily <- FALSE
-        } else {
-          get_daily <- TRUE
-        }
+    if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance
+      new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+      if (nrow(new_realtime) > 20000) {
+        new_realtime <- new_realtime[order(new_realtime$datetime) , ]
+        new_realtime <- utils::tail(new_realtime, 20000) #Retain only max 20000 data points for plotting performance
+        end_new_dates <- min(new_realtime$datetime)
+        new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
+        dates <- c(dates, new_dates)
+      }
+      if (nrow(new_realtime) > 0) {
+        realtime <- rbind(realtime, new_realtime)
+        get_daily <- FALSE
       } else {
         get_daily <- TRUE
       }
     } else {
       get_daily <- TRUE
     }
+    
     if (get_daily) {
       new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , c("datetime", "value")]
       if (nrow(new_realtime) > 0) {
@@ -402,23 +417,17 @@ plotOverlap_shiny <- function(location,
       lubridate::hour(first_date) <- 0
       ribbon[ribbon$datetime == min(ribbon$datetime), "datetime"] <- first_date
     }
-    realtime <- merge(realtime, ribbon, all = TRUE, by = "datetime")
-  } else {
-    realtime$max <- NA
-    realtime$min <- NA
-    realtime$q75 <- NA
-    realtime$q25 <- NA
+    realtime <- merge(realtime, ribbon[, "datetime", drop = FALSE], all = TRUE, by = "datetime")
   }
-  
   
   realtime$year <- lubridate::year(realtime$datetime) #year, month columns used for removing Feb 29 later
   realtime$month <- lubridate::month(realtime$datetime)
   realtime$day <- lubridate::day(realtime$datetime)
   realtime <- realtime[!(realtime$month == 2 & realtime$day == 29), ] #Remove Feb 29
-  daily$year <- lubridate::year(daily$datetime)
-  daily$month <- lubridate::month(daily$datetime)
-  daily$day <- lubridate::month(daily$datetime)
-  daily <- daily[!(daily$month == 2 & daily$day == 29), ] #Remove Feb 29
+  ribbon$year <- lubridate::year(ribbon$datetime)
+  ribbon$month <- lubridate::month(ribbon$datetime)
+  ribbon$day <- lubridate::month(ribbon$datetime)
+  ribbon <- ribbon[!(ribbon$month == 2 & ribbon$day == 29), ] #Remove Feb 29
   
   if (overlaps) { # This section sorts out the overlap years, builds the plotting column
     temp <- data.frame(date = day_seq)
@@ -454,8 +463,8 @@ plotOverlap_shiny <- function(location,
   
   # apply datum correction where necessary
   if (datum$conversion_m > 0) {
-    daily[ , c("value", "max", "min", "q75", "q25")] <- apply(daily[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
-    realtime[ , c("value", "max", "min", "q75", "q25")] <- apply(realtime[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
+    ribbon[ , c("max", "min", "q75", "q25")] <- apply(ribbon[ , c("max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
+    realtime$value <- realtime$value + datum$conversion_m
   }
   
   if (!is.null(filter)) {
@@ -480,11 +489,9 @@ plotOverlap_shiny <- function(location,
   
   # See this page for blue flavors: https://encycolorpedia.com/86b4bc
   plot <- plotly::plot_ly() %>%
-    # plotly::add_ribbons(data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#78b9c5"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
-    # plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("#c3d9dd"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"))
-    
-    plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = if (lang == "en") "Historic Range" else "Plage historique", color = I("#D4ECEF"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) %>%
-  plotly::add_ribbons(data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "Typical Range" else "Plage typique", color = I("#FFE9C3"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) 
+    plotly::add_ribbons(data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#5f9da6"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
+    plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("#D4ECEF"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"))
+  
   # Add traces
   col_idx <- 1
   for (i in rev(unique(realtime$plot_year))) {
@@ -542,6 +549,8 @@ plotOverlap_shiny <- function(location,
       legend = list(font = list(size = legend_scale * 12))
     ) %>%
     plotly::config(locale = lang)
+  
+  plot
   
   return(plot)
 }
