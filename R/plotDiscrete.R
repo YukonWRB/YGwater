@@ -6,6 +6,7 @@
 #' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime. Default is the current date.
 #' @param locations A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use `locGrp` instead.
 #' @param locGrp Only used if `dbSource` is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use `locations` instead.
+#' @param sub_locations A vector of sub-location names or codes, only used if dbSource == 'AC' and table 'sub_locations'. Default is NULL; if there are sub-locations applicable, these will all be fetched and displayed as distinct traces. Must match the length of 'locations', use NA for locations without sub-locations.
 #' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
 #' @param paramGrp Only used if `dbSource` is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use `parameters` instead.
 #' @param standard A standard or guideline name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if `dbSource` is 'EQ'.
@@ -36,6 +37,7 @@
 plotDiscrete <- function(start, 
                          end = Sys.Date() + 1, 
                          locations = NULL, locGrp = NULL, 
+                         sub_locations = NULL,
                          parameters = NULL, paramGrp = NULL, 
                          standard = NULL, 
                          log = FALSE, 
@@ -108,6 +110,7 @@ plotDiscrete <- function(start,
   # start <- "2020-01-01"
   # end <- "2024-05-05"
   # locations <- c("09AD-SC01", "08AA-SC01", "09AK-SC01", "09DC-SC01B")
+  # sub_locations <- NULL
   # parameters <- c("snow water equivalent", "snow depth")
   # locGrp <- NULL
   # paramGrp <- NULL
@@ -452,6 +455,12 @@ plotDiscrete <- function(start,
       on.exit(DBI::dbDisconnect(AC), add = TRUE)
     }
     
+    if (!is.null(sub_locations)) {
+      if (length(sub_locations) != length(locations)) {
+        stop("The length of 'sub_locations' must match the length of 'locations'")
+      }
+    }
+    
     # Validate existence of parameters and/or locations
     if (!is.null(locations)) {
       if (inherits(locations, "character")) {
@@ -467,18 +476,53 @@ plotDiscrete <- function(start,
       
       locIds <- DBI::dbGetQuery(AC, query)
       if (nrow(locIds) == 0) {
-        stop("No locations found in the aquacache with the names '", paste0(locations, collapse = "', '"), "'")
+        stop("No locations found in the aquacache with the names or codes '", paste0(locations, collapse = "', '"), "'")
       }
       if (nrow(locIds) < length(locations)) {
-        # Find the missing locations and tell the user which ones are missing
+        # Find the missing locations and tell the user which ones are missing; 
         combined_locIds <- unique(c(locIds$location_id, locIds$location, locIds$name, locIds$name_fr))
         missing <- setdiff(locations, combined_locIds)
+        
+        # Find the element's index and remove it from locations and sub_locations (if not null)
+
+          missing_idx <- which(locations %in% missing)
+          locations <- locations[-missing_idx]
+          if (!is.null(sub_locations)) {
+            sub_locations <- sub_locations[-missing_idx]
+          }
+        
         if (inherits(locations, "character")) {
-          warning("The following locations were not found in the aquacache despite searching the 'location', 'name', and 'name_fr' columns of table 'locations': ", paste0(missing, collapse = ", "))
+          warning("The following locations were not found in the aquacache despite searching the 'location', 'name', and 'name_fr' columns of table 'locations': ", paste0(missing, collapse = ", "), ". Moving on without that location (and sub-location if applicable).")
         } else {
-          warning("The following locations were not found in the aquacache table 'locations': ", paste0(missing, collapse = ", "))
+          warning("The following locations were not found in the aquacache table 'locations': ", paste0(missing, collapse = ", "), ". Moving on without that location (and sub-location if applicable)")
         }
       }
+    }
+    
+    if (!is.null(sub_locations)) {
+      query <- paste0(
+        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE ",
+        "LOWER(sub_location) IN (LOWER('", paste0(sub_locations, collapse = "'), LOWER('"), "')) ",
+        "OR LOWER(sub_location_name) IN (LOWER('", paste0(sub_locations, collapse = "'), LOWER('"), "'))",
+        "OR LOWER(sub_location_name_fr) IN (LOWER('", paste0(sub_locations, collapse = "'), LOWER('"), "')) "
+      )
+      
+      subLocIds <- DBI::dbGetQuery(AC, query)
+      if (nrow(subLocIds) == 0) {
+        warning("You specified sub_locations but none were found in the aquacache. Ignoring sub_locations.")
+      }
+      if (nrow(subLocIds) < length(sub_locations)) {
+        # Find the missing sub-locations and tell the user which ones are missing
+        combined_subLocIds <- unique(c(subLocIds$sub_location_id, subLocIds$sub_location, subLocIds$name, subLocIds$name_fr))
+        missing <- setdiff(sub_locations, combined_subLocIds)
+        if (inherits(sub_locations, "character")) {
+          warning("The following sub-locations were not found in the aquacache despite searching the 'sub_location', 'name', and 'name_fr' columns of table 'sub_locations': ", paste0(missing, collapse = ", "))
+        } else {
+          warning("The following sub-locations were not found in the aquacache table 'sub_locations': ", paste0(missing, collapse = ", "))
+        }
+      }
+    } else {
+      subLocIds <- data.frame()
     }
     
     if (!is.null(parameters)) {
@@ -508,10 +552,13 @@ plotDiscrete <- function(start,
       }
     }
     
-    samp_query <- paste0("
+    if (is.null(sub_locations) | nrow(subLocIds) == 0) {
+      samp_query <- paste0("
     SELECT
         s.sample_id,
         s.location_id,
+        sl.sub_location_name,
+        sl.sub_location_name_fr,
         s.sub_location_id,
         mt.media_type,
         mt.media_type_fr,
@@ -540,12 +587,58 @@ plotDiscrete <- function(start,
         approval_types as at ON s.sample_approval = at.approval_type_id
     LEFT JOIN
         qualifier_types as qt ON s.sample_qualifier = qt.qualifier_type_id
-    WHERE location_id IN (", paste0(locIds$location_id, collapse = ", "), ") 
-    AND datetime > '", start, "' AND datetime < '", end, "';
+    LEFT JOIN
+        sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
+    WHERE s.location_id IN (", paste0(locIds$location_id, collapse = ", "), ") 
+    AND s.datetime > '", start, "' AND s.datetime < '", end, "';
         ")
+    } else {
+      samp_query <- paste0("
+SELECT
+    s.sample_id,
+    s.location_id,
+    sl.sub_location_name,
+    sl.sub_location_name_fr,
+    mt.media_type,
+    mt.media_type_fr,
+    s.z,
+    s.datetime,
+    s.target_datetime,
+    cm.collection_method,
+    st.sample_type,
+    gt.grade_type_description,
+    gt.grade_type_description_fr,
+    at.approval_type_description,
+    at.approval_type_description_fr,
+    qt.qualifier_type_description,
+    qt.qualifier_type_description_fr
+FROM 
+    samples AS s
+LEFT JOIN
+    media_types AS mt ON s.media_id = mt.media_id
+LEFT JOIN
+    collection_methods AS cm ON s.collection_method = cm.collection_method_id
+LEFT JOIN
+    sample_types AS st ON s.sample_type = st.sample_type_id
+LEFT JOIN
+    grade_types AS gt ON s.sample_grade = gt.grade_type_id
+LEFT JOIN
+    approval_types AS at ON s.sample_approval = at.approval_type_id
+LEFT JOIN
+    qualifier_types AS qt ON s.sample_qualifier = qt.qualifier_type_id
+LEFT JOIN
+    sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
+WHERE
+    (s.location_id, COALESCE(s.sub_location_id, -1)) IN (
+        ", paste0("(", locIds$location_id, ", ", ifelse(is.na(subLocIds$sub_location_id), -1, subLocIds$sub_location_id), ")", collapse = ", "), "
+    )
+AND s.datetime > '", start, "' AND s.datetime < '", end, "';
+")
+    }
     
     samples <- DBI::dbGetQuery(AC, samp_query)
-
+    
+    
     if (nrow(samples) == 0) {
       stop("No samples were found matching your requested locations and parameters.")
     }
@@ -554,6 +647,13 @@ plotDiscrete <- function(start,
     samples <- merge(samples, locIds, by = "location_id", all.x = TRUE)
     samples <- samples[, -which(names(samples) == "location_id")] # drop unnecessary columns
     
+    # Merge columns for location name and sub_location name (where not null)
+    if (lang == "en") {
+      samples$name <- ifelse(is.na(samples$sub_location_name), samples$name, paste0(samples$name, " - ", samples$sub_location_name))
+    } else {
+      samples$name <- ifelse(is.na(samples$sub_location_name_fr), samples$name, paste0(samples$name, " - ", samples$sub_location_name_fr))
+    }
+
     # Get the measurements from table results
     res_query <- paste0("
     SELECT 
@@ -603,7 +703,7 @@ plotDiscrete <- function(start,
     
     # Retain columns depending on if 'fr' or 'en', rename cols to match EQWin output
     if (lang == "fr") {
-      data <- data[, c("result", "target_datetime", "datetime", "param_name_fr", "units", "location", "name_fr", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")]
+      data <- data[, c("result", "target_datetime", "datetime", "param_name_fr", "units", "location", "name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")]
       names(data) <- c("result", "target_datetime", "datetime", "param_name", "units", "location", "location_name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")
     } else {
       data <- data[, c("result", "target_datetime", "datetime", "param_name", "units", "location", "name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")]

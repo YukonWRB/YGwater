@@ -9,6 +9,7 @@ plotDiscrete(
   end = Sys.Date() + 1,
   locations = NULL,
   locGrp = NULL,
+  sub_locations = NULL,
   parameters = NULL,
   paramGrp = NULL,
   standard = NULL,
@@ -41,6 +42,8 @@ plotDiscrete(
 \item{locations}{A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use \code{locGrp} instead.}
 
 \item{locGrp}{Only used if \code{dbSource} is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{locations} instead.}
+
+\item{sub_locations}{A vector of sub-location names or codes, only used if dbSource == 'AC' and table 'sub_locations'. Default is NULL; if there are sub-locations applicable, these will all be fetched and displayed as distinct traces. Must match the length of 'locations', use NA for locations without sub-locations.}
 
 \item{parameters}{A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use \code{paramGrp} instead.}
 
