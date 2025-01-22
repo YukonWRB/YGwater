@@ -2,8 +2,8 @@
 #' 
 #' Plots data directly from EQWin or from the aquacache for one or more location (station) and one or more parameter. Depending on the setting for argument 'facet_on', the function can either make a facet plot where each station is a facet (with parameters as distinct traces) or where each parameter is a facet (with locations as distinct traces). Values above or below the detection limit are shown as the detection limit but symbolized differently (open circles). 
 #' 
-#' @param start The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'.
-#' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Default is the current date.
+#' @param start The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime.
+#' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime. Default is the current date.
 #' @param locations A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use `locGrp` instead.
 #' @param locGrp Only used if `dbSource` is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use `locations` instead.
 #' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
@@ -57,8 +57,6 @@ plotDiscrete <- function(start,
                          dbCon = NULL,
                          dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
   
-  #TODO: Create workflow for dbSource = 'AC'. parameters and locations can be character or numeric for best operation with Shiny and directly from function.
-
   # testing parameters for EQWIN direct
   # start <- "2024-11-01"
   # end <- "2024-11-24"
@@ -113,6 +111,7 @@ plotDiscrete <- function(start,
   # parameters <- c("snow water equivalent", "snow depth")
   # locGrp <- NULL
   # paramGrp <- NULL
+  # standard = NULL
   # log = FALSE
   # loc_code= 'name'
   # facet_on = 'locs'
@@ -203,7 +202,7 @@ plotDiscrete <- function(start,
   
   
   # Create a data.frame to hold the plotting data. EQWin and aquacache fill this list in differently, but the end result is the same to pass on to the plotting portion.
-  # 'data' should contain columns named location, location_name, parameter, datetime, value, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, result_speciation.
+  # 'data' should contain columns named location, location_name, parameter, datetime, result, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, result_speciation.
   data <- data.frame()
   
   # Fetch the data ##############################################################################################################
@@ -303,17 +302,17 @@ plotDiscrete <- function(start,
     data <- merge(data, params)
     data <- merge(data, locations)
     data <- data[, -which(names(data) %in% c("StnId"))]  # Drop unnecessary column   ! Note that this leaves some columns that are not output from the aquacache data fetch; thse are only for adding standard values to the plot and aquacache will need to work differently.
-    names(data) <- c("ParamId", "SampleId", "value", "datetime", "param_name", "units", "location", "location_name")
+    names(data) <- c("ParamId", "SampleId", "result", "datetime", "param_name", "units", "location", "location_name")
     
     # Now add the result_condition and result_condition_value columns
     # Sometimes the "." is a "," in the result, so we need to replace it
-    data$value <- gsub(",", ".", data$value)
-    #result_condition should get < DL, > DL, or NA depending on if '<' or '>' show up in columns 'value'
-    data$result_condition <- ifelse(grepl("<", data$value), "< DL", ifelse(grepl(">", data$value), "> DL", NA))
-    #result_condition_value should get the numeric portion of the string in 'value' only if '<' or '>' show up in columns 'value'
-    data$result_condition_value <- ifelse(grepl("<", data$value), as.numeric(gsub("<", "", data$value)), ifelse(grepl(">", data$value), as.numeric(gsub(">", "", data$value)), NA))
-    # turn column 'value' to a numeric, which will remove the '<' and '>' characters
-    data$value <- suppressWarnings(as.numeric(data$value))
+    data$result <- gsub(",", ".", data$result)
+    #result_condition should get < DL, > DL, or NA depending on if '<' or '>' show up in columns 'result'
+    data$result_condition <- ifelse(grepl("<", data$result), "< DL", ifelse(grepl(">", data$result), "> DL", NA))
+    #result_condition_value should get the numeric portion of the string in 'result' only if '<' or '>' show up in columns 'result'
+    data$result_condition_value <- ifelse(grepl("<", data$result), as.numeric(gsub("<", "", data$result)), ifelse(grepl(">", data$result), as.numeric(gsub(">", "", data$result)), NA))
+    # turn column 'result' to a numeric, which will remove the '<' and '>' characters
+    data$result <- suppressWarnings(as.numeric(data$result))
     
     # Check encoding and if necessary convert to UTF-8, otherwise plotly gets grumpy
     locale_info <- Sys.getlocale("LC_CTYPE")
@@ -431,8 +430,8 @@ plotDiscrete <- function(start,
         merged_df <- merge(combined_df, EQWinStd_result, by = c("CalcId", "SampleId"), all.x = TRUE)
         
         # Assign the calculated values back to data$std_max and data$std_min
-        data$std_max[merged_df$idx[merged_df$std_type == "std_max"]] <- merged_df$Value[merged_df$std_type == "std_max"]
-        data$std_min[merged_df$idx[merged_df$std_type == "std_min"]] <- merged_df$Value[merged_df$std_type == "std_min"]
+        data$std_max[merged_df$idx[merged_df$std_type == "std_max"]] <- merged_df$result[merged_df$std_type == "std_max"]
+        data$std_min[merged_df$idx[merged_df$std_type == "std_min"]] <- merged_df$result[merged_df$std_type == "std_min"]
       }
 
       
@@ -475,9 +474,9 @@ plotDiscrete <- function(start,
         combined_locIds <- unique(c(locIds$location_id, locIds$location, locIds$name, locIds$name_fr))
         missing <- setdiff(locations, combined_locIds)
         if (inherits(locations, "character")) {
-          warning("The following locations were not found in the aquacache despite searching the 'location', 'name', and 'name_fr' columns: ", paste0(missing, collapse = ", "))
+          warning("The following locations were not found in the aquacache despite searching the 'location', 'name', and 'name_fr' columns of table 'locations': ", paste0(missing, collapse = ", "))
         } else {
-          warning("The following locations were not found in the aquacache: ", paste0(missing, collapse = ", "))
+          warning("The following locations were not found in the aquacache table 'locations': ", paste0(missing, collapse = ", "))
         }
       }
     }
@@ -502,54 +501,86 @@ plotDiscrete <- function(start,
         combined_paramIds <- unique(c(paramIds$parameter_id, paramIds$param_name, paramIds$param_name_fr))
         missing <- setdiff(parameters, combined_paramIds)
         if (inherits(parameters, "character")) {
-          warning("The following parameters were not found in the aquacache despite searching the 'param_name' and 'param_name_fr' columns: ", paste0(missing, collapse = ", "))
+          warning("The following parameters were not found in the aquacache despite searching the 'param_name' and 'param_name_fr' columns of table 'parameters': ", paste0(missing, collapse = ", "))
         } else {
-          warning("The following parameters were not found in the aquacache: ", paste0(missing, collapse = ", "))
+          warning("The following parameters were not found in the aquacache table 'parameters': ", paste0(missing, collapse = ", "))
         }
       }
     }
     
-    tsids <- DBI::dbGetQuery(AC, paste0("SELECT location_id, parameter_id AS param_id, timeseries_id FROM timeseries WHERE location_id IN (", paste0(locIds$location_id, collapse = ", "), ") AND parameter_id IN (", paste0(paramIds$parameter_id, collapse = ", "), ");"))
+    samp_query <- paste0("
+    SELECT
+        s.sample_id,
+        s.location_id,
+        s.sub_location_id,
+        mt.media_type,
+        mt.media_type_fr,
+        s.z,
+        s.datetime,
+        s.target_datetime,
+        cm.collection_method,
+        st.sample_type,
+        gt.grade_type_description,
+        gt.grade_type_description_fr,
+        at.approval_type_description,
+        at.approval_type_description_fr,
+        qt.qualifier_type_description,
+        qt.qualifier_type_description_fr
+    FROM 
+        samples as s
+    LEFT JOIN
+        media_types as mt ON s.media_id = mt.media_id
+    LEFT JOIN
+        collection_methods as cm ON s.collection_method = cm.collection_method_id
+    LEFT JOIN
+        sample_types as st ON s.sample_type = st.sample_type_id
+    LEFT JOIN
+        grade_types as gt ON s.sample_grade = gt.grade_type_id
+    LEFT JOIN
+        approval_types as at ON s.sample_approval = at.approval_type_id
+    LEFT JOIN
+        qualifier_types as qt ON s.sample_qualifier = qt.qualifier_type_id
+    WHERE location_id IN (", paste0(locIds$location_id, collapse = ", "), ") 
+    AND datetime > '", start, "' AND datetime < '", end, "';
+        ")
     
-    if (nrow(tsids) == 0) {
-      stop("No timeseries were found matching your requested locations and parameters.")
+    samples <- DBI::dbGetQuery(AC, samp_query)
+
+    if (nrow(samples) == 0) {
+      stop("No samples were found matching your requested locations and parameters.")
     }
     
-    # Merge the location and parameter names into the tsids data.frame
-    tsids <- merge(tsids, locIds)
-    tsids <- merge(tsids, paramIds, by.x = "param_id", by.y = "parameter_id")
-    tsids <- tsids[, -which(names(tsids) %in% c("location_id", "param_id"))] # drop unnecessary columns
+    # Merge the locations into the samples data.frame
+    samples <- merge(samples, locIds, by = "location_id", all.x = TRUE)
+    samples <- samples[, -which(names(samples) == "location_id")] # drop unnecessary columns
     
-    # Get the measurements from table measurements_discrete
-    query <- paste0("
+    # Get the measurements from table results
+    res_query <- paste0("
     SELECT 
-        m.timeseries_id, 
-        m.target_datetime, 
-        m.datetime, 
-        m.value, 
-        m.result_condition, 
-        m.result_condition_value, 
-        st.sample_type, 
-        cm.collection_method, 
+        r.sample_id,
+        r.parameter_id,
+        r.result_type,
+        r.result,
+        r.result_condition, 
+        r.result_condition_value,
+        rvt.result_value_type,
         sf.sample_fraction, 
         rs.result_speciation 
     FROM 
-        measurements_discrete AS m
+        results AS r
     LEFT JOIN 
-        sample_types AS st ON m.sample_type = st.sample_type_id
+        sample_fractions AS sf ON r.sample_fraction = sf.sample_fraction_id
     LEFT JOIN 
-        collection_methods AS cm ON m.collection_method = cm.collection_method_id
-    LEFT JOIN 
-        sample_fractions AS sf ON m.sample_fraction = sf.sample_fraction_id
-    LEFT JOIN 
-        result_speciations AS rs ON m.result_speciation = rs.result_speciation_id
+        result_speciations AS rs ON r.result_speciation = rs.result_speciation_id
+    LEFT JOIN
+        result_value_types AS rvt ON r.result_value_type = rvt.result_value_type_id
     WHERE 
-        m.timeseries_id IN (", paste0(tsids$timeseries_id, collapse = ", "), ") 
-        AND m.datetime > '", as.character(start), "' 
-        AND m.datetime < '", as.character(end), "';
-")
+        r.sample_id IN (", paste0(samples$sample_id, collapse = ", "), ")
+    AND
+        r.parameter_id IN (", paste0(paramIds$parameter_id, collapse = ", "), ")
+        ;")
     
-    results <- DBI::dbGetQuery(AC, query)
+    results <- DBI::dbGetQuery(AC, res_query)
     
     if (nrow(results) == 0) {
       stop("No results were found for the date range locations/parameter combinations specified.")
@@ -557,13 +588,14 @@ plotDiscrete <- function(start,
     
     #Swap the datetime columns if target_datetime is TRUE
     if (target_datetime) {
-      names(results)[names(results) == "datetime"] <- "actual_datetime"
-      names(results)[names(results) == "target_datetime"] <- "datetime"
-      names(results)[names(results) == "actual_datetime"] <- "target_datetime"
+      names(samples)[names(samples) == "datetime"] <- "actual_datetime"
+      names(samples)[names(samples) == "target_datetime"] <- "datetime"
+      names(samples)[names(samples) == "actual_datetime"] <- "target_datetime"
     } 
     
-    # Merge the results with the tsids data.frame
-    data <- merge(results, tsids)
+    # Merge the results with the samples and paramIds data.frames
+    data <- merge(results, samples, by = "sample_id", all.x = TRUE)
+    data <- merge(data, paramIds, by = "parameter_id", all.x = TRUE)
     
     # Now make result_condition column understandable
     #result_condition should get < DL, > DL, or NA depending on if 1 or 2 show up in column 'result_condition'
@@ -571,20 +603,20 @@ plotDiscrete <- function(start,
     
     # Retain columns depending on if 'fr' or 'en', rename cols to match EQWin output
     if (lang == "fr") {
-      data <- data[, c("value", "target_datetime", "datetime", "param_name_fr", "units", "location", "name_fr", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")]
-      names(data) <- c("value", "target_datetime", "datetime", "param_name", "units", "location", "location_name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")
+      data <- data[, c("result", "target_datetime", "datetime", "param_name_fr", "units", "location", "name_fr", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")]
+      names(data) <- c("result", "target_datetime", "datetime", "param_name", "units", "location", "location_name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")
     } else {
-      data <- data[, c("value", "target_datetime", "datetime", "param_name", "units", "location", "name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")]
-      names(data) <- c("value", "target_datetime", "datetime", "param_name", "units", "location", "location_name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")
+      data <- data[, c("result", "target_datetime", "datetime", "param_name", "units", "location", "name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")]
+      names(data) <- c("result", "target_datetime", "datetime", "param_name", "units", "location", "location_name", "result_condition", "result_condition_value", "sample_type", "collection_method", "sample_fraction", "result_speciation")
     }
   }
   
   #Plot the data ####################################################################################################
   
   if (log) {
-    if (any(data[!is.na(data$value), "value"] <= 0)) {
+    if (any(data[!is.na(data$result), "result"] <= 0)) {
       warning("Some values are <= 0 and cannot be log-transformed. These values will be removed to keep your requested log transformation.")
-      data <- data[data$value > 0, ]
+      data <- data[data$result > 0, ]
     }
   }
   
@@ -609,8 +641,8 @@ plotDiscrete <- function(start,
     plots <- lapply(seq_along(df_list), function(i) {
       facet_value <- names(df_list)[i]
       df <- df_list[[facet_value]]
-      conditions <- df[is.na(df$value),] # Isolate the rows that are < DL or > DL
-      df <- df[!is.na(df$value),]
+      conditions <- df[is.na(df$result),] # Isolate the rows that are < DL or > DL
+      df <- df[!is.na(df$result),]
       
       if (i == 1) {
         # Add entries for parameter/location_name which show up elsewhere in 'data' but not in facet 1
@@ -618,12 +650,12 @@ plotDiscrete <- function(start,
         for (m in missing) {
           if (color_by %in% c("location", "location_name")) {
             unit_text <- unique(df$units)
-            to_bind <- data.frame(value = -Inf, datetime = min(df$datetime), param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA)
+            to_bind <- data.frame(result = -Inf, datetime = min(df$datetime), param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA)
             df <- dplyr::bind_rows(df, to_bind)  # used instead of rbind because it automatically adds columns with NA values
           } else {
             unit_text <- unique(data[data$param_name == m, "units"])
             loc_text <- unique(data[data$location_name == facet_value, "location"])
-            to_bind <- data.frame(value = -Inf, datetime = min(df$datetime), param_name = m, units = unit_text, location = loc_text, location_name = facet_value, result_condition = NA, result_condition_value = NA)
+            to_bind <- data.frame(result = -Inf, datetime = min(df$datetime), param_name = m, units = unit_text, location = loc_text, location_name = facet_value, result_condition = NA, result_condition_value = NA)
             df <- dplyr::bind_rows(df, to_bind)
           }
         }
@@ -673,7 +705,7 @@ plotDiscrete <- function(start,
       
       p <- plotly::plot_ly(df, 
                            x = ~datetime, 
-                           y = ~value, 
+                           y = ~result, 
                            type = 'scatter',
                            mode = 'markers',
                            color = ~get(color_by),
@@ -681,7 +713,7 @@ plotDiscrete <- function(start,
                            legendgroup = ~get(color_by),
                            showlegend = (i == 1),
                            marker = list(
-                             opacity = ifelse(all(df$value == -Inf), 0, 1),
+                             opacity = ifelse(all(df$result == -Inf), 0, 1),
                              symbol = "circle",
                              size = point_scale * 7,
                              line = list(width = 0.2, color = grDevices::rgb(0, 0, 0))
@@ -690,7 +722,7 @@ plotDiscrete <- function(start,
                            text = ~paste(get(color_by), "<br>",  # Name or parameter of trace
                                          datetime, "<br>",  # Datetime
                                          if (targ_dt) paste("True sample datetime:", target_datetime, "<br>"),  # true sample datetime if requested and dbSource = 'AC'
-                                         as.character(value), units, # Value and units
+                                         as.character(result), units, # result and units
                                          if (type) paste("<br>Sample type:", sample_type),  # Sample type if provided
                                          if (collection) paste("<br>Collection method:", collection_method),  # Collection method if provided
                                          if (fraction) paste("<br>Sample fraction:", sample_fraction),  # Sample fraction if provided
@@ -740,7 +772,7 @@ plotDiscrete <- function(start,
                                              result_condition, 
                                              "of", 
                                              as.character(result_condition_value), 
-                                             units, # Result condition and value
+                                             units, # Result condition and result
                                              if (type) paste("<br>Sample type:", 
                                                              sample_type),  # Sample type if provided
                                              if (collection) paste("<br>Collection method:", 
@@ -863,8 +895,7 @@ plotDiscrete <- function(start,
   data <- data[order(data$location_name),]
     
   plot <- create_facet_plot(data, facet_by, targ_dt = target_datetime, loc_code = loc_code)
-  plot
-  
+
   return(plot)
   
 }
