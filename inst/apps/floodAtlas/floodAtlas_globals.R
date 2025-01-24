@@ -3,8 +3,6 @@ floodAtlas_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUser,
   library(shiny)
   library(shinyjs)
   
-  # source(system.file("apps/streamLine/modules/mapView.R", package = "YGwater"))
-  
   # Establish database connection pool
   if (!exists("pool")) {
     pool <<- pool::dbPool(
@@ -15,7 +13,6 @@ floodAtlas_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUser,
       user = dbUser,
       password = dbPass
     )
-    DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
   } else {
     # Check if pool object works
     test <- DBI::dbGetQuery(pool, "SELECT 1;")
@@ -28,7 +25,6 @@ floodAtlas_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUser,
         user = dbUser,
         password = dbPass
       )
-      DBI::dbExecute(pool, "SET logged_in_user.username = 'public';")
     }
   }
 }

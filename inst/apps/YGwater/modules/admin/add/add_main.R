@@ -204,8 +204,7 @@ add <- function(id, AquaCache) {
       datum$DATUM_FROM_ID <- datum_list$DATUM_ID[match(datum$DATUM_FROM, datum_list$DATUM_EN)]
       # Replace DATUM_TO with DATUM_ID
       datum$DATUM_TO_ID <- datum_list$DATUM_ID[match(datum$DATUM_TO, datum_list$DATUM_EN)]
-      print(datum)
-      
+
       # Drop original DATUM_FROM and DATUM_TO columns
       datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
       
@@ -525,8 +524,7 @@ add <- function(id, AquaCache) {
                        current = TRUE,
                        network = if (isTruthy(input$network)) as.numeric(input$network) else NA,
                        project = if (isTruthy(input$project)) as.numeric(input$project) else NA)                
-      print(df)
-      
+
       tryCatch( {
         AquaCache::addACLocation(con = AquaCache,
                                  df = df)

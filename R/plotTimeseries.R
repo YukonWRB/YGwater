@@ -473,7 +473,7 @@ plotTimeseries <- function(location,
   }
   trace_data <- trace_data[order(trace_data$datetime),]
   
-  if (!is.null(filter)) { # Use the same approach as in plotOverlap to filter the value column
+  if (!is.null(filter)) { # Use the same approach as in ggplotOverlap to filter the value column
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {

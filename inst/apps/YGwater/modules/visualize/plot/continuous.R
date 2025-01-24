@@ -768,7 +768,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
             
             return_months <- as.numeric(unlist(strsplit(input$return_months, ",")))
             
-            plot <- plotOverlap(location = input$loc_code,
+            plot <- ggplotOverlap(location = input$loc_code,
                                 parameter = as.numeric(input$param),
                                 startDay = input$start_doy,
                                 endDay = input$end_doy,
