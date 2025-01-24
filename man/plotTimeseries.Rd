@@ -37,7 +37,7 @@ plotTimeseries(
 
 \item{sub_location}{Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).}
 
-\item{parameter}{The parameter name (text) or code (numeric) that you wish to plot. The location:parameter combo must be in the local database.}
+\item{parameter}{The parameter name (text) or code (numeric) that you wish to plot. The location:sublocation:parameter combo must be in the local database.}
 
 \item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.}
 

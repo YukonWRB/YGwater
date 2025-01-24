@@ -7,7 +7,7 @@
 #' 
 #' @param location The location for which you want a plot.
 #' @param sub_location Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).
-#' @param parameter The parameter name (text) or code (numeric) that you wish to plot. The location:parameter combo must be in the local database.
+#' @param parameter The parameter name (text) or code (numeric) that you wish to plot. The location:sublocation:parameter combo must be in the local database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
 #' @param period_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max'.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.
@@ -62,9 +62,9 @@ plotTimeseries <- function(location,
                            con = NULL) 
 {
 
-  # location <- "29AB-M3"
+  # location <- "1556"
   # sub_location <- NULL
-  # parameter = "Snow Water Equivalent"
+  # parameter = 34
   # start_date <- "2020-08-30"
   # end_date <- Sys.time()
   # record_rate = NULL
@@ -200,7 +200,7 @@ plotTimeseries <- function(location,
   
   if (is.null(sub_location)) {
     # Check if there are multiple sub_locations for this parameter_code, location regardless of sub_location. If so, throw a stop
-    sub_loc_check <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+    sub_loc_check <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND sub_location_id IS NOT NULL;"))
     if (nrow(sub_loc_check) > 1) {
       stop("There are multiple sub-locations for this location and parameter. Please specify a sub-location.")
     }
@@ -240,18 +240,6 @@ plotTimeseries <- function(location,
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
     }
   }
-
-  if (is.null(record_rate)) { # period_type may or may not be NULL
-    if (is.null(period_type)) { #both record_rate and period_type are NULL
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
-    } else { #period_type is not NULL but record_rate is
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = '", period_type, "';"))
-    }
-  } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
-  } else { #both record_rate and period_type are not NULL
-    exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
-  }
   
   # Narrow down by z if necessary
   if (!is.null(z)) {
@@ -288,7 +276,7 @@ plotTimeseries <- function(location,
         temp <- exist_check[exist_check$record_rate == "year", ]
       }
     }
-    if (nrow(temp) > 0) {
+    if (nrow(temp) > 1) {
       exist_check <- temp
       if (is.null(period_type)) {
         warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the period_type as NULL, selecting the one(s) with the most frequent period type.")
@@ -485,7 +473,7 @@ plotTimeseries <- function(location,
   }
   trace_data <- trace_data[order(trace_data$datetime),]
   
-  if (!is.null(filter)) { # Use the same approach as in plotOverlap to filter the value column
+  if (!is.null(filter)) { # Use the same approach as in ggplotOverlap to filter the value column
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
@@ -516,7 +504,7 @@ plotTimeseries <- function(location,
   plot <- plotly::plot_ly()
   if (historic_range) {
     plot <- plot %>%
-      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#FFE9C3"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
+      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#5f9da6"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
       plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("#D4ECEF"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
   

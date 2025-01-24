@@ -2,11 +2,11 @@
 % Please edit documentation in R/plotOverlap.R
 \name{plotOverlap}
 \alias{plotOverlap}
-\alias{hydrometContinuous}
 \title{Plot of overlapping years or portions thereof}
 \usage{
 plotOverlap(
   location,
+  sub_location = NULL,
   parameter,
   record_rate = NULL,
   startDay = 1,
@@ -15,60 +15,21 @@ plotOverlap(
   years = NULL,
   datum = TRUE,
   title = TRUE,
-  custom_title = NULL,
   filter = NULL,
-  historic_range = "all",
-  returns = "auto",
-  return_type = "max",
-  return_months = c(5:9),
-  return_max_year = NULL,
-  allowed_missing = 10,
+  historic_range = "last",
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
   gridx = FALSE,
   gridy = TRUE,
-  legend = TRUE,
-  save_path = NULL,
   con = NULL,
-  continuous_data = NULL,
-  snowbulletin = FALSE,
-  lang = "en"
-)
-
-hydrometContinuous(
-  location,
-  parameter,
-  record_rate = NULL,
-  startDay = 1,
-  endDay = 365,
-  tzone = "MST",
-  years = NULL,
-  datum = TRUE,
-  title = TRUE,
-  custom_title = NULL,
-  filter = NULL,
-  historic_range = "all",
-  returns = "auto",
-  return_type = "max",
-  return_months = c(5:9),
-  return_max_year = NULL,
-  allowed_missing = 10,
-  line_scale = 1,
-  axis_scale = 1,
-  legend_scale = 1,
-  gridx = FALSE,
-  gridy = TRUE,
-  legend = TRUE,
-  save_path = NULL,
-  con = NULL,
-  continuous_data = NULL,
-  snowbulletin = FALSE,
   lang = "en"
 )
 }
 \arguments{
 \item{location}{The location for which you want a plot.}
+
+\item{sub_location}{Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).}
 
 \item{parameter}{The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.}
 
@@ -80,27 +41,15 @@ hydrometContinuous(
 
 \item{tzone}{The timezone to use for graphing. Only really evident for a small number of days.}
 
-\item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year. Currently, only 1 year can be provided for when other data is provided to function.}
+\item{years}{The years to plot. If \code{startDay} and \code{endDay} cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.}
 
 \item{datum}{Should a vertical datum be applied to the data, if available? TRUE or FALSE.}
 
 \item{title}{Should a title be included?}
 
-\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
-
 \item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
 \item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
-
-\item{returns}{Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".}
-
-\item{return_type}{Use minimum ("min") or maximum ("max") values for returns?}
-
-\item{return_months}{Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within \code{startDay} and \code{endDay}, but will only consider data up to the last year specified in \code{years}. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of \code{\link[fasstr:calc_annual_extremes]{fasstr::calc_annual_extremes()}} and also used to set the 'water_year_start' parameter of this function.}
-
-\item{return_max_year}{The last year of data to consider when calculating returns. If left NULL behavior depends on parameter \code{historic_range}: if \code{historic_range} is set to 'last' defaults to the last year in \code{year} otherwise uses all data available. Automatically set to max(years) if \code{historic_range} is 'last', otherwise set to the current year.}
-
-\item{allowed_missing}{Allowable \% of data missing during the months specified in 'return_months' to still retain the year for analysis when calculating returns. Passed to 'allowed_missing' argument of \code{\link[fasstr:calc_annual_extremes]{fasstr::calc_annual_extremes()}}.}
 
 \item{line_scale}{A scale factor to apply to the size (width) of the lines. Default is 1.}
 
@@ -108,47 +57,19 @@ hydrometContinuous(
 
 \item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
 
-\item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
+\item{gridx}{Should grid lines be drawn on the x-axis? Default is FALSE}
 
-\item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
-
-\item{legend}{Should a legend (including text for min/max range and return periods) be added to the plot?}
-
-\item{save_path}{Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.}
+\item{gridy}{Should grid lines be drawn on the y-axis? Default is FALSE}
 
 \item{con}{A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.}
-
-\item{continuous_data}{A data.frame with the data to be plotted. Must contain the following columns: datetime, value.}
-
-\item{snowbulletin}{If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.}
 
 \item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
 }
 \value{
-A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
+An html plot.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Generate plots of water level/flow, snow pillows, or other continuous data present in the local hydrometric database generated by package AquaCache for any given start/end day of year. Integrates return periods if requested.
-
-Notice: in many cases, you're better off using the Shiny app at \code{\link[=YGwater]{YGwater()}} to generate and export your plot. Read on if you need additional control over the final product.
-
-This function plots data from the local hydrometric database (maintained by the AquaCache package) and yields consistent-looking plots for continuous data. This function can only plot what's in the database. Plots will include bands representing the historic min, max, and 25th-75th percentiles based on the last year of data requested. If necessary for performance, data may be down-sampled to daily means: see details.
-}
-\details{
-Superseded functions WRBfloods::levelPlot() and WRBfloods::flowPlot() can be used in the event that this function does not yield your desired graph, or if you cannot use the local database and must use data directly from the Water Survey of Canada.
-\subsection{Down sampling of data}{
-
-When requesting time periods where high-frequency (realtime) data is available, some of the data may be displayed as daily means instead to improve performance. Specifically, only day ranges of less than 60 days will have high-frequency data (61 days or more will be plotted with daily means). Additionally, daily means will be fetched once the number of high-frequency rows exceeds 20 000 after year specified under parameter \code{years} (this will plot up to two 60-day lines at 5 minute recording intervals). In all cases, high-frequency data will be fetched nearest to the specified \code{endDate}.
-}
-
-\subsection{Return periods:}{
-
-Return periods generated using the "calculate" option are calculated using all available after applying the parameter \code{return_max_year}. Extreme values are isolated for each year and passed to \code{\link[fasstr:compute_frequency_analysis]{fasstr::compute_frequency_analysis()}} using a Log Pearson Type 3 distribution and the method of moments to fit a curve to the distribution. Years (or rather periods within years; see below) missing more than the percentage of data specified in \code{allowed_missing} are excluded from consideration.
-
-As the time of year during which minimum or maximum values happen is variable and to prevent filtering out years that are missing irrelevant data (most rivers peak in spring, some peak in late summer, snow pack peaks in winter), the parameters return_months and allowed_missing should be carefully selected. This may require you to make a graph first to evaluate when the annual min/max of interest happens. Consider as well that you can ask for return periods specific for a month or season, such as return periods of minimum flows in September, or maximum flows in January. This also applies to levels or any other continuous parameter which this function can plot.
-
-If specifying the option "table", the function will attempt to find returns for the location within the package internal data. The returns contained there are from consultant work involving a detailed analysis of which data to keep/discard, as well as a human determination of the most appropriate distribution and curve fitting methods. The caveat here is that these tables are not necessarily up to date, that most locations have no calculated return periods, and that return periods only exist for water levels.
-}
+A pared-down, sped up, simplified version of the original \code{\link[=ggplotOverlap]{ggplotOverlap()}} function. Created for use with a simple Shiny application linked to the Flood Atlas, but will likely see other uses.
 }

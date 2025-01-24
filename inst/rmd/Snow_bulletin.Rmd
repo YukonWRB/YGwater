@@ -121,7 +121,7 @@ iceThickness <- function(cddf) {
 #### -------------------- A: snow scale/pillow plots ---------------------- ####
 snowbullpillow <- function(location, custom_title, year, number="", language="en", scale=scale_param) {
   
-  plot <- YGwater::hydrometContinuous(
+  plot <- YGwater::ggplotOverlap(
   location = location,
   parameter = "snow water equivalent",
   startDay = paste0(year, "-09-01"),
@@ -338,7 +338,7 @@ snowbullCDDF <- function(timeseries_id, custom_title, language="en",
     custom_title <- paste0("D: Cumulative Degree-Days of Freezing in ", custom_title)
   }
 
-  plot <- YGwater::hydrometContinuous(parameter= "CDDF", 
+  plot <- YGwater::ggplotOverlap(parameter= "CDDF", 
                                       startDay = "2023-09-01", 
                                       endDay = "2024-08-31",  
                                       years = c(year-1), 
@@ -374,7 +374,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
   flood <- data$flow_level_flood
   tryCatch({
   plot <-
-    YGwater::hydrometContinuous(
+    YGwater::ggplotOverlap(
       location = location,
       parameter = parameter,
       startDay = paste0(year, "-10-01"),

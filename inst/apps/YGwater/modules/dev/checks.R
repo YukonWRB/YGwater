@@ -96,7 +96,6 @@ checks <- function(id, con) {
       data_filtered$sampleIds <- data_all$sampleIds
       data_filtered$stnGrps <- data_all$stnGrps
       data_filtered$stns <- data_all$stns
-      print(input$selected_checks)
     })
     
     # Observer to update selectizeInputs

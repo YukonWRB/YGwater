@@ -31,7 +31,7 @@ floodAtlas <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
   source(system.file("apps/floodAtlas/floodAtlas_globals.R", package = "YGwater"))
   floodAtlas_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass)
   
-  
-  
+enableBookmarking("url")
+
   shiny::runApp(appDir, display.mode = "normal", host = host, port = port)
 }
