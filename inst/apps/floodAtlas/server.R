@@ -6,37 +6,32 @@
 #' @noRd
 
 
-# http://127.0.0.1:5328/?_inputs_&yrs=%222025%22&param_code=1165&loc_code=%2209EA004%22&lang=%22en%22
+# http://127.0.0.1:5637/?_inputs_&info=0&yrs=2024&param_code=1165&loc_code="09AB004"&lang="en"
 
 app_server <- function(input, output, session) {
   
   # Initial setup #############################################################
   
-  
-  # Automatically update URL every time an input changes
-  observe({
-    cleaned_inputs <- reactiveValuesToList(input)
-    
-    # Remove unwanted characters (e.g., backslashes and extra quotes) from specific inputs
-    cleaned_inputs$loc_code <- gsub("[\"\\\\]", "", input$loc_code)
-    cleaned_inputs$lang <- gsub("[\"\\\\]", "", input$lang)
-    if (!is.null(input$yrs)) {
-      cleaned_inputs$yrs <- paste(input$yrs, collapse = ",")  # Join multiple years into a clean string
-    }
-    
-    # Update the input values with cleaned versions
-    updateTextInput(session, "loc_code", value = cleaned_inputs$loc_code)
-    updateTextInput(session, "lang", value = cleaned_inputs$lang)
-    updateSelectizeInput(session, "yrs", selected = input$yrs)
-    
-    session$doBookmark()
-  })
   # Remove irrelevant bookmarks
   setBookmarkExclude(c("plot_plotly", "error", "explain", "redo", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
   
+  # Automatically update URL every time an input changes
+  observe({
+    req(input$loc_code, input$param_code, input$yrs, input$lang)
+    session$doBookmark()
+  })
+
   # Update the query string
   onBookmarked(updateQueryString)
   
+    # Clean and save parameters into the URL bookmark
+  # onBookmarked(function(state) {
+  #   state$values$loc_code <- gsub("[\"\\\\]", "", input$loc_code)
+  #   state$values$param_code <- input$param_code
+  #   state$values$yrs <- paste(input$yrs, collapse = ",")
+  #   state$values$lang <- gsub("[\"\\\\]", "", input$lang)
+  # })
+
   # Parse URL query parameters on app load
   params <- reactiveValues()
   observeEvent(session, {
@@ -79,7 +74,7 @@ app_server <- function(input, output, session) {
   # Debounce the 'yrs' input
   debounced_years <- reactive({
     input$yrs
-  }) %>% debounce(300) # delay in ms
+  }) %>% debounce(600) # delay in ms
   
   # Update the years if the user changes them
   observeEvent(debounced_years(), {

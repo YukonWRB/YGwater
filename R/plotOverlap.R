@@ -30,14 +30,14 @@
 #' @export
 
 
-# location <- "09AB004"
+# location <- "09EA004"
 # sub_location <- NULL
 # parameter <- "water level"
 # record_rate = NULL
 # startDay <- 1
 # endDay <- 365
 # tzone <- "MST"
-# years <- c(2022)
+# years <- c(2024)
 # datum <- TRUE
 # title <- TRUE
 # filter <- 20
@@ -380,7 +380,7 @@ plotOverlap <- function(location,
   # Find out where values need to be filled in with daily means
   if (length(dates) > 0) {
     for (i in 1:length(dates)) {
-      toDate <- as.Date(dates[i]) #convert to plain date to check if there are any datetimes with that plain date in the data.frame
+      toDate <- as.Date(dates[i]) # convert to plain date to check if there are any datetimes with that plain date in the data.frame
       if (!(toDate %in% as.Date(realtime$datetime))) {
         row <- daily[daily$datetime == dates[i] , c("datetime", "value")]
         realtime <- rbind(realtime, row)
@@ -390,6 +390,12 @@ plotOverlap <- function(location,
   if (nrow(realtime) == 0) {
     stop("There is no data to plot within this range of years and days. If you're wanting a plot overlaping the new year, remember that the last year requested should be the *December* year.")
   }
+  
+  # Fill in any missing hours in realtime with NAs
+  all_times <- seq(min(realtime$datetime), max(realtime$datetime), by = "1 hour")
+  complete <- data.frame(datetime = all_times, value = NA)
+  complete[match(realtime$datetime, all_times) , ] <- realtime
+  realtime <- complete
   
   # Add the ribbon values ######################
   # Make the ribbon sequence
@@ -572,8 +578,6 @@ plotOverlap <- function(location,
       legend = list(font = list(size = legend_scale * 12))
     ) %>%
     plotly::config(locale = lang)
-  
-  plot
   
   return(plot)
 }
