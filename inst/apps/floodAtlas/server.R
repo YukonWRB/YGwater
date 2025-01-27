@@ -13,7 +13,7 @@ app_server <- function(input, output, session) {
   # Initial setup #############################################################
   
   # Remove irrelevant bookmarks
-  setBookmarkExclude(c("plot_plotly", "error", "explain", "redo", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
+  setBookmarkExclude(c("plot_plotly", "error", "info", "redo", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
   
   # Automatically update URL every time an input changes
   observe({
@@ -161,5 +161,32 @@ app_server <- function(input, output, session) {
       })
     })
   })
+  
+  # plot <- reactive({
+  #   req(params$loc_code, params$param_code, params$yrs, params$lang)
+  #   print("creating plot")
+  #   future::future(
+  #     plotOverlap(location = params$loc_code,
+  #                 sub_location = NULL,
+  #                 parameter = params$param_code,
+  #                 startDay = 1,
+  #                 endDay = 365,
+  #                 years = params$yrs,
+  #                 datum = FALSE,
+  #                 filter = 20,
+  #                 lang = params$lang,
+  #                 line_scale = 1,
+  #                 axis_scale = 1,
+  #                 legend_scale = 1,
+  #                 gridx = FALSE,
+  #                 gridy = FALSE,
+  #                 con = pool)
+  #   ) # End future
+  # }) # End reactive
+  # 
+  # output$plot_plotly <- plotly::renderPlotly({
+  #   print("rendering plot")
+  #   plot()
+  # })
   
 }

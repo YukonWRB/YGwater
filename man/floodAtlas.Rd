@@ -11,7 +11,8 @@ floodAtlas(
   dbName = "aquacache",
   dbHost = Sys.getenv("aquacacheHost"),
   dbUser = Sys.getenv("aquacacheUser"),
-  dbPass = Sys.getenv("aquacachePass")
+  dbPass = Sys.getenv("aquacachePass"),
+  server = FALSE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ floodAtlas(
 \item{dbUser}{Username for the aquacache database. Default is pulled from the .Renviron file.}
 
 \item{dbPass}{Password for the aquacache database. Default is pulled from the .Renviron file.}
+
+\item{server}{Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.}
 }
 \value{
 Opens a Shiny application.

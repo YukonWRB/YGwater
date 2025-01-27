@@ -7,7 +7,7 @@ floodAtlas_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUser,
   if (!exists("pool")) {
     pool <<- pool::dbPool(
       drv = RPostgres::Postgres(),
-      dbname = dbName,
+      dbname = ,
       host = dbHost,
       port = dbPort,
       user = dbUser,
