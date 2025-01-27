@@ -528,7 +528,6 @@ plotOverlap <- function(location,
   
   colors <- grDevices::colorRampPalette(c("#00454e", "#7A9A01", "#FFA900", "#DC4405"))(length(unique(realtime$plot_year)))
   for (i in unique(realtime$plot_year)) {
-    
     plot <- plotly::add_trace(plot,
                               data = realtime[realtime$plot_year == i, ],
                               x = ~fake_datetime,
@@ -539,7 +538,7 @@ plotOverlap <- function(location,
                               name = i,
                               color = I(colors[col_idx]),
                               hoverinfo = "text", 
-                              text = ~paste0(i, ": ", round(value, 4), " (", datetime, ")"))
+                              text = ~paste0(plot_year, ": ", round(value, 2), " (", datetime, ")"))
     col_idx <- col_idx + 1
   }
   
