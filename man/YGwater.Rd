@@ -13,13 +13,14 @@ YGwater(
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
   accessPath =
-    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB"
+    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
+  server = FALSE
 )
 }
 \arguments{
-\item{host}{Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in \code{port} to be open on the host machine.}
+\item{host}{Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in \code{port} to be open on the host machine. Ignored if \code{server} is set to TRUE (Shiny Server takes care of that).}
 
-\item{port}{Port number (numeric) on which to serve the app. Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network.}
+\item{port}{Port number (numeric) on which to serve the app. Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network. Ignored if \code{server} is set to TRUE (Shiny Server takes care of that).}
 
 \item{dbName}{Name of the aquacache database. Default is "aquacache".}
 
@@ -32,6 +33,8 @@ YGwater(
 \item{dbPass}{Password for the aquacache database. Default is pulled from the .Renviron file.}
 
 \item{accessPath}{Path to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.}
+
+\item{server}{Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.}
 }
 \value{
 Opens a Shiny application.

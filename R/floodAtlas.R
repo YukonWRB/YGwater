@@ -5,8 +5,8 @@
 #' 
 #' This application is designed for use by WRB or other YG staff, and is designed to allow greater flexibility and tune ability of plots and outputs than the public facing app (Streamline). In addition, certain portions of the application interface with databases other than aquacache such as EQWin or the snow database, and may allow for edit privileges to these databases. This app is also used to roll out new, experimental features before they are added to Streamline.
 #'
-#' @param host Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in `port` to be open on the host machine.
-#' @param port Port number (numeric). Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network.
+#' @param host Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in `port` to be open on the host machine. Ignored if `server` is set to TRUE (Shiny Server takes care of that).
+#' @param port Port number (numeric). Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network. Ignored if `server` is set to TRUE (Shiny Server takes care of that).
 #' @param dbName Name of the aquacache database. Default is "aquacache".
 #' @param dbHost Host address of the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbPort Port number of the aquacache database. Default is pulled from the .Renviron file.
@@ -48,7 +48,7 @@ floodAtlas <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
   source(system.file("apps/floodAtlas/floodAtlas_globals.R", package = "YGwater"))
   floodAtlas_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass)
   
-  enableBookmarking("url")
+  shiny::enableBookmarking("url")
 
   if (server) {
     shiny::shinyAppDir(appDir)

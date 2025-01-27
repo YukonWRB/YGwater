@@ -30,14 +30,14 @@
 #' @export
 
 
-# location <- "09EA004"
+# location <- "09AB004"
 # sub_location <- NULL
 # parameter <- "water level"
 # record_rate = NULL
 # startDay <- 1
 # endDay <- 365
 # tzone <- "MST"
-# years <- c(2024)
+# years <- c(2024, 2023, 2022, 2021)
 # datum <- TRUE
 # title <- TRUE
 # filter <- 20
@@ -351,7 +351,7 @@ plotOverlap <- function(location,
     }
     end_UTC <- end
     attr(end_UTC, "tzone") <- "UTC"
-    if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance
+    if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance (rest is populated with daily means. Gives 3 years of data at 1 hour intervals)
       new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       if (nrow(new_realtime) > 20000) {
         new_realtime <- new_realtime[order(new_realtime$datetime) , ]
@@ -361,6 +361,11 @@ plotOverlap <- function(location,
         dates <- c(dates, new_dates)
       }
       if (nrow(new_realtime) > 0) {
+        # Fill in any missing hours in realtime with NAs
+        all_times <- seq(min(new_realtime$datetime), max(new_realtime$datetime), by = "1 hour")
+        complete <- data.frame(datetime = all_times, value = NA)
+        complete[match(new_realtime$datetime, all_times) , ] <- new_realtime
+        new_realtime <- complete
         realtime <- rbind(realtime, new_realtime)
         get_daily <- FALSE
       } else {
@@ -390,12 +395,6 @@ plotOverlap <- function(location,
   if (nrow(realtime) == 0) {
     stop("There is no data to plot within this range of years and days. If you're wanting a plot overlaping the new year, remember that the last year requested should be the *December* year.")
   }
-  
-  # Fill in any missing hours in realtime with NAs
-  all_times <- seq(min(realtime$datetime), max(realtime$datetime), by = "1 hour")
-  complete <- data.frame(datetime = all_times, value = NA)
-  complete[match(realtime$datetime, all_times) , ] <- realtime
-  realtime <- complete
   
   # Add the ribbon values ######################
   # Make the ribbon sequence
@@ -514,6 +513,9 @@ plotOverlap <- function(location,
     }
   }
   
+  # Order realtime
+  realtime <- realtime[order(realtime$datetime, decreasing = TRUE), ]
+  
   #### ----------------------------- Make the plot -------------------------- ####
   # Create basic plot with historic range
   
@@ -523,6 +525,8 @@ plotOverlap <- function(location,
   
   # Add traces
   col_idx <- 1
+  
+  colors <- grDevices::colorRampPalette(c("#00454e", "#7A9A01", "#FFA900", "#DC4405"))(length(unique(realtime$plot_year)))
   for (i in unique(realtime$plot_year)) {
     
     plot <- plotly::add_trace(plot,
@@ -533,7 +537,7 @@ plotOverlap <- function(location,
                               mode = "lines",
                               line = list(width = 2.5 * line_scale),
                               name = i,
-                              color = I(grDevices::colorRampPalette(c("#00454e", "#7A9A01", "#FFA900", "#DC4405"))(length(unique(realtime$plot_year)))[col_idx]),
+                              color = I(colors[col_idx]),
                               hoverinfo = "text", 
                               text = ~paste0(i, ": ", round(value, 4), " (", datetime, ")"))
     col_idx <- col_idx + 1

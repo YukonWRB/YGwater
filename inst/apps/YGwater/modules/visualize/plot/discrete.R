@@ -3,10 +3,10 @@ discretePlotUI <- function(id) {
   sidebarLayout(
     sidebarPanel(
       # Toggle for data source
-      radioButtons(ns("data_source"),
+      shinyjs::hidden(radioButtons(ns("data_source"),
                    NULL,
                    choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
-                   selected = "AC"),
+                   selected = "AC")),
       uiOutput(ns("EQWin_source_ui")),
       # start and end datetime
       dateRangeInput(ns("date_range"),
@@ -205,20 +205,25 @@ discretePlotServer <- function(id, mdb_files, AquaCache, language) {
     
     ns <- session$ns  # Used to create UI elements within the server code
     
-    EQWin_selector <- reactiveVal(FALSE)
+    EQWin_selector <- reactiveVal(FALSE)  # flags whether the EQWin source UI is already rendered
+
+      if (!is.null(mdb_files)) {
+        shinyjs::delay(100, shinyjs::show("data_source"))
+      }
+    
     observeEvent(input$data_source, {
       if (input$data_source == "AC") {
-        shinyjs::hide("EQWin_source")
+        shinyjs::hide("EQWin_source_ui")
       } else {
-        if (!EQWin_selector()) {
-          EQWin_selector(TRUE)
+        if (!EQWin_selector()) { # Only renders the ui element once
           output$EQWin_source_ui <- renderUI({
-            selectizeInput(ns("EQWin_source"), "EQWin database", choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
+            selectizeInput(ns("EQWin_source_ui"), "EQWin database", choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
           })
+          EQWin_selector(TRUE)
         }
-        shinyjs::show("EQWin_source")
+        shinyjs::show("EQWin_source_ui")
       }
-    })
+    }, ignoreInit = TRUE)
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
@@ -252,15 +257,6 @@ discretePlotServer <- function(id, mdb_files, AquaCache, language) {
       data$EQ_param_grps <- EQ_param_grps
       data$EQ_stds <- EQ_stds
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-
-
-    observe({
-      if (is.null(mdb_files)) {
-        shinyjs::hide("data_source")
-        shinyjs::hide("EQWin_source")
-        updateRadioButtons(session, "data_source", selected = "AC")
-      }
-    })
     
     
     

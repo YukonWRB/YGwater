@@ -50,6 +50,8 @@ app_server <- function(input, output, session) {
       sub <-  gsub("[[:punct:]]", "", query$lang)
       params$lang <- sub
       updateTextInput(session, "lang", value = params$lang)
+      updateActionButton(session, "info", label = if (params$lang == "en") "Plot info" else "Info sur le graphique")
+      updateSelectizeInput(session, "yrs", label = if (params$lang == "en") "Add years" else "Ajouter des années")
     }
     if (!is.null(query$yrs)) {
       sub_yrs <- gsub("[[:punct:]]", "", query$yrs)
@@ -74,7 +76,7 @@ app_server <- function(input, output, session) {
   # Debounce the 'yrs' input
   debounced_years <- reactive({
     input$yrs
-  }) %>% debounce(600) # delay in ms
+  }) %>% debounce(500) # delay in ms
   
   # Update the years if the user changes them
   observeEvent(debounced_years(), {
