@@ -10,13 +10,14 @@
 #' @param target_date The target date of the snow survey, given in the form yyyy-mm-dd as a text string or Date object. Example: for the march snow survey of 2024, target_date = '2024-03-01'
 #' @param circuit The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, NorthSlope, OldCrow, PellyFarm, Ross, SLakes, Teslin, Watson, Whitehorse, and YEC. "all" will create a workbook for all circuits.
 #' @param save_path The path where you want the circuit workbook(s) saved. Default "choose" lets you pick your folder.
+#' @param snowCon A snow database connection object, if you have one. If not, the function will attempt to connect to the snow database using function [snowConnect()] and close the connection when finished.
 #' 
 #' @return A snow survey template called template_test (currently) for the specified circuit and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
 #'
 #' @export
 #'
 
-createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose") {
+createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose", snowCon = NULL) {
   
   if (save_path == "choose") {
     if (!interactive()) {
@@ -48,7 +49,6 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     circuits <- circuit
   }
   
-  snowCon_flag <- TRUE # sets flag so that snow DB connection is attempted at start. If fails, flag is set to FALSE and function continues without DB connection for subsequent circuits
   for (circuit in circuits) {
     
     template <- openxlsx::loadWorkbook(system.file("snow_survey/SnowSurveyTemplate.xlsx", package = "YGwater")) # reloaded each time to start from original
@@ -80,7 +80,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     } else if (circuit == "watson") {
       courses <- c("Frances River", "Hyland River B", "Hyland Snow Scale", "Watson Lake Airport") # Hyland River does not exist in aquacache db, but is in snow db
     } else if (circuit == "whitehorse") { # Buckbrush snow scales is not in snow db. Whitehorse Airport is actually Whitehorse Airport A
-      courses <- c("Buckbrush Snow Pillow", "Mt McIntyre B", "Whitehorse Airport", "Whitehorse Airport B")
+      courses <- c("Buckbrush Snow Pillow", "Mt McIntyre B", "Whitehorse Airport", "Whitehorse Airport B_Ice Lake")
     } else if (circuit == "yec") {
       courses <- c("Aishihik Lake", "Canyon Lake")
     } else {
@@ -88,20 +88,38 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
     }
     
     ## Get maintenance for all courses
-    if (snowCon_flag) {
-      tryCatch({
-        con <- snowConnect(silent = TRUE)
-        maintenance <- DBI::dbGetQuery(con, paste0("SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance ",
-                                                   "INNER JOIN locations ON maintenance.location = locations.location " ,
-                                                   "WHERE completed = FALSE AND name IN ('", paste(courses, collapse = "', '"), "') ",
-                                                   "AND completed = FALSE"))
-        try(DBI::dbDisconnect(con))
-      }, error = function(e) {
-        snowCon_flag <<- FALSE
-        warning("Could not connect to snow database. Maintenance information will not be included in the report. Do you have the correct credentials in your .Renviron file?")
-      })
-    }
-    
+      if (is.null(snowCon)) { # Create new connection
+        tryCatch({
+          snowCon <- snowConnect(silent = TRUE)
+          maintenance <- DBI::dbGetQuery(snowCon, paste0("SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance ",
+                                                     "INNER JOIN locations ON maintenance.location = locations.location " ,
+                                                     "WHERE completed = FALSE AND name IN ('", paste(courses, collapse = "', '"), "') ",
+                                                     "AND completed = FALSE"))
+          DBI::dbDisconnect(snowCon)
+          snowCon_flag <- TRUE
+        }, error = function(e) {
+          snowCon_flag <<- FALSE
+          warning("Could not connect to snow database. Maintenance information will not be included in the report. Do you have the correct credentials in your .Renviron file?")
+        })
+      } else { # Use existing connection (don't close it afterwards)
+        # Check that the existing connection is valid
+        check <- DBI::dbGetQuery(snowCon, "SELECT 1")
+        if (nrow(check) == 0) {
+          snowCon_flag <<- FALSE
+          warning("Existing snow database connection is invalid. Maintenance information will not be included in the report.")
+        } else {
+          tryCatch({
+            maintenance <- DBI::dbGetQuery(snowCon, paste0("SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance ",
+                                                           "INNER JOIN locations ON maintenance.location = locations.location " ,
+                                                           "WHERE completed = FALSE AND name IN ('", paste(courses, collapse = "', '"), "') ",
+                                                           "AND completed = FALSE"))
+            snowCon_flag <- TRUE
+          }, error = function(e) {
+            snowCon_flag <<- FALSE
+            warning("Could not connect to snow database with the connection you provided. Maintenance information will not be included in the report.")
+          }) # End tryCatch
+        }
+      }
     
     #### ------------ Add sheet for each snow course of the circuit ----------- ####
     # Put courses in alphabetical order
