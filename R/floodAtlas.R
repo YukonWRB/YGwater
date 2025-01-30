@@ -31,11 +31,11 @@ floodAtlas <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
   # future::plan(multisession)
 
   # If on Windows OS OR running interactively, use multisession, else use multicore
-  if (Sys.info()["sysname"] == "Windows" | interactive()) {
-    future::plan("multisession")
-  } else {
-    future::plan("multicore")
-  }
+  # if (Sys.info()["sysname"] == "Windows" | interactive()) {
+  #   future::plan("multisession")
+  # } else {
+  #   future::plan("multicore")
+  # }
 
     
   appDir <- system.file("apps/floodAtlas", package = "YGwater")
