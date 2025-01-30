@@ -20,8 +20,7 @@
 #' @seealso [waterInfo()] for a similar function dealing with water flow/level.
 #' @export
 #'
-#TODO: This function should really be getting data from the hydro database.
-
+#'
 snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", stats = TRUE, complete_yrs = TRUE, plots = TRUE, plot_type = "combined", quiet = FALSE, con = NULL) {
 
   # parameters for testing (remember to comment out when done)
@@ -65,48 +64,58 @@ if (is.null(con)) {
   }
   
   if (locations[1] == "all") {
-    locations <- DBI::dbGetQuery(con, "SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
-FROM locations AS l
-JOIN locations_networks AS ln ON l.location_id = ln.location_id
-JOIN networks AS n ON ln.network_id = n.network_id
-JOIN timeseries AS t ON l.location_id = t.location_id
-JOIN datum_conversions AS d ON l.location_id = d.location_id
-WHERE n.name = 'Snow Survey Network'
-AND t.category = 'discrete';
+    locations <- DBI::dbGetQuery(con, "
+    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    FROM locations AS l
+    JOIN locations_networks AS ln ON l.location_id = ln.location_id
+    JOIN networks AS n ON ln.network_id = n.network_id
+    JOIN samples AS s ON l.location_id = s.location_id
+    JOIN datum_conversions AS d ON l.location_id = d.location_id
+    WHERE n.name = 'Snow Survey Network';
 ")
     all <- TRUE
   } else {
-    loc_tbl <- DBI::dbGetQuery(con, paste0("SELECT DISTINCT l.location, l.name, l.location_id
-FROM locations AS l
-JOIN locations_networks AS ln ON l.location_id = ln.location_id
-JOIN networks AS n ON ln.network_id = n.network_id
-JOIN timeseries AS t ON l.location_id = t.location_id
-WHERE n.name = 'Snow Survey Network'
-AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "', '"), "');
+    loc_tbl <- DBI::dbGetQuery(con, paste0("
+    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    FROM locations AS l
+    JOIN locations_networks AS ln ON l.location_id = ln.location_id
+    JOIN networks AS n ON ln.network_id = n.network_id
+    JOIN samples AS s ON l.location_id = s.location_id
+    JOIN datum_conversions AS d ON l.location_id = d.location_id
+    WHERE n.name = 'Snow Survey Network';
 "))
     check_locs <- loc_tbl$location[!(loc_tbl$location %in% locations)]
     if (length(check_locs) > 0) {
-      message("Could not find a record for location ", check_locs, ". Other locations will be returned.")
+      message("Could not find a record for location ", check_locs, ". All other locations will be returned.")
     }
     locations <- loc_tbl[loc_tbl$location %in% locations , ]
+    all <- FALSE
   }
 
   #Get the measurements
-  tsids <- DBI::dbGetQuery(con, paste0("SELECT t.timeseries_id, t.location_id, t.end_datetime, p.param_name, l.location FROM timeseries as T JOIN parameters as p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location = l.location WHERE t.location_id IN ('", paste(locations$location_id, collapse = "', '"), "')"))
-  
-  meas <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value, timeseries_id FROM measurements_discrete WHERE timeseries_id IN (", paste(tsids$timeseries_id, collapse = ", "), ")"))
 
-  if (!inactive) { #Filter out the inactive stations if inactive is FALSE
-    remove <- tsids[tsids$end_datetime < Sys.time() - 365*60*60*24*5, ]
-    locations <- locations[!locations$location_id %in% remove$location_id,]
-    meas <- meas[!meas$timeseries_id %in% remove$timeseries_id, ]
+  samples <- DBI::dbGetQuery(con, paste0("SELECT sample_id, location_id, target_datetime FROM samples WHERE location_id IN ('", paste(locations$location_id, collapse = "', '"), "') AND media_id = 7 AND collection_method = 1"))#media = 'atmospheric', collection_method = 'observation'
+  
+  if (!inactive) { # Filter out any location with no measurements for 5 or more years
+    inactive <- samples %>%
+      dplyr::group_by(location_id) %>%
+      dplyr::summarise(min_year = min(lubridate::year(target_datetime)),
+                       max_year = max(lubridate::year(target_datetime))) %>%
+      dplyr::mutate(inactive = max_year - min_year < 5) %>%
+      dplyr::filter(inactive) %>%
+      dplyr::pull(location_id)
+    
+    locations <- locations[!locations$location_id %in% inactive,]
+    samples <- samples[!samples$location_id %in% inactive,]
   }
+  
+  results <- DBI::dbGetQuery(con, paste0("SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('", paste(samples$sample_id, collapse = "', '"), "') AND p.parameter_id IN (21, 1220)"))
 
   #Manipulate/preprocess things a bit
-  meas$year <- lubridate::year(meas$target_date)
-  meas$month <- lubridate::month(meas$target_date)
+  samples$year <- lubridate::year(samples$target_datetime)
+  samples$month <- lubridate::month(samples$target_datetime)
   
-  meas <- merge(meas, tsids, by = "timeseries_id")
+  results <- merge(results, samples, by = "sample_id")
   
   if (stats) {
     #Calculate station basic stats: min, max, mean, median, total yrs, gaps

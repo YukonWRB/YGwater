@@ -13,7 +13,7 @@ app_server <- function(input, output, session) {
   # Initial setup #############################################################
   
   # Remove irrelevant bookmarks
-  setBookmarkExclude(c("plot_plotly", "error", "explain", "redo", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
+  setBookmarkExclude(c("plot_plotly", "error", "info", "redo", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
   
   # Automatically update URL every time an input changes
   observe({
@@ -23,14 +23,6 @@ app_server <- function(input, output, session) {
 
   # Update the query string
   onBookmarked(updateQueryString)
-  
-    # Clean and save parameters into the URL bookmark
-  # onBookmarked(function(state) {
-  #   state$values$loc_code <- gsub("[\"\\\\]", "", input$loc_code)
-  #   state$values$param_code <- input$param_code
-  #   state$values$yrs <- paste(input$yrs, collapse = ",")
-  #   state$values$lang <- gsub("[\"\\\\]", "", input$lang)
-  # })
 
   # Parse URL query parameters on app load
   params <- reactiveValues()
@@ -50,6 +42,8 @@ app_server <- function(input, output, session) {
       sub <-  gsub("[[:punct:]]", "", query$lang)
       params$lang <- sub
       updateTextInput(session, "lang", value = params$lang)
+      updateActionButton(session, "info", label = if (params$lang == "en") "Plot info" else "Info sur le graphique")
+      updateSelectizeInput(session, "yrs", label = if (params$lang == "en") "Add years" else "Ajouter des années")
     }
     if (!is.null(query$yrs)) {
       sub_yrs <- gsub("[[:punct:]]", "", query$yrs)
@@ -74,7 +68,7 @@ app_server <- function(input, output, session) {
   # Debounce the 'yrs' input
   debounced_years <- reactive({
     input$yrs
-  }) %>% debounce(600) # delay in ms
+  }) %>% debounce(500) # delay in ms
   
   # Update the years if the user changes them
   observeEvent(debounced_years(), {
@@ -161,5 +155,32 @@ app_server <- function(input, output, session) {
       })
     })
   })
+  
+  # plot <- reactive({
+  #   req(params$loc_code, params$param_code, params$yrs, params$lang)
+  #   print("creating plot")
+  #   future::future(
+  #     plotOverlap(location = params$loc_code,
+  #                 sub_location = NULL,
+  #                 parameter = params$param_code,
+  #                 startDay = 1,
+  #                 endDay = 365,
+  #                 years = params$yrs,
+  #                 datum = FALSE,
+  #                 filter = 20,
+  #                 lang = params$lang,
+  #                 line_scale = 1,
+  #                 axis_scale = 1,
+  #                 legend_scale = 1,
+  #                 gridx = FALSE,
+  #                 gridy = FALSE,
+  #                 con = pool)
+  #   ) # End future
+  # }) # End reactive
+  # 
+  # output$plot_plotly <- plotly::renderPlotly({
+  #   print("rendering plot")
+  #   plot()
+  # })
   
 }

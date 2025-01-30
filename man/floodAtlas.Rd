@@ -11,13 +11,14 @@ floodAtlas(
   dbName = "aquacache",
   dbHost = Sys.getenv("aquacacheHost"),
   dbUser = Sys.getenv("aquacacheUser"),
-  dbPass = Sys.getenv("aquacachePass")
+  dbPass = Sys.getenv("aquacachePass"),
+  server = FALSE
 )
 }
 \arguments{
-\item{host}{Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in \code{port} to be open on the host machine.}
+\item{host}{Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in \code{port} to be open on the host machine. Ignored if \code{server} is set to TRUE (Shiny Server takes care of that).}
 
-\item{port}{Port number (numeric). Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network.}
+\item{port}{Port number (numeric). Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network. Ignored if \code{server} is set to TRUE (Shiny Server takes care of that).}
 
 \item{dbPort}{Port number of the aquacache database. Default is pulled from the .Renviron file.}
 
@@ -28,6 +29,8 @@ floodAtlas(
 \item{dbUser}{Username for the aquacache database. Default is pulled from the .Renviron file.}
 
 \item{dbPass}{Password for the aquacache database. Default is pulled from the .Renviron file.}
+
+\item{server}{Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.}
 }
 \value{
 Opens a Shiny application.

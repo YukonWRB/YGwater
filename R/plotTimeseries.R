@@ -19,7 +19,7 @@
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
-#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range be plotted? Default is TRUE.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param line_scale A scale factor to apply to the size (width) of the line. Default is 1.
@@ -477,7 +477,7 @@ plotTimeseries <- function(location,
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "discharge, river/stream", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
+      if (parameter %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
         trace_data[trace_data$value < 0 & !is.na(trace_data$value),"value"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         trace_data[trace_data$value < -100 & !is.na(trace_data$value),"value"] <- NA

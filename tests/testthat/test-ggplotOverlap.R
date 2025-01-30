@@ -33,7 +33,7 @@ test_that("continuous level plot is as expected for full year with character sta
 })
 
 test_that("continuous flow plot is as expected for full year with numeric startDay and endDay", {
-  plot <- ggplotOverlap("09EA004", "discharge, river/stream", startDay = 1, endDay = 365, years = "2022", save_path = NULL, historic_range = "last")
+  plot <- ggplotOverlap("09EA004", "flow", startDay = 1, endDay = 365, years = "2022", save_path = NULL, historic_range = "last")
   vdiffr::expect_doppelganger("full num start/end", plot)
 })
 

@@ -1,0 +1,36 @@
+Last edited: 2025-01-29
+
+App is currently available on Shiny Server, but in rough state.
+
+To do:
+1. Finish incorporation of 'public' parameter, which can now be set T/F when calling YGwater(). This sets the 'config' global param so it can be used in the UI as well as server files.
+  - At present, only used to show/hide login button
+  
+2. Fix location/ loc code update for continuous plots (and check if same issue holds for discrete plots)
+
+3. Enable asynchronous plot/report/map generation so as to not block other users. Two options:
+  a) ExtendedTask. This allows a task to be sent to a worker and allows the user's session as well as other user's session to remain reactive (so the user can continue to navigate, click, etc.) https://shiny.posit.co/r/articles/improve/nonblocking/
+  b) Asynchronous programming using promises and futures. This also sends a task to a worker, but the user's session is blocked until execution is done. However, other users are not blocked. https://shiny.posit.co/r/articles/improve/async/ and https://posit.co/blog/shiny-1-1-0/
+  
+  Both options are likely necessary, as it's sometimes desirable to force a user to wait until a task is complete before doing other things. However, for things like long-running report generation, it would be nice if the user could navigate elsewhere
+  
+4. Make a proper landing page instead of going straight to the map.
+
+5. Add an 'About' page with info about the app, repo link, contact info, bug report tool (that captures app state)
+
+6. Work through url bookmarking reactivity
+
+7. Make links within app:
+  - From map pages to data, plots, images
+  - From plots to data
+  
+8. Make a 'quick list' of common data download requests such as:
+  - Snow survey results
+  - Water quality results
+  - Water level results
+  
+9. Create data download page
+
+10. Create document view/download page
+
+11. Create metadata view page (tables in app, but could also enable direct download of table using DT)
