@@ -15,7 +15,7 @@
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
-#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
@@ -500,7 +500,7 @@ plotOverlap <- function(location,
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "discharge, river/stream", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
+      if (parameter %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
         realtime[realtime$value < 0 & !is.na(realtime$value),"value"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         realtime[realtime$value < -100 & !is.na(realtime$value),"value"] <- NA

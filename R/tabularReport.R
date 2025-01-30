@@ -56,11 +56,11 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   if (!is.null(flow_locations)) {
     if (flow_locations[1] == "default") {
       flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
-      flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name = 'discharge, river/stream' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
+      flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name = 'flow' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
     } else if (flow_locations[1] == "all") {
-      flow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name = 'discharge, river/stream' ORDER BY location;")
+      flow_locations <- DBI::dbGetQuery(con, "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name = 'flow' ORDER BY location;")
     } else {
-      flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name = 'discharge, river/stream' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
+      flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name = 'flow' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
     }
   }
 
@@ -89,10 +89,10 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   if (!is.null(precip_locations)) {
     if (precip_locations[1] == "default") {
       precip_locations <- c("08AA003", "08AA010", "08AB001", "09AA001", "09AA004", "09AA013", "09AB001", "09AB010", "09AC001", "09AE002", "09AH001", "09AH004", "09BC001", "09BC002", "09CA002", "09DC005", "09DC006", "09EA003", "09EB001", "09FC001", "09FD002", "10AA001", "10AD002", "10MA002", "10BE001")
-      precip_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name IN ('water level', 'discharge, river/stream') AND t.location IN ('", paste(precip_locations, collapse = "', '"), "') ORDER BY location;"))[,1]
+      precip_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name IN ('water level', 'flow') AND t.location IN ('", paste(precip_locations, collapse = "', '"), "') ORDER BY location;"))[,1]
       precip_locations <- unique(precip_locations)
     } else if (precip_locations[1] == "all") {
-      precip_locations <- DBI::dbGetQuery(con, "SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name IN ('water level', 'discharge, river/stream') ORDER BY location;")[,1]
+      precip_locations <- DBI::dbGetQuery(con, "SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name IN ('water level', 'flow') ORDER BY location;")[,1]
       precip_locations <- unique(precip_locations)
     }
   }

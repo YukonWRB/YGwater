@@ -64,7 +64,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
   end_date <- as.POSIXct(end_date)
   attr(end_date, "tzone") <- "UTC"
   
-  params <- DBI::dbGetQuery(con, "SELECT parameter_id, param_name FROM parameters WHERE param_name IN ('water level', 'discharge, river/stream')")
+  params <- DBI::dbGetQuery(con, "SELECT parameter_id, param_name FROM parameters WHERE param_name IN ('water level', 'flow')")
 
   #select the locations
   if (locations[1] == "all") {
@@ -78,19 +78,19 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
     for (i in unique(locs$location)) {
       sub <- locs[locs$location == i ,]
       if (nrow(sub) > 1) {
-        if (params[params$param_name == "discharge, river/stream", "parameter_id"] %in% sub$parameter_id) {
+        if (params[params$param_name == "flow", "parameter_id"] %in% sub$parameter_id) {
           level_end <- sub[sub$parameter_id == params[params$param_name == "water level", "parameter_id"], "end_datetime"]
           if (level_end > end_date) {
             level_end <- end_date
           }
-          flow_end <- sub[sub$parameter_id == params[params$param_name == "discharge, river/stream", "parameter_id"], "end_datetime"]
+          flow_end <- sub[sub$parameter_id == params[params$param_name == "flow", "parameter_id"], "end_datetime"]
           if (flow_end > end_date) {
             flow_end <- end_date
           }
           if (flow_end > level_end - 6*30*24*60*60) { #check if last flow is recent enough
             locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name == "water level", "parameter_id"]) , ] #drop level
           } else {
-            locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name =="discharge, river/stream", "parameter_id"]) , ] #drop flow
+            locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name =="flow", "parameter_id"]) , ] #drop flow
           }
         }
       }
@@ -211,7 +211,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
         plot <- plot +
           ggplot2::geom_point(ggplot2::aes(y = .data$Max_1_Day), color = "red3") +
           ggplot2::geom_line(ggplot2::aes(y = .data$Max_1_Day), linewidth = 0.1, color = "red3")
-        if (params[params$parameter_id == sub(".*_", "", i), "param_name"] == "discharge, river/stream") {
+        if (params[params$parameter_id == sub(".*_", "", i), "param_name"] == "flow") {
           plot <- plot +
             ggplot2::labs(y = "Annual extreme value (log scale)", title = paste0(sub("_.*", "", i), ": " , name), subtitle = paste0("Parameter: ", params[params$parameter_id == sub(".*_", "", i), "param_name"], ", m3/s")) +
             ggplot2::scale_y_log10()
