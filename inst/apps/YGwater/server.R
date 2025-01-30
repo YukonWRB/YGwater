@@ -49,6 +49,12 @@ app_server <- function(input, output, session) {
     addImgs = FALSE,
     visit = FALSE)
   
+  observe({
+    print("updating available languages")
+    available_languages <- names(translations)[-c(1,2)]  # Get available languages dynamically
+    session$sendCustomMessage("updateLangMenu", available_languages)
+  })
+
   ## database connections ###########
   # Initial database connections without edit privileges
   if (dir.exists(config$accessPath)) {
@@ -57,17 +63,6 @@ app_server <- function(input, output, session) {
     if (length(mdb_files) == 0) {
       mdb_files <- NULL
     }
-    # # Try to connect 
-    # tryCatch({
-    #   EQWin <- AccessConnect(config$accessPath)
-    #   valid <- DBI::dbGetQuery(EQWin, "SELECT 1;")
-    #   if (nrow(valid) == 0) {
-    #     EQWin <- NULL
-    #   }
-    #   print("Connected to EQWin")
-    # }, error = function(e) {
-    #   EQWin <<- NULL
-    # })
   } else {
     mdb_files <- NULL
   }
@@ -107,6 +102,7 @@ Shiny.onInputChange('userLang', language);
 console.log(language);")
     }
   })
+  
   # Check if userLang contains en or fr in the string and set the language accordingly
   observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
     if (substr(input$userLang , 1, 2) == "en") {
@@ -138,8 +134,9 @@ console.log(language);")
   user_logged_in <- reactiveVal(FALSE) # Reactive value to track login status
   
   ## Log in #########
+  # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
   observeEvent(input$loginBtn, {
-    if (log_attempts() > 3) {
+    if (log_attempts() > 5) {
       showModal(modalDialog(
         title = "Login Failed",
         "You've exceeded the maximum number of login attempts.",

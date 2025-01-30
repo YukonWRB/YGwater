@@ -12,7 +12,7 @@
 #' @param save_path The path where you want the circuit workbook(s) saved. Default "choose" lets you pick your folder.
 #' @param snowCon A snow database connection object, if you have one. If not, the function will attempt to connect to the snow database using function [snowConnect()] and close the connection when finished.
 #' 
-#' @return A snow survey template called template_test (currently) for the specified circuit and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
+#' @return A snow survey template for the specified circuit(s) and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
 #'
 #' @export
 #'

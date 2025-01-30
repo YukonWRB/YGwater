@@ -21,7 +21,7 @@ createSnowTemplate(
 \item{snowCon}{A snow database connection object, if you have one. If not, the function will attempt to connect to the snow database using function \code{\link[=snowConnect]{snowConnect()}} and close the connection when finished.}
 }
 \value{
-A snow survey template called template_test (currently) for the specified circuit and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
+A snow survey template for the specified circuit(s) and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}

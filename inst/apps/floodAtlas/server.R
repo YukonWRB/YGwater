@@ -23,14 +23,6 @@ app_server <- function(input, output, session) {
 
   # Update the query string
   onBookmarked(updateQueryString)
-  
-    # Clean and save parameters into the URL bookmark
-  # onBookmarked(function(state) {
-  #   state$values$loc_code <- gsub("[\"\\\\]", "", input$loc_code)
-  #   state$values$param_code <- input$param_code
-  #   state$values$yrs <- paste(input$yrs, collapse = ",")
-  #   state$values$lang <- gsub("[\"\\\\]", "", input$lang)
-  # })
 
   # Parse URL query parameters on app load
   params <- reactiveValues()

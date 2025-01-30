@@ -14,7 +14,8 @@ YGwater(
   dbPass = Sys.getenv("aquacachePass"),
   accessPath =
     "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
-  server = FALSE
+  server = FALSE,
+  public = TRUE
 )
 }
 \arguments{
@@ -35,6 +36,8 @@ YGwater(
 \item{accessPath}{Path to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.}
 
 \item{server}{Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.}
+
+\item{public}{TRUE restricts or doesn't create some UI elements that are not intended for public use. Default is TRUE.}
 }
 \value{
 Opens a Shiny application.

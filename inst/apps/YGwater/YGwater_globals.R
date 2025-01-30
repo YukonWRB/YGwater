@@ -1,4 +1,4 @@
-YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RLS_pass, accessPath) {
+YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RLS_pass, accessPath, public) {
   
   library(shiny)
   library(shinyjs)
@@ -60,14 +60,16 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1))
   
   # Establish database connection parameters
-  # The actual connection is being done at the server level for YGwater. This allows using a login input form to connect to the database with edit privileges.
+  # The actual connection is being done at the server level for YGwater. This allows using a login input form to connect to the database with edit privileges or to see additional elements
+  # double assignment creates a global variable that can be accessed by all UI and server functions
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,
     dbPort = dbPort,
     dbUser = dbUser,
     dbPass = dbPass,
-    accessPath = accessPath
+    accessPath = accessPath,
+    public = public
   )
 }
 

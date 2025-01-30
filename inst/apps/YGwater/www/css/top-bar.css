@@ -60,3 +60,18 @@
 .selectize-dropdown {
   z-index: 1050 !important; /* Ensure the dropdown overlays other content */
 }
+
+/* highlight selected language in the dropdown */
+.dropdown-menu li.active a {
+    font-weight: bold;
+    background-color: #f8f9fa;
+}
+
+/* remove the top bar container (with logos) below x screen size
+This might not work in RStudio's viewer and definitely won't work on old IE8 or lower browsers (but who uses that anyways). Current being implemented by the 'class' argument of the fluidRow
+@media only screen and (max-width: 1500px) {
+  .top-bar-container {
+    display: none !important;
+  }
+}
+*/

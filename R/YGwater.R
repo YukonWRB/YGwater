@@ -14,11 +14,12 @@
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
 #' @param accessPath Path to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
+#' @param public TRUE restricts or doesn't create some UI elements that are not intended for public use. Default is TRUE.
 #' 
 #' @return Opens a Shiny application.
 #' @export
 
-YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbName = "aquacache", dbHost = Sys.getenv("aquacacheHost"), dbPort = Sys.getenv("aquacachePort"), dbUser = Sys.getenv("aquacacheUser"), dbPass = Sys.getenv("aquacachePass"), accessPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB", server = FALSE){
+YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbName = "aquacache", dbHost = Sys.getenv("aquacacheHost"), dbPort = Sys.getenv("aquacachePort"), dbUser = Sys.getenv("aquacacheUser"), dbPass = Sys.getenv("aquacachePass"), accessPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB", server = FALSE, public = TRUE){
   
   rlang::check_installed("shiny", reason = "required to use YGwater app")
   rlang::check_installed("shinyjs", reason = "required to use YGwater app")
@@ -37,7 +38,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   
   # Load the global variables, library calls, and possibly in future a connection to the DB.
   source(system.file("apps/YGwater/YGwater_globals.R", package = "YGwater"))
-  YGwater_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass, accessPath = accessPath)
+  YGwater_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass, accessPath = accessPath, public = public)
   
   shiny::enableBookmarking(store = "url")  # Enable bookmarking
   
