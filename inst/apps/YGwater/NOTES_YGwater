@@ -34,7 +34,3 @@ To do:
 10. Create document view/download page
 
 11. Create metadata view page (tables in app, but could also enable direct download of table using DT)
-
-12. Remove all header based on screen size as it's very cluttered and takes too much vertical space on phones. May require language selector to be in navbar; see below
-
-13. Explore placing language selector in navbar (to the extreme right)

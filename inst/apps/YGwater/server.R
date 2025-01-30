@@ -49,12 +49,6 @@ app_server <- function(input, output, session) {
     addImgs = FALSE,
     visit = FALSE)
   
-  observe({
-    print("updating available languages")
-    available_languages <- names(translations)[-c(1,2)]  # Get available languages dynamically
-    session$sendCustomMessage("updateLangMenu", available_languages)
-  })
-
   ## database connections ###########
   # Initial database connections without edit privileges
   if (dir.exists(config$accessPath)) {
@@ -94,38 +88,42 @@ app_server <- function(input, output, session) {
   # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
   languageSelection <- reactiveValues() # holds language and abbreviation
   
+  # Populate the language selection dropdown
+  session$sendCustomMessage("updateLangMenu", names(translations)[-c(1,2)])
+  
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
     if (!isRestoring()) {
-      shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
-Shiny.onInputChange('userLang', language);
-console.log(language);")
+      shinyjs::runjs("
+      var language =  window.navigator.userLanguage || window.navigator.language;
+      console.log('Detected browser language: ' + language);
+      Shiny.setInputValue('userLang', language, {priority: 'event'});
+                     ")
     }
   })
   
+  # Set initial language based on browser language
   # Check if userLang contains en or fr in the string and set the language accordingly
   observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
-    if (substr(input$userLang , 1, 2) == "en") {
-      updateSelectizeInput(session, "langSelect", selected = "English")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
-    } else if (substr(input$userLang , 1, 2) == "fr") {
-      updateSelectizeInput(session, "langSelect", selected = "Français")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "fr"))  # Updates the language in the web page html head.
-      
-    } else {
-      updateSelectizeInput(session, "langSelect", selected = "English")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
-    }
+    print("running")
+    print(input$userLang)
+    lang_code <- substr(input$userLang, 1, 2)
+    
+    selected_lang <- if (lang_code == "fr") "Français" else "English"
+    
+    # Send the selected language to JavaScript so it updates input$langSelect
+    session$sendCustomMessage(type = 'setSelectedLanguage', message = selected_lang)
+    
+    # Also update the HTML <head> for language settings
+    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(lang_code == "fr", "fr", "en")))
   }, ignoreInit = TRUE, ignoreNULL = TRUE)
   
   # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
+  # Observe user selection of language
   observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
     if (input$langSelect %in% names(translations)[-c(1,2)]) {
       languageSelection$language <- input$langSelect
     }
-  })
-  
-  observe({ # Find the abbreviation for use in the 'titleCase' function
     languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
   })
   
@@ -346,7 +344,9 @@ $(document).keyup(function(event) {
       # Show relevant tabs for viz mode
       showTab(inputId = "navbar", target = "plot")
       showTab(inputId = "navbar", target = "map")
-      showTab(inputId = "navbar", target = "FOD")
+      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
+        showTab(inputId = "navbar", target = "FOD")
+      }
       showTab(inputId = "navbar", target = "gen")
       showTab(inputId = "navbar", target = "img")
       # don't show 'admin' tab unless logged in

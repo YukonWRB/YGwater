@@ -2,7 +2,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   library(shiny)
   library(shinyjs)
-  
+
   # 'Admin' side modules ###
   source(system.file("apps/YGwater/modules/admin/admin.R", package = "YGwater"))
   
@@ -62,6 +62,10 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # Establish database connection parameters
   # The actual connection is being done at the server level for YGwater. This allows using a login input form to connect to the database with edit privileges or to see additional elements
   # double assignment creates a global variable that can be accessed by all UI and server functions
+  
+  # confirm G drive access
+  g_drive <- dir.exists("//env-fs/env-data/corp/water")
+  
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,
@@ -69,7 +73,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     dbUser = dbUser,
     dbPass = dbPass,
     accessPath = accessPath,
-    public = public
+    public = public,
+    g_drive = g_drive
   )
 }
 

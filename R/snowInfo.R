@@ -20,8 +20,7 @@
 #' @seealso [waterInfo()] for a similar function dealing with water flow/level.
 #' @export
 #'
-#TODO: This function should really be getting data from the hydro database.
-
+#'
 snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", stats = TRUE, complete_yrs = TRUE, plots = TRUE, plot_type = "combined", quiet = FALSE, con = NULL) {
 
   # parameters for testing (remember to comment out when done)
@@ -65,30 +64,32 @@ if (is.null(con)) {
   }
   
   if (locations[1] == "all") {
-    locations <- DBI::dbGetQuery(con, "SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
-FROM locations AS l
-JOIN locations_networks AS ln ON l.location_id = ln.location_id
-JOIN networks AS n ON ln.network_id = n.network_id
-JOIN timeseries AS t ON l.location_id = t.location_id
-JOIN datum_conversions AS d ON l.location_id = d.location_id
-WHERE n.name = 'Snow Survey Network'
-AND t.category = 'discrete';
+    locations <- DBI::dbGetQuery(con, "
+    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    FROM locations AS l
+    JOIN locations_networks AS ln ON l.location_id = ln.location_id
+    JOIN networks AS n ON ln.network_id = n.network_id
+    JOIN samples AS s ON l.location_id = s.location_id
+    JOIN datum_conversions AS d ON l.location_id = d.location_id
+    WHERE n.name = 'Snow Survey Network';
 ")
     all <- TRUE
   } else {
-    loc_tbl <- DBI::dbGetQuery(con, paste0("SELECT DISTINCT l.location, l.name, l.location_id
-FROM locations AS l
-JOIN locations_networks AS ln ON l.location_id = ln.location_id
-JOIN networks AS n ON ln.network_id = n.network_id
-JOIN timeseries AS t ON l.location_id = t.location_id
-WHERE n.name = 'Snow Survey Network'
-AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "', '"), "');
+    loc_tbl <- DBI::dbGetQuery(con, paste0("
+    SELECT DISTINCT l.location, l.name, l.location_id
+    FROM locations AS l
+    JOIN locations_networks AS ln ON l.location_id = ln.location_id
+    JOIN networks AS n ON ln.network_id = n.network_id
+    JOIN timeseries AS t ON l.location_id = t.location_id
+    WHERE n.name = 'Snow Survey Network'
+    AND t.parameter_id IN (1220, 21) AND l.location IN ('", paste(locations, collapse = "', '"), "');
 "))
     check_locs <- loc_tbl$location[!(loc_tbl$location %in% locations)]
     if (length(check_locs) > 0) {
-      message("Could not find a record for location ", check_locs, ". Other locations will be returned.")
+      message("Could not find a record for location ", check_locs, ". All other locations will be returned.")
     }
     locations <- loc_tbl[loc_tbl$location %in% locations , ]
+    all <- FALSE
   }
 
   #Get the measurements
