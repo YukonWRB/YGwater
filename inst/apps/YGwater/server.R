@@ -105,8 +105,6 @@ app_server <- function(input, output, session) {
   # Set initial language based on browser language
   # Check if userLang contains en or fr in the string and set the language accordingly
   observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
-    print("running")
-    print(input$userLang)
     lang_code <- substr(input$userLang, 1, 2)
     
     selected_lang <- if (lang_code == "fr") "Français" else "English"
