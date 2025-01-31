@@ -125,7 +125,7 @@ app_ui <- function(request) {
   });
 </script>"),
     tags$head(
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc - comes after the navbarPage because otherwise the navbarPage css overrides it
     )
   ) # End fluidPage
 }
