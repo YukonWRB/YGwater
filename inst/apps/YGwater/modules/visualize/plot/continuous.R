@@ -137,11 +137,10 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
     output$main <- renderUI({
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
-        actionButton(ns("full_screen"),
-                     "Full screen")
+        uiOutput(ns("full_screen_ui"))
       ) # End tagList
     }) %>% # End renderUI
-      bindEvent(language$language, data) # Re-render the UI if the language or data changes
+      bindEvent(language$language) # Re-render the UI if the language or data changes
     
     observeEvent(input$param, {
       # Update the location choices
@@ -818,7 +817,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
                                             end_date = input$end_date,
                                             historic_range = input$historic_range,
                                             datum = input$apply_datum,
-                                            filter = filter,
+                                            filter = if (input$plot_filter) 20 else NULL,
                                             lang = plot_aes$lang,
                                             line_scale = plot_aes$line_scale,
                                             axis_scale = plot_aes$axis_scale,
@@ -835,7 +834,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
                                        end_date = input$end_date,
                                        historic_range = input$historic_range,
                                        datum = input$apply_datum,
-                                       filter = filter,
+                                       filter = if (input$plot_filter) 20 else NULL,
                                        lang = plot_aes$lang,
                                        line_scale = plot_aes$line_scale,
                                        axis_scale = plot_aes$axis_scale,
@@ -856,7 +855,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
                                         end_date = input$end_date,
                                         historic_range = input$historic_range,
                                         datum = input$apply_datum,
-                                        filter = filter,
+                                        filter = if (input$plot_filter) 20 else NULL,
                                         lang = plot_aes$lang,
                                         line_scale = plot_aes$line_scale,
                                         axis_scale = plot_aes$axis_scale,
@@ -877,8 +876,6 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
         output$full_screen_ui <- renderUI({
           actionButton(ns("full_screen"), "Full screen")
         })
-        
-        shinyjs::show("full_screen")
       }, error = function(e) {
         showModal(modalDialog(paste0("An error occurred while creating the plot. Please check your inputs and try again.\n  \n  Error: ", e$message), easyClose = TRUE))
         return()
