@@ -37,3 +37,5 @@ To do:
 
 
 12. Speed up translations/text selection by using the new function t() in the globals.
+
+13. Explore safety of using <<- for database connection. See line 75 in the main server.
