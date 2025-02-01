@@ -68,7 +68,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   names(translation_cache) <<- setdiff(names(translations)[-2], "id")
 
   # Make a helper function, send to global environment
-  t <<- function(key, lang) {
+  tr <<- function(key, lang) {
     translation_cache[[lang]][[key]]  # list 'lang', item 'key'
   }
   

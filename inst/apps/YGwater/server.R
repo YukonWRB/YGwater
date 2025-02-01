@@ -121,8 +121,8 @@ app_server <- function(input, output, session) {
   observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
     if (input$langSelect %in% names(translation_cache)) {
       languageSelection$language <- input$langSelect
-      languageSelection$abbrev <- t("titleCase", languageSelection$language)
-      session$sendCustomMessage("updateTitle", t("title", languageSelection$language)) # Update the title of the app based on the selected language
+      languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+      session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the title of the app based on the selected language
     }
   })
   

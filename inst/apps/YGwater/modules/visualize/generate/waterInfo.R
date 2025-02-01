@@ -37,10 +37,10 @@ waterInfoServer <- function(id, con, language) {
         tagList(
           # selector for one parameter (flow if exists, else level) or both
           selectizeInput(ns("param"),
-                         label = t("gen_waterInfo_param_select", language$language),
+                         label = tr("gen_waterInfo_param_select", language$language),
                          choices = stats::setNames(
                            c("one", "both"),
-                           c(t("gen_waterInfo_param_select_one", language$language), t("gen_waterInfo_param_select_both", language$language))
+                           c(tr("gen_waterInfo_param_select_one", language$language), tr("gen_waterInfo_param_select_both", language$language))
                          ), 
                          selected = selections$param,
                          multiple = FALSE,
@@ -48,11 +48,11 @@ waterInfoServer <- function(id, con, language) {
           
           # selector for location
           selectizeInput(ns("loc"), 
-                         label = t("gen_waterInfo_loc_select", language$language),
+                         label = tr("gen_waterInfo_loc_select", language$language),
                          choices = stats::setNames(
                            c("all", data$locs$location),
-                           c(t("all_locs", language$language),
-                             titleCase(data$locs[[t("generic_name_col", language$language)]], language$abbrev))
+                           c(tr("all_locs", language$language),
+                             titleCase(data$locs[[tr("generic_name_col", language$language)]], language$abbrev))
                          ),
                          selected = selections$loc,
                          multiple = TRUE,
@@ -60,26 +60,26 @@ waterInfoServer <- function(id, con, language) {
           
           # end date to use in calculations
           dateInput(ns("end"), 
-                    label = t("gen_waterInfo_end_date", language$language),
+                    label = tr("gen_waterInfo_end_date", language$language),
                     value = selections$end,
                     width = "100%"),
         
         # month ranges
         selectizeInput(ns("min_m"),
-                       label = t("gen_waterInfo_min_months", language$language),
+                       label = tr("gen_waterInfo_min_months", language$language),
                        choices = stats::setNames(
                          c(1:12),
-                         c(t("jan", language$language), t("feb", language$language), t("mar", language$language), t("apr", language$language), t("may", language$language), t("jun", language$language), t("jul", language$language), t("aug", language$language), t("sep", language$language), t("oct", language$language), t("nov", language$language), t("dec", language$language))
+                         c(tr("jan", language$language), tr("feb", language$language), tr("mar", language$language), tr("apr", language$language), tr("may", language$language), tr("jun", language$language), tr("jul", language$language), tr("aug", language$language), tr("sep", language$language), tr("oct", language$language), tr("nov", language$language), tr("dec", language$language))
                        ),
                        selected = selections$min_m,
                        multiple = TRUE,
                        width = "100%"),
         
         selectizeInput(ns("max_m"),
-                       label = t("gen_waterInfo_max_months", language$language),
+                       label = tr("gen_waterInfo_max_months", language$language),
                        choices = stats::setNames(
                          c(1:12),
-                         c(t("jan", language$language), t("feb", language$language), t("mar", language$language), t("apr", language$language), t("may", language$language), t("jun", language$language), t("jul", language$language), t("aug", language$language), t("sep", language$language), t("oct", language$language), t("nov", language$language), t("dec", language$language))
+                         c(tr("jan", language$language), tr("feb", language$language), tr("mar", language$language), tr("apr", language$language), tr("may", language$language), tr("jun", language$language), tr("jul", language$language), tr("aug", language$language), tr("sep", language$language), tr("oct", language$language), tr("nov", language$language), tr("dec", language$language))
                        ),
                        selected = selections$max_m,
                        multiple = TRUE,
@@ -87,7 +87,7 @@ waterInfoServer <- function(id, con, language) {
         
         # percent allowed missing
         numericInput(ns("prct"),
-                     label = t("gen_waterInfo_prct_miss", language$language),
+                     label = tr("gen_waterInfo_prct_miss", language$language),
                      min = 1,
                      max = 100,
                      value = selections$prct,
@@ -95,23 +95,23 @@ waterInfoServer <- function(id, con, language) {
         
         # Generate plots?
         checkboxInput(ns("plots"),
-                      label = t("gen_waterInfo_plots", language$language),
+                      label = tr("gen_waterInfo_plots", language$language),
                       value = selections$plots,
                       width = "100%"),
         
         # Type of plot
         selectizeInput(ns("ptype"),
-                       label = t("gen_waterInfo_ptype", language$language),
+                       label = tr("gen_waterInfo_ptype", language$language),
                        choices = stats::setNames(
                          c("combined", "separate"),
-                         c(t("gen_waterInfo_ptype_combine", language$language), t("gen_waterInfo_ptype_separate", language$language))
+                         c(tr("gen_waterInfo_ptype_combine", language$language), tr("gen_waterInfo_ptype_separate", language$language))
                        ),
                        selected = selections$ptype,
                        multiple = FALSE,
                        width = "100%"),
         
         # Make it happen
-        actionButton(ns("go"), label = t("create_report", language$language)),
+        actionButton(ns("go"), label = tr("create_report", language$language)),
         downloadButton(ns("download"), "download", style = "visibility: hidden;") # Hidden; triggered automatically but left hidden if 'go' is successful
       
         ) # End tagList
@@ -169,7 +169,7 @@ waterInfoServer <- function(id, con, language) {
       observeEvent(input$go, {
         tryCatch({
           withProgress(
-            message = t("generating_working", language$language), 
+            message = tr("generating_working", language$language), 
             value = 0, 
             {
               incProgress(0.2)
