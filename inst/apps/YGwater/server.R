@@ -114,15 +114,16 @@ app_server <- function(input, output, session) {
     
     # Also update the HTML <head> for language settings
     session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(lang_code == "fr", "fr", "en")))
-  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+  }, ignoreInit = TRUE, ignoreNULL = TRUE, once = TRUE) # This observeEvent should only run once when the app is loaded.
   
   # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
   # Observe user selection of language
   observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
-    if (input$langSelect %in% names(translations)[-c(1,2)]) {
+    if (input$langSelect %in% names(translation_cache)) {
       languageSelection$language <- input$langSelect
+      languageSelection$abbrev <- t("titleCase", languageSelection$language)
+      session$sendCustomMessage("updateTitle", t("title", languageSelection$language)) # Update the title of the app based on the selected language
     }
-    languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
   })
   
   # Log in/out for edits ##########################################
