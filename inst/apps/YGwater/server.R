@@ -176,7 +176,9 @@ $(document).keyup(function(event) {
       return()
     }
     tryCatch({
+      # DRop old connection
       DBI::dbDisconnect(AquaCache)
+      # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
       AquaCache <<- AquaConnect(name = config$dbName, 
                                 host = config$dbHost,
                                 port = config$dbPort,
@@ -248,6 +250,7 @@ $(document).keyup(function(event) {
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
+        # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
         AquaCache <<- AquaConnect(name = config$dbName, 
                                   host = config$dbHost,
                                   port = config$dbPort,
@@ -265,6 +268,7 @@ $(document).keyup(function(event) {
       ))
       # Check to see if the connection is still open, if not reconnect
       if (!DBI::dbIsValid(AquaCache)) {
+        # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
         AquaCache <<- AquaConnect(name = config$dbName, 
                                   host = config$dbHost,
                                   port = config$dbPort,
@@ -279,7 +283,6 @@ $(document).keyup(function(event) {
   ## Log out #####################################################
   observeEvent(input$logoutBtn, {
     
-    # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
     user_logged_in(FALSE)  # Set login status to FALSE
     # Hide the 'admin' tabs upon logout
     hideTab(inputId = "navbar", target = "admin")
@@ -289,7 +292,10 @@ $(document).keyup(function(event) {
     shinyjs::hide("logoutBtn")
     shinyjs::show("loginBtn")
     
+    # Drop old connection
     DBI::dbDisconnect(AquaCache)
+    
+    # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
     AquaCache <<- AquaConnect(name = config$dbName, 
                               host = config$dbHost,
                               port = config$dbPort,

@@ -47,7 +47,7 @@ app_ui <- function(request) {
     ),
     navbarPage(title = tags$a(
       class = "visible-xs", href = "#",
-      tags$img(src = "imgs/Yukon_logo.png", style = "height: 50px; margin-right: 10px;, margin-top: -30px")
+      tags$img(src = "imgs/Yukon_logo.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
     ),
     id = "navbar",
     theme = "css/bootstrap3.css",  # Note that this uses the 'bootstrap3' theme because of compatibility issues. The file 'bootstrap5.css' could be used if/when navbarPage is updated to use BS5. Also the default dark blue color has been changed to YG-specific colors.
