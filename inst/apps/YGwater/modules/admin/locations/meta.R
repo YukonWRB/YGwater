@@ -7,7 +7,7 @@ locsMetaUI <- function(id) {
   )
 }
 
-locsMetaServer <- function(id, AquaCache, data) {
+locsMetaServer <- function(id, data) {
   
   moduleServer(id, function(input, output, session) {
     

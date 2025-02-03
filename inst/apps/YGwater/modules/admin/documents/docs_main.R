@@ -7,7 +7,7 @@ addDocsUI <- function(id) {
   )
 }
 
-addDocs <- function(id, AquaCache) {
+addDocs <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

@@ -10,13 +10,13 @@ waterInfoUI <- function(id) {
   )
 }
 
-waterInfoServer <- function(id, con, language) {
+waterInfoServer <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
     
     data <- reactiveValues(
-      locs = dbGetQueryDT(con, "SELECT DISTINCT ts.location_id, ts.location, l.name, l.name_fr, ts.parameter_id, p.param_name, p.param_name_fr FROM timeseries AS ts JOIN parameters AS p ON ts.parameter_id = p.parameter_id JOIN locations AS l on ts.location_id = l.location_id WHERE ts.parameter_id IN (1150, 1165)")
+      locs = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT ts.location_id, ts.location, l.name, l.name_fr, ts.parameter_id, p.param_name, p.param_name_fr FROM timeseries AS ts JOIN parameters AS p ON ts.parameter_id = p.parameter_id JOIN locations AS l on ts.location_id = l.location_id WHERE ts.parameter_id IN (1150, 1165)")
     )
     
     # Create reactiveValues to store the user's selections. Used if switching between languages.
@@ -36,11 +36,11 @@ waterInfoServer <- function(id, con, language) {
         req(data, language$language, language$abbrev)
         tagList(
           # selector for one parameter (flow if exists, else level) or both
-          selectizeInput(ns("param"), 
-                         label = translations[id == "gen_waterInfo_param_select", get(language$language)][[1]], 
+          selectizeInput(ns("param"),
+                         label = tr("gen_waterInfo_param_select", language$language),
                          choices = stats::setNames(
                            c("one", "both"),
-                           c(translations[id == "gen_waterInfo_param_select_one", get(language$language)][[1]], translations[id == "gen_waterInfo_param_select_both", get(language$language)][[1]])
+                           c(tr("gen_waterInfo_param_select_one", language$language), tr("gen_waterInfo_param_select_both", language$language))
                          ), 
                          selected = selections$param,
                          multiple = FALSE,
@@ -48,14 +48,11 @@ waterInfoServer <- function(id, con, language) {
           
           # selector for location
           selectizeInput(ns("loc"), 
-                         label = translations[id == "gen_waterInfo_loc_select", get(language$language)][[1]],
+                         label = tr("gen_waterInfo_loc_select", language$language),
                          choices = stats::setNames(
                            c("all", data$locs$location),
-                           c(translations[id == "all_locs", get(language$language)][[1]],
-                             titleCase(
-                               data$locs[[translations[id == "generic_name_col", get(language$language)][[1]]]],
-                               language$abbrev)
-                           )
+                           c(tr("all_locs", language$language),
+                             titleCase(data$locs[[tr("generic_name_col", language$language)]], language$abbrev))
                          ),
                          selected = selections$loc,
                          multiple = TRUE,
@@ -63,26 +60,26 @@ waterInfoServer <- function(id, con, language) {
           
           # end date to use in calculations
           dateInput(ns("end"), 
-                    label = translations[id == "gen_waterInfo_end_date", get(language$language)][[1]], 
+                    label = tr("gen_waterInfo_end_date", language$language),
                     value = selections$end,
                     width = "100%"),
         
         # month ranges
         selectizeInput(ns("min_m"),
-                       label = translations[id == "gen_waterInfo_min_months", get(language$language)][[1]],
+                       label = tr("gen_waterInfo_min_months", language$language),
                        choices = stats::setNames(
                          c(1:12),
-                         c(translations[id == "jan", get(language$language)][[1]], translations[id == "feb", get(language$language)][[1]], translations[id == "mar", get(language$language)][[1]], translations[id == "apr", get(language$language)][[1]], translations[id == "may", get(language$language)][[1]], translations[id == "jun", get(language$language)][[1]], translations[id == "jul", get(language$language)][[1]], translations[id == "aug", get(language$language)][[1]], translations[id == "sep", get(language$language)][[1]], translations[id == "oct", get(language$language)][[1]], translations[id == "nov", get(language$language)][[1]], translations[id == "dec", get(language$language)][[1]])
+                         c(tr("jan", language$language), tr("feb", language$language), tr("mar", language$language), tr("apr", language$language), tr("may", language$language), tr("jun", language$language), tr("jul", language$language), tr("aug", language$language), tr("sep", language$language), tr("oct", language$language), tr("nov", language$language), tr("dec", language$language))
                        ),
                        selected = selections$min_m,
                        multiple = TRUE,
                        width = "100%"),
         
         selectizeInput(ns("max_m"),
-                       label = translations[id == "gen_waterInfo_max_months", get(language$language)][[1]],
+                       label = tr("gen_waterInfo_max_months", language$language),
                        choices = stats::setNames(
                          c(1:12),
-                         c(translations[id == "jan", get(language$language)][[1]], translations[id == "feb", get(language$language)][[1]], translations[id == "mar", get(language$language)][[1]], translations[id == "apr", get(language$language)][[1]], translations[id == "may", get(language$language)][[1]], translations[id == "jun", get(language$language)][[1]], translations[id == "jul", get(language$language)][[1]], translations[id == "aug", get(language$language)][[1]], translations[id == "sep", get(language$language)][[1]], translations[id == "oct", get(language$language)][[1]], translations[id == "nov", get(language$language)][[1]], translations[id == "dec", get(language$language)][[1]])
+                         c(tr("jan", language$language), tr("feb", language$language), tr("mar", language$language), tr("apr", language$language), tr("may", language$language), tr("jun", language$language), tr("jul", language$language), tr("aug", language$language), tr("sep", language$language), tr("oct", language$language), tr("nov", language$language), tr("dec", language$language))
                        ),
                        selected = selections$max_m,
                        multiple = TRUE,
@@ -90,7 +87,7 @@ waterInfoServer <- function(id, con, language) {
         
         # percent allowed missing
         numericInput(ns("prct"),
-                     label = translations[id == "gen_waterInfo_prct_miss", get(language$language)][[1]],
+                     label = tr("gen_waterInfo_prct_miss", language$language),
                      min = 1,
                      max = 100,
                      value = selections$prct,
@@ -98,24 +95,24 @@ waterInfoServer <- function(id, con, language) {
         
         # Generate plots?
         checkboxInput(ns("plots"),
-                      label = translations[id == "gen_waterInfo_plots", get(language$language)][[1]],
+                      label = tr("gen_waterInfo_plots", language$language),
                       value = selections$plots,
                       width = "100%"),
         
         # Type of plot
         selectizeInput(ns("ptype"),
-                       label = translations[id == "gen_waterInfo_ptype", get(language$language)][[1]],
+                       label = tr("gen_waterInfo_ptype", language$language),
                        choices = stats::setNames(
                          c("combined", "separate"),
-                         c(translations[id == "gen_waterInfo_ptype_combine", get(language$language)][[1]], translations[id == "gen_waterInfo_ptype_separate", get(language$language)][[1]])
+                         c(tr("gen_waterInfo_ptype_combine", language$language), tr("gen_waterInfo_ptype_separate", language$language))
                        ),
                        selected = selections$ptype,
                        multiple = FALSE,
                        width = "100%"),
         
         # Make it happen
-        actionButton(ns("go"), label = translations[id == "create_report", get(language$language)][[1]]),
-        downloadButton(ns("download"), "download", style = "visibility: hidden;") # Hidden; triggered automatically if 'go' is successful
+        actionButton(ns("go"), label = tr("create_report", language$language)),
+        downloadButton(ns("download"), "download", style = "visibility: hidden;") # Hidden; triggered automatically but left hidden if 'go' is successful
       
         ) # End tagList
       }) %>% # End renderUI
@@ -172,7 +169,8 @@ waterInfoServer <- function(id, con, language) {
       observeEvent(input$go, {
         tryCatch({
           withProgress(
-            message = translations[id == "generating_working", get(language$language)][[1]], value = 0, 
+            message = tr("generating_working", language$language), 
+            value = 0, 
             {
               incProgress(0.2)
               
@@ -185,7 +183,7 @@ waterInfoServer <- function(id, con, language) {
               
               # 3. Call waterInfo() so it writes all files to 'dir'
               suppressWarnings(waterInfo(
-                con = con,
+                con = session$userData$AquaCache,
                 locations = selections$loc,
                 level_flow = selections$param,
                 end_date = selections$end,

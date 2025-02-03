@@ -13,7 +13,7 @@ mapPrecipUI <- function(id) {
   )
 }
 
-mapPrecipServer <- function(id, AquaCache, data, language) {
+mapPrecipServer <- function(id, data, language) {
   moduleServer(id, function(input, output, session) {
     
   })

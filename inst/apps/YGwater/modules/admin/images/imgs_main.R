@@ -7,7 +7,7 @@ addImgsUI <- function(id) {
   )
 }
 
-addImgs <- function(id, AquaCache) {
+addImgs <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

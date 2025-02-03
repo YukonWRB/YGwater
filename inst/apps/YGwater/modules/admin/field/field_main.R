@@ -7,7 +7,7 @@ visitUI <- function(id) {
   )
 }
 
-visit <- function(id, AquaCache) {
+visit <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

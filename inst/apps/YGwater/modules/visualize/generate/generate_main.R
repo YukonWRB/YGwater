@@ -21,7 +21,7 @@ genUI <- function(id) {
   )
 }
 
-gen <- function(id, mdb_files, con, language) {
+gen <- function(id, mdb_files,language) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -62,7 +62,7 @@ gen <- function(id, mdb_files, con, language) {
           where = "beforeEnd",
           ui = WQReportUI(ns("WQReport"))
         )
-        WQReportServer("WQReport", mdb_files, con = con, language = language)
+        WQReportServer("WQReport", mdb_files, language = language)
       } 
       
       # snowInfo module
@@ -74,7 +74,7 @@ gen <- function(id, mdb_files, con, language) {
           where = "beforeEnd",
           ui = snowInfoUI(ns("snowInfo"))
         )
-        snowInfoServer("snowInfo", con = con, language = language)
+        snowInfoServer("snowInfo", language = language)
       }
       
       # waterInfo module
@@ -86,21 +86,10 @@ gen <- function(id, mdb_files, con, language) {
           where = "beforeEnd",
           ui = waterInfoUI(ns("waterInfo"))
         )
-        waterInfoServer("waterInfo", con = con, language = language)
+        waterInfoServer("waterInfo", language = language)
       }
       
-      # # basins module
-      # if (input$type == "basins" && !submodules$basins) {
-      #   submodules$basins <- TRUE
-      #   # Dynamically insert the UI
-      #   insertUI(
-      #     selector = paste0("#", ns("basins_placeholder")),
-      #     where = "beforeEnd",
-      #     ui = basinsUI(ns("basins"))
-      #   )
-      #   basinsServer("basins", con = con, language = language)
-      # }
-      
+
       # Show only the relevant module using shinyjs
       shinyjs::hide(selector = paste0("#", ns("WQ_placeholder")))
       shinyjs::hide(selector = paste0("#", ns("snowInfo_placeholder")))

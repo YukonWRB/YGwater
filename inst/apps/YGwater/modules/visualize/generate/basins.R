@@ -10,7 +10,7 @@ basinsUI <- function(id) {
   )
 }
 
-basinsServer <- function(id, AquaCache) {
+basinsServer <- function(id) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code

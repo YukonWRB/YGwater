@@ -28,8 +28,7 @@ floodAtlas <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOp
 
   # See this site for non-blocking, multi-core/session running: https://shiny.posit.co/r/articles/improve/nonblocking/
   # In comparison to promises/future, unblocks not just other sessions but the current session too. Might not be helpful here but definitely helpful when generating reports in other app.
-  # future::plan(multisession)
-
+  
   # If on Windows OS OR running interactively, use multisession, else use multicore
   # if (Sys.info()["sysname"] == "Windows" | interactive()) {
   #   future::plan("multisession")

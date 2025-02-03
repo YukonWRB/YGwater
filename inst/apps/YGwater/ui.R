@@ -11,6 +11,11 @@ app_ui <- function(request) {
     shinyjs::useShinyjs(),
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # Include the JavaScript file for full screen button
+      tags$script(HTML("
+      Shiny.addCustomMessageHandler('updateTitle', function(newTitle) {
+        document.title = newTitle;
+      });
+    ")),
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css") # Fonts
       # css for z index control is at the bottom because it must come after the css passed on silently by navbarPage
     ),
@@ -25,12 +30,12 @@ app_ui <- function(request) {
              column(3,
                     div(class = "logo",
                         htmltools::img(src = "imgs/Yukon_logo.png", .noWS = "outside", alt = "Yukon Government logo")
-                        ),
+                    ),
                     class = "logo-container"),
              column(9,
                     div(class = "aurora",
                         htmltools::img(src = "imgs/YG_Aurora_resized_flipped.png", .noWS = "outside", alt = "Aurora")
-                        ),
+                    ),
                     div(class = "login-container",
                         if (!config$public) { # 'public' is a global variable established in the globals file
                           div(class = "login-btn-container",
@@ -40,26 +45,29 @@ app_ui <- function(request) {
                     ),
                     class = "aurora-login-container")
     ),
-    navbarPage(title = NULL,
-               id = "navbar",
-               theme = "css/bootstrap3.css",  # Note that this uses the 'bootstrap3' theme because of compatibility issues. The file 'bootstrap5.css' could be used if/when navbarPage is updated to use BS5. Also the defaut dark blue color has been changed to YG-specific colors.
-               windowTitle = "Yukon Water Data Portal",
-               collapsible = TRUE,
-               fluid = TRUE,
-               lang = "en",
-               tabPanel(title = "Switch to View mode", value = "viz"),
-               tabPanel(title = "Map", value = "map",
-                        uiOutput("map_ui")),
-               tabPanel(title = "Plot", value = "plot", 
-                        uiOutput("plot_ui")),
-               if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
-                 tabPanel(title = "FOD comments", value = "FOD",
-                          uiOutput("fod_ui"))
-               },
-               tabPanel(title = "Generate", value = "gen",
-                        uiOutput("gen_ui")),
-               tabPanel(title = "View images", value = "img",
-                        uiOutput("img_ui")),
+    navbarPage(title = tags$a(
+      class = "visible-xs", href = "#",
+      tags$img(src = "imgs/Yukon_logo.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
+    ),
+    id = "navbar",
+    theme = "css/bootstrap3.css",  # Note that this uses the 'bootstrap3' theme because of compatibility issues. The file 'bootstrap5.css' could be used if/when navbarPage is updated to use BS5. Also the default dark blue color has been changed to YG-specific colors.
+    windowTitle = NULL,
+    collapsible = TRUE,
+    fluid = TRUE,
+    lang = "en",
+    tabPanel(title = "Switch to View mode", value = "viz"),
+    tabPanel(title = "Map", value = "map",
+             uiOutput("map_ui")),
+    tabPanel(title = "Plot", value = "plot", 
+             uiOutput("plot_ui")),
+    if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
+      tabPanel(title = "FOD comments", value = "FOD",
+               uiOutput("fod_ui"))
+    },
+    tabPanel(title = "Generate", value = "gen",
+             uiOutput("gen_ui")),
+    tabPanel(title = "View images", value = "img",
+             uiOutput("img_ui")),
     ), # End navbarPage (though it's modified below)
     
     # Insert language selector into the navbar
@@ -125,7 +133,7 @@ app_ui <- function(request) {
   });
 </script>"),
     tags$head(
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc - comes after the navbarPage because otherwise the navbarPage css overrides it
     )
   ) # End fluidPage
 }

@@ -128,7 +128,7 @@ locsNewTSUI <- function(id) {
   )
 }
 
-locsNewTSServer <- function(id, AquaCache) {
+locsNewTSServer <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

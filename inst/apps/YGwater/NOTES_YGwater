@@ -34,3 +34,6 @@ To do:
 10. Create document view/download page
 
 11. Create metadata view page (tables in app, but could also enable direct download of table using DT)
+
+
+12. Speed up translations/text selection by using the new function tr() in the globals.

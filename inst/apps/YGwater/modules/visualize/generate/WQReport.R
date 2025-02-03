@@ -192,7 +192,7 @@ WQReportUI <- function(id) {
   ) # End fluidPage
 } # End WQReportUI
 
-WQReportServer <- function(id, mdb_files, con, language) {
+WQReportServer <- function(id, mdb_files, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
@@ -232,8 +232,8 @@ WQReportServer <- function(id, mdb_files, con, language) {
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
-    # data$AC_locs <- DBI::dbGetQuery(con, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id")
-    # data$AC_params <- DBI::dbGetQuery(con, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id")
+    # data$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id")
+    # data$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id")
     
     observeEvent(input$EQWin_source, {
       EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
