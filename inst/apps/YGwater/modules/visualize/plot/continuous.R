@@ -32,7 +32,7 @@ continuousPlotServer <- function(id, data, language) {
       req(data, language$language, language$abbrev)
       tagList(
         selectizeInput(ns("type"), label = "Plot type", choices = c("Long timeseries", "Overlapping years"), selected = "Long timeseries"),
-        selectizeInput(ns("param"), label = "Plotting parameter", stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = values$water_level), #Choices are selected in the server
+        selectizeInput(ns("param"), label = "Plotting parameter", stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = values$water_level),
         selectizeInput(ns("loc_code"), "Select location by code", choices = NULL), # Choices are populated based on the parameter
         selectizeInput(ns("loc_name"), "Select location by name", choices = NULL), # Choices are populated based on the parameter
         
@@ -276,6 +276,17 @@ continuousPlotServer <- function(id, data, language) {
     runTraceNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
     observeEvent(input$add_trace, {
       # When the button is clicked, a modal will appear with the necessary fields to add a trace. The trace values are then displayed to the user under button 'trace_x'
+      # Make sure that there is an input$param, input$loc_code before running the modal; give the user an informative modal if not
+      if (nchar(input$loc_code) == 0 | nchar(input$param) == 0) {
+        showModal(modalDialog(
+          "Please select a location and parameter for the first trace before adding another.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
       
       if (runTraceNew() == FALSE) {
         showModal(modalDialog(
@@ -527,6 +538,18 @@ continuousPlotServer <- function(id, data, language) {
     runSubplotNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
     observeEvent(input$add_subplot, {
       # When the button is clicked, a modal will appear with the necessary fields to add a subplot. The subplot values are then displayed to the user under button 'subplot_x'
+      
+      # Make sure that there is an input$param, input$loc_code before running the modal; give the user an informative modal if not
+      if (nchar(input$loc_code) == 0 | nchar(input$param) == 0) {
+        showModal(modalDialog(
+          "Please select a location and parameter for the first subplot before adding another.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
       
       if (runSubplotNew() == FALSE) {
         showModal(modalDialog(
@@ -786,6 +809,10 @@ continuousPlotServer <- function(id, data, language) {
 
           if (input$type == "Overlapping years") {
 
+            if (nchar(input$loc_code) == 0) {
+              showModal(modalDialog("Please select a location.", easyClose = TRUE))
+              return()
+            }
             # return_months <- as.numeric(unlist(strsplit(input$return_months, ",")))
             
             plot <- plotOverlap(location = input$loc_code,
@@ -840,6 +867,10 @@ continuousPlotServer <- function(id, data, language) {
                                             shareY = input$shareY,
                                             con = session$userData$AquaCache)
               } else {
+                if (nchar(input$loc_code) == 0) {
+                  showModal(modalDialog("Please select a location.", easyClose = TRUE))
+                  return()
+                }
                 plot <- plotTimeseries(location = input$loc_code,
                                        parameter = as.numeric(input$param),
                                        start_date = input$start_date,
