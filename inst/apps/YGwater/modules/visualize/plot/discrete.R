@@ -10,7 +10,7 @@ discretePlotUI <- function(id) {
   )
 }
 
-discretePlotServer <- function(id, mdb_files, AquaCache, language) {
+discretePlotServer <- function(id, mdb_files, language) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -25,8 +25,8 @@ discretePlotServer <- function(id, mdb_files, AquaCache, language) {
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
     
-    data$AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT loc.location_id, loc.name FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
-    data$AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC")
+    data$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
+    data$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC")
     
     output$sidebar <- renderUI({
       tagList(
@@ -491,7 +491,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache, language) {
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
                                  dbSource = input$data_source,
-                                 dbCon = AquaCache)
+                                 dbCon = session$userData$AquaCache)
           }
           
           

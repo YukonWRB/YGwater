@@ -10,13 +10,13 @@ waterInfoUI <- function(id) {
   )
 }
 
-waterInfoServer <- function(id, con, language) {
+waterInfoServer <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
     
     data <- reactiveValues(
-      locs = dbGetQueryDT(con, "SELECT DISTINCT ts.location_id, ts.location, l.name, l.name_fr, ts.parameter_id, p.param_name, p.param_name_fr FROM timeseries AS ts JOIN parameters AS p ON ts.parameter_id = p.parameter_id JOIN locations AS l on ts.location_id = l.location_id WHERE ts.parameter_id IN (1150, 1165)")
+      locs = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT ts.location_id, ts.location, l.name, l.name_fr, ts.parameter_id, p.param_name, p.param_name_fr FROM timeseries AS ts JOIN parameters AS p ON ts.parameter_id = p.parameter_id JOIN locations AS l on ts.location_id = l.location_id WHERE ts.parameter_id IN (1150, 1165)")
     )
     
     # Create reactiveValues to store the user's selections. Used if switching between languages.
@@ -183,7 +183,7 @@ waterInfoServer <- function(id, con, language) {
               
               # 3. Call waterInfo() so it writes all files to 'dir'
               suppressWarnings(waterInfo(
-                con = con,
+                con = session$userData$AquaCache,
                 locations = selections$loc,
                 level_flow = selections$param,
                 end_date = selections$end,

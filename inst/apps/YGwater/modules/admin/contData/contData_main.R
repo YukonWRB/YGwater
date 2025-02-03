@@ -7,7 +7,7 @@ contDataUI <- function(id) {
   )
 }
 
-contData <- function(id, AquaCache) {
+contData <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

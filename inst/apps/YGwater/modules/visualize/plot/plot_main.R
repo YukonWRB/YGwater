@@ -14,7 +14,7 @@ plotUI <- function(id) {
   )
 }
 
-plot <- function(id, mdb_files, AquaCache, language) {
+plot <- function(id, mdb_files, language) {
   
   moduleServer(id, function(input, output, session) {
 
@@ -28,7 +28,7 @@ plot <- function(id, mdb_files, AquaCache, language) {
     shareData <- reactiveValues()
     
     if (!loaded$shareData) {
-      datums <- DBI::dbGetQuery(AquaCache, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
+      datums <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
       datums$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", datums$datum_name_en)
       datums$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", datums$datum_name_en)
       datums$datum_name_en <- gsub("APPROXIMATE", "approx.", datums$datum_name_en)
@@ -41,7 +41,7 @@ plot <- function(id, mdb_files, AquaCache, language) {
       
       if (input$plot_type == "Discrete" && !loaded$submodule_discrete) {
         
-        # discData$parameters_discrete <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
+        # discData$parameters_discrete <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
         # discData$parameters_discrete <- discData$parameters_discrete[order(discData$parameters_discrete$param_name), ]
         
         insertUI(
@@ -50,15 +50,15 @@ plot <- function(id, mdb_files, AquaCache, language) {
           ui = discretePlotUI(ns("discretePlot"))
         )
         loaded$submodule_discrete <- TRUE
-        discretePlotServer("discretePlot", mdb_files, AquaCache, language)
+        discretePlotServer("discretePlot", mdb_files, language)
       } 
       
       if (input$plot_type == "Continuous" && !loaded$submodule_continuous) {
         
-        contData$all_ts <- DBI::dbGetQuery(AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
+        contData$all_ts <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         contData$all_ts <- contData$all_ts[order(contData$all_ts$name), ]
         
-        contData$parameters <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
+        contData$parameters <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
         contData$parameters <- contData$parameters[order(contData$parameters$param_name), ]
         contData$datums <- shareData$datums
         
@@ -68,7 +68,7 @@ plot <- function(id, mdb_files, AquaCache, language) {
           ui = continuousPlotUI(ns("continuousPlot"))
         )
         loaded$submodule_continuous <- TRUE
-        continuousPlotServer("continuousPlot", AquaCache = AquaCache, data = contData, language = language)
+        continuousPlotServer("continuousPlot", data = contData, language = language)
       } 
       
       if (input$plot_type == "Mix") {
@@ -79,7 +79,7 @@ plot <- function(id, mdb_files, AquaCache, language) {
           ui = mixPlotUI(ns("mixPlotUI"))
         )
         loaded$submodule_mix <- TRUE
-        mixPlotServer("mixPlot", mdb_files, AquaCache)
+        mixPlotServer("mixPlot", mdb_files)
       }
       
       # Show only the relevant module using shinyjs

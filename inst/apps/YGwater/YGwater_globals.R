@@ -56,13 +56,14 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   
   
-  # Load translations infrastructure
+  # Load translations infrastructure to the global environment
   translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1))
   
-  translations <- openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1)
   
+  # New method to gradually move to:
+  translations <- openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1)
   # Build a list from the data.frame
-  translation_cache <<- lapply(setdiff(names(translations[, -2]), "id"), function(lang) {
+  translation_cache <<- lapply(setdiff(names(translations[, -2]), "id"), function(lang) { # Removes the second, "description" column, builds lists for each language
     setNames(translations[[lang]], translations$id)
   })
   names(translation_cache) <<- setdiff(names(translations)[-2], "id")
@@ -92,5 +93,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     public = public,
     g_drive = g_drive
   )
+  
 }
 

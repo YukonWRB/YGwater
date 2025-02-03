@@ -10,7 +10,7 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlotServer <- function(id, AquaCache, data, language) {
+continuousPlotServer <- function(id, data, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server
@@ -768,7 +768,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
       shinyjs::hide("full_screen")
       
       tryCatch({
-        withProgress(message = translations[id == "generating_working", get(language$language)][[1]], value = 0, {
+        withProgress(message = tr("generating_working", language$language), value = 0, {
           
           incProgress(0.5)
 
@@ -798,7 +798,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
                                 lang = plot_aes$lang,
                                 gridx = plot_aes$showgridx,
                                 gridy = plot_aes$showgridy,
-                                con = AquaCache)
+                                con = session$userData$AquaCache)
             
             output$plot <- plotly::renderPlotly(plot)
 
@@ -826,7 +826,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
                                             gridy = plot_aes$showgridy,
                                             shareX = input$shareX,
                                             shareY = input$shareY,
-                                            con = AquaCache)
+                                            con = session$userData$AquaCache)
               } else {
                 plot <- plotTimeseries(location = input$loc_code,
                                        parameter = as.numeric(input$param),
@@ -841,7 +841,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
                                        legend_scale = plot_aes$legend_scale,
                                        gridx = plot_aes$showgridx,
                                        gridy = plot_aes$showgridy,
-                                       con = AquaCache)
+                                       con = session$userData$AquaCache)
               }
             } else { # Multiple traces, single plot
             locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
@@ -864,7 +864,7 @@ continuousPlotServer <- function(id, AquaCache, data, language) {
                                         gridy = plot_aes$showgridy,
                                         shareX = input$shareX,
                                         shareY = input$shareY,
-                                        con = AquaCache)
+                                        con = session$userData$AquaCache)
             }        
             output$plot <- plotly::renderPlotly(plot)
           }

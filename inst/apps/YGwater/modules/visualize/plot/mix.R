@@ -14,7 +14,7 @@ mixPlotUI <- function(id) {
   )
 }
 
-mixPlotServer <- function(id, EQWin, AquaCache) {
+mixPlotServer <- function(id, EQWin) {
   moduleServer(id, function(input, output, session) {
     
   })

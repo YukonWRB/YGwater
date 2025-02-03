@@ -36,6 +36,4 @@ To do:
 11. Create metadata view page (tables in app, but could also enable direct download of table using DT)
 
 
-12. Speed up translations/text selection by using the new function t() in the globals.
-
-13. Explore safety of using <<- for database connection. See line 75 in the main server.
+12. Speed up translations/text selection by using the new function tr() in the globals.

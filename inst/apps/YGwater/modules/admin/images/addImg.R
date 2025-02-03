@@ -32,7 +32,7 @@ addImgUI <- function(id) {
 }
 
 
-addImg <- function(id, AquaCache) {
+addImg <- function(id) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
