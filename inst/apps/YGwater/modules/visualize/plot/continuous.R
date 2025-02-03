@@ -23,6 +23,10 @@ continuousPlotServer <- function(id, data, language) {
     values$swe <- data$parameters$parameter_id[data$parameters$param_name == "snow water equivalent"]
     values$snow_depth <- data$parameters$parameter_id[data$parameters$param_name == "snow depth"]
     
+    # Prevention of circular updates
+    values$updating <- FALSE
+    
+    # Create the UI for the sidebar and main panel #########################################################
     # Render the sidebar UI
     output$sidebar <- renderUI({
       req(data, language$language, language$abbrev)
@@ -142,18 +146,27 @@ continuousPlotServer <- function(id, data, language) {
     }) %>% # End renderUI
       bindEvent(language$language) # Re-render the UI if the language or data changes
     
+    
+    # Update the location choices based on the selected parameter ##########################################
     observeEvent(input$param, {
+      print("observing param change")
       # Update the location choices
-      updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]))
-      updateSelectizeInput(session, "loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))])
+      updateSelectizeInput(session, 
+                           "loc_name", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), 
+                           selected = if (input$loc_name %in% data$all_ts[data$all_ts$parameter_id == input$param, "name"]) input$loc_name else character(0)) # already ordered by the query
+      updateSelectizeInput(session, 
+                           "loc_code", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], 
+                           selected = if (input$loc_code %in% data$all_ts[data$all_ts$parameter_id == input$param, "location"]) input$loc_code else character(0))
       if (input$param %in% c(values$swe, values$snow_depth)) {
         updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
         updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
-        updateTextInput(session, "return_months", value = "3,4,5")
+        # updateTextInput(session, "return_months", value = "3,4,5")
       } else {
         updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()), "-01-01"))
         updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-12-31"))
-        updateTextInput(session, "return_months", value = "5,6,7,8,9")
+        # updateTextInput(session, "return_months", value = "5,6,7,8,9")
       }
       if (input$param == values$water_level) {
         shinyjs::show("apply_datum")
@@ -161,12 +174,13 @@ continuousPlotServer <- function(id, data, language) {
         shinyjs::hide("apply_datum")
         updateCheckboxInput(session, "apply_datum", value = FALSE)
       }
-    })
+    }, ignoreNULL = TRUE)
     
     # Cross-updating of plot selection location name or code, and toggle apply_datum visible/invisible
     observeEvent(input$loc_code, {
       if (input$loc_code %in% data$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
-        updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
+          updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
+          # Update years, used for the overlapping years plot (runs regardless of plot type selected because the user could switch plot types)
         try({
           possible_years <- seq(
             as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "end_datetime"], 1, 4)),
@@ -174,7 +188,6 @@ continuousPlotServer <- function(id, data, language) {
             )
           updateSelectizeInput(session, "years", choices = possible_years)
         })
-
         data$possible_datums <- data$datums[data$datums$location == input$loc_code & data$datums$conversion_m != 0, ]
         if (nrow(data$possible_datums) < 1) {
           shinyjs::hide("apply_datum")
@@ -184,21 +197,9 @@ continuousPlotServer <- function(id, data, language) {
         }
       }
     }, ignoreInit = TRUE)
-    
+
     observeEvent(input$loc_name, {
       updateSelectizeInput(session, "loc_code", selected = unique(data$all_ts[data$all_ts$name == input$loc_name, "location"]))
-    }, ignoreInit = TRUE)
-    
-    observeEvent(input$return_periods, {
-      if (input$return_periods == "none") {
-        shinyjs::hide("return_type")
-        shinyjs::hide("return_months")
-        shinyjs::hide("return_yrs")
-      } else {
-        shinyjs::show("return_type")
-        shinyjs::show("return_months")
-        shinyjs::show("return_yrs")
-      }
     }, ignoreInit = TRUE)
     
     # Modal dialog for extra aesthetics ########################################################################
@@ -210,7 +211,6 @@ continuousPlotServer <- function(id, data, language) {
                                axis_scale = 1,
                                legend_scale = 1)
     
-    # Modal dialog for extra aesthetics
     observeEvent(input$extra_aes, {
       showModal(modalDialog(
         title = "Modify plot aesthetics",
@@ -310,8 +310,14 @@ continuousPlotServer <- function(id, data, language) {
     
     # Observe the param inputs for all traces and update the location choices in the modal
     observeEvent(input$traceNew_param, {
-      updateSelectizeInput(session, "traceNew_loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]))
-      updateSelectizeInput(session, "traceNew_loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]))
+      updateSelectizeInput(session, 
+                           "traceNew_loc_code", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]),
+                           selected = if (input$traceNew_loc_code %in% data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]) input$traceNew_loc_code else character(0))
+      updateSelectizeInput(session, 
+                           "traceNew_loc_name", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]),
+                           selected = if (input$traceNew_loc_name %in% data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]) input$traceNew_loc_name else character(0))
     }, ignoreInit = TRUE)
     
     observeEvent(input$traceNew_loc_code, {
@@ -552,8 +558,14 @@ continuousPlotServer <- function(id, data, language) {
     
     # Observe the param inputs for all traces and update the location choices in the modal
     observeEvent(input$subplotNew_param, {
-      updateSelectizeInput(session, "subplotNew_loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]))
-      updateSelectizeInput(session, "subplotNew_loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]))
+      updateSelectizeInput(session, 
+                           "subplotNew_loc_code", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]),
+                           selected = if (input$subplotNew_loc_code %in% data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]) input$subplotNew_loc_code else character(0))
+      updateSelectizeInput(session,
+                           "subplotNew_loc_name",
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]),
+                           selected = if (input$subplotNew_loc_name %in% data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]) input$subplotNew_loc_name else character(0))
     }, ignoreInit = TRUE)
     
     observeEvent(input$subplotNew_loc_code, {
