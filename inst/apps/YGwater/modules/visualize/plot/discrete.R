@@ -10,7 +10,7 @@ discretePlotUI <- function(id) {
   )
 }
 
-discretePlotServer <- function(id, mdb_files, language) {
+discretePlotServer <- function(id, mdb_files, language, windowDims) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -398,6 +398,7 @@ discretePlotServer <- function(id, mdb_files, language) {
     })
     
     # Create and render the plot ############################################################
+    plot_created <- reactiveVal(FALSE)
     first_plot <- reactiveVal(TRUE)
     first_plot_with_standards <- reactiveVal(TRUE)
     observeEvent(input$make_plot, {
@@ -463,6 +464,7 @@ discretePlotServer <- function(id, mdb_files, language) {
                                  guideline_scale = plot_aes$guideline_scale,
                                  axis_scale = plot_aes$axis_scale,
                                  legend_scale = plot_aes$legend_scale,
+                                 legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
                                  dbSource = input$data_source,
@@ -488,6 +490,7 @@ discretePlotServer <- function(id, mdb_files, language) {
                                  guideline_scale = plot_aes$guideline_scale,
                                  axis_scale = plot_aes$axis_scale,
                                  legend_scale = plot_aes$legend_scale,
+                                 legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
                                  dbSource = input$data_source,
@@ -498,6 +501,7 @@ discretePlotServer <- function(id, mdb_files, language) {
           output$plot <- plotly::renderPlotly(plot)
           
           incProgress(1)
+          plot_created(TRUE)
         }) # End withProgress\
         
         output$full_screen_ui <- renderUI({
@@ -541,6 +545,24 @@ discretePlotServer <- function(id, mdb_files, language) {
       })
     }, ignoreInit = TRUE) # End of plot rendering loop
     
+    # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
+    debouncedWindowDims <- debounce(r = windowDims, millis = 500)
+    
+    observeEvent(debouncedWindowDims(), {
+      req(plot_created())
+      print("observed change in windowDims")
+      if (is.null(debouncedWindowDims())) return()
+      if (debouncedWindowDims()$width > 1.3 * debouncedWindowDims()$height) {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "v"))
+      } else {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "h"))
+      }
+    }, ignoreNULL = TRUE)
+    
+    
+    # Observe the full screen button and run the javascript function to make the plot full screen
     observeEvent(input$full_screen, {
       shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot"), "');"))
     }, ignoreInit = TRUE)

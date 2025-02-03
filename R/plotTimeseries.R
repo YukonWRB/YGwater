@@ -15,7 +15,7 @@
 #' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
-#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
+#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
@@ -25,6 +25,7 @@
 #' @param line_scale A scale factor to apply to the size (width) of the line. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
@@ -55,36 +56,40 @@ plotTimeseries <- function(location,
                            line_scale = 1,
                            axis_scale = 1,
                            legend_scale = 1,
+                           legend_position = "v",
                            gridx = FALSE,
                            gridy = FALSE,
                            rate = NULL,
                            tzone = "auto",
                            con = NULL) 
 {
-
-  # location <- "1556"
-  # sub_location <- NULL
-  # parameter = 34
-  # start_date <- "2020-08-30"
-  # end_date <- Sys.time()
-  # record_rate = NULL
-  # period_type = NULL
-  # z = NULL
-  # z_approx = NULL
-  # invert = NULL
-  # slider = TRUE
-  # datum = FALSE
-  # title = TRUE
-  # custom_title = NULL
-  # filter = NULL
-  # historic_range = TRUE
-  # lang = "en"
-  # line_scale = 1
-  # axis_scale = 1
-  # legend_scale = 1
-  # rate = "max"
-  # tzone = "auto"
-  # con = NULL
+# 
+# location <- "1556"
+# sub_location <- NULL
+# parameter = 34
+# start_date <- "2020-08-30"
+# end_date <- Sys.time()
+# record_rate = NULL
+# period_type = NULL
+# z = NULL
+# z_approx = NULL
+# invert = NULL
+# slider = TRUE
+# datum = FALSE
+# title = TRUE
+# custom_title = NULL
+# filter = NULL
+# historic_range = TRUE
+# lang = "en"
+# line_scale = 1
+# axis_scale = 1
+# legend_scale = 1
+# legend_position = "v"
+# rate = "max"
+# tzone = "auto"
+# con = NULL
+# gridx = FALSE
+# gridy = FALSE
 
   # Checks and initial work ##########################################
   
@@ -531,18 +536,20 @@ plotTimeseries <- function(location,
                    tickformat = if (lang == "en") "%b %d '%y" else "%d %b '%y",
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
-                   rangeslider = list(visible = if (slider) TRUE else FALSE)), 
+                   rangeslider = list(visible = if (slider & legend_position == "v") TRUE else FALSE)), 
       yaxis = list(title = y_title, 
                    showgrid = gridy, 
                    showline = TRUE,
                    zeroline = FALSE,
                    titlefont = list(size = axis_scale * 14),
-                   tickfont = list(size = axis_scale * 12)), 
+                   tickfont = list(size = axis_scale * 12),
+                   autorange = if (invert) "reversed" else TRUE), 
       margin = list(b = 0,
                     t = 40 * axis_scale,
                     l = 50 * axis_scale), 
       hovermode = "x unified",
-      legend = list(font = list(size = legend_scale * 12))
+      legend = list(font = list(size = legend_scale * 12),
+                    orientation = legend_position)
     ) %>%
     plotly::config(locale = lang)
   

@@ -10,7 +10,7 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlotServer <- function(id, data, language) {
+continuousPlotServer <- function(id, data, language, windowDims) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server
@@ -149,7 +149,6 @@ continuousPlotServer <- function(id, data, language) {
     
     # Update the location choices based on the selected parameter ##########################################
     observeEvent(input$param, {
-      print("observing param change")
       # Update the location choices
       updateSelectizeInput(session, 
                            "loc_name", 
@@ -799,6 +798,7 @@ continuousPlotServer <- function(id, data, language) {
     
     
     # Create and render the plot ############################################################
+    plot_created <- reactiveVal(FALSE)
     observeEvent(input$make_plot, {
       shinyjs::hide("full_screen")
       
@@ -834,6 +834,7 @@ continuousPlotServer <- function(id, data, language) {
                                 line_scale = plot_aes$line_scale,
                                 axis_scale = plot_aes$axis_scale,
                                 legend_scale = plot_aes$legend_scale,
+                                legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
                                 lang = plot_aes$lang,
                                 gridx = plot_aes$showgridx,
                                 gridy = plot_aes$showgridy,
@@ -861,6 +862,7 @@ continuousPlotServer <- function(id, data, language) {
                                             line_scale = plot_aes$line_scale,
                                             axis_scale = plot_aes$axis_scale,
                                             legend_scale = plot_aes$legend_scale,
+                                            legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
                                             gridx = plot_aes$showgridx,
                                             gridy = plot_aes$showgridy,
                                             shareX = input$shareX,
@@ -882,6 +884,7 @@ continuousPlotServer <- function(id, data, language) {
                                        line_scale = plot_aes$line_scale,
                                        axis_scale = plot_aes$axis_scale,
                                        legend_scale = plot_aes$legend_scale,
+                                       legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
                                        gridx = plot_aes$showgridx,
                                        gridy = plot_aes$showgridy,
                                        con = session$userData$AquaCache)
@@ -903,6 +906,7 @@ continuousPlotServer <- function(id, data, language) {
                                         line_scale = plot_aes$line_scale,
                                         axis_scale = plot_aes$axis_scale,
                                         legend_scale = plot_aes$legend_scale,
+                                        legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
                                         gridx = plot_aes$showgridx,
                                         gridy = plot_aes$showgridy,
                                         shareX = input$shareX,
@@ -913,6 +917,7 @@ continuousPlotServer <- function(id, data, language) {
           }
 
           incProgress(1)
+          plot_created(TRUE)
         }) # End withProgress\
         
         # Create a full screen button
@@ -924,16 +929,28 @@ continuousPlotServer <- function(id, data, language) {
         return()
       })
     }, ignoreInit = TRUE) # End of plot rendering loop
-
-
-    observeEvent(input$full_screen, {
-      if (input$type == "Overlapping years") {
-        shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot_gg"), "');"))
-      } else if (input$type == "Long timeseries"){
-        shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot_plotly"), "');"))
+    
+    # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
+    debouncedWindowDims <- debounce(r = windowDims, millis = 500)
+    
+    observeEvent(debouncedWindowDims(), {
+      req(plot_created())
+      print("observed change in windowDims")
+      if (is.null(debouncedWindowDims())) return()
+      if (debouncedWindowDims()$width > 1.3 * debouncedWindowDims()$height) {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "v"))
+      } else {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "h"))
       }
+    }, ignoreNULL = TRUE)
+    
+    # Observe the full screen button and run the javascript function to make the plot full screen
+    observeEvent(input$full_screen, {
+      shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot"), "');"))
     }, ignoreInit = TRUE)
-
+    
   }) # End of moduleServer
 }
 

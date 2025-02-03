@@ -11,6 +11,7 @@ app_ui <- function(request) {
     shinyjs::useShinyjs(),
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # Include the JavaScript file for full screen button
+      tags$script(src = "js/window_size.js"),  # Include the JavaScript file to report screen dimensions
       tags$script(HTML("
       Shiny.addCustomMessageHandler('updateTitle', function(newTitle) {
         document.title = newTitle;

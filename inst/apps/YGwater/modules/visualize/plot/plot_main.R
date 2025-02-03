@@ -14,7 +14,7 @@ plotUI <- function(id) {
   )
 }
 
-plot <- function(id, mdb_files, language) {
+plot <- function(id, mdb_files, language, windowDims) {
   
   moduleServer(id, function(input, output, session) {
 
@@ -50,7 +50,7 @@ plot <- function(id, mdb_files, language) {
           ui = discretePlotUI(ns("discretePlot"))
         )
         loaded$submodule_discrete <- TRUE
-        discretePlotServer("discretePlot", mdb_files, language)
+        discretePlotServer("discretePlot", mdb_files, language, windowDims)
       } 
       
       if (input$plot_type == "Continuous" && !loaded$submodule_continuous) {
@@ -68,7 +68,7 @@ plot <- function(id, mdb_files, language) {
           ui = continuousPlotUI(ns("continuousPlot"))
         )
         loaded$submodule_continuous <- TRUE
-        continuousPlotServer("continuousPlot", data = contData, language = language)
+        continuousPlotServer("continuousPlot", data = contData, language = language, windowDims = windowDims)
       } 
       
       if (input$plot_type == "Mix") {
@@ -79,7 +79,7 @@ plot <- function(id, mdb_files, language) {
           ui = mixPlotUI(ns("mixPlotUI"))
         )
         loaded$submodule_mix <- TRUE
-        mixPlotServer("mixPlot", mdb_files)
+        mixPlotServer("mixPlot", mdb_files, language, windowDims)
       }
       
       # Show only the relevant module using shinyjs

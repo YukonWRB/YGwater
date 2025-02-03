@@ -37,3 +37,7 @@ To do:
 
 
 12. Speed up translations/text selection by using the new function tr() in the globals.
+
+13. Use nabvarMenus instead of conditionalPanels - or at least explore if it leads to better UX
+
+14. Adjust plots so that legend is below if screen is taller than wider
