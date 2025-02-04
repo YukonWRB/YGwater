@@ -64,10 +64,10 @@ plotTimeseries <- function(location,
                            con = NULL) 
 {
 # 
-# location <- "1556"
+# location <- "08AA005"
 # sub_location <- NULL
-# parameter = 34
-# start_date <- "2020-08-30"
+# parameter = 1165
+# start_date <- "2020-01-01"
 # end_date <- Sys.time()
 # record_rate = NULL
 # period_type = NULL

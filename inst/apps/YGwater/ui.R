@@ -11,7 +11,8 @@ app_ui <- function(request) {
     shinyjs::useShinyjs(),
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # Include the JavaScript file for full screen button
-      tags$script(src = "js/window_size.js"),  # Include the JavaScript file to report screen dimensions
+      # The Javascript below contains functions to detect window size and continuously send these dimensions to the server (debounced) as variable input$window_dimensions. There's also a function that allows tracking container sizes: trackContainerSize(containerId, shinyInputId)  continerId = the id of the container to track, shinyInputId = the id of the input to send the size to (will create or update if existing)
+      tags$script(src = "js/window_resize.js"),  # Include the JavaScript file to report screen dimensions
       tags$script(HTML("
       Shiny.addCustomMessageHandler('updateTitle', function(newTitle) {
         document.title = newTitle;
