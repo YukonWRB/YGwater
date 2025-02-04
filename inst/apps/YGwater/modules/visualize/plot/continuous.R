@@ -10,7 +10,7 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlotServer <- function(id, data, language) {
+continuousPlotServer <- function(id, data, language, windowDims) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server
@@ -149,7 +149,6 @@ continuousPlotServer <- function(id, data, language) {
     
     # Update the location choices based on the selected parameter ##########################################
     observeEvent(input$param, {
-      print("observing param change")
       # Update the location choices
       updateSelectizeInput(session, 
                            "loc_name", 
@@ -179,13 +178,13 @@ continuousPlotServer <- function(id, data, language) {
     # Cross-updating of plot selection location name or code, and toggle apply_datum visible/invisible
     observeEvent(input$loc_code, {
       if (input$loc_code %in% data$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
-          updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
-          # Update years, used for the overlapping years plot (runs regardless of plot type selected because the user could switch plot types)
+        updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
+        # Update years, used for the overlapping years plot (runs regardless of plot type selected because the user could switch plot types)
         try({
           possible_years <- seq(
             as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "end_datetime"], 1, 4)),
             as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "start_datetime"], 1, 4))
-            )
+          )
           updateSelectizeInput(session, "years", choices = possible_years)
         })
         data$possible_datums <- data$datums[data$datums$location == input$loc_code & data$datums$conversion_m != 0, ]
@@ -197,7 +196,7 @@ continuousPlotServer <- function(id, data, language) {
         }
       }
     }, ignoreInit = TRUE)
-
+    
     observeEvent(input$loc_name, {
       updateSelectizeInput(session, "loc_code", selected = unique(data$all_ts[data$all_ts$name == input$loc_name, "location"]))
     }, ignoreInit = TRUE)
@@ -622,13 +621,13 @@ continuousPlotServer <- function(id, data, language) {
           shinyjs::show("shareX")
           shinyjs::show("shareY")
         }
-
+        
         subplots$subplot1 <- list(subplot = "subplot1",
-                              parameter = as.numeric(input$param),
-                              location = input$loc_code)
+                                  parameter = as.numeric(input$param),
+                                  location = input$loc_code)
         subplots$subplot2 <- list(subplot = "subplot2",
-                              parameter = as.numeric(input$subplotNew_param),
-                              location = input$subplotNew_loc_code)
+                                  parameter = as.numeric(input$subplotNew_param),
+                                  location = input$subplotNew_loc_code)
         button1Text <- HTML(paste0("<b>Subplot 1</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot1$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"])))
         button2Text <- HTML(paste0("<b>Subplot 2</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot2$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot2$location, "name"])))
         output$subplot1_ui <- renderUI({
@@ -645,8 +644,8 @@ continuousPlotServer <- function(id, data, language) {
         
       } else if (subplotCount() == 2) {
         subplots$subplot3 <- list(subplot = "subplot3",
-                              parameter = as.numeric(input$subplotNew_param),
-                              location = input$subplotNew_loc_code)
+                                  parameter = as.numeric(input$subplotNew_param),
+                                  location = input$subplotNew_loc_code)
         button3Text <- HTML(paste0("<b>Subplot 3</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot3$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot3$location, "name"])))
         output$subplot3_ui <- renderUI({
           actionButton(ns("subplot3"), button3Text)
@@ -655,8 +654,8 @@ continuousPlotServer <- function(id, data, language) {
         
       } else if (subplotCount() == 3) {
         subplots$subplot4 <- list(subplot = "subplot4",
-                              parameter = as.numeric(input$subplotNew_param),
-                              location = input$subplotNew_loc_code)
+                                  parameter = as.numeric(input$subplotNew_param),
+                                  location = input$subplotNew_loc_code)
         button4Text <- HTML(paste0("<b>Subplot 4</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot4$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot4$location, "name"])))
         output$subplot4_ui <- renderUI({
           actionButton(ns("subplot4"), button4Text)
@@ -799,6 +798,7 @@ continuousPlotServer <- function(id, data, language) {
     
     
     # Create and render the plot ############################################################
+    plot_created <- reactiveVal(FALSE)
     observeEvent(input$make_plot, {
       shinyjs::hide("full_screen")
       
@@ -806,9 +806,9 @@ continuousPlotServer <- function(id, data, language) {
         withProgress(message = tr("generating_working", language$language), value = 0, {
           
           incProgress(0.5)
-
+          
           if (input$type == "Overlapping years") {
-
+            
             if (nchar(input$loc_code) == 0) {
               showModal(modalDialog("Please select a location.", easyClose = TRUE))
               return()
@@ -816,8 +816,8 @@ continuousPlotServer <- function(id, data, language) {
             # return_months <- as.numeric(unlist(strsplit(input$return_months, ",")))
             
             plot <- plotOverlap(location = input$loc_code,
-                                  sub_location = NULL,
-                                  record_rate = NULL,
+                                sub_location = NULL,
+                                record_rate = NULL,
                                 parameter = as.numeric(input$param),
                                 startDay = input$start_doy,
                                 endDay = input$end_doy,
@@ -834,13 +834,15 @@ continuousPlotServer <- function(id, data, language) {
                                 line_scale = plot_aes$line_scale,
                                 axis_scale = plot_aes$axis_scale,
                                 legend_scale = plot_aes$legend_scale,
+                                legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+                                slider = FALSE,
                                 lang = plot_aes$lang,
                                 gridx = plot_aes$showgridx,
                                 gridy = plot_aes$showgridy,
                                 con = session$userData$AquaCache)
             
             output$plot <- plotly::renderPlotly(plot)
-
+            
           } else if (input$type == "Long timeseries") {
             # Check if multiple traces are selected
             
@@ -861,6 +863,8 @@ continuousPlotServer <- function(id, data, language) {
                                             line_scale = plot_aes$line_scale,
                                             axis_scale = plot_aes$axis_scale,
                                             legend_scale = plot_aes$legend_scale,
+                                            legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+                                            slider = FALSE,
                                             gridx = plot_aes$showgridx,
                                             gridy = plot_aes$showgridy,
                                             shareX = input$shareX,
@@ -882,37 +886,42 @@ continuousPlotServer <- function(id, data, language) {
                                        line_scale = plot_aes$line_scale,
                                        axis_scale = plot_aes$axis_scale,
                                        legend_scale = plot_aes$legend_scale,
+                                       legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+                                       slider = FALSE,
                                        gridx = plot_aes$showgridx,
                                        gridy = plot_aes$showgridy,
                                        con = session$userData$AquaCache)
               }
             } else { # Multiple traces, single plot
-            locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
-            params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
-            lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
-            plot <- plotMultiTimeseries(type = "traces",
-                                        locations = locs,
-                                        parameters = params,
-                                        lead_lag = lead_lags,
-                                        start_date = input$start_date,
-                                        end_date = input$end_date,
-                                        historic_range = input$historic_range,
-                                        datum = input$apply_datum,
-                                        filter = if (input$plot_filter) 20 else NULL,
-                                        lang = plot_aes$lang,
-                                        line_scale = plot_aes$line_scale,
-                                        axis_scale = plot_aes$axis_scale,
-                                        legend_scale = plot_aes$legend_scale,
-                                        gridx = plot_aes$showgridx,
-                                        gridy = plot_aes$showgridy,
-                                        shareX = input$shareX,
-                                        shareY = input$shareY,
-                                        con = session$userData$AquaCache)
+              locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
+              params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
+              lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
+              plot <- plotMultiTimeseries(type = "traces",
+                                          locations = locs,
+                                          parameters = params,
+                                          lead_lag = lead_lags,
+                                          start_date = input$start_date,
+                                          end_date = input$end_date,
+                                          historic_range = input$historic_range,
+                                          datum = input$apply_datum,
+                                          filter = if (input$plot_filter) 20 else NULL,
+                                          lang = plot_aes$lang,
+                                          line_scale = plot_aes$line_scale,
+                                          axis_scale = plot_aes$axis_scale,
+                                          legend_scale = plot_aes$legend_scale,
+                                          legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+                                          slider = FALSE,
+                                          gridx = plot_aes$showgridx,
+                                          gridy = plot_aes$showgridy,
+                                          shareX = input$shareX,
+                                          shareY = input$shareY,
+                                          con = session$userData$AquaCache)
             }        
             output$plot <- plotly::renderPlotly(plot)
           }
-
+          
           incProgress(1)
+          plot_created(TRUE)
         }) # End withProgress\
         
         # Create a full screen button
@@ -924,16 +933,34 @@ continuousPlotServer <- function(id, data, language) {
         return()
       })
     }, ignoreInit = TRUE) # End of plot rendering loop
-
-
-    observeEvent(input$full_screen, {
-      if (input$type == "Overlapping years") {
-        shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot_gg"), "');"))
-      } else if (input$type == "Long timeseries"){
-        shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot_plotly"), "');"))
+    
+    # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
+    # The js function takes care of debouncing the window resize event and also reacts to a change in orientation or full screen event
+    
+    observeEvent(windowDims(), {
+      req(plot_created())
+      if (is.null(windowDims())) return()
+      if (windowDims()$width > 1.3 * windowDims()$height) {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "v"))
+      } else {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "h"))
       }
+    }, ignoreNULL = TRUE)
+    
+    # Observe the full screen button and run the javascript function to make the plot full screen
+    observeEvent(input$full_screen, {
+      shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot"), "');"))
+      
+      # Manually trigger a window resize event after some delay
+      shinyjs::runjs("
+                      setTimeout(function() {
+                        sendWindowSizeToShiny();
+                      }, 700);
+                    ")
     }, ignoreInit = TRUE)
-
+    
   }) # End of moduleServer
 }
 

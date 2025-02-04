@@ -31,6 +31,14 @@ app_server <- function(input, output, session) {
     isRestoring_img(TRUE)
   })
   
+  # Track window dimensions (used to modify plot appearance)
+  windowDims <- reactive({
+    req(input$window_dimensions)
+    input$window_dimensions
+  })
+  
+  
+  
   # Initialize reactive flags to track whether each UI has been loaded
   ui_loaded <- reactiveValues(
     viz = FALSE,
@@ -424,7 +432,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$plot) {
         output$plot_ui <- renderUI(plotUI("plot"))
         ui_loaded$plot <- TRUE
-        plot("plot", mdb_files, language = languageSelection) # Call the server
+        plot("plot", mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
     if (input$navbar == "map") {

@@ -18,7 +18,7 @@
 #' @param lead_lag The number of **hours** to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters. Not used for `type` 'subplots'.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
-#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
+#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param shareX Should the x-axis be shared across facets? Default is TRUE (dates are shared).
 #' @param shareY Should the y-axis be shared across facets? Default is FALSE (values are not shared).
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists, only for water level and distance. Default is TRUE.
@@ -30,6 +30,7 @@
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
@@ -65,6 +66,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                 line_scale = 1,
                                 axis_scale = 1,
                                 legend_scale = 1,
+                                legend_position = 'v',
                                 gridx = FALSE,
                                 gridy = FALSE,
                                 rate = NULL,
@@ -73,6 +75,7 @@ plotMultiTimeseries <- function(type = 'traces',
   
   # type <- 'subplots'
   # locations <- c("09FC001", "09EA004", "08AA012")
+  # sub_locations <- NULL
   # parameters <- c("water level", "flow", "water level")
   # record_rates <- NULL
   # period_types <- NULL
@@ -97,6 +100,9 @@ plotMultiTimeseries <- function(type = 'traces',
   # gridy <- FALSE
   # rate <- NULL
   # tzone <- "auto"
+  # legend_position <- 'v'
+  # shareX = TRUE
+  # shareY = TRUE
   
   
   # Checks and initial work ##########################################
@@ -860,7 +866,8 @@ plotMultiTimeseries <- function(type = 'traces',
         rangeslider = list(visible = if (slider) TRUE else FALSE)
       ),
       hovermode = "closest",
-      legend = list(font = list(size = legend_scale * 12))
+      legend = list(font = list(size = legend_scale * 12),
+                    orientation = legend_position)
     )
     
     # Combine axis layouts with other layout settings
@@ -968,7 +975,8 @@ plotMultiTimeseries <- function(type = 'traces',
                         t = 40 * axis_scale,
                         l = 50 * axis_scale), 
           hovermode = "x unified",
-          legend = list(font = list(size = legend_scale * 12))
+          legend = list(font = list(size = legend_scale * 12),
+                        orientation = legend_position)
         ) %>%
         plotly::config(locale = lang)
       

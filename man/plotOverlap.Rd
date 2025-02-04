@@ -15,11 +15,14 @@ plotOverlap(
   years = NULL,
   datum = TRUE,
   title = TRUE,
+  invert = NULL,
+  slider = TRUE,
   filter = NULL,
   historic_range = "last",
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
+  legend_position = "v",
   gridx = FALSE,
   gridy = TRUE,
   con = NULL,
@@ -47,6 +50,10 @@ plotOverlap(
 
 \item{title}{Should a title be included?}
 
+\item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.}
+
+\item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.}
+
 \item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
 \item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
@@ -56,6 +63,8 @@ plotOverlap(
 \item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
 
 \item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
+\item{legend_position}{The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.}
 
 \item{gridx}{Should grid lines be drawn on the x-axis? Default is FALSE}
 

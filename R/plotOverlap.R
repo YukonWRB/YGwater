@@ -15,11 +15,14 @@
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
+#' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
+#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
 #' @param gridx Should grid lines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should grid lines be drawn on the y-axis? Default is FALSE
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
@@ -49,6 +52,8 @@
 # axis_scale = 1
 # legend_scale = 1
 # historic_range = 'all'
+# legend_position = "v"
+# invert = TRUE
 
 # location <- "29AB-M3"
 # sub_location <- NULL
@@ -66,27 +71,31 @@
 # lang <- "en"
 # gridx = FALSE
 # gridy = FALSE
+# legend_position = "v"
 
 
 plotOverlap <- function(location,
-                              sub_location = NULL,
-                              parameter,
-                              record_rate = NULL,
-                              startDay = 1,
-                              endDay = 365,
-                              tzone = "MST",
-                              years = NULL,
-                              datum = TRUE,
-                              title = TRUE,
-                              filter = NULL,
-                              historic_range = 'last',
-                              line_scale = 1,
-                              axis_scale = 1,
-                              legend_scale = 1,
-                              gridx = FALSE,
-                              gridy = TRUE,
-                              con = NULL,
-                              lang = "en")
+                        sub_location = NULL,
+                        parameter,
+                        record_rate = NULL,
+                        startDay = 1,
+                        endDay = 365,
+                        tzone = "MST",
+                        years = NULL,
+                        datum = TRUE,
+                        title = TRUE,
+                        invert = NULL,
+                        slider = TRUE,
+                        filter = NULL,
+                        historic_range = 'last',
+                        line_scale = 1,
+                        axis_scale = 1,
+                        legend_scale = 1,
+                        legend_position = 'v',
+                        gridx = FALSE,
+                        gridy = TRUE,
+                        con = NULL,
+                        lang = "en")
 {
   
   if (is.null(con)) {
@@ -102,6 +111,12 @@ plotOverlap <- function(location,
   #### --------- Checks on input parameters and other start-up bits ------- ####
   if (inherits(parameter, "character")) {
     parameter <- tolower(parameter)
+  }
+  
+  if (!is.null(invert)) {
+    if (!inherits(invert, "logical")) {
+      stop("Your entry for the parameter 'invert' is invalid. Leave it as NULL or TRUE/FALSE.")
+    }
   }
   
   if (!(lang %in% c("en", "fr"))) {
@@ -206,13 +221,13 @@ plotOverlap <- function(location,
   #Confirm parameter and location exist in the database and that there is only one entry
   if (inherits(parameter, "character")) {
     escaped_parameter <- gsub("'", "''", parameter)
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
     parameter_code <- parameter_tbl$parameter_id[1]
     if (is.na(parameter_code)) {
       stop("The parameter you entered does not exist in the database.")
     }
   } else if (inherits(parameter, "numeric")) {
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ", parameter, ";"))
+    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE parameter_id = ", parameter, ";"))
     if (nrow(parameter_tbl) == 0) {
       stop("The parameter you entered does not exist in the database.")
     }
@@ -517,6 +532,15 @@ plotOverlap <- function(location,
   realtime <- realtime[order(realtime$datetime, decreasing = TRUE), ]
   
   #### ----------------------------- Make the plot -------------------------- ####
+  
+  if (is.null(invert)) {
+    if (parameter_tbl$plot_default_y_orientation[1] == "inverted") {
+      invert <- TRUE
+    } else {
+      invert <- FALSE
+    }
+  }
+  
   # Create basic plot with historic range
   
   plot <- plotly::plot_ly() %>%
@@ -567,13 +591,14 @@ plotOverlap <- function(location,
                    tickformat = if (lang == "en") "%b %d" else "%d %b",
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
-                   rangeslider = list(visible = FALSE)), 
+                   rangeslider = list(visible = if (slider & legend_position == "v") TRUE else FALSE)), 
       yaxis = list(title = paste0(parameter_name, " (", units, ")"), 
                    showgrid = gridy, 
                    showline = TRUE,
                    zeroline = FALSE,
                    titlefont = list(size = axis_scale * 14),
-                   tickfont = list(size = axis_scale * 12)), 
+                   tickfont = list(size = axis_scale * 12),
+                   autorange = if (invert) "reversed" else TRUE), 
       margin = list(b = 0,
                     t = 40 * axis_scale,
                     l = 50 * axis_scale), 
