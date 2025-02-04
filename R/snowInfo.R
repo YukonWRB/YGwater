@@ -82,13 +82,13 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
     JOIN networks AS n ON ln.network_id = n.network_id
     JOIN samples AS s ON l.location_id = s.location_id
     JOIN datum_conversions AS d ON l.location_id = d.location_id
-    WHERE n.name = 'Snow Survey Network';
+    WHERE n.name = 'Snow Survey Network' AND l.location IN ('", paste(locations, collapse = "', '"), "');
 "))
-    check_locs <- loc_tbl$location[!(loc_tbl$location %in% locations)]
+    # Find the missing locations if any were not found. locations is a vector of requested locations
+    check_locs <- locations[!locations %in% loc_tbl$location]
     if (length(check_locs) > 0) {
       message("Could not find a record for location ", check_locs, ". All other locations will be returned.")
     }
-    locations <- loc_tbl[loc_tbl$location %in% locations , ]
     all <- FALSE
   }
   

@@ -35,6 +35,8 @@ waterInfoServer <- function(id, language) {
       output$menu <- renderUI({
         req(data, language$language, language$abbrev)
         tagList(
+          textOutput(ns("info")),
+          tags$hr(), # dividing blank space
           # selector for one parameter (flow if exists, else level) or both
           selectizeInput(ns("param"),
                          label = tr("gen_waterInfo_param_select", language$language),
@@ -48,7 +50,7 @@ waterInfoServer <- function(id, language) {
           
           # selector for location
           selectizeInput(ns("loc"), 
-                         label = tr("gen_waterInfo_loc_select", language$language),
+                         label = tr("gen_loc_select", language$language),
                          choices = stats::setNames(
                            c("all", data$locs$location),
                            c(tr("all_locs", language$language),
@@ -95,7 +97,7 @@ waterInfoServer <- function(id, language) {
         
         # Generate plots?
         checkboxInput(ns("plots"),
-                      label = tr("gen_waterInfo_plots", language$language),
+                      label = tr("gen_generate_plots", language$language),
                       value = selections$plots,
                       width = "100%"),
         
@@ -117,6 +119,10 @@ waterInfoServer <- function(id, language) {
         ) # End tagList
       }) %>% # End renderUI
         bindEvent(language$language, data$locs) # Re-render the UI if the language or data changes
+      
+      output$info <- renderText({
+        tr("gen_waterInfo_info", language$language)
+        }) %>% bindEvent(language$language) # Re-render the text if the language changes
       
       # Observe inputs and store in object 'selections'
       observeEvent(input$param, {
@@ -169,7 +175,7 @@ waterInfoServer <- function(id, language) {
       observeEvent(input$go, {
         tryCatch({
           withProgress(
-            message = tr("generating_working", language$language), 
+            message = tr("dl_prep", language$language), 
             value = 0, 
             {
               incProgress(0.2)
