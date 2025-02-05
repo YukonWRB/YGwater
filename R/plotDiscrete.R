@@ -23,6 +23,7 @@
 #' @param guideline_scale A scale factor to apply to the size of standard/guideline values Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param dbSource The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
@@ -53,6 +54,7 @@ plotDiscrete <- function(start,
                          guideline_scale = 1, 
                          axis_scale = 1, 
                          legend_scale = 1,
+                         legend_position = 'v',
                          gridx = FALSE,
                          gridy = FALSE,
                          dbSource = "EQ", 
@@ -944,13 +946,18 @@ AND s.datetime > '", start, "' AND s.datetime < '", end, "';
     # Combine plots into a single subplot
     if (rows == "auto") {
       nrows <- ceiling(sqrt(length(plots)))
+      # Determine how many columns this represents, given the nrows and the number of plots
+      # ncols <- ceiling(length(plots) / nrows)
     } else {
       nrows <- min(rows, length(plots))
+      # ncols <- ceiling(length(plots) / nrows)
     }
     
     # Apply the layout settings to the final plot
     final_plot <- plotly::subplot(plots, 
-                                  nrows = nrows, 
+                                  nrows = nrows,
+                                  # widths = rep(1/ncols, ncols),
+                                  # heights = rep(1/nrows, nrows),
                                   shareX = FALSE,
                                   shareY = FALSE,
                                   titleX = FALSE, 
