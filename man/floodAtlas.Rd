@@ -5,6 +5,7 @@
 \title{Shiny application for internal WRB use}
 \usage{
 floodAtlas(
+  app,
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
   dbPort = Sys.getenv("aquacachePort"),
@@ -16,6 +17,8 @@ floodAtlas(
 )
 }
 \arguments{
+\item{app}{The name of the app to run. Options are "overlap" or "timeseries".}
+
 \item{host}{Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in \code{port} to be open on the host machine. Ignored if \code{server} is set to TRUE (Shiny Server takes care of that).}
 
 \item{port}{Port number (numeric). Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network. Ignored if \code{server} is set to TRUE (Shiny Server takes care of that).}

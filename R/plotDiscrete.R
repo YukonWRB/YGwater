@@ -947,31 +947,20 @@ AND s.datetime > '", start, "' AND s.datetime < '", end, "';
     if (rows == "auto") {
       nrows <- ceiling(sqrt(length(plots)))
       # Determine how many columns this represents, given the nrows and the number of plots
-      # ncols <- ceiling(length(plots) / nrows)
+      ncols <- ceiling(length(plots) / nrows)
     } else {
       nrows <- min(rows, length(plots))
-      # ncols <- ceiling(length(plots) / nrows)
+      ncols <- ceiling(length(plots) / nrows)
     }
     
-    # Attempt to make subplots same size always, taken from this: https://github.com/plotly/plotly.R/issues/2144
-    # corr_margin <- function(m, margin) {
-    #   if (m >= 3L) {
-    #     average_margin <- margin * (m - 2) / m
-    #     outer_size <- 1 / m - average_margin
-    #     inner_size <- 1 / m - average_margin + margin
-    #     return(c(outer_size, rep(inner_size, m - 2L), outer_size))
-    #   }
-    #   NULL
-    # }
+    # Plot widths/heights are a bit buggy. The issue seems to be that the margins are added/subtracted from plot dimensions after the heights/widths are set. If margins are the same everywhere though it works out! Still not quite perfect, but at least a bit better.
+    # margins <-  c(0, (0.08 * axis_scale), 0, (0.08 * axis_scale)) # left, right, top, bottom
+    margins <- 0.04 * axis_scale
     
-    margins <-  c(0, (0.08 * axis_scale), 0, (0.08 * axis_scale)) # left, right, top, bottom
-    
+
     # Apply the layout settings to the final plot
     final_plot <- plotly::subplot(plots, 
                                   nrows = nrows,
-                                  # heights = corr_margin(nrows, (margins[3] + margins[4])/2),
-                                  # widths = corr_margin(ncols, (margins[1] + margins[2])/2),
-                                  # heights = rep(1/nrows, nrows),
                                   shareX = FALSE,
                                   shareY = FALSE,
                                   titleX = FALSE, 

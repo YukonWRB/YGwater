@@ -1,4 +1,4 @@
-#' The floodAtlas User-Interface
+#' The floodAtlas timeseries User-Interface
 #'
 #' @param request Internal parameter for `{shiny}`.
 #'     DO NOT REMOVE.
@@ -33,22 +33,19 @@ app_ui <- function(request) {
     numericInput("param_code", label = NULL, value = 1165), # level
     textInput("lang", label = NULL, value = "en"),
     
-    # Make visible buttons in a fluidRow
-    fluidRow(
-      class = "button-row",
-      actionButton("info", "Info"),
-      selectizeInput("yrs", label = "Add years", choices = as.character(format(Sys.Date(), "%Y")), selected = as.character(format(Sys.Date(), "%Y")), multiple = TRUE, options = list(maxItems = 10))
-    ),
+    # Make visible buttons in a fluidRow (rendered in server)
+    uiOutput("visible_buttons"),
+    
     # Calculate remaining height for the plot
     tags$style(HTML("
-  #plot_plotly {
+  #plot {
     height: calc(100vh - 120px) !important;
     width: 100% !important;
   }
 ")),
     tags$div(
       # style = "height: calc(100vh - 100px); width: 100%;",
-      plotly::plotlyOutput("plot_plotly", height = "100%", width = "100%")
+      plotly::plotlyOutput("plot", height = "100%", width = "100%")
     ),
     htmlOutput("error")
     
