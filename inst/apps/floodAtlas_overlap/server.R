@@ -1,4 +1,4 @@
-#' The floodAtlas app server-side
+#' The floodAtlas overlapping years app server-side
 #'
 #' @param input,output,session Internal parameters for {shiny}.
 #'     DO NOT REMOVE.
