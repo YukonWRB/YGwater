@@ -6,19 +6,29 @@
 #' @noRd
 
 
-# http://127.0.0.1:5637/?_inputs_&info=0&yrs=2024&param_code=1165&loc_code="09AB004"&lang="en"
-
 app_server <- function(input, output, session) {
   
   # Initial setup #############################################################
   
   # Connection to DB
   session$userData$con <- AquaConnect(name = config$dbName,
-                                            host = config$dbHost,
-                                            port = config$dbPort,
-                                            username = config$dbUser,
-                                            password = config$dbPass,
-                                            silent = TRUE)
+                                      host = config$dbHost,
+                                      port = config$dbPort,
+                                      username = config$dbUser,
+                                      password = config$dbPass,
+                                      silent = TRUE)
+  
+  print("Connected to AquaCache")
+  
+  session$onUnhandledError(function() {
+    DBI::dbDisconnect(session$userData$con)
+    print("Disconnected from AquaCache after unhandled error")
+  })
+  
+  session$onSessionEnded(function() {
+    DBI::dbDisconnect(session$userData$con)
+    print("Disconnected from AquaCache after session end")
+  })
   
   # Remove irrelevant bookmarks
   setBookmarkExclude(c("go", "plot", "error", "info", "redo", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
@@ -138,10 +148,9 @@ app_server <- function(input, output, session) {
     }
   })
   
-  
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
-    function(loc, param, yrs, lang) {
+    function(loc, param, yrs, lang, config) {
 
     promises::future_promise({
       
@@ -175,12 +184,11 @@ app_server <- function(input, output, session) {
   }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
   
   observeEvent(params$render, {
-    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang)
+    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, config)
   })
   
   output$plot <- plotly::renderPlotly({
     plot_output$result()
   })
-  
   
 }

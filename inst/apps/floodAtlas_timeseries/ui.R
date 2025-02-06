@@ -9,7 +9,7 @@ app_ui <- function(request) {
   
   fluidPage(
     shinyjs::useShinyjs(),
-
+    
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # YG fonts (the CSS refers to files in the www/fonts folder so there is no external dependency)
       tags$style(HTML("#loc_code { display: none; }")), # Hide the input by default

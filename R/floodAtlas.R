@@ -24,10 +24,10 @@ floodAtlas <- function(app, host = getOption("shiny.host", "127.0.0.1"), port = 
   rlang::check_installed("shinyjs", reason = "required to use floodAtlas app")
   
   # Add these in the suggests if used
-  rlang::check_installed("promises", reason = "required to enable asynchronous operations in floodAtlas app")
-  rlang::check_installed("future", reason = "required to enable asynchronous operations in floodAtlas app")
+  rlang::check_installed("promises", reason = "required to enable asynchronous operations in floodAtlas apps")
+  rlang::check_installed("future", reason = "required to enable asynchronous operations in floodAtlas apps")
   
-  # If on Windows OS OR running interactively, use multisession, else use multicore
+  # # If on Windows OS OR running interactively, use multisession, else use multicore
   # if (Sys.info()["sysname"] == "Windows" | interactive()) {
   #   future::plan("multisession")
   # } else {

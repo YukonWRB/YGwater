@@ -105,7 +105,7 @@ app_server <- function(input, output, session) {
   
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
-    function(loc, param, lang) {
+    function(loc, param, lang, config) {
 
     promises::future_promise({
       
@@ -139,7 +139,7 @@ app_server <- function(input, output, session) {
   
   # Trigger the plot creation when the render changes
   observeEvent(params$render, {
-    plot_output$invoke(params$loc_code, params$param_code, params$lang)
+    plot_output$invoke(params$loc_code, params$param_code, params$lang, config)
   })
   
   output$plot <- plotly::renderPlotly({
