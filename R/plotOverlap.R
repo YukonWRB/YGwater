@@ -33,15 +33,15 @@
 #' @export
 
 
-# location <- "09AB004"
+# location <- "09AA-M1"
 # sub_location <- NULL
-# parameter <- "water level"
+# parameter <- "snow water equivalent"
 # record_rate = NULL
-# startDay <- 1
-# endDay <- 365
+# startDay <- "2024-09-01"
+# endDay <- "2025-06-01"
 # tzone <- "MST"
-# years <- c(2024, 2023, 2022, 2021)
-# datum <- TRUE
+# years <- c(2024, 2023, 2022, 2025)
+# datum <- FALSE
 # title <- TRUE
 # filter <- 20
 # plot_scale <- 1
@@ -162,7 +162,7 @@ plotOverlap <- function(location,
     startDay <<- as.numeric(startDay)
     if (last_year %in% leap_list & length(years) > 1) { #Skips over Feb 29 because feb 29 has no historical info
       if (startDay == 59) {
-        startDay <<- startDay + 1
+        startDay <<- startDay + 1  # add a day to skip over Feb 29
       }
     }
     startDay <<- as.POSIXct(startDay*60*60*24, origin = paste0(last_year - 1, "-12-31"), tz = "UTC")
@@ -176,9 +176,7 @@ plotOverlap <- function(location,
     endDay <<- as.numeric(endDay)
     if (last_year %in% leap_list & length(years) > 1) { #Skips over Feb 29 because feb 29 has no historical info
       if (endDay == 59) {
-        if (endDay < 366) {
-          endDay <<- endDay + 1
-        }
+        endDay <<- endDay + 1
       }
     }
     endDay <<- as.POSIXct(endDay*60*60*24, origin = paste0(last_year - 1, "-12-31 23:59:59"), tz = "UTC")
@@ -190,9 +188,9 @@ plotOverlap <- function(location,
       years <- lubridate::year(Sys.Date()) - 1
       max_year <- lubridate::year(Sys.Date()) - 1
       lubridate::year(startDay) <- lubridate::year(Sys.Date()) - 1
-      lubridate::year(endDay) <- lubridate::year(endDay)
+      lubridate::year(endDay) <- lubridate::year(Sys.Date())
     } else {
-      lubridate::year(endDay) <- lubridate::year(endDay) + 1
+      lubridate::year(startDay) <- lubridate::year(startDay) - 1
     }
   } else {
     overlaps <- FALSE
@@ -325,32 +323,29 @@ plotOverlap <- function(location,
   daily_start <- startDay
   lubridate::year(daily_start) <- min(years) - 1
   if (historic_range == "all") {
-    lubridate::year(daily_end) <- max(max(years) + 1, lubridate::year(Sys.time()))
-    daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
-    if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
-      daily_end <- daily_end + 60*60*24
-    }
+    lubridate::year(daily_end) <- max(last_year + 1, lubridate::year(Sys.time()))
   } else if (historic_range == "last") {
     if (overlaps) {
       lubridate::year(daily_end) <- last_year + 1
     } else {
       lubridate::year(daily_end) <- last_year
     }
-    daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
-    if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
-      daily_end <- daily_end + 60*60*24
-    }
   }
-  daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", daily_start, "' AND '", daily_end, "' ORDER by date ASC;"))
+  daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
+  if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
+    daily_end <- daily_end + 60*60*24
+  }
+  
+  daily <- dbGetQueryDT(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", daily_start, "' AND '", daily_end, "' ORDER by date ASC;"))
   
   
   #Fill in any missing days in daily with NAs
-  all_dates <- seq(min(daily$date), max(daily$date), by = "1 day")
-  complete <- data.frame(date = all_dates, value = NA, max = NA, min = NA, q75 = NA, q25 = NA)
-  complete[match(daily$date, all_dates) , ] <- daily
-  daily <- complete
+  all_dates <- data.table(date = seq.Date(min(daily$date), max(daily$date), by = "day"))
+  if (nrow(all_dates) > nrow(daily)) {
+    daily <- merge(all_dates, daily, by = "date", all.x = TRUE)
+  }
   
-  daily$date <- as.POSIXct(daily$date) + 12*60*60 # to posixct and not date so that it plays well with realtime df
+  daily$date <- as.POSIXct(daily$date) + 12*60*60 # to posixct and not date so that it plays well with realtime df, and add 12 hours for middle of the day
   daily$date <- lubridate::force_tz(daily$date, tzone)
   names(daily)[names(daily) == "date"] <- "datetime"
   
@@ -367,21 +362,29 @@ plotOverlap <- function(location,
     end_UTC <- end
     attr(end_UTC, "tzone") <- "UTC"
     if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance (rest is populated with daily means. Gives 3 years of data at 1 hour intervals)
-      new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+      new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       if (nrow(new_realtime) > 20000) {
         new_realtime <- new_realtime[order(new_realtime$datetime) , ]
-        new_realtime <- utils::tail(new_realtime, 20000) #Retain only max 20000 data points for plotting performance
+        new_realtime <- utils::tail(new_realtime, 20000) #Retain only most recent 20000 data points for plotting performance
+        
+        # Add the truncated dates to the dates vector
         end_new_dates <- min(new_realtime$datetime)
         new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
         dates <- c(dates, new_dates)
       }
       if (nrow(new_realtime) > 0) {
         # Fill in any missing hours in realtime with NAs
-        all_times <- seq(min(new_realtime$datetime), max(new_realtime$datetime), by = "1 hour")
-        complete <- data.frame(datetime = all_times, value = NA)
-        complete[match(new_realtime$datetime, all_times) , ] <- new_realtime
-        new_realtime <- complete
-        realtime <- rbind(realtime, new_realtime)
+        # Must use calculate_period to get the correct number of hours in the period as it can change.
+        new_realtime <- calculate_period(new_realtime)
+        new_realtime$period <- as.numeric(lubridate::period("P0DT3H"))
+        
+        # Create groups for consecutive rows with the same period
+        new_realtime[, grp := data.table::rleidv(period)]
+        df_full <- new_realtime[, .(datetime = seq(min(datetime), max(datetime), by = as.difftime(as.numeric(period[1]), units = "secs"))), by = grp]
+        # Merge the complete sequence with the original data (inserting NA where missing)
+        if (nrow(df_full) > nrow(new_realtime)) {
+          new_realtime <- merge(df_full[,list(datetime)], new_realtime[, list(datetime, value)], by = "datetime", all.x = TRUE) # Drop unnecessary columns
+        }
         get_daily <- FALSE
       } else {
         get_daily <- TRUE
@@ -490,14 +493,31 @@ plotOverlap <- function(location,
     realtime$md <- paste0(realtime$month, realtime$day)
     realtime$md <- as.numeric(realtime$md)
     
-    realtime$fake_datetime <- as.POSIXct(rep(NA, nrow(realtime)))
-    realtime$plot_year <- NA
-    for (i in 1:nrow(realtime)) {  #!!!This desperately needs to be vectorized in some way. Super slow!
-      fake_datetime <- gsub("[0-9]{4}", if (realtime$md[i] %in% md_sequence) last_year else last_year + 1, realtime$datetime[i])
-      fake_datetime <- ifelse(nchar(fake_datetime) > 11, fake_datetime, paste0(fake_datetime, " 00:00:00"))
-      realtime$fake_datetime[i] <- as.POSIXct(fake_datetime, tz = tzone)
-      realtime$plot_year[i] <- if (realtime$md[i] %in% md_sequence) paste0(realtime$year[i], "-", realtime$year[i] + 1) else paste0(realtime$year[i] - 1, "-", realtime$year[i])
-    }
+    # Commented out to trial vectorization
+    # realtime$fake_datetime <- as.POSIXct(rep(NA, nrow(realtime)))
+    # realtime$plot_year <- NA
+    # for (i in 1:nrow(realtime)) {  #!!!This desperately needs to be vectorized in some way. Super slow!
+    #   fake_datetime <- gsub("[0-9]{4}", if (realtime$md[i] %in% md_sequence) last_year - 1 else last_year, realtime$datetime[i])
+    #   fake_datetime <- ifelse(nchar(fake_datetime) > 11, fake_datetime, paste0(fake_datetime, " 00:00:00"))
+    #   realtime$fake_datetime[i] <- as.POSIXct(fake_datetime, tz = tzone)
+    #   realtime$plot_year[i] <- if (realtime$md[i] %in% md_sequence) paste0(realtime$year[i], "-", realtime$year[i] + 1) else paste0(realtime$year[i] - 1, "-", realtime$year[i])
+      
+      
+
+      in_md_seq <- realtime$md %in% md_sequence
+      # Format datetime as string
+      dt_str <- format(realtime$datetime, "%Y-%m-%d %H:%M:%S")
+      # Determine replacement year based on condition
+      replacement_year <- ifelse(in_md_seq, last_year - 1, last_year)
+      # Replace the year portion using a regex substitution
+      fake_dt_str <- paste0(replacement_year, substring(dt_str, 5))
+      realtime$fake_datetime <- as.POSIXct(fake_dt_str, tz = tzone)
+      realtime$plot_year <- ifelse(in_md_seq,
+                                   paste0(realtime$year, "-", realtime$year + 1),
+                                   paste0(realtime$year - 1, "-", realtime$year))
+      
+      
+    # }
   } else { #Does not overlap the new year
     realtime$plot_year <- as.character(realtime$year)
     realtime$fake_datetime <- gsub("[0-9]{4}", last_year, realtime$datetime)
@@ -544,8 +564,25 @@ plotOverlap <- function(location,
   # Create basic plot with historic range
   
   plot <- plotly::plot_ly() %>%
-    plotly::add_ribbons(data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#5f9da6"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
-    plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("#D4ECEF"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"))
+    plotly::add_ribbons(data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ], 
+                        x = ~datetime, 
+                        ymin = ~q25, 
+                        ymax = ~q75, 
+                        name = if (lang == "en") "IQR" else "EIQ", 
+                        color = I("#5f9da6"), 
+                        line = list(width = 0.2), 
+                        hoverinfo = "text", 
+                        text = ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")")) 
+  %>%
+    plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], 
+                        x = ~datetime, 
+                        ymin = ~min, 
+                        ymax = ~max, 
+                        name = "Min-Max", 
+                        color = I("#D4ECEF"), 
+                        line = list(width = 0.2), 
+                        hoverinfo = "text", 
+                        text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"))
   
   # Add traces
   col_idx <- 1
@@ -556,7 +593,8 @@ plotOverlap <- function(location,
                               data = realtime[realtime$plot_year == i, ],
                               x = ~fake_datetime,
                               y = ~value,
-                              type = "scatter",
+                              # type = "scatter",
+                              type = "scattergl",
                               mode = "lines",
                               line = list(width = 2.5 * line_scale),
                               name = i,
@@ -606,6 +644,6 @@ plotOverlap <- function(location,
       legend = list(font = list(size = legend_scale * 12))
     ) %>%
     plotly::config(locale = lang)
-  
+
   return(plot)
 }

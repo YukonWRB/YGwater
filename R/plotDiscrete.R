@@ -953,17 +953,31 @@ AND s.datetime > '", start, "' AND s.datetime < '", end, "';
       # ncols <- ceiling(length(plots) / nrows)
     }
     
+    # Attempt to make subplots same size always, taken from this: https://github.com/plotly/plotly.R/issues/2144
+    # corr_margin <- function(m, margin) {
+    #   if (m >= 3L) {
+    #     average_margin <- margin * (m - 2) / m
+    #     outer_size <- 1 / m - average_margin
+    #     inner_size <- 1 / m - average_margin + margin
+    #     return(c(outer_size, rep(inner_size, m - 2L), outer_size))
+    #   }
+    #   NULL
+    # }
+    
+    margins <-  c(0, (0.08 * axis_scale), 0, (0.08 * axis_scale)) # left, right, top, bottom
+    
     # Apply the layout settings to the final plot
     final_plot <- plotly::subplot(plots, 
                                   nrows = nrows,
-                                  # widths = rep(1/ncols, ncols),
+                                  # heights = corr_margin(nrows, (margins[3] + margins[4])/2),
+                                  # widths = corr_margin(ncols, (margins[1] + margins[2])/2),
                                   # heights = rep(1/nrows, nrows),
                                   shareX = FALSE,
                                   shareY = FALSE,
                                   titleX = FALSE, 
                                   titleY = TRUE,
-                                  margin = c(0, (0.08 * axis_scale), 0, (0.08 * axis_scale))) %>%
-      plotly::layout(showlegend = TRUE)
+                                  margin = margins) %>% 
+       plotly::layout(showlegend = TRUE)
     
     # Link axes if desired
     if (shareX || shareY) {
