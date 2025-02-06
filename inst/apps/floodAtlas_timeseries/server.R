@@ -131,7 +131,7 @@ app_server <- function(input, output, session) {
                   slider = FALSE,
                   title = TRUE,
                   custom_title = if (lang == "en") "Last 30 days" else "Derniers 30 jours",
-                  con = NULL)
+                  con = con)
       DBI::dbDisconnect(con)
       return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
     })

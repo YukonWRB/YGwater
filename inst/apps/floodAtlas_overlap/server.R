@@ -177,7 +177,7 @@ app_server <- function(input, output, session) {
                   gridx = FALSE,
                   gridy = FALSE,
                   slider = FALSE,
-                  con = NULL)
+                  con = con)
       DBI::dbDisconnect(con)
       return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
     })
