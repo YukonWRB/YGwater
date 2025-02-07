@@ -19,6 +19,12 @@ xle_processing <- function(file,
                            logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
                            dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
                            repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
+  file = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\FAILED\\1083563_YOWN-2308 Haines Junction Villag_2024_09_17_115603.xle"
+  aq_upload = TRUE
+  master_sheet = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
+  logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
+  dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
+  repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
   
   # Make sure tibble is installed as it's in suggests
   rlang::check_installed("tibble", reason = "necessary for function to run")
@@ -167,7 +173,7 @@ xle_processing <- function(file,
   if (!well_loc %in% YOWNIDs) { #If YOWN ID is not found in master sheet, move file to "FAILED" folder and stop
     file.rename(from = paste0(dropbox, "/", file),
                 to = paste0(dropbox, "/FAILED/", file))
-    stop("The YOWN code specified in the file name does not exist") 
+    stop(write(paste0("Please check the YOWN code for errors"), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")) 
   }
   
   write(paste0(well_loc, " detected in file name"), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
