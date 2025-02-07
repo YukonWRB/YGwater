@@ -27,19 +27,19 @@ floodAtlas <- function(app, host = getOption("shiny.host", "127.0.0.1"), port = 
   rlang::check_installed("promises", reason = "required to enable asynchronous operations in floodAtlas apps")
   rlang::check_installed("future", reason = "required to enable asynchronous operations in floodAtlas apps")
   
-  # # If on Windows OS OR running interactively, use multisession, else use multicore
-  # if (Sys.info()["sysname"] == "Windows" | interactive()) {
-  #   future::plan("multisession")
-  # } else {
-  #   future::plan("multicore")
-  # }
+  # If on Windows OR running interactively, use multisession, else use multicore
+  if (Sys.info()["sysname"] == "Windows" | interactive()) {
+    future::plan("multisession")
+  } else {
+    future::plan("multicore")
+  }
   
-  future::plan("multisession")
+  # future::plan("multisession")
   
   if (app == "overlap") {
-    appDir <- system.file("apps/floodAtlas_overlap", package = "YGwater")
+    appDir <- system.file("apps/floodAtlas_over", package = "YGwater")
   } else if (app == "timeseries") {
-    appDir <- system.file("apps/floodAtlas_timeseries", package = "YGwater")
+    appDir <- system.file("apps/floodAtlas_ts", package = "YGwater")
   } else {
     stop("Invalid app name. Choose either 'overlap' or 'timeseries'.")
   }
@@ -50,11 +50,11 @@ floodAtlas <- function(app, host = getOption("shiny.host", "127.0.0.1"), port = 
   
   # Load the global variables, library calls, and possibly in future a connection to the DB.
   if (app == "overlap") {
-    source(system.file("apps/floodAtlas_overlap/floodAtlas_overlap_globals.R", package = "YGwater"))
-    floodAtlas_overlap_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass)
+    source(system.file("apps/floodAtlas_over/floodAtlas_over_globals.R", package = "YGwater"))
+    floodAtlas_over_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass)
   } else if (app == "timeseries") {
-    source(system.file("apps/floodAtlas_timeseries/floodAtlas_timeseries_globals.R", package = "YGwater"))
-    floodAtlas_timeseries_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass)
+    source(system.file("apps/floodAtlas_ts/floodAtlas_ts_globals.R", package = "YGwater"))
+    floodAtlas_ts_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass)
   }
 
   

@@ -19,7 +19,7 @@
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
-#' @param plot_rate One of 'realtime' (max resolution), 'hourly', 'daily'. Default to 'hourly'.
+#' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
@@ -89,7 +89,7 @@ plotOverlap <- function(location,
                         slider = TRUE,
                         filter = NULL,
                         historic_range = 'last',
-                        plot_rate = "daily",
+                        rate = "day",
                         line_scale = 1,
                         axis_scale = 1,
                         legend_scale = 1,
@@ -132,9 +132,11 @@ plotOverlap <- function(location,
     }
   }
   
-  if (!plot_rate %in% c("realtime", "hourly", "daily")) {
-    warning("Your entry for parameter plot_rate is invalid. It's been reset to the default 'hourly'.")
-    plot_rate <- "hourly"
+  if (!is.null(rate)) {
+    reate <- tolower(rate)
+    if (!(rate %in% c("max", "hour", "day"))) {
+      stop("Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again.")
+    }
   }
   
   if (is.null(years)) {
@@ -367,11 +369,11 @@ plotOverlap <- function(location,
     end_UTC <- end
     attr(end_UTC, "tzone") <- "UTC"
     if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance (rest is populated with daily means. Gives 3 full years of data at 1 hour intervals)
-      if (plot_rate == "realtime") {
+      if (rate == "max") {
         new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL ORDER BY datetime")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-      } else if (plot_rate == "hourly") {
+      } else if (rate == "hour") {
         new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL ORDER BY datetime")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-      } else if (plot_rate == "daily") {
+      } else if (rate == "day") {
         new_realtime <- data.table::data.table()
       }
       

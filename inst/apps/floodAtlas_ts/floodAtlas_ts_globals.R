@@ -1,4 +1,4 @@
-floodAtlas_timeseries_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass) {
+floodAtlas_ts_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass) {
   
   library(shiny)
   library(shinyjs)

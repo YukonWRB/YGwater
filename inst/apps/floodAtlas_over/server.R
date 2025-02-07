@@ -1,27 +1,51 @@
-#' The floodAtlas timeseries app server-side
+#' The floodAtlas overlapping years app server-side
 #'
 #' @param input,output,session Internal parameters for {shiny}.
 #'     DO NOT REMOVE.
 #' @import shiny
 #' @noRd
 
+
 app_server <- function(input, output, session) {
   
   # Initial setup #############################################################
   
+  # Connection to DB
+  session$userData$con <- AquaConnect(name = config$dbName,
+                                      host = config$dbHost,
+                                      port = config$dbPort,
+                                      username = config$dbUser,
+                                      password = config$dbPass,
+                                      silent = TRUE)
+  
+  print("Connected to AquaCache")
+  
+  session$onUnhandledError(function() {
+    DBI::dbDisconnect(session$userData$con)
+    print("Disconnected from AquaCache after unhandled error")
+  })
+  
+  session$onSessionEnded(function() {
+    DBI::dbDisconnect(session$userData$con)
+    print("Disconnected from AquaCache after session end")
+  })
+  
   # Remove irrelevant bookmarks
-  setBookmarkExclude(c("plot", "error", "info", "redo", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
+  setBookmarkExclude(c("go", "plot", "error", "info", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
   
   # Automatically update URL every time an input changes
   observe({
-    req(input$loc_code, input$param_code, input$lang)
+    req(input$loc_code, input$param_code, input$yrs, input$lang)
     session$doBookmark()
   })
   
   output$visible_buttons <- renderUI({
     fluidRow(
       class = "button-row",
+      # actionButton("info", label = if (input$lang == "en") "Plot info" else "Info sur le graphique", style = 'margin-bottom: 15px'),
       actionButton("info", label = "Info", style = 'margin-bottom: 15px'),
+      selectizeInput("yrs", label = NULL, choices = as.character(format(Sys.Date(), "%Y")), selected = as.character(format(Sys.Date(), "%Y")), multiple = TRUE, options = list(maxItems = 10)),
+      bslib::input_task_button("go", label = if (input$lang == "en") "Re-draw" else "Re-dessiner", label_busy = if (input$lang == "en") "Processing..." else "SVP patienter...", style = 'margin-bottom: 15px')
     )
   })
   
@@ -47,12 +71,20 @@ app_server <- function(input, output, session) {
       params$lang <- sub
       updateTextInput(session, "lang", value = params$lang)
     }
+    if (!is.null(query$yrs)) {
+      sub_yrs <- gsub("[[:punct:]]", "", query$yrs)
+      params$yrs <- as.numeric(sub_yrs)
+    }
     
     if (!is.null(query$loc_code)) {
       sub_loc <- gsub("[[:punct:]]", "", query$loc_code)
       params$loc_code <- sub_loc
       sub_param <- gsub("[[:punct:]]", "", query$param_code)
       params$param_code <- as.numeric(sub_param)
+      # Find the years of record for the location
+      tsid <- DBI::dbGetQuery(session$userData$con, paste0("SELECT timeseries_id FROM timeseries WHERE location = '", params$loc_code, "' AND parameter_id = ",  params$param_code, ";"))[1,1]
+      yrs <- DBI::dbGetQuery(session$userData$con, paste0("SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " ORDER BY year DESC;"))
+      updateSelectizeInput(session, "yrs", choices = yrs$year, selected = params$yrs)
     }
     
     # Trigger the plot creation
@@ -62,13 +94,27 @@ app_server <- function(input, output, session) {
   
   # Observers run after initial app load ######################################
   
+  # Update the years if the user changes them
+  observeEvent(input$yrs, {
+    params$yrs <- input$yrs
+  })
+  
+  # input$go is triggering a reactiveValues change, which triggers the plot to be re-rendered. This is done to allow for triggering the reactive upon loading from a URL as well as when clicking the go button.
+  observeEvent(input$go, {
+    if (params$render) {
+      params$render <- FALSE
+    } else {
+    params$render <- TRUE
+    }
+  })
+  
   # Show a modal with explanatory info when the user clicks the info button
   observeEvent(input$info, {
     if (params$lang == "en") {
       showModal(modalDialog(
         title = "Information",
         HTML("<ul>
-              <li>This plots shows of water level or flow at full resolution (5 minutes to 1 hour) for the past 30 days.</li>
+              <li>This plot allow you to plot up to 10 years of data to compare water level or flow traces to each other and to historic ranges.</li>
               <li>The 'Typical' range is the interquartile range, which is the range of values between the 25th and 75th percentiles of the data.</li>
               <li>The 'Historic' range is the full range of daily mean values.</li>
               <li>The typical and historic ranges are calculated using all data <i><b>prior</i> </b>to the last year selected, giving relevant historical context.</li>
@@ -81,7 +127,7 @@ app_server <- function(input, output, session) {
       showModal(modalDialog(
         title = "Information",
         HTML("<ul>
-              <li>Ce graphique démontre le niveau d'eau ou débit durant les 30 derniers jours .</li>
+              <li>Ce grahique vous permettent de tracer jusqu'à 10 ans de données pour comparer les traces de niveau d'eau ou de débit les unes aux autres et aux plages historiques.</li>
               <li>La plage typique représente l'écart interquartile, qui est la plage de valeurs entre les 25e et 75e percentiles des données.</li>
               <li>La plage historique est la plage complète des valeurs moyennes journalières.</li>
               <li>Les plages typiques et historiques sont calculées en utilisant toutes les données <i><b>antérieures</i></b> à la dernière année sélectionnée, donnant un contexte historique.</li>
@@ -102,10 +148,9 @@ app_server <- function(input, output, session) {
     }
   })
   
-  
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
-    function(loc, param, lang, config) {
+    function(loc, param, yrs, lang, config) {
 
     promises::future_promise({
       
@@ -116,10 +161,13 @@ app_server <- function(input, output, session) {
                          password = config$dbPass,
                          silent = TRUE)
       
-      p <- plotTimeseries(location = loc,
+      p <- plotOverlap(location = loc,
                   sub_location = NULL,
                   parameter = param,
-                  start_date = Sys.Date() - 30,
+                  startDay = 1,
+                  endDay = 365,
+                  years = yrs,
+                  plot_rate = "daily",
                   datum = FALSE,
                   filter = 20,
                   lang = lang,
@@ -129,22 +177,18 @@ app_server <- function(input, output, session) {
                   gridx = FALSE,
                   gridy = FALSE,
                   slider = FALSE,
-                  title = TRUE,
-                  custom_title = if (lang == "en") "Last 30 days" else "Derniers 30 jours",
                   con = con)
       DBI::dbDisconnect(con)
       return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
     })
-  })
+  }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
   
-  # Trigger the plot creation when the render changes
   observeEvent(params$render, {
-    plot_output$invoke(params$loc_code, params$param_code, params$lang, config)
+    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, config)
   })
   
   output$plot <- plotly::renderPlotly({
     plot_output$result()
   })
-  
   
 }
