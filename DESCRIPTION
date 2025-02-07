@@ -1,7 +1,7 @@
 Package: YGwater
 Title: Utility functions for the Yukon Water Science and Stewardship
     Branch
-Version: 1.4.20
+Version: 1.5.0
 Authors@R: c(
     person("Ghislain", "de Laplante", , "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -80,16 +80,14 @@ Suggests:
     RSQLite,
     trend,
     shiny,
-    shinyalert,
     shinyjs,
-    shinythemes,
-    shinyWidgets,
     testthat (>= 3.0.0),
     tidyhydat,
     tibble,
     vdiffr,
     weathercan,
-    withr
+    withr,
+    zipR
 Remotes:
     github::ropensci/weathercan,
     github::YukonWRB/AquaCache

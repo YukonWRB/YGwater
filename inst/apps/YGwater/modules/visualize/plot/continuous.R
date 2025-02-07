@@ -2,119 +2,15 @@ continuousPlotUI <- function(id) {
   ns <- NS(id)
   sidebarLayout(
     sidebarPanel(
-      selectizeInput(ns("type"), label = "Plot type", choices = c("Long timeseries", "Overlapping years"), selected = "Long timeseries"),
-      selectizeInput(ns("param"), label = "Plotting parameter", choices = "placeholder"), #Choices are selected in the server
-      selectizeInput(ns("loc_code"), "Select location by code", choices = "placeholder"), #Choices are selected in the server
-      selectizeInput(ns("loc_name"), "Select location by name", choices = "placeholder"), #Choices are selected in the server
-      
-      # Now make a conditional panel depending on the selected plot type
-      conditionalPanel(
-        ns = ns,
-        condition = "input.type == 'Overlapping years'",
-        
-        div(
-          dateInput(ns("start_doy"), "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
-          style = "display: flex; align-items: center;",
-          span(
-            id = ns("log_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
-            title = "The year is ignored; only the day-of-year is used.",
-            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-          )
-        ),
-        div(
-          dateInput(ns("end_doy"), "End day-of-year", , value = paste0(lubridate::year(Sys.Date()), "-01-01")),
-          style = "display: flex; align-items: center;",
-          span(
-            id = ns("log_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
-            title = "The year is ignored; only the day-of-year is used.",
-            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-          )
-        ),
-        div(
-          selectizeInput(ns("years"), label = "Select years to plot", , choices = "placeholder", multiple = TRUE), #Choices are selected in the server
-          style = "display: flex; align-items: center;",
-          span(
-            id = ns("log_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
-            title = "For periods overlaping the new year select the December year.",
-            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-          )
-        ),
-        div(
-          selectizeInput(ns("historic_range_overlap"),"Historic range includes all years of record or up to last year plotted?", 
-                         choices = c("all", "last"), selected = "all"),
-          style = "display: flex; align-items: center;",
-          span(
-            id = ns("log_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
-            title = "Historic ranges are plotted as a gray ribbon.",
-            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-          )
-        ),
-        selectizeInput(ns("return_periods"), "Plot return periods?", choices = stats::setNames(c("none", "auto", "calculate", "table"), c("none", "auto select", "calculate", "from table")), selected = "auto select"),
-        selectizeInput(ns("return_type"), "Select return type", choices = c("Min", "Max"), selected = "Max"),
-        numericInput(ns("return_yrs"), "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),
-        textInput(ns("return_months"), "Months for return calculation (comma delimited)", value = "5,6,7,8,9"),
-      ),
-      
-      conditionalPanel(
-        ns = ns,
-        condition = "input.type == 'Long timeseries'",
-        dateInput(ns("start_date"), "Start date", value = Sys.Date() - 365, max = Sys.Date() - 1),
-        dateInput(ns("end_date"), "End date", value = Sys.Date(), max = Sys.Date()),
-        uiOutput(ns("trace1_ui")), # Will be a button with the trace values. Upon click, user can edit or remove the trace.
-        uiOutput(ns("trace2_ui")),
-        uiOutput(ns("trace3_ui")),
-        uiOutput(ns("trace4_ui")),
-        uiOutput(ns("subplot1_ui")), # Will be a button with the subplot values. Upon click, user can edit or remove the subplot.
-        uiOutput(ns("subplot2_ui")),
-        uiOutput(ns("subplot3_ui")),
-        uiOutput(ns("subplot4_ui")),
-        div(
-          style = "display: flex; justify-content: flex-start;", # Use flexbox to align buttons side by side
-          actionButton(ns("add_trace"),
-                       "Add trace",
-                       style = "margin-right: 5px;"),
-          actionButton(ns("add_subplot"),
-                       "Add subplot")
-        ),
-        checkboxInput(ns("log_y"), "Log scale y-axis?"),
-        uiOutput(ns("share_axes")),
-        checkboxInput(ns("historic_range"), "Plot historic range?")
-      ),
-      checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
-      checkboxInput(ns("plot_filter"), "Filter extreme values?"),
-      
-      div(
-        actionButton(ns("extra_aes"),
-                     "Modify plot aesthetics",
-                     title = "Modify plot aesthetics such as language, line size, text size.",
-                     style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
-        actionButton(ns("make_plot"),
-                     "Create Plot",
-                     style = "display: block; width: 100%;") # Ensure block display and full width
-      )
+      uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
     ),
     mainPanel(
-      plotOutput(ns("plot_gg"), height = "800px"),
-      plotly::plotlyOutput(ns("plot_plotly"), width = "100%", height = "800px", inline = TRUE),
-      actionButton(ns("full_screen"),
-                   "Full screen")
+      uiOutput(ns("main"))
     )
   )
 }
 
-continuousPlotServer <- function(id, AquaCache, data) {
+continuousPlotServer <- function(id, data, language, windowDims) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server
@@ -122,28 +18,154 @@ continuousPlotServer <- function(id, AquaCache, data) {
     
     # Initial setup and data loading ########################################################################
     values <- reactiveValues()
+    # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth' - this is used to change default plot start/end dates and to show the datum checkbox
+    values$water_level <- data$parameters$parameter_id[data$parameters$param_name == "water level"]
+    values$swe <- data$parameters$parameter_id[data$parameters$param_name == "snow water equivalent"]
+    values$snow_depth <- data$parameters$parameter_id[data$parameters$param_name == "snow depth"]
     
-    observe({
-      # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth'
-      values$water_level <- data$parameters$parameter_id[data$parameters$param_name == "water level"]
-      values$swe <- data$parameters$parameter_id[data$parameters$param_name == "snow water equivalent"]
-      values$snow_depth <- data$parameters$parameter_id[data$parameters$param_name == "snow depth"]
-      # Update the parameter choices
-      updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = values$water_level)
-    })
+    # Prevention of circular updates
+    values$updating <- FALSE
     
+    # Create the UI for the sidebar and main panel #########################################################
+    # Render the sidebar UI
+    output$sidebar <- renderUI({
+      req(data, language$language, language$abbrev)
+      tagList(
+        selectizeInput(ns("type"), label = "Plot type", choices = c("Long timeseries", "Overlapping years"), selected = "Long timeseries"),
+        selectizeInput(ns("param"), label = "Plotting parameter", stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = values$water_level),
+        selectizeInput(ns("loc_code"), "Select location by code", choices = NULL), # Choices are populated based on the parameter
+        selectizeInput(ns("loc_name"), "Select location by name", choices = NULL), # Choices are populated based on the parameter
+        
+        # Now make a conditional panel depending on the selected plot type
+        conditionalPanel(
+          ns = ns,
+          condition = "input.type == 'Overlapping years'",
+          
+          div(
+            dateInput(ns("start_doy"), "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
+            style = "display: flex; align-items: center;",
+            span(
+              id = ns("log_info"),
+              `data-toggle` = "tooltip",
+              `data-placement` = "right",
+              `data-trigger` = "click hover",
+              title = "The year is ignored; only the day-of-year is used.",
+              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+            )
+          ),
+          div(
+            dateInput(ns("end_doy"), "End day-of-year", , value = paste0(lubridate::year(Sys.Date()), "-01-01")),
+            style = "display: flex; align-items: center;",
+            span(
+              id = ns("log_info"),
+              `data-toggle` = "tooltip",
+              `data-placement` = "right",
+              `data-trigger` = "click hover",
+              title = "The year is ignored; only the day-of-year is used.",
+              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+            )
+          ),
+          div(
+            selectizeInput(ns("years"), label = "Select years to plot", choices = NULL, multiple = TRUE), #Choices are populated based on the location and parameter
+            style = "display: flex; align-items: center;",
+            span(
+              id = ns("log_info"),
+              `data-toggle` = "tooltip",
+              `data-placement` = "right",
+              `data-trigger` = "click hover",
+              title = "For periods overlaping the new year select the December year.",
+              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+            )
+          ),
+          div(
+            selectizeInput(ns("historic_range_overlap"),"Historic range includes all years of record or up to last year plotted?", 
+                           choices = c("all", "last"), selected = "all"),
+            style = "display: flex; align-items: center;",
+            span(
+              id = ns("log_info"),
+              `data-toggle` = "tooltip",
+              `data-placement` = "right",
+              `data-trigger` = "click hover",
+              title = "Historic ranges are plotted as a gray ribbon.",
+              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+            )
+          )
+          # lines below were used with the ggplot overlaping years plot, these params have yet to be included in the plotly plot
+          # selectizeInput(ns("return_periods"), "Plot return periods?", choices = stats::setNames(c("none", "auto", "calculate", "table"), c("none", "auto select", "calculate", "from table")), selected = "auto select"),
+          # selectizeInput(ns("return_type"), "Select return type", choices = c("Min", "Max"), selected = "Max"),
+          # numericInput(ns("return_yrs"), "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),
+          # textInput(ns("return_months"), "Months for return calculation (comma delimited)", value = "5,6,7,8,9"),
+        ),
+        
+        conditionalPanel(
+          ns = ns,
+          condition = "input.type == 'Long timeseries'",
+          dateInput(ns("start_date"), "Start date", value = Sys.Date() - 365, max = Sys.Date() - 1),
+          dateInput(ns("end_date"), "End date", value = Sys.Date(), max = Sys.Date()),
+          uiOutput(ns("trace1_ui")), # Will be a button with the trace values. Upon click, user can edit or remove the trace.
+          uiOutput(ns("trace2_ui")),
+          uiOutput(ns("trace3_ui")),
+          uiOutput(ns("trace4_ui")),
+          uiOutput(ns("subplot1_ui")), # Will be a button with the subplot values. Upon click, user can edit or remove the subplot.
+          uiOutput(ns("subplot2_ui")),
+          uiOutput(ns("subplot3_ui")),
+          uiOutput(ns("subplot4_ui")),
+          div(
+            style = "display: flex; justify-content: flex-start;", # Use flexbox to align buttons side by side
+            actionButton(ns("add_trace"),
+                         "Add trace",
+                         style = "margin-right: 5px;"),
+            actionButton(ns("add_subplot"),
+                         "Add subplot")
+          ),
+          checkboxInput(ns("log_y"), "Log scale y-axis?"),
+          uiOutput(ns("share_axes")),
+          checkboxInput(ns("historic_range"), "Plot historic range?")
+        ),
+        checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
+        checkboxInput(ns("plot_filter"), "Filter extreme values?"),
+        
+        div(
+          actionButton(ns("extra_aes"),
+                       "Modify plot aesthetics",
+                       title = "Modify plot aesthetics such as language, line size, text size.",
+                       style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
+          actionButton(ns("make_plot"),
+                       "Create Plot",
+                       style = "display: block; width: 100%;") # Ensure block display and full width
+        )
+      ) # End tagList
+    }) %>% # End renderUI
+      bindEvent(language$language, data) # Re-render the UI if the language or data changes
+    
+    output$main <- renderUI({
+      tagList(
+        plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
+        uiOutput(ns("full_screen_ui"))
+      ) # End tagList
+    }) %>% # End renderUI
+      bindEvent(language$language) # Re-render the UI if the language or data changes
+    
+    
+    # Update the location choices based on the selected parameter ##########################################
     observeEvent(input$param, {
       # Update the location choices
-      updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]))
-      updateSelectizeInput(session, "loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))
+      updateSelectizeInput(session, 
+                           "loc_name", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), 
+                           selected = if (input$loc_name %in% data$all_ts[data$all_ts$parameter_id == input$param, "name"]) input$loc_name else character(0)) # already ordered by the query
+      updateSelectizeInput(session, 
+                           "loc_code", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], 
+                           selected = if (input$loc_code %in% data$all_ts[data$all_ts$parameter_id == input$param, "location"]) input$loc_code else character(0))
       if (input$param %in% c(values$swe, values$snow_depth)) {
         updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
         updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
-        updateTextInput(session, "return_months", value = "3,4,5")
+        # updateTextInput(session, "return_months", value = "3,4,5")
       } else {
         updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()), "-01-01"))
         updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-12-31"))
-        updateTextInput(session, "return_months", value = "5,6,7,8,9")
+        # updateTextInput(session, "return_months", value = "5,6,7,8,9")
       }
       if (input$param == values$water_level) {
         shinyjs::show("apply_datum")
@@ -151,20 +173,20 @@ continuousPlotServer <- function(id, AquaCache, data) {
         shinyjs::hide("apply_datum")
         updateCheckboxInput(session, "apply_datum", value = FALSE)
       }
-    })
+    }, ignoreNULL = TRUE)
     
     # Cross-updating of plot selection location name or code, and toggle apply_datum visible/invisible
     observeEvent(input$loc_code, {
       if (input$loc_code %in% data$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
         updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
+        # Update years, used for the overlapping years plot (runs regardless of plot type selected because the user could switch plot types)
         try({
           possible_years <- seq(
             as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "end_datetime"], 1, 4)),
             as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "start_datetime"], 1, 4))
-            )
+          )
           updateSelectizeInput(session, "years", choices = possible_years)
         })
-
         data$possible_datums <- data$datums[data$datums$location == input$loc_code & data$datums$conversion_m != 0, ]
         if (nrow(data$possible_datums) < 1) {
           shinyjs::hide("apply_datum")
@@ -179,18 +201,6 @@ continuousPlotServer <- function(id, AquaCache, data) {
       updateSelectizeInput(session, "loc_code", selected = unique(data$all_ts[data$all_ts$name == input$loc_name, "location"]))
     }, ignoreInit = TRUE)
     
-    observeEvent(input$return_periods, {
-      if (input$return_periods == "none") {
-        shinyjs::hide("return_type")
-        shinyjs::hide("return_months")
-        shinyjs::hide("return_yrs")
-      } else {
-        shinyjs::show("return_type")
-        shinyjs::show("return_months")
-        shinyjs::show("return_yrs")
-      }
-    }, ignoreInit = TRUE)
-    
     # Modal dialog for extra aesthetics ########################################################################
     # Create a list with default aesthetic values
     plot_aes <- reactiveValues(lang = "en",
@@ -200,7 +210,6 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                axis_scale = 1,
                                legend_scale = 1)
     
-    # Modal dialog for extra aesthetics
     observeEvent(input$extra_aes, {
       showModal(modalDialog(
         title = "Modify plot aesthetics",
@@ -266,6 +275,17 @@ continuousPlotServer <- function(id, AquaCache, data) {
     runTraceNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
     observeEvent(input$add_trace, {
       # When the button is clicked, a modal will appear with the necessary fields to add a trace. The trace values are then displayed to the user under button 'trace_x'
+      # Make sure that there is an input$param, input$loc_code before running the modal; give the user an informative modal if not
+      if (nchar(input$loc_code) == 0 | nchar(input$param) == 0) {
+        showModal(modalDialog(
+          "Please select a location and parameter for the first trace before adding another.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
       
       if (runTraceNew() == FALSE) {
         showModal(modalDialog(
@@ -300,8 +320,14 @@ continuousPlotServer <- function(id, AquaCache, data) {
     
     # Observe the param inputs for all traces and update the location choices in the modal
     observeEvent(input$traceNew_param, {
-      updateSelectizeInput(session, "traceNew_loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]))
-      updateSelectizeInput(session, "traceNew_loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]))
+      updateSelectizeInput(session, 
+                           "traceNew_loc_code", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]),
+                           selected = if (input$traceNew_loc_code %in% data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]) input$traceNew_loc_code else character(0))
+      updateSelectizeInput(session, 
+                           "traceNew_loc_name", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]),
+                           selected = if (input$traceNew_loc_name %in% data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]) input$traceNew_loc_name else character(0))
     }, ignoreInit = TRUE)
     
     observeEvent(input$traceNew_loc_code, {
@@ -493,7 +519,7 @@ continuousPlotServer <- function(id, AquaCache, data) {
         shinyjs::show("loc_name")
         shinyjs::show("add_subplot")
         updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter)
-        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]), selected = traces$trace1$location)
+        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], selected = traces$trace1$location)
         updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"]))
       } else {
         shinyjs::show("trace1_ui")
@@ -511,6 +537,18 @@ continuousPlotServer <- function(id, AquaCache, data) {
     runSubplotNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
     observeEvent(input$add_subplot, {
       # When the button is clicked, a modal will appear with the necessary fields to add a subplot. The subplot values are then displayed to the user under button 'subplot_x'
+      
+      # Make sure that there is an input$param, input$loc_code before running the modal; give the user an informative modal if not
+      if (nchar(input$loc_code) == 0 | nchar(input$param) == 0) {
+        showModal(modalDialog(
+          "Please select a location and parameter for the first subplot before adding another.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
       
       if (runSubplotNew() == FALSE) {
         showModal(modalDialog(
@@ -542,8 +580,14 @@ continuousPlotServer <- function(id, AquaCache, data) {
     
     # Observe the param inputs for all traces and update the location choices in the modal
     observeEvent(input$subplotNew_param, {
-      updateSelectizeInput(session, "subplotNew_loc_code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]))
-      updateSelectizeInput(session, "subplotNew_loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]))
+      updateSelectizeInput(session, 
+                           "subplotNew_loc_code", 
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]),
+                           selected = if (input$subplotNew_loc_code %in% data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]) input$subplotNew_loc_code else character(0))
+      updateSelectizeInput(session,
+                           "subplotNew_loc_name",
+                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]),
+                           selected = if (input$subplotNew_loc_name %in% data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]) input$subplotNew_loc_name else character(0))
     }, ignoreInit = TRUE)
     
     observeEvent(input$subplotNew_loc_code, {
@@ -577,13 +621,13 @@ continuousPlotServer <- function(id, AquaCache, data) {
           shinyjs::show("shareX")
           shinyjs::show("shareY")
         }
-
+        
         subplots$subplot1 <- list(subplot = "subplot1",
-                              parameter = as.numeric(input$param),
-                              location = input$loc_code)
+                                  parameter = as.numeric(input$param),
+                                  location = input$loc_code)
         subplots$subplot2 <- list(subplot = "subplot2",
-                              parameter = as.numeric(input$subplotNew_param),
-                              location = input$subplotNew_loc_code)
+                                  parameter = as.numeric(input$subplotNew_param),
+                                  location = input$subplotNew_loc_code)
         button1Text <- HTML(paste0("<b>Subplot 1</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot1$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"])))
         button2Text <- HTML(paste0("<b>Subplot 2</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot2$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot2$location, "name"])))
         output$subplot1_ui <- renderUI({
@@ -600,8 +644,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
         
       } else if (subplotCount() == 2) {
         subplots$subplot3 <- list(subplot = "subplot3",
-                              parameter = as.numeric(input$subplotNew_param),
-                              location = input$subplotNew_loc_code)
+                                  parameter = as.numeric(input$subplotNew_param),
+                                  location = input$subplotNew_loc_code)
         button3Text <- HTML(paste0("<b>Subplot 3</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot3$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot3$location, "name"])))
         output$subplot3_ui <- renderUI({
           actionButton(ns("subplot3"), button3Text)
@@ -610,8 +654,8 @@ continuousPlotServer <- function(id, AquaCache, data) {
         
       } else if (subplotCount() == 3) {
         subplots$subplot4 <- list(subplot = "subplot4",
-                              parameter = as.numeric(input$subplotNew_param),
-                              location = input$subplotNew_loc_code)
+                                  parameter = as.numeric(input$subplotNew_param),
+                                  location = input$subplotNew_loc_code)
         button4Text <- HTML(paste0("<b>Subplot 4</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot4$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot4$location, "name"])))
         output$subplot4_ui <- renderUI({
           actionButton(ns("subplot4"), button4Text)
@@ -744,7 +788,7 @@ continuousPlotServer <- function(id, AquaCache, data) {
         shinyjs::show("loc_name")
         shinyjs::show("add_trace")
         updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot1$parameter)
-        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]), selected = subplots$subplot1$location)
+        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], selected = subplots$subplot1$location)
         updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"]))
       } else {
         shinyjs::show("subplot1_ui")
@@ -754,45 +798,52 @@ continuousPlotServer <- function(id, AquaCache, data) {
     
     
     # Create and render the plot ############################################################
+    plot_created <- reactiveVal(FALSE)
     observeEvent(input$make_plot, {
       shinyjs::hide("full_screen")
       
       tryCatch({
-        withProgress(message = "Generating plot... please be patient", value = 0, {
+        withProgress(message = tr("generating_working", language$language), value = 0, {
           
           incProgress(0.5)
-          filter <- if (input$plot_filter) 20 else NULL
           
           if (input$type == "Overlapping years") {
-            shinyjs::hide("plot_plotly")
             
-            return_months <- as.numeric(unlist(strsplit(input$return_months, ",")))
+            if (nchar(input$loc_code) == 0) {
+              showModal(modalDialog("Please select a location.", easyClose = TRUE))
+              return()
+            }
+            # return_months <- as.numeric(unlist(strsplit(input$return_months, ",")))
             
             plot <- plotOverlap(location = input$loc_code,
+                                sub_location = NULL,
+                                record_rate = NULL,
                                 parameter = as.numeric(input$param),
                                 startDay = input$start_doy,
                                 endDay = input$end_doy,
                                 years = input$years,
                                 historic_range = input$historic_range_overlap,
                                 datum = input$apply_datum,
-                                filter = filter,
-                                returns = input$return_periods,
-                                return_type = input$return_type,
-                                return_months = return_months,
-                                return_max_year = input$return_yrs,
-                                line_scale = 1.4 * plot_aes$line_scale,
-                                axis_scale = 1.4 * plot_aes$axis_scale,
-                                legend_scale = 1.4 * plot_aes$legend_scale,
+                                title = TRUE,
+                                filter = if (input$plot_filter) 20 else NULL,
+                                # Lines below used to be applicable to ggplots, but haven't been implemented in the plotly plot yet
+                                # returns = input$return_periods,
+                                # return_type = input$return_type,
+                                # return_months = return_months,
+                                # return_max_year = input$return_yrs,
+                                line_scale = plot_aes$line_scale,
+                                axis_scale = plot_aes$axis_scale,
+                                legend_scale = plot_aes$legend_scale,
+                                legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+                                slider = FALSE,
                                 lang = plot_aes$lang,
                                 gridx = plot_aes$showgridx,
                                 gridy = plot_aes$showgridy,
-                                con = AquaCache)
+                                con = session$userData$AquaCache)
             
-            output$plot_gg <- renderPlot(plot)
-            shinyjs::show("plot_gg")
+            output$plot <- plotly::renderPlotly(plot)
             
           } else if (input$type == "Long timeseries") {
-            shinyjs::hide("plot_gg")
             # Check if multiple traces are selected
             
             if (traceCount() == 1) {  # Either a single trace, or more than 1 subplot
@@ -807,83 +858,109 @@ continuousPlotServer <- function(id, AquaCache, data) {
                                             end_date = input$end_date,
                                             historic_range = input$historic_range,
                                             datum = input$apply_datum,
-                                            filter = filter,
+                                            filter = if (input$plot_filter) 20 else NULL,
                                             lang = plot_aes$lang,
                                             line_scale = plot_aes$line_scale,
                                             axis_scale = plot_aes$axis_scale,
                                             legend_scale = plot_aes$legend_scale,
+                                            legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+                                            slider = FALSE,
                                             gridx = plot_aes$showgridx,
                                             gridy = plot_aes$showgridy,
                                             shareX = input$shareX,
                                             shareY = input$shareY,
-                                            con = AquaCache)
+                                            con = session$userData$AquaCache)
               } else {
+                if (nchar(input$loc_code) == 0) {
+                  showModal(modalDialog("Please select a location.", easyClose = TRUE))
+                  return()
+                }
                 plot <- plotTimeseries(location = input$loc_code,
                                        parameter = as.numeric(input$param),
                                        start_date = input$start_date,
                                        end_date = input$end_date,
                                        historic_range = input$historic_range,
                                        datum = input$apply_datum,
-                                       filter = filter,
+                                       filter = if (input$plot_filter) 20 else NULL,
                                        lang = plot_aes$lang,
                                        line_scale = plot_aes$line_scale,
                                        axis_scale = plot_aes$axis_scale,
                                        legend_scale = plot_aes$legend_scale,
+                                       legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+                                       slider = FALSE,
                                        gridx = plot_aes$showgridx,
                                        gridy = plot_aes$showgridy,
-                                       con = AquaCache)
+                                       con = session$userData$AquaCache)
               }
             } else { # Multiple traces, single plot
-            locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
-            params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
-            lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
-            plot <- plotMultiTimeseries(type = "traces",
-                                        locations = locs,
-                                        parameters = params,
-                                        lead_lag = lead_lags,
-                                        start_date = input$start_date,
-                                        end_date = input$end_date,
-                                        historic_range = input$historic_range,
-                                        datum = input$apply_datum,
-                                        filter = filter,
-                                        lang = plot_aes$lang,
-                                        line_scale = plot_aes$line_scale,
-                                        axis_scale = plot_aes$axis_scale,
-                                        legend_scale = plot_aes$legend_scale,
-                                        gridx = plot_aes$showgridx,
-                                        gridy = plot_aes$showgridy,
-                                        shareX = input$shareX,
-                                        shareY = input$shareY,
-                                        con = AquaCache)
+              locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
+              params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
+              lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
+              plot <- plotMultiTimeseries(type = "traces",
+                                          locations = locs,
+                                          parameters = params,
+                                          lead_lag = lead_lags,
+                                          start_date = input$start_date,
+                                          end_date = input$end_date,
+                                          historic_range = input$historic_range,
+                                          datum = input$apply_datum,
+                                          filter = if (input$plot_filter) 20 else NULL,
+                                          lang = plot_aes$lang,
+                                          line_scale = plot_aes$line_scale,
+                                          axis_scale = plot_aes$axis_scale,
+                                          legend_scale = plot_aes$legend_scale,
+                                          legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+                                          slider = FALSE,
+                                          gridx = plot_aes$showgridx,
+                                          gridy = plot_aes$showgridy,
+                                          shareX = input$shareX,
+                                          shareY = input$shareY,
+                                          con = session$userData$AquaCache)
             }        
-            output$plot_plotly <- plotly::renderPlotly(plot)
-            shinyjs::show("plot_plotly")
+            output$plot <- plotly::renderPlotly(plot)
           }
-
+          
           incProgress(1)
+          plot_created(TRUE)
         }) # End withProgress\
         
         # Create a full screen button
         output$full_screen_ui <- renderUI({
           actionButton(ns("full_screen"), "Full screen")
         })
-        
-        shinyjs::show("full_screen")
       }, error = function(e) {
         showModal(modalDialog(paste0("An error occurred while creating the plot. Please check your inputs and try again.\n  \n  Error: ", e$message), easyClose = TRUE))
         return()
       })
     }, ignoreInit = TRUE) # End of plot rendering loop
-
-
-    observeEvent(input$full_screen, {
-      if (input$type == "Overlapping years") {
-        shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot_gg"), "');"))
-      } else if (input$type == "Long timeseries"){
-        shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot_plotly"), "');"))
+    
+    # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
+    # The js function takes care of debouncing the window resize event and also reacts to a change in orientation or full screen event
+    
+    observeEvent(windowDims(), {
+      req(plot_created())
+      if (is.null(windowDims())) return()
+      if (windowDims()$width > 1.3 * windowDims()$height) {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "v"))
+      } else {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "h"))
       }
+    }, ignoreNULL = TRUE)
+    
+    # Observe the full screen button and run the javascript function to make the plot full screen
+    observeEvent(input$full_screen, {
+      shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot"), "');"))
+      
+      # Manually trigger a window resize event after some delay
+      shinyjs::runjs("
+                      setTimeout(function() {
+                        sendWindowSizeToShiny();
+                      }, 700);
+                    ")
     }, ignoreInit = TRUE)
-
+    
   }) # End of moduleServer
 }
 

@@ -7,7 +7,7 @@ discDataUI <- function(id) {
   )
 }
 
-discData <- function(id, AquaCache) {
+discData <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

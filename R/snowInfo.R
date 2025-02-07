@@ -20,8 +20,7 @@
 #' @seealso [waterInfo()] for a similar function dealing with water flow/level.
 #' @export
 #'
-#TODO: This function should really be getting data from the hydro database.
-
+#'
 snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", stats = TRUE, complete_yrs = TRUE, plots = TRUE, plot_type = "combined", quiet = FALSE, con = NULL) {
 
   # parameters for testing (remember to comment out when done)
@@ -65,71 +64,81 @@ if (is.null(con)) {
   }
   
   if (locations[1] == "all") {
-    locations <- DBI::dbGetQuery(con, "SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
-FROM locations AS l
-JOIN locations_networks AS ln ON l.location_id = ln.location_id
-JOIN networks AS n ON ln.network_id = n.network_id
-JOIN timeseries AS t ON l.location_id = t.location_id
-JOIN datum_conversions AS d ON l.location_id = d.location_id
-WHERE n.name = 'Snow Survey Network'
-AND t.category = 'discrete';
+    locations <- DBI::dbGetQuery(con, "
+    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    FROM locations AS l
+    JOIN locations_networks AS ln ON l.location_id = ln.location_id
+    JOIN networks AS n ON ln.network_id = n.network_id
+    JOIN samples AS s ON l.location_id = s.location_id
+    JOIN datum_conversions AS d ON l.location_id = d.location_id
+    WHERE n.name = 'Snow Survey Network';
 ")
     all <- TRUE
   } else {
-    loc_tbl <- DBI::dbGetQuery(con, paste0("SELECT DISTINCT l.location, l.name, l.location_id
-FROM locations AS l
-JOIN locations_networks AS ln ON l.location_id = ln.location_id
-JOIN networks AS n ON ln.network_id = n.network_id
-JOIN timeseries AS t ON l.location_id = t.location_id
-WHERE n.name = 'Snow Survey Network'
-AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "', '"), "');
+    loc_tbl <- DBI::dbGetQuery(con, paste0("
+    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    FROM locations AS l
+    JOIN locations_networks AS ln ON l.location_id = ln.location_id
+    JOIN networks AS n ON ln.network_id = n.network_id
+    JOIN samples AS s ON l.location_id = s.location_id
+    JOIN datum_conversions AS d ON l.location_id = d.location_id
+    WHERE n.name = 'Snow Survey Network';
 "))
     check_locs <- loc_tbl$location[!(loc_tbl$location %in% locations)]
     if (length(check_locs) > 0) {
-      message("Could not find a record for location ", check_locs, ". Other locations will be returned.")
+      message("Could not find a record for location ", check_locs, ". All other locations will be returned.")
     }
     locations <- loc_tbl[loc_tbl$location %in% locations , ]
+    all <- FALSE
   }
 
   #Get the measurements
-  tsids <- DBI::dbGetQuery(con, paste0("SELECT t.timeseries_id, t.location_id, t.end_datetime, p.param_name, l.location FROM timeseries as T JOIN parameters as p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location = l.location WHERE t.location_id IN ('", paste(locations$location_id, collapse = "', '"), "')"))
-  
-  meas <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value, timeseries_id FROM measurements_discrete WHERE timeseries_id IN (", paste(tsids$timeseries_id, collapse = ", "), ")"))
 
-  if (!inactive) { #Filter out the inactive stations if inactive is FALSE
-    remove <- tsids[tsids$end_datetime < Sys.time() - 365*60*60*24*5, ]
-    locations <- locations[!locations$location_id %in% remove$location_id,]
-    meas <- meas[!meas$timeseries_id %in% remove$timeseries_id, ]
+  samples <- DBI::dbGetQuery(con, paste0("SELECT sample_id, location_id, target_datetime FROM samples WHERE location_id IN ('", paste(locations$location_id, collapse = "', '"), "') AND media_id = 7 AND collection_method = 1"))#media = 'atmospheric', collection_method = 'observation'
+  
+  if (!inactive) { # Filter out any location with no measurements for 5 or more years
+    inactive <- samples %>%
+      dplyr::group_by(location_id) %>%
+      dplyr::summarise(min_year = min(lubridate::year(target_datetime)),
+                       max_year = max(lubridate::year(target_datetime))) %>%
+      dplyr::mutate(inactive = max_year - min_year < 5) %>%
+      dplyr::filter(inactive) %>%
+      dplyr::pull(location_id)
+    
+    locations <- locations[!locations$location_id %in% inactive,]
+    samples <- samples[!samples$location_id %in% inactive,]
   }
+  
+  results <- DBI::dbGetQuery(con, paste0("SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('", paste(samples$sample_id, collapse = "', '"), "') AND p.parameter_id IN (21, 1220)"))
 
   #Manipulate/preprocess things a bit
-  meas$year <- lubridate::year(meas$target_date)
-  meas$month <- lubridate::month(meas$target_date)
+  samples$year <- lubridate::year(samples$target_datetime)
+  samples$month <- lubridate::month(samples$target_datetime)
   
-  meas <- merge(meas, tsids, by = "timeseries_id")
+  results <- merge(results, samples, by = "sample_id")
   
   if (stats) {
     #Calculate station basic stats: min, max, mean, median, total yrs, gaps
     stats_df <- data.frame()
     for (i in 1:nrow(locations)) {
-      yrs <- unique(meas[meas$location == locations$location[i] , "year"])
+      yrs <- unique(results[results$location_id == locations$location_id[i] , "year"])
       if (lubridate::month(Sys.Date()) %in% c(1:5) & complete_yrs) {
         yrs <- yrs[!yrs == lubridate::year(Sys.Date())]
       }
       total_yrs <- max(yrs) - min(yrs)
       gaps <- seq(min(yrs), max(yrs))[!(seq(min(yrs), max(yrs)) %in% yrs)]
-      sample_months <- sort(unique(lubridate::month(meas[meas$location == locations$location[i] , ]$target_datetime, label = TRUE, abbr = TRUE)))
-      allMaxSWE <- max(meas[meas$location == locations$location[i] & meas$param_name == "snow water equivalent" , "value"], na.rm = TRUE)
-      allMaxDepth <- max(meas[meas$location == locations$location[i] & meas$param_name == "snow depth" , "value"], na.rm = TRUE)
+      sample_months <- sort(unique(lubridate::month(results[results$location_id == locations$location_id[i] , ]$target_datetime, label = TRUE, abbr = TRUE)))
+      allMaxSWE <- max(results[results$location_id == locations$location_id[i] & results$param_name == "snow water equivalent" , "result"], na.rm = TRUE)
+      allMaxDepth <- max(results[results$location_id == locations$location_id[i] & results$param_name == "snow depth" , "result"], na.rm = TRUE)
 
       depthMaxes <- NULL
       SWEMaxes <- NULL
       for (j in unique(yrs)) {
-        subset <- meas[meas$year == j & meas$location == locations$location[i], ]
+        subset <- results[results$year == j & results$location_id == locations$location_id[i], ]
         months <- unique(subset$month)
         if (3 %in% months & 4 %in% months) {
-          subsetDepth <- max(subset[subset$param_name == "snow depth", "value"], na.rm = TRUE)
-          subsetSWE <- max(subset[subset$param_name == "snow water equivalent", "value"], na.rm = TRUE)
+          subsetDepth <- max(subset[subset$param_name == "snow depth", "result"], na.rm = TRUE)
+          subsetSWE <- max(subset[subset$param_name == "snow water equivalent", "result"], na.rm = TRUE)
           depthMaxes <- c(depthMaxes, subsetDepth)
           SWEMaxes <- c(SWEMaxes, subsetSWE)
         }
@@ -141,18 +150,18 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
       meanMaxSWE <- mean(SWEMaxes)
 
       stats_df <- rbind(stats_df,
-                     data.frame("location_ID" = locations$location[i],
+                     data.frame("location_code" = locations$location[i],
                                 "total_record_yrs" = total_yrs,
                                 "start" = min(yrs),
                                 "end" = max(yrs),
                                 "missing_yrs" = paste(gaps, collapse = ", ", sep = ", "),
                                 "sample_months" = paste(sample_months, collapse = ", "),
-                                "max_SWE" = allMaxSWE,
-                                "mean_max_SWE" = round(meanMaxSWE, 1),
-                                "median_max_SWE" = round(medianMaxSWE, 1),
-                                "max_DEPTH" = allMaxDepth,
-                                "mean_max_DEPTH" = round(meanMaxDepth, 1),
-                                "median_max_DEPTH" = round(medianMaxDepth,1)
+                                "max_SWE_mm" = round(allMaxSWE, 0),
+                                "mean_max_SWE_mm" = round(meanMaxSWE, 1),
+                                "median_max_SWE_mm" = round(medianMaxSWE, 1),
+                                "max_DEPTH_cm" = round(allMaxDepth, 0),
+                                "mean_max_DEPTH_cm" = round(meanMaxDepth, 1),
+                                "median_max_DEPTH_cm" = round(medianMaxDepth,1)
                      )
       )
     }
@@ -160,14 +169,14 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
     trends <- data.frame()
     #Calculate trends for all locations
     for (i in 1:nrow(locations)) {
-      yrs <- unique(meas[meas$location == locations$location[i] , "year"])
+      yrs <- unique(results[results$location_id == locations$location_id[i] , "year"])
       yrs <- yrs[order(yrs)]
       if (lubridate::month(Sys.Date()) %in% c(1:5) & complete_yrs) {
         yrs <- yrs[!yrs == lubridate::year(Sys.Date())]
       }
       AllSWEMax <- numeric(0)
       for (j in unique(yrs)) {
-        AllSWEMax <- c(AllSWEMax, max(meas[meas$location == locations$location[i] & meas$year == j & meas$param_name == "snow water equivalent", "value"]))
+        AllSWEMax <- c(AllSWEMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow water equivalent", "result"]))
       }
       AllSWEMax <- stats::na.omit(hablar::rationalize(AllSWEMax))
       if (length(AllSWEMax) > 6) {
@@ -179,7 +188,7 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
 
       AllDepthMax <- numeric(0)
       for (j in unique(yrs)) {
-        AllDepthMax <- c(AllDepthMax, max(meas[meas$location == locations$location[i] & meas$year == j & meas$param_name == "snow depth", "value"]))
+        AllDepthMax <- c(AllDepthMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow depth", "result"]))
       }
       AllDepthMax <- stats::na.omit(hablar::rationalize(AllDepthMax))
       if (length(AllDepthMax) > 6) {
@@ -188,9 +197,10 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
         AllDepthSensMax$estimates <- NA
         AllDepthSensMax$p.value <- NA
       }
-
+      
       trends <- rbind(trends,
-                      data.frame("location_ID" = locations$location[i],
+                      data.frame("location_id" = locations$location_id[i],
+                                 "location_code" = locations$location[i],
                                  "p.value_SWE_max" = round(unname(AllSWESensMax$p.value), 3),
                                  "sens.slope_SWE_max" = round(unname(AllSWESensMax$estimates), 3),
                                  "n_years_SWE" = AllSWESensMax$parameter,
@@ -199,22 +209,24 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
                                  "n_years_DEPTH" = AllDepthSensMax$parameter
                       ))
     }
-
+    
     for (i in 1:nrow(trends)) {
-      subset <- meas[meas$location == trends$location_ID[i] & meas$value > 0,]
+      subset <- results[results$location_id == trends$location_id[i] & results$result > 0,]
       intercept_yr <- min(subset$year)
-      intercept_value_SWE <- unname(stats::lm(formula = subset[subset$param_name == "snow water equivalent", "value"] ~ subset[subset$param_name == "snow water equivalent", "target_datetime"])$coefficients[1])
-      intercept_value_depth <- unname(stats::lm(formula = subset[subset$param_name == "snow depth", "value"] ~ subset[subset$param_name == "snow depth", "target_datetime"])$coefficients[1])
-      trends$annual_prct_chg_SWE[i] <- round(trends[trends$location_ID == trends$location_ID[i] , "sens.slope_SWE_max"] / intercept_value_SWE, 4)
-      trends$annual_prct_chg_DEPTH[i] <- round(trends[trends$location_ID == trends$location_ID[i] , "sens.slope_DEPTH_max"] / intercept_value_depth, 4)
+      intercept_value_SWE <- unname(stats::lm(formula = subset[subset$param_name == "snow water equivalent", "result"] ~ subset[subset$param_name == "snow water equivalent", "target_datetime"])$coefficients[1])
+      intercept_value_depth <- unname(stats::lm(formula = subset[subset$param_name == "snow depth", "result"] ~ subset[subset$param_name == "snow depth", "target_datetime"])$coefficients[1])
+      trends$annual_prct_chg_SWE[i] <- round(trends[trends$location_code == trends$location_code[i] , "sens.slope_SWE_max"] / intercept_value_SWE, 4)
+      trends$annual_prct_chg_DEPTH[i] <- round(trends[trends$location_code == trends$location_code[i] , "sens.slope_DEPTH_max"] / intercept_value_depth, 4)
       trends$note[i] <- paste0("Prct chg based on linear model intercepts of ", round(intercept_value_SWE, 1), " and ", round(intercept_value_depth,1), " for SWE and depth at the start year.")
     }
+    # Drop the location_id key column
+    trends$location_id <- NULL
 
     if (all) {
       #Calculate the territory trend and add it to trends
       terr_prct_chg_SWE <- mean(trends$annual_prct_chg_SWE)
       terr_prct_chg_depth <- mean(trends$annual_prct_chg_DEPTH)
-      trends <- plyr::rbind.fill(trends, data.frame("location_ID" = "territory",
+      trends <- plyr::rbind.fill(trends, data.frame("location_code" = "territory",
                                                     "annual_prct_chg_SWE" = terr_prct_chg_SWE,
                                                     "annual_prct_chg_DEPTH" = terr_prct_chg_depth,
                                                     "note" = "Mean of the annual percent changes."))
@@ -230,12 +242,12 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
         yearApr1SWE <- NULL
         yearApr1Depth <- NULL
         for (j in 1:nrow(locations)) {
-          subset <- meas[meas$year == i & meas$location == locations$location[j] , ]
+          subset <- results[results$year == i & results$location_id == locations$location_id[j] , ]
           months <- unique(subset$month)
           add <- FALSE
           if (3 %in% months & 4 %in% months) {
-            locationSWE <- max(subset[subset$param_name == "snow water equivalent", "value"], na.rm = TRUE)
-            locationDepth <- max(subset[subset$param_name == "snow depth", "value"], na.rm = TRUE)
+            locationSWE <- max(subset[subset$param_name == "snow water equivalent", "result"], na.rm = TRUE)
+            locationDepth <- max(subset[subset$param_name == "snow depth", "result"], na.rm = TRUE)
             add <- TRUE
           }
           if (add) {
@@ -243,8 +255,8 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
             yearMaxDepth <- c(yearMaxDepth, locationDepth)
           }
           if (4 %in% months) {
-            locApr1SWE <- subset[as.Date(subset$target_date) == paste0(i, "-04-01") & subset$param_name == "snow water equivalent", "value"]
-            locApr1Depth <- subset[as.Date(subset$target_date) == paste0(i, "-04-01") & subset$param_name == "snow depth", "value"]
+            locApr1SWE <- subset[as.Date(subset$target_date) == paste0(i, "-04-01") & subset$param_name == "snow water equivalent", "result"]
+            locApr1Depth <- subset[as.Date(subset$target_date) == paste0(i, "-04-01") & subset$param_name == "snow depth", "result"]
             yearApr1SWE <- c(yearApr1SWE, locApr1SWE)
             yearApr1Depth <- c(yearApr1Depth, locApr1Depth)
           }
@@ -285,10 +297,10 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
       new_apr1 <- data.frame("location" = "all_locs_Apr1",
                             "name" = "Territory-averaged April 1")
       
-      meas <- plyr::rbind.fill(meas, plot_all_SWE)
-      meas <- plyr::rbind.fill(meas, plot_all_depth)
-      meas <- plyr::rbind.fill(meas, plot_apr1_SWE)
-      meas <- plyr::rbind.fill(meas, plot_apr1_depth)
+      results <- plyr::rbind.fill(results, plot_all_SWE)
+      results <- plyr::rbind.fill(results, plot_all_depth)
+      results <- plyr::rbind.fill(results, plot_apr1_SWE)
+      results <- plyr::rbind.fill(results, plot_apr1_depth)
       
       locations <- plyr::rbind.fill(locations, new_all)
       locations <- plyr::rbind.fill(locations, new_apr1)
@@ -298,10 +310,10 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
                               "n_locs" = nrow(locations) - 2,
                               "yr_start" = min(yrs),
                               "yr_end" = max(yrs),
-                              "mean_SWE" = c(round(mean(meanMaxSWE), 1), round(mean(meanApr1SWE), 1)),
-                              "median_SWE" = c(round(stats::median(meanMaxSWE), 1), round(stats::median(meanApr1SWE), 1)),
-                              "mean_DEPTH" = c(round(mean(meanMaxDepth), 1), round(mean(meanApr1Depth), 1)),
-                              "median_DEPTH" = c(round(stats::median(meanMaxDepth), 1), round(stats::median(meanApr1Depth), 1)),
+                              "mean_SWE_mm" = c(round(mean(meanMaxSWE), 1), round(mean(meanApr1SWE), 1)),
+                              "median_SWE_mm" = c(round(stats::median(meanMaxSWE), 1), round(stats::median(meanApr1SWE), 1)),
+                              "mean_DEPTH_cm" = c(round(mean(meanMaxDepth), 1), round(mean(meanApr1Depth), 1)),
+                              "median_DEPTH_cm" = c(round(stats::median(meanMaxDepth), 1), round(stats::median(meanApr1Depth), 1)),
                               "p.val_SWE_mean" = c(round(unname(meanMaxSWESens$p.value), 3), round(unname(meanApr1SWESens$p.value), 3)),
                               "sens.slope_SWE_mean" = c(round(unname(meanMaxSWESens$estimates), 3), round(unname(meanApr1SWESens$estimates), 3)),
                               "p.val_DEPTH_mean" = c(round(unname(meanMaxDepthSens$p.value), 3), round(unname(meanApr1DepthSens$p.value), 3)),
@@ -334,28 +346,28 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
       if (name == "all_locs_Apr1") {
         name <- "Territory mean April 1"
       }
-      plot_meas <- meas[meas$location == locations$location[i] , -which(names(meas) == "end_datetime") ]
-      plot_meas <- plot_meas[order(plot_meas$target_datetime), ]
+      plot_results <- results[results$location_id == locations$location_id[i] , ]
+      plot_results <- plot_results[order(plot_results$target_datetime), ]
 
-      SWE <- plot_meas[plot_meas$param_name == "snow water equivalent", "value"]
-      depth <- plot_meas[plot_meas$param_name == "snow depth", "value"]
-      target_datetimes <- plot_meas[plot_meas$param_name == "snow water equivalent", "target_datetime"]
-      years <- plot_meas[plot_meas$param_name == "snow water equivalent", "year"]
-      months <- plot_meas[plot_meas$param_name == "snow water equivalent", "month"]
+      SWE <- plot_results[plot_results$param_name == "snow water equivalent", "result"]
+      depth <- plot_results[plot_results$param_name == "snow depth", "result"]
+      target_datetimes <- plot_results[plot_results$param_name == "snow water equivalent", "target_datetime"]
+      years <- plot_results[plot_results$param_name == "snow water equivalent", "year"]
+      months <- plot_results[plot_results$param_name == "snow water equivalent", "month"]
       
-      density <- data.frame(timeseries_id = paste(unique(plot_meas$timeseries_id), collapse = ", "),
+      density <- data.frame(timeseries_id = paste(unique(plot_results$timeseries_id), collapse = ", "),
                             target_datetime = target_datetimes,
                             value = (SWE/10)/depth,
                             year = years,
                             month = months,
-                            location_id = unique(plot_meas$location_id),
-                            location = unique(plot_meas$location),
+                            location_code = unique(plot_results$location_code),
+                            location = unique(plot_results$location),
                             param_name = "density")
       
-      plot_meas <- rbind(plot_meas, density)
+      plot_results <- rbind(plot_results, density)
                             
 
-      plotSWE <- ggplot2::ggplot(data = plot_meas[plot_meas$param_name == "snow water equivalent" & plot_meas$value > 0, ], ggplot2::aes(x = .data$target_datetime, y = .data$value, group = .data$year)) +
+      plotSWE <- ggplot2::ggplot(data = plot_results[plot_results$param_name == "snow water equivalent" & plot_results$value > 0, ], ggplot2::aes(x = .data$target_datetime, y = .data$value, group = .data$year)) +
         ggplot2::scale_x_datetime() +
         ggplot2::geom_point() +
         ggplot2::geom_line(linewidth = 0.1) +
@@ -371,7 +383,7 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
                          axis.ticks.x = ggplot2::element_blank())
       }
 
-      plotDepth <- ggplot2::ggplot(data = plot_meas[plot_meas$param_name == "snow water equivalent" & plot_meas$value > 0 , ], ggplot2::aes(x = .data$target_datetime, y = .data$value, group = .data$year)) +
+      plotDepth <- ggplot2::ggplot(data = plot_results[plot_results$param_name == "snow water equivalent" & plot_results$value > 0 , ], ggplot2::aes(x = .data$target_datetime, y = .data$value, group = .data$year)) +
         ggplot2::scale_x_datetime() +
         ggplot2::geom_point(size = 1.75) +
         ggplot2::geom_line(linewidth = 0.1) +
@@ -387,7 +399,7 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
                          axis.ticks.x = ggplot2::element_blank())
       }
 
-      plotDensity <- ggplot2::ggplot(data = plot_meas[plot_meas$param_name == "density" & plot_meas$value > 0 , ], ggplot2::aes(x = .data$target_datetime, y = .data$value, group = .data$year)) +
+      plotDensity <- ggplot2::ggplot(data = plot_results[plot_results$param_name == "density" & plot_results$value > 0 , ], ggplot2::aes(x = .data$target_datetime, y = .data$value, group = .data$year)) +
         ggplot2::scale_x_datetime() +
         ggplot2::geom_point(size = 1.75) +
         ggplot2::geom_line(linewidth = 0.1) +
@@ -427,27 +439,27 @@ AND t.category = 'discrete' AND l.location IN ('", paste(locations, collapse = "
   
   if (all) {
     locations <- locations[!locations$location %in% c("all_locs_max", "all_locs_Apr1") , ]
-    meas <- meas[!meas$location %in% c("all_locs_max", "all_locs_Apr1") , ]
+    results <- results[!results$location %in% c("all_locs_max", "all_locs_Apr1") , ]
   }
 
   #Fix up the location metadata table
-  locations <- locations[, -which(names(locations) == "location_id")]
-  names(locations) <- c("location_ID", "location_name", "latitude", "longitude", "elevation")
+  locations <- locations[, -which(names(locations) == "location_code")]
+  names(locations) <- c("location_code", "location_name", "latitude", "longitude", "elevation")
   
   locations$last_survey <- NA
   for (i in 1:nrow(locations)) {
-    locations$last_survey[i] <- as.character(as.Date(max(tsids[tsids$location == locations$location_ID[i] , "end_datetime"])))
+    locations$last_survey[i] <- as.character(as.Date(max(tsids[tsids$location == locations$location_code[i] , "end_datetime"])))
   }
 
   #Concatenate the various products into a list to return.
   if (stats) {
     if (all) {
-      results <- list("locations" = locations, "stats" = stats_df, "trends" = trends, "territory_stats_trends" = territory, "measurements" = meas)
+      results <- list("locations" = locations, "stats" = stats_df, "trends" = trends, "territory_stats_trends" = territory, "measurements" = results)
     } else {
-      results <- list("locations" = locations, "stats" = stats_df, "trends" = trends, "measurements" = meas)
+      results <- list("locations" = locations, "stats" = stats_df, "trends" = trends, "measurements" = results)
     }
   } else {
-    results <- list("locations" = locations, "measurements" = meas)
+    results <- list("locations" = locations, "measurements" = results)
   }
   if (!is.null(save_path)) {
     openxlsx::write.xlsx(results, paste0(save_path, "/SnowInfo_", Sys.Date(), "/measurements+stats.xlsx"))

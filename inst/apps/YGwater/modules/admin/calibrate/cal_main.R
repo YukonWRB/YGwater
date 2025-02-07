@@ -7,7 +7,7 @@ calUI <- function(id) {
   )
 }
 
-cal <- function(id, AquaCache) {
+cal <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

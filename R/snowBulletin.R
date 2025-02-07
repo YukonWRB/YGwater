@@ -76,7 +76,7 @@ snowBulletin <-
         message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")
       } else {
         # Synchronize
-        AquaCache::synchronize(con = AquaCache::AquaConnect(silent = TRUE), 
+        AquaCache::synchronize_continuous(con = AquaCache::AquaConnect(silent = TRUE), 
                                 timeseries_id = c(20, 145, 51, 75, 122, # For plot A
                                                   649, 217, 85, 317, # For other plot A
                                                   #663, 665, 666, 668, 664, 671, 667, # For plot c (cannot be synchronized)

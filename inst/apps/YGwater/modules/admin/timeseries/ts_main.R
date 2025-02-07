@@ -7,7 +7,7 @@ tsUI <- function(id) {
   )
 }
 
-ts <- function(id, AquaCache) {
+ts <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

@@ -7,7 +7,7 @@ equipUI <- function(id) {
   )
 }
 
-equip <- function(id, AquaCache) {
+equip <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

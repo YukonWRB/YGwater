@@ -1,8 +1,8 @@
-YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RLS_pass, accessPath) {
+YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RLS_pass, accessPath, public) {
   
   library(shiny)
   library(shinyjs)
-  
+
   # 'Admin' side modules ###
   source(system.file("apps/YGwater/modules/admin/admin.R", package = "YGwater"))
   
@@ -40,10 +40,10 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/visualize/plot/mix.R", package = "YGwater"))
   
   source(system.file("apps/YGwater/modules/visualize/generate/generate_main.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/generate/basins.R", package = "YGwater"))
+  # source(system.file("apps/YGwater/modules/visualize/generate/basins.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/generate/WQReport.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/generate/snowReport.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/generate/waterReport.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/generate/snowInfo.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/generate/waterInfo.R", package = "YGwater"))
   
   source(system.file("apps/YGwater/modules/visualize/map/map_main.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/precip.R", package = "YGwater"))
@@ -56,18 +56,43 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   
   
-  # Load translations infrastructure
+  # Load translations infrastructure to the global environment
   translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1))
   
+  
+  # New method to gradually move to:
+  translations <- openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1)
+  # Build a list from the data.frame
+  translation_cache <<- lapply(setdiff(names(translations[, -2]), "id"), function(lang) { # Removes the second, "description" column, builds lists for each language
+    setNames(translations[[lang]], translations$id)
+  })
+  names(translation_cache) <<- setdiff(names(translations)[-2], "id")
+
+  # Make a helper function, send to global environment
+  tr <<- function(key, lang) {
+    translation_cache[[lang]][[key]]  # list 'lang', item 'key'
+  }
+  
+  # When testing, the function option is ~300 times faster than the data.table option
+  
+  
   # Establish database connection parameters
-  # The actual connection is being done at the server level for YGwater. This allows using a login input form to connect to the database with edit privileges.
+  # The actual connection is being done at the server level for YGwater. This allows using a login input form to connect to the database with edit privileges or to see additional elements
+  # double assignment creates a global variable that can be accessed by all UI and server functions
+  
+  # confirm G drive access
+  g_drive <- dir.exists("//env-fs/env-data/corp/water")
+  
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,
     dbPort = dbPort,
     dbUser = dbUser,
     dbPass = dbPass,
-    accessPath = accessPath
+    accessPath = accessPath,
+    public = public,
+    g_drive = g_drive
   )
+  
 }
 

@@ -37,3 +37,18 @@
       font-family: 'Nunito Sans', sans-serif;
       font-style: italic;
     }
+    
+    /* Set Nunito Sans as the default font for body text */
+body {
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 16px; /* Optional: Adjust font size */
+  line-height: 1.6; /* Optional: Adjust line spacing for readability */
+}
+
+/* Use Montserrat for headers */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700; /* Optional: Adjust weight for bold headers */
+  line-height: 1.3; /* Optional: Adjust line spacing for headers */
+}
+

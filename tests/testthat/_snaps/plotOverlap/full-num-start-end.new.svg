@@ -57,7 +57,7 @@
 <text x='316.51' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='29.36px' lengthAdjust='spacingAndGlyphs'>Jul 01</text>
 <text x='410.45' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='34.87px' lengthAdjust='spacingAndGlyphs'>Sep 01</text>
 <text x='502.88' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='34.86px' lengthAdjust='spacingAndGlyphs'>Nov 01</text>
-<text transform='translate(13.74,288.72) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='168.07px' lengthAdjust='spacingAndGlyphs'>Discharge, River/Stream (m3/s)</text>
+<text transform='translate(13.74,288.72) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='168.07px' lengthAdjust='spacingAndGlyphs'>flow (m3/s)</text>
 <rect x='604.75' y='42.82' width='51.52' height='41.78' style='stroke-width: 1.07; stroke: none; fill: #FFFFFF;' />
 <text x='610.23' y='55.43' style='font-size: 9.00px; font-family: sans;' textLength='19.01px' lengthAdjust='spacingAndGlyphs'>Year</text>
 <rect x='610.23' y='61.84' width='17.28' height='17.28' style='stroke-width: 1.07; stroke: none; fill: #FFFFFF;' />

@@ -90,7 +90,7 @@ for (i in 1:nrow(tsid)) {
     year <- lubridate::year(Sys.Date())
   }
   tryCatch({
-    plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 30, startDay = Sys.Date()-364, endDay = Sys.Date(), years = year)
+    plot <- ggplotOverlap(location = tsid[i, "location"], parameter = "distance", returns = "none", datum = FALSE, filter = 30, startDay = Sys.Date()-364, endDay = Sys.Date(), years = year)
     if (min(plot$data$value, na.rm=TRUE) < 1) {
       plot <- plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
     }
@@ -110,7 +110,7 @@ for (i in 1:nrow(tsid)) {
       zoom_year <- lubridate::year(Sys.Date())
     }
     tryCatch({
-      zoom_plot <- hydrometContinuous(location = tsid[i, "location"], parameter = "distance", returns = "none", startDay = Sys.Date()-zoom_days, endDay = Sys.Date(), datum = FALSE, filter = 50, years = zoom_year)
+      zoom_plot <- ggplotOverlap(location = tsid[i, "location"], parameter = "distance", returns = "none", startDay = Sys.Date()-zoom_days, endDay = Sys.Date(), datum = FALSE, filter = 50, years = zoom_year)
       if (min(zoom_plot$data$value, na.rm = TRUE) < 1) {
         zoom_plot <- zoom_plot + ggplot2::geom_hline(yintercept = 0, col = "darkred", linetype = "dashed", linewidth = 1)
       }

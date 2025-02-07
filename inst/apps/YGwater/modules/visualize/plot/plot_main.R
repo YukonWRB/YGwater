@@ -7,58 +7,86 @@ plotUI <- function(id) {
                    "Select a data type to plot",
                    choices = c("Discrete", "Continuous", "Mix"),
                    selected = "Discrete"),
-    uiOutput(ns("submoduleUI"))
+    # placeholder divs for dynamically loaded UIs
+    div(id = ns("discrete_placeholder"), style = "display: none;"),
+    div(id = ns("continuous_placeholder"), style = "display: none;"),
+    div(id = ns("mix_placeholder"), style = "display: none;")
   )
 }
 
-plot <- function(id, mdb_files, AquaCache) {
+plot <- function(id, mdb_files, language, windowDims) {
   
   moduleServer(id, function(input, output, session) {
 
     ns <- session$ns
     
+    # Reactive to track if the data has been loaded yet (when user changes tabs it doesn't reload each time)
+    loaded <- reactiveValues(contData = FALSE, discData = FALSE, shareData = FALSE, submodule_discrete = FALSE, submodule_continuous = FALSE, submodule_mix = FALSE)
+    
     contData <- reactiveValues()
     discData <- reactiveValues()
     shareData <- reactiveValues()
-    datums <- DBI::dbGetQuery(AquaCache, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
+    
+    if (!loaded$shareData) {
+      datums <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
       datums$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", datums$datum_name_en)
       datums$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", datums$datum_name_en)
       datums$datum_name_en <- gsub("APPROXIMATE", "approx.", datums$datum_name_en)
-    shareData$datums <- datums
-    
+      shareData$datums <- datums
+      loaded$shareData <- TRUE
+    }
+
     # Load the submodule server and UI based on the plot type selected
     observeEvent(input$plot_type, {
       
-      if (input$plot_type == "Discrete") {
+      if (input$plot_type == "Discrete" && !loaded$submodule_discrete) {
         
-        # discData$parameters_discrete <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id WHERE timeseries.category = 'discrete';")
+        # discData$parameters_discrete <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
         # discData$parameters_discrete <- discData$parameters_discrete[order(discData$parameters_discrete$param_name), ]
         
-        output$submoduleUI <- renderUI({
-          discretePlotUI(ns("discretePlot"))
-        })
-        discretePlotServer("discretePlot", mdb_files, AquaCache)
+        insertUI(
+          selector = paste0("#", ns("discrete_placeholder")),
+          where = "beforeEnd",
+          ui = discretePlotUI(ns("discretePlot"))
+        )
+        loaded$submodule_discrete <- TRUE
+        discretePlotServer("discretePlot", mdb_files, language, windowDims)
+      } 
+      
+      if (input$plot_type == "Continuous" && !loaded$submodule_continuous) {
         
-      } else if (input$plot_type == "Continuous") {
-        
-        contData$all_ts <- DBI::dbGetQuery(AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.category, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location WHERE ts.category = 'continuous';")
+        contData$all_ts <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         contData$all_ts <- contData$all_ts[order(contData$all_ts$name), ]
         
-        contData$parameters <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id WHERE timeseries.category = 'continuous';")
+        contData$parameters <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
         contData$parameters <- contData$parameters[order(contData$parameters$param_name), ]
         contData$datums <- shareData$datums
         
-        output$submoduleUI <- renderUI({
-          continuousPlotUI(ns("continuousPlot"))
-        })
-        continuousPlotServer("continuousPlot", AquaCache = AquaCache, data = contData)
+        insertUI(
+          selector = paste0("#", ns("continuous_placeholder")),
+          where = "beforeEnd",
+          ui = continuousPlotUI(ns("continuousPlot"))
+        )
+        loaded$submodule_continuous <- TRUE
+        continuousPlotServer("continuousPlot", data = contData, language = language, windowDims = windowDims)
+      } 
+      
+      if (input$plot_type == "Mix") {
         
-      } else if (input$plot_type == "Mix") {
-        output$submoduleUI <- renderUI({
-          mixPlotUI(ns("mixPlot"))
-        })
-        mixPlotServer("mixPlot", mdb_files, AquaCache)
+        insertUI(
+          selector = paste0("#", ns("mix_placeholder")),
+          where = "beforeEnd",
+          ui = mixPlotUI(ns("mixPlotUI"))
+        )
+        loaded$submodule_mix <- TRUE
+        mixPlotServer("mixPlot", mdb_files, language, windowDims)
       }
+      
+      # Show only the relevant module using shinyjs
+      shinyjs::hide(selector = paste0("#", ns("discrete_placeholder")))
+      shinyjs::hide(selector = paste0("#", ns("continuous_placeholder")))
+      shinyjs::hide(selector = paste0("#", ns("mix_placeholder")))
+      shinyjs::show(selector = paste0("#", ns(paste0(tolower(input$plot_type), "_placeholder"))))
     })
   }) # End of moduleServer
 }

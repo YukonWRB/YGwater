@@ -39,7 +39,7 @@ calculateFlowStats <- function(stations = NULL, data = NULL, perc = 95, record_l
       on.exit(DBI::dbDisconnect(con))
     }
     
-    flow_paramId <- DBI::dbGetQuery(con, "SELECT parameter_id FROM parameters WHERE param_name = 'discharge, river/stream'")$parameter_id
+    flow_paramId <- DBI::dbGetQuery(con, "SELECT parameter_id FROM parameters WHERE param_name = 'flow'")$parameter_id
     flow_all <- DBI::dbGetQuery(con, 
                                 paste0("SELECT locations.name, timeseries.location, measurements_calculated_daily_corrected.date, measurements_calculated_daily_corrected.value ",
                                        "FROM measurements_calculated_daily_corrected ",
