@@ -171,7 +171,7 @@ app_server <- function(input, output, session) {
                   startDay = 1,
                   endDay = 365,
                   years = yrs,
-                  plot_rate = "daily",
+                  rate = "daily",
                   datum = FALSE,
                   filter = 20,
                   lang = lang,
