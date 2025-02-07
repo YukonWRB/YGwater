@@ -1,0 +1,54 @@
+    /* Custom font loading */
+    @font-face {
+      font-family: 'Montserrat';
+      src: url('fonts/Montserrat/Montserrat-VariableFont_wght.woff2') format('woff2-variations');
+      font-weight: 100 900;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Montserrat';
+      src: url('fonts/Montserrat/Montserrat-Italic-VariableFont_wght.woff2') format('woff2-variations');
+      font-weight: 100 900;
+      font-style: italic;
+    }
+    @font-face {
+      font-family: 'Nunito Sans';
+      src: url('fonts/NunitoSans/NunitoSans-VariableFont_YTLC.woff2') format('woff2-variations');
+      font-weight: 100 900;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'Nunito Sans';
+      src: url('fonts/NunitoSans/NunitoSans-Italic-Variable_YTLC.woff2') format('woff2');
+      font-weight: 100 900;
+      font-style: italic;
+    }
+    .montserrat {
+      font-family: 'Montserrat', sans-serif;
+    }
+    .montserrat-italic {
+      font-family: 'Montserrat', sans-serif;
+      font-style: italic;
+    }
+    .nunito-sans {
+      font-family: 'Nunito Sans', sans-serif;
+    }
+    .nunito-sans-italic {
+      font-family: 'Nunito Sans', sans-serif;
+      font-style: italic;
+    }
+    
+    /* Set Nunito Sans as the default font for body text */
+body {
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 16px; /* Optional: Adjust font size */
+  line-height: 1.6; /* Optional: Adjust line spacing for readability */
+}
+
+/* Use Montserrat for headers */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700; /* Optional: Adjust weight for bold headers */
+  line-height: 1.3; /* Optional: Adjust line spacing for headers */
+}
+

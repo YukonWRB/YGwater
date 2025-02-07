@@ -1,57 +1,75 @@
 /* Custom styling for positioning and z-index of top bar containers */
 .top-bar-container {
-  height: 80px;
-  margin-bottom: 3px; /* Adjust to reduce/increase space above the navbar */
-  position: relative; /* Ensure container is positioned relative for absolute child positioning */
-   z-index: 1;
+  height: 60px;
+  margin-bottom: 3px; /* Adjust spacing above navbar */
+  position: relative;
+  z-index: 1; /* Higher than navbar */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  background-color: white; /* Ensures it's not transparent */
 }
 
 .navbar {
-  z-index: 1;
+  z-index: 2;
+}
+
+/* Styling for the logo container */
+.logo-container {
+  display: flex;
+  align-items: center;
+  flex: 1;
 }
 
 .logo-container img {
-  height: 80px;
+  height: 60px;
   width: auto; /* Maintain aspect ratio */
-  margin-top: -5px;
-  position: absolute; /* Position logo absolutely within its container */
-  top: 0; /* Align top edge with container */
-  left: 0px; /* spacing from the screen edge */
-  z-index: 1;
+  margin-left: 10px; /* Ensure spacing */
 }
 
-/* Styling for the right-aligned aurora and its container */
-.right-aligned-aurora {
+/* Container for the aurora image and login button */
+.aurora-login-container {
+  display: flex;
+  flex: 3;
+  justify-content: flex-end;
+  flex-direction: column-reverse;
+  align-items: flex-end;
   position: relative;
+  z-index: 2; /* Ensures it's above the logo */
+  height: 100%;
+}
+
+/* Styling for the aurora image */
+.aurora img {
+  height: 50px;
+  width: auto;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+}
+
+/* Adjust the login button position */
+.login-container {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-   z-index: 2;
-}
-
-.aurora-container img {
-  height: 120px;
-  width:  700;
-  position: absolute; /* Position aurora absolutely within its container */
-  top: -20px; /* Align top edge with container */
-  right: 0px; /* spacing from the screen edge */
-  z-index: 1; /* Background layer */
-}
-
-/* Adjust the position and priority of the language selector and login button */
-.lang-login-container {
-  position: relative;
   margin-top: 10px;
-  z-index: 3; /* Foreground layer */
+  margin-left: 10px;
+  z-index: 3; /* Ensures it’s above the background */
+}
+
+/* Space out login buttons properly */
+.login-btn-container {
   display: flex;
-  align-items: center;
+  gap: 10px;
+  margin-bottom: 0;
 }
 
-.language-select-container {
-  text-align: left;
-  margin-top: 10px;
-  margin-right: 20px;
-  z-index: 3; /* Foreground layer */
+/* Ensure buttons look clean */
+.login-btn-container .btn {
+  font-size: 16px;
+  padding: 5px 10px;
 }
 
 .selectize-control, .selectize-dropdown {
@@ -60,3 +78,12 @@
 .selectize-dropdown {
   z-index: 1050 !important; /* Ensure the dropdown overlays other content */
 }
+
+/* Highlight selected language in the dropdown */
+.dropdown-menu li.active a {
+    font-weight: bold;
+    background-color: #00454e !important; /* Bootstrap primary blue */
+    color: white !important; /* Ensures text is visible */
+    border-radius: 4px; /* Optional: smooth corners */
+}
+

@@ -9,6 +9,7 @@ app_server <- function(input, output, session) {
   
   
   # Initial setup #############################################################
+  
   # Automatically update URL every time an input changes
   observe({
     reactiveValuesToList(input)
@@ -30,6 +31,14 @@ app_server <- function(input, output, session) {
     isRestoring_img(TRUE)
   })
   
+  # Track window dimensions (used to modify plot appearance)
+  windowDims <- reactive({
+    req(input$window_dimensions)
+    input$window_dimensions
+  })
+  
+  
+  
   # Initialize reactive flags to track whether each UI has been loaded
   ui_loaded <- reactiveValues(
     viz = FALSE,
@@ -50,47 +59,44 @@ app_server <- function(input, output, session) {
     visit = FALSE)
   
   ## database connections ###########
-  # Initial database connections without edit privileges
-  if (dir.exists(config$accessPath)) {
+  # Look for .mdb files in the AccessPath directory
+  if (dir.exists(config$accessPath) & !config$public) {
     # List the *.mdb files in the directory
     mdb_files <- list.files(config$accessPath, pattern = "*.mdb", full.names = TRUE)
     if (length(mdb_files) == 0) {
       mdb_files <- NULL
     }
-    # # Try to connect 
-    # tryCatch({
-    #   EQWin <- AccessConnect(config$accessPath)
-    #   valid <- DBI::dbGetQuery(EQWin, "SELECT 1;")
-    #   if (nrow(valid) == 0) {
-    #     EQWin <- NULL
-    #   }
-    #   print("Connected to EQWin")
-    # }, error = function(e) {
-    #   EQWin <<- NULL
-    # })
   } else {
     mdb_files <- NULL
   }
   
-  if (is.null(mdb_files)) {
+  if (is.null(mdb_files) & !config$public) {
     print("No .mdb files found in the AccessPath directory.")
   }
   
-  AquaCache <- AquaConnect(name = config$dbName, 
-                           host = config$dbHost,
-                           port = config$dbPort,
-                           username = config$dbUser,
-                           password = config$dbPass,
-                           silent = TRUE)
+  
+  # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
+  session$userData$config <- config
+  
+  # Initial database connections without edit privileges
+  
+  # Is this a better way to do it??? Safer???
+  session$userData$AquaCache <- AquaConnect(name = config$dbName,
+                                            host = config$dbHost,
+                                            port = config$dbPort,
+                                            username = config$dbUser,
+                                            password = config$dbPass,
+                                            silent = TRUE)
+
   print("Connected to AquaCache")
   
   session$onUnhandledError(function() {
-    DBI::dbDisconnect(AquaCache)
+    DBI::dbDisconnect(session$userData$AquaCache)
     print("Disconnected from AquaCache after unhandled error")
   })
   
   session$onSessionEnded(function() {
-    DBI::dbDisconnect(AquaCache)
+    DBI::dbDisconnect(session$userData$AquaCache)
     print("Disconnected from AquaCache after session end")
   })
   
@@ -99,38 +105,42 @@ app_server <- function(input, output, session) {
   # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
   languageSelection <- reactiveValues() # holds language and abbreviation
   
+  # Populate the language selection dropdown
+  session$sendCustomMessage("updateLangMenu", names(translations)[-c(1,2)])
+  
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
     if (!isRestoring()) {
-      shinyjs::runjs("var language =  window.navigator.userLanguage || window.navigator.language;
-Shiny.onInputChange('userLang', language);
-console.log(language);")
+      shinyjs::runjs("
+      var language =  window.navigator.userLanguage || window.navigator.language;
+      console.log('Detected browser language: ' + language);
+      Shiny.setInputValue('userLang', language, {priority: 'event'});
+                     ")
     }
   })
+  
+  # Set initial language based on browser language
   # Check if userLang contains en or fr in the string and set the language accordingly
   observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
-    if (substr(input$userLang , 1, 2) == "en") {
-      updateSelectizeInput(session, "langSelect", selected = "English")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
-    } else if (substr(input$userLang , 1, 2) == "fr") {
-      updateSelectizeInput(session, "langSelect", selected = "Français")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "fr"))  # Updates the language in the web page html head.
-      
-    } else {
-      updateSelectizeInput(session, "langSelect", selected = "English")
-      session$sendCustomMessage(type = 'updateLang', message = list(lang = "en"))  # Updates the language in the web page html head.
-    }
-  }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    lang_code <- substr(input$userLang, 1, 2)
+    
+    selected_lang <- if (lang_code == "fr") "Français" else "English"
+    
+    # Send the selected language to JavaScript so it updates input$langSelect
+    session$sendCustomMessage(type = 'setSelectedLanguage', message = selected_lang)
+    
+    # Also update the HTML <head> for language settings
+    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(lang_code == "fr", "fr", "en")))
+  }, ignoreInit = TRUE, ignoreNULL = TRUE, once = TRUE) # This observeEvent should only run once when the app is loaded.
   
   # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
+  # Observe user selection of language
   observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
-    if (input$langSelect %in% names(translations)[-c(1,2)]) {
+    if (input$langSelect %in% names(translation_cache)) {
       languageSelection$language <- input$langSelect
+      languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+      session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the title of the app based on the selected language
     }
-  })
-  
-  observe({ # Find the abbreviation for use in the 'titleCase' function
-    languageSelection$abbrev <- translations[id == "titleCase", get(languageSelection$language)][[1]]
   })
   
   # Log in/out for edits ##########################################
@@ -138,8 +148,9 @@ console.log(language);")
   user_logged_in <- reactiveVal(FALSE) # Reactive value to track login status
   
   ## Log in #########
+  # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
   observeEvent(input$loginBtn, {
-    if (log_attempts() > 3) {
+    if (log_attempts() > 5) {
       showModal(modalDialog(
         title = "Login Failed",
         "You've exceeded the maximum number of login attempts.",
@@ -182,14 +193,15 @@ $(document).keyup(function(event) {
       return()
     }
     tryCatch({
-      DBI::dbDisconnect(AquaCache)
-      AquaCache <<- AquaConnect(name = config$dbName, 
-                                host = config$dbHost,
-                                port = config$dbPort,
+      # Drop old connection
+      # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
+      session$userData$AquaCache_new <- AquaConnect(name = session$userData$config$dbName, 
+                                host = session$userData$config$dbHost,
+                                port = session$userData$config$dbPort,
                                 username = input$username, 
                                 password = input$password, 
                                 silent = TRUE)
-      test <- DBI::dbGetQuery(AquaCache, "SELECT 1;")
+      test <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT 1;")
       # Test the connection
       if (nrow(test) > 0) {
         showModal(modalDialog(
@@ -198,6 +210,16 @@ $(document).keyup(function(event) {
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
+        
+        # Drop the old connection
+        DBI::dbDisconnect(session$userData$AquaCache)
+        session$userData$AquaCache <- session$userData$AquaCache_new
+        session$userData$AquaCache_new <- NULL
+        
+        # Update the session with the new user's credentials
+        session$userData$config$dbUser <- input$username
+        session$userData$config$dbPass <- input$password
+        
         user_logged_in(TRUE)
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
@@ -254,12 +276,10 @@ $(document).keyup(function(event) {
           easyClose = TRUE,
           footer = modalButton("Close")
         ))
-        AquaCache <<- AquaConnect(name = config$dbName, 
-                                  host = config$dbHost,
-                                  port = config$dbPort,
-                                  username = config$dbUser,
-                                  password = config$dbPass,
-                                  silent = TRUE)
+        # attempt a disconnect of the new connection
+        try({
+          DBI::dbDisconnect(session$userData$AquaCache_new)
+        })
         return()
       }
     }, error = function(e) {
@@ -269,15 +289,10 @@ $(document).keyup(function(event) {
         easyClose = TRUE,
         footer = modalButton("Close")
       ))
-      # Check to see if the connection is still open, if not reconnect
-      if (!DBI::dbIsValid(AquaCache)) {
-        AquaCache <<- AquaConnect(name = config$dbName, 
-                                  host = config$dbHost,
-                                  port = config$dbPort,
-                                  username = config$dbUser,
-                                  password = config$dbPass,
-                                  silent = TRUE)
-      }
+      try({
+        DBI::dbDisconnect(session$userData$AquaCache_new)
+        session$userData$AquaCache_new <- NULL
+      })
       return()
     })
   })
@@ -285,7 +300,6 @@ $(document).keyup(function(event) {
   ## Log out #####################################################
   observeEvent(input$logoutBtn, {
     
-    # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
     user_logged_in(FALSE)  # Set login status to FALSE
     # Hide the 'admin' tabs upon logout
     hideTab(inputId = "navbar", target = "admin")
@@ -295,8 +309,10 @@ $(document).keyup(function(event) {
     shinyjs::hide("logoutBtn")
     shinyjs::show("loginBtn")
     
-    DBI::dbDisconnect(AquaCache)
-    AquaCache <<- AquaConnect(name = config$dbName, 
+    # Drop old connection
+    DBI::dbDisconnect(session$userData$AquaCache)
+    # Re-create the connection with the base 'config' parameters, no edit privileges
+    session$userData$AquaCache <- AquaConnect(name = config$dbName, 
                               host = config$dbHost,
                               port = config$dbPort,
                               username = config$dbUser,
@@ -349,7 +365,9 @@ $(document).keyup(function(event) {
       # Show relevant tabs for viz mode
       showTab(inputId = "navbar", target = "plot")
       showTab(inputId = "navbar", target = "map")
-      showTab(inputId = "navbar", target = "FOD")
+      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
+        showTab(inputId = "navbar", target = "FOD")
+      }
       showTab(inputId = "navbar", target = "gen")
       showTab(inputId = "navbar", target = "img")
       # don't show 'admin' tab unless logged in
@@ -414,14 +432,14 @@ $(document).keyup(function(event) {
       if (!ui_loaded$plot) {
         output$plot_ui <- renderUI(plotUI("plot"))
         ui_loaded$plot <- TRUE
-        plot("plot", mdb_files, AquaCache) # Call the server
+        plot("plot", mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
     if (input$navbar == "map") {
       if (!ui_loaded$map) {
         output$map_ui <- renderUI(mapUI("map"))
         ui_loaded$map <- TRUE
-        primary_outputs$map_main <- map("map", AquaCache, language = languageSelection) # Call the server
+        primary_outputs$map_main <- map("map", language = languageSelection) # Call the server
       }
       observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
         if (!is.null(primary_outputs$map_main$change_tab)) {
@@ -441,77 +459,77 @@ $(document).keyup(function(event) {
       if (!ui_loaded$img) {
         output$img_ui <- renderUI(imgUI("img"))
         ui_loaded$img <- TRUE
-        img("img", con = AquaCache, language = languageSelection, restoring = isRestoring_img) # Call the server
+        img("img", language = languageSelection, restoring = isRestoring_img) # Call the server
       }
     }
     if (input$navbar == "gen") {
       if (!ui_loaded$gen) {
         output$gen_ui <- renderUI(genUI("gen"))
         ui_loaded$gen <- TRUE
-        gen("gen", mdb_files, AquaCache) # Call the server
+        gen("gen", mdb_files, language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "locs") {
       if (!ui_loaded$locs) {
         output$locs_ui <- renderUI(locsUI("locs"))
         ui_loaded$locs <- TRUE
-        locs("locs", AquaCache) # Call the server
+        locs("locs") # Call the server
       }
     }
     if (input$navbar == "ts") {
       if (!ui_loaded$ts) {
         output$ts_ui <- renderUI(tsUI("ts"))
         ui_loaded$ts <- TRUE
-        ts("ts", AquaCache) # Call the server
+        ts("ts") # Call the server
       }
     }
     if (input$navbar == "equip") {
       if (!ui_loaded$equip) {
         output$equip_ui <- renderUI(equipUI("equip"))  # Render the UI
         ui_loaded$equip <- TRUE
-        equip("equip", AquaCache)  # Call the server
+        equip("equip")  # Call the server
       }
     }
     if (input$navbar == "cal") {
       if (!ui_loaded$cal) {
         output$cal_ui <- renderUI(calUI("cal"))  # Render the UI
         ui_loaded$cal <- TRUE
-        cal("cal", AquaCache)  # Call the server
+        cal("cal")  # Call the server
       }
     }
     if (input$navbar == "contData") {
       if (!ui_loaded$contData) {
         output$contData_ui <- renderUI(contDataUI("contData"))  # Render the UI
         ui_loaded$contData <- TRUE
-        contData("contData", AquaCache)  # Call the server
+        contData("contData")  # Call the server
       }
     }
     if (input$navbar == "discData") {
       if (!ui_loaded$discData) {
         output$discData_ui <- renderUI(discDataUI("discData"))  # Render the UI
         ui_loaded$discData <- TRUE
-        discData("discData", AquaCache)  # Call the server
+        discData("discData")  # Call the server
       }
     }
     if (input$navbar == "addDocs") {
       if (!ui_loaded$addDocs) {
         output$addDocs_ui <- renderUI(addDocsUI("addDocs"))  # Render the UI
         ui_loaded$addDocs <- TRUE
-        addDocs("addDocs", AquaCache)  # Call the server
+        addDocs("addDocs")  # Call the server
       }
     }
     if (input$navbar == "addImgs") {
       if (!ui_loaded$addImgs) {
         output$addImgs_ui <- renderUI(addImgsUI("addImgs"))  # Render the UI
         ui_loaded$addImgs <- TRUE
-        addImgs("addImgs", AquaCache)  # Call the server
+        addImgs("addImgs")  # Call the server
       }
     }
     if (input$navbar == "visit") {
       if (!ui_loaded$visit) {
         output$visit_ui <- renderUI(visitUI("visit"))  # Render the UI
         ui_loaded$visit <- TRUE
-        visit("visit", AquaCache)  # Call the server
+        visit("visit")  # Call the server
       }
     }
   }) # End of observeEvent for loading modules based on navbar

@@ -14,7 +14,7 @@ locsUI <- function(id) {
   )
 }
 
-locs <- function(id, AquaCache) {
+locs <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

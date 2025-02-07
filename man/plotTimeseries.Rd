@@ -6,6 +6,7 @@
 \usage{
 plotTimeseries(
   location,
+  sub_location = NULL,
   parameter,
   record_rate = NULL,
   period_type = NULL,
@@ -24,6 +25,7 @@ plotTimeseries(
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
+  legend_position = "v",
   gridx = FALSE,
   gridy = FALSE,
   rate = NULL,
@@ -34,11 +36,13 @@ plotTimeseries(
 \arguments{
 \item{location}{The location for which you want a plot.}
 
-\item{parameter}{The parameter name (text) or code (numeric) that you wish to plot. The location:parameter combo must be in the local database.}
+\item{sub_location}{Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).}
+
+\item{parameter}{The parameter name (text) or code (numeric) that you wish to plot. The location:sublocation:parameter combo must be in the local database.}
 
 \item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.}
 
-\item{period_type}{The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order.}
+\item{period_type}{The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max'.}
 
 \item{z}{Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.}
 
@@ -50,7 +54,7 @@ plotTimeseries(
 
 \item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.}
 
-\item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.}
+\item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.}
 
 \item{datum}{Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.}
 
@@ -58,7 +62,7 @@ plotTimeseries(
 
 \item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.}
 
-\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
+\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
 \item{historic_range}{Should the historic range be plotted? Default is TRUE.}
 
@@ -69,6 +73,8 @@ plotTimeseries(
 \item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
 
 \item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
+\item{legend_position}{The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.}
 
 \item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
 

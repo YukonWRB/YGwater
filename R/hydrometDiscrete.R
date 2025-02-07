@@ -131,9 +131,9 @@ hydrometDiscrete <- function(location = NULL,
     #then for presence of data within the time range requested.
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
     parameter_code <- DBI::dbGetQuery(con, paste0("SELECT parameter_id FROM parameters WHERE param_name = '", parameter, "';"))[1,1]
-    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime FROM timeseries WHERE location_id = '", location_id, "' AND parameter_id = ", parameter_code, " AND category = 'discrete'"))
+    exists <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, start_datetime FROM timeseries WHERE location_id = '", location_id, "' AND parameter_id = ", parameter_code, ";"))
     if (nrow(exists) == 0) {
-      stop("There is no entry for the location and parameter combination that you specified of discrete data type. If you are trying to graph continuous data use hydrometContinuous.")
+      stop("There is no entry for the location and parameter combination that you specified of discrete data type. If you are trying to graph continuous data use plotOverlap or plotTimeseries")
     } else if (nrow(exists) > 1) {
       stop("There is more than one entry in the database for the location and parameter that you specified! Please alert the database manager.")
     } else {

@@ -4,7 +4,12 @@
 \alias{createSnowTemplate}
 \title{Creates snow survey template for specific survey target date and circuit}
 \usage{
-createSnowTemplate(target_date, circuit = "all", save_path = "choose")
+createSnowTemplate(
+  target_date,
+  circuit = "all",
+  save_path = "choose",
+  snowCon = NULL
+)
 }
 \arguments{
 \item{target_date}{The target date of the snow survey, given in the form yyyy-mm-dd as a text string or Date object. Example: for the march snow survey of 2024, target_date = '2024-03-01'}
@@ -12,9 +17,11 @@ createSnowTemplate(target_date, circuit = "all", save_path = "choose")
 \item{circuit}{The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, NorthSlope, OldCrow, PellyFarm, Ross, SLakes, Teslin, Watson, Whitehorse, and YEC. "all" will create a workbook for all circuits.}
 
 \item{save_path}{The path where you want the circuit workbook(s) saved. Default "choose" lets you pick your folder.}
+
+\item{snowCon}{A snow database connection object, if you have one. If not, the function will attempt to connect to the snow database using function \code{\link[=snowConnect]{snowConnect()}} and close the connection when finished.}
 }
 \value{
-A snow survey template called template_test (currently) for the specified circuit and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
+A snow survey template for the specified circuit(s) and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}

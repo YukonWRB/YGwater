@@ -2,229 +2,247 @@ discretePlotUI <- function(id) {
   ns <- NS(id)
   sidebarLayout(
     sidebarPanel(
-      # Toggle for data source
-      radioButtons(ns("data_source"),
-                   NULL,
-                   choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
-                   selected = "AC"),
-      uiOutput(ns("EQWin_source_ui")),
-      # start and end datetime
-      dateRangeInput(ns("date_range"),
-                     "Select date range",
-                     start = Sys.Date() - 30,
-                     end = Sys.Date(),
-                     max = Sys.Date() + 1,
-                     format = "yyyy-mm-dd"),
-      conditionalPanel(ns = ns,
-                       condition = "input.data_source == 'EQ'",
-                       # Toggle button for locations or location groups (only show if data source  == EQWin)
-                       radioButtons(ns("locs_groups"),
-                                    NULL,
-                                    choices = c("Locations", "Location Groups"),
-                                    selected = "Locations"),
-                       # Selectize input for locations, populated once connection is established
-                       selectizeInput(ns("locations_EQ"),
-                                      "Select locations",
-                                      choices = "Placeholder",
-                                      multiple = TRUE),
-                       # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
-                       selectizeInput(ns("location_groups"),
-                                      "Select a location group",
-                                      choices = "Placeholder",
-                                      multiple = TRUE,
-                                      options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values,
-                       
-                       # Toggle button for parameters or parameter groups (only show if data source == EQWin)
-                       radioButtons(ns("params_groups"),
-                                    NULL,
-                                    choices = c("Parameters", "Parameter Groups"),
-                                    selected = "Parameters"),
-                       # Selectize input for parameters, populated once connection is established
-                       selectizeInput(ns("parameters_EQ"),
-                                      "Select parameters",
-                                      choices = "Placeholder",
-                                      multiple = TRUE),
-                       # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
-                       selectizeInput(ns("parameter_groups"),
-                                      "Select a parameter group",
-                                      choices = "Placeholder",
-                                      multiple = TRUE,
-                                      options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values
-                       # Selectize input for a standard to apply
-                       div(
-                         style = "display: flex; align-items: center;",
-                         tags$label(
-                           "Select a standard to apply (optional)", 
-                           class = "control-label",
-                           style = "margin-right: 5px;"
-                         ),
-                         span(
-                           id = ns("standard_info"),
-                           `data-toggle` = "tooltip",
-                           `data-placement` = "right",
-                           `data-trigger` = "click hover",
-                           title = "Warning: this adds a lot of time for plot generation!!!",
-                           icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-                         )
-                       ),
-                       selectizeInput(ns("standard"),
-                                      NULL,
-                                      choices = "Placeholder",
-                                      multiple = TRUE,
-                                      options = list(maxItems = 1)) # This is to be able to use the default no selection upon initialization but only have one possible selection anyways.
-      ),
-      
-      conditionalPanel(ns = ns,
-                       condition = "input.data_source == 'AC'",
-                       # Selectize input for locations, populated once connection is established
-                       selectizeInput(ns("locations_AC"),
-                                      "Select locations",
-                                      choices = "Placeholder",
-                                      multiple = TRUE),
-                       # Selectize input for parameters, populated once connection is established
-                       selectizeInput(ns("parameters_AC"),
-                                      "Select parameters",
-                                      choices = "Placeholder",
-                                      multiple = TRUE)
-      ),
-      
-      # Below inputs are not conditional on data source
-      div(
-        style = "display: flex; align-items: center;",
-        tags$label(
-          "Facet on", 
-          class = "control-label",
-          style = "margin-right: 5px;"
-        ),
-        span(
-          id = ns("facet_info"),
-          `data-toggle` = "tooltip",
-          `data-placement` = "right",
-          `data-trigger` = "click hover",
-          title = "Multiple plots are built where each plot represents a different location or parameter, with the other variable represented as different traces.",
-          icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-        )
-      ),
-      radioButtons(ns("facet_on"),
-                   NULL,
-                   choices = stats::setNames(c("locs", "params"), c("Locations", "Parameters")),
-                   selected = "locs"),
-      
-      div(
-        checkboxInput(ns("log_scale"),
-                      NULL),
-        style = "display: flex; align-items: center;",
-        tags$label(
-          "Use log scale", 
-          class = "control-label",
-          style = "margin-right: 5px;"
-        ),
-        span(
-          id = ns("log_info"),
-          `data-toggle` = "tooltip",
-          `data-placement` = "right",
-          `data-trigger` = "click hover",
-          title = "Warning: negative values will be removed for log transformation.",
-          icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-        )
-      ),
-      div(
-        checkboxInput(ns("shareX"),
-                      NULL,
-                      value = TRUE),
-        style = "display: flex; align-items: center;",
-        tags$label(
-          "Share X axis between subplots (dates are aligned)", 
-          class = "control-label",
-          style = "margin-right: 5px;"
-        )
-      ),
-      div(
-        checkboxInput(ns("shareY"),
-                      NULL,
-                      value = FALSE),
-        style = "display: flex; align-items: center;",
-        tags$label(
-          "Share Y axis between subplots (values are aligned)", 
-          class = "control-label",
-          style = "margin-right: 5px;"
-        )
-      ),
-      div(
-        selectizeInput(ns("loc_code"),
-                       label = "Choose how to display location codes/names",
-                       choices = stats::setNames(
-                         c("name", "code", "nameCode", "codeName"),
-                         c("Name", "Code", "Name (Code)", "Code (Name)")
-                       ),
-                       selected = "Name"),
-        style = "display: flex; align-items: center;"
-      ),
-      
-      div(
-        checkboxInput(ns("target_datetime"),
-                      label = NULL),
-        style = "display: flex; align-items: center;",
-        tags$label(
-          "Use target instead of actual datetime", 
-          class = "control-label",
-          style = "margin-right: 5px;"
-        ),
-        span(
-          id = ns("target_datetime_info"),
-          `data-toggle` = "tooltip",
-          `data-placement` = "right",
-          `data-trigger` = "click hover",
-          title = "Some measurements have a 'fake' datetime to line up repeated measurements with a certain date. An example are snow survey measurements: these can be taken with a few days of the 1st of the month but visualize nicely when lined up with the 1st.",
-          icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-        )
-      ),
-      
-      div(
-        actionButton(ns("extra_aes"),
-                     "Modify plot aesthetics",
-                     title = "Modify plot aesthetics such as language, color palette, point/line size, text size.",
-                     style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
-        actionButton(ns("make_plot"),
-                     "Create Plot",
-                     style = "display: block; width: 100%;") # Ensure block display and full width
-      )
-      
+      uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
     ),
-    
     mainPanel(
-      plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
-      uiOutput(ns("full_screen_ui"))
+      uiOutput(ns("main"))
     )
   )
 }
 
-discretePlotServer <- function(id, mdb_files, AquaCache) {
+discretePlotServer <- function(id, mdb_files, language, windowDims) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements within the server code
     
-    EQWin_selector <- reactiveVal(FALSE)
-    observeEvent(input$data_source, {
-      if (input$data_source == "AC") {
-        shinyjs::hide("EQWin_source")
-      } else {
-        if (!EQWin_selector()) {
-          EQWin_selector(TRUE)
-          output$EQWin_source_ui <- renderUI({
-            selectizeInput(ns("EQWin_source"), "EQWin database", choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
-          })
-        }
-        shinyjs::show("EQWin_source")
-      }
-    })
+    EQWin_selector <- reactiveVal(FALSE)  # flags whether the EQWin source UI is already rendered
+    
+    if (!is.null(mdb_files)) {
+      shinyjs::delay(100, shinyjs::show("data_source"))
+    }
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     data <- reactiveValues()
     
-    data$AC_locs <- DBI::dbGetQuery(AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id WHERE ts.category = 'discrete' ORDER BY loc.name ASC")
-    data$AC_params <- DBI::dbGetQuery(AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id WHERE ts.category = 'discrete' ORDER BY p.param_name ASC")
+    data$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
+    data$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC")
+    
+    output$sidebar <- renderUI({
+      tagList(
+        # Toggle for data source
+        shinyjs::hidden(radioButtons(ns("data_source"),
+                                     NULL,
+                                     choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
+                                     selected = "AC")),
+        uiOutput(ns("EQWin_source_ui")),
+        # start and end datetime
+        dateRangeInput(ns("date_range"),
+                       "Select date range",
+                       start = Sys.Date() - 30,
+                       end = Sys.Date(),
+                       max = Sys.Date() + 1,
+                       format = "yyyy-mm-dd"),
+        conditionalPanel(ns = ns,
+                         condition = "input.data_source == 'EQ'",
+                         # Toggle button for locations or location groups (only show if data source  == EQWin)
+                         radioButtons(ns("locs_groups"),
+                                      NULL,
+                                      choices = c("Locations", "Location Groups"),
+                                      selected = "Locations"),
+                         # Selectize input for locations, populated once connection is established
+                         selectizeInput(ns("locations_EQ"),
+                                        "Select locations",
+                                        choices = NULL,
+                                        multiple = TRUE),
+                         # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
+                         selectizeInput(ns("location_groups"),
+                                        "Select a location group",
+                                        choices = NULL,
+                                        multiple = TRUE,
+                                        options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values,
+                         
+                         # Toggle button for parameters or parameter groups (only show if data source == EQWin)
+                         radioButtons(ns("params_groups"),
+                                      NULL,
+                                      choices = c("Parameters", "Parameter Groups"),
+                                      selected = "Parameters"),
+                         # Selectize input for parameters, populated once connection is established
+                         selectizeInput(ns("parameters_EQ"),
+                                        "Select parameters",
+                                        choices = NULL,
+                                        multiple = TRUE),
+                         # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
+                         selectizeInput(ns("parameter_groups"),
+                                        "Select a parameter group",
+                                        choices = NULL,
+                                        multiple = TRUE,
+                                        options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values
+                         # Selectize input for a standard to apply
+                         div(
+                           style = "display: flex; align-items: center;",
+                           tags$label(
+                             "Select a standard to apply (optional)", 
+                             class = "control-label",
+                             style = "margin-right: 5px;"
+                           ),
+                           span(
+                             id = ns("standard_info"),
+                             `data-toggle` = "tooltip",
+                             `data-placement` = "right",
+                             `data-trigger` = "click hover",
+                             title = "Warning: this adds a lot of time for plot generation!!!",
+                             icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+                           )
+                         ),
+                         selectizeInput(ns("standard"),
+                                        NULL,
+                                        choices = NULL,
+                                        multiple = TRUE,
+                                        options = list(maxItems = 1)) # This is to be able to use the default no selection upon initialization but only have one possible selection anyways.
+        ),
+        
+        conditionalPanel(ns = ns,
+                         condition = "input.data_source == 'AC'",
+                         # Selectize input for locations, populated once connection is established
+                         selectizeInput(ns("locations_AC"),
+                                        "Select locations",
+                                        choices = NULL,
+                                        multiple = TRUE),
+                         # Selectize input for parameters, populated once connection is established
+                         selectizeInput(ns("parameters_AC"),
+                                        "Select parameters",
+                                        choices = NULL,
+                                        multiple = TRUE)
+        ),
+        
+        # Below inputs are not conditional on data source
+        div(
+          style = "display: flex; align-items: center;",
+          tags$label(
+            "Facet on", 
+            class = "control-label",
+            style = "margin-right: 5px;"
+          ),
+          span(
+            id = ns("facet_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "Multiple plots are built where each plot represents a different location or parameter, with the other variable represented as different traces.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        radioButtons(ns("facet_on"),
+                     NULL,
+                     choices = stats::setNames(c("locs", "params"), c("Locations", "Parameters")),
+                     selected = "locs"),
+        
+        div(
+          checkboxInput(ns("log_scale"),
+                        NULL),
+          style = "display: flex; align-items: center;",
+          tags$label(
+            "Use log scale", 
+            class = "control-label",
+            style = "margin-right: 5px;"
+          ),
+          span(
+            id = ns("log_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "Warning: negative values will be removed for log transformation.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        div(
+          checkboxInput(ns("shareX"),
+                        NULL,
+                        value = TRUE),
+          style = "display: flex; align-items: center;",
+          tags$label(
+            "Share X axis between subplots (dates are aligned)", 
+            class = "control-label",
+            style = "margin-right: 5px;"
+          )
+        ),
+        div(
+          checkboxInput(ns("shareY"),
+                        NULL,
+                        value = FALSE),
+          style = "display: flex; align-items: center;",
+          tags$label(
+            "Share Y axis between subplots (values are aligned)", 
+            class = "control-label",
+            style = "margin-right: 5px;"
+          )
+        ),
+        div(
+          selectizeInput(ns("loc_code"),
+                         label = "Choose how to display location codes/names",
+                         choices = stats::setNames(
+                           c("name", "code", "nameCode", "codeName"),
+                           c("Name", "Code", "Name (Code)", "Code (Name)")
+                         ),
+                         selected = "Name"),
+          style = "display: flex; align-items: center;"
+        ),
+        
+        div(
+          checkboxInput(ns("target_datetime"),
+                        label = NULL),
+          style = "display: flex; align-items: center;",
+          tags$label(
+            "Use target instead of actual datetime", 
+            class = "control-label",
+            style = "margin-right: 5px;"
+          ),
+          span(
+            id = ns("target_datetime_info"),
+            `data-toggle` = "tooltip",
+            `data-placement` = "right",
+            `data-trigger` = "click hover",
+            title = "Some measurements have a 'fake' datetime to line up repeated measurements with a certain date. An example are snow survey measurements: these can be taken with a few days of the 1st of the month but visualize nicely when lined up with the 1st.",
+            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
+          )
+        ),
+        
+        div(
+          actionButton(ns("extra_aes"),
+                       "Modify plot aesthetics",
+                       title = "Modify plot aesthetics such as language, color palette, point/line size, text size.",
+                       style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
+          actionButton(ns("make_plot"),
+                       "Create Plot",
+                       style = "display: block; width: 100%;") # Ensure block display and full width
+        )
+      ) # End of tagList
+    })  %>% # End of renderUI for sidebar
+    bindEvent(language$language)  #TODO: bindEvent should also be on data, but data is not being used in the creation of lists yet
+    
+    output$main <- renderUI({
+      tagList(
+        plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
+        uiOutput(ns("full_screen_ui"))
+      ) # End of tagList
+    }) %>% # End renderUI
+      bindEvent(language$language) # Re-render the UI if the language or data changes
+    
+    
+    observeEvent(input$data_source, {
+      if (input$data_source == "AC") {
+        shinyjs::hide("EQWin_source_ui")
+      } else {
+        if (!EQWin_selector()) { # Only renders the ui element once
+          output$EQWin_source_ui <- renderUI({
+            selectizeInput(ns("EQWin_source"), "EQWin database", choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
+          })
+          EQWin_selector(TRUE)
+        }
+        shinyjs::show("EQWin_source_ui")
+      }
+    }, ignoreInit = TRUE)
     
     observeEvent(input$EQWin_source, {
       EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
@@ -251,28 +269,20 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
       data$EQ_params <- EQ_params
       data$EQ_param_grps <- EQ_param_grps
       data$EQ_stds <- EQ_stds
+      
+      # Update the selectize inputs
+      updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
+      updateSelectizeInput(session, "parameter_groups", choices = data$EQ_param_grps$groupname, server = TRUE)
+      updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)
+      updateSelectizeInput(session, "location_groups", choices = data$EQ_loc_grps$groupname, server = TRUE)
+      updateSelectizeInput(session, "standard", choices = stats::setNames(data$EQ_stds$StdCode, data$EQ_stds$StdName), server = TRUE, selected = "")
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-
-
-    observe({
-      if (is.null(mdb_files)) {
-        shinyjs::hide("data_source")
-        shinyjs::hide("EQWin_source")
-        updateRadioButtons(session, "data_source", selected = "AC")
-      }
-    })
     
     
-    
-    observe({
-      req(input$data_source, data)
+    observeEvent(input$data_source, {
+      req(data)
       if (input$data_source == "EQ") {
-        req(data$EQ_params)
-        updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
-        updateSelectizeInput(session, "parameter_groups", choices = data$EQ_param_grps$groupname, server = TRUE)
-        updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)
-        updateSelectizeInput(session, "location_groups", choices = data$EQ_loc_grps$groupname, server = TRUE)
-        updateSelectizeInput(session, "standard", choices = stats::setNames(data$EQ_stds$StdCode, data$EQ_stds$StdName), server = TRUE, selected = "")
+        # These updates are performed in the observeEvent for input$EQWin_source
       } else if (input$data_source == "AC") { # AC selected
         updateSelectizeInput(session, "parameters_AC", choices = data$AC_params$param_name, server = TRUE)
         updateSelectizeInput(session, "locations_AC", choices = data$AC_locs$name, server = TRUE)
@@ -388,6 +398,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
     })
     
     # Create and render the plot ############################################################
+    plot_created <- reactiveVal(FALSE)
     first_plot <- reactiveVal(TRUE)
     first_plot_with_standards <- reactiveVal(TRUE)
     observeEvent(input$make_plot, {
@@ -430,8 +441,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
       }
 
       tryCatch({
-        withProgress(message = "Generating plot... please be patient", value = 0, {
-          print(plot_aes$nrows)
+        withProgress(message = translations[id == "generating_working", get(language$language)][[1]], value = 0, {
           incProgress(0.5)
           if (input$data_source == "EQ") {
             plot <- plotDiscrete(start = input$date_range[1],
@@ -454,6 +464,7 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
                                  guideline_scale = plot_aes$guideline_scale,
                                  axis_scale = plot_aes$axis_scale,
                                  legend_scale = plot_aes$legend_scale,
+                                 legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
                                  dbSource = input$data_source,
@@ -479,16 +490,18 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
                                  guideline_scale = plot_aes$guideline_scale,
                                  axis_scale = plot_aes$axis_scale,
                                  legend_scale = plot_aes$legend_scale,
+                                 legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
                                  gridx = plot_aes$showgridx,
                                  gridy = plot_aes$showgridy,
                                  dbSource = input$data_source,
-                                 dbCon = AquaCache)
+                                 dbCon = session$userData$AquaCache)
           }
           
           
           output$plot <- plotly::renderPlotly(plot)
           
           incProgress(1)
+          plot_created(TRUE)
         }) # End withProgress\
         
         output$full_screen_ui <- renderUI({
@@ -532,8 +545,31 @@ discretePlotServer <- function(id, mdb_files, AquaCache) {
       })
     }, ignoreInit = TRUE) # End of plot rendering loop
     
+    # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
+    # The js function takes care of debouncing the window resize event and also reacts to a change in orientation or full screen event
+    
+    observeEvent(windowDims(), {
+      req(plot_created())
+      if (is.null(windowDims())) return()
+      if (windowDims()$width > 1.3 * windowDims()$height) {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "v"))
+      } else {
+        plotly::plotlyProxy("plot", session) %>%
+          plotly::plotlyProxyInvoke("relayout", legend = list(orientation = "h"))
+      }
+    }, ignoreNULL = TRUE)
+    
+    # Observe the full screen button and run the javascript function to make the plot full screen
     observeEvent(input$full_screen, {
       shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot"), "');"))
+      
+      # Manually trigger a window resize event after some delay
+      shinyjs::runjs("
+                      setTimeout(function() {
+                        sendWindowSizeToShiny();
+                      }, 700);
+                    ")
     }, ignoreInit = TRUE)
     
   }) # End of moduleServer

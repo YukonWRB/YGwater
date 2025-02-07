@@ -1,8 +1,8 @@
-basinsUI <- function(id) {
+snowInfoUI <- function(id) {
   ns <- NS(id)
   sidebarLayout(
     sidebarPanel(
-
+      
     ),
     mainPanel(
       
@@ -10,11 +10,11 @@ basinsUI <- function(id) {
   )
 }
 
-basinsServer <- function(id, AquaCache) {
+snowInfoServer <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
-
+    
     
   })
 }

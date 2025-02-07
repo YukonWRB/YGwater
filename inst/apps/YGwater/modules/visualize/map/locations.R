@@ -47,7 +47,7 @@ mapLocsUI <- function(id) {
   ) # End of tagList
 }
 
-mapLocsServer <- function(id, AquaCache, data, language) {
+mapLocsServer <- function(id, data, language) {
   moduleServer(id, function(input, output, session) {
     
     setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click", "clicked_view_data", "clicked_view_plots"))
@@ -458,33 +458,14 @@ mapLocsServer <- function(id, AquaCache, data, language) {
       loc.sub <- data$locations[data$locations$location_id %in% timeseries.sub$location_id, ]
       loc.sub <- loc.sub[popup_data, on = .(location_id), popup_html := popup_html]
       
-      # leaflet::leafletProxy("map", session = session) %>%
-      #   leaflet::clearMarkers()
-      # print("markers cleared")
-      # 
-      # leaflet::leafletProxy("map", session = session) %>%
-      #   leaflet::clearMarkerClusters()
-      # print("cleared clusters")
-      # 
-      # leaflet::leafletProxy("map", session = session) %>%
-      #   leaflet::addMarkers(data = loc.sub,
-      #                       lng = ~longitude,
-      #                       lat = ~latitude,
-      #                       popup = ~popup_html,
-      #                       clusterOptions = leaflet::markerClusterOptions())
-      # print("markers added")
-      
       leaflet::leafletProxy("map", session = session) %>%
         leaflet::clearMarkers() %>%
-        { print("Markers cleared") ; . } %>%
         leaflet::clearMarkerClusters() %>%
-        { print("Clusters cleared") ; . } %>%
         leaflet::addMarkers(data = loc.sub,
                             lng = ~longitude,
                             lat = ~latitude,
                             popup = ~popup_html,
-                            clusterOptions = leaflet::markerClusterOptions()) %>%
-        { print("Markers added") ; . }
+                            clusterOptions = leaflet::markerClusterOptions())
       
     }) # End of observe for map filters and rendering location points
     

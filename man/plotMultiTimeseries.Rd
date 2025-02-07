@@ -7,6 +7,7 @@
 plotMultiTimeseries(
   type = "traces",
   locations,
+  sub_locations = NULL,
   parameters,
   record_rates = NULL,
   period_types = NULL,
@@ -29,6 +30,7 @@ plotMultiTimeseries(
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
+  legend_position = "v",
   gridx = FALSE,
   gridy = FALSE,
   rate = NULL,
@@ -40,6 +42,8 @@ plotMultiTimeseries(
 \item{type}{Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.}
 
 \item{locations}{The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.}
+
+\item{sub_locations}{Your desired sub-locations, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-locations (character) or the sub-location IDs (numeric). Matched one to one to the locations and parameters or recycled if specified as length one.}
 
 \item{parameters}{The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.}
 
@@ -61,7 +65,7 @@ plotMultiTimeseries(
 
 \item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.}
 
-\item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.}
+\item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.}
 
 \item{shareX}{Should the x-axis be shared across facets? Default is TRUE (dates are shared).}
 
@@ -73,7 +77,7 @@ plotMultiTimeseries(
 
 \item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.}
 
-\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
+\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
 \item{historic_range}{Default NULL will plot historic ranges for up to two traces and no historical ranges at all if more than two traces; TRUE will plot historic ranges for all traces; FALSE will not plot historic ranges.}
 
@@ -84,6 +88,8 @@ plotMultiTimeseries(
 \item{axis_scale}{A scale factor to apply to the size of axis labels. Default is 1.}
 
 \item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
+
+\item{legend_position}{The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.}
 
 \item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
 

@@ -7,6 +7,7 @@
 #' 
 #' @param type Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.
 #' @param locations The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.
+#' @param sub_locations Your desired sub-locations, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-locations (character) or the sub-location IDs (numeric). Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param parameters The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param period_types The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
@@ -17,18 +18,19 @@
 #' @param lead_lag The number of **hours** to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters. Not used for `type` 'subplots'.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
-#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool.
+#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param shareX Should the x-axis be shared across facets? Default is TRUE (dates are shared).
 #' @param shareY Should the y-axis be shared across facets? Default is FALSE (values are not shared).
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists, only for water level and distance. Default is TRUE.
 #' @param title Should a title be included? TRUE/FALSE.
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
-#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "discharge, river/stream" ("débit d'eau"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Default NULL will plot historic ranges for up to two traces and no historical ranges at all if more than two traces; TRUE will plot historic ranges for all traces; FALSE will not plot historic ranges.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
+#' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
@@ -41,6 +43,7 @@
 
 plotMultiTimeseries <- function(type = 'traces',
                                 locations,
+                                sub_locations = NULL,
                                 parameters,
                                 record_rates = NULL,
                                 period_types = NULL,
@@ -63,6 +66,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                 line_scale = 1,
                                 axis_scale = 1,
                                 legend_scale = 1,
+                                legend_position = 'v',
                                 gridx = FALSE,
                                 gridy = FALSE,
                                 rate = NULL,
@@ -71,7 +75,8 @@ plotMultiTimeseries <- function(type = 'traces',
   
   # type <- 'subplots'
   # locations <- c("09FC001", "09EA004", "08AA012")
-  # parameters <- c("water level", "discharge, river/stream", "water level")
+  # sub_locations <- NULL
+  # parameters <- c("water level", "flow", "water level")
   # record_rates <- NULL
   # period_types <- NULL
   # z <- NULL
@@ -95,6 +100,9 @@ plotMultiTimeseries <- function(type = 'traces',
   # gridy <- FALSE
   # rate <- NULL
   # tzone <- "auto"
+  # legend_position <- 'v'
+  # shareX = TRUE
+  # shareY = TRUE
   
   
   # Checks and initial work ##########################################
@@ -169,6 +177,13 @@ plotMultiTimeseries <- function(type = 'traces',
   
   if (length(locations) == 1 & length(parameters) > 1) {
     locations <- rep(locations, length(parameters))
+  }
+  if (!is.null(sub_locations)) {
+    if (length(sub_locations) == 1 & length(locations) > 1) {
+      sub_locations <- rep(sub_locations, length(locations))
+    } else {
+      stop("The number of locations and sub_locations must be the same OR sub_locations must be NULL or of length 1.")
+    }
   }
   if (length(parameters) == 1 & length(locations) > 1) {
     parameters <- rep(parameters, length(locations))
@@ -281,7 +296,10 @@ plotMultiTimeseries <- function(type = 'traces',
   
   # Get the data for each location:parameter:record_rate combo
   # Make a list with one element per location:parameter:record_rate combo
-  timeseries <- data.frame(location = locations, parameter = parameters, record_rate = record_rates, period_type = period_types, z = z, z_approx = z_approx, lead_lag = lead_lag)
+  if (is.null(sub_locations)) {
+    sub_locations <- rep(NA, length(locations))
+  }
+  timeseries <- data.frame(location = locations, sub_location = sub_locations, parameter = parameters, record_rate = record_rates, period_type = period_types, z = z, z_approx = z_approx, lead_lag = lead_lag)
   if (nrow(unique(timeseries)) != nrow(timeseries)) {
     stop("You have duplicate entries in your locations and/or parameters and/or record_rates and/or period_types. Please review the function documentation and try again.")
   }
@@ -289,8 +307,8 @@ plotMultiTimeseries <- function(type = 'traces',
   data <- list()
   remove <- numeric()
   for (i in 1:nrow(timeseries)) {
-    
     location <- timeseries$location[i]
+    sub_location <- if (is.na(timeseries$sub_location[i])) NULL else timeseries$sub_location[i]
     parameter <- timeseries$parameter[i]
     record_rate <- if (is.na(timeseries$record_rate[i])) NULL else timeseries$record_rate[i]
     period_type <- if (is.na(timeseries$period_type[i])) NULL else timeseries$period_type[i]
@@ -300,15 +318,30 @@ plotMultiTimeseries <- function(type = 'traces',
     if (lead_lag == 0) timeseries$lead_lag[i] <- 0
     
     # Determine the timeseries and adjust the date range #################
+    # Confirm parameter and location, sub location exist in the database and that there is only one entry
+    
     location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
     if (is.na(location_id)) {
       warning("The location you entered, ", location, ", does not exist in the database. Moving on to the next entry.")
       remove <- c(remove, i)
       next
     }
-    #Confirm parameter and location exist in the database and that there is only one entry
+    if (!is.null(sub_location)) {
+      if (inherits(sub_location, "character")) {
+        sub_location <- tolower(sub_location)
+        escaped_sub_location <- gsub("'", "''", sub_location)
+        sub_location_id <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = '", escaped_sub_location, "' OR sub_location_name_fr = '", escaped_sub_location, "';"))[1,1]
+      } else { # Check if the sub_location_id exists
+        sub_location_id <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_id = ", sub_location, ";"))[1,1]
+      }
+      if (is.na(sub_location_id)) {
+        warning("The sub-location you entered for location ", location, ", sub-location ", sub_location, " does not exist in the database. Moving on to the next entry.")
+        remove <- c(remove, i)
+        next
+      }
+    }
     if (inherits(parameter, "character")) {
-      parameters <- tolower(parameters)
+      parameter <- tolower(parameter)
       escaped_parameter <- gsub("'", "''", parameter)
       parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
       parameter_code <- parameter_tbl$parameter_id[1]
@@ -334,18 +367,39 @@ plotMultiTimeseries <- function(type = 'traces',
       timeseries[i, "parameter_name"] <- titleCase(parameter_tbl$param_name[1], "en")
     }
     
-    if (is.null(record_rate)) { # period_type may or may not be NULL
-      if (is.null(period_type)) { #both record_rate and period_type are NULL
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous';"))
-      } else { #period_type is not NULL but record_rate is
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND period_type = '", period_type, "';"))
+    if (is.null(sub_location)) {
+      # Check if there are multiple timeseries for this parameter_code, location regardless of sub_location. If so, throw a stop
+      sub_loc_check <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+      if (nrow(sub_loc_check) > 1) {
+        warning("There are multiple entries in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Moving on to the next entry.")
+        remove <- c(remove, i)
+        next
       }
-    } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "';"))
-    } else { #both record_rate and period_type are not NULL
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND category = 'continuous' AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+      if (is.null(record_rate)) { # period_type may or may not be NULL
+        if (is.null(period_type)) { #both record_rate and period_type are NULL
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+        } else { #period_type is not NULL but record_rate is
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = '", period_type, "';"))
+        }
+      } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+      } else { #both record_rate and period_type are not NULL
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+      }
+    } else { # sub_location is specified
+      if (is.null(record_rate)) { # period_type may or may not be NULL
+        if (is.null(period_type)) { #both record_rate and period_type are NULL
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, ";"))
+        } else { #period_type is not NULL but record_rate is
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND period_type = '", period_type, "';"))
+        }
+      } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+      } else { #both record_rate and period_type are not NULL
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+      }
     }
-    
+
     # Narrow down by z if necessary
     if (!is.null(z)) {
       if (is.null(z_approx)) {
@@ -592,11 +646,11 @@ plotMultiTimeseries <- function(type = 'traces',
       }
       trace_data <- trace_data[order(trace_data$datetime),]
       
-      if (!is.null(filter)) { # Use the same approach as in plotOverlap to filter the value column
+      if (!is.null(filter)) { # Use the same approach as in ggplotOverlap to filter the value column
         if (!inherits(filter, "numeric")) {
           message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
         } else {
-          if (parameter %in% c("water level", "niveau d'eau", "discharge, river/stream", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
+          if (parameter %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
             trace_data[trace_data$value < 0 & !is.na(trace_data$value),"value"] <- NA
           } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
             trace_data[trace_data$value < -100 & !is.na(trace_data$value),"value"] <- NA
@@ -684,7 +738,7 @@ plotMultiTimeseries <- function(type = 'traces',
   }
   
   # Make the plot ###################################
-  colors <- grDevices::colorRampPalette(c("#0097A9", "#7A9A01", "#F2A900","#DC4405"))(length(data))
+  colors <- grDevices::colorRampPalette(c("#00454e", "#7A9A01", "#F2A900","#DC4405"))(length(data))
   
   # Function to add an opacity value to a hex color
   add_opacity_to_color <- function(hex_color, opacity) {
@@ -812,7 +866,8 @@ plotMultiTimeseries <- function(type = 'traces',
         rangeslider = list(visible = if (slider) TRUE else FALSE)
       ),
       hovermode = "closest",
-      legend = list(font = list(size = legend_scale * 12))
+      legend = list(font = list(size = legend_scale * 12),
+                    orientation = legend_position)
     )
     
     # Combine axis layouts with other layout settings
@@ -850,23 +905,6 @@ plotMultiTimeseries <- function(type = 'traces',
       subplot <- plotly::plot_ly()
       if (historic_range) {
         subplot <- subplot %>%
-          plotly::add_ribbons(data = data[[i]]$range_data[!is.na(data[[i]]$range_data$q25) & !is.na(data[[i]]$range_data$q75), ], 
-                              x = ~datetime, 
-                              ymin = ~q25, 
-                              ymax = ~q75, 
-                              name = if (lang == "en") "IQR" else "EIQ",
-                              legendgroup = if (lang == "en") "IQR" else "EIQ",
-                              showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
-                              color = I("grey40"), 
-                              line = list(width = 0.2), 
-                              hoverinfo = "text", 
-                              text = ~paste0("q25: ", 
-                                             round(q25, 2), 
-                                             " q75: ", 
-                                             round(q75, 2), 
-                                             " (", as.Date(datetime), 
-                                             ")")
-                              ) %>%
           plotly::add_ribbons(data = data[[i]]$range_data[!is.na(data[[i]]$range_data$min) & !is.na(data[[i]]$range_data$max), ], 
                               x = ~datetime, 
                               ymin = ~min, 
@@ -874,16 +912,33 @@ plotMultiTimeseries <- function(type = 'traces',
                               name = "Min-Max",
                               legendgroup = "Min-Max",
                               showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
-                              color = I("grey80"), 
+                              color = I("#D4ECEF"), 
                               line = list(width = 0.2), 
                               hoverinfo = "text", 
                               text = ~paste0("Min: ", 
                                              round(min, 2), 
-                                             " Max: ", 
+                                             ", Max: ", 
                                              round(max, 2), 
                                              " (", as.Date(datetime), 
                                              ")")
-                              ) 
+          )  %>%
+          plotly::add_ribbons(data = data[[i]]$range_data[!is.na(data[[i]]$range_data$q25) & !is.na(data[[i]]$range_data$q75), ], 
+                              x = ~datetime, 
+                              ymin = ~q25, 
+                              ymax = ~q75, 
+                              name = if (lang == "en") "IQR" else "EIQ",
+                              legendgroup = if (lang == "en") "IQR" else "EIQ",
+                              showlegend = if (i == 1) TRUE else FALSE,  # Only show legend for the first ribbon trace
+                              color = I("#5f9da6"), 
+                              line = list(width = 0.2), 
+                              hoverinfo = "text", 
+                              text = ~paste0("Q25: ", 
+                                             round(q25, 2), 
+                                             ", Q75: ", 
+                                             round(q75, 2), 
+                                             " (", as.Date(datetime), 
+                                             ")")
+          )
       }
       subplot <- subplot %>%
         plotly::add_trace(data = data[[i]]$trace_data, 
@@ -900,7 +955,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                          round(value, 4), 
                                          " (", datetime, 
                                          ")")
-                          ) %>%
+        ) %>%
         plotly::layout(
           title = NULL, 
           xaxis = list(title = list(standoff = 0), 
@@ -920,7 +975,8 @@ plotMultiTimeseries <- function(type = 'traces',
                         t = 40 * axis_scale,
                         l = 50 * axis_scale), 
           hovermode = "x unified",
-          legend = list(font = list(size = legend_scale * 12))
+          legend = list(font = list(size = legend_scale * 12),
+                        orientation = legend_position)
         ) %>%
         plotly::config(locale = lang)
       
