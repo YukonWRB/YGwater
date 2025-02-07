@@ -80,7 +80,6 @@ app_server <- function(input, output, session) {
   
   # Initial database connections without edit privileges
   
-  # Is this a better way to do it??? Safer???
   session$userData$AquaCache <- AquaConnect(name = config$dbName,
                                             host = config$dbHost,
                                             port = config$dbPort,
