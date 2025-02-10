@@ -30,8 +30,8 @@ YOWN_WDC_Update <- function(
     corr_ts <- corr_data_list[["timeseries"]]
     corr_meta <- corr_data_list[["metadata"]] %>%
       dplyr::filter(attribute != "TS name")
-    write.csv(corr_ts, file = paste0(WDC_struc, i, "\\", i, "_btoc_corr.csv"))
-    write.csv(corr_meta, file = paste0(WDC_struc, i, "\\", i, "_meta.csv"))
+    utils::write.csv(corr_ts, file = paste0(WDC_struc, i, "\\", i, "_btoc_corr.csv"))
+    utils::write.csv(corr_meta, file = paste0(WDC_struc, i, "\\", i, "_meta.csv"))
     
     # Download bgs data
     bgs_data_list <- aq_download(loc_id = i, ts_name = "Wlevel_bgs.Calculated", start = "1990-01-01", end = Sys.Date())
