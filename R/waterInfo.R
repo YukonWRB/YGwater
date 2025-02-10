@@ -201,6 +201,8 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
     )
 
     if (plots) {
+      grDevices::pdf(NULL)
+      
       x_lim <- c(min(min(yrs_min), min(yrs_max)), max(max(yrs_min), max(yrs_max)))
       plot <- ggplot2::ggplot(data = tbl, ggplot2::aes(x = .data$Year, y = .data$Min_1_Day)) +
         ggplot2::geom_point(color = "royalblue4") +
@@ -243,14 +245,13 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
         if (!dir.exists(paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name)))) {
           dir.create(paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name)), recursive = TRUE)
         }
-        grDevices::pdf(NULL)
         if (plot_type == "combined") {
           ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name), "/", sub("/", "_", params[params$parameter_id == sub(".*_", "", i), "param_name"]), "_combined.png"), plot = plot, height = 6, width = 8, units = "in", device = "png", dpi = 300)
         } else {
           ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name), "/", sub("/", "_", params[params$parameter_id == sub(".*_", "", i), "param_name"]),  "_separate.png"), plot = plots_separate, height = 6, width = 8, units = "in", device = "png", dpi = 300)
         }
-        dev.off()
       }
+      dev.off()
     } #End of plots loop
   }#End of loop working on extremes list of tables.
   if (plot_type == "combined" & plots & !quiet) {
