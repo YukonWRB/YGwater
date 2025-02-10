@@ -5,21 +5,23 @@
       font-weight: 100 900;
       font-style: normal;
     }
+    /* not used so commented out
     @font-face {
       font-family: 'Montserrat';
-      src: url('../fonts/Montserrat/Montserrat-Italic-VariableFont_wght.woff2') format('woff2-variations');
+      src: url('../../fonts/Montserrat/Montserrat-Italic-VariableFont_wght.woff2') format('woff2-variations');
       font-weight: 100 900;
       font-style: italic;
     }
+    */
     @font-face {
       font-family: 'Nunito Sans';
-      src: url('../fonts/NunitoSans/NunitoSans-VariableFont_YTLC.woff2') format('woff2-variations');
+      src: url('../../fonts/NunitoSans/NunitoSans-VariableFont_YTLC.woff2') format('woff2-variations');
       font-weight: 100 900;
       font-style: normal;
     }
     @font-face {
       font-family: 'Nunito Sans';
-      src: url('../fonts/NunitoSans/NunitoSans-Italic-VariableFont.woff2') format('woff2-variations');
+      src: url('../../fonts/NunitoSans/NunitoSans-Italic-VariableFont.woff2') format('woff2-variations');
       font-weight: 100 900;
       font-style: italic;
     }
@@ -33,7 +35,7 @@
     .nunito-sans {
       font-family: 'Nunito Sans', sans-serif;
     }
-    .nunito-sans {
+    .nunito-sans-italic {
       font-family: 'Nunito Sans', sans-serif;
       font-style: italic;
     }
