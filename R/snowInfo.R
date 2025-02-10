@@ -336,6 +336,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   } #End of stats loop
   
   if (plots) {
+    grDevices::pdf(NULL)
     plotsSWE <- list()
     plotsDepth <- list()
     plotsDensity <- list()
@@ -427,7 +428,6 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
         plotsDensity[[display_name]] <- plotDensity
       }
       if (!is.null(save_path)) {
-        grDevices::pdf(NULL)
         if (plot_type == "combined") {
           ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_combined.png"), plot = plots_combined, height = 8, width = 8, units = "in", device = "png", dpi = 300)
         } else {
@@ -435,13 +435,14 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
           ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DEPTH.png"), plot = plotDepth, height = 6, width = 10, units = "in", device = "png", dpi = 300)
           ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DENSITY.png"), plot = plotDensity, height = 6, width = 10, units = "in", device = "png", dpi = 300)
         }
-        dev.off()
+
       }
     } #End of for locations loop
     
     if (plot_type == "combined") {
       message("Combined SWE, depth, density plots were returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
     }
+    dev.off()
   } #End of plots loop
   
   
