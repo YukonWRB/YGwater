@@ -94,19 +94,19 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   
   #Get the measurements
   
-  samples <- DBI::dbGetQuery(con, paste0("SELECT sample_id, location_id, target_datetime FROM samples WHERE location_id IN ('", paste(locations$location_id, collapse = "', '"), "') AND media_id = 7 AND collection_method = 1"))#media = 'atmospheric', collection_method = 'observation'
+  samples <- DBI::dbGetQuery(con, paste0("SELECT sample_id, location_id, target_datetime FROM samples WHERE location_id IN ('", paste(locations$location_id, collapse = "', '"), "') AND media_id = 7 AND collection_method = 1")) #media = 'atmospheric', collection_method = 'observation'
   
   if (!inactive) { # Filter out any location with no measurements for 5 or more years
-    inactive <- samples %>%
+    rm.inactive <- samples %>%
       dplyr::group_by(location_id) %>%
       dplyr::summarise(min_year = min(lubridate::year(target_datetime)),
                        max_year = max(lubridate::year(target_datetime))) %>%
-      dplyr::mutate(inactive = max_year - min_year < 5) %>%
-      dplyr::filter(inactive) %>%
+      dplyr::mutate(rm.inactive = max_year - min_year < 5) %>%
+      dplyr::filter(rm.inactive) %>%
       dplyr::pull(location_id)
     
-    locations <- locations[!locations$location_id %in% inactive,]
-    samples <- samples[!samples$location_id %in% inactive,]
+    locations <- locations[!locations$location_id %in% rm.inactive,]
+    samples <- samples[!samples$location_id %in% rm.inactive,]
   }
   
   results <- DBI::dbGetQuery(con, paste0("SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('", paste(samples$sample_id, collapse = "', '"), "') AND p.parameter_id IN (21, 1220)"))
@@ -146,10 +146,10 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
         }
       }
       
-      medianMaxDepth <- stats::median(depthMaxes)
-      meanMaxDepth <- mean(depthMaxes)
-      medianMaxSWE <- stats::median(SWEMaxes)
-      meanMaxSWE <- mean(SWEMaxes)
+      medianMaxDepth <- stats::median(depthMaxes, na.rm = TRUE)
+      meanMaxDepth <- mean(depthMaxes, na.rm = TRUE)
+      medianMaxSWE <- stats::median(SWEMaxes, na.rm = TRUE)
+      meanMaxSWE <- mean(SWEMaxes, na.rm = TRUE)
       
       stats_df <- rbind(stats_df,
                         data.frame("location_code" = locations$location[i],
@@ -178,7 +178,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       }
       AllSWEMax <- numeric(0)
       for (j in unique(yrs)) {
-        AllSWEMax <- c(AllSWEMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow water equivalent", "result"]))
+        AllSWEMax <- c(AllSWEMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow water equivalent", "result"]), na.rm = TRUE)
       }
       AllSWEMax <- stats::na.omit(hablar::rationalize(AllSWEMax))
       if (length(AllSWEMax) > 6) {
@@ -190,7 +190,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       
       AllDepthMax <- numeric(0)
       for (j in unique(yrs)) {
-        AllDepthMax <- c(AllDepthMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow depth", "result"]))
+        AllDepthMax <- c(AllDepthMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow depth", "result"]), na.rm = TRUE)
       }
       AllDepthMax <- stats::na.omit(hablar::rationalize(AllDepthMax))
       if (length(AllDepthMax) > 6) {
@@ -225,13 +225,14 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
     trends$location_id <- NULL
     
     if (all) {
+      # Below is commented out as it's a bit misleading. The mean of the % annual change is not meaningful for the territory as a whole.
       #Calculate the territory trend and add it to trends
-      terr_prct_chg_SWE <- mean(trends$annual_prct_chg_SWE)
-      terr_prct_chg_depth <- mean(trends$annual_prct_chg_DEPTH)
-      trends <- plyr::rbind.fill(trends, data.frame("location_code" = "territory",
-                                                    "annual_prct_chg_SWE" = terr_prct_chg_SWE,
-                                                    "annual_prct_chg_DEPTH" = terr_prct_chg_depth,
-                                                    "note" = "Mean of the annual percent changes."))
+      # terr_prct_chg_SWE <- mean(trends$annual_prct_chg_SWE, na.rm = TRUE)
+      # terr_prct_chg_depth <- mean(trends$annual_prct_chg_DEPTH, na.rm = TRUE)
+      # trends <- plyr::rbind.fill(trends, data.frame("location_code" = "territory",
+      #                                               "annual_prct_chg_SWE" = terr_prct_chg_SWE,
+      #                                               "annual_prct_chg_DEPTH" = terr_prct_chg_depth,
+      #                                               "note" = "Mean of the annual percent changes."))
       
       yrs <- seq(1980, lubridate::year(Sys.Date())) #Start in 1980 because the network is essentially unchanged since then
       meanMaxSWE <- NULL
@@ -264,12 +265,12 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
           }
         }
         if (!is.null(yearMaxSWE) & !is.null(yearMaxDepth) & length(yearMaxSWE) > nrow(locations)/2) {
-          meanMaxSWE <- c(meanMaxSWE, mean(yearMaxSWE))
-          meanMaxDepth <- c(meanMaxDepth, mean(yearMaxDepth))
+          meanMaxSWE <- c(meanMaxSWE, mean(yearMaxSWE, na.rm = TRUE))
+          meanMaxDepth <- c(meanMaxDepth, mean(yearMaxDepth, na.rm = TRUE))
         }
         if (!is.null(yearApr1SWE) & !is.null(yearApr1Depth)) {
-          meanApr1SWE <- c(meanApr1SWE, mean(yearApr1SWE))
-          meanApr1Depth <- c(meanApr1Depth, mean(yearApr1Depth))
+          meanApr1SWE <- c(meanApr1SWE, mean(yearApr1SWE, na.rm = TRUE))
+          meanApr1Depth <- c(meanApr1Depth, mean(yearApr1Depth, na.rm = TRUE))
         }
       }
       
@@ -312,10 +313,10 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
                               "n_locs" = nrow(locations) - 2,
                               "yr_start" = min(yrs),
                               "yr_end" = max(yrs),
-                              "mean_SWE_mm" = c(round(mean(meanMaxSWE), 1), round(mean(meanApr1SWE), 1)),
-                              "median_SWE_mm" = c(round(stats::median(meanMaxSWE), 1), round(stats::median(meanApr1SWE), 1)),
-                              "mean_DEPTH_cm" = c(round(mean(meanMaxDepth), 1), round(mean(meanApr1Depth), 1)),
-                              "median_DEPTH_cm" = c(round(stats::median(meanMaxDepth), 1), round(stats::median(meanApr1Depth), 1)),
+                              "mean_SWE_mm" = c(round(mean(meanMaxSWE, na.rm = TRUE), 1), round(mean(meanApr1SWE, na.rm = TRUE), 1)),
+                              "median_SWE_mm" = c(round(stats::median(meanMaxSWE, na.rm = TRUE), 1), round(stats::median(meanApr1SWE, na.rm = TRUE), 1)),
+                              "mean_DEPTH_cm" = c(round(mean(meanMaxDepth, na.rm = TRUE), 1), round(mean(meanApr1Depth, na.rm = TRUE), 1)),
+                              "median_DEPTH_cm" = c(round(stats::median(meanMaxDepth, na.rm = TRUE), 1), round(stats::median(meanApr1Depth, na.rm = TRUE), 1)),
                               "p.val_SWE_mean" = c(round(unname(meanMaxSWESens$p.value), 3), round(unname(meanApr1SWESens$p.value), 3)),
                               "sens.slope_SWE_mean" = c(round(unname(meanMaxSWESens$estimates), 3), round(unname(meanApr1SWESens$estimates), 3)),
                               "p.val_DEPTH_mean" = c(round(unname(meanMaxDepthSens$p.value), 3), round(unname(meanApr1DepthSens$p.value), 3)),
@@ -426,13 +427,15 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
         plotsDensity[[display_name]] <- plotDensity
       }
       if (!is.null(save_path)) {
+        grDevices::pdf(NULL)
         if (plot_type == "combined") {
-          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_combined.png"), plot = plots_combined, height = 10, width = 10, units = "in", device = "png", dpi = 500)
+          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_combined.png"), plot = plots_combined, height = 8, width = 8, units = "in", device = "png", dpi = 300)
         } else {
-          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_SWE.png"), plot = plotSWE, height = 8, width = 12, units = "in", device = "png", dpi = 500)
-          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DEPTH.png"), plot = plotDepth, height = 8, width = 12, units = "in", device = "png", dpi = 500)
-          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DENSITY.png"), plot = plotDensity, height = 8, width = 12, units = "in", device = "png", dpi = 500)
+          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_SWE.png"), plot = plotSWE, height = 6, width = 10, units = "in", device = "png", dpi = 300)
+          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DEPTH.png"), plot = plotDepth, height = 6, width = 10, units = "in", device = "png", dpi = 300)
+          ggplot2::ggsave(filename = paste0(save_path, "/SnowInfo_", Sys.Date(), "/plots/", name, "_DENSITY.png"), plot = plotDensity, height = 6, width = 10, units = "in", device = "png", dpi = 300)
         }
+        dev.off()
       }
     } #End of for locations loop
     

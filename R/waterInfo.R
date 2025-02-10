@@ -243,11 +243,13 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
         if (!dir.exists(paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name)))) {
           dir.create(paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name)), recursive = TRUE)
         }
+        grDevices::pdf(NULL)
         if (plot_type == "combined") {
-          ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name), "/", sub("/", "_", params[params$parameter_id == sub(".*_", "", i), "param_name"]), "_combined.png"), plot = plot, height = 8, width = 10, units = "in", device = "png", dpi = 500)
+          ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name), "/", sub("/", "_", params[params$parameter_id == sub(".*_", "", i), "param_name"]), "_combined.png"), plot = plot, height = 6, width = 8, units = "in", device = "png", dpi = 300)
         } else {
-          ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name), "/", sub("/", "_", params[params$parameter_id == sub(".*_", "", i), "param_name"]),  "_separate.png"), plot = plots_separate, height = 7, width = 9, units = "in", device = "png", dpi = 500)
+          ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name), "/", sub("/", "_", params[params$parameter_id == sub(".*_", "", i), "param_name"]),  "_separate.png"), plot = plots_separate, height = 6, width = 8, units = "in", device = "png", dpi = 300)
         }
+        dev.off()
       }
     } #End of plots loop
   }#End of loop working on extremes list of tables.
