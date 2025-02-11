@@ -20,7 +20,7 @@ xle_processing(
 \arguments{
 \item{file}{Full path to the .xle file. This must be an XLE file from a Solinst logger.}
 
-\item{aq_upload}{Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned.}
+\item{aq_upload}{Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned. Uses function \code{\link[=aq_upload]{aq_upload()}} with default parameters, so you'll want to make sure your Aquarius login details are in your .Renviron file.}
 
 \item{master_sheet}{Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.}
 
