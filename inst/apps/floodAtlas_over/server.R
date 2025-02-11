@@ -118,7 +118,7 @@ app_server <- function(input, output, session) {
       showModal(modalDialog(
         title = "Information",
         HTML("<ul>
-              <li>This plot allow you to plot up to 10 years of data to compare water level or flow traces to each other and to historic ranges.</li>
+              <li>This plot allows you to plot up to 10 years of data to compare water level or flow traces to each other and to historic ranges.</li>
               <li>The 'Typical' range is the interquartile range, which is the range of values between the 25th and 75th percentiles of the data.</li>
               <li>The 'Historic' range is the full range of daily mean values.</li>
               <li>The typical and historic ranges are calculated using all data <i><b>prior</i> </b>to the last year selected, giving relevant historical context.</li>
@@ -178,6 +178,7 @@ app_server <- function(input, output, session) {
                   line_scale = 1,
                   axis_scale = 1,
                   legend_scale = 1,
+                  title = FALSE,
                   gridx = FALSE,
                   gridy = FALSE,
                   slider = FALSE,

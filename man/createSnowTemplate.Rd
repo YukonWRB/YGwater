@@ -18,7 +18,7 @@ createSnowTemplate(
 
 \item{save_path}{The path where you want the circuit workbook(s) saved. Default "choose" lets you pick your folder.}
 
-\item{snowCon}{A snow database connection object, if you have one. If not, the function will attempt to connect to the snow database using function \code{\link[=snowConnect]{snowConnect()}} and close the connection when finished.}
+\item{snowCon}{A snow database connection object. If left NULL the function will attempt to connect to the snow database using function \code{\link[=snowConnect]{snowConnect()}} and close the connection when finished.}
 }
 \value{
 A snow survey template for the specified circuit(s) and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
