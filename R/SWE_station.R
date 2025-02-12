@@ -51,6 +51,15 @@ SWE_station <- function(stations = "all",
                         save_path = "choose") 
 {
   
+  # parameter checks
+  if (!month %in% c(3, 4, 5)) {
+    stop("Parameter 'month' must be either 3, 4 or 5")
+  }
+  source <- tolower(source)
+  if (!source %in% c("aquacache", "snow")) {
+    stop("Parameter 'source' must be either 'aquacache' or 'snow'")
+  }
+  
   if (csv == TRUE) {
     if (save_path == "choose") {
       if (!interactive()) {
