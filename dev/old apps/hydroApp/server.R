@@ -105,7 +105,7 @@ app_server <- function(input, output, session) {
             temp_plot <- tempfile(fileext = ".png")
             grDevices::png(temp_plot, width = 900, height = 1200, res = 110)
             print(precip_res$plot)
-            dev.off()
+            grDevices::dev.off()
             list(src = temp_plot, contentType = "image/png", width = 900, height = 1200, alt = "Precipitation Map")
           }, deleteFile = TRUE)
           shinyjs::show("export_precip_map")
