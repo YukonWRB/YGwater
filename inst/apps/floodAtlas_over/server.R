@@ -58,33 +58,37 @@ app_server <- function(input, output, session) {
     query <- parseQueryString(session$clientData$url_search)
     
     # Set input values based on URL parameters if they exist
-    if (!is.null(query$loc_code)) {
-      params$loc_code <- query$loc_code
-      updateTextInput(session, "loc_code", value = params$loc_code)
-    }
-    if (!is.null(query$param_code)) {
-      params$param_code <- as.numeric(query$param_code)
-      updateNumericInput(session, "param_code", value = params$param_code)
-    }
-    if (!is.null(query$lang)) {
-      sub <-  gsub("[[:punct:]]", "", query$lang)
-      params$lang <- sub
-      updateTextInput(session, "lang", value = params$lang)
-    }
+    # yrs
     if (!is.null(query$yrs)) {
       sub_yrs <- gsub("[[:punct:]]", "", query$yrs)
       params$yrs <- as.numeric(sub_yrs)
     }
     
-    if (!is.null(query$loc_code)) {
-      sub_loc <- gsub("[[:punct:]]", "", query$loc_code)
-      params$loc_code <- sub_loc
+    # param_code
+    if (!is.null(query$param_code)) {
       sub_param <- gsub("[[:punct:]]", "", query$param_code)
       params$param_code <- as.numeric(sub_param)
+      updateNumericInput(session, "param_code", value = params$param_code)
+    }
+    
+    # loc_code
+    if (!is.null(query$loc_code)) {
+      # remove punctuation
+      sub_loc <- gsub("[[:punct:]]", "", query$loc_code)
+      params$loc_code <- sub_loc
+      updateTextInput(session, "loc_code", value = params$loc_code)
+      
       # Find the years of record for the location
       tsid <- DBI::dbGetQuery(session$userData$con, paste0("SELECT timeseries_id FROM timeseries WHERE location = '", params$loc_code, "' AND parameter_id = ",  params$param_code, ";"))[1,1]
       yrs <- DBI::dbGetQuery(session$userData$con, paste0("SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " ORDER BY year DESC;"))
       updateSelectizeInput(session, "yrs", choices = yrs$year, selected = params$yrs)
+    }
+    
+    # language
+    if (!is.null(query$lang)) {
+      sub <-  gsub("[[:punct:]]", "", query$lang)
+      params$lang <- sub
+      updateTextInput(session, "lang", value = params$lang)
     }
     
     # Trigger the plot creation
@@ -114,7 +118,7 @@ app_server <- function(input, output, session) {
       showModal(modalDialog(
         title = "Information",
         HTML("<ul>
-              <li>This plot allow you to plot up to 10 years of data to compare water level or flow traces to each other and to historic ranges.</li>
+              <li>This plot allows you to plot up to 10 years of data to compare water level or flow traces to each other and to historic ranges.</li>
               <li>The 'Typical' range is the interquartile range, which is the range of values between the 25th and 75th percentiles of the data.</li>
               <li>The 'Historic' range is the full range of daily mean values.</li>
               <li>The typical and historic ranges are calculated using all data <i><b>prior</i> </b>to the last year selected, giving relevant historical context.</li>
@@ -167,13 +171,14 @@ app_server <- function(input, output, session) {
                   startDay = 1,
                   endDay = 365,
                   years = yrs,
-                  plot_rate = "daily",
+                  rate = "day",
                   datum = FALSE,
                   filter = 20,
                   lang = lang,
                   line_scale = 1,
                   axis_scale = 1,
                   legend_scale = 1,
+                  title = FALSE,
                   gridx = FALSE,
                   gridy = FALSE,
                   slider = FALSE,

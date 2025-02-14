@@ -10,7 +10,7 @@
 #' @param target_date The target date of the snow survey, given in the form yyyy-mm-dd as a text string or Date object. Example: for the march snow survey of 2024, target_date = '2024-03-01'
 #' @param circuit The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, NorthSlope, OldCrow, PellyFarm, Ross, SLakes, Teslin, Watson, Whitehorse, and YEC. "all" will create a workbook for all circuits.
 #' @param save_path The path where you want the circuit workbook(s) saved. Default "choose" lets you pick your folder.
-#' @param snowCon A snow database connection object, if you have one. If not, the function will attempt to connect to the snow database using function [snowConnect()] and close the connection when finished.
+#' @param snowCon A snow database connection object. If left NULL the function will attempt to connect to the snow database using function [snowConnect()] and close the connection when finished.
 #' 
 #' @return A snow survey template for the specified circuit(s) and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
 #'
@@ -38,7 +38,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
   }
   
   if (length(circuit) != 1) {
-    stop("parameter circuit must be a character vector of length 1, one of 'all' or a specific circuit name.")
+    stop("parameter circuit must be a character vector of length 1, either 'all' or a specific circuit name.")
   }
   
   circuit <- tolower(circuit)
@@ -95,7 +95,7 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
                                                      "INNER JOIN locations ON maintenance.location = locations.location " ,
                                                      "WHERE completed = FALSE AND name IN ('", paste(courses, collapse = "', '"), "') ",
                                                      "AND completed = FALSE"))
-          DBI::dbDisconnect(snowCon)
+          on.exit(DBI::dbDisconnect(snowCon))
           snowCon_flag <- TRUE
         }, error = function(e) {
           snowCon_flag <<- FALSE
