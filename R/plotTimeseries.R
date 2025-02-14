@@ -114,7 +114,7 @@ plotTimeseries <- function(location,
   }
   
   if (!is.null(rate)) {
-    tolower(rate)
+    rate <- tolower(rate)
     if (!(rate %in% c("max", "hour", "day"))) {
       stop("Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again.")
     }
@@ -509,15 +509,33 @@ plotTimeseries <- function(location,
   plot <- plotly::plot_ly()
   if (historic_range) {
     plot <- plot %>%
-      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ], x = ~datetime, ymin = ~q25, ymax = ~q75, name = if (lang == "en") "IQR" else "EIQ", color = I("#5f9da6"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
-      plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], x = ~datetime, ymin = ~min, ymax = ~max, name = "Min-Max", color = I("#D4ECEF"), line = list(width = 0.2), hoverinfo = "text", text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
+      plotly::add_ribbons(data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ],
+                          x = ~datetime, 
+                          ymin = ~q25, 
+                          ymax = ~q75, 
+                          # name = if (lang == "en") "IQR" else "EIQ", 
+                          name = if (lang == "en") "Typical" else "Typique",
+                          color = I("#5f9da6"), 
+                          line = list(width = 0.2), 
+                          hoverinfo = "text", 
+                          text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
+      plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], 
+                          x = ~datetime, 
+                          ymin = ~min, 
+                          ymax = ~max, 
+                          # name = "Min-Max", 
+                          name = if (lang == "en") "Historic" else "Historique",
+                          color = I("#D4ECEF"), 
+                          line = list(width = 0.2), 
+                          hoverinfo = "text", 
+                          text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
   
   plot <- plot %>%
     plotly::add_trace(data = trace_data, 
                       x = ~datetime, 
                       y = ~value, 
-                      type = "scatter", 
+                      type = "scattergl", 
                       mode = "lines",
                       line = list(width = 2.5 * line_scale),
                       name = parameter_name, 
