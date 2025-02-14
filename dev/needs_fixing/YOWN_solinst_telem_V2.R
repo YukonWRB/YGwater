@@ -107,6 +107,7 @@ data <- data %>%
     # Parse time series name
     for (i in colnames(data)[2:4]) {
       ts_ID <- grep(gsub("\\(.*?\\)", "", i), c("Water Temp.TEMPERATURE", "Wlevel_Hgt.level_RAW", "Conductivity Field.Econdy-F"), value = TRUE, ignore.case = TRUE)[1]
+      
       df <- data.frame("Time" = data$Time,
                        "Value" = data[, i])
       YGwater::aq_upload(loc_id = z,
