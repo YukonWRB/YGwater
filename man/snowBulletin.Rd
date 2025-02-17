@@ -42,5 +42,5 @@ This function fetches data from the local postgresql hydrometric database create
 \details{
 To download data, you MUST have the database credentials loaded into your .Renviron profile. See function \code{\link[=AquaConnect]{AquaConnect()}} for more information, and contact the database administrator/data scientist for credentials or help.
 
-If you also wish to synchronize timeseries on our database with new data provided by others (such as when the WSC adjusts or publishes flow values) you must also have write credentials to the database. Please talk to the Data Scientist to get these credentials.
+If you also wish to synchronize timeseries on our database with new data provided by others (such as when the WSC adjusts or publishes flow values) you must also have write credentials to the database. Connection for this will be done with \code{\link[AquaCache:AquaConnect]{AquaCache::AquaConnect()}}. Please talk to the Data Scientist to get these credentials.
 }

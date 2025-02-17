@@ -2,7 +2,7 @@
 % Please edit documentation in R/SWE_station.R
 \name{SWE_station}
 \alias{SWE_station}
-\title{Calculates snow survey stats for stations}
+\title{Calculate snow survey stats for stations}
 \usage{
 SWE_station(
   stations = "all",
@@ -41,5 +41,5 @@ A table and a csv file (if csv = TRUE) with the current snow depth and swe, the 
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-The purpose of this script is to summarise the SWE data of each station for a particular year and month and compare to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course" summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
+This script summarises the SWE data of each station for a particular year and month and compares it to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course' summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
 }
