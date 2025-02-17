@@ -100,7 +100,7 @@ snowBulletin <- function(year,
   }
   
   ### Generate a snow bulletin for the whole territory###
-  if (is.null(basins) == TRUE) {
+  if (is.null(basins)) {
     
     basins <- c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", 
                 "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek")

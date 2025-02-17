@@ -169,7 +169,7 @@ SWE_basin <- function(year,
   colnames(swe_basin) <- c("location", "year", "month", "value", "perc", "parameter", "units")
   
   ## Calculate max, min and median historical SWE for each basin if summarise = TRUE
-  if (summarise == TRUE) {
+  if (summarise) {
     # calculate stats excluding current year
     swe_basin_summary <- swe_basin_year %>%
       dplyr::filter(.data$yr != year) %>%
@@ -197,7 +197,7 @@ SWE_basin <- function(year,
   }
   
   # Write csv if csv = TRUE
-  if (csv == TRUE) {
+  if (csv) {
     utils::write.csv(swe_basin, file = paste0("SweBasin_", year, "-0", month, ".csv"), row.names = FALSE)
   }
   return(swe_basin)

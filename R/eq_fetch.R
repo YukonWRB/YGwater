@@ -138,7 +138,7 @@ eq_fetch <- function(EQcode,
   rownames(sampledata) <- NULL
   
   # Download all standards, filter by user choice via popup window
-  if (apply_standards == TRUE) {
+  if (apply_standards) {
     print("Processing standards")
     # Extract eqstds and eqstdval tables from access database, merge together by StdId
     eqstds <- as.data.frame(DBI::dbReadTable(EQWin, "eqstds") %>%
@@ -217,7 +217,7 @@ eq_fetch <- function(EQcode,
       dplyr::filter(.data$StnCode == i) %>%
       dplyr::select(c("StnCode", "CollectDateTime", "StnType", which(as.vector(sapply(names(sampledata), function(x) sub(" \\(.*", "", x))) %in% paramIDs)))
     list[["stndata"]] <- stndata
-    if (apply_standards == TRUE) {
+    if (apply_standards) {
       list[["stnstd"]] <- stdlist[[i]] %>%
         dplyr::select(c("StdName", "StdCode", which(as.vector(sapply(names(stnstd), function(x) sub(" \\(.*", "", x))) %in% paramIDs)))
     }

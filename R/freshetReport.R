@@ -133,7 +133,7 @@ freshetReport <-
       report_name <- "Custom Water Report"
     }
 
-    if (is.null(report_name) == FALSE & is.null(custom_report_stations) == TRUE) {
+    if (!is.null(report_name) & is.null(custom_report_stations)) {
 
       ### Generate a report for the whole territory###
       if (report_name %in% c("Territory", "territory", "Communities", "communities", "Yukon", "Yukon Wide", "Yukon wide", "yukon wide")) {
@@ -586,8 +586,7 @@ freshetReport <-
       } #End of custom report
     }
 
-    if (is.null(report_name) == TRUE &
-        is.null(custom_report_stations) == TRUE) {
+    if (is.null(report_name) & is.null(custom_report_stations)) {
       stop("You must specify either a report_name or provide a character vector for custom_report_station.")   #to catch an error where no parameter was entered in both of these
     }
 

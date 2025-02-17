@@ -60,7 +60,7 @@ SWE_station <- function(stations = "all",
     stop("Parameter 'source' must be either 'aquacache' or 'snow'")
   }
   
-  if (csv == TRUE) {
+  if (csv) {
     if (save_path == "choose") {
       if (!interactive()) {
         stop("You must specify a save path when running in non-interactive mode.")
@@ -325,8 +325,8 @@ SWE_station <- function(stations = "all",
   tabl <- merge(tabl, loc_basin, by = "location_id")
   
   # Remove those that are inactive or not
-  if (active == TRUE) {
-    tabl <- tabl[tabl$active == TRUE, ]
+  if (active) {
+    tabl <- tabl[tabl$active, ]
   } else {tabl <- tabl}
   
   # remove active column

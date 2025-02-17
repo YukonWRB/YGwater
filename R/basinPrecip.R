@@ -177,7 +177,7 @@ basinPrecip <- function(location,
     hrdpa <- TRUE
   }
 
-  if (hrdpa == TRUE) {
+  if (hrdpa) {
     start_hrdpa <- start + 60*60*4.8 #Assuming that rasters are issued at most 1.2 hours post valid time, this sets the start time so that the 6 hours before the requested start time is not included.
     start_hrdpa <- lubridate::floor_date(start_hrdpa, "6 hours")
     end_hrdpa <- lubridate::floor_date(end, "6 hours")
@@ -352,7 +352,7 @@ basinPrecip <- function(location,
     forecast_precip <- terra::rast(end_precip$files) - terra::rast(past_precip$files)
     forecast_precip <- terra::project(forecast_precip, "+proj=longlat +EPSG:3347")
     names(forecast_precip) <- "precip"
-  } else if (hrdpa == TRUE & end > (Sys.time() - 60*60*6)) { #There might be a need for some hrdps to fill in to the requested end time. Determine the difference between the actual end time and requested end time, fill in with hrdps if necessary
+  } else if (hrdpa & end > (Sys.time() - 60*60*6)) { #There might be a need for some hrdps to fill in to the requested end time. Determine the difference between the actual end time and requested end time, fill in with hrdps if necessary
     getHRDPS(clip = NULL, save_path = hrdps_loc, param = "APCP_Sfc") #This will not run through if the files are already present
     available_hrdps <- data.frame(files = list.files(paste0(hrdps_loc, "/APCP_Sfc"), pattern = "*.tiff$", full.names = TRUE))
     available_hrdps <- available_hrdps %>%
@@ -406,7 +406,7 @@ basinPrecip <- function(location,
   }
 
   ###now the rasters are present for the extent and time required, finally! Proceed to accumulating them into a single raster.
-  if (hrdpa == TRUE & hrdps == FALSE) {
+  if (hrdpa & !hrdps) {
     if (length(hrdpa_files) > 1) {
       all_hrdpa <- list()
       xmin <- numeric(0)
@@ -445,12 +445,12 @@ basinPrecip <- function(location,
     actual_times <- actual_times_hrdpa
   }
 
-  if (hrdpa == FALSE & hrdps == TRUE) {
+  if (!hrdpa & hrdps) {
     total <- forecast_precip
     actual_times <- actual_times_hrdps
   }
 
-  if (hrdpa == TRUE & hrdps == TRUE) {
+  if (hrdpa & hrdps) {
     #start with hrdpa
     if (length(hrdpa_files) > 1) {
       all_hrdpa <- list()
@@ -671,7 +671,7 @@ basinPrecip <- function(location,
   if (type == "longlat") {
     list <- list(mean_precip = mean_precip, total_time_range_UTC = actual_times, reanalysis_time_range_UTC = actual_times_hrdpa, forecast_time_range_UTC = actual_times_hrdps, point = requested_point, plot = if (map) plot else NULL)
     if (silent == FALSE) {
-      if (map == TRUE) {
+      if (map) {
         cat("  \n  \n", crayon::blue(crayon::bold(crayon::underline(round(mean_precip, 2)))), " mm of rain or water equivalent ", if (hrdps == FALSE) "fell" else if (hrdps == TRUE & hrdpa == TRUE) "will have falllen" else if (hrdps == TRUE & hrdpa == FALSE) "will fall", " at your requested point (", requested_point[1], ", ", requested_point[2], ") between ", crayon::blue(crayon::bold(as.character(actual_times[1]), "and ", as.character(actual_times[2]), "UTC.")), "The smallest watershed for which I could find a polygon is ", basin$feature_name, ", ", stringr::str_to_title(basin$description), "  \n  \nNOTES:  \n Your requested times have been adjusted to align with available data.\n", if (hrdps == FALSE) "Precipitation is based solely on retrospective-looking data produced by the HRDPA" else if (hrdps == TRUE & hrdpa == TRUE) "Precipitation is based on a mixture of retrospective-looking data from the HRDPA re-analysis and modelled precipitation using the HRDPS." else if (hrdps == TRUE & hrdpa == FALSE) "Precipitation is based on the HRDPS climate model outputs.", "  \n\n")
       } else {
         cat("  \n  \n", crayon::blue(crayon::bold(crayon::underline(round(mean_precip, 2)))), " mm of rain or water equivalent ", if (hrdps == FALSE) "fell" else if (hrdps == TRUE & hrdpa == TRUE) "will have falllen" else if (hrdps == TRUE & hrdpa == FALSE) "will fall", " at your requested point (", requested_point[1], ", ", requested_point[2], ") between ", crayon::blue(crayon::bold(as.character(actual_times[1]), "and ", as.character(actual_times[2]), "UTC.")), "  \n  \nNOTES:  \n Your requested times have been adjusted to align with available data.\n", if (hrdps == FALSE) "Precipitation is based solely on retrospective-looking data produced by the HRDPA" else if (hrdps == TRUE & hrdpa == TRUE) "Precipitation is based on a mixture of retrospective-looking data from the HRDPA re-analysis and modelled precipitation using the HRDPS." else if (hrdps == TRUE & hrdpa == FALSE) "Precipitation is based on the HRDPS climate model outputs.", "  \n\n")

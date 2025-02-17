@@ -527,7 +527,7 @@ stationInfo$Station <- gsub("Morely", "Morley", stationInfo$Station)
 
 ```{r Rates table for levels, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE, results='asis'}
 
-if (rate == TRUE & report_type %in% c("Both", "Level", "both", "level")){
+if (rate  & report_type %in% c("Both", "Level", "both", "level")){
   cat("# Summary of water levels and trajectories  \n")
   info <- dplyr::bind_rows(levelInfo)[c(2, 5, 6, 8, 10, 20)]
   
@@ -737,7 +737,7 @@ tryCatch({
 
 ```{r Get MESH and CLEVER information, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 
-if (MESH == TRUE){
+if (MESH ){
   #today's files if exists:
   MESHfiles <- list.files("G:/water/Hydrology/Flood_Forecasting/01-Imagery-Data-Forecasts/2022/02-Openwater/01-Forecasts/MESH/zSource/", pattern= paste0(".*", gsub("-", "", as.character(Sys.Date())), "*\\.*csv"))
   
@@ -783,7 +783,7 @@ if (MESH == TRUE){
   })
 } else { MESH <- list()}
 
-if (CLEVER == TRUE){
+if (CLEVER ){
   CLEVERstns <- c("10AA006", "10AB001", "10AA004", "10AA001" ,"10AD002", "99FK100", "09AE003", "09AA013")
   
   tryCatch({
@@ -824,7 +824,7 @@ for(i in stations) {
                                               returns = level_returns,
                                               complete_df = levelDataList[[n]][[1]])
           
-          if (plot_titles == TRUE){
+          if (plot_titles){
             levelPlot <- levelPlot +
               ggplot2::labs(title=paste0("Station ", i, ": ", stringr::str_to_title(tidyhydat::hy_stations(i)[,2]))) +
               ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14))
@@ -835,7 +835,7 @@ for(i in stations) {
           
           
           
-          if (level_zoom == TRUE){ #Plot zoomed-in level data
+          if (level_zoom){ #Plot zoomed-in level data
             cat("  \n### Level (last", zoom_days, " days) \n")
             
 
@@ -846,7 +846,7 @@ for(i in stations) {
                                                      returns = level_returns,
                                                      complete_df = levelDataList[[n]][[1]])
             
-            if (plot_titles == TRUE){
+            if (plot_titles){
               zoomLevelPlot <- zoomLevelPlot +
                 ggplot2::labs(title=paste0("Station ", i, ": ", stringr::str_to_title(tidyhydat::hy_stations(i)[,2]))) +
                 ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14))
@@ -873,7 +873,7 @@ for(i in stations) {
                                                returns = flow_returns,
                                                complete_df = flowDataList[[n]][[1]])
             
-            if (plot_titles == TRUE){
+            if (plot_titles){
               flowPlot <- flowPlot +
                 ggplot2::labs(title=paste0("Station ", i, ": ", stringr::str_to_title(tidyhydat::hy_stations(i)[,2]))) +
                 ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14))
@@ -882,7 +882,7 @@ for(i in stations) {
             print(flowPlot)
             cat("  \n")
             
-            if (flow_zoom == TRUE) { #plot zoomed-in flow data as well
+            if (flow_zoom) { #plot zoomed-in flow data as well
               cat("  \n### Flow (last", zoom_days, " days)  \n")
               
               if (i %in% names(MESH) & i %in% names(CLEVER)){
@@ -944,7 +944,7 @@ for(i in stations) {
                                                      complete_df = flowDataList[[n]][[1]])
               }
               
-              if (plot_titles == TRUE){
+              if (plot_titles){
                 zoomFlowPlot <- zoomFlowPlot +
                   ggplot2::labs(title=paste0("Station ", i, ": ", stringr::str_to_title(tidyhydat::hy_stations(i)[,2]))) +
                   ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14))

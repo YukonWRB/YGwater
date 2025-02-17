@@ -53,7 +53,7 @@ snowBulletinStats <- function(year,
   }
   
   # Set up save_path
-  if (excel_output == TRUE) {
+  if (excel_output) {
     if (save_path == "choose") {
       if (!interactive()) {
         stop("You must specify a save path when running in non-interactive mode.")
@@ -526,7 +526,7 @@ snowBulletinStats <- function(year,
                  "cddf_stats" = cddf_stats, "flow_stats" = flow_stats,
                  "swe_basin_summary" = swe_basin_summary, "swe_compiled" = swe_compiled)
   
-  if (excel_output == TRUE) {
+  if (excel_output) {
     
     ## Main workbook
     wb <- openxlsx::createWorkbook()
