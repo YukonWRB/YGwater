@@ -48,7 +48,7 @@ YOWN_WDC_Update <- function(
     # Download bgs data
     bgs_data_list <- aq_download(loc_id = i, ts_name = "Wlevel_bgs.Calculated", start = "1990-01-01", end = Sys.Date())
     bgs_ts <- bgs_data_list[["timeseries"]]
-    write.csv(bgs_ts, file = paste0(WDC_struc, i, "\\", i, "_bgs.csv"))
+    utils::write.csv(bgs_ts, file = paste0(WDC_struc, i, "\\", i, "_bgs.csv"))
     
     # Copy most current version of grade key
     file.copy(from = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\02_R_SUPPORT_FILES\\YOWN_GradeKey.txt",

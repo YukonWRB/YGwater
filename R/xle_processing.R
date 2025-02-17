@@ -5,7 +5,7 @@
 #'
 #' @param file Full path to the .xle file. This must be an XLE file from a Solinst logger.
 #' @param aq_upload Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned. Uses function [aq_upload()] with default parameters, so you'll want to make sure your Aquarius login details are in your .Renviron file.
-#' @param master_sheet Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.
+#' @param master_file Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.
 #' @param logger_tracking Path to YOWN logger tracking sheet (.xlsx), used to track logger metadata. This part is done within a tryCatch block to enable this function to run even if the logger tracking sheet is open, missing, or otherwise inaccessible.
 #' @param dropbox Path to YOWN logger dropbox folder, where the xle file is located. This is used to move the file to the appropriate folder after processing.
 #' @param repo Path to YOWN Active Wells folder, which will be concatenated with the YOWN ID to create the final resting place for the xle file. If NULL the file will not get moved.
@@ -15,41 +15,98 @@
 
 xle_processing <- function(file,
                            aq_upload = TRUE,
-                           master_sheet = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
+                           master_file = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
                            logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
                            dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
                            repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
+  
+  
   # file = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\FAILED\\1083563_YOWN-2308 Haines Junction Villag_2024_09_17_115603.xle"
   # aq_upload = TRUE
-  # master_sheet = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
+  # master_file = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
   # logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
   # dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
   # repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
   
-  if (!file.exists(master_sheet)) {
-    stop("Master sheet not found, check file location")
-  }
-  if (!file.exists(logger_tracking)) {
-    stop("Logger tracking sheet not found, check file location")
-  }
-  if (!file.exists(dropbox)) {
-    stop("Dropbox folder not found, check folder location")
-  }
-  if (!file.exists(repo)) {
-    stop("Active Wells folder not found, check folder location")
-  }
+
   
   # Make sure tibble is installed as it's in suggests
   rlang::check_installed("tibble", reason = "necessary for function to run")
   
-  # Ensure the 'file' has extension .xle (last part of the string)
-  if (tools::file_ext(file) != "xle") {
-    stop("The file must have the extension .xle")
+  if (!file.exists(master_file)) {
+    stop("Master file not found, check file location")
+  } else { # File exists, so if reading fails it must mean the sheet doesn't exist
+    #Read in reference sheets and logger drop folder
+    tryCatch({
+      master <- openxlsx::read.xlsx(master_file, sheet = "YOWN_MASTER")
+      YOWNIDs <- master$YOWN.Code 
+    }, error = function(e) {
+      stop("Master Excel file found but not not the sheet named 'YOWN_MASTER', check the file and try again.")
+    })
+    # Make sure the table has the required columns
+    
+    
+    #... please fill this in...
+    
+    
+    
   }
   
-  #Read in reference sheets and logger drop folder
-  master <- openxlsx::read.xlsx(master_sheet, sheet = "YOWN_MASTER")
-  YOWNIDs <- master$YOWN.Code 
+  if (!file.exists(logger_tracking)) {
+    stop("Logger tracking sheet not found, check file location")
+  } else {
+    tryCatch({
+      log_track_sheet <- openxlsx::read.xlsx(logger_tracking, sheet = "Sheet 1")
+    }, error = function(e) {
+      stop("Logger tracking Excel file found but not not the sheet named 'Sheet 1', check the file and try again.")
+    })
+
+    # Make sure the table has the required columns
+    
+    # ... please fill this in...
+    
+  }
+  
+  if (!dir.exists(dropbox)) {
+    stop("Dropbox folder not found, check folder location")
+  } else {
+    
+    # Please fill this in with logic to ensure the folder structure is correct... If it's not, throw error that explains the proper structure to the user so that it can be fixed if ever needed.
+    
+    
+    
+  }
+  
+  if (!is.null(repo)) {
+    if (!dir.exists(repo)) {
+      stop("Active Wells folder not found, check folder location")
+    } else {
+      # Please fill this in with logic to ensure the folder structure is correct...
+      
+      # ... please fill this in with logic to ensure the folder structure is correct... If it's not, throw error that explains the proper structure to the user so that it can be fixed if ever needed.
+      
+    }
+  }
+
+  
+  
+  # Ensure the 'file' has extension .xle (last part of the string)
+  if (!file.exists(file)) {
+    stop("Logger file not found, check file location")
+  } else {
+    if (tools::file_ext(file) != "xle") {
+      stop("The logger file must have the extension .xle")
+    } else {
+      xml_file <- xml2::read_xml(file)
+      
+      # Check if the file has the right structure, unless this is done later on in the script
+      
+      
+    }
+  }
+
+  
+
   
   #### Define helper functions ####
   # Define pressure conversion function
@@ -133,7 +190,6 @@ xle_processing <- function(file,
   }
   
   #### xle processing ####
-  xml_file <- xml2::read_xml(file)
   
   # Extract File Info
   log_properties <- parse_properties(xml_file, "File_info")
@@ -288,7 +344,6 @@ xle_processing <- function(file,
 
   
   #### Track metadata ####
-  existing_data <- openxlsx::read.xlsx(logger_tracking, sheet = "Sheet 1")
   
   # Format data to be added
   new_data <- data.frame(YOWN_ID = well_loc,
@@ -300,7 +355,7 @@ xle_processing <- function(file,
                 Retrieve_Date = as.character(max(final_data$Time)))
   
   # Append the new data
-  updated_data <- rbind(existing_data, new_data) %>%
+  updated_data <- rbind(log_track_sheet, new_data) %>%
     dplyr::distinct()
   
   # Write the updated data back to the Excel file and make an entry in the logger tracker
