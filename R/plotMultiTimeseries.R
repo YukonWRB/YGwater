@@ -862,7 +862,7 @@ plotMultiTimeseries <- function(type = 'traces',
         showgrid = gridx,
         showline = TRUE,
         showspikes = TRUE,
-        tickformat = if (lang == "fr") "%d %b '%y" else "%b %d '%y",
+        tickformat = if (lang == "fr") "%-d %b '%y" else "%b %-d '%y",
         rangeslider = list(visible = if (slider) TRUE else FALSE)
       ),
       hovermode = "closest",

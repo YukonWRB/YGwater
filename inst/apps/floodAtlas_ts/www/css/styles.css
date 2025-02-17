@@ -1,0 +1,15 @@
+/* Primary button style */
+.btn-primary {
+  border: 1px solid #00616d;
+  color: #ffffff;
+  background-color: #00616d;
+}
+
+/* Hover, focus, and active state */
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+  border: 1px solid #00454e;
+  color: #ffffff;
+  background-color: #00454e;
+}
