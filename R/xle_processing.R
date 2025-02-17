@@ -26,6 +26,19 @@ xle_processing <- function(file,
   # dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
   # repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
   
+  if (!file.exists(master_sheet)) {
+    stop("Master sheet not found, check file location")
+  }
+  if (!file.exists(logger_tracking)) {
+    stop("Logger tracking sheet not found, check file location")
+  }
+  if (!file.exists(dropbox)) {
+    stop("Dropbox folder not found, check folder location")
+  }
+  if (!file.exists(repo)) {
+    stop("Active Wells folder not found, check folder location")
+  }
+  
   # Make sure tibble is installed as it's in suggests
   rlang::check_installed("tibble", reason = "necessary for function to run")
   
