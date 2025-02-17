@@ -19,9 +19,11 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi=300)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 300)
 con <- YGwater::AquaConnect()
-knitr::include_graphics
+on.exit(DBI::dbDisconnect(con))
+# TODO: What the heck did Emily try to do with the incomplete line below???
+# knitr::include_graphics
 fig.height_half <- 2.9
 fig.height_full <- 2.7
 language_param <- params$language
@@ -87,15 +89,15 @@ titles <- titles[[params$language]]
 #### -------------------- Conditional text colours ------------------------ ####
 textColour <- function(desc) {
   if (length(desc) == 0) {
-    text_colour <- officer::fp_text_lite(color = "black", bold = TRUE, font.size=11)
+    text_colour <- officer::fp_text_lite(color = "black", bold = TRUE, font.size = 11)
   } else if (desc %in% c("slightly above", "above", "well above")) {
-    text_colour <- officer::fp_text_lite(color = "#0097A9", bold = TRUE, font.size=11)
+    text_colour <- officer::fp_text_lite(color = "#0097A9", bold = TRUE, font.size = 11)
   } else if (desc %in% c("close to", "")) {
-    text_colour <- officer::fp_text_lite(color = "#7A9A01", bold = TRUE, font.size=11)
+    text_colour <- officer::fp_text_lite(color = "#7A9A01", bold = TRUE, font.size = 11)
   } else if (desc %in% c("slightly below", "below", "well below")) {
-    text_colour <- officer::fp_text_lite(color = "#834333", bold = TRUE, font.size=11)
+    text_colour <- officer::fp_text_lite(color = "#834333", bold = TRUE, font.size = 11)
   } else {
-    text_colour <- officer::fp_text_lite(color = "black", bold = TRUE, font.size=11)
+    text_colour <- officer::fp_text_lite(color = "black", bold = TRUE, font.size = 11)
   }
   return(text_colour)
 }
@@ -126,17 +128,19 @@ snowbullpillow <- function(location, custom_title, year, number="", language="en
   parameter = "snow water equivalent",
   startDay = paste0(year, "-09-01"),
   endDay = paste0(year, '-07-01'),
-  years = year-1,
+  years = year - 1,
   returns = "none",
   custom_title = custom_title,
   con = con,
-  plot_scale = scale, 
+  line_scale = scale,
+  axis_scale = scale,
+  legend_scale = scale,
   snowbulletin = TRUE, 
-  language = language
+  lang = language
 )
 plot <- plot + ggplot2::theme(legend.position = "none") 
 
-if(language == "fr") {
+if (language == "fr") {
   plot <- plot + ggplot2::labs(y = "EEN (mm)")
 } else {
   plot <- plot + ggplot2::labs(y =  "SWE (mm)")
@@ -149,7 +153,13 @@ return(plot)
 
 #### -------------- A: snow pillow without historical data ---------------- ####
 
-snowbullpillow2 <- function(location_pil, location_surv, custom_title, language=language_param, year=year_param, scale=scale_param, month=month_param) {
+snowbullpillow2 <- function(location_pil, 
+                            location_surv, 
+                            custom_title, 
+                            language = language_param, 
+                            year = year_param, 
+                            scale = scale_param, 
+                            month = month_param) {
   # Get this years snow pillow
 # snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily_corrected ",
 #                             "WHERE timeseries_id = ", location_pil,
@@ -211,17 +221,17 @@ return(plot)
 #### ------------- B: Function to create basin SWE boxplots --------------- ####
 snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale=scale_param, language) {
   # Subset data
-  swe_basin <- swe_basins[swe_basins$location==basin,]
+  swe_basin <- swe_basins[swe_basins$location == basin,]
   swe_basin$datetime <- as.POSIXct(swe_basin$datetime)
   # Plot
   plot <- hydrometDiscrete(location = loc, parameter = "SWE", startDay = 1, tzone = "MST", years = c(year), title = TRUE, custom_title = custom_title, plot_type = "linedbox", save_path = NULL, discrete_data = swe_basin, con = con, plot_scale = scale)
   
   plot <- plot + ggplot2::theme(legend.position = "none")
   
-  if(language == "french") {
-  plot <- plot + ggplot2::labs(y="EEN (mm)")
+  if (language == "french") {
+  plot <- plot + ggplot2::labs(y = "EEN (mm)")
   } else {
-    plot <- plot + ggplot2::labs(y="SWE (mm)")
+    plot <- plot + ggplot2::labs(y = "SWE (mm)")
   }
   
   return(plot)
@@ -230,7 +240,7 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale=scale_
 #### ------------- C: Function to create monthly precip plots ------------- ####
 snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language, month = month_param) {
   tab <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, datetime, value_corrected AS value, period, imputed FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid,
-                                     " AND datetime >= '", year-40, "-10-01'",
+                                     " AND datetime >= '", year - 40, "-10-01'",
                                      " AND datetime <= '", year, "-0", month_param, "-02'"))
 
   attr(tab$datetime, "tzone") <- "MST"
@@ -238,7 +248,7 @@ snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language
   tab$year <- format(tab$datetime, "%Y")
   tab$units <- "mm"
   
-  if (language=="french") {
+  if (language == "french") {
     custom_title <- paste0("C : Précipitations mensuelles à ", custom_title)
   } else {
     custom_title <- paste0("C: ", custom_title, " Monthly Precipitation")
@@ -246,7 +256,7 @@ snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language
 
   plot <- hydrometDiscrete(location = NULL, parameter = "Total precipitation",
                  tzone = "MST",
-                 years = year-1,#c(params$year),
+                 years = year - 1,#c(params$year),
                  startDay = "2023-10-01", # 275
                  endDay = "2024-05-01", #120
                  title = TRUE, custom_title = custom_title,
@@ -322,8 +332,11 @@ return(cddf)
 }
 
 # Function to create CDDF plots
-snowbullCDDF <- function(timeseries_id, custom_title, language="en", 
-                         year=year_param, month=month_param, scale=scale_param) {
+snowbullCDDF <- function(timeseries_id, 
+                         custom_title, language="en", 
+                         year = year_param, 
+                         month = month_param, 
+                         scale = scale_param) {
   location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value
                                           FROM measurements_continuous_corrected
                                           WHERE timeseries_id = ", timeseries_id, 
@@ -337,27 +350,29 @@ snowbullCDDF <- function(timeseries_id, custom_title, language="en",
   } else {
     custom_title <- paste0("D: Cumulative Degree-Days of Freezing in ", custom_title)
   }
-
-  plot <- YGwater::ggplotOverlap(parameter= "CDDF", 
-                                      startDay = "2023-09-01", 
-                                      endDay = "2024-08-31",  
-                                      years = c(year-1), 
-                                      title = TRUE, 
-                                      custom_title = custom_title, 
-                                      returns = "none", 
-                                      allowed_missing = 10, 
-                                      plot_scale = scale, 
-                                      save_path = NULL, 
-                                      con = con, 
-                                      continuous_data = location, 
-                                      snowbulletin = TRUE,
-                                      language = language)
+  
+  plot <- YGwater::ggplotOverlap(parameter = "CDDF", 
+                                 startDay = "2023-09-01", 
+                                 endDay = "2024-08-31",  
+                                 years = c(year - 1), 
+                                 title = TRUE, 
+                                 custom_title = custom_title, 
+                                 returns = "none", 
+                                 allowed_missing = 10, 
+                                 line_scale = scale,
+                                 axis_scale = scale,
+                                 legend_scale = scale,
+                                 save_path = NULL, 
+                                 con = con, 
+                                 continuous_data = location, 
+                                 snowbulletin = TRUE,
+                                 lang = language)
   plot <- plot + ggplot2::theme(legend.position = "none") 
   
-    if(language == "fr") {
-      plot <- plot + ggplot2::labs(y="DJGC (\u00B0C-jours)")
+    if (language == "fr") {
+      plot <- plot + ggplot2::labs(y = "DJGC (\u00B0C-jours)")
     } else {
-      plot <- plot + ggplot2::labs(y="CDDF (\u00B0C days)")
+      plot <- plot + ggplot2::labs(y = "CDDF (\u00B0C days)")
       }
 
   
@@ -383,9 +398,11 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
       returns = "none",
       custom_title = custom_title,
       con = con,
-      plot_scale = scale * 0.9,
+      line_scale = scale * 0.9,
+      axis_scale = scale * 0.9,
+      legend_scale = scale * 0.9,
       snowbulletin = TRUE,
-      language = language
+      lang = language
     )
   
   if (exists('flood') &
@@ -406,8 +423,8 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
         #   colour = "red",
         #   vjust = -0.5
         # )
-             if(language == "fr") {
-      plot <- plot + ggplot2::labs(y="Niveau d'eau (m)")
+             if (language == "fr") {
+      plot <- plot + ggplot2::labs(y = "Niveau d'eau (m)")
       } 
       
     } else {
@@ -428,8 +445,8 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
         #   ) + 
         ggplot2::scale_y_log10() 
       
-      if(language == "fr") {
-      plot <- plot + ggplot2::labs(y=expression(paste("Débit (",m^3, "/s)")))
+      if (language == "fr") {
+      plot <- plot + ggplot2::labs(y = expression(paste("Débit (",m^3, "/s)")))
       } 
     }
     
@@ -453,17 +470,18 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
 ```{r SWEbasins, include=FALSE, eval=TRUE}
 # Get SWE data for basins 
 swe_basins <- YGwater::SWE_basin(year = year_param,
-                                   month = c(3, 4, 5), # c(3)
-                                   threshold = 6,
-                                   csv = FALSE,
-                                   summarise = FALSE,
-                                   source = "AquaCache")
-  # Add datetime to data
-  swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
-  swe_basins <<- swe_basins
+                                 month = c(3, 4, 5),
+                                 threshold = 6,
+                                 csv = FALSE,
+                                 summarise = FALSE,
+                                 source = "AquaCache",
+                                 con = con)
+# Add datetime to data
+swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
+swe_basins <<- swe_basins
 # Get stats for text
-  stats <- snowBulletinStats(year = year_param, month = month_param, excel_output = FALSE)
-  stats <<- stats
+stats <- snowBulletinStats(year = year_param, month = month_param, excel_output = FALSE, con = con)
+stats <<- stats
 
 ```
 

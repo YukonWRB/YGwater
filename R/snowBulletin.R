@@ -33,6 +33,14 @@ snowBulletin <- function(year,
                          synchronize = FALSE,
                          language = "english") {
   
+  # year <- 2024
+  # month <- 3
+  # scale <- 1
+  # basins <- NULL
+  # save_path <- "C:/Users/gtdelapl/Desktop"
+  # synchronize <- TRUE
+  # language <- "english"
+  
   #Check parameters
   #Language
   if (!(language %in% c("french", "english"))) {
@@ -77,7 +85,7 @@ snowBulletin <- function(year,
     } else {
       message("Synchronizing necessary timeseries. This could take a while, please be patient.")
       # TODO: this now call several locations which are part of the 'sample_series' table.
-      target_sample_series <- DBI::dbGetQuery(con, "SELECT samples_series_id FROM sample_series WHERE ...")
+      target_sample_series <- DBI::dbGetQuery(con, "SELECT samples_series_id FROM sample_series WHERE source_fx = 'downloadSnowCourse'") # Snow survey sites 
       AquaCache::synchronize_discrete(con = con, 
                                       sample_series_id = ,
                                       start_datetime = paste0(year - 1, "-09-01"))
@@ -86,9 +94,7 @@ snowBulletin <- function(year,
                                                           649, 217, 85, 317, # For other plot A
                                                           #663, 665, 666, 668, 664, 671, 667, # For plot c (cannot be synchronized)
                                                           484, 532, 540, 500, 548, 492, 556, 508, # For plot D
-                                                          30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14, # For plot E
-                                                          323, 324, 209, 210, 211, 212, # Alaska snow survey sites
-                                                          189:356), # Snow survey sites 
+                                                          30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14), 
                                         start_datetime = paste0(year - 1, "-09-01"))
     }
   }

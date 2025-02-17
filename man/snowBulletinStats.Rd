@@ -11,13 +11,14 @@ snowBulletinStats(
   excel_output = FALSE,
   save_path = "choose",
   synchronize = FALSE,
-  source = "aquacache"
+  source = "aquacache",
+  con = NULL
 )
 }
 \arguments{
 \item{year}{Year for which the snow bulletin stats are calculated.}
 
-\item{month}{Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5.}
+\item{month}{Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5 as a vector of length 1.}
 
 \item{basins}{The name of the sub_basin you wish to generate stats for. One or more of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek" as a character vector, or NULL for all basins. North Slope will be added when AquaCache is updated with the new snow database.}
 
@@ -28,6 +29,8 @@ snowBulletinStats(
 \item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in this function will be synchronized. If FALSE (default), none will be synchronized. Currently is a placeholder and does not work.}
 
 \item{source}{Should the SWE statistics for stations (station_stats) be calculated from the 'aquacache' database or the 'snow' database? Default is 'aquacache'.}
+
+\item{con}{A connection to the database. Leave as NULL to use function \code{\link[=AquaConnect]{AquaConnect()}} with default settings and close the connection automatically afterwards.}
 }
 \value{
 A snow bulletin in Microsoft Word format.
