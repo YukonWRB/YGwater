@@ -118,10 +118,11 @@ getWeather <- function(station,
     message(paste0("Your specified start date is before the actual start of records. The start date has been modified to begin in year ", station$start))
   }
 
-  if (station$end+1 < yr_end) {
-    end <- gsub(substr(end, 1, 4), as.numeric(station$end)+1, end)
-    message(paste0("Your specified end date is after the last available records. The end date year has been modified to ", as.numeric(station$end)), ".")
-  }
+  # Commented out because the weathercan package station list is broken
+  # if (station$end + 1 < yr_end) {
+  #   end <- gsub(substr(end, 1, 4), as.numeric(station$end) + 1, end)
+  #   message(paste0("Your specified end date is after the last available records. The end date year has been modified to ", as.numeric(station$end)), ".")
+  # }
 
   data <- suppressWarnings(weathercan::weather_dl(station$station_id, start = as.character(start), end = as.character(end), interval = interval, time_disp = tzone))
 

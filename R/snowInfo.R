@@ -442,7 +442,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
     if (plot_type == "combined") {
       message("Combined SWE, depth, density plots were returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
     }
-    dev.off()
+    grDevices::dev.off()
   } #End of plots loop
   
   

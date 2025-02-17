@@ -1,10 +1,10 @@
-#' Calculates snow survey stats for stations
+#' Calculate snow survey stats for stations
 #'
 #' @description
 #' `r lifecycle::badge('stable')`
 #' 
-#' The purpose of this script is to summarise the SWE data of each station for a particular year and month and compare to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course" summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
-
+#' This script summarises the SWE data of each station for a particular year and month and compares it to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course' summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
+#' 
 #' @param stations A vector of snow course stations, identified with their location ID. Default is "all", where all stations in the snow db are taken.
 #' @param year The year of interest. The stats will be calculated based on all years prior to 'year'.
 #' @param month The month of interest. Options are 3, 4 and 5 for March, April and May, respectively. Historical stats are given for the first day of this month.
@@ -50,6 +50,15 @@ SWE_station <- function(stations = "all",
                         summarise = TRUE, 
                         save_path = "choose") 
 {
+  
+  # parameter checks
+  if (!month %in% c(3, 4, 5)) {
+    stop("Parameter 'month' must be either 3, 4 or 5")
+  }
+  source <- tolower(source)
+  if (!source %in% c("aquacache", "snow")) {
+    stop("Parameter 'source' must be either 'aquacache' or 'snow'")
+  }
   
   if (csv == TRUE) {
     if (save_path == "choose") {

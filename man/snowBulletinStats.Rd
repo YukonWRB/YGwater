@@ -11,7 +11,7 @@ snowBulletinStats(
   excel_output = FALSE,
   save_path = "choose",
   synchronize = FALSE,
-  source = "AquaCache"
+  source = "aquacache"
 )
 }
 \arguments{
@@ -19,15 +19,15 @@ snowBulletinStats(
 
 \item{month}{Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5.}
 
-\item{basins}{The name of the sub_basin you wish to generate stats for. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when AquaCache is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.}
+\item{basins}{The name of the sub_basin you wish to generate stats for. One or more of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek" as a character vector, or NULL for all basins. North Slope will be added when AquaCache is updated with the new snow database.}
 
-\item{excel_output}{If TRUE, calculated stats will be outputted in multiple excel tables.}
+\item{excel_output}{If TRUE, calculated stats will be output in multiple excel tables.}
 
-\item{save_path}{The path to the directory (folder) where the excel files should be saved. Enter the path as a character string.}
+\item{save_path}{The path to the directory (folder) where the excel files should be saved. Enter the path as a character string or leave as 'choose' to select interactively. Not used if excel_output = FALSE.}
 
-\item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. Currently is a placeholder and does not work.}
+\item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in this function will be synchronized. If FALSE (default), none will be synchronized. Currently is a placeholder and does not work.}
 
-\item{source}{Should the SWE statistics for stations (station_stats) be calculated from the hydro database or the snow database. Default is hydro database.}
+\item{source}{Should the SWE statistics for stations (station_stats) be calculated from the 'aquacache' database or the 'snow' database? Default is 'aquacache'.}
 }
 \value{
 A snow bulletin in Microsoft Word format.

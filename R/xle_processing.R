@@ -4,7 +4,7 @@
 #' Parse xle (Solinst) logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Created to work within the Yukon Water Resources Branch's folder structure.
 #'
 #' @param file Full path to the .xle file. This must be an XLE file from a Solinst logger.
-#' @param aq_upload Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned.
+#' @param aq_upload Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned. Uses function [aq_upload()] with default parameters, so you'll want to make sure your Aquarius login details are in your .Renviron file.
 #' @param master_sheet Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.
 #' @param logger_tracking Path to YOWN logger tracking sheet (.xlsx), used to track logger metadata. This part is done within a tryCatch block to enable this function to run even if the logger tracking sheet is open, missing, or otherwise inaccessible.
 #' @param dropbox Path to YOWN logger dropbox folder, where the xle file is located. This is used to move the file to the appropriate folder after processing.

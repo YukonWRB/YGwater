@@ -251,7 +251,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
           ggplot2::ggsave(filename = paste0(save_path, "/WaterInfo_", Sys.Date(), "/plots/", sub("/", "_", name), "/", sub("/", "_", params[params$parameter_id == sub(".*_", "", i), "param_name"]),  "_separate.png"), plot = plots_separate, height = 6, width = 8, units = "in", device = "png", dpi = 300)
         }
       }
-      dev.off()
+      grDevices::dev.off()
     } #End of plots loop
   }#End of loop working on extremes list of tables.
   if (plot_type == "combined" & plots & !quiet) {
