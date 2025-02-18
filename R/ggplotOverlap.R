@@ -612,8 +612,10 @@ ggplotOverlap <- function(location,
   if (snowbulletin) {
     # Order realtime by fake_datetime
     realtime <- realtime[order(realtime$fake_datetime),]
-    realtime[realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"),]$value <- NA
-    #realtime[realtime$datetime > "2024-04-30",]$value <- NA
+    # Remove all values before the first of the month
+    try({
+      realtime[realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"), "value"] <- NA
+    })
     # Apply rolling mean
     realtime$q25 <- zoo::rollmean(realtime$q25, 5, fill = NA, align = "left")
     realtime$q75 <- zoo::rollmean(realtime$q75, 5, fill = NA, align = "left")

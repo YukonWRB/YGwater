@@ -80,14 +80,15 @@ snowBulletin <- function(year,
       stop("You must have the AquaCache package version minimum 2.3.2 installed to synchronize data with source. Please install the package and try again, or run without synchronization.")
     }
     con <- AquaCache::AquaConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
     if (DBI::dbIsReadOnly(con)) {
       message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")
     } else {
       message("Synchronizing necessary timeseries. This could take a while, please be patient.")
       # TODO: this now call several locations which are part of the 'sample_series' table.
-      target_sample_series <- DBI::dbGetQuery(con, "SELECT samples_series_id FROM sample_series WHERE source_fx = 'downloadSnowCourse'") # Snow survey sites 
+      target_sample_series <- DBI::dbGetQuery(con, "SELECT sample_series_id FROM sample_series WHERE source_fx = 'downloadSnowCourse'") # Snow survey sites 
       AquaCache::synchronize_discrete(con = con, 
-                                      sample_series_id = ,
+                                      sample_series_id = target_sample_series$sample_series_id,
                                       start_datetime = paste0(year - 1, "-09-01"))
       AquaCache::synchronize_continuous(con = con, 
                                         timeseries_id = c(20, 145, 51, 75, 122, # For plot A

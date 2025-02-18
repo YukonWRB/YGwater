@@ -76,9 +76,9 @@ SWE_station <- function(stations = "all",
   }
   
   # First retrieve location-basin info from snow db
-  con <- snowConnect(silent = TRUE)
-  loc_basin <- DBI::dbGetQuery(con, "SELECT location, sub_basin, active FROM locations")
-  DBI::dbDisconnect(con)
+  snowCon <- snowConnect(silent = TRUE)
+  loc_basin <- DBI::dbGetQuery(snowCon, "SELECT location, sub_basin, active FROM locations")
+  DBI::dbDisconnect(snowCon)
   colnames(loc_basin) <- c("location_id", "sub_basin", "active")
   
   # Create list of stations
@@ -93,21 +93,19 @@ SWE_station <- function(stations = "all",
     con <- AquaConnect(silent = TRUE)
     
     # Get measurements
-    Meas <- DBI::dbGetQuery(con,
-                            paste0("SELECT locations.name, locations.location, measurements_discrete.value, measurements_discrete.target_datetime, measurements_discrete.datetime, parameters.param_name, datum_conversions.conversion_m, result_value_types.result_value_type, locations.name_fr
-                      FROM measurements_discrete
-                      INNER JOIN timeseries ON measurements_discrete.timeseries_id=timeseries.timeseries_id
-                      INNER JOIN locations ON timeseries.location=locations.location
-                      INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
-                      INNER JOIN datum_conversions ON locations.location_id = datum_conversions.location_id
-                      INNER JOIN result_value_types ON measurements_discrete.result_value_type = result_value_types.result_value_type_id
-                      WHERE (parameters.param_name = 'snow water equivalent' OR parameters.param_name = 'snow depth') AND
-                              locations.location IN ('", paste0(stations, collapse = "', '"), "')")
-    )
+    Meas <- DBI::dbGetQuery(con, 
+    paste0("SELECT l.name, l.name_fr, l.location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
+           FROM results as res
+           INNER JOIN samples as samp ON res.sample_id = samp.sample_id
+           INNER JOIN locations as l ON samp.location_id = l.location_id
+           INNER JOIN parameters as p ON res.parameter_id = p.parameter_id
+           INNER JOIN datum_conversions as dc ON l.location_id = dc.location_id
+           INNER JOIN result_value_types as rvt ON res.result_value_type = rvt.result_value_type_id
+           WHERE p.param_name IN ('snow water equivalent', 'snow depth') AND l.location IN ('", paste0(stations, collapse = "', '"), "')"))
     
     DBI::dbDisconnect(con)
     # Rename columns:
-    colnames(Meas) <- c("location_name", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "result_value_type", "name_fr")
+    colnames(Meas) <- c("location_name", "location_name_fr", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "result_value_type")
     # Change 'snow water equivalent' to SWE
     Meas[Meas$parameter == 'snow water equivalent',]$parameter <- "SWE"
     # Where note = estimated, make estimate_flag = TRUE
@@ -315,7 +313,7 @@ SWE_station <- function(stations = "all",
     
     # Add column for french name
     if (source == "aquacache") {
-      tabl <- merge(tabl, unique(Meas[, c("location_id", "name_fr")]), by = "location_id", all.x = TRUE)
+      tabl <- merge(tabl, unique(Meas[, c("location_id", "location_name_fr")]), by = "location_id", all.x = TRUE)
     }
   }
   

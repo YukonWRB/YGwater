@@ -328,7 +328,7 @@ snowBulletinStats <- function(year,
     cddf_allyrs$period <- paste0("All years")
     
     # Calculate stats. For last 40 years
-    cddf_40yrs <- cddf[cddf$year > year-40,]
+    cddf_40yrs <- cddf[cddf$year > year - 40,]
     cddf_40yrs <- cddf_40yrs %>%
       dplyr::group_by(.data$location_id, .data$location_name) %>%
       dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
@@ -389,7 +389,7 @@ snowBulletinStats <- function(year,
       cddf_stats <- merge(cddf_stats, cddf_yr[, c("location_id", "location_name", "value")])
     }
     # Calculate percent historical
-    cddf_stats$perc_hist_med <- round(cddf_stats$value / cddf_stats$median *100, 0)
+    cddf_stats$perc_hist_med <- round(cddf_stats$value / cddf_stats$median * 100, 0)
     # Add variable column
     cddf_stats$variable <- paste0(month.name[month], " 1st CDDF")
     # Reorder columns
@@ -411,7 +411,7 @@ snowBulletinStats <- function(year,
   pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$median * 100)
   
   #### -----------------------  SWE stations ---------------------------- ####
-  station_stats <- SWE_station(stations="all", year = year, month = month, return_missing = TRUE, 
+  station_stats <- SWE_station(stations = "all", year = year, month = month, return_missing = TRUE, 
                                active = TRUE, source = source, summarise = TRUE)
   # Remove 'Snow Course' from name
   
@@ -445,7 +445,7 @@ snowBulletinStats <- function(year,
                            csv = FALSE,
                            summarise = TRUE,
                            source = "AquaCache")
-  basin_stats$perc_hist_med <- basin_stats$swe_relative *100
+  basin_stats$perc_hist_med <- basin_stats$swe_relative * 100
   basin_stats$swe <- round(basin_stats$swe)
   # Add description of % median
   basin_stats <- basin_stats %>%
@@ -465,12 +465,12 @@ snowBulletinStats <- function(year,
   # if (Sys.Date() < paste0(year, "-0", month, "-01")) {
   #   precip_stats <- NULL
   # } else {
-  precip_stats <- precipStats()
+  precip_stats <- suppressMessages(precipStats())
   # }
   
   
   #### ------------------------------ CDDF ------------------------------ ####
-  cddf_stats <- cddfStats(month, year)
+  cddf_stats <- suppressMessages(cddfStats(month, year))
   
   #### ------------------------- Flow/level stats ----------------------- ####
   
@@ -509,11 +509,17 @@ snowBulletinStats <- function(year,
   
   swe_compiled <- station_stats
   # If swe = 0, swe_med = 0 ---> no snow where median zero
-  swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
+  try({
+    swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
+  })
   # If swe !=0, swe_med = 0  ---> snow where median zero
-  swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
+  try({
+    swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
+  })
   # If swe = 0, swe_med != 0 ---> no snow
-  swe_compiled$swe_rat[swe_compiled$swe == 0 & swe_compiled$swe_med != 0] <- "no snow present"
+  try({
+    swe_compiled$swe_rat[swe_compiled$swe == 0 & swe_compiled$swe_med != 0] <- "no snow present"
+  })
   
   swe_compiled <- swe_compiled[, c("location_name", "swe_rat")]
   swe_compiled$Bulletin_Edition <- paste0(year, "-", month.name[month])

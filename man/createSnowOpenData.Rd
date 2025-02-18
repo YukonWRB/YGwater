@@ -7,7 +7,7 @@
 createSnowOpenData()
 }
 \value{
-Two excel documents, one with the locations, another with the data. The snow data includes all surveys in the database. it does not include individual samples, but simply a mean of all samples.
+Two excel documents, one with location metadata and another with the data. The snow data includes all surveys in the database. it does not include individual samples, but simply a mean of all samples.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
