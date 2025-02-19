@@ -11,6 +11,7 @@ params:
   scale: scale
   basins: basins
   language: language
+  con: con
 editor_options: 
   markdown: 
     wrap: 72
@@ -20,7 +21,6 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 300)
-con <- YGwater::AquaConnect()
 # TODO: What the heck did Emily try to do with the incomplete line below???
 # knitr::include_graphics
 fig.height_half <- 2.9
@@ -1856,8 +1856,6 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   flextable::fontsize(size=size, part="all") %>%
   flextable::line_spacing(space=1) %>%
   flextable::padding(padding.top = 0.8, padding.bottom = 0.8)
-
-DBI::dbDisconnect(con)
 
 ```
 

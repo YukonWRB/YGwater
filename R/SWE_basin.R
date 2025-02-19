@@ -10,7 +10,7 @@
 #' @param summarise TRUE to summarise the data into a data.frame with the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
 #' @param source Database from which to fetch this data. Options are: aquacache or snow.
-#' @param con A connection to the aquacache database. If NULL, a new connection will be created with [AquaConnect()] or [snowConnect()] (depending on 'source' parameter) and automatically closed.
+#' @param con A connection to the database specified in `source`. If NULL, a new connection will be created with [AquaConnect()] or [snowConnect()] (depending on 'source' parameter) and automatically closed.
 #' 
 #' @return A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
 #' @export

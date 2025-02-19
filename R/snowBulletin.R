@@ -19,6 +19,7 @@
 #' @param save_path The path to the directory (folder) where the report should be saved. Enter the path as a character string.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.
 #' @param language The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".
+#' @param con A connection to the AquaCache database. If left NULL connection will be attempted with function [AquaConnect()] using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!
 #'
 #' @return A snow bulletin in Microsoft Word format.
 #'
@@ -31,7 +32,8 @@ snowBulletin <- function(year,
                          basins = NULL,
                          save_path = 'choose',
                          synchronize = FALSE,
-                         language = "english") {
+                         language = "english",
+                         con = NULL) {
   
   # year <- 2024
   # month <- 3
@@ -72,15 +74,18 @@ snowBulletin <- function(year,
     }
   }
   
+  if (is.null(con)) {
+    con <- AquaConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
+  }
+  
   ## Synchronize time series of interest
   # Check for credentials with read/write authority
   if (synchronize) {
     # Make sure most recent version of AquaCache R package is downloaded
-    if (!rlang::is_installed("AquaCache", version = "2.3.2")) {
-      stop("You must have the AquaCache package version minimum 2.3.2 installed to synchronize data with source. Please install the package and try again, or run without synchronization.")
+    if (!rlang::is_installed("AquaCache", version = "2.3.3")) {
+      stop("You must have the AquaCache package version minimum 2.3.3 installed to synchronize data with source. Please install the package and try again, or run without synchronization.")
     }
-    con <- AquaCache::AquaConnect(silent = TRUE)
-    on.exit(DBI::dbDisconnect(con), add = TRUE)
     if (DBI::dbIsReadOnly(con)) {
       message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")
     } else {
@@ -126,6 +131,7 @@ snowBulletin <- function(year,
                   month = month,
                   scale = scale,
                   basins = basins,
-                  language = language)
+                  language = language,
+                  con = con)
   )
 }
