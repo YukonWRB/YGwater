@@ -75,11 +75,11 @@ YOWNplot <- function(AQID,
   # Unlist time series data
   timeseries <- datalist$timeseries
 
-  # Replace all grades below C with "Redacted"
-  timeseries$grade_description[timeseries$grade_description != "A" & timeseries$grade_description != "B" & timeseries$grade_description != "C" & timeseries$grade_description != "MISSING DATA"] <- "REDACTED"
+  # Replace all grades below D with "Redacted"
+  timeseries$grade_description[timeseries$grade_description != "A" & timeseries$grade_description != "B" & timeseries$grade_description != "C" & timeseries$grade_description !=  "E" & timeseries$grade_description != "MISSING DATA"] <- "REDACTED"
 
   # Replace all values with  grade of less than C with NA, to remove values from plots. This screens out GW recovery patterns and bad data from plots and stat calculations
-  timeseries$value[timeseries$grade_description != "A" & timeseries$grade_description != "B" & timeseries$grade_description != "C"] <- NA
+  timeseries$value[timeseries$grade_description != "A" & timeseries$grade_description != "B" & timeseries$grade_description != "C" & timeseries$grade_description != "D"] <- NA
 
   # Change timestamps from UTC to MST
   attr(timeseries$datetime , "tzone") <- "MST"
@@ -477,7 +477,8 @@ YOWNplot <- function(AQID,
           ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
                                                                    "B" = "#0097A9",
                                                                    "C" = "#F2A900",
-                                                                   "REDACTED" = "#DC4405",
+                                                                   "D" = "#DC4405",
+                                                                   "REDACTED" = "red",
                                                                    "MISSING DATA" = "black"))
 
       } else if (tolower(stats) == "line") {
@@ -492,7 +493,8 @@ YOWNplot <- function(AQID,
           ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
                                                                    "B" = "#0097A9",
                                                                    "C" = "#F2A900",
-                                                                   "REDACTED" = "#DC4405",
+                                                                   "D" = "#DC4405",
+                                                                   "REDACTED" = "red",
                                                                    "MISSING DATA" = "black"))
       }
     } else if (stats == FALSE) {
@@ -508,7 +510,8 @@ YOWNplot <- function(AQID,
                                      values = c("A" = "#7A9A01",
                                                 "B" = "#0097A9",
                                                 "C" = "#F2A900",
-                                                "REDACTED" = "#DC4405",
+                                                "D" = "#DC4405",
+                                                "REDACTED" = "red",
                                                 "MISSING DATA" = "black")) +
         ggplot2::scale_y_reverse(name = ytitle,
                                  limits = c(plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
@@ -524,7 +527,12 @@ YOWNplot <- function(AQID,
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf_current, ggplot2::aes(x = .data$timestamp_MST, y = plyr::round_any(min(stats::na.omit(.data$daymin)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
-        ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01", "B" = "#0097A9", "C" = "#F2A900", "REDACTED" = "#DC4405", "MISSING DATA" = "black")) +
+        ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
+                                                                 "B" = "#0097A9",
+                                                                 "C" = "#F2A900",
+                                                                 "D" = "#DC4405",
+                                                                 "REDACTED" = "red",
+                                                                 "MISSING DATA" = "black")) +
         ggplot2::scale_y_continuous(name = ytitle,
                                     limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling)),
                                     breaks = seq(floor(min(stats::na.omit(plotdf$daymin))), ceiling(max(stats::na.omit(plotdf$daymax))), by = 0.25),
@@ -533,7 +541,12 @@ YOWNplot <- function(AQID,
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf, ggplot2::aes(x = .data$timestamp_MST, y = plyr::round_any(min(stats::na.omit(.data$daymean)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
-        ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01", "B" = "#0097A9", "C" = "#F2A900", "REDACTED" = "#DC4405", "MISSING DATA" = "black")) +
+        ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
+                                                                 "B" = "#0097A9",
+                                                                 "C" = "#F2A900",
+                                                                 "D" = "#DC4405",
+                                                                 "REDACTED" = "red",
+                                                                 "MISSING DATA" = "black")) +
         ggplot2::scale_y_continuous(name = ytitle,
                                     limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymean)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymean)), 0.5, f = ceiling)),
                                     breaks = seq(floor(min(stats::na.omit(plotdf$daymean))), ceiling(max(stats::na.omit(plotdf$daymean))), by = 0.25),
