@@ -1701,10 +1701,10 @@ as of `r month.name[params$month]` 1
 # B
 # Plotting 
 if (language_param == "french") {
-  snowbullSWE(loc= "Alsek", basin = "Alsek",
+  snowbullSWE(loc = "Alsek", basin = "Alsek",
             year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Alsek", language = language_param)
 } else {
-  snowbullSWE(loc= "Alsek", basin = "Alsek",
+  snowbullSWE(loc = "Alsek", basin = "Alsek",
             year = year_param, swe_basins = swe_basins, custom_title = "B: Alsek Basin Monthly Snow Course", language = language_param)
 }
 
@@ -1733,7 +1733,7 @@ if (language_param == "french") {
 # Plotting
 snowbullWater(location = station_id,
               parameter = "flow",
-              year = year_param-1,
+              year = year_param - 1,
               custom_title = custom_title,
               scale = scale_param,
               language = substr(language_param, 1, 2))
@@ -1746,16 +1746,16 @@ snowbullWater(location = station_id,
 tabl <- stats$station_stats
 
 # Add R next to record swe
-if (length(tabl[tabl$record_flag==TRUE,]$swe) > 0) {
-  tabl[tabl$record_flag==TRUE,]$swe <- paste0(tabl[tabl$record_flag==TRUE,]$swe, " R")
+if (length(tabl[tabl$record_flag == TRUE,]$swe) > 0) {
+  tabl[tabl$record_flag == TRUE,]$swe <- paste0(tabl[tabl$record_flag == TRUE,]$swe, " R")
 }
 # Add E next to estimated swe
-if (length(tabl[tabl$estimate_flag==TRUE,]$swe) > 0) {
-  tabl[tabl$estimate_flag==TRUE,]$swe <- paste0(tabl[tabl$estimate_flag==TRUE,]$swe, " E")
+if (length(tabl[tabl$estimate_flag == TRUE,]$swe) > 0) {
+  tabl[tabl$estimate_flag == TRUE,]$swe <- paste0(tabl[tabl$estimate_flag == TRUE,]$swe, " E")
 }
 # Add B next to swe outside of sampling period
-if (length(tabl[tabl$date_flag==TRUE,]$swe) > 0) {
-  tabl[tabl$date_flag==TRUE,]$swe <- paste0(tabl[tabl$date_flag==TRUE,]$swe, " B")
+if (length(tabl[tabl$date_flag == TRUE,]$swe) > 0) {
+  tabl[tabl$date_flag == TRUE,]$swe <- paste0(tabl[tabl$date_flag == TRUE,]$swe, " B")
 }
 
 #### French version versus English version of table ####
@@ -1833,10 +1833,10 @@ if (language == "french") {
 flextable::as_grouped_data(tabl, groups = "sub_basin") %>% 
   flextable::as_flextable(hide_grouplabel = TRUE) %>% 
   #flextable::set_header_labels(what = "") %>% 
-  flextable::bold(bold = TRUE, part="header") %>% 
+  flextable::bold(bold = TRUE, part = "header") %>% 
   #flextable::align(i = ~ !is.na(sub_basin), align = "left") %>% 
-  flextable::align(part="header", align="center") %>%
-  flextable::align(align="center", j=c(2:9)) %>%
+  flextable::align(part = "header", align="center") %>%
+  flextable::align(align = "center", j = c(2:9)) %>%
   flextable::bold(i = ~ !is.na(sub_basin)) %>%
   flextable::bg(bg="#0097A9", part="header") %>%
   #flextable::bg(bg="#77A3A9", part="header") %>%

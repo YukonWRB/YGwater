@@ -7,7 +7,7 @@ adminUI <- function(id) {
   )
 }
 
-admin <- function(id, AquaCache) {
+admin <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

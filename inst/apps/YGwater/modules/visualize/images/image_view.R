@@ -48,6 +48,7 @@ img <- function(id, language, restoring) {
       choices <- stats::setNames(choices, c(auto, man))
       
       updateSelectizeInput(session, "type", label = titleCase(translations[id == "img_type_lab", get(language$language)][[1]], language$abbrev), choices = choices, selected = input$type)
+      
       output$dates <- renderUI({
         dateRangeInput(ns("dates"), label = translations[id == "date_range_lab", get(language$language)][[1]], start = if (restoring()) input$dates[1] else Sys.Date() - 2, end = if (restoring()) input$dates[2] else Sys.Date(), language = language$abbrev, separator = translations[id == "date_sep", get(language$language)][[1]])
       })

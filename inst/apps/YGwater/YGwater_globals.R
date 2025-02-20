@@ -52,6 +52,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   source(system.file("apps/YGwater/modules/visualize/images/image_view.R", package = "YGwater"))
   
+  source(system.file("apps/YGwater/modules/visualize/info/home.R", package = "YGwater"))
+  
   source(system.file("apps/YGwater/modules/visualize/FOD/FOD_main.R", package = "YGwater"))
   
   
@@ -91,7 +93,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     dbPass = dbPass,
     accessPath = accessPath,
     public = public,
-    g_drive = g_drive
+    g_drive = g_drive,
+    admin = FALSE
   )
   
 }

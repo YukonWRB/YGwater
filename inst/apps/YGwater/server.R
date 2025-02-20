@@ -43,6 +43,7 @@ app_server <- function(input, output, session) {
   ui_loaded <- reactiveValues(
     viz = FALSE,
     admin = FALSE,
+    home = FALSE,
     plot = FALSE,
     map = FALSE,
     FOD = FALSE,
@@ -57,6 +58,18 @@ app_server <- function(input, output, session) {
     addDocs = FALSE,
     addImgs = FALSE,
     visit = FALSE)
+  
+  tab_created <- reactiveValues(
+    locs = FALSE,
+    ts = FALSE,
+    equip = FALSE,
+    cal = FALSE,
+    contData = FALSE,
+    discData = FALSE,
+    addDocs = FALSE,
+    addImgs = FALSE,
+    visit = FALSE
+  )
   
   ## database connections ###########
   # Look for .mdb files in the AccessPath directory
@@ -105,7 +118,7 @@ app_server <- function(input, output, session) {
   languageSelection <- reactiveValues() # holds language and abbreviation
   
   # Populate the language selection dropdown
-  session$sendCustomMessage("updateLangMenu", names(translations)[-c(1,2)])
+  session$sendCustomMessage("updateLangMenu", names(translation_cache))
   
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
@@ -223,50 +236,20 @@ $(document).keyup(function(event) {
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
-        # Create the new tabs for the 'admin' mode
-        # In the login success handler, after user_logged_in(TRUE):
-        insertTab("navbar",
-                  tabPanel(title = "Switch to Admin mode", value = "admin",
-                           uiOutput("admin_ui")),
-                  target = "map", position = "before")
-        insertTab("navbar",
-                  tabPanel(title = "Manage locations", value = "locs",
-                           uiOutput("locs_ui")),
-                  target = "gen", position = "after")
-        insertTab("navbar",
-                  tabPanel(title = "Manage timeseries", value = "ts",
-                           uiOutput("ts_ui")),
-                  target = "locs", position = "after")
-        insertTab("navbar",
-                  tabPanel(title = "Manage equipment", value = "equip",
-                           uiOutput("equip_ui")),
-                  target = "ts", position = "after")
-        insertTab("navbar",
-                  tabPanel(title = "Enter checks/calibrations", value = "cal",
-                           uiOutput("cal_ui")),
-                  target = "equip", position = "after")
-        insertTab("navbar",
-                  tabPanel(title = "Manage continuous data", value = "contData",
-                           uiOutput("contData_ui")),
-                  target = "cal", position = "after")
-        insertTab("navbar",
-                  tabPanel(title = "Manage discrete data", value = "discData",
-                           uiOutput("discData_ui")),
-                  target = "contData", position = "after")
-        insertTab("navbar",
-                  tabPanel(title = "Manage docs", value = "addDocs",
-                           uiOutput("addDocs_ui")),
-                  target = "discData", position = "after")
-        insertTab("navbar",
-                  tabPanel(title = "Manage images", value = "addImgs",
-                           uiOutput("addImgs_ui")),
-                  target = "addDocs", position = "after")
-        insertTab("navbar",
-                  tabPanel(title = "Add/modify field visit", value = "visit",
-                           uiOutput("visit_ui")),
-                  target = "addImgs", position = "after")
-        
-        updateTabsetPanel(session, "navbar", selected = "admin")
+        # Check if the user has admin privileges. Inspect the 'timeseries' table to see if they have write privileges.
+        result <- DBI::dbGetQuery(con, paste0("SELECT has_table_privilege('timeseries', 'UPDATE') AS can_write;"))
+        if (result$can_write) {
+          session$userData$config$admin <- TRUE
+          # Create the new tabs for the 'admin' mode
+          insertTab("navbar",
+                    tabPanel(title = "Switch to Admin mode", value = "admin",
+                             uiOutput("admin_ui")),
+                    target = "map", position = "before")
+          # Other tabs are created if/when the user clicks on the 'admin' tab
+        } else {
+          session$userData$config$admin <- FALSE
+        }
+        # Return to exit this observeEvent
         return()
       } else {
         showModal(modalDialog(
@@ -340,7 +323,7 @@ $(document).keyup(function(event) {
   programmatic_change <- reactiveVal(FALSE)
   
   # Initialize reactive values to store last tabs for each mode
-  last_viz_tab <- reactiveVal("map")      # Default tab for viz mode
+  last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
   last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
   initial_tab <- reactiveVal(NULL)
     
@@ -362,6 +345,7 @@ $(document).keyup(function(event) {
       programmatic_change(TRUE)
       
       # Show relevant tabs for viz mode
+      showTab(inputId = "navbar", target = "home")
       showTab(inputId = "navbar", target = "plot")
       showTab(inputId = "navbar", target = "map")
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible
@@ -392,6 +376,71 @@ $(document).keyup(function(event) {
     } else if (input$navbar == "admin") {
       programmatic_change(TRUE)
       
+      # Create the tabs if they're not there yet
+      if (!tab_created$locs) {
+        insertTab("navbar",
+                  tabPanel(title = "Manage locations", value = "locs",
+                           uiOutput("locs_ui")),
+                  target = "gen", position = "after")
+        tab_created$locs <- TRUE
+      }
+      if (!tab_created$ts) {
+        insertTab("navbar",
+                  tabPanel(title = "Manage timeseries", value = "ts",
+                           uiOutput("ts_ui")),
+                  target = "locs", position = "after")
+        tab_created$ts <- TRUE
+      }
+      if (!tab_created$equip) {
+        insertTab("navbar",
+                  tabPanel(title = "Manage equipment", value = "equip",
+                           uiOutput("equip_ui")),
+                  target = "ts", position = "after")
+        tab_created$equip <- TRUE
+      }
+      if (!tab_created$cal) {
+        insertTab("navbar",
+                  tabPanel(title = "Enter checks/calibrations", value = "cal",
+                           uiOutput("cal_ui")),
+                  target = "equip", position = "after")
+        tab_created$cal <- TRUE
+      }
+      if (!tab_created$contData) {
+        insertTab("navbar",
+                  tabPanel(title = "Manage continuous data", value = "contData",
+                           uiOutput("contData_ui")),
+                  target = "cal", position = "after")
+        tab_created$contData <- TRUE
+      }
+      if (!tab_created$discData) {
+        insertTab("navbar",
+                  tabPanel(title = "Manage discrete data", value = "discData",
+                           uiOutput("discData_ui")),
+                  target = "contData", position = "after")
+        tab_created$discData <- TRUE
+      }
+      if (!tab_created$addDocs) {
+        insertTab("navbar",
+                  tabPanel(title = "Manage docs", value = "addDocs",
+                           uiOutput("addDocs_ui")),
+                  target = "discData", position = "after")
+        tab_created$addDocs <- TRUE
+      }
+      if (!tab_created$addImgs) {
+        insertTab("navbar",
+                  tabPanel(title = "Manage images", value = "addImgs",
+                           uiOutput("addImgs_ui")),
+                  target = "addDocs", position = "after")
+        tab_created$addImgs <- TRUE
+      }
+      if (!tab_created$visit) {
+        insertTab("navbar",
+                  tabPanel(title = "Add/modify field visit", value = "visit",
+                           uiOutput("visit_ui")),
+                  target = "addImgs", position = "after")
+        tab_created$visit <- TRUE
+      }
+      
       # Show relevant tabs for admin mode
       showTab(inputId = "navbar", target = "viz")
       showTab(inputId = "navbar", target = "locs")
@@ -406,6 +455,7 @@ $(document).keyup(function(event) {
       
       # Hide irrelevant tabs
       hideTab(inputId = "navbar", target = "admin")
+      hideTab(inputId = "navbar", target = "home")
       hideTab(inputId = "navbar", target = "plot")
       hideTab(inputId = "navbar", target = "map")
       hideTab(inputId = "navbar", target = "FOD")
@@ -417,7 +467,7 @@ $(document).keyup(function(event) {
       
     } else {
       # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("plot", "map", "FOD", "gen", "img")) {
+      if (input$navbar %in% c("home", "plot", "map", "FOD", "gen", "img")) {
         # User is in viz mode
         last_viz_tab(input$navbar)
       } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "contData", "discData", "addDocs", "addImgs", "visit")) {
@@ -427,6 +477,13 @@ $(document).keyup(function(event) {
     }
     
     # Load modules when the corresponding tabs are selected
+    if (input$navbar == "home") {
+      if (!ui_loaded$home) {
+        output$home_ui <- renderUI(homeUI("home"))
+        ui_loaded$home <- TRUE
+        home("home", language = languageSelection, windowDims) # Call the server
+      }
+    }
     if (input$navbar == "plot") {
       if (!ui_loaded$plot) {
         output$plot_ui <- renderUI(plotUI("plot"))

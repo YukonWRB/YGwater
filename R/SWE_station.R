@@ -187,7 +187,8 @@ SWE_station <- function(stations = "all",
       # On rare occasions two measurements were taken around the same 'target date'; find the means of these measurements
       duplicated <- tab[duplicated(tab[, c("target_date", "parameter")]) | duplicated(tab[, c("target_date", "parameter")], fromLast = TRUE), ]
       if (nrow(duplicated) > 0) {
-        sub <- duplicated %>% dplyr::group_by(.data$target_date, .data$parameter) %>%
+        sub <- duplicated %>% 
+          dplyr::group_by(.data$target_date, .data$parameter) %>%
           dplyr::summarise(location_name = unique(location_name), location_id = unique(location_id), target_date = unique(target_date), sample_date = mean(sample_date), elevation = mean(elevation), estimate_flag = if (TRUE %in% estimate_flag) TRUE else FALSE, parameter = unique(parameter), value = mean(value), mon = unique(mon), yr = unique(yr), day = unique(day))
         
         tab <- tab[!(tab$target_date %in% duplicated$target_date & tab$parameter %in% duplicated$parameter),]
