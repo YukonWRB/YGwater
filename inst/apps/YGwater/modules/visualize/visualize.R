@@ -9,7 +9,7 @@ vizUI <- function(id) {
   )
 }
 
-viz <- function(id, AquaCache) {
+viz <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

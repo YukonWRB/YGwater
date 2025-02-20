@@ -22,12 +22,12 @@ locs <- function(id) {
     
     setBookmarkExclude()
     
-    data <- reactiveValues(locs = DBI::dbGetQuery(AquaCache, "SELECT * FROM locations"),
-                           networks = DBI::dbGetQuery(AquaCache, "SELECT * FROM networks"),
-                           projects = DBI::dbGetQuery(AquaCache, "SELECT * FROM projects"),
-                           location_types = DBI::dbGetQuery(AquaCache, "SELECT * FROM location_types"),
-                           location_networks = DBI::dbGetQuery(AquaCache, "SELECT * FROM locations_networks"),
-                           location_projects = DBI::dbGetQuery(AquaCache, "SELECT * FROM locations_projects"))
+    data <- reactiveValues(locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations"),
+                           networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM networks"),
+                           projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM projects"),
+                           location_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM location_types"),
+                           location_networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations_networks"),
+                           location_projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations_projects"))
     
     # Store information to pass between modules
     subModuleOutputs <- reactiveValues() # Holds the stuff that needs to be output from the sub-modules back tot this server
@@ -49,7 +49,7 @@ locs <- function(id) {
           where = "beforeEnd",
           ui = locsMainUI(ns("main"))
         )
-        subModuleOutputs <- locsMainServer("main", AquaCache, data)
+        subModuleOutputs <- locsMainServer("main", data)
       }
       
       # Metadata module
@@ -60,7 +60,7 @@ locs <- function(id) {
           where = "beforeEnd",
           ui = locsMetaUI(ns("meta"))
         )
-        locsMetaServer("meta", AquaCache, data)
+        locsMetaServer("meta", data)
       }
       
       # Add new location module
@@ -71,18 +71,18 @@ locs <- function(id) {
           where = "beforeEnd",
           ui = locsNewLocUI(ns("new_loc"))
         )
-        submoduleOutputs <- locsNewLocServer("new_loc", AquaCache)
+        submoduleOutputs <- locsNewLocServer("new_loc")
         
 
         observe({
           req(submoduleOutputs$new_loc$added)
           if (subModuleOutputs$new_loc$added) { # If a new location has been added, refresh the data
-            data <- reactiveValues(locs = DBI::dbGetQuery(AquaCache, "SELECT * FROM locations"),
-                                   networks = DBI::dbGetQuery(AquaCache, "SELECT * FROM networks"),
-                                   projects = DBI::dbGetQuery(AquaCache, "SELECT * FROM projects"),
-                                   location_types = DBI::dbGetQuery(AquaCache, "SELECT * FROM location_types"),
-                                   location_networks = DBI::dbGetQuery(AquaCache, "SELECT * FROM locations_networks"),
-                                   location_projects = DBI::dbGetQuery(AquaCache, "SELECT * FROM locations_projects"))
+            data <- reactiveValues(locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations"),
+                                   networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM networks"),
+                                   projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM projects"),
+                                   location_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM location_types"),
+                                   location_networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations_networks"),
+                                   location_projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations_projects"))
           }
         })
       }
@@ -95,7 +95,7 @@ locs <- function(id) {
           where = "beforeEnd",
           ui = locsNewTSUI(ns("new_ts"))
         )
-        locsNewTSServer("new_ts", AquaCache)
+        locsNewTSServer("new_ts")
 
       }
       

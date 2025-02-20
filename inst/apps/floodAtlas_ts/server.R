@@ -21,7 +21,7 @@ app_server <- function(input, output, session) {
   output$visible_buttons <- renderUI({
     fluidRow(
       class = "button-row",
-      actionButton("info", label = "Info", style = 'margin-bottom: 15px'),
+      actionButton("info", label = "Info", style = 'margin-bottom: 15px', class = "btn btn-primary"),
     )
   })
   
@@ -117,7 +117,7 @@ app_server <- function(input, output, session) {
                          silent = TRUE)
       
       loc_name <- DBI::dbGetQuery(con, paste0("SELECT ", if (lang == "en") "name" else "name_fr", " FROM locations WHERE location = '", loc, "';"))[1,1]
-      if (nchar(loc_name) > 25) {
+      if (nchar(loc_name) > 30) {
         loc_name <- paste0(substr(loc_name, 1, 25), "...")
       }
       
@@ -148,10 +148,8 @@ app_server <- function(input, output, session) {
   
   # Trigger the plot creation when the render changes
   observeEvent(input$user_speed, {
-    print(input$user_speed)
     req(params$loc_code, params$param_code, params$lang)
     rate <- if (input$user_speed < 0.0003) "day" else if (input$user_speed < 0.002) "hour" else "max"
-    print(rate)
     plot_output$invoke(params$loc_code, params$param_code, params$lang, config, rate)
   })
   

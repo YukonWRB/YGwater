@@ -11,7 +11,8 @@ snowBulletin(
   basins = NULL,
   save_path = "choose",
   synchronize = FALSE,
-  language = "english"
+  language = "english",
+  con = NULL
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ snowBulletin(
 \item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.}
 
 \item{language}{The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".}
+
+\item{con}{A connection to the AquaCache database. If left NULL connection will be attempted with function \code{\link[=AquaConnect]{AquaConnect()}} using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!}
 }
 \value{
 A snow bulletin in Microsoft Word format.

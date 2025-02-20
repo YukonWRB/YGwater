@@ -58,6 +58,8 @@ app_ui <- function(request) {
     fluid = TRUE,
     lang = "en",
     tabPanel(title = "Switch to View mode", value = "viz"),
+    tabPanel(title = "Home", value = "home",
+             uiOutput("home_ui")),
     tabPanel(title = "Map", value = "map",
              uiOutput("map_ui")),
     tabPanel(title = "Plot", value = "plot", 

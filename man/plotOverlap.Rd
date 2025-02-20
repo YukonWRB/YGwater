@@ -15,6 +15,7 @@ plotOverlap(
   years = NULL,
   datum = TRUE,
   title = TRUE,
+  custom_title = NULL,
   invert = NULL,
   slider = TRUE,
   filter = NULL,
@@ -50,6 +51,8 @@ plotOverlap(
 \item{datum}{Should a vertical datum be applied to the data, if available? TRUE or FALSE.}
 
 \item{title}{Should a title be included?}
+
+\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.}
 
 \item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.}
 

@@ -39,7 +39,7 @@ addUI <- function(id) {
   )
 }
 
-add <- function(id, AquaCache) {
+add <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -47,21 +47,21 @@ add <- function(id, AquaCache) {
     
     # Get some data from the aquacache
     moduleData <- reactiveValues(
-      exist_locs = dbGetQueryDT(AquaCache, "SELECT location_id, location, name, name_fr FROM locations"),
-      loc_types = dbGetQueryDT(AquaCache, "SELECT * FROM location_types"),
-      organizations = dbGetQueryDT(AquaCache, "SELECT * FROM organizations"),
+      exist_locs = dbGetQueryDT(session$userData$AquaCache, "SELECT location_id, location, name, name_fr FROM locations"),
+      loc_types = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM location_types"),
+      organizations = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM organizations"),
       # limit documents to those that are data sharing agreements, which requires a join on table document_types
-      agreements = dbGetQueryDT(AquaCache, "SELECT document_id, name, description FROM documents WHERE type = (SELECT document_type_id FROM document_types WHERE document_type_en = 'data sharing agreement')"),
+      agreements = dbGetQueryDT(session$userData$AquaCache, "SELECT document_id, name, description FROM documents WHERE type = (SELECT document_type_id FROM document_types WHERE document_type_en = 'data sharing agreement')"),
       # parameters are linked to parameter_groups and parameter_sub_groups via parameter_relationships (to allow a many to many relationships)
-      parameters = dbGetQueryDT(AquaCache, "SELECT parameter_id, param_name FROM parameters"),
-      parameter_groups = dbGetQueryDT(AquaCache, "SELECT group_id, group_name, description FROM parameter_groups"),
-      parameter_sub_groups = dbGetQueryDT(AquaCache, "SELECT sub_group_id, sub_group_name, description FROM parameter_sub_groups"),
-      parameter_relationships = dbGetQueryDT(AquaCache, "SELECT * FROM parameter_relationships"),
-      media = dbGetQueryDT(AquaCache, "SELECT media_id, media_type FROM media_types"),
-      datums = dbGetQueryDT(AquaCache, "SELECT datum_id, datum_name_en FROM datum_list"),
-      networks = dbGetQueryDT(AquaCache, "SELECT network_id, name FROM networks"),
-      projects = dbGetQueryDT(AquaCache, "SELECT project_id, name FROM projects"),
-      user_groups = dbGetQueryDT(AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
+      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT parameter_id, param_name FROM parameters"),
+      parameter_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT group_id, group_name, description FROM parameter_groups"),
+      parameter_sub_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT sub_group_id, sub_group_name, description FROM parameter_sub_groups"),
+      parameter_relationships = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM parameter_relationships"),
+      media = dbGetQueryDT(session$userData$AquaCache, "SELECT media_id, media_type FROM media_types"),
+      datums = dbGetQueryDT(session$userData$AquaCache, "SELECT datum_id, datum_name_en FROM datum_list"),
+      networks = dbGetQueryDT(session$userData$AquaCache, "SELECT network_id, name FROM networks"),
+      projects = dbGetQueryDT(session$userData$AquaCache, "SELECT project_id, name FROM projects"),
+      user_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
     )
     
     
@@ -285,7 +285,7 @@ add <- function(id, AquaCache) {
       if (input$network %in% moduleData$networks$network_id || nchar(input$network) == 0) {
         return()
       }
-      net_types <- dbGetQueryDT(AquaCache, "SELECT id, name FROM network_project_types")
+      net_types <- dbGetQueryDT(session$userData$AquaCache, "SELECT id, name FROM network_project_types")
       showModal(modalDialog(
         textInput(ns("network_name"), "Network name"),
         textInput(ns("network_name_fr"), "Network name French (optional)"),
@@ -309,9 +309,9 @@ add <- function(id, AquaCache) {
                        description = input$network_description,
                        description_fr = if (isTruthy(input$network_description_fr)) input$network_description_fr else NA,
                        type = input$network_type)
-      DBI::dbAppendTable(AquaCache, "networks", df, append = TRUE)
+      DBI::dbAppendTable(session$userData$AquaCache, "networks", df, append = TRUE)
       # Update the moduleData reactiveValues
-      moduleData$networks <- dbGetQueryDT(AquaCache, "SELECT network_id, name FROM networks")
+      moduleData$networks <- dbGetQueryDT(session$userData$AquaCache, "SELECT network_id, name FROM networks")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "network", choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name), selected = moduleData$networks[moduleData$networks$name == df$name, "network_id"])
       showModal(modalDialog(
@@ -324,7 +324,7 @@ add <- function(id, AquaCache) {
       if (input$project %in% moduleData$projects$project_id || nchar(input$project) == 0) {
         return()
       }
-      proj_types <- dbGetQueryDT(AquaCache, "SELECT id, name FROM network_project_types")
+      proj_types <- dbGetQueryDT(session$userData$AquaCache, "SELECT id, name FROM network_project_types")
       
       showModal(modalDialog(
         textInput(ns("project_name"), "Project name"),
@@ -353,9 +353,9 @@ add <- function(id, AquaCache) {
                        description = input$project_description,
                        description_fr = if (isTruthy(input$project_description_fr)) input$project_description_fr else NA,
                        type = input$project_type)
-      DBI::dbAppendTable(AquaCache, "projects", df, append = TRUE)
+      DBI::dbAppendTable(session$userData$AquaCache, "projects", df, append = TRUE)
       # Update the moduleData reactiveValues
-      moduleData$projects <- dbGetQueryDT(AquaCache, "SELECT project_id, name FROM projects")
+      moduleData$projects <- dbGetQueryDT(session$userData$AquaCache, "SELECT project_id, name FROM projects")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "project", choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), selected = moduleData$projects[moduleData$projects$name == df$name, "project_id"])
       showModal(modalDialog(
@@ -390,9 +390,9 @@ add <- function(id, AquaCache) {
                        phone = if (isTruthy(input$contact_phone)) input$contact_phone else NA,
                        email = if (isTruthy(input$contact_email)) input$contact_email else NA,
                        note = if (isTruthy(input$contact_note)) input$contact_note else NA)
-      DBI::dbAppendTable(AquaCache, "organizations", df, append = TRUE)
+      DBI::dbAppendTable(session$userData$AquaCache, "organizations", df, append = TRUE)
       # Update the moduleData reactiveValues
-      moduleData$organizations <- dbGetQueryDT(AquaCache, "SELECT organization_id, name FROM organizations")
+      moduleData$organizations <- dbGetQueryDT(session$userData$AquaCache, "SELECT organization_id, name FROM organizations")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "loc_owner", choices = stats::setNames(moduleData$organizations$organization_id, moduleData$organizations$name), selected = moduleData$organizations[moduleData$organizations$name == df$name, "organization_id"])
       showModal(modalDialog(
@@ -422,9 +422,9 @@ add <- function(id, AquaCache) {
       # Add the group to the database
       df <- data.frame(group_name = input$group_name,
                        group_description = input$group_description)
-      DBI::dbAppendTable(AquaCache, "user_groups", df, append = TRUE)
+      DBI::dbAppendTable(session$userData$AquaCache, "user_groups", df, append = TRUE)
       # Update the moduleData reactiveValues
-      moduleData$user_groups <- dbGetQueryDT(AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
+      moduleData$user_groups <- dbGetQueryDT(session$userData$AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "share_with", choices = stats::setNames(moduleData$user_groups$group_id, paste0(moduleData$user_groups$group_name, " (", moduleData$user_groups$group_description, ")")), selected = c(input$share_with, moduleData$user_groups[moduleData$user_groups$group_name == df$group_name, "group_id"]))
       showModal(modalDialog(
@@ -526,10 +526,10 @@ add <- function(id, AquaCache) {
                        project = if (isTruthy(input$project)) as.numeric(input$project) else NA)                
 
       tryCatch( {
-        AquaCache::addACLocation(con = AquaCache,
+        AquaCache::addACLocation(con = session$userData$AquaCache,
                                  df = df)
         # Update the moduleData reactiveValues
-        moduleData$exist_locs <- dbGetQueryDT(AquaCache, "SELECT location_id, location, name, name_fr FROM locations")
+        moduleData$exist_locs <- dbGetQueryDT(session$userData$AquaCache, "SELECT location_id, location, name, name_fr FROM locations")
         
         # Show a modal to the user that the location was added
         showModal(modalDialog(

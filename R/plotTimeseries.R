@@ -309,12 +309,12 @@ plotTimeseries <- function(location,
     exist_check <- exist_check[which.min(abs(exist_check$z)), ]
   }
   
-  if (title == TRUE) {
+  if (title) {
     if (is.null(custom_title)) {
       if (lang == "fr") {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
       } 
-      if (lang == "en" || is.na(stn_name) == TRUE) {
+      if (lang == "en" || is.na(stn_name)) {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
       }
       stn_name <- titleCase(stn_name, lang)
@@ -551,7 +551,7 @@ plotTimeseries <- function(location,
       xaxis = list(title = list(standoff = 0), 
                    showgrid = gridx, 
                    showline = TRUE, 
-                   tickformat = if (lang == "en") "%b %d '%y" else "%d %b '%y",
+                   tickformat = if (lang == "en") "%b %-d '%y" else "%d %-b '%y",
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
                    rangeslider = list(visible = if (slider & legend_position == "v") TRUE else FALSE)), 

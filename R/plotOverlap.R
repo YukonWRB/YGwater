@@ -15,6 +15,7 @@
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year.
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
+#' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
@@ -85,6 +86,7 @@ plotOverlap <- function(location,
                         years = NULL,
                         datum = TRUE,
                         title = TRUE,
+                        custom_title = NULL,
                         invert = NULL,
                         slider = TRUE,
                         filter = NULL,
@@ -636,6 +638,7 @@ plotOverlap <- function(location,
   
   # Layout elements
   if (title) {
+    if (is.null(custom_title)) {
       if (lang == "fr") {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
       } 
@@ -643,7 +646,10 @@ plotOverlap <- function(location,
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
       }
       stn_name <- titleCase(stn_name, lang)
+    } else {
+      stn_name <- custom_title
     }
+  }
   
   plot <- plot %>%
     plotly::layout(
@@ -655,7 +661,7 @@ plotOverlap <- function(location,
       xaxis = list(title = list(standoff = 0), 
                    showgrid = gridx, 
                    showline = TRUE, 
-                   tickformat = if (lang == "en") "%b %d" else "%d %b",
+                   tickformat = if (lang == "en") "%b %-d" else "%-d %b",
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
                    rangeslider = list(visible = if (slider & legend_position == "v") TRUE else FALSE)), 

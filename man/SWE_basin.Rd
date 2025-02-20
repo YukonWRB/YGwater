@@ -10,7 +10,8 @@ SWE_basin(
   threshold = 7,
   csv = FALSE,
   summarise = FALSE,
-  source = "aquacache"
+  source = "aquacache",
+  con = NULL
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ SWE_basin(
 \item{summarise}{TRUE to summarise the data into a data.frame with the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.}
 
 \item{source}{Database from which to fetch this data. Options are: aquacache or snow.}
+
+\item{con}{A connection to the database specified in \code{source}. If NULL, a new connection will be created with \code{\link[=AquaConnect]{AquaConnect()}} or \code{\link[=snowConnect]{snowConnect()}} (depending on 'source' parameter) and automatically closed.}
 }
 \value{
 A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.

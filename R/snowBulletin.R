@@ -19,6 +19,7 @@
 #' @param save_path The path to the directory (folder) where the report should be saved. Enter the path as a character string.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.
 #' @param language The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".
+#' @param con A connection to the AquaCache database. If left NULL connection will be attempted with function [AquaConnect()] using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!
 #'
 #' @return A snow bulletin in Microsoft Word format.
 #'
@@ -31,7 +32,16 @@ snowBulletin <- function(year,
                          basins = NULL,
                          save_path = 'choose',
                          synchronize = FALSE,
-                         language = "english") {
+                         language = "english",
+                         con = NULL) {
+  
+  # year <- 2024
+  # month <- 3
+  # scale <- 1
+  # basins <- NULL
+  # save_path <- "C:/Users/gtdelapl/Desktop"
+  # synchronize <- TRUE
+  # language <- "english"
   
   #Check parameters
   #Language
@@ -64,37 +74,39 @@ snowBulletin <- function(year,
     }
   }
   
+  if (is.null(con)) {
+    con <- AquaConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con), add = TRUE)
+  }
+  
   ## Synchronize time series of interest
   # Check for credentials with read/write authority
   if (synchronize) {
     # Make sure most recent version of AquaCache R package is downloaded
-    if (!rlang::is_installed("AquaCache", version = "2.3.2")) {
-      stop("You must have the AquaCache package version minimum 2.3.2 installed to synchronize data with source. Please install the package and try again, or run without synchronization.")
+    if (!rlang::is_installed("AquaCache", version = "2.3.3")) {
+      stop("You must have the AquaCache package version minimum 2.3.3 installed to synchronize data with source. Please install the package and try again, or run without synchronization.")
     }
-    con <- AquaCache::AquaConnect(silent = TRUE)
     if (DBI::dbIsReadOnly(con)) {
       message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")
     } else {
       message("Synchronizing necessary timeseries. This could take a while, please be patient.")
       # TODO: this now call several locations which are part of the 'sample_series' table.
-      target_sample_series <- DBI::dbGetQuery(con, "SELECT samples_series_id FROM sample_series WHERE ...")
+      target_sample_series <- DBI::dbGetQuery(con, "SELECT sample_series_id FROM sample_series WHERE source_fx = 'downloadSnowCourse'") # Snow survey sites 
       AquaCache::synchronize_discrete(con = con, 
-                                      sample_series_id = ,
+                                      sample_series_id = target_sample_series$sample_series_id,
                                       start_datetime = paste0(year - 1, "-09-01"))
       AquaCache::synchronize_continuous(con = con, 
                                         timeseries_id = c(20, 145, 51, 75, 122, # For plot A
                                                           649, 217, 85, 317, # For other plot A
                                                           #663, 665, 666, 668, 664, 671, 667, # For plot c (cannot be synchronized)
                                                           484, 532, 540, 500, 548, 492, 556, 508, # For plot D
-                                                          30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14, # For plot E
-                                                          323, 324, 209, 210, 211, 212, # Alaska snow survey sites
-                                                          189:356), # Snow survey sites 
+                                                          30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14), 
                                         start_datetime = paste0(year - 1, "-09-01"))
     }
   }
   
   ### Generate a snow bulletin for the whole territory###
-  if (is.null(basins) == TRUE) {
+  if (is.null(basins)) {
     
     basins <- c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", 
                 "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek")
@@ -119,6 +131,7 @@ snowBulletin <- function(year,
                   month = month,
                   scale = scale,
                   basins = basins,
-                  language = language)
+                  language = language,
+                  con = con)
   )
 }

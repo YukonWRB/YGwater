@@ -18,16 +18,13 @@ app_server <- function(input, output, session) {
                                       password = config$dbPass,
                                       silent = TRUE)
   
-  print("Connected to AquaCache")
-  
+
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$con)
-    print("Disconnected from AquaCache after unhandled error")
   })
   
   session$onSessionEnded(function() {
     DBI::dbDisconnect(session$userData$con)
-    print("Disconnected from AquaCache after session end")
   })
   
   # Remove irrelevant bookmarks
@@ -43,9 +40,9 @@ app_server <- function(input, output, session) {
     fluidRow(
       class = "button-row",
       # actionButton("info", label = if (input$lang == "en") "Plot info" else "Info sur le graphique", style = 'margin-bottom: 15px'),
-      actionButton("info", label = "Info", style = 'margin-bottom: 15px'),
+      actionButton("info", label = "Info", style = 'margin-bottom: 15px', class = "btn btn-primary"),
       selectizeInput("yrs", label = NULL, choices = as.character(format(Sys.Date(), "%Y")), selected = as.character(format(Sys.Date(), "%Y")), multiple = TRUE, options = list(maxItems = 10)),
-      bslib::input_task_button("go", label = if (input$lang == "en") "Re-draw" else "Re-dessiner", label_busy = if (input$lang == "en") "Processing..." else "SVP patienter...", style = 'margin-bottom: 15px')
+      bslib::input_task_button("go", label = if (input$lang == "en") "Re-draw" else "Re-dessiner", label_busy = if (input$lang == "en") "Processing..." else "SVP patienter...", style = 'margin-bottom: 15px', class = "btn btn-primary")
     )
   })
   
@@ -165,6 +162,11 @@ app_server <- function(input, output, session) {
                          password = config$dbPass,
                          silent = TRUE)
       
+      loc_name <- DBI::dbGetQuery(con, paste0("SELECT ", if (lang == "en") "name" else "name_fr", " FROM locations WHERE location = '", loc, "';"))[1,1]
+      if (nchar(loc_name) > 30) {
+        loc_name <- paste0(substr(loc_name, 1, 25), "...")
+      }
+      
       p <- plotOverlap(location = loc,
                   sub_location = NULL,
                   parameter = param,
@@ -178,7 +180,8 @@ app_server <- function(input, output, session) {
                   line_scale = 1,
                   axis_scale = 1,
                   legend_scale = 1,
-                  title = FALSE,
+                  title = TRUE,
+                  custom_title = loc_name,
                   gridx = FALSE,
                   gridy = FALSE,
                   slider = FALSE,
