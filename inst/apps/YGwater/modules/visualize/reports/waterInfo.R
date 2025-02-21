@@ -10,7 +10,7 @@ waterInfoUI <- function(id) {
   )
 }
 
-waterInfoServer <- function(id, language) {
+waterInfo <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code

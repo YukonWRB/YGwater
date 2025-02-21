@@ -10,7 +10,7 @@ snowInfoUI <- function(id) {
   )
 }
 
-snowInfoServer <- function(id, language) {
+snowInfo <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code

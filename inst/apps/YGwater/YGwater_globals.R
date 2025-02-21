@@ -34,12 +34,12 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # 'Visualize' side modules ####
   source(system.file("apps/YGwater/modules/visualize/visualize.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/plot/plot_main.R", package = "YGwater"))
+  # source(system.file("apps/YGwater/modules/visualize/plot/plot_main.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/plot/discrete.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/plot/continuous.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/plot/mix.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/reports/reports_main.R", package = "YGwater"))
+  # source(system.file("apps/YGwater/modules/visualize/reports/reports_main.R", package = "YGwater"))
   # source(system.file("apps/YGwater/modules/visualize/reports/basins.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/reports/WQReport.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/reports/snowInfo.R", package = "YGwater"))

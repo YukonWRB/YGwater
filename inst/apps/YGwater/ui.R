@@ -74,8 +74,14 @@ app_ui <- function(request) {
       tabPanel(title = "FOD comments", value = "FOD",
                uiOutput("fod_ui"))
     },
-    tabPanel(title = "Reports", value = "reports",
-             uiOutput("gen_ui")),
+    navbarMenu(title = "Reports", menuName = "reports",
+               tabPanel(title = "Snowpack info", value = "snowInfo",
+                        uiOutput("snowInfo_ui")),
+               tabPanel(title = "Water level/flow info", value = "waterInfo",
+                        uiOutput("waterInfo_ui")),
+               tabPanel(title = "Water quality", value = "WQReport",
+                        uiOutput("WQReport_ui"))
+               ),
     tabPanel(title = "View images", value = "img",
              uiOutput("img_ui")),
     navbarMenu(title = "Info", menuName = "info",

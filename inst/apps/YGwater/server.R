@@ -48,7 +48,9 @@ app_server <- function(input, output, session) {
     map = FALSE,
     FOD = FALSE,
     img = FALSE,
-    reports = FALSE,
+    snowInfo = FALSE,
+    waterInfo = FALSE,
+    WQReport = FALSE,
     news = FALSE,
     about = FALSE,
     locs = FALSE,
@@ -210,24 +212,21 @@ $(document).keyup(function(event) {
     }
     log_attempts(log_attempts() + 1)
     tryCatch({
-      # Drop old connection
-      # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
       session$userData$AquaCache_new <- AquaConnect(name = session$userData$config$dbName, 
-                                host = session$userData$config$dbHost,
-                                port = session$userData$config$dbPort,
-                                username = input$username, 
-                                password = input$password, 
-                                silent = TRUE)
-      test <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT 1;")
+                                                    host = session$userData$config$dbHost,
+                                                    port = session$userData$config$dbPort,
+                                                    username = input$username, 
+                                                    password = input$password, 
+                                                    silent = TRUE)
+      test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
       # Test the connection
       if (nrow(test) > 0) {
         showModal(modalDialog(
           title = tr("login_success", languageSelection$language),
-          paste0(tr("login_success_msg"), input$username),
+          paste0(tr("login_success_msg", languageSelection$language), " ", input$username),
           easyClose = TRUE,
           footer = modalButton(tr("close", languageSelection$language))
         ))
-        
         # Drop the old connection
         DBI::dbDisconnect(session$userData$AquaCache)
         session$userData$AquaCache <- session$userData$AquaCache_new
@@ -242,7 +241,7 @@ $(document).keyup(function(event) {
         shinyjs::show("logoutBtn")
         
         # Check if the user has admin privileges. Inspect the 'timeseries' table to see if they have write privileges.
-        result <- DBI::dbGetQuery(con, paste0("SELECT has_table_privilege('timeseries', 'UPDATE') AS can_write;"))
+        result <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT has_table_privilege('timeseries', 'UPDATE') AS can_write;"))
         if (result$can_write) {
           session$userData$config$admin <- TRUE
           # Create the new tabs for the 'admin' mode
@@ -254,14 +253,15 @@ $(document).keyup(function(event) {
         } else {
           session$userData$config$admin <- FALSE
         }
-        # Return to exit this observeEvent
+        # Redirect to last 'admin' tab
+        updateTabsetPanel(session, "navbar", selected = last_admin_tab())
         return()
       } else {
         showModal(modalDialog(
           title = "Login Failed",
           "Invalid username or password.",
           easyClose = TRUE,
-          footer = modalButton("Close")
+          footer = modalButton(tr("close", languageSelection$language))
         ))
         # attempt a disconnect of the new connection
         try({
@@ -274,11 +274,11 @@ $(document).keyup(function(event) {
         title = "Login Failed",
         "Invalid username or password.",
         easyClose = TRUE,
-        footer = modalButton("Close")
+        footer = modalButton(tr("close", languageSelection$language))
       ))
+      # attempt a disconnect of the new connection
       try({
         DBI::dbDisconnect(session$userData$AquaCache_new)
-        session$userData$AquaCache_new <- NULL
       })
       return()
     })
@@ -337,12 +337,11 @@ $(document).keyup(function(event) {
     if (programmatic_change()) {
       # Reset the flag and exit to prevent looping
       if (!is.null(initial_tab())) {
-        programmatic_change(FALSE)
         return()
       } else {
         initial_tab(FALSE)
-        programmatic_change(FALSE)
       }
+      programmatic_change(FALSE)
     }
     
     if (input$navbar == "viz") {
@@ -356,7 +355,7 @@ $(document).keyup(function(event) {
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible
         showTab(inputId = "navbar", target = "FOD")
       }
-      showTab(inputId = "navbar", target = "reports")
+      showTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', and 'WQReport' as well
       showTab(inputId = "navbar", target = "img")
       showTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       # don't show 'admin' tab unless logged in
@@ -469,7 +468,7 @@ $(document).keyup(function(event) {
       hideTab(inputId = "navbar", target = "plot") # Actually a navbarMenu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
       hideTab(inputId = "navbar", target = "map")
       hideTab(inputId = "navbar", target = "FOD")
-      hideTab(inputId = "navbar", target = "reports")
+      hideTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', and 'WQReport' as well
       hideTab(inputId = "navbar", target = "img")
       hideTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       
@@ -478,7 +477,7 @@ $(document).keyup(function(event) {
       
     } else {
       # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "reports", "img", "about", "news")) {
+      if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "img", "about", "news")) {
         # User is in viz mode
         last_viz_tab(input$navbar)
       } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "contData", "discData", "addDocs", "addImgs", "visit")) {
@@ -543,11 +542,25 @@ $(document).keyup(function(event) {
         img("img", language = languageSelection, restoring = isRestoring_img) # Call the server
       }
     }
-    if (input$navbar == "reports") {
-      if (!ui_loaded$reports) {
-        output$reports_ui <- renderUI(reportsUI("reports"))
-        ui_loaded$reports <- TRUE
-        reports("reports", mdb_files, language = languageSelection) # Call the server
+    if (input$navbar == "snowInfo") {
+      if (!ui_loaded$snowInfo) {
+        output$snowInfo_ui <- renderUI(snowInfoUI("snowInfo"))
+        ui_loaded$snowinfo <- TRUE
+        snowInfo("snowInfo", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "waterInfo") {
+      if (!ui_loaded$waterInfo) {
+        output$waterInfo_ui <- renderUI(waterInfoUI("waterInfo"))
+        ui_loaded$waterInfo <- TRUE
+        waterInfo("waterInfo",language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "WQReport") {
+      if (!ui_loaded$WQReport) {
+        output$WQReport_ui <- renderUI(WQReportUI("WQReport"))
+        ui_loaded$WQReport <- TRUE
+        WQReport("WQReport", mdb_files = mdb_files, language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "about") {
