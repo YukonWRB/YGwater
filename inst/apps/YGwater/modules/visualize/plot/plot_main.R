@@ -3,10 +3,10 @@
 plotUI <- function(id) {
   ns <- NS(id)
   fluidPage(
-    selectizeInput(ns("plot_type"),
-                   "Select a data type to plot",
-                   choices = c("Discrete", "Continuous", "Mix"),
-                   selected = "Discrete"),
+    # selectizeInput(ns("plot_type"),
+    #                "Select a data type to plot",
+    #                choices = c("Discrete", "Continuous", "Mix"),
+    #                selected = "Discrete"),
     # placeholder divs for dynamically loaded UIs
     div(id = ns("discrete_placeholder"), style = "display: none;"),
     div(id = ns("continuous_placeholder"), style = "display: none;"),
@@ -14,9 +14,11 @@ plotUI <- function(id) {
   )
 }
 
-plot <- function(id, mdb_files, language, windowDims) {
+plot <- function(id, mdb_files, language, windowDims, plot_type) {
   
   moduleServer(id, function(input, output, session) {
+    
+    print(plot_type)
 
     ns <- session$ns
     
@@ -37,9 +39,9 @@ plot <- function(id, mdb_files, language, windowDims) {
     }
 
     # Load the submodule server and UI based on the plot type selected
-    observeEvent(input$plot_type, {
+    observeEvent(plot_type, {
       
-      if (input$plot_type == "Discrete" && !loaded$submodule_discrete) {
+      if (plot_type == "discrete" && !loaded$submodule_discrete) {
         
         # discData$parameters_discrete <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id;")
         # discData$parameters_discrete <- discData$parameters_discrete[order(discData$parameters_discrete$param_name), ]
@@ -53,7 +55,7 @@ plot <- function(id, mdb_files, language, windowDims) {
         discretePlotServer("discretePlot", mdb_files, language, windowDims)
       } 
       
-      if (input$plot_type == "Continuous" && !loaded$submodule_continuous) {
+      if (plot_type == "continuous" && !loaded$submodule_continuous) {
         
         contData$all_ts <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location;")
         contData$all_ts <- contData$all_ts[order(contData$all_ts$name), ]
@@ -71,8 +73,7 @@ plot <- function(id, mdb_files, language, windowDims) {
         continuousPlotServer("continuousPlot", data = contData, language = language, windowDims = windowDims)
       } 
       
-      if (input$plot_type == "Mix") {
-        
+      if (plot_type == "mix") {
         insertUI(
           selector = paste0("#", ns("mix_placeholder")),
           where = "beforeEnd",
@@ -86,7 +87,7 @@ plot <- function(id, mdb_files, language, windowDims) {
       shinyjs::hide(selector = paste0("#", ns("discrete_placeholder")))
       shinyjs::hide(selector = paste0("#", ns("continuous_placeholder")))
       shinyjs::hide(selector = paste0("#", ns("mix_placeholder")))
-      shinyjs::show(selector = paste0("#", ns(paste0(tolower(input$plot_type), "_placeholder"))))
+      shinyjs::show(selector = paste0("#", ns(paste0(plot_type, "_placeholder"))))
     })
   }) # End of moduleServer
 }

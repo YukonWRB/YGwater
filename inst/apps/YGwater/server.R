@@ -44,11 +44,15 @@ app_server <- function(input, output, session) {
     viz = FALSE,
     admin = FALSE,
     home = FALSE,
-    plot = FALSE,
+    discretePlot = FALSE,
+    continuousPlot = FALSE,
+    mixPlot = FALSE,
     map = FALSE,
     FOD = FALSE,
     img = FALSE,
     gen = FALSE,
+    news = FALSE,
+    about = FALSE,
     locs = FALSE,
     ts = FALSE,
     equip = FALSE,
@@ -59,9 +63,12 @@ app_server <- function(input, output, session) {
     addImgs = FALSE,
     visit = FALSE)
   
+  # reactive to see if 'admin' side tabs have been created already
   tab_created <- reactiveValues(
     locs = FALSE,
     ts = FALSE,
+    data = FALSE,
+    files = FALSE,
     equip = FALSE,
     cal = FALSE,
     contData = FALSE,
@@ -244,7 +251,7 @@ $(document).keyup(function(event) {
           insertTab("navbar",
                     tabPanel(title = "Switch to Admin mode", value = "admin",
                              uiOutput("admin_ui")),
-                    target = "map", position = "before")
+                    target = "home", position = "before")
           # Other tabs are created if/when the user clicks on the 'admin' tab
         } else {
           session$userData$config$admin <- FALSE
@@ -308,10 +315,8 @@ $(document).keyup(function(event) {
     removeTab("navbar", "ts", session = session)
     removeTab("navbar", "equip", session = session)
     removeTab("navbar", "cal", session = session)
-    removeTab("navbar", "contData", session = session)
-    removeTab("navbar", "discData", session = session)
-    removeTab("navbar", "addDocs", session = session)
-    removeTab("navbar", "addImgs", session = session)
+    removeTab("navbar", "data", session = session)
+    removeTab("navbar", "files", session = session)
     removeTab("navbar", "visit", session = session)
   })
   
@@ -353,6 +358,7 @@ $(document).keyup(function(event) {
       }
       showTab(inputId = "navbar", target = "gen")
       showTab(inputId = "navbar", target = "img")
+      showTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       # don't show 'admin' tab unless logged in
       if (user_logged_in()) {  # this UI element is generated upon successful login
         showTab(inputId = "navbar", target = "admin")
@@ -364,10 +370,8 @@ $(document).keyup(function(event) {
       hideTab(inputId = "navbar", target = "ts")
       hideTab(inputId = "navbar", target = "equip")
       hideTab(inputId = "navbar", target = "cal")
-      hideTab(inputId = "navbar", target = "contData")
-      hideTab(inputId = "navbar", target = "discData")
-      hideTab(inputId = "navbar", target = "addDocs")
-      hideTab(inputId = "navbar", target = "addImgs")
+      hideTab(inputId = "navbar", target = "data") # Actually a navbarMenu, and this targets the tabs 'contData' and 'discData' as well
+      hideTab(inputId = "navbar", target = "files") # Actually a navbarMenu, and this targets the tabs 'addDocs' and 'addImgs' as well
       hideTab(inputId = "navbar", target = "visit")
       
       # Select the last tab the user was on in viz mode
@@ -405,39 +409,39 @@ $(document).keyup(function(event) {
                   target = "equip", position = "after")
         tab_created$cal <- TRUE
       }
-      if (!tab_created$contData) {
+      # Create the navbarMenu that holds the continuous and discrete data tabs
+      if (!tab_created$data) { 
         insertTab("navbar",
-                  tabPanel(title = "Manage continuous data", value = "contData",
-                           uiOutput("contData_ui")),
+                  navbarMenu(title = "Manage data", menuName = "data",
+                             tabPanel(title = "Continuous data", value = "contData",
+                                      uiOutput("contData_ui")),
+                             tabPanel(title = "Discrete data", value = "discData",
+                                      uiOutput("discData_ui"))),
                   target = "cal", position = "after")
+        tab_created$data <- TRUE
         tab_created$contData <- TRUE
-      }
-      if (!tab_created$discData) {
-        insertTab("navbar",
-                  tabPanel(title = "Manage discrete data", value = "discData",
-                           uiOutput("discData_ui")),
-                  target = "contData", position = "after")
         tab_created$discData <- TRUE
       }
-      if (!tab_created$addDocs) {
+      # Create the navbarMenu for docs/images/vectors/rasters
+      if (!tab_created$files) {
         insertTab("navbar",
-                  tabPanel(title = "Manage docs", value = "addDocs",
-                           uiOutput("addDocs_ui")),
-                  target = "discData", position = "after")
+                  navbarMenu(title = "Manage files/docs", menuName = "files",
+                             tabPanel(title = "Documents", value = "addDocs",
+                                      uiOutput("addDocs_ui")),
+                             tabPanel(title = "Images", value = "addImgs",
+                                      uiOutput("addImgs_ui"))
+                             #.... plus extra tabs for vectors and rasters when built
+                             ),
+                  target = "data", position = "after")
+        tab_created$files <- TRUE
         tab_created$addDocs <- TRUE
-      }
-      if (!tab_created$addImgs) {
-        insertTab("navbar",
-                  tabPanel(title = "Manage images", value = "addImgs",
-                           uiOutput("addImgs_ui")),
-                  target = "addDocs", position = "after")
         tab_created$addImgs <- TRUE
       }
       if (!tab_created$visit) {
         insertTab("navbar",
                   tabPanel(title = "Add/modify field visit", value = "visit",
                            uiOutput("visit_ui")),
-                  target = "addImgs", position = "after")
+                  target = "files", position = "after")
         tab_created$visit <- TRUE
       }
       
@@ -447,13 +451,11 @@ $(document).keyup(function(event) {
       showTab(inputId = "navbar", target = "ts")
       showTab(inputId = "navbar", target = "equip")
       showTab(inputId = "navbar", target = "cal")
-      showTab(inputId = "navbar", target = "contData")
-      showTab(inputId = "navbar", target = "discData")
-      showTab(inputId = "navbar", target = "addDocs")
-      showTab(inputId = "navbar", target = "addImgs")
+      showTab(inputId = "navbar", target = "data") # Actually a navbarMenu, and this targets the tabs 'contData' and 'discData' as well
+      showTab(inputId = "navbar", target = "files") # Actually a navbarMenu, and this targets the tabs 'addDocs' and 'addImgs' as well
       showTab(inputId = "navbar", target = "visit")
       
-      # Hide irrelevant tabs
+      # Hide irrelevant tabs/menus
       hideTab(inputId = "navbar", target = "admin")
       hideTab(inputId = "navbar", target = "home")
       hideTab(inputId = "navbar", target = "plot")
@@ -461,13 +463,14 @@ $(document).keyup(function(event) {
       hideTab(inputId = "navbar", target = "FOD")
       hideTab(inputId = "navbar", target = "gen")
       hideTab(inputId = "navbar", target = "img")
+      hideTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       
       # Select the last tab the user was on in admin mode
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
       
     } else {
       # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("home", "plot", "map", "FOD", "gen", "img")) {
+      if (input$navbar %in% c("home", "plot", "map", "FOD", "gen", "img", "about", "news")) {
         # User is in viz mode
         last_viz_tab(input$navbar)
       } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "contData", "discData", "addDocs", "addImgs", "visit")) {
@@ -481,14 +484,29 @@ $(document).keyup(function(event) {
       if (!ui_loaded$home) {
         output$home_ui <- renderUI(homeUI("home"))
         ui_loaded$home <- TRUE
-        home("home", language = languageSelection, windowDims) # Call the server
+        home("home", language = languageSelection) # Call the server
       }
     }
-    if (input$navbar == "plot") {
-      if (!ui_loaded$plot) {
-        output$plot_ui <- renderUI(plotUI("plot"))
-        ui_loaded$plot <- TRUE
-        plot("plot", mdb_files, language = languageSelection, windowDims) # Call the server
+    
+    if (input$navbar == "discrete") {
+      if (!ui_loaded$discretePlot) {
+        output$discrete_ui <- renderUI(discretePlotUI("discretePlot"))
+        ui_loaded$discretePlot <- TRUE
+        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims) # Call the server
+      }
+    }
+    if (input$navbar == "continuous") {
+      if (!ui_loaded$continuousPlot) {
+        output$continuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
+        ui_loaded$continuousPlot <- TRUE
+        continuousPlot("continuousPlot", language = languageSelection, windowDims) # Call the server
+      }
+    }
+    if (input$navbar == "mix") {
+      if (!ui_loaded$mixPlot) {
+        output$mix_ui <- renderUI(mixPlotUI("mixPlot"))
+        ui_loaded$mixPlot <- TRUE
+        mixPlot("mixPlot", mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
     if (input$navbar == "map") {
@@ -523,6 +541,20 @@ $(document).keyup(function(event) {
         output$gen_ui <- renderUI(genUI("gen"))
         ui_loaded$gen <- TRUE
         gen("gen", mdb_files, language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "about") {
+      if (!ui_loaded$about) {
+        output$about_ui <- renderUI(aboutUI("about"))
+        ui_loaded$about <- TRUE
+        about("about", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "news") {
+      if (!ui_loaded$news) {
+        output$news_ui <- renderUI(newsUI("news"))
+        ui_loaded$news <- TRUE
+        news("news", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "locs") {

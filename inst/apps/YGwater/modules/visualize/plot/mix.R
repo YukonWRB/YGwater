@@ -14,7 +14,7 @@ mixPlotUI <- function(id) {
   )
 }
 
-mixPlotServer <- function(id, EQWin, language, windowDims) {
+mixPlotServer <- function(id, mdb_files, language, windowDims) {
   moduleServer(id, function(input, output, session) {
     
   

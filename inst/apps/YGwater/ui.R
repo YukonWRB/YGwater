@@ -62,8 +62,14 @@ app_ui <- function(request) {
              uiOutput("home_ui")),
     tabPanel(title = "Map", value = "map",
              uiOutput("map_ui")),
-    tabPanel(title = "Plot", value = "plot", 
-             uiOutput("plot_ui")),
+    navbarMenu(title = "Plot", menuName = "plot",
+               tabPanel(title = "Discrete", value = "discrete",
+                        uiOutput("discrete_ui")),
+               tabPanel(title = "Continuous", value = "continuous",
+                        uiOutput("continuous_ui")),
+               tabPanel(title = "Mix", value = "mi",
+                        uiOutput("mi_ui"))
+               ),
     if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
       tabPanel(title = "FOD comments", value = "FOD",
                uiOutput("fod_ui"))
@@ -72,6 +78,12 @@ app_ui <- function(request) {
              uiOutput("gen_ui")),
     tabPanel(title = "View images", value = "img",
              uiOutput("img_ui")),
+    navbarMenu(title = "Info", menuName = "info",
+               tabPanel("News", value = "news",
+                        uiOutput("news_ui")),
+               tabPanel("About", value = "about",
+                        uiOutput("about_ui"))
+               ),
     ), # End navbarPage (though it's modified below)
     
     # Insert language selector into the navbar

@@ -12,7 +12,7 @@ homeUI <- function(id) {
   )
 }
 
-home <- function(id, language, restoring) {
+home <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
