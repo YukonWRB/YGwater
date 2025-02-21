@@ -37,8 +37,6 @@ app_server <- function(input, output, session) {
     input$window_dimensions
   })
   
-  
-  
   # Initialize reactive flags to track whether each UI has been loaded
   ui_loaded <- reactiveValues(
     viz = FALSE,
@@ -50,7 +48,7 @@ app_server <- function(input, output, session) {
     map = FALSE,
     FOD = FALSE,
     img = FALSE,
-    gen = FALSE,
+    reports = FALSE,
     news = FALSE,
     about = FALSE,
     locs = FALSE,
@@ -65,6 +63,7 @@ app_server <- function(input, output, session) {
   
   # reactive to see if 'admin' side tabs have been created already
   tab_created <- reactiveValues(
+    viz = FALSE,
     locs = FALSE,
     ts = FALSE,
     data = FALSE,
@@ -171,8 +170,8 @@ app_server <- function(input, output, session) {
   observeEvent(input$loginBtn, {
     if (log_attempts() > 5) {
       showModal(modalDialog(
-        title = "Login Failed",
-        "You've exceeded the maximum number of login attempts.",
+        title = tr("login_fail", languageSelection$language),
+        tr("login_fail_attempts", languageSelection$language),
         easyClose = TRUE,
         footer = modalButton("Close")
       ))
@@ -187,12 +186,12 @@ $(document).keyup(function(event) {
   });
   ')),
         title = "Login",
-        renderUI(HTML("Log in to add/modify data and administer assets.", "<br> <br>")),
-        textInput("username", "Username"),
-        passwordInput("password", "Password"),
+        renderUI(HTML(tr("login_txt", languageSelection$language), "<br> <br>")),
+        textInput("username", tr("un", languageSelection$language)),
+        passwordInput("password", tr("pwd", languageSelection$language)),
         footer = tagList(
-          modalButton("Close"),
-          actionButton("confirmLogin", "Log In", class = "btn-primary")
+          modalButton(tr("close", languageSelection$language)),
+          actionButton("confirmLogin", tr("login_confirm", languageSelection$language), class = "btn-primary")
         )
       ))
     }
@@ -200,17 +199,16 @@ $(document).keyup(function(event) {
   
   # Log in attempt if the button is clicked
   observeEvent(input$confirmLogin, {
-    log_attempts(log_attempts() + 1)
-    
     if (nchar(input$username) == 0 || nchar(input$password) == 0) {
       showModal(modalDialog(
-        title = "Login Failed",
-        "Please enter both a username and password.",
+        title = tr("login_fail", languageSelection$language),
+        tr("login_fail_missing", languageSelection$language),
         easyClose = TRUE,
-        footer = modalButton("Close")
+        footer = modalButton(tr("close", languageSelection$language))
       ))
       return()
     }
+    log_attempts(log_attempts() + 1)
     tryCatch({
       # Drop old connection
       # NOTE! Double assignment is used when (re)creating the connection to get out of the observer's scope into the environment.
@@ -224,10 +222,10 @@ $(document).keyup(function(event) {
       # Test the connection
       if (nrow(test) > 0) {
         showModal(modalDialog(
-          title = "Login Successful",
-          "You are now logged in.",
+          title = tr("login_success", languageSelection$language),
+          paste0(tr("login_success_msg"), input$username),
           easyClose = TRUE,
-          footer = modalButton("Close")
+          footer = modalButton(tr("close", languageSelection$language))
         ))
         
         # Drop the old connection
@@ -307,9 +305,11 @@ $(document).keyup(function(event) {
                               username = config$dbUser,
                               password = config$dbPass,
                               silent = TRUE)
-    # Redirect to 'viz' tab
-    updateTabsetPanel(session, "navbar", selected = "viz")
+    
+    # Redirect to last 'viz' tab
+    updateTabsetPanel(session, "navbar", selected = last_viz_tab())
     # Remove admin-related tabs on logout
+    removeTab("navbar", "viz", session = session)
     removeTab("navbar", "admin", session = session)
     removeTab("navbar", "locs", session = session)
     removeTab("navbar", "ts", session = session)
@@ -351,12 +351,12 @@ $(document).keyup(function(event) {
       
       # Show relevant tabs for viz mode
       showTab(inputId = "navbar", target = "home")
-      showTab(inputId = "navbar", target = "plot")
+      showTab(inputId = "navbar", target = "plot") # Actually a navbarMenu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
       showTab(inputId = "navbar", target = "map")
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible
         showTab(inputId = "navbar", target = "FOD")
       }
-      showTab(inputId = "navbar", target = "gen")
+      showTab(inputId = "navbar", target = "reports")
       showTab(inputId = "navbar", target = "img")
       showTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       # don't show 'admin' tab unless logged in
@@ -381,11 +381,19 @@ $(document).keyup(function(event) {
       programmatic_change(TRUE)
       
       # Create the tabs if they're not there yet
+      if (!tab_created$viz) {
+        insertTab("navbar",
+                  tabPanel(title = "Switch to View mode", value = "viz",
+                           uiOutput("viz_ui")),
+                  target = "home", position = "before"
+                  )
+        tab_created$viz <- TRUE
+      }
       if (!tab_created$locs) {
         insertTab("navbar",
                   tabPanel(title = "Manage locations", value = "locs",
                            uiOutput("locs_ui")),
-                  target = "gen", position = "after")
+                  target = "reports", position = "after")
         tab_created$locs <- TRUE
       }
       if (!tab_created$ts) {
@@ -457,11 +465,11 @@ $(document).keyup(function(event) {
       
       # Hide irrelevant tabs/menus
       hideTab(inputId = "navbar", target = "admin")
-      hideTab(inputId = "navbar", target = "home")
-      hideTab(inputId = "navbar", target = "plot")
+      hideTab(inputId = "navbar", target = "home") 
+      hideTab(inputId = "navbar", target = "plot") # Actually a navbarMenu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
       hideTab(inputId = "navbar", target = "map")
       hideTab(inputId = "navbar", target = "FOD")
-      hideTab(inputId = "navbar", target = "gen")
+      hideTab(inputId = "navbar", target = "reports")
       hideTab(inputId = "navbar", target = "img")
       hideTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       
@@ -470,7 +478,7 @@ $(document).keyup(function(event) {
       
     } else {
       # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("home", "plot", "map", "FOD", "gen", "img", "about", "news")) {
+      if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "reports", "img", "about", "news")) {
         # User is in viz mode
         last_viz_tab(input$navbar)
       } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "contData", "discData", "addDocs", "addImgs", "visit")) {
@@ -487,7 +495,6 @@ $(document).keyup(function(event) {
         home("home", language = languageSelection) # Call the server
       }
     }
-    
     if (input$navbar == "discrete") {
       if (!ui_loaded$discretePlot) {
         output$discrete_ui <- renderUI(discretePlotUI("discretePlot"))
@@ -536,11 +543,11 @@ $(document).keyup(function(event) {
         img("img", language = languageSelection, restoring = isRestoring_img) # Call the server
       }
     }
-    if (input$navbar == "gen") {
-      if (!ui_loaded$gen) {
-        output$gen_ui <- renderUI(genUI("gen"))
-        ui_loaded$gen <- TRUE
-        gen("gen", mdb_files, language = languageSelection) # Call the server
+    if (input$navbar == "reports") {
+      if (!ui_loaded$reports) {
+        output$reports_ui <- renderUI(reportsUI("reports"))
+        ui_loaded$reports <- TRUE
+        reports("reports", mdb_files, language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "about") {

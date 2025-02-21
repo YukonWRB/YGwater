@@ -57,7 +57,7 @@ app_ui <- function(request) {
     collapsible = TRUE,
     fluid = TRUE,
     lang = "en",
-    tabPanel(title = "Switch to View mode", value = "viz"),
+    # tabPanel(title = "Switch to View mode", value = "viz"),
     tabPanel(title = "Home", value = "home",
              uiOutput("home_ui")),
     tabPanel(title = "Map", value = "map",
@@ -67,14 +67,14 @@ app_ui <- function(request) {
                         uiOutput("discrete_ui")),
                tabPanel(title = "Continuous", value = "continuous",
                         uiOutput("continuous_ui")),
-               tabPanel(title = "Mix", value = "mi",
+               tabPanel(title = "Mix", value = "mix",
                         uiOutput("mi_ui"))
                ),
     if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
       tabPanel(title = "FOD comments", value = "FOD",
                uiOutput("fod_ui"))
     },
-    tabPanel(title = "Generate", value = "gen",
+    tabPanel(title = "Reports", value = "reports",
              uiOutput("gen_ui")),
     tabPanel(title = "View images", value = "img",
              uiOutput("img_ui")),
