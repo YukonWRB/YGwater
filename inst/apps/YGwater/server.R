@@ -330,18 +330,12 @@ $(document).keyup(function(event) {
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
   last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
-  initial_tab <- reactiveVal(NULL)
-    
+
   # Move between tabs/modules
   observeEvent(input$navbar, {
     if (programmatic_change()) {
-      # Reset the flag and exit to prevent looping
-      if (!is.null(initial_tab())) {
-        return()
-      } else {
-        initial_tab(FALSE)
-      }
       programmatic_change(FALSE)
+      return()
     }
     
     if (input$navbar == "viz") {
