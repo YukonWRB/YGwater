@@ -15,9 +15,13 @@ write("#### YOWN ANALYSIS LOG FILE ####\n", file = log_file)
 # Extract vector of all YOWN IDs, write filtered sites by publish column
 YOWNIDs <- na.omit(master_sheet$YOWN.Code)
 YOWNnames <- master_sheet %>%
-  dplyr::select(YOWN.Code, Name)
+  dplyr::select("YOWN.Code", "Name")
 YOWNIDs_pY <- master_sheet$YOWN.Code[master_sheet$Publish == "YES"]
 write(paste0("#### YOWN SITES FILTERED BY PUBLISH COLUMN ####\n", paste(setdiff(YOWNIDs, YOWNIDs_pY), collapse = ", ")), file = log_file)
+
+# Set manual screen wells
+manual_scrn <- c("YOWN-1923", "YOWN-1908")
+YOWNIDs_pY <- na.omit(setdiff(YOWNIDs_pY, manual_scrn))
 
 # Read current year analysis sheet
 analysis_sheet_cy <- openxlsx::read.xlsx(analysis_sheet, sheet = as.character(as.numeric(format(Sys.Date(), "%Y")) - 1))
@@ -29,10 +33,13 @@ analysis_sheet_py <- openxlsx::read.xlsx(analysis_sheet, sheet = as.character(as
 # Create vector of YOWN.Codes for which Peak.Captured is Y for both current analysis_sheet_cy and analysis_sheet_py
 cy_peak_f <- analysis_sheet_cy %>%
   dplyr::filter(Peak.Captured == "Y") %>%
+  dplyr::filter(YOWN.Code %in% YOWNIDs_pY) %>%
   dplyr::pull("YOWN.Code")
+  
 
 py_peak_f <- analysis_sheet_py %>%
   dplyr::filter(Peak.Captured == "Y") %>%
+  dplyr::filter(YOWN.Code %in% YOWNIDs_pY) %>%
   dplyr::pull("YOWN.Code")
 
 peak_f <- intersect(cy_peak_f, py_peak_f)
@@ -42,10 +49,12 @@ write(paste0("#### YOWN SITES FILTERED BY UNCAPTURED PEAK IN CURRENT YEAR OR PRE
 # Create vector of YOWN.Codes for which Trough.Captured is Y for both current analysis_sheet_cy and analysis_sheet_py
 cy_trough_f <- analysis_sheet_cy %>%
   dplyr::filter(Trough.Captured == "Y") %>%
+  dplyr::filter(YOWN.Code %in% YOWNIDs_pY) %>%
   dplyr::pull("YOWN.Code")
 
 py_trough_f <- analysis_sheet_py %>%
   dplyr::filter(Trough.Captured == "Y") %>%
+  dplyr::filter(YOWN.Code %in% YOWNIDs_pY) %>%
   dplyr::pull("YOWN.Code")
 
 trough_f <- intersect(cy_trough_f, py_trough_f)
@@ -53,8 +62,6 @@ trough_f <- intersect(cy_trough_f, py_trough_f)
 write(paste0("#### YOWN SITES FILTERED BY UNCAPTURED TROUGH IN CURRENT YEAR OR PREVIOUS YEAR ####\n", paste(setdiff(YOWNIDs, trough_f), collapse = ", ")), file = log_file)
 
 write(paste0("#### TOTAL NUMBER OF YOWN SITES SCREENED DUE TO UNCAPTURED PEAK OR TROUGH ####\n", length(union(peak_f, trough_f)), " out of ", length(YOWNIDs)), file = log_file)
-
-manual_scrn <- c()
 
 # Combine peak_f and trough_f
 peak_trough_f <- dplyr::union(peak_f, trough_f)
@@ -71,7 +78,7 @@ YOWN_getDBdata <- function(location,
                            master_sheet = master_sheet,
                            analysis_sheet = analysis_sheet) {
   
-  # location
+  # location = "YOWN-1908"
   # parameter = 1166 # m bgs
   # record_rate = NULL
   # period_type = NULL
@@ -81,7 +88,7 @@ YOWN_getDBdata <- function(location,
   # end_date = Sys.Date()
   # master_sheet = master_sheet
   # analysis_sheet = analysis_sheet
-  
+  # 
   # Function arg checks
   if (inherits(parameter, "character")) {
     parameter <- tolower(parameter)
@@ -114,7 +121,7 @@ YOWN_getDBdata <- function(location,
   if (nrow(tsid) == 0) {
     stop("There is no data for this combination of parameter ID and location")
   } else if (nrow(tsid) > 1) {
-    stop("There are multiple timeseries IDs for this parameter and location combol;. Adjust script to handle z elevations. Thanks a lot Ghislain.")
+    stop("There are multiple timeseries IDs for this parameter and location combo; Adjust script to handle z elevations. Thanks a lot Ghislain.")
   }
   tsid <- tsid[1,1]
   
@@ -127,6 +134,21 @@ YOWN_getDBdata <- function(location,
   # Retrieve grades, add to data
   grades <- DBI::dbGetQuery(con, paste0("SELECT gt.grade_type_code, gt.grade_type_description, g.start_dt, g.end_dt FROM grades AS g LEFT JOIN grade_types AS gt ON gt.grade_type_id = g.grade_type_id WHERE g.timeseries_id = ", tsid, ";"))
   
+  # Create index of rows with grades that are not A, B, C, or E
+  gradechange_index <- which(!grades$grade_type_code %in% c("A", "B", "C", "E"))
+  
+  # Expand bad grades by 1 hour on each side
+  for (i in gradechange_index) {
+    grades[i, "start_dt"] <- (grades[i, "start_dt"] - 3600)
+    grades[i, "end_dt"] <- (grades[i, "end_dt"] + 3600)
+  }
+  
+  # Reduce good grades by 1 hour on each side
+  for (i in setdiff(rownames(grades), gradechange_index)) {
+    grades[i, "start_dt"] <- (grades[i, "start_dt"] + 3600)
+    grades[i, "end_dt"] <- (grades[i, "end_dt"] - 3600)
+  }
+  
   for (i in 1:nrow(grades)) {
     start <- grades[i, "start_dt"]
     end <- grades[i, "end_dt"]
@@ -137,12 +159,29 @@ YOWN_getDBdata <- function(location,
     data$grade[1] <- "UNK"
     warning("Grades for timeseries ", tsid, " do not begin at start of time series. UNK added until first grade observed.")
   }
-  
+
   # Fill grades
   data$grade <- zoo::na.locf(data$grade)
   
   # Retrieve qualifier, add to data
   qualifiers <- DBI::dbGetQuery(con, paste0("SELECT qt.qualifier_type_code, qt.qualifier_type_description, q.start_dt, q.end_dt FROM qualifiers AS q LEFT JOIN qualifier_types AS qt ON qt.qualifier_type_id = q.qualifier_type_id WHERE q.timeseries_id = ", tsid, ";"))
+  
+  if (length(qualifiers$qualifier_type_code) != 0) {
+    # Create index of rows with qualifiers that are not A, B, C, or E
+    qualchange_index <- which(!grades$grade_type_code %in% c("A", "B", "C", "E"))
+    
+    # Expand bad grades by 1 hour on each side
+    for (i in gradechange_index) {
+      grades[i, "start_dt"] <- (grades[i, "start_dt"] - 3600)
+      grades[i, "end_dt"] <- (grades[i, "end_dt"] + 3600)
+    }
+    
+    # Reduce good grades by 1 hour on each side
+    for (i in setdiff(rownames(grades), gradechange_index)) {
+      grades[i, "start_dt"] <- (grades[i, "start_dt"] + 3600)
+      grades[i, "end_dt"] <- (grades[i, "end_dt"] - 3600)
+    }
+  }
   
   if (length(qualifiers$qualifier_type_code) != 0) {
     for (i in 1:nrow(qualifiers)) {
@@ -167,60 +206,7 @@ YOWN_getDBdata <- function(location,
 }
 
 
-#### Define sin regression function ####
-sinreg <- function(x, y, fixed_period = NA, plot = FALSE) {
-  if (is.na(fixed_period)) {
-    Ots <- ts(y)
-    ssp <- spectrum(Ots, plot = FALSE)
-    Nper <- 1/ssp$freq[ssp$spec == max(ssp$spec)]
-    Dper <- Nper * diff(range(x))/length(x)
-  }
-  else if (is.numeric(fixed_period) & length(fixed_period) == 
-           1) {
-    Dper <- fixed_period
-  }
-  else {
-    stop("ERROR: Supplied value for fixed period is not recognized")
-  }
-  sinlm <- lm(y ~ sin(2 * pi/Dper * x) + cos(2 * pi/Dper * 
-                                               x))
-  sinm <- sinlm$fitted
-  if (plot == TRUE) {
-    dev.new()
-    plot(x, y)
-    lines(x, sinm, col = "red")
-  }
-  coeff <- summary(sinlm)[["coefficients"]]
-  I <- coeff[1, 1]
-  A <- sqrt(coeff[2, 1]^2 + coeff[3, 1]^2)
-  phase <- -acos(coeff[2, 1]/A)
-  peak <- (0.25 + (phase/(2 * pi))) * Dper
-  R2adj <- summary(sinlm)$adj.r.squared
-  p <- as.numeric(pf(summary(sinlm)$fstatistic[1], summary(sinlm)$fstatistic[2], 
-                     summary(sinlm)$fstatistic[3], lower.tail = F))
-  metadata <- data.frame("Parameter" = c("Intercept", "Amplitude", 
-                                         "Period", "Phase", "R2adj", "p-value"), "Value" = c(I, A, Dper, 
-                                                                                             phase, R2adj, p))
-  return(list(metadata, sinm))
-}
-
 #### Data Processing ####
-
-# Apply YOWN_GetDBdata to every i in in YOWNIDs, create a df containing every instance of grade UNK
-for (i in YOWNIDs) {
-  print(i)
-  full_data <- tryCatch({
-    YOWN_getDBdata(location = i, start_date = "1990-01-01", end_date = Sys.Date())
-  }, error = function(e) {
-    print(paste0(e))
-    return(NULL)
-  })
-  # If the grades column contains UNK, print thw YOWN ID with UNK
-  if ("UNK" %in% full_data$grade) {
-    print(paste0(i, " UNK"))
-  }
-}
-
 
 # Create blank data frame with columns YOWN.Code, cy_peak, py_peak, and peak_change
 peak_df <- data.frame(YOWN.Code = peak_f,
@@ -231,45 +217,77 @@ trough_df <- data.frame(YOWN.Code = trough_f,
                         cy_trough = NA,
                         py_trough = NA,
                         trough_change = NA)
-for (i in YOWNIDs) {
+# Initiate df to store peak and trough values for every year from 2001 to present, with separate columns for peak and trough for each year
+historical_maxmin <- data.frame(YOWN.Code = YOWNIDs_pY,
+                                historical_max = NA,
+                                historical_min = NA)
+
+for (i in YOWNIDs_pY) {
   print(i)
   # Get full data for station
   full_data <- tryCatch({
-    YOWN_getDBdata(location = i, start_date = "1990-01-01", end_date = Sys.Date())
+    YOWN_getDBdata(location = i, start_date = "1990-01-01", end_date = Sys.Date()) %>%
+      # replace values where grade is UNS or N with NA
+      dplyr::mutate(value = ifelse(.data$grade %in% c("UNS", "N"), NA, .data$value)) %>%
+      # replace values where qualifier is DD with NA
+      dplyr::mutate(value = ifelse(.data$qualifier == "DD", NA, .data$value))
   }, error = function(e) {
     print(paste0(e))
     return(NULL)
   })
   
   if (!is.null(full_data)) {
-    # Filter data for current year-1, pull max and min, add to peak_df and trough_df
+    # Filter data for current year and previous year
     cy_data <- full_data %>%
-      dplyr::filter(datetime >= as.Date(paste0(as.numeric(format(Sys.Date(), "%Y")) - 1, "-01-01")))
-    cy_max <- min(cy_data$value)
-    cy_max_date <- cy_data$datetime[which(cy_data$value == cy_max)]
-    cy_min <- max(cy_data$value)
-    cy_min_date <- cy_data$datetime[which(cy_data$value == cy_min)]
-    peak_df[peak_df$YOWN.Code == i, "cy_peak"] <- cy_max
-    trough_df[trough_df$YOWN.Code == i, "cy_trough"] <- cy_min
-    
-    # Filter data for current year-2, pull max and min, add to peak_df and trough_df
+      dplyr::filter(datetime >= as.POSIXct(paste0(as.numeric(format(Sys.Date(), "%Y")) - 1, "-01-01")))
     py_data <- full_data %>%
       dplyr::filter(datetime >= as.Date(paste0(as.numeric(format(Sys.Date(), "%Y")) - 2, "-01-01"))) %>%
       dplyr::filter(datetime < as.Date(paste0(as.numeric(format(Sys.Date(), "%Y")) - 1, "-01-01")))
-    py_max <- min(py_data$value)
-    py_max_date <- py_data$datetime[which(py_data$value == py_max)]
-    py_min <- max(py_data$value)
-    py_min_date <- py_data$datetime[which(py_data$value == py_min)]
-    peak_df[peak_df$YOWN.Code == i, "py_peak"] <- py_max
-    trough_df[trough_df$YOWN.Code == i, "py_trough"] <- py_min
     
-    # Filter peak_df by YOWN codes in peak_f
-    peak_df <- peak_df[peak_df$YOWN.Code %in% peak_f,]
-    
-    # Filter trough_df by YOWN codes in trough_f
-    trough_df <- trough_df[trough_df$YOWN.Code %in% trough_f,]
+    if (i %in% peak_f) {
+      cy_max <- min(na.omit(cy_data$value))
+      cy_max_date <- cy_data$datetime[which(cy_data$value == cy_max)]
+      hist_max <- min(na.omit(full_data$value))
+      hist_max_date <- full_data$datetime[which(full_data$value == hist_max)]
+      peak_df[peak_df$YOWN.Code == i, "cy_peak"] <- cy_max # Add to peak comparison table
+      py_max <- min(na.omit(py_data$value))
+      py_max_date <- py_data$datetime[which(py_data$value == py_max)]
+      peak_df[peak_df$YOWN.Code == i, "py_peak"] <- py_max
+      if (cy_max == hist_max) { # Populate historical_maxmin table
+        historical_maxmin[historical_maxmin$YOWN.Code == i, "historical_max"] <- "Y"
+      } else {
+        historical_maxmin[historical_maxmin$YOWN.Code == i, "historical_max"] <- "N"
+      }
+    }
+    if (i %in% trough_f) {
+      cy_min <- max(na.omit(cy_data$value))
+      cy_min_date <- cy_data$datetime[which(cy_data$value == cy_min)]
+      hist_min <- max(na.omit(full_data$value))
+      hist_min_date <- full_data$datetime[which(full_data$value == hist_min)]
+      trough_df[trough_df$YOWN.Code == i, "cy_trough"] <- cy_min # Add to trough comparison table
+      py_min <- max(na.omit(py_data$value))
+      py_min_date <- py_data$datetime[which(py_data$value == py_min)]
+      trough_df[trough_df$YOWN.Code == i, "py_trough"] <- py_min
+      if (cy_min == hist_min) { # Populate historical_maxmin table
+        historical_maxmin[historical_maxmin$YOWN.Code == i, "historical_min"] <- "Y"
+      } else {
+        historical_maxmin[historical_maxmin$YOWN.Code == i, "historical_min"] <- "N"
+      }
+    }
   }
 }
+
+# Create data frames showing what percentage of wells had a historical maximum or minimum in 2024
+historical_maxmin_perc <- data.frame(historical_max = NA,
+                                     historical_min = NA)
+
+# Find percentage of wells that reached their maximum value in 2024
+historical_maxmin_perc$historical_max <- sum(na.omit(historical_maxmin$historical_max) == "Y") / length(na.omit(historical_maxmin$historical_max))*100
+maxtext <- paste0(sum(na.omit(historical_maxmin$historical_max) == "Y"), " out of ", length(na.omit(historical_maxmin$historical_max)))
+
+# Find percentage of wells that reached their minimum value in 2024
+historical_maxmin_perc$historical_min <- sum(na.omit(historical_maxmin$historical_min) == "Y") / length(na.omit(historical_maxmin$historical_min))*100
+mintext <- paste0(sum(na.omit(historical_maxmin$historical_min) == "Y"), " out of ", length(na.omit(historical_maxmin$historical_min)))
 
 # Populate peak_change and trough_change columns
 peak_df$peak_change <-  peak_df$py_peak - peak_df$cy_peak
@@ -350,10 +368,46 @@ final_plot <- cowplot::ggdraw() +
   cowplot::draw_image("G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\01_MARKUP_IMAGES\\Template_nogrades.jpg") +
   cowplot::draw_plot(final)
 
-ggplot2::ggsave(plot = final_plot, filename = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\YOWN_MAXcompare.jpg",  height = 8.5, width = 11, units = "in")
+ggplot2::ggsave(plot = final_plot, filename = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\2024_YOWN_MAXcompare.jpg",  height = 8.5, width = 11, units = "in")
 
 print("Max Plot Generated")
 
+#### Create historical max comparison plot ####
+# Create data frame showing percentage of wells that reached the historical max in 2024
+
+historical_max_pie <- data.frame(
+  Category = c("Highest Level on Record", "Not Highest Level on Record"),
+  Percentage = c(historical_maxmin_perc$historical_max, 100 - historical_maxmin_perc$historical_max)
+)
+# Round numbers to nearest percent
+historical_max_pie$Percentage <- round(historical_max_pie$Percentage, 0)
+historical_max_pie <- historical_max_pie %>%
+  dplyr::mutate(labels = scales::percent(.data$Percentage/100))
+
+maxpie <- ggplot2::ggplot(historical_max_pie, ggplot2::aes(x = "", y = Percentage, fill = Category)) +
+  ggplot2::geom_col(colour = "black", linewidth = 1) +
+  ggplot2::geom_bar(stat = "identity", width = 1) +
+  ggplot2::coord_polar("y", start = 0) +
+  ggplot2::scale_fill_manual(values = c("Highest Level on Record" = "#DC4405", "Not Highest Level on Record" = "#244C5A")) +
+  ggplot2::theme_void() +
+  ggplot2::geom_label(ggplot2::aes(x = 1.1, label = labels),
+                      size = 4,
+                      colour = "white",
+                      position = ggplot2::position_stack(vjust = 0.5),
+                      show.legend = FALSE) +
+  ggplot2::ggtitle("Percentage of Wells that Reached a\nMaximum Level in 2024") +
+  ggplot2::theme(legend.position = "bottom",
+                 legend.title = ggplot2::element_blank(),
+                 legend.text = ggplot2::element_text(size = 8),
+                 plot.title = ggplot2::element_text(size = 14),
+                 plot.margin = ggplot2::unit(c(0, 0, 0, 0), "cm")) +
+  ggplot2::theme(text = ggplot2::element_text(),
+                 legend.position = "bottom",
+                 legend.margin = ggplot2::margin(-20,0,7,0),
+                 legend.text = ggplot2::element_text(size = 8),
+                 plot.title = ggplot2::element_text(hjust = 0.5, vjust = -5, size = 9))
+ggplot2::ggsave(plot = maxpie, filename = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\2024_MaxHistorical_PieChart.jpg",  height = 3, width = 3.5, units = "in")
+  
 #### Create min comparison plot ####
 plot <- ggplot2::ggplot(data = trough_df, ggplot2::aes(x = reorder(Name, -trough_change), y = trough_change, fill = trough_change < 0)) +
   ggplot2::scale_fill_manual(name = "", values = c("FALSE" = "#7A9A01", "TRUE" = "#DC4405")) + 
@@ -396,28 +450,6 @@ title <- ggplot2::ggplot() +
                                                     face = "bold"),
                  plot.margin = ggplot2::unit(c(6.3, 0, 0, 0.51), "cm"))
 
-caption <- ggplot2::ggplot() +
-  ggplot2::geom_blank() +
-  ggplot2::theme_minimal() +
-  ggplot2::labs(title = paste0("Plot generated: ", Sys.Date(), "\nYukon Observation Well Network")) +
-  ggplot2::theme(text = ggplot2::element_text(family = "Montserrat SemiBold"),
-                 plot.title = ggplot2::element_text(hjust = 0,
-                                                    vjust = 0,
-                                                    size = 9,
-                                                    colour = "#464646"),
-                 plot.margin = ggplot2::unit(c(-2.39, 0, 0, 0.6), "cm"))
-
-subtitle <- ggplot2::ggplot() +
-  ggplot2::geom_blank() +
-  ggplot2::theme_minimal() +
-  ggplot2::labs(title = paste0("All YOWN wells with sufficient data quality and quantity for analysis")) +
-  ggplot2::theme(text = ggplot2::element_text(family = "Montserrat SemiBold"),
-                 plot.title = ggplot2::element_text(hjust = 0,
-                                                    vjust = 0,
-                                                    size = 10,
-                                                    color = "#464646"),
-                 plot.margin = ggplot2::unit(c(6.85, 0, 0, 0.6), "cm"))
-
 # Use plot_grid method to combine titles, captions, and main plot in proper orientation
 final <- cowplot::plot_grid(title, subtitle, plot, caption, ncol = 1, nrow = 4, rel_heights = c(0.1, 0.1, 2, 0.1))
 
@@ -426,93 +458,43 @@ final_plot <- cowplot::ggdraw() +
   cowplot::draw_image("G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\01_MARKUP_IMAGES\\Template_nogrades.jpg") +
   cowplot::draw_plot(final)
 
-ggplot2::ggsave(plot = final_plot, filename = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\YOWN_MINcompare.jpg",  height = 8.5, width = 11, units = "in")
+ggplot2::ggsave(plot = final_plot, filename = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\2024_YOWN_MINcompare.jpg",  height = 8.5, width = 11, units = "in")
 
 print("Min Plot Generated")
 
+#### Create historical max comparison plot ####
+# Create data frame showing percentage of wells that reached the historical max in 2024
 
+historical_min_pie <- data.frame(
+  Category = c("Lowest Level on Record", "Not Lowest Level on Record"),
+  Percentage = c(historical_maxmin_perc$historical_min, 100 - historical_maxmin_perc$historical_min)
+)
+# Round numbers to nearest percent
+historical_min_pie$Percentage <- round(historical_min_pie$Percentage, 0)
+historical_min_pie <- historical_min_pie %>%
+  dplyr::mutate(labels = scales::percent(.data$Percentage/100))
 
-
-
-
-# Create smoothed time series data
-cy_loess <- loess(value ~ as.numeric(datetime), data = cy_data, span = 0.8)
-cy_loess <- data.frame(datetime = cy_data$datetime, value = predict(cy_loess))
-# identify regions in cy_loess where slope  = 0
-cy_loess_d <- diff(cy_loess$value)
-index_loess <- which(diff(sign(cy_loess_d)) != 0 ) + 1
-points_loess <- which(cy_loess$datetime %in% cy_loess$datetime[index_loess])
-points_loess <- data.frame(datetime = cy_loess$datetime[points_loess], value = cy_loess$value[points_loess])
-# Create a data frame to store max, min, and corresponding dates
-limits <- data.frame(cy_max_date = cy_max_date, cy_max = cy_max, cy_min_date = cy_min_date, cy_min = cy_min)
-
-peak_df[peak_df$YOWN.Code == i, "cy_peak"] <- cy_max
-trough_df[trough_df$YOWN.Code == i, "cy_trough"] <- cy_min
-
-#### Check for suitability of sine regression ####
-sinregression <- sinreg(cy_data$datetime, cy_data$value) 
-sinmetadata <- sinregression[[1]]
-
-# Check for suitable R2 value
-if (sinmetadata[which(sinmetadata$Parameter == "R2adj"), 2] > 0.9) {
-  print(i)
-  sinregression <- data.frame(datetime = cy_data$datetime, value = sinregression[[2]])
-  # Calculate peak/trough and inflection points from sin regression
-  sinregression_d <- diff(sinregression$value)
-  index_pt <- which(diff(sign(sinregression_d)) != 0 ) + 1
-  points_pt <- which(sinregression$datetime %in% sinregression$datetime[index_pt])
-  points_pt <- data.frame(datetime = sinregression$datetime[points_pt], value = sinregression$value[points_pt])
-  sinregression_d2 <- diff(sinregression_d)
-  index_infl <- which(diff(sign(sinregression_d2)) != 0 ) + 1
-  points_infl <- which(sinregression$datetime %in% sinregression$datetime[index_infl])
-  points_infl <- data.frame(datetime = sinregression$datetime[points_infl], value = sinregression$value[points_infl])
-  
-} else {
-  print("R2 value is less than 0.9, indicating fluctuations may not follow a sinusoidal pattern")
-}
-}
-
-
-
-
-plot <- ggplot2::ggplot() +
-  ggplot2::geom_line(data = cy_data, ggplot2::aes(x = datetime, y = value), color = "blue") +
-  # ggplot2::geom_line(data = cy_loess, ggplot2::aes(x = datetime, y = value), color = "black") +
-  # ggplot2::geom_line(data = test2, ggplot2::aes(x = datetime, y = value), color = "red") +
-  ggplot2::geom_line(data = cy_loess, ggplot2::aes(x = datetime, y = value), color = "black") +
-  ggplot2::geom_line(data = sinregression, ggplot2::aes(x = datetime, y = value), color = "purple") +
-  ggplot2::geom_point(data = points_infl, ggplot2::aes(x = datetime, y = value), color = "brown",size = 3) +
-  ggplot2::geom_point(data = points_pt, ggplot2::aes(x = datetime, y = value), color = "green",size = 3) +
-  ggplot2::geom_point(data = points_loess, ggplot2::aes(x = datetime, y = value), color = "red",size = 3) +
-  ggplot2::scale_y_reverse(n.breaks = 10)
-plot
-
-
-
-# Filter data for current year-2, pull max and min
-
-
-# Smooth data by weekly averaging
-
-
-
-
-py_data <- full_data %>%
-  dplyr::filter(datetime >= as.Date(paste0(as.numeric(format(Sys.Date(), "%Y")) - 2, "-01-01"))) %>%
-  dplyr::filter(datetime < as.Date(paste0(as.numeric(format(Sys.Date(), "%Y")) - 1, "-01-01")))
-py_max <- min(py_data$value)
-py_max_date <- py_data$datetime[which(py_data$value == py_max)]
-py_min <- max(py_data$value)
-py_min_date <- py_data$datetime[which(py_data$value == py_min)]
-peak_df[peak_df$YOWN.Code == i, "py_peak"] <- py_max
-trough_df[trough_df$YOWN.Code == i, "py_trough"] <- py_min
-}
-
-# Get last date of previous year
-py_start_date <- paste0(as.numeric(format(Sys.Date(), "%Y")) - 2, "-01-01")
-
-
-# Fill in cy_peak and py_peak columns with max yearly values
-
-
+minpie <- ggplot2::ggplot(historical_min_pie, ggplot2::aes(x = "", y = Percentage, fill = Category)) +
+  ggplot2::geom_col(colour = "black", linewidth = 1) +
+  ggplot2::geom_bar(stat = "identity", width = 1) +
+  ggplot2::coord_polar("y", start = 0) +
+  ggplot2::scale_fill_manual(values = c("Lowest Level on Record" = "#DC4405", "Not Lowest Level on Record" = "#244C5A")) +
+  ggplot2::theme_void() +
+  ggplot2::geom_label(ggplot2::aes(x = 1.1, label = labels),
+                      size = 4,
+                      colour = "white",
+                      position = ggplot2::position_stack(vjust = 0.5),
+                      show.legend = FALSE) +
+  ggplot2::ggtitle("Percentage of Wells that Reached a\n Historical Minimum Level in 2024") +
+  ggplot2::theme(legend.position = "bottom",
+                 legend.title = ggplot2::element_blank(),
+                 legend.text = ggplot2::element_text(size = 8),
+                 plot.title = ggplot2::element_text(size = 14),
+                 plot.margin = ggplot2::unit(c(0, 0, 0, 0), "cm")) +
+  ggplot2::theme(text = ggplot2::element_text(),
+                 legend.position = "bottom",
+                 legend.margin = ggplot2::margin(-20,0,7,0),
+                 legend.text = ggplot2::element_text(size = 8),
+                 plot.title = ggplot2::element_text(hjust = 0.5, vjust = -5, size = 9))
+ggplot2::ggsave(plot = minpie, filename = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\2024_MinHistorical_PieChart.jpg",  height = 3, width = 3.5, units = "in")
 
