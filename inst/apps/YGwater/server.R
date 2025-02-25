@@ -51,6 +51,7 @@ app_server <- function(input, output, session) {
     snowInfo = FALSE,
     waterInfo = FALSE,
     WQReport = FALSE,
+    snowBulletin = FALSE,
     news = FALSE,
     about = FALSE,
     locs = FALSE,
@@ -349,7 +350,7 @@ $(document).keyup(function(event) {
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible
         showTab(inputId = "navbar", target = "FOD")
       }
-      showTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', and 'WQReport' as well
+      showTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
       showTab(inputId = "navbar", target = "img")
       showTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       # don't show 'admin' tab unless logged in
@@ -462,7 +463,7 @@ $(document).keyup(function(event) {
       hideTab(inputId = "navbar", target = "plot") # Actually a navbarMenu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
       hideTab(inputId = "navbar", target = "map")
       hideTab(inputId = "navbar", target = "FOD")
-      hideTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', and 'WQReport' as well
+      hideTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', 'snowBulletin' as well
       hideTab(inputId = "navbar", target = "img")
       hideTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       
@@ -471,7 +472,7 @@ $(document).keyup(function(event) {
       
     } else {
       # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "img", "about", "news")) {
+      if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "img", "about", "news")) {
         # User is in viz mode
         last_viz_tab(input$navbar)
       } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "contData", "discData", "addDocs", "addImgs", "visit")) {
@@ -538,16 +539,16 @@ $(document).keyup(function(event) {
     }
     if (input$navbar == "snowInfo") {
       if (!ui_loaded$snowInfo) {
-        output$snowInfo_ui <- renderUI(snowInfoUI("snowInfo"))
+        output$snowInfo_ui <- renderUI(snowInfoUIMod("snowInfo"))
         ui_loaded$snowinfo <- TRUE
-        snowInfo("snowInfo", language = languageSelection) # Call the server
+        snowInfoMod("snowInfo", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "waterInfo") {
       if (!ui_loaded$waterInfo) {
-        output$waterInfo_ui <- renderUI(waterInfoUI("waterInfo"))
+        output$waterInfo_ui <- renderUI(waterInfoUIMod("waterInfo"))
         ui_loaded$waterInfo <- TRUE
-        waterInfo("waterInfo",language = languageSelection) # Call the server
+        waterInfoMod("waterInfo",language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "WQReport") {
@@ -555,6 +556,13 @@ $(document).keyup(function(event) {
         output$WQReport_ui <- renderUI(WQReportUI("WQReport"))
         ui_loaded$WQReport <- TRUE
         WQReport("WQReport", mdb_files = mdb_files, language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "snowBulletin") {
+      if (!ui_loaded$snowBulletin) {
+        output$snowBulletin_ui <- renderUI(snowBulletinUIMod("snowBulletin"))
+        ui_loaded$snowBulletin <- TRUE
+        snowBulletinMod("snowBulletin", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "about") {

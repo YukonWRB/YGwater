@@ -1,4 +1,4 @@
-snowInfoUI <- function(id) {
+snowInfoUIMod <- function(id) {
   ns <- NS(id)
   fluidPage(
     # Custom CSS below is for consistency with the sidebarPanel look elsewhere in the app.
@@ -10,7 +10,7 @@ snowInfoUI <- function(id) {
   )
 }
 
-snowInfo <- function(id, language) {
+snowInfoMod <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
@@ -133,12 +133,6 @@ snowInfo <- function(id, language) {
     outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
     
     observeEvent(input$go, {
-      print(selections$loc)
-      print(selections$inactive)
-      print(selections$complete)
-      print(selections$stats)
-      print(selections$plots)
-      print(selections$plot_type)
       
       if (nchar(selections$loc) == 0) {
         showNotification(

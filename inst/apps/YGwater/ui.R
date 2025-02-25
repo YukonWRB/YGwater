@@ -69,7 +69,7 @@ app_ui <- function(request) {
                         uiOutput("continuous_ui")),
                tabPanel(title = "Mix", value = "mix",
                         uiOutput("mi_ui"))
-               ),
+    ),
     if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
       tabPanel(title = "FOD comments", value = "FOD",
                uiOutput("fod_ui"))
@@ -80,8 +80,12 @@ app_ui <- function(request) {
                tabPanel(title = "Water level/flow info", value = "waterInfo",
                         uiOutput("waterInfo_ui")),
                tabPanel(title = "Water quality", value = "WQReport",
-                        uiOutput("WQReport_ui"))
-               ),
+                        uiOutput("WQReport_ui")),
+               if (!config$public) {
+                 tabPanel(title = "Snow Bulletin + stats", value = "snowBulletin",
+                          uiOutput("snowBulletin_ui"))
+               }
+    ), # End reports navbarMenu
     tabPanel(title = "View images", value = "img",
              uiOutput("img_ui")),
     navbarMenu(title = "Info", menuName = "info",
@@ -89,7 +93,7 @@ app_ui <- function(request) {
                         uiOutput("news_ui")),
                tabPanel("About", value = "about",
                         uiOutput("about_ui"))
-               ),
+    ),
     ), # End navbarPage (though it's modified below)
     
     # Insert language selector into the navbar

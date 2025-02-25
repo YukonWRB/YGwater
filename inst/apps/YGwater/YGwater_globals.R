@@ -34,16 +34,15 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # 'Visualize' side modules ####
   source(system.file("apps/YGwater/modules/visualize/visualize.R", package = "YGwater"))
   
-  # source(system.file("apps/YGwater/modules/visualize/plot/plot_main.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/plot/discrete.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/plot/continuous.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/plot/mix.R", package = "YGwater"))
   
-  # source(system.file("apps/YGwater/modules/visualize/reports/reports_main.R", package = "YGwater"))
-  # source(system.file("apps/YGwater/modules/visualize/reports/basins.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/reports/basins.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/reports/WQReport.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/reports/snowInfo.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/reports/waterInfo.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/reports/snowBulletin.R", package = "YGwater"))
   
   source(system.file("apps/YGwater/modules/visualize/map/map_main.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/precip.R", package = "YGwater"))
@@ -82,7 +81,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   
   # Establish database connection parameters
-  # The actual connection is being done at the server level for YGwater. This allows using a login input form to connect to the database with edit privileges or to see additional elements
+  # The actual connection is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
   # double assignment creates a global variable that can be accessed by all UI and server functions
   
   # confirm G drive access

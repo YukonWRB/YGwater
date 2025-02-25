@@ -10,6 +10,7 @@ ggplotOverlap(
   record_rate = NULL,
   startDay = 1,
   endDay = 365,
+  traceEnd = endDay,
   tzone = "MST",
   years = NULL,
   datum = TRUE,
@@ -45,6 +46,8 @@ ggplotOverlap(
 \item{startDay}{The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
 
 \item{endDay}{The end day of year for the plot x-axis. As per \code{startDay}.}
+
+\item{traceEnd}{The end day of year for the trace line. If NULL, will default to \code{endDay}. Must be less than \code{endDay}. Format as per \code{startDay}.}
 
 \item{tzone}{The timezone to use for graphing. Only really evident for a small number of days.}
 

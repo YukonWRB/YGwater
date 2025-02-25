@@ -33,14 +33,12 @@ snowBulletinStats(
 \item{con}{A connection to the database. Leave as NULL to use function \code{\link[=AquaConnect]{AquaConnect()}} with default settings and close the connection automatically afterwards.}
 }
 \value{
-A snow bulletin in Microsoft Word format.
+A list of data.frames OR, if requested, three Excel workbooks.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
 
-This function generates the statistics associated with the snow bulletin for a specified date. The output is list of tables (in R), or a number of excel workbooks.
-
-This function fetches data from the local postgresql aquacache created/maintained by the AquaCache package.
+This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package.
 }
 \details{
 To download data, you MUST have your aquacache credentials added to your .Renviron file. See function \code{\link[=AquaConnect]{AquaConnect()}} or talk to the database administrator/data scientist for help.

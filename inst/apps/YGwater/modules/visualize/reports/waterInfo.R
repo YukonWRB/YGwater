@@ -1,4 +1,4 @@
-waterInfoUI <- function(id) {
+waterInfoUIMod <- function(id) {
   ns <- NS(id)
   fluidPage(
     # Custom CSS below is for consistency with the sidebarPanel look elsewhere in the app.
@@ -10,7 +10,7 @@ waterInfoUI <- function(id) {
   )
 }
 
-waterInfo <- function(id, language) {
+waterInfoMod <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code
