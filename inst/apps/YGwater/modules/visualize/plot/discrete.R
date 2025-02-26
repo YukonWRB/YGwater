@@ -385,7 +385,9 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
       plot_aes$colorblind <- input$colorblind
       plot_aes$showgridx <- input$showgridx
       plot_aes$showgridy <- input$showgridy
-      plot_aes$nrows <- if (input$nrows > 0) input$nrows else NULL
+      if (!is.na(input$nrows)) {
+        plot_aes$nrows <- if (input$nrows > 0) input$nrows else NULL
+      }
       plot_aes$point_scale <- input$point_scale
       plot_aes$guideline_scale <- input$guideline_scale
       plot_aes$axis_scale <- input$axis_scale
