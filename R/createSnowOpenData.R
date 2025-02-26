@@ -3,11 +3,8 @@
 #' @description
 #' `r lifecycle::badge('stable')`
 #' The purpose of this script is create files for the Yukon Open Data portal.
-#' @return Two excel documents, one with the locations, another with the data. The snow data includes all surveys in the database. it does not include individual samples, but simply a mean of all samples.
+#' @return Two excel documents, one with location metadata and another with the data. The snow data includes all surveys in the database. it does not include individual samples, but simply a mean of all samples.
 #' @export
-
-#TODO: (1)
-
 
 createSnowOpenData <-
   function() {

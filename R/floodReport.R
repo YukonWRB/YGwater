@@ -121,20 +121,20 @@ floodReport <-
     }
 
     #####Generate reports#####
-    if (is.null(report_name) == FALSE & is.null(custom_report_stations) == FALSE) {
+    if (!is.null(report_name) & !is.null(custom_report_stations)) {
       #deals with mistakes
       message("You specified custom report stations while the preset report was also set. I've set the preset to Custom Hydrometric Report so you get a custom report instead.")
       report_name <- "Custom Hydrometric Report"
     }
 
-    if (is.null(report_name) == FALSE & is.null(custom_report_stations) == TRUE) {
+    if (!is.null(report_name) & is.null(custom_report_stations)) {
 
       ### Generate a report for the whole territory###
       if (report_name %in% c("Territory", "territory", "Communities", "communities", "Yukon", "Yukon Wide", "Yukon wide", "yukon wide")) {
         stations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
         preset_extras <- c("09EA003:2013,1972","09EB001:2013,1964", "09AH001:2021,1992","09AH004:2021","09AE002:1962,1992,2022", "09BC002:2013,1992,1972", "09FD003:2007,2015", "10AA001:2007,2012,2013", "09DC006:1992,1983,2013", "09AB004:2007,2021", "09AB010:2007,2021")
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years == TRUE){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -548,8 +548,7 @@ floodReport <-
       } #End of custom report
     }
 
-    if (is.null(report_name) == TRUE &
-        is.null(custom_report_stations) == TRUE) {
+    if (is.null(report_name) & is.null(custom_report_stations)) {
       stop("You must specify either a report_name or provide a character vector for custom_report_station.")   #to catch an error where no parameter was entered in both of these
     }
 

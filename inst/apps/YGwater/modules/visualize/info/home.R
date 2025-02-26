@@ -10,7 +10,6 @@ homeUI <- function(id) {
     tags$div(style = "height: 10px;"),
     htmlOutput(ns("discBody"))
   )
-  
 }
 
 home <- function(id, language, restoring) {

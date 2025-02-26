@@ -609,11 +609,13 @@ ggplotOverlap <- function(location,
 
   } #End of loop integrating provided data
 
-  if (snowbulletin == TRUE) {
+  if (snowbulletin) {
     # Order realtime by fake_datetime
     realtime <- realtime[order(realtime$fake_datetime),]
-    realtime[realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"),]$value <- NA
-    #realtime[realtime$datetime > "2024-04-30",]$value <- NA
+    # Remove all values before the first of the month
+    try({
+      realtime[realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"), "value"] <- NA
+    })
     # Apply rolling mean
     realtime$q25 <- zoo::rollmean(realtime$q25, 5, fill = NA, align = "left")
     realtime$q75 <- zoo::rollmean(realtime$q75, 5, fill = NA, align = "left")
@@ -769,7 +771,7 @@ ggplotOverlap <- function(location,
         returns <- "table"
         loc_returns <- data[[returns_table]][data[[returns_table]]$ID == location , ]
         loc_returns[ , c("twoyear", "fiveyear", "tenyear", "twentyyear", "fiftyyear", "onehundredyear", "twohundredyear", "fivehundredyear", "thousandyear", "twothousandyear", "LSL", "FSL")] <- apply(loc_returns[ , c("twoyear", "fiveyear", "tenyear", "twentyyear", "fiftyyear", "onehundredyear", "twohundredyear", "fivehundredyear", "thousandyear", "twothousandyear", "LSL", "FSL")], 2, function(x) x + datum$conversion_m)
-        loc_returns[is.na(loc_returns) == TRUE] <- -10 #This prevents a ggplot error when it tries to plot a logical along with numerics, but keeps the values out of the plot.
+        loc_returns[is.na(loc_returns)] <- -10 #This prevents a ggplot error when it tries to plot a logical along with numerics, but keeps the values out of the plot.
 
         plot <- plot +
           ggplot2::geom_hline(yintercept = loc_returns$twoyear, 
@@ -913,12 +915,12 @@ ggplotOverlap <- function(location,
   
 
   # Wrap things up and return() -----------------------
-  if (title == TRUE) {
-    if (is.null(custom_title) == TRUE) {
+  if (title) {
+    if (is.null(custom_title)) {
       if (lang == "fr") {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
       } 
-      if (lang == "en" || is.na(stn_name) == TRUE) {
+      if (lang == "en" || is.na(stn_name)) {
         stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
       }
       stn_name <- titleCase(stn_name, lang)
@@ -926,7 +928,7 @@ ggplotOverlap <- function(location,
       plot <- plot +
         ggplot2::labs(title = stn_name) +
         ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * axis_scale, face = "bold"))
-    } else if (is.null(custom_title) == FALSE) {
+    } else if (!is.null(custom_title)) {
       plot <- plot +
         ggplot2::labs(title = as.character(custom_title)) +
         ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * axis_scale, face = "bold"))

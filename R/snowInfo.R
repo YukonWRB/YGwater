@@ -94,7 +94,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   
   #Get the measurements
   
-  samples <- DBI::dbGetQuery(con, paste0("SELECT sample_id, location_id, target_datetime FROM samples WHERE location_id IN ('", paste(locations$location_id, collapse = "', '"), "') AND media_id = 7 AND collection_method = 1")) #media = 'atmospheric', collection_method = 'observation'
+  samples <- DBI::dbGetQuery(con, paste0("SELECT sample_id, location_id, target_datetime FROM samples WHERE location_id IN ('", paste(locations$location_id, collapse = "', '"), "') AND media_id = 7 AND collection_method = 1")) # media = 'atmospheric', collection_method = 'observation'
   
   if (!inactive) { # Filter out any location with no measurements for 5 or more years
     rm.inactive <- samples %>%
@@ -109,7 +109,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
     samples <- samples[!samples$location_id %in% rm.inactive,]
   }
   
-  results <- DBI::dbGetQuery(con, paste0("SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('", paste(samples$sample_id, collapse = "', '"), "') AND p.parameter_id IN (21, 1220)"))
+  results <- DBI::dbGetQuery(con, paste0("SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('", paste(samples$sample_id, collapse = "', '"), "') AND p.parameter_id IN (21, 1220)")) # 21 = SWE, 1220 = depth
   
   #Manipulate/preprocess things a bit
   samples$year <- lubridate::year(samples$target_datetime)

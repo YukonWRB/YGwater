@@ -83,7 +83,7 @@ WSC_drainages <- function(inputs_folder = "choose",
       poly <- rbind(poly, sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[i], 1, 7),"_DrainageBasin_BassinDeDrainage"))))
     }
     poly <- poly[!duplicated(data.frame(poly)),] #root out duplicates
-    if (active_only == TRUE) {#Retain only active stations
+    if (active_only) {#Retain only active stations
       poly <- poly[poly$Status =="active", ]
     }
     #Write to file
@@ -100,7 +100,7 @@ WSC_drainages <- function(inputs_folder = "choose",
       points <- rbind(points, sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[i], 1, 7),"_PourPoint_PointExutoire"))))
     }
     points <- points[!duplicated(data.frame(points)),] #root out duplicates
-    if (active_only == TRUE) {#Retain only active stations
+    if (active_only) {#Retain only active stations
       points <- points[points$Status == "active", ]
     }
     #Write to file

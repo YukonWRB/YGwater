@@ -11,25 +11,18 @@
 #' To download data, you MUST have your aquacache credentials added to your .Renviron file. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
 #'
 #' @param year Year for which the snow bulletin stats are calculated.
-#' @param month Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5.
+#' @param month Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5 as a vector of length 1.
 #' @param basins The name of the sub_basin you wish to generate stats for. One or more of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek" as a character vector, or NULL for all basins. North Slope will be added when AquaCache is updated with the new snow database.
 #' @param excel_output If TRUE, calculated stats will be output in multiple excel tables. 
 #' @param save_path The path to the directory (folder) where the excel files should be saved. Enter the path as a character string or leave as 'choose' to select interactively. Not used if excel_output = FALSE.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in this function will be synchronized. If FALSE (default), none will be synchronized. Currently is a placeholder and does not work.
 #' @param source Should the SWE statistics for stations (station_stats) be calculated from the 'aquacache' database or the 'snow' database? Default is 'aquacache'.
+#' @param con A connection to the database. Leave as NULL to use function [AquaConnect()] with default settings and close the connection automatically afterwards.
 #'
 #' @return A snow bulletin in Microsoft Word format.
 #'
 #' @export
 #'
-
-# year <- 2024
-# month <- 3
-# excel_output <- TRUE
-# save_path = "choose"
-# basins = NULL
-# synchronize = TRUE
-# source = "aquacache"
 
 snowBulletinStats <- function(year,
                               month,
@@ -37,7 +30,8 @@ snowBulletinStats <- function(year,
                               excel_output = FALSE,
                               save_path = "choose",
                               synchronize = FALSE,
-                              source = "aquacache") {
+                              source = "aquacache",
+                              con = NULL) {
   
   # Check parameters are valid
   if (!month %in% c(3, 4, 5)) {
@@ -53,11 +47,13 @@ snowBulletinStats <- function(year,
     }
   }
   
-  con <- AquaConnect()
-  on.exit(DBI::dbDisconnect(con))
+  if (is.null(con)) {
+    con <- AquaConnect()
+    on.exit(DBI::dbDisconnect(con))
+  }
   
   # Set up save_path
-  if (excel_output == TRUE) {
+  if (excel_output) {
     if (save_path == "choose") {
       if (!interactive()) {
         stop("You must specify a save path when running in non-interactive mode.")
@@ -111,7 +107,7 @@ snowBulletinStats <- function(year,
                        count = dplyr::n(),
                        type = "sum")
     # Only keep those with all 5, 6 or 7 months (depending on month_param)
-    precip_years <- precip_years[precip_years$count == 2+month,]
+    precip_years <- precip_years[precip_years$count == 2 + month,]
     
     # Get value from year of interest
     tab_yr <- precip_years[precip_years$fake_year == year, ]
@@ -332,7 +328,7 @@ snowBulletinStats <- function(year,
     cddf_allyrs$period <- paste0("All years")
     
     # Calculate stats. For last 40 years
-    cddf_40yrs <- cddf[cddf$year > year-40,]
+    cddf_40yrs <- cddf[cddf$year > year - 40,]
     cddf_40yrs <- cddf_40yrs %>%
       dplyr::group_by(.data$location_id, .data$location_name) %>%
       dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
@@ -393,7 +389,7 @@ snowBulletinStats <- function(year,
       cddf_stats <- merge(cddf_stats, cddf_yr[, c("location_id", "location_name", "value")])
     }
     # Calculate percent historical
-    cddf_stats$perc_hist_med <- round(cddf_stats$value / cddf_stats$median *100, 0)
+    cddf_stats$perc_hist_med <- round(cddf_stats$value / cddf_stats$median * 100, 0)
     # Add variable column
     cddf_stats$variable <- paste0(month.name[month], " 1st CDDF")
     # Reorder columns
@@ -415,7 +411,7 @@ snowBulletinStats <- function(year,
   pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$median * 100)
   
   #### -----------------------  SWE stations ---------------------------- ####
-  station_stats <- SWE_station(stations="all", year = year, month = month, return_missing = TRUE, 
+  station_stats <- SWE_station(stations = "all", year = year, month = month, return_missing = TRUE, 
                                active = TRUE, source = source, summarise = TRUE)
   # Remove 'Snow Course' from name
   
@@ -449,7 +445,7 @@ snowBulletinStats <- function(year,
                            csv = FALSE,
                            summarise = TRUE,
                            source = "AquaCache")
-  basin_stats$perc_hist_med <- basin_stats$swe_relative *100
+  basin_stats$perc_hist_med <- basin_stats$swe_relative * 100
   basin_stats$swe <- round(basin_stats$swe)
   # Add description of % median
   basin_stats <- basin_stats %>%
@@ -469,12 +465,12 @@ snowBulletinStats <- function(year,
   # if (Sys.Date() < paste0(year, "-0", month, "-01")) {
   #   precip_stats <- NULL
   # } else {
-  precip_stats <- precipStats()
+  precip_stats <- suppressMessages(precipStats())
   # }
   
   
   #### ------------------------------ CDDF ------------------------------ ####
-  cddf_stats <- cddfStats(month, year)
+  cddf_stats <- suppressMessages(cddfStats(month, year))
   
   #### ------------------------- Flow/level stats ----------------------- ####
   
@@ -513,11 +509,17 @@ snowBulletinStats <- function(year,
   
   swe_compiled <- station_stats
   # If swe = 0, swe_med = 0 ---> no snow where median zero
-  swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
+  try({
+    swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
+  })
   # If swe !=0, swe_med = 0  ---> snow where median zero
-  swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
+  try({
+    swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
+  })
   # If swe = 0, swe_med != 0 ---> no snow
-  swe_compiled$swe_rat[swe_compiled$swe == 0 & swe_compiled$swe_med != 0] <- "no snow present"
+  try({
+    swe_compiled$swe_rat[swe_compiled$swe == 0 & swe_compiled$swe_med != 0] <- "no snow present"
+  })
   
   swe_compiled <- swe_compiled[, c("location_name", "swe_rat")]
   swe_compiled$Bulletin_Edition <- paste0(year, "-", month.name[month])
@@ -530,7 +532,7 @@ snowBulletinStats <- function(year,
                  "cddf_stats" = cddf_stats, "flow_stats" = flow_stats,
                  "swe_basin_summary" = swe_basin_summary, "swe_compiled" = swe_compiled)
   
-  if (excel_output == TRUE) {
+  if (excel_output) {
     
     ## Main workbook
     wb <- openxlsx::createWorkbook()

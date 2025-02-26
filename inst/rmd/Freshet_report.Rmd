@@ -546,7 +546,7 @@ if (report_type %in% c("Both", "Flow", "both", "flow")){
 
 ```{r Compile station info, echo=FALSE, results='asis', message=FALSE}
 
-if (force_CGVD28 == TRUE){
+if (force_CGVD28){
   stationInfo <- lapply(stations, function(x) dplyr::bind_cols(tidyhydat::hy_stations(x)[c(2,1,7,8)], if(nrow(dplyr::slice_tail(as.data.frame(tidyhydat::hy_stn_datum_conv(x)[,3])))==1) as.data.frame(tidyhydat::hy_stn_datum_conv(x)[1,3]) else (data.frame(DATUM_TO="Local datum")))) %>%
   purrr::reduce(dplyr::bind_rows)
 } else {
@@ -603,7 +603,7 @@ stationInfo$Station <- gsub("Morely", "Morley", stationInfo$Station)
 
 ```{r Rates table for levels, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
 
-if (rate == TRUE & report_type %in% c("Both", "Level", "both", "level")){
+if (rate & report_type %in% c("Both", "Level", "both", "level")){
   
   cat("  \n# Summary of water levels and trajectories")
   
@@ -654,7 +654,7 @@ if (rate == TRUE & report_type %in% c("Both", "Level", "both", "level")){
   
   print(knitr::kable(rateTable, digits=2, align = "lccccccc"))
   
-  if (force_CGVD28 == TRUE){
+  if (force_CGVD28){
     cat("*masl = metres above sea level  \n  \n**Notes:**  \nCurrent water levels are presented relative to the local datum (column 2) and relative to the Geodetic Survey of Canada Datum, which is assumed by Water Survey of Canada to refer to Canadian Geodetic Vertical Datum 1928 (CGVD28, column 3). The local datum is an arbitrary elevation used at each hydrometric station and reported by the Water Survey of Canada at [wateroffice.ec.gc.ca](https://wateroffice.ec.gc.ca/). Local datum values can be compared at one station across years but not across stations, while masl elevations can be compared across stations and years with consideration of the datum used. More recent datums are published for each of these stations on the Water Survey of Canada website. This report uses CGVD28 to match elevations reported by the Yukon Energy Corporation for Marsh Lake.")
     } else {
       cat("*masl = metres above sea level  \n  \n**Notes:**  \nCurrent water levels are presented relative to the local datum (column 2) and relative to the Canadian Geodetic Vertical Datum 2013 (CGVD2013, column 3). The local datum is an arbitrary elevation used at each hydrometric station and reported by the Water Survey of Canada at [wateroffice.ec.gc.ca](https://wateroffice.ec.gc.ca/). Local datum values can be compared at one station across years but not across stations, while masl elevations can be compared across stations and years with consideration to the datum used. Older (deprecated) vertical datums are published for each station on the Water Survey of Canada website. Datum information is provided in a table of station information at the end of this document.")
@@ -761,7 +761,7 @@ if (report_type %in% c("Both", "Flow", "both", "flow") & length(flowInfo) > 0){
 
 ```{r Get MESH and CLEVER information, echo=FALSE, results='asis', message=FALSE}
 
-if (MESH == TRUE){
+if (MESH){
   #today's files if exists:
   MESHfiles <- list.files("G:/water/Hydrology/Flood_Forecasting/01-Imagery-Data-Forecasts/2022/02-Openwater/01-Forecasts/MESH/zSource/", pattern= paste0(".*", gsub("-", "", as.character(Sys.Date())), "*\\.*csv"))
   
@@ -807,7 +807,7 @@ if (MESH == TRUE){
   })
 } else { MESH <- list()}
 
-if (CLEVER == TRUE){
+if (CLEVER){
   CLEVERstns <- c("10AA006", "10AB001", "10AA004", "10AA001" ,"10AD002", "99FK100", "09AE003", "09AA013")
   
   tryCatch({
@@ -848,7 +848,7 @@ for(i in stations) {
                                               force_CGVD28 = force_CGVD28,
                                               returns = level_returns,
                                               complete_df = levelDataList[[n]][[1]])
-          if (plot_titles == TRUE){
+          if (plot_titles){
             levelPlot <- levelPlot +
               ggplot2::labs(title=paste0("Station ", i, ": ", stringr::str_to_title(tidyhydat::hy_stations(i)[,2]))) +
               ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14))
@@ -856,7 +856,7 @@ for(i in stations) {
           print(levelPlot)
           cat("  \n")
           
-          if (level_zoom == TRUE){ #Plot zoomed-in level data
+          if (level_zoom){ #Plot zoomed-in level data
             cat("  \n### Level (last", zoom_days, " days) \n")
             zoomLevelPlot <- utils_zoom_level_plot(station_number = i,
                                                    level_years = levelDataList[[n]][[2]],
@@ -866,7 +866,7 @@ for(i in stations) {
                                                    returns = level_returns,
                                                    complete_df = levelDataList[[n]][[1]])
             
-            if (plot_titles == TRUE){
+            if (plot_titles){
               zoomLevelPlot <- zoomLevelPlot +
                 ggplot2::labs(title=paste0("Station ", i, ": ", stringr::str_to_title(tidyhydat::hy_stations(i)[,2]))) +
                 ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14))
@@ -893,7 +893,7 @@ for(i in stations) {
                                                returns = flow_returns,
                                                complete_df = flowDataList[[n]][[1]])
             
-            if (plot_titles == TRUE){
+            if (plot_titles){
               flowPlot <- flowPlot +
                 ggplot2::labs(title=paste0("Station ", i, ": ", stringr::str_to_title(tidyhydat::hy_stations(i)[,2]))) +
                 ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14))
@@ -902,7 +902,7 @@ for(i in stations) {
             print(flowPlot)
             cat("  \n")
             
-            if (flow_zoom == TRUE) { #plot zoomed-in flow data as well
+            if (flow_zoom) { #plot zoomed-in flow data as well
               cat("  \n### Flow (last", zoom_days, " days)  \n")
               
               if (i %in% names(MESH) & i %in% names(CLEVER)){
@@ -964,7 +964,7 @@ for(i in stations) {
                                                      complete_df = flowDataList[[n]][[1]])
               }
               
-              if (plot_titles == TRUE){
+              if (plot_titles){
                 zoomFlowPlot <- zoomFlowPlot +
                   ggplot2::labs(title=paste0("Station ", i, ": ", stringr::str_to_title(tidyhydat::hy_stations(i)[,2]))) +
                   ggplot2::theme(plot.title=ggplot2::element_text(hjust=0.05, size=14))
@@ -998,7 +998,7 @@ cat("  \n")
 ```
 
 ```{r Precipitation, echo=FALSE, results='asis', message=FALSE}
-if (precip == TRUE){
+if (precip){
   cat("# Accumulated Precipitation Above Stations  \n")
   tryCatch({
     now <- Sys.time() #setting now prevents running basinPrecip with different start/end times.
@@ -1092,7 +1092,7 @@ if (meteogram==TRUE){
 
 ```{r Fixed camera images, eval=TRUE, echo=FALSE, fig.height=4, fig.width=7, message=FALSE, warning=FALSE, fig.height=4, fig.width=7, results='asis'}
 
-if (WSC_images == TRUE) {
+if (WSC_images) {
   tryCatch({
     cat("  \n  \newpage  \n")
     images <- XML::readHTMLTable(httr::content(httr::GET("https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/", config=httr::authenticate(Sys.getenv("ECCCUSER"), Sys.getenv("ECCCPASS"))), "text"))[[1]]

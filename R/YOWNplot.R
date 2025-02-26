@@ -169,7 +169,7 @@ YOWNplot <- function(AQID,
       dplyr::mutate("daymean" = zoo::rollapply(data = plotdf$daymean,  FUN = mean, width = smooth, partial = TRUE)) %>%
       dplyr::mutate("daymin" = zoo::rollapply(data = plotdf$daymin,  FUN = mean, width = smooth, partial = TRUE)) %>%
       dplyr::mutate("daymax" = zoo::rollapply(data = plotdf$daymax,  FUN = mean, width = smooth, partial = TRUE))
-  } else if (smooth == TRUE) {
+  } else if (smooth) {
     stop("ERROR: Specify smoothing value as a number")
   }
 
@@ -297,7 +297,7 @@ YOWNplot <- function(AQID,
         dplyr::mutate("daymean" = zoo::rollapply(data = plotdf$daymean,  FUN = mean, width = smooth, partial = TRUE)) %>%
         dplyr::mutate("daymin" = zoo::rollapply(data = plotdf$daymin,  FUN = mean, width = smooth, partial = TRUE)) %>%
         dplyr::mutate("daymax" = zoo::rollapply(data = plotdf$daymax,  FUN = mean, width = smooth, partial = TRUE))
-    } else if (smooth == TRUE) {
+    } else if (smooth) {
       stop("ERROR: Specify smoothing value as a number")
     }
 
