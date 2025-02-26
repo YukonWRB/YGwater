@@ -27,7 +27,7 @@ ggplotOverlap(
   axis_scale = 1,
   legend_scale = 1,
   gridx = FALSE,
-  gridy = TRUE,
+  gridy = FALSE,
   legend = TRUE,
   save_path = NULL,
   con = NULL,
