@@ -40,6 +40,45 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   source(system.file("apps/YGwater/YGwater_globals.R", package = "YGwater"))
   YGwater_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass, accessPath = accessPath, public = public)
   
+  # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app
+  con <- AquaConnect(
+    name = dbName,
+    host = dbHost,
+    port = dbPort,
+    username = dbUser,
+    password = dbPass,
+    silent = TRUE)
+  
+  # Check that the DB has the 'application' schema
+  if (!DBI::dbExistsTable(con, "page_content", schema = "application")) {
+    stop("The database does not have the required 'application' schema, or is at minimum missing the 'page_content' table. Refer to the script 'application_tables.R' in this application's folder to create this table. You'll find this cript at ", appDir, ".")
+  }
+  
+  # Check that the connection can see a few tables: 'timeseries', 'locations', 'parameters', 'measurements_continuous_calculated', 'samples', 'results'
+  if (!DBI::dbExistsTable(con, "timeseries")) {
+    stop("The user you're connecting with can't see the table 'timeseries'. This table is required for the app to function.")
+  }
+  if (!DBI::dbExistsTable(con, "locations")) {
+    stop("The user you're connecting with can't see the table 'locations'. This table is required for the app to function.")
+  }
+  if (!DBI::dbExistsTable(con, "parameters")) {
+    stop("The user you're connecting with can't see the table 'parameters'. This table is required for the app to function.")
+  }
+  if (!DBI::dbExistsTable(con, "measurements_continuous_corrected")) {
+    stop("The user you're connecting with can't see the view table 'measurements_continuous_corrected'. This table is required for the app to function.")
+  }
+  if (!DBI::dbExistsTable(con, "samples")) {
+    stop("The user you're connecting with can't see the table 'samples'. This table is required for the app to function.")
+  }
+  if (!DBI::dbExistsTable(con, "results")) {
+    stop("The user you're connecting with can't see the table 'results'. This table is required for the app to function.")
+  }
+  #... there are other necessary tables, but if the user has access to the ones listed above everything is probably fine.
+  
+  # Disconnect from the database
+  DBI::dbDisconnect(con)
+  
+  
   shiny::enableBookmarking(store = "url")  # Enable bookmarking
   
   if (server) {

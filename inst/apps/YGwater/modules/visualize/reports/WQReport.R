@@ -192,7 +192,7 @@ WQReportUI <- function(id) {
   ) # End fluidPage
 } # End WQReportUI
 
-WQReportServer <- function(id, mdb_files, language) {
+WQReport <- function(id, mdb_files, language) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code

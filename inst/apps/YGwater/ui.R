@@ -57,21 +57,43 @@ app_ui <- function(request) {
     collapsible = TRUE,
     fluid = TRUE,
     lang = "en",
-    tabPanel(title = "Switch to View mode", value = "viz"),
+    # tabPanel(title = "Switch to View mode", value = "viz"),
     tabPanel(title = "Home", value = "home",
              uiOutput("home_ui")),
     tabPanel(title = "Map", value = "map",
              uiOutput("map_ui")),
-    tabPanel(title = "Plot", value = "plot", 
-             uiOutput("plot_ui")),
+    navbarMenu(title = "Plot", menuName = "plot",
+               tabPanel(title = "Discrete", value = "discrete",
+                        uiOutput("discrete_ui")),
+               tabPanel(title = "Continuous", value = "continuous",
+                        uiOutput("continuous_ui")),
+               tabPanel(title = "Mix", value = "mix",
+                        uiOutput("mi_ui"))
+    ),
     if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
       tabPanel(title = "FOD comments", value = "FOD",
                uiOutput("fod_ui"))
     },
-    tabPanel(title = "Generate", value = "gen",
-             uiOutput("gen_ui")),
+    navbarMenu(title = "Reports", menuName = "reports",
+               tabPanel(title = "Snowpack info", value = "snowInfo",
+                        uiOutput("snowInfo_ui")),
+               tabPanel(title = "Water level/flow info", value = "waterInfo",
+                        uiOutput("waterInfo_ui")),
+               tabPanel(title = "Water quality", value = "WQReport",
+                        uiOutput("WQReport_ui")),
+               if (!config$public) {
+                 tabPanel(title = "Snow Bulletin + stats", value = "snowBulletin",
+                          uiOutput("snowBulletin_ui"))
+               }
+    ), # End reports navbarMenu
     tabPanel(title = "View images", value = "img",
              uiOutput("img_ui")),
+    navbarMenu(title = "Info", menuName = "info",
+               tabPanel("News", value = "news",
+                        uiOutput("news_ui")),
+               tabPanel("About", value = "about",
+                        uiOutput("about_ui"))
+    ),
     ), # End navbarPage (though it's modified below)
     
     # Insert language selector into the navbar

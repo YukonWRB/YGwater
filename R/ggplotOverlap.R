@@ -27,6 +27,7 @@
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
+#' @param traceEnd The end day of year for the trace line. If NULL, will default to `endDay`. Must be less than `endDay`. Format as per `startDay`.
 #' @param tzone The timezone to use for graphing. Only really evident for a small number of days.
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year. Currently, only 1 year can be provided for when other data is provided to function.
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
@@ -85,6 +86,7 @@ ggplotOverlap <- function(location,
                         record_rate = NULL,
                         startDay = 1,
                         endDay = 365,
+                        traceEnd = endDay,
                         tzone = "MST",
                         years = NULL,
                         datum = TRUE,
@@ -101,7 +103,7 @@ ggplotOverlap <- function(location,
                         axis_scale = 1,
                         legend_scale = 1,
                         gridx = FALSE,
-                        gridy = TRUE,
+                        gridy = FALSE,
                         legend = TRUE,
                         save_path = NULL,
                         con = NULL,
@@ -183,7 +185,7 @@ ggplotOverlap <- function(location,
   }
 
 
-  #### ------------------ Dealing with start/end dates ---------------------- ####
+  #### ------------------ Dealing with start/end dates and traceEnd ---------------------- ####
   # Sort out startDay and endDay into actual dates if needed
   last_year <- max(years)
 
@@ -218,6 +220,7 @@ ggplotOverlap <- function(location,
     endDay <<- as.POSIXct(endDay*60*60*24, origin = paste0(last_year - 1, "-12-31 23:59:59"), tz = "UTC")
     endDay <<- lubridate::force_tz(endDay, tzone)
   })
+  
   if (startDay > endDay) { #if the user is wanting a range overlapping the new year
     overlaps <- TRUE
     if (null_years) {
@@ -231,6 +234,27 @@ ggplotOverlap <- function(location,
   } else {
     overlaps <- FALSE
   }
+  
+  tryCatch({ #This part will fail if traceEnd specified as a number
+    traceEnd <- as.character(traceEnd)
+    traceEnd <- as.POSIXct(traceEnd, tz = tzone)
+  }, error = function(e) {
+    traceEnd <<- as.numeric(traceEnd)
+    if (last_year %in% leap_list & length(years) > 1) { #Skips over Feb 29 because feb 29 has no historical info
+      if (traceEnd == 59) {
+        if (traceEnd < 366) {
+          traceEnd <<- traceEnd + 1
+        }
+      }
+    }
+    traceEnd <<- as.POSIXct(traceEnd*60*60*24, origin = paste0(last_year - 1, "-12-31 23:59:59"), tz = "UTC")
+    traceEnd <<- lubridate::force_tz(traceEnd, tzone)
+  })
+  lubridate::year(traceEnd) <- lubridate::year(endDay)
+  if (traceEnd > endDay) {
+    traceEnd <- endDay
+  }
+  
   
   if (is.null(return_max_year)) {
     if (historic_range == "last") {
@@ -342,7 +366,7 @@ ggplotOverlap <- function(location,
     daily_end <- endDay
     if (historic_range == "all") {
       lubridate::year(daily_end) <- max(max(years) + 1, lubridate::year(Sys.time()))
-      daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
+      daily_end <- daily_end + 60*60*24 # adds a day so that the ribbon is complete for the whole plotted line
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
@@ -376,7 +400,7 @@ ggplotOverlap <- function(location,
       start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
       start_UTC <- start
       attr(start_UTC, "tzone") <- "UTC"
-      end <- as.POSIXct(paste0(i, substr(endDay, 5, 10), " 23:59:59"), tz = tzone)
+      end <- as.POSIXct(paste0(i, substr(traceEnd, 5, 10), " 23:59:59"), tz = tzone)
       if (overlaps) {
         lubridate::year(end) <- lubridate::year(end) + 1
       }
@@ -742,10 +766,10 @@ ggplotOverlap <- function(location,
     }
   }
   
-  if (gridy) {
+  if (gridx) {
     plot <- plot + ggplot2::theme(panel.grid.major.x = ggplot2::element_line(color = "black", size = 0.5))
   }
-  if (gridx) {
+  if (gridy) {
     plot <- plot + ggplot2::theme(panel.grid.major.y = ggplot2::element_line(color = "black", size = 0.5))
   }
 
