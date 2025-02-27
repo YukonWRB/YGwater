@@ -7,7 +7,7 @@
 xle_processing(
   file,
   aq_upload = TRUE,
-  master_sheet =
+  master_file =
     "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
   logger_tracking =
     "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
@@ -22,7 +22,7 @@ xle_processing(
 
 \item{aq_upload}{Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned. Uses function \code{\link[=aq_upload]{aq_upload()}} with default parameters, so you'll want to make sure your Aquarius login details are in your .Renviron file.}
 
-\item{master_sheet}{Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.}
+\item{master_file}{Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.}
 
 \item{logger_tracking}{Path to YOWN logger tracking sheet (.xlsx), used to track logger metadata. This part is done within a tryCatch block to enable this function to run even if the logger tracking sheet is open, missing, or otherwise inaccessible.}
 
