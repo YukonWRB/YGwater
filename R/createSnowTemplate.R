@@ -91,11 +91,11 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
       if (is.null(snowCon)) { # Create new connection
         tryCatch({
           snowCon <- snowConnect(silent = TRUE)
+          on.exit(DBI::dbDisconnect(snowCon), add = TRUE)
           maintenance <- DBI::dbGetQuery(snowCon, paste0("SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance ",
                                                      "INNER JOIN locations ON maintenance.location = locations.location " ,
                                                      "WHERE completed = FALSE AND name IN ('", paste(courses, collapse = "', '"), "') ",
                                                      "AND completed = FALSE"))
-          on.exit(DBI::dbDisconnect(snowCon))
           snowCon_flag <- TRUE
         }, error = function(e) {
           snowCon_flag <<- FALSE

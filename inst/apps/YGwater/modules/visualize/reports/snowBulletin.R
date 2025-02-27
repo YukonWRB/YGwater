@@ -209,9 +209,7 @@ snowBulletinMod <- function(id, language) {
                                   con = session$userData$AquaCache,
                                   source = "aquacache",
                                   synchronize = FALSE)
-                print("success!")
               } else {
-                print("here")
                 snowBulletin(year = selections$year,
                              month = selections$month,
                              basins = if (selections$basins == "all") NULL else selections$basins,

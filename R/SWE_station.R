@@ -11,7 +11,9 @@
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
 #' @param return_missing TRUE or FALSE. If TRUE, stations with missing data in the year and month of interest are shown in output table with empty 'depth' and 'swe' columns.
 #' @param active TRUE or FALSE. If TRUE, only active stations are retrieved. If FALSE, all stations, whether active or not, are retrieved.
-#' @param source Database from which to fetch this data. Options are: aquacache or snow.
+#' @param source Database from which to fetch this data. Options are: aquacache or snow. (N.B.: Connection to the Snow DB is required regardless of source option to fetch basin/sub-basin information, at least for now).
+#' @param aquaCon A connection to the aquacache database. If NULL, a new connection will be created with [AquaConnect()] and automatically closed.
+#' @param snowCon A connection to the snow database. If NULL, a new connection will be created with [snowConnect()] and automatically closed. If aquaCon is not NULL but snowCon is NULL, connection to the snow DB will be attempted at the same host and port as the aquacache connection.
 #' @param summarise TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.
 #' @param save_path The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.
 #' 
@@ -47,6 +49,8 @@ SWE_station <- function(stations = "all",
                         return_missing = FALSE,
                         active = TRUE,
                         source = "aquacache",
+                        aquaCon = NULL,
+                        snowCon = NULL,
                         summarise = TRUE, 
                         save_path = "choose") 
 {
@@ -76,11 +80,18 @@ SWE_station <- function(stations = "all",
   }
   
   # First retrieve location-basin info from snow db
-  snowCon <- snowConnect(silent = TRUE)
-  loc_basin <- DBI::dbGetQuery(snowCon, "SELECT location, sub_basin, active FROM locations")
-  DBI::dbDisconnect(snowCon)
-  colnames(loc_basin) <- c("location_id", "sub_basin", "active")
-  
+  if (is.null(snowCon)) {
+    if (!is.null(aquaCon)) {
+      # Try with the same host and port as the AquaCache connection
+      dets <-  DBI::dbGetQuery(aquaCon, "SELECT inet_server_addr() AS ip, inet_server_port() AS port")
+      snowCon <- snowConnect(host = dets$ip, port = dets$port, silent = TRUE)
+      on.exit(DBI::dbDisconnect(snowCon), add = TRUE)
+    }
+    snowCon <- snowConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(snowCon), add = TRUE)
+  }
+  loc_basin <- DBI::dbGetQuery(snowCon, "SELECT location AS location_id, sub_basin, active FROM locations")
+
   # Create list of stations
   if (all(stations == "all")) {
     stations <- unique(loc_basin$location_id)
@@ -90,10 +101,13 @@ SWE_station <- function(stations = "all",
   ## From aquacache db ##
   if (source == "aquacache") {
     # Retrieve data from db
-    con <- AquaConnect(silent = TRUE)
-    
+    if (is.null(aquaCon)) {
+      aquaCon <- AquaConnect(silent = TRUE)
+      on.exit(DBI::dbDisconnect(aquaCon), add = TRUE)
+    }
+
     # Get measurements
-    Meas <- DBI::dbGetQuery(con, 
+    Meas <- DBI::dbGetQuery(aquaCon, 
     paste0("SELECT l.name, l.name_fr, l.location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
            FROM results as res
            INNER JOIN samples as samp ON res.sample_id = samp.sample_id
@@ -103,7 +117,6 @@ SWE_station <- function(stations = "all",
            INNER JOIN result_value_types as rvt ON res.result_value_type = rvt.result_value_type_id
            WHERE p.param_name IN ('snow water equivalent', 'snow depth') AND l.location IN ('", paste0(stations, collapse = "', '"), "')"))
     
-    DBI::dbDisconnect(con)
     # Rename columns:
     colnames(Meas) <- c("location_name", "location_name_fr", "location_id", "value", "target_date", "sample_date", "parameter", "elevation", "result_value_type")
     # Change 'snow water equivalent' to SWE
@@ -127,16 +140,14 @@ SWE_station <- function(stations = "all",
     ## From snow db ##
   } else if (source == "snow") {
     # Retrieve data from db
-    con <- snowConnect(silent = TRUE)
     
     # Get measurements
-    Meas <- DBI::dbGetQuery(con, paste0("SELECT means.name, means.location, means.swe, means.depth, means.target_date,
+    Meas <- DBI::dbGetQuery(snowCon, paste0("SELECT means.name, means.location, means.swe, means.depth, means.target_date,
                          means.survey_date, locations.elevation, means.estimate_flag
                          FROM means
                          INNER JOIN locations ON means.location = locations.location
                          WHERE means.location IN ('", paste0(stations, collapse = "', '"), "')"))
-    DBI::dbDisconnect(con)
-    
+
     # Calculate density
     Meas$density <- round((Meas$swe / Meas$depth) * 10, 2)
     

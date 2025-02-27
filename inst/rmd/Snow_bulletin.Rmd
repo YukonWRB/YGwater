@@ -24,7 +24,13 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 300)
 # TODO: What the heck did Emily try to do with the incomplete line below???
+# TODO: There's a call to ggsave for the legend at line 602 or so - then a call to knitr::include_graphics("legend_plot.png"). This is problematic as it requires writing to the folder where the Rmd is located, and once installed that's the package folder. This is not a good idea.
 # knitr::include_graphics
+# TODO: Deal with commented out code
+# TODO: Add snow_period parameter, akin to precip_period, cddf_period. Requires modification of snowBulletinStats function.
+# TODO: Add periods of 'last 30 years' and 2001-2030 (visible once possible in Shiny apps) for the xxx_period options. Requires modification of snowBulletinStats function.
+# TODO: double assignment (<<-) is used in some places. Likely not necessary.
+# TODO: assignement of parameters passed on from snowBulletin function to parameters like language_param, etc is not necessary. Can be used directly.
 fig.height_half <- 2.9
 fig.height_full <- 2.7
 language_param <- language
@@ -483,7 +489,7 @@ swe_basins <- SWE_basin(year = year_param,
                         threshold = 6,
                         csv = FALSE,
                         summarise = FALSE,
-                        source = "AquaCache",
+                        source = "aquacache",
                         con = con)
 # Add datetime to data
 swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
@@ -1850,26 +1856,26 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   #flextable::set_header_labels(what = "") %>% 
   flextable::bold(bold = TRUE, part = "header") %>% 
   #flextable::align(i = ~ !is.na(sub_basin), align = "left") %>% 
-  flextable::align(part = "header", align="center") %>%
+  flextable::align(part = "header", align = "center") %>%
   flextable::align(align = "center", j = c(2:9)) %>%
   flextable::bold(i = ~ !is.na(sub_basin)) %>%
-  flextable::bg(bg="#0097A9", part="header") %>%
-  #flextable::bg(bg="#77A3A9", part="header") %>%
-  flextable::color(color="white", part="header") %>%
-  flextable::hline(part="all") %>%
-  flextable::vline(part="body") %>% 
+  flextable::bg(bg = "#0097A9", part = "header") %>%
+  #flextable::bg(bg = "#77A3A9", part = "header") %>%
+  flextable::color(color = "white", part = "header") %>%
+  flextable::hline(part = "all") %>%
+  flextable::vline(part = "body") %>% 
   flextable::border_outer() %>% 
   flextable::autofit() %>%
-  flextable::width(j=1, width = wdth[1]) %>%
-  flextable::width(j=2, width = wdth[2]) %>%
-  flextable::width(j=3, width = wdth[3]) %>%
-  flextable::width(j=4, width = wdth[4]) %>%
-  flextable::width(j=c(5,6,7), width = wdth[5]) %>%
-  flextable::width(j=8, width = wdth[6]) %>%
-  flextable::width(j=9, width = wdth[7]) %>%
-  flextable::font(fontname="Nunito Sans", part="all") %>%
-  flextable::fontsize(size=size, part="all") %>%
-  flextable::line_spacing(space=1) %>%
+  flextable::width(j = 1, width = wdth[1]) %>%
+  flextable::width(j = 2, width = wdth[2]) %>%
+  flextable::width(j = 3, width = wdth[3]) %>%
+  flextable::width(j = 4, width = wdth[4]) %>%
+  flextable::width(j = c(5,6,7), width = wdth[5]) %>%
+  flextable::width(j = 8, width = wdth[6]) %>%
+  flextable::width(j = 9, width = wdth[7]) %>%
+  flextable::font(fontname = "Nunito Sans", part = "all") %>%
+  flextable::fontsize(size = size, part = "all") %>%
+  flextable::line_spacing(space = 1) %>%
   flextable::padding(padding.top = 0.8, padding.bottom = 0.8)
 
 ```

@@ -3,7 +3,7 @@
 #' @description
 #' `r lifecycle::badge('experimental')`
 #'
-#' This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package.
+#' This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package OR from the snow database.
 #'
 #' @details
 #' To download data, you MUST have your aquacache credentials added to your .Renviron file. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
@@ -411,7 +411,7 @@ snowBulletinStats <- function(year,
   
   #### -----------------------  SWE stations ---------------------------- ####
   station_stats <- SWE_station(stations = "all", year = year, month = month, return_missing = TRUE, 
-                               active = TRUE, source = source, summarise = TRUE)
+                               active = TRUE, source = source, summarise = TRUE, aquaCon = con)  # If source == 'aquacache', the (mandatory) snow DB connection will by default use the same ip and host as the aquacache connection
   # Remove 'Snow Course' from name
   
   #### ---------------- Pillows with snow survey record ----------------- ####
