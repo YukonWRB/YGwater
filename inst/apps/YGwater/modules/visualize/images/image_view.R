@@ -166,6 +166,7 @@ img <- function(id, language, restoring) {
       )
       output$tbl <- DT::renderDataTable(out_tbl, server = FALSE)
     })
+
     
     # Render the image based on selected_row() ############################################################
     observeEvent(selected_row(), {

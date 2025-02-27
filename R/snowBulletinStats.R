@@ -3,9 +3,7 @@
 #' @description
 #' `r lifecycle::badge('experimental')`
 #'
-#' This function generates the statistics associated with the snow bulletin for a specified date. The output is list of tables (in R), or a number of excel workbooks.
-#'
-#' This function fetches data from the local postgresql aquacache created/maintained by the AquaCache package.
+#' This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package.
 #'
 #' @details
 #' To download data, you MUST have your aquacache credentials added to your .Renviron file. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
@@ -19,7 +17,7 @@
 #' @param source Should the SWE statistics for stations (station_stats) be calculated from the 'aquacache' database or the 'snow' database? Default is 'aquacache'.
 #' @param con A connection to the database. Leave as NULL to use function [AquaConnect()] with default settings and close the connection automatically afterwards.
 #'
-#' @return A snow bulletin in Microsoft Word format.
+#' @return A list of data.frames OR, if requested, three Excel workbooks.
 #'
 #' @export
 #'
@@ -106,6 +104,7 @@ snowBulletinStats <- function(year,
       dplyr::summarise(value = sum(.data$value), 
                        count = dplyr::n(),
                        type = "sum")
+    
     # Only keep those with all 5, 6 or 7 months (depending on month_param)
     precip_years <- precip_years[precip_years$count == 2 + month,]
     
@@ -131,7 +130,7 @@ snowBulletinStats <- function(year,
     precip_allyrs$period <- paste0("All years")
     
     # Calculate stats. For last 40 years
-    precip_40yrs <- precip_years[precip_years$fake_year > year-40,]
+    precip_40yrs <- precip_years[precip_years$fake_year > year - 40,]
     precip_40yrs <- precip_40yrs %>%
       dplyr::group_by(.data$location_id, .data$location_name) %>%
       dplyr::summarise(value = min(.data$value), type = "min", years = dplyr::n()) %>%
@@ -193,9 +192,9 @@ snowBulletinStats <- function(year,
     }
     
     # Calculate percent historical
-    precip_stats$perc_hist_med <- round(precip_stats$value / precip_stats$median *100, 0)
+    precip_stats$perc_hist_med <- round(precip_stats$value / precip_stats$median * 100, 0)
     # Add variable coloumn
-    precip_stats$variable <- paste0("Oct - ", month.abb[month-1], " cumulative precipitation")
+    precip_stats$variable <- paste0("Oct - ", month.abb[month - 1], " cumulative precipitation")
     # Add description of % median
     precip_stats <- precip_stats %>%
       dplyr::mutate(description = dplyr::case_when(
@@ -229,11 +228,11 @@ snowBulletinStats <- function(year,
           t <- 0
         }
         # If yesterday's cddf is 0 and todays temp is >= 0, keep cddf at 0
-        if (cddf==0 & t>=0) {
+        if (cddf == 0 & t >= 0) {
           cddf <- 0
         } else { 
           cddf <- cddf - t
-          if (cddf<0){cddf <- 0}}
+          if (cddf < 0) {cddf <- 0}}
         # Set cddf for that day
         temps$cddf[d] <- cddf
       }
@@ -257,10 +256,10 @@ snowBulletinStats <- function(year,
     for (y in first_yr:last_yr) {
       # Subset data
       tab <- temps[temps$datetime >= paste0(y, '-09-01') 
-                   & temps$datetime < paste0(y+1, '-06-14'),]
+                   & temps$datetime < paste0(y + 1, '-06-14'),]
       # Only calculate if missing less than 10 days, but only for years that are not in the 'years' list
       if (length(tab$datetime) != 0) {
-        if (sum(!is.na(tab$value)) >= 276 | format(min(tab$datetime), "%Y") %in% c(year-1)) {
+        if (sum(!is.na(tab$value)) >= 276 | format(min(tab$datetime), "%Y") %in% c(year - 1)) {
           cddf_y <- calcCDDF(tab)
           cddf <- rbind(cddf, cddf_y)
         }
@@ -281,7 +280,7 @@ snowBulletinStats <- function(year,
                                                 FROM measurements_continuous_corrected 
                                                 INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
                                                 INNER JOIN locations ON timeseries.location = locations.location
-                                                WHERE measurements_continuous_corrected.timeseries_id IN ('", paste0(tsid, collapse="', '"),
+                                                WHERE measurements_continuous_corrected.timeseries_id IN ('", paste0(tsid, collapse = "', '"),
                                         "')"))# ", timeseries_id))
     
     attr(tabl$datetime, "tzone") <- "MST"
@@ -509,17 +508,17 @@ snowBulletinStats <- function(year,
   
   swe_compiled <- station_stats
   # If swe = 0, swe_med = 0 ---> no snow where median zero
-  try({
-    swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
-  })
+    if (length( swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat) < 0) {
+      swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
+    }
   # If swe !=0, swe_med = 0  ---> snow where median zero
-  try({
-    swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
-  })
+    if (length(swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat) > 0) {
+      swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
+    }
   # If swe = 0, swe_med != 0 ---> no snow
-  try({
+  if (length(swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med != 0,]$swe_rat) > 0) {
     swe_compiled$swe_rat[swe_compiled$swe == 0 & swe_compiled$swe_med != 0] <- "no snow present"
-  })
+  }
   
   swe_compiled <- swe_compiled[, c("location_name", "swe_rat")]
   swe_compiled$Bulletin_Edition <- paste0(year, "-", month.name[month])
@@ -562,11 +561,11 @@ snowBulletinStats <- function(year,
     openxlsx::writeDataTable(wb, sheet = 1, x = swe_basin_summary)
     openxlsx::saveWorkbook(wb, paste0(save_path, "/swe_basin_summary.xlsx"), overwrite = TRUE)
     
-  } else {
+    message("Excel workbooks saved to ", save_path)
     
+  } else {
     return(tables)
   }
-  
 }
 
 

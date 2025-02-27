@@ -19,6 +19,8 @@
 #' @param save_path The path to the directory (folder) where the report should be saved. Enter the path as a character string.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.
 #' @param language The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".
+#' @param precip_period The period to use for precipitation stats. Options are "Last 40 years", "All years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "Last 40 years".
+#' @param cddf_period The period to use for the cumulative degree day plot historic range. Options are "Last 40 years", "All years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "Last 40 years".
 #' @param con A connection to the AquaCache database. If left NULL connection will be attempted with function [AquaConnect()] using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!
 #'
 #' @return A snow bulletin in Microsoft Word format.
@@ -33,8 +35,11 @@ snowBulletin <- function(year,
                          save_path = 'choose',
                          synchronize = FALSE,
                          language = "english",
+                         precip_period = "Last 40 years",
+                         cddf_period = "Last 40 years",
                          con = NULL) {
   
+  # Testing parameters
   # year <- 2024
   # month <- 3
   # scale <- 1
@@ -52,6 +57,15 @@ snowBulletin <- function(year,
     lc <- Sys.getlocale("LC_TIME")
     Sys.setlocale("LC_TIME", "French")
     on.exit(Sys.setlocale("LC_TIME", lc), add = TRUE)
+  }
+  
+  # precip_period
+  if (!(precip_period %in% c("Last 40 years", "All years", "1981-2010", "1991-2020"))) {
+    stop("Parameter 'precip_period' must be one of the options: 'Last 40 years', 'All years', '1981-2010', '1991-2020'.")
+  }
+  # cddf_period
+  if (!(cddf_period %in% c("Last 40 years", "All years", "1981-2010", "1991-2020"))) {
+    stop("Parameter 'cddf_period' must be one of the options: 'Last 40 years', 'All years', '1981-2010', '1991-2020'.")
   }
   
   # Make sure officer is installed
@@ -132,6 +146,8 @@ snowBulletin <- function(year,
                   scale = scale,
                   basins = basins,
                   language = language,
+                  precip_period = precip_period,
+                  cddf_period = cddf_period,
                   con = con)
   )
 }
