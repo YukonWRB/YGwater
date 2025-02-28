@@ -197,10 +197,6 @@ snowBulletinMod <- function(id, language) {
             # 3. Call the appropriate function so it writes all files to 'dir'
             suppressWarnings({
               if (selections$stats) {
-                print(selections$year)
-                print(selections$month)
-                print(selections$basins)
-                print(dir)
                 snowBulletinStats(year = selections$year,
                                   month = selections$month,
                                   basins = if (selections$basins == "all") NULL else selections$basins,
