@@ -18,16 +18,16 @@
 #'
 
 snowConnect <- function(name = "snow", host = Sys.getenv("snowHost"), port = Sys.getenv("snowPort"), username = Sys.getenv("snowUser"), password = Sys.getenv("snowPass"), silent = FALSE){
-
-
-
+  
+  
+  
   tryCatch({
     con <- DBI::dbConnect(drv = RPostgres::Postgres(),
-                            dbname = name,
-                            host = host,
-                            port = port,
-                            user = username,
-                            password = password)
+                          dbname = name,
+                          host = host,
+                          port = port,
+                          user = username,
+                          password = password)
     # Explicitly set the timezone to UTC as all functions in this package work with UTC timezones
     DBI::dbExecute(con, "SET timezone = 'UTC'")
     
@@ -37,6 +37,6 @@ snowConnect <- function(name = "snow", host = Sys.getenv("snowHost"), port = Sys
     }
     return(con)
   }, error = function(e){
-    stop("Snow database connection failed.")
+    stop("Snow database connection failed: ", e$message)
   })
 }

@@ -84,7 +84,7 @@ SWE_station <- function(stations = "all",
     if (!is.null(aquaCon)) {
       # Try with the same host and port as the AquaCache connection
       dets <-  DBI::dbGetQuery(aquaCon, "SELECT inet_server_addr() AS ip, inet_server_port() AS port")
-      snowCon <- snowConnect(host = dets$ip, port = dets$port, silent = TRUE)
+      snowCon <- snowConnect(host = as.character(dets$ip), port = as.numeric(dets$port), silent = TRUE)
       on.exit(DBI::dbDisconnect(snowCon), add = TRUE)
     } else {
       snowCon <- snowConnect(silent = TRUE)

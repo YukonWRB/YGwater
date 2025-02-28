@@ -401,7 +401,8 @@ snowBulletinStats <- function(year,
   #### ----------------- Pillows with historical record ----------------- ####
   pillow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
                     locations.location AS location_id, date, parameters.param_name AS variable, 
-                    value, q50 AS median, min, max, doy_count AS years FROM measurements_calculated_daily_corrected 
+                    value, q50 AS median, min, max, doy_count AS years 
+                    FROM measurements_calculated_daily_corrected 
                     INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id
                     INNER JOIN locations ON timeseries.location = locations.location
                     INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
@@ -410,8 +411,14 @@ snowBulletinStats <- function(year,
   pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$median * 100)
   
   #### -----------------------  SWE stations ---------------------------- ####
-  station_stats <- SWE_station(stations = "all", year = year, month = month, return_missing = TRUE, 
-                               active = TRUE, source = source, summarise = TRUE, aquaCon = con)  # If source == 'aquacache', the (mandatory) snow DB connection will by default use the same ip and host as the aquacache connection
+  station_stats <- SWE_station(stations = "all", 
+                               year = year, 
+                               month = month, 
+                               return_missing = TRUE, 
+                               active = TRUE, 
+                               source = source, 
+                               summarise = TRUE, 
+                               aquaCon = con)  # If source == 'aquacache', the (mandatory) snow DB connection will by default use the same ip and host as the aquacache connection
   # Remove 'Snow Course' from name
   
   #### ---------------- Pillows with snow survey record ----------------- ####
@@ -423,7 +430,7 @@ snowBulletinStats <- function(year,
     pillow_stats[pillow_stats$location_id == "09AA-M2", ]$perc_hist_med <- round((pillow_stats[pillow_stats$location_id == "09AA-M2", ]$value /
                                                                                     pillow_stats[pillow_stats$location_id == "09AA-M2", ]$median) * 100)
   } else {
-    message("Log Cabin does not have pillow stats for this year")
+    message("Log Cabin does not have pillow stats for this year and month combo")
   }
   
   # King Solomon Dome
@@ -434,7 +441,7 @@ snowBulletinStats <- function(year,
     pillow_stats[pillow_stats$location_id == "09EA-M1", ]$perc_hist_med <- round((pillow_stats[pillow_stats$location_id == "09EA-M1", ]$value /
                                                                                     pillow_stats[pillow_stats$location_id == "09EA-M1", ]$median) * 100)
   } else {
-    message("King Solomon Dome does not have pillow stats for this year")
+    message("King Solomon Dome does not have pillow stats for this year and month combo")
   }
   
   #### --------------------------- Basins ------------------------------- ####
