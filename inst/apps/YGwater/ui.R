@@ -32,6 +32,7 @@ app_ui <- function(request) {
              column(3,
                     div(class = "logo",
                         htmltools::img(src = "imgs/Yukon_logo.png", .noWS = "outside", alt = "Yukon Government logo")
+                        
                     ),
                     class = "logo-container"),
              column(9,

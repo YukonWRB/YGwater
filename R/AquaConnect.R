@@ -37,6 +37,6 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
     }
     return(con)
   }, error = function(e){
-    stop("Connection failed.")
+    stop("AquaCache database connection failed.")
   })
 }

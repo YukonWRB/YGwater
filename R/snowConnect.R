@@ -37,6 +37,6 @@ snowConnect <- function(name = "snow", host = Sys.getenv("snowHost"), port = Sys
     }
     return(con)
   }, error = function(e){
-    stop("Connection failed.")
+    stop("Snow database connection failed.")
   })
 }

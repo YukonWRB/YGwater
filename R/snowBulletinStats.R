@@ -46,7 +46,7 @@ snowBulletinStats <- function(year,
   }
   
   if (is.null(con)) {
-    con <- AquaConnect()
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
   

@@ -86,9 +86,10 @@ SWE_station <- function(stations = "all",
       dets <-  DBI::dbGetQuery(aquaCon, "SELECT inet_server_addr() AS ip, inet_server_port() AS port")
       snowCon <- snowConnect(host = dets$ip, port = dets$port, silent = TRUE)
       on.exit(DBI::dbDisconnect(snowCon), add = TRUE)
+    } else {
+      snowCon <- snowConnect(silent = TRUE)
+      on.exit(DBI::dbDisconnect(snowCon), add = TRUE)
     }
-    snowCon <- snowConnect(silent = TRUE)
-    on.exit(DBI::dbDisconnect(snowCon), add = TRUE)
   }
   loc_basin <- DBI::dbGetQuery(snowCon, "SELECT location AS location_id, sub_basin, active FROM locations")
 
