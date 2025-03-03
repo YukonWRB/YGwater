@@ -23,9 +23,6 @@ date: "`r paste0(month.name[params$month],' 1, ', params$year)`"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 300)
-# TODO: What the heck did Emily try to do with the incomplete line below???
-# TODO: There's a call to ggsave for the legend at line 602 or so - then a call to knitr::include_graphics("legend_plot.png"). This is problematic as it requires writing to the folder where the Rmd is located, and once installed that's the package folder. This is not a good idea.
-# knitr::include_graphics
 # TODO: Deal with commented out code
 # TODO: Add snow_period parameter, akin to precip_period, cddf_period. Requires modification of snowBulletinStats function.
 # TODO: Add periods of 'last 30 years' and 2001-2030 (visible once possible in Shiny apps) for the xxx_period options. Requires modification of snowBulletinStats function.
@@ -493,10 +490,8 @@ swe_basins <- SWE_basin(year = year_param,
                         con = con)
 # Add datetime to data
 swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
-swe_basins <<- swe_basins
 # Get stats for text
 stats <- snowBulletinStats(year = year_param, month = month_param, excel_output = FALSE, con = con)
-stats <<- stats
 
 ```
 
@@ -565,43 +560,78 @@ lowest elevation at which flood impacts are estimated to occur.
 
 ```{r legend, echo=FALSE, eval=TRUE, out.width="40%"}
 
+# Check if the plot file can be found for the requested language; if not, re-create it
 if (language_param == "french") {
-  lines <- c("Valeur maximale relevée", "Valeur minimale relevée", "Valeur médiane relevée", "Année courante", "Niveau d'inondation", "L'étendue moyenne des \nvaleurs relevées", "L'étendue min.-max. des \nvaleurs relevées")
-  legend_title <- "Légende des figures"
+  if (file.exists(system.file("rmd/legend_plot_fr.png", package = "YGwater"))) {
+    knitr::include_graphics(system.file("rmd/legend_plot_fr.png", package = "YGwater"))
+  } else {
+    lines <- c("Valeur maximale relevée", "Valeur minimale relevée", "Valeur médiane relevée", "Année courante", "Niveau d'inondation", "L'étendue moyenne des \nvaleurs relevées", "L'étendue min.-max. des \nvaleurs relevées")
+    legend_title <- "Légende des figures"
+    
+    # Plotting figure
+    plot <- ggplot2::ggplot() +
+      ggplot2::theme_void() + 
+      ggplot2::theme(legend.position.inside = c(0.5,0.5), 
+                     legend.text = ggplot2::element_text(size = 12, margin = ggplot2::margin(b = 0.2, t = 0.2, unit = "cm")), 
+                     legend.title = ggplot2::element_text(size = 12),
+                     legend.spacing.x = ggplot2::unit(0.5, 'cm'),
+                     #legend.spacing.y = ggplot2::unit(5, 'cm'),
+                     legend.key.width = ggplot2::unit(2, "cm"),
+                     legend.key.height = ggplot2::unit(1, "cm"),
+                     aspect.ratio = 1,
+                     legend.background = ggplot2::element_blank(),
+                     legend.box.background = ggplot2::element_rect(colour = "black"),
+                     #legend.title.margin = ggplot2::margin(b = 10),
+                     legend.margin = ggplot2::margin(t = 0.3, r = 0.3, b = 0.3, l = 0.3, unit = "cm")
+      ) +  # Adjust legend position as needed
+      ggplot2::scale_color_manual(name = legend_title, values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
+      ggplot2::scale_size_manual(name = legend_title, values = c(1.5, 1.5, 1.5, 1.5, 1, 10, 10), labels = lines) +  # Customize legend entries for fill
+      ggplot2::scale_linetype_manual(name = legend_title, values = c("solid", "solid", "solid", "solid", "dashed", "solid", "solid"), labels = lines) +  # Customize legend entries for shape
+      ggplot2::geom_line(ggplot2::aes(x = 1, y = 1, color = lines, size = lines, linetype = lines)) +
+      ggplot2::guides(color = ggplot2::guide_legend(byrow = TRUE
+                                                    #,title.vjust=-1
+      ))
+    
+    ggplot2::ggsave("legend_plot_fr.png", plot = plot, width = 3.3, height = 5.8)
+    knitr::include_graphics(system.file("rmd/legend_plot_fr.png", package = "YGwater"))
+  }
 } else {
-  lines <- c("Maximum observed value", "Minimum observed value", "Median observed value", "Current year", "Flood level", "Average range of \nobserved values", "Min - max range of \nobserved values")  # Example list of unique legend elements
-  legend_title <- "Figure Legend"
+  if (file.exists(system.file("rmd/legend_plot_en.png", package = "YGwater"))) {
+    knitr::include_graphics(system.file("rmd/legend_plot_en.png", package = "YGwater"))
+  } else {
+    lines <- c("Maximum observed value", "Minimum observed value", "Median observed value", "Current year", "Flood level", "Average range of \nobserved values", "Min - max range of \nobserved values")  # Example list of unique legend elements
+    legend_title <- "Figure Legend"
+    
+    # Plotting figure
+    plot <- ggplot2::ggplot() +
+      ggplot2::theme_void() + 
+      ggplot2::theme(legend.position.inside = c(0.5,0.5), 
+                     legend.text = ggplot2::element_text(size = 12, margin = ggplot2::margin(b = 0.2, t = 0.2, unit = "cm")), 
+                     legend.title = ggplot2::element_text(size = 12),
+                     legend.spacing.x = ggplot2::unit(0.5, 'cm'),
+                     #legend.spacing.y = ggplot2::unit(5, 'cm'),
+                     legend.key.width = ggplot2::unit(2, "cm"),
+                     legend.key.height = ggplot2::unit(1, "cm"),
+                     aspect.ratio = 1,
+                     legend.background = ggplot2::element_blank(),
+                     legend.box.background = ggplot2::element_rect(colour = "black"),
+                     #legend.title.margin = ggplot2::margin(b = 10),
+                     legend.margin = ggplot2::margin(t = 0.3, r = 0.3, b = 0.3, l = 0.3, unit = "cm")
+      ) +  # Adjust legend position as needed
+      ggplot2::scale_color_manual(name = legend_title, values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
+      ggplot2::scale_size_manual(name = legend_title, values = c(1.5, 1.5, 1.5, 1.5, 1, 10, 10), labels = lines) +  # Customize legend entries for fill
+      ggplot2::scale_linetype_manual(name = legend_title, values = c("solid", "solid", "solid", "solid", "dashed", "solid", "solid"), labels = lines) +  # Customize legend entries for shape
+      ggplot2::geom_line(ggplot2::aes(x = 1, y = 1, color = lines, size = lines, linetype = lines)) +
+      ggplot2::guides(color = ggplot2::guide_legend(byrow = TRUE
+                                                    #,title.vjust=-1
+      ))
+    
+    ggplot2::ggsave("legend_plot_en.png", plot = plot, width = 3.3, height = 5.8)
+    knitr::include_graphics(system.file("rmd/legend_plot_en.png", package = "YGwater"))
+  }
 }
 
-# Plotting figure
-plot <- ggplot2::ggplot() +
-  ggplot2::theme_void() + 
-  ggplot2::theme(legend.position.inside = c(0.5,0.5), 
-                 legend.text = ggplot2::element_text(size = 12, margin = ggplot2::margin(b = 0.2, t = 0.2, unit = "cm")), 
-                 legend.title = ggplot2::element_text(size = 12),
-                 legend.spacing.x = ggplot2::unit(0.5, 'cm'),
-                 #legend.spacing.y = ggplot2::unit(5, 'cm'),
-                 legend.key.width = ggplot2::unit(2, "cm"),
-                 legend.key.height = ggplot2::unit(1, "cm"),
-                 aspect.ratio = 1,
-                 legend.background = ggplot2::element_blank(),
-                 legend.box.background = ggplot2::element_rect(colour = "black"),
-                 #legend.title.margin = ggplot2::margin(b = 10),
-                 legend.margin = ggplot2::margin(t = 0.3, r = 0.3, b = 0.3, l = 0.3, unit = "cm")
-  ) +  # Adjust legend position as needed
-  #ggplot2::labs(legend.title = "Figure Legend") +  # Set legend title
-  ggplot2::scale_color_manual(name = legend_title, values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
-  ggplot2::scale_size_manual(name = legend_title, values = c(1.5, 1.5, 1.5, 1.5, 1, 10, 10), labels = lines) +  # Customize legend entries for fill
-  ggplot2::scale_linetype_manual(name = legend_title, values = c("solid", "solid", "solid", "solid", "dashed", "solid", "solid"), labels = lines) +  # Customize legend entries for shape
-  #theme_minimal() +  
-  ggplot2::geom_line(ggplot2::aes(x = 1, y = 1, color = lines, size = lines, linetype = lines)) +
-  ggplot2::guides(color = ggplot2::guide_legend(byrow = TRUE
-                                                #,title.vjust=-1
-  ))
 
-ggplot2::ggsave("legend_plot.png", plot = plot, width = 3.3, height = 5.8)
-
-knitr::include_graphics("legend_plot.png")
 
 ```
 
@@ -1757,13 +1787,19 @@ snowbullWater(location = station_id,
 
 tabl <- stats$station_stats
 
-
 # Round values
 tabl$elevation <- round(as.numeric(tabl$elevation), 0)
 tabl$depth <- round(tabl$depth, 0)
 tabl$swe <- round(tabl$swe, 0)
 tabl$swe_prevyear <- round(tabl$swe_prevyear, 0)
 tabl$swe_med <- round(tabl$swe_med, 0)
+
+# Truncate the strings in column 4 to remove the year from the date
+tabl$sample_date <- as.character(tabl$sample_date)
+tabl$sample_date <- substr(tabl$sample_date, 6,10)
+
+# Add a column for the percent of median SWE
+tabl$perc_hist_med <- round(tabl$swe/tabl$swe_med*100, 0)
 
 # Add R next to record swe
 if (length(tabl[tabl$record_flag == TRUE,]$swe) > 0) {
@@ -1782,15 +1818,14 @@ if (length(tabl[tabl$date_flag == TRUE,]$swe) > 0) {
 #### French version versus English version of table ####
 if (language == "french") {
   # Not N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
-  tabl$sample_date <- as.character(tabl$sample_date)
   tabl$sample_date[is.na(tabl$sample_date)] <- "A.R."
   tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "A.R."
   # Subset to columns of interest
-  tabl <- tabl[, c("name_fr", "location_id", "elevation", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
+  tabl <- tabl[, c("location_name_fr", "location_id", "elevation", "sample_date", "depth", "swe", "perc_hist_med", "swe_prevyear", "swe_med", "years", "sub_basin")]
   # Rename columns
-  colnames(tabl) <- c("Nom", "Identifiant", "Élévation (m)", "Date du relevé", "Épaisseur de neige (cm)", "Équivalent en eau de la neige  (EEN) (mm)", "Année dernière (EEN) (mm)", "Médiane historique (EEN) (mm)", "Nombre d'années avec données", "sub_basin")
+  colnames(tabl) <- c("Nom", "Identifiant", "Élévation (m)", "Date du relevé (mm-jj)", "Épaisseur de neige (cm)", "Équivalent en eau (EEN, mm)", "% de l'EEN médiane", "Année dernière (EEN, mm)", "Médiane historique (EEN, mm)", "Nombre d'années avec données", "sub_basin")
   size <- 9
-  wdth <- c(1.3, 1.0, 0.8, 1.0, 0.8, 0.8, 0.7)
+  wdth <- c(1.3, 0.8, 0.7, 0.6, 0.7, 0.7, 0.6)
   # Remove 'Parcours nivométrique' from name
   tabl[,1] <- sub("Parcours nivométrique du ", "", tabl[,1])
   tabl[,1] <- sub("Parcours nivométrique de la ", "", tabl[,1])
@@ -1803,14 +1838,13 @@ if (language == "french") {
   
 } else {
   # Not N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
-  tabl$sample_date <- as.character(tabl$sample_date)
   tabl$sample_date[is.na(tabl$sample_date)] <- "N.S."
   tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "N.S."
   # Subset to columns of interest
-  tabl <- tabl[, c("location_name", "location_id", "elevation", "sample_date", "depth", "swe", "swe_prevyear", "swe_med", "years", "sub_basin")]
-  colnames(tabl) <- c("Name", "Number", "Elevation (m)", "Date of Survey", "Snow depth (cm)", "Water content (SWE) (mm)", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
-  size <- 10
-  wdth <- c(1.5, 1.1, 0.8, 1.1, 0.7, 0.8, 0.6)
+  tabl <- tabl[, c("location_name", "location_id", "elevation", "sample_date", "depth", "swe", "perc_hist_med", "swe_prevyear", "swe_med", "years", "sub_basin")]
+  colnames(tabl) <- c("Name", "Number", "Elevation (m)", "Date of Survey (mm-dd)", "Snow depth (cm)", "Water content (SWE) (mm)", "% of median SWE", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
+  size <- 9
+  wdth <- c(1.2, 0.8, 0.7, 0.7, 0.7, 0.7, 0.6)
   # Remove 'Snow Course' from name
   tabl[,1] <- sub(" Snow Course", "", tabl[,1])
 }
@@ -1825,7 +1859,7 @@ tabl <- tabl %>% dplyr::arrange(factor(sub_basin, levels = target))
 tabl$sub_basin <- paste0(tabl$sub_basin, " River Basin")
 # Replace all _ with space
 tabl$sub_basin <- gsub("_", " ", tabl$sub_basin)
-tabl$sub_basin <- gsub("Alaska River Basin", "Alaska Snow Courses", tabl$sub_basin)
+tabl$sub_basin <- gsub("Alaska River Basin", "Coastal South-East Alaska Snow Courses", tabl$sub_basin)
 
 # Manually replace french names 
 if (language == "french") {
@@ -1842,25 +1876,23 @@ if (language == "french") {
       sub_basin == "Peel River Basin" ~ "Bassin de la rivière Peel", 
       sub_basin == "Liard River Basin" ~ "Bassin de la rivière Liard", 
       sub_basin == "Alsek River Basin" ~ "Bassin de la rivière Alsek", 
-      sub_basin == "Alaska Snow Courses" ~ "Stations nivométriques en Alaska", # Example replacement
+      sub_basin == "Coastal South-East Alaska Snow Courses" ~ "Stations nivométriques côtières en Alaska", # Example replacement
       TRUE ~ sub_basin  # Default case to keep original names if not listed
     ))
 }
-
+# Replace cells with NA with "-"
+tabl[is.na(tabl)] <- "-"
 
 
 ##### Create flextable ####
 
 flextable::as_grouped_data(tabl, groups = "sub_basin") %>% 
   flextable::as_flextable(hide_grouplabel = TRUE) %>% 
-  #flextable::set_header_labels(what = "") %>% 
   flextable::bold(bold = TRUE, part = "header") %>% 
-  #flextable::align(i = ~ !is.na(sub_basin), align = "left") %>% 
   flextable::align(part = "header", align = "center") %>%
-  flextable::align(align = "center", j = c(2:9)) %>%
+  flextable::align(align = "center", j = c(2:10)) %>%
   flextable::bold(i = ~ !is.na(sub_basin)) %>%
   flextable::bg(bg = "#0097A9", part = "header") %>%
-  #flextable::bg(bg = "#77A3A9", part = "header") %>%
   flextable::color(color = "white", part = "header") %>%
   flextable::hline(part = "all") %>%
   flextable::vline(part = "body") %>% 
@@ -1870,14 +1902,53 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   flextable::width(j = 2, width = wdth[2]) %>%
   flextable::width(j = 3, width = wdth[3]) %>%
   flextable::width(j = 4, width = wdth[4]) %>%
-  flextable::width(j = c(5,6,7), width = wdth[5]) %>%
-  flextable::width(j = 8, width = wdth[6]) %>%
-  flextable::width(j = 9, width = wdth[7]) %>%
+  flextable::width(j = c(5,6,7,8), width = wdth[5]) %>%
+  flextable::width(j = 9, width = wdth[6]) %>%
+  flextable::width(j = 10, width = wdth[7]) %>%
   flextable::font(fontname = "Nunito Sans", part = "all") %>%
   flextable::fontsize(size = size, part = "all") %>%
+  flextable::fontsize(j = 2, size = 7.5) %>%
   flextable::line_spacing(space = 1) %>%
   flextable::padding(padding.top = 0.8, padding.bottom = 0.8)
 
 ```
+`r 
+if (language_param == "english") {
+"
 
+### Date notes:
+N.S. - No survey
+
+### SWE notes:
+E - Estimate  
+B - Survey date is outside of valid sampling range  
+R - New record  
+
+### Median historical SWE and Years of record notes:
+* Composite record. Current location measurements combined with historical record from discontinued nearby location, adjusted based on overlapping years of record.
+- Whitehorse Airport combines records from the old Whitehorse Airport snow course located within the airport grounds with new measurements taken a few hundred meters to the West of the airport. Two years of overlapping records were used to adjust the historical station data (1965-2022) to the new location.
+- Twin Creeks B combines records from  old Twin Creeks A snow course located at the West end of the Twin Creeks air strip with new measurements taken at the East end of the air strip. Five years of overlapping records are currently used to adjust the historical station data (1977-2015) to the new location.
+- Hyland River B combines records from the old Hyland River snow course located near the Hyland River air strip with new measurements taken 6 kilometers to the north of the old station. Five years of overlapping records were used to adjust the historical station data (1976-2017) to the new location.
+"
+} else {
+"
+
+### Notes au sujet des dates :
+A.R. - Aucun relevé
+
+### Notes au sujet de l'EEN :
+E - Estimation  
+B - Date du relevé en dehors de la plage d’échantillonnage valide  
+R - Nouveau record  
+
+### Notes au sujet de la médiane historique de l'EEN et du nombre d'années avec données :
+* Enregistrement composite. Les mesures actuelles de l'emplacement sont combinées avec l'enregistrement historique de l'emplacement voisin abandonné, ajusté en fonction des années d'enregistrement chevauchantes.
+- L'aéroport de Whitehorse combine les enregistrements de l'ancien parcours nivométrique de l'aéroport de Whitehorse situé dans l'enceinte de l'aéroport avec les nouvelles mesures prises à quelques centaines de mètres à l'ouest de l'aéroport. Deux années d'enregistrements chevauchants ont été utilisées pour ajuster les données de l'ancienne station (1965-2022) à l'emplacement de la nouvelle station.
+- Twin Creeks B combine les enregistrements de l'ancien parcours nivométrique de Twin Creeks A situé à l'extrémité ouest de la piste d'atterrissage de Twin Creeks avec les nouvelles mesures prises à l'extrémité est de la piste d'atterrissage. Cinq années d'enregistrements chevauchants sont actuellement utilisées pour ajuster les données de l'ancienne station (1977-2015) à l'emplacement de la nouvelle station.
+- Hyland River B combine les enregistrements de l'ancien parcours nivométrique de la rivière Hyland situé près la piste d'atterrissage de la rivière Hyland avec les nouvelles mesures prises à 6 kilomètres au nord de l'ancienne station. Cinq années d'enregistrements chevauchants ont été utilisées pour ajuster les données de l'ancienne station (1976-2017) à l'emplacement de la nouvelle station.
+"
+}
+`
+
+\newpage
 # `r titles$MAP4`
