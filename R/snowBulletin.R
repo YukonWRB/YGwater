@@ -39,15 +39,6 @@ snowBulletin <- function(year,
                          cddf_period = "Last 40 years",
                          con = NULL) {
   
-  # Testing parameters
-  # year <- 2024
-  # month <- 3
-  # scale <- 1
-  # basins <- NULL
-  # save_path <- "C:/Users/gtdelapl/Desktop"
-  # synchronize <- TRUE
-  # language <- "english"
-  
   #Check parameters
   #Language
   if (!(language %in% c("french", "english"))) {
