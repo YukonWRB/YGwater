@@ -455,7 +455,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
           #   colour = "red",
           #   vjust = -0.5
           #   ) + 
-          ggplot2::scale_y_log10() 
+          ggplot2::scale_y_log10()
         
         if (language == "fr") {
           plot <- plot + ggplot2::labs(y = expression(paste("Débit (",m^3, "/s)")))
@@ -588,9 +588,7 @@ if (language_param == "french") {
       ggplot2::scale_size_manual(name = legend_title, values = c(1.5, 1.5, 1.5, 1.5, 1, 10, 10), labels = lines) +  # Customize legend entries for fill
       ggplot2::scale_linetype_manual(name = legend_title, values = c("solid", "solid", "solid", "solid", "dashed", "solid", "solid"), labels = lines) +  # Customize legend entries for shape
       ggplot2::geom_line(ggplot2::aes(x = 1, y = 1, color = lines, size = lines, linetype = lines)) +
-      ggplot2::guides(color = ggplot2::guide_legend(byrow = TRUE
-                                                    #,title.vjust=-1
-      ))
+      ggplot2::guides(color = ggplot2::guide_legend(byrow = TRUE))
     
     ggplot2::ggsave("legend_plot_fr.png", plot = plot, width = 3.3, height = 5.8)
     knitr::include_graphics(system.file("rmd/legend_plot_fr.png", package = "YGwater"))
@@ -780,7 +778,6 @@ if ("Upper Yukon" %in% params$basins) {
 ```
 
 ```{r UpperYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
-#r UpperYukonRiver_Snow, echo=FALSE, eval=include, out.width='.49\\linewidth', fig.width=4, fig.height=3,fig.show='hold',fig.align='center'
 graphics::par(mfrow = c(1, 2))
 
 ## A1 Tagish

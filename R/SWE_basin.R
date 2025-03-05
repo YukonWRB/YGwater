@@ -68,7 +68,7 @@ SWE_basin <- function(year,
                             FROM means")
     # Rename columns:
     colnames(Meas) <- c("location_id", "SWE", "target_date")
-  } else {stop("Parameter 'source' must be either 'aquacache' or 'snow'")}
+  }
   
   ###### PART 1. Aggregate SWE by basin and year ######
   # 1. Import the Factors table: To use location_numS and Weights for basin-scale SWE estimates:

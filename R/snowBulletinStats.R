@@ -450,7 +450,8 @@ snowBulletinStats <- function(year,
                            threshold = 6,
                            csv = FALSE,
                            summarise = TRUE,
-                           source = "AquaCache")
+                           source = "aquacache",
+                           con = con)
   basin_stats$perc_hist_med <- basin_stats$swe_relative * 100
   basin_stats$swe <- round(basin_stats$swe)
   # Add description of % median

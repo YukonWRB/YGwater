@@ -22,26 +22,6 @@
 
 #TODO: (1) Add units and parameter to table (2) Create tests (2) query more than 1 month
 
-# # For testing
-# test1 <- SWE_station(year = 2024,
-#            month = c(3),
-#            csv = TRUE,
-#            return_missing = TRUE,
-#            active = TRUE,
-#            source = "snow",
-#            summarise = FALSE)
-# #
-# stations = "08AA-SC01"
-# year <- 2024
-# month <- 5
-# csv = FALSE
-# return_missing = TRUE
-# active = TRUE
-# source <- "snow"
-# summarise = TRUE
-
-#TODO: (1) Add check for snow db credentials
-
 SWE_station <- function(stations = "all",
                         year,
                         month,

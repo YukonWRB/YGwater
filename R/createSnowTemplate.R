@@ -165,7 +165,8 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
       summary <- SWE_station(year = as.numeric(substr(target_date, start = 1, stop = 4)),
                              month = as.numeric(substr(target_date, start = 7, stop = 7)),
                              return_missing = TRUE, 
-                             source = "snow")
+                             source = "snow",
+                             snowCon = snowCon)
       # Subset to locations of interest and columns of interest
       summary <- summary[summary$location_name %in% courses, c("location_name", "location_id", "swe_prevyear", "swe_med")]
       # Add locations to summary that are not in database

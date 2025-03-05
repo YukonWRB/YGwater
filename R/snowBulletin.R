@@ -112,7 +112,6 @@ snowBulletin <- function(year,
   
   ### Generate a snow bulletin for the whole territory###
   if (is.null(basins)) {
-    
     basins <- c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", 
                 "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek")
   } else {
@@ -125,12 +124,11 @@ snowBulletin <- function(year,
     }
   }
   
-  
   ### Generate a snow bulletin for specified basins ###
   
   rmarkdown::render(
     input = system.file("rmd", "Snow_bulletin.Rmd", package = "YGwater"),
-    output_file = paste0("Snow Bulletin ", Sys.Date()),
+    output_file = paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
     output_dir = save_path,
     params = list(year = year,
                   month = month,
