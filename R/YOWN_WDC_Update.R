@@ -8,25 +8,28 @@
 
 YOWN_WDC_Update <- function(
     WDC_struc = "\\\\envgeoserver\\share\\WaterResources\\Groundwater\\YOWN_DATA\\",
-    master_sheet = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\2_SPREADSHEETS\\1_YOWN_MASTER_TABLE\\YOWN_MASTER.xlsx") {
+    master_file = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\2_SPREADSHEETS\\1_YOWN_MASTER_TABLE\\YOWN_MASTER.xlsx") {
   
   
   # Function arg checks
-  if (!dir.exists(WDC_struc)) {
-    stop("WDC_struc does not exist")
+  if (!file.exists(master_file)) {
+    stop("Master file not found, check file location")
+  } else { # File exists, so if reading fails it must mean the sheet doesn't exist
+    #Read in reference sheets and logger drop folder
+    tryCatch({
+      master_sheet <- openxlsx::read.xlsx(master_file, sheet = "YOWN_MASTER")
+    }, error = function(e) {
+      stop("Master Excel file found but not not the sheet named 'YOWN_MASTER', check the file and try again.")
+    })
+    # Make sure the table has the required columns
+    tryCatch({
+      publish <- master_sheet$Publish
+      YOWNIDs <- master_sheet$YOWN.Code[master_sheet$Publish == "YES"]
+    }, error = function(e) {
+      stop("Master Excel file found but not not the column named 'Publish', check the file and try again.")
+    })
   }
-  if (!file.exists(master_sheet)) {
-    stop("master_sheet does not exist")
-  }
-  
-  # Import YOWN master spreadsheet
-  master_sheet <- openxlsx::read.xlsx(master_sheet, sheet = "YOWN_MASTER")
-  
-  # Extract list of YOWN codes which contain a Y in the "publish?" column
-  YOWNIDs <- master_sheet$YOWN.Code[master_sheet$Publish == "YES"]
-  if (length(YOWNIDs) == 0) {
-    stop("No YOWN codes found, check spreadsheet headings")
-  }
+}
   
   # Iterate through YOWNIDs
   for (i in YOWNIDs) {
