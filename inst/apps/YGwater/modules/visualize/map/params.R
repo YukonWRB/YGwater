@@ -93,7 +93,7 @@ mapParamServer <- function(id, data, language) {
     output$primary_param <- renderUI({
       tagList(
         h4(translations[id == "map_primary_param", get(language$language)][[1]]), # Text for primary parameter
-        p(titleCase(data$parameters[data$parameters$parameter_id == map_params$param1,  get(translations[id == "param_name_col", get(language$language)])], language$abbrev)), # Name of primary parameter
+        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(translations[id == "param_name_col", get(language$language)])], language$abbrev)), # Name of primary parameter
         p(translations[id == "map_min_yrs_selected1", get(language$language)][[1]], " ", map_params$yrs1, " ", translations[id == "map_min_yrs_selected2", get(language$language)][[1]], # Text for min years selected
           translations[id == "map_date_within_selected1", get(language$language)][[1]], map_params$days1, translations[id == "map_date_within_selected2", get(language$language)][[1]]) # Text for within x days
       )
@@ -104,7 +104,7 @@ mapParamServer <- function(id, data, language) {
       } else {
         tagList(
           h4(translations[id == "map_second_param", get(language$language)][[1]]), # Text for secondary parameter
-          p(titleCase(data$parameters[data$parameters$parameter_id == map_params$param2,  get(translations[id == "param_name_col", get(language$language)])], language$abbrev)), # Name of secondary parameter
+          p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(translations[id == "param_name_col", get(language$language)])], language$abbrev)), # Name of secondary parameter
           p(translations[id == "map_min_yrs_selected1", get(language$language)][[1]], " ", map_params$yrs2, " ", translations[id == "map_min_yrs_selected2", get(language$language)][[1]], # Text for min years selected
             translations[id == "map_date_within_selected1", get(language$language)][[1]], map_params$days2, translations[id == "map_date_within_selected2", get(language$language)][[1]]) # Text for within x days
         )
@@ -132,8 +132,8 @@ mapParamServer <- function(id, data, language) {
           ns("param"),
           label = translations[id == "parameter", get(language$language)][[1]],
           choices = stats::setNames(
-            data$parameters$parameter_id,
-            titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+            moduleData$parameters$parameter_id,
+            titleCase(moduleData$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
           ),
           selected = map_params$param1,
           multiple = FALSE
@@ -170,8 +170,8 @@ mapParamServer <- function(id, data, language) {
           ns("param"),
           label = translations[id == "parameter", get(language$language)][[1]],
           choices = stats::setNames(
-            data$parameters$parameter_id,
-            titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+            moduleData$parameters$parameter_id,
+            titleCase(moduleData$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
           ),
           selected = map_params$param2,
           multiple = FALSE
@@ -251,7 +251,7 @@ mapParamServer <- function(id, data, language) {
     
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
-      req(data, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$target, map_params$params, input$map_zoom)
+      req(moduleData, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$target, map_params$params, input$map_zoom)
 
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
@@ -262,10 +262,10 @@ mapParamServer <- function(id, data, language) {
       }
       
       # Stop if the parameter does not exist; it's possible that the user typed something in themselves
-      if (!map_params$param1 %in% data$parameters$parameter_id) {
+      if (!map_params$param1 %in% moduleData$parameters$parameter_id) {
         return()
       }
-      if (map_params$params == 2 && !map_params$param2 %in% data$parameters$parameter_id) {
+      if (map_params$params == 2 && !map_params$param2 %in% moduleData$parameters$parameter_id) {
         return()
       }
       
@@ -340,10 +340,10 @@ mapParamServer <- function(id, data, language) {
       }
       
       
-      locs_tsids1 <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements1$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
+      locs_tsids1 <- merge(moduleData$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], moduleData$timeseries[moduleData$timeseries$timeseries_id %in% closest_measurements1$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
       
-      locs_tsids1$param_name <- data$parameters[data$parameters$parameter_id == map_params$param1,  get(translations[id == "param_name_col", get(language$language)])]
-      locs_tsids1$param_unit <- data$parameters[data$parameters$parameter_id == map_params$param1,  "unit_default"]
+      locs_tsids1$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(translations[id == "param_name_col", get(language$language)])]
+      locs_tsids1$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  "unit_default"]
       
       
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter

@@ -23,10 +23,10 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
     }
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
-    data <- reactiveValues()
+    moduleData <- reactiveValues()
     
-    data$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
-    data$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC")
+    moduleData$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
+    moduleData$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC")
     
     output$sidebar <- renderUI({
       tagList(
@@ -219,7 +219,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
         )
       ) # End of tagList
     })  %>% # End of renderUI for sidebar
-    bindEvent(language$language)  #TODO: bindEvent should also be on data, but data is not being used in the creation of lists yet
+    bindEvent(language$language)  #TODO: bindEvent should also be on moduleData, but moduleData is not being used in the creation of lists yet
     
     output$main <- renderUI({
       tagList(
@@ -227,7 +227,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
         uiOutput(ns("full_screen_ui"))
       ) # End of tagList
     }) %>% # End renderUI
-      bindEvent(language$language) # Re-render the UI if the language or data changes
+      bindEvent(language$language) # Re-render the UI if the language or moduleData changes
     
     
     observeEvent(input$data_source, {
@@ -264,28 +264,28 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
         }
       })
       
-      data$EQ_locs <- EQ_locs
-      data$EQ_loc_grps <- EQ_loc_grps
-      data$EQ_params <- EQ_params
-      data$EQ_param_grps <- EQ_param_grps
-      data$EQ_stds <- EQ_stds
+      moduleData$EQ_locs <- EQ_locs
+      moduleData$EQ_loc_grps <- EQ_loc_grps
+      moduleData$EQ_params <- EQ_params
+      moduleData$EQ_param_grps <- EQ_param_grps
+      moduleData$EQ_stds <- EQ_stds
       
       # Update the selectize inputs
-      updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
-      updateSelectizeInput(session, "parameter_groups", choices = data$EQ_param_grps$groupname, server = TRUE)
-      updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)
-      updateSelectizeInput(session, "location_groups", choices = data$EQ_loc_grps$groupname, server = TRUE)
-      updateSelectizeInput(session, "standard", choices = stats::setNames(data$EQ_stds$StdCode, data$EQ_stds$StdName), server = TRUE, selected = "")
+      updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(moduleData$EQ_params$ParamCode, paste0(moduleData$EQ_params$ParamCode, " (", moduleData$EQ_params$ParamDesc, ")")), server = TRUE)
+      updateSelectizeInput(session, "parameter_groups", choices = moduleData$EQ_param_grps$groupname, server = TRUE)
+      updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(moduleData$EQ_locs$StnCode, paste0(moduleData$EQ_locs$StnCode, " (", moduleData$EQ_locs$StnDesc, ")")), server = TRUE)
+      updateSelectizeInput(session, "location_groups", choices = moduleData$EQ_loc_grps$groupname, server = TRUE)
+      updateSelectizeInput(session, "standard", choices = stats::setNames(moduleData$EQ_stds$StdCode, moduleData$EQ_stds$StdName), server = TRUE, selected = "")
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     
     observeEvent(input$data_source, {
-      req(data)
+      req(moduleData)
       if (input$data_source == "EQ") {
         # These updates are performed in the observeEvent for input$EQWin_source
       } else if (input$data_source == "AC") { # AC selected
-        updateSelectizeInput(session, "parameters_AC", choices = data$AC_params$param_name, server = TRUE)
-        updateSelectizeInput(session, "locations_AC", choices = data$AC_locs$name, server = TRUE)
+        updateSelectizeInput(session, "parameters_AC", choices = moduleData$AC_params$param_name, server = TRUE)
+        updateSelectizeInput(session, "locations_AC", choices = moduleData$AC_locs$name, server = TRUE)
       }
     })
     

@@ -18,28 +18,28 @@ continuousPlot <- function(id, language, windowDims) {
     
     # Initial setup and data loading ########################################################################
     
-    data <- reactiveValues(all_ts = DBI::dbGetQuery(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location ORDER BY loc.name;"),
+    moduleData <- reactiveValues(all_ts = DBI::dbGetQuery(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location ORDER BY loc.name;"),
     parameters = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id ORDER BY parameters.param_name;")
     )
-    data$datums <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
-    data$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", data$datum_name_en)
-    data$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", data$datum_name_en)
-    data$datum_name_en <- gsub("APPROXIMATE", "approx.", data$datum_name_en)
+    moduleData$datums <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
+    moduleData$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", moduleData$datum_name_en)
+    moduleData$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", moduleData$datum_name_en)
+    moduleData$datum_name_en <- gsub("APPROXIMATE", "approx.", moduleData$datum_name_en)
     
     
     values <- reactiveValues()
     # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth' - this is used to change default plot start/end dates and to show the datum checkbox
-    values$water_level <- data$parameters$parameter_id[data$parameters$param_name == "water level"]
-    values$swe <- data$parameters$parameter_id[data$parameters$param_name == "snow water equivalent"]
-    values$snow_depth <- data$parameters$parameter_id[data$parameters$param_name == "snow depth"]
+    values$water_level <- moduleData$parameters$parameter_id[moduleData$parameters$param_name == "water level"]
+    values$swe <- moduleData$parameters$parameter_id[moduleData$parameters$param_name == "snow water equivalent"]
+    values$snow_depth <- moduleData$parameters$parameter_id[moduleData$parameters$param_name == "snow depth"]
     
     # Create the UI for the sidebar and main panel #########################################################
     # Render the sidebar UI
     output$sidebar <- renderUI({
-      req(data, language$language, language$abbrev)
+      req(moduleData, language$language, language$abbrev)
       tagList(
         selectizeInput(ns("type"), label = "Plot type", choices = c("Long timeseries", "Overlapping years"), selected = "Long timeseries"),
-        selectizeInput(ns("param"), label = "Plotting parameter", stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = values$water_level),
+        selectizeInput(ns("param"), label = "Plotting parameter", stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = values$water_level),
         selectizeInput(ns("loc_code"), "Select location by code", choices = NULL), # Choices are populated based on the parameter
         selectizeInput(ns("loc_name"), "Select location by name", choices = NULL), # Choices are populated based on the parameter
         
@@ -143,7 +143,7 @@ continuousPlot <- function(id, language, windowDims) {
         )
       ) # End tagList
     }) %>% # End renderUI
-      bindEvent(language$language, data) # Re-render the UI if the language or data changes
+      bindEvent(language$language, moduleData) # Re-render the UI if the language or moduleData changes
     
     output$main <- renderUI({
       tagList(
@@ -151,7 +151,7 @@ continuousPlot <- function(id, language, windowDims) {
         uiOutput(ns("full_screen_ui"))
       ) # End tagList
     }) %>% # End renderUI
-      bindEvent(language$language) # Re-render the UI if the language or data changes
+      bindEvent(language$language) # Re-render the UI if the language or moduleData changes
     
     
     # Update the location choices based on the selected parameter ##########################################
@@ -159,12 +159,12 @@ continuousPlot <- function(id, language, windowDims) {
       # Update the location choices
       updateSelectizeInput(session, 
                            "loc_name", 
-                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), 
-                           selected = if (input$loc_name %in% data$all_ts[data$all_ts$parameter_id == input$param, "name"]) input$loc_name else character(0)) # already ordered by the query
+                           choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "name"]), 
+                           selected = if (input$loc_name %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "name"]) input$loc_name else character(0)) # already ordered by the query
       updateSelectizeInput(session, 
                            "loc_code", 
-                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], 
-                           selected = if (input$loc_code %in% data$all_ts[data$all_ts$parameter_id == input$param, "location"]) input$loc_code else character(0))
+                           choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"])[order(unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"]))], 
+                           selected = if (input$loc_code %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"]) input$loc_code else character(0))
       if (input$param %in% c(values$swe, values$snow_depth)) {
         updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
         updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
@@ -184,18 +184,18 @@ continuousPlot <- function(id, language, windowDims) {
     
     # Cross-updating of plot selection location name or code, and toggle apply_datum visible/invisible
     observeEvent(input$loc_code, {
-      if (input$loc_code %in% data$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
-        updateSelectizeInput(session, "loc_name", selected = unique(data$all_ts[data$all_ts$location == input$loc_code, "name"]))
+      if (input$loc_code %in% moduleData$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
+        updateSelectizeInput(session, "loc_name", selected = unique(moduleData$all_ts[moduleData$all_ts$location == input$loc_code, "name"]))
         # Update years, used for the overlapping years plot (runs regardless of plot type selected because the user could switch plot types)
         try({
           possible_years <- seq(
-            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "end_datetime"], 1, 4)),
-            as.numeric(substr(data$all_ts[data$all_ts$location == input$loc_code & data$all_ts$parameter_id == input$param, "start_datetime"], 1, 4))
+            as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location == input$loc_code & moduleData$all_ts$parameter_id == input$param, "end_datetime"], 1, 4)),
+            as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location == input$loc_code & moduleData$all_ts$parameter_id == input$param, "start_datetime"], 1, 4))
           )
           updateSelectizeInput(session, "years", choices = possible_years)
         })
-        data$possible_datums <- data$datums[data$datums$location == input$loc_code & data$datums$conversion_m != 0, ]
-        if (nrow(data$possible_datums) < 1) {
+        moduleData$possible_datums <- moduleData$datums[moduleData$datums$location == input$loc_code & moduleData$datums$conversion_m != 0, ]
+        if (nrow(moduleData$possible_datums) < 1) {
           shinyjs::hide("apply_datum")
           updateCheckboxInput(session, "apply_datum", value = FALSE)
         } else {
@@ -205,7 +205,7 @@ continuousPlot <- function(id, language, windowDims) {
     }, ignoreInit = TRUE)
     
     observeEvent(input$loc_name, {
-      updateSelectizeInput(session, "loc_code", selected = unique(data$all_ts[data$all_ts$name == input$loc_name, "location"]))
+      updateSelectizeInput(session, "loc_code", selected = unique(moduleData$all_ts[moduleData$all_ts$name == input$loc_name, "location"]))
     }, ignoreInit = TRUE)
     
     # Modal dialog for extra aesthetics ########################################################################
@@ -296,9 +296,9 @@ continuousPlot <- function(id, language, windowDims) {
       
       if (runTraceNew() == FALSE) {
         showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$param)),
-          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])),
-          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"])),
+          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = as.numeric(input$param)),
+          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"])),
+          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "name"])),
           numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
           footer = tagList(
             actionButton(ns("add_new_trace"), "Add trace"),
@@ -309,9 +309,9 @@ continuousPlot <- function(id, language, windowDims) {
         runTraceNew(TRUE)
       } else { # The modal has already run once, use the previously selected values
         showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$traceNew_param)),
-          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"])),
-          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"])),
+          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = as.numeric(input$traceNew_param)),
+          selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "location"])),
+          selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "name"])),
           numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
           footer = tagList(
             actionButton(ns("add_new_trace"), "Add trace"),
@@ -329,22 +329,22 @@ continuousPlot <- function(id, language, windowDims) {
     observeEvent(input$traceNew_param, {
       updateSelectizeInput(session, 
                            "traceNew_loc_code", 
-                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]),
-                           selected = if (input$traceNew_loc_code %in% data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "location"]) input$traceNew_loc_code else character(0))
+                           choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "location"]),
+                           selected = if (input$traceNew_loc_code %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "location"]) input$traceNew_loc_code else character(0))
       updateSelectizeInput(session, 
                            "traceNew_loc_name", 
-                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]),
-                           selected = if (input$traceNew_loc_name %in% data$all_ts[data$all_ts$parameter_id == input$traceNew_param, "name"]) input$traceNew_loc_name else character(0))
+                           choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "name"]),
+                           selected = if (input$traceNew_loc_name %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "name"]) input$traceNew_loc_name else character(0))
     }, ignoreInit = TRUE)
     
     observeEvent(input$traceNew_loc_code, {
-      if (input$traceNew_loc_code %in% data$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
-        updateSelectizeInput(session, "traceNew_loc_name", selected = unique(data$all_ts[data$all_ts$location == input$traceNew_loc_code, "name"]))
+      if (input$traceNew_loc_code %in% moduleData$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
+        updateSelectizeInput(session, "traceNew_loc_name", selected = unique(moduleData$all_ts[moduleData$all_ts$location == input$traceNew_loc_code, "name"]))
       }
     }, ignoreInit = TRUE)
     
     observeEvent(input$traceNew_loc_name, {
-      updateSelectizeInput(session, "traceNew_loc_code", selected = unique(data$all_ts[data$all_ts$name == input$traceNew_loc_name, "location"]))
+      updateSelectizeInput(session, "traceNew_loc_code", selected = unique(moduleData$all_ts[moduleData$all_ts$name == input$traceNew_loc_name, "location"]))
     }, ignoreInit = TRUE)
     
     observeEvent(input$add_new_trace, {
@@ -358,8 +358,8 @@ continuousPlot <- function(id, language, windowDims) {
                               parameter = as.numeric(input$traceNew_param),
                               location = input$traceNew_loc_code,
                               lead_lag = input$traceNew_lead_lag)
-        button1Text <- HTML(paste0("<b>Trace 1</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces$trace1$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"])))
-        button2Text <- HTML(paste0("<b>Trace 2</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces$trace2$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace2$location, "name"]), "<br>Lead/lag ", traces$trace2$lead_lag, " hours"))
+        button1Text <- HTML(paste0("<b>Trace 1</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces$trace1$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace1$location, "name"])))
+        button2Text <- HTML(paste0("<b>Trace 2</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces$trace2$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace2$location, "name"]), "<br>Lead/lag ", traces$trace2$lead_lag, " hours"))
         output$trace1_ui <- renderUI({
           actionButton(ns("trace1"), button1Text)
         })
@@ -377,7 +377,7 @@ continuousPlot <- function(id, language, windowDims) {
                               parameter = as.numeric(input$traceNew_param),
                               location = input$traceNew_loc_code,
                               lead_lag = input$traceNew_lead_lag)
-        button3Text <- HTML(paste0("<b>Trace 3</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces$trace3$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace3$location, "name"]), "<br>Lead/lag ", traces$trace3$lead_lag, " hours"))
+        button3Text <- HTML(paste0("<b>Trace 3</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces$trace3$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace3$location, "name"]), "<br>Lead/lag ", traces$trace3$lead_lag, " hours"))
         output$trace3_ui <- renderUI({
           actionButton(ns("trace3"), button3Text)
         })
@@ -388,7 +388,7 @@ continuousPlot <- function(id, language, windowDims) {
                               parameter = as.numeric(input$traceNew_param),
                               location = input$traceNew_loc_code,
                               lead_lag = input$traceNew_lead_lag)
-        button4Text <- HTML(paste0("<b>Trace 4</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces$trace4$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces$trace4$location, "name"]), "<br>Lead/lag ", traces$trace4$lead_lag, " hours"))
+        button4Text <- HTML(paste0("<b>Trace 4</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces$trace4$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace4$location, "name"]), "<br>Lead/lag ", traces$trace4$lead_lag, " hours"))
         output$trace4_ui <- renderUI({
           actionButton(ns("trace4"), button4Text)
         })
@@ -404,9 +404,9 @@ continuousPlot <- function(id, language, windowDims) {
     clicked_trace <- reactiveVal(NULL)
     observeEvent(input$trace1, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter),
-        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace1$parameter, "location"]), selected = traces$trace1$location),
-        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace1$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"])),
+        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace1$parameter),
+        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace1$parameter, "location"]), selected = traces$trace1$location),
+        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace1$parameter, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace1$location, "name"])),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
           actionButton(ns("remove_trace"), "Remove trace"),
@@ -418,9 +418,9 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$trace2, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace2$parameter),
-        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace2$parameter, "location"]), selected = traces$trace2$location),
-        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace2$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace2$location, "name"])),
+        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace2$parameter),
+        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, "location"]), selected = traces$trace2$location),
+        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace2$location, "name"])),
         numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace2$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
@@ -433,9 +433,9 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$trace3, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace3$parameter),
-        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace3$parameter, "location"]), selected = traces$trace3$location),
-        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace3$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == traces$trace3$location, "name"]),
+        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace3$parameter),
+        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, "location"]), selected = traces$trace3$location),
+        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, "name"])), selected = unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace3$location, "name"]),
         numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace3$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
@@ -448,9 +448,9 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$trace4, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace4$parameter),
-        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace4$parameter, "location"]), selected = traces$trace4$location),
-        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == traces$trace4$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == traces$trace4$location, "name"]),
+        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace4$parameter),
+        selectizeInput(ns("traceNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, "location"]), selected = traces$trace4$location),
+        selectizeInput(ns("traceNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, "name"])), selected = unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace4$location, "name"]),
         numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace4$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
@@ -478,9 +478,9 @@ continuousPlot <- function(id, language, windowDims) {
       
       # Update the trace button text
       if (target_trace == "trace1") {
-        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[target_trace]]$location, "name"])))
+        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == traces[[target_trace]]$location, "name"])))
       } else {
-        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[target_trace]]$location, "name"]), "<br>Lead/lag ", traces[[target_trace]]$lead_lag, " hours"))
+        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == traces[[target_trace]]$location, "name"]), "<br>Lead/lag ", traces[[target_trace]]$lead_lag, " hours"))
       }
       
       output[[paste0(target_trace, "_ui")]] <- renderUI({
@@ -511,9 +511,9 @@ continuousPlot <- function(id, language, windowDims) {
       # Re-render text for all buttons
       for (i in 1:traceCount()) {
         if (i == 1) {
-          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[paste0("trace", i)]]$location, "name"])))
+          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == traces[[paste0("trace", i)]]$location, "name"])))
         } else {
-          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == traces[[paste0("trace", i)]]$location, "name"]), "<br>Lead/lag ", traces[[paste0("trace", i)]]$lead_lag, " hours"))
+          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == traces[[paste0("trace", i)]]$location, "name"]), "<br>Lead/lag ", traces[[paste0("trace", i)]]$lead_lag, " hours"))
         }
         updateActionButton(session, paste0("trace", i), label = button_text)
       }
@@ -525,9 +525,9 @@ continuousPlot <- function(id, language, windowDims) {
         shinyjs::show("loc_code")
         shinyjs::show("loc_name")
         shinyjs::show("add_subplot")
-        updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = traces$trace1$parameter)
-        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], selected = traces$trace1$location)
-        updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == traces$trace1$location, "name"]))
+        updateSelectizeInput(session, "param", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace1$parameter)
+        updateSelectizeInput(session, "loc_code", choices =  unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"])[order(unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"]))], selected = traces$trace1$location)
+        updateSelectizeInput(session, "loc_name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location == traces$trace1$location, "name"]))
       } else {
         shinyjs::show("trace1_ui")
       }
@@ -559,9 +559,9 @@ continuousPlot <- function(id, language, windowDims) {
       
       if (runSubplotNew() == FALSE) {
         showModal(modalDialog(
-          selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$param)),
-          selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])),
-          selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"])),
+          selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = as.numeric(input$param)),
+          selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"])),
+          selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "name"])),
           footer = tagList(
             actionButton(ns("add_new_subplot"), "Add subplot"),
             actionButton(ns("cancel"), "Cancel")
@@ -571,9 +571,9 @@ continuousPlot <- function(id, language, windowDims) {
         runSubplotNew(TRUE)
       } else { # The modal has already run once, use the previously selected values
         showModal(modalDialog(
-          selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = as.numeric(input$subplotNew_param)),
-          selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"])),
-          selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"])),
+          selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = as.numeric(input$subplotNew_param)),
+          selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location"])),
+          selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "name"])),
           footer = tagList(
             actionButton(ns("add_new_subplot"), "Add subplot"),
             actionButton(ns("cancel"), "Cancel")
@@ -589,22 +589,22 @@ continuousPlot <- function(id, language, windowDims) {
     observeEvent(input$subplotNew_param, {
       updateSelectizeInput(session, 
                            "subplotNew_loc_code", 
-                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]),
-                           selected = if (input$subplotNew_loc_code %in% data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "location"]) input$subplotNew_loc_code else character(0))
+                           choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location"]),
+                           selected = if (input$subplotNew_loc_code %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location"]) input$subplotNew_loc_code else character(0))
       updateSelectizeInput(session,
                            "subplotNew_loc_name",
-                           choices = unique(data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]),
-                           selected = if (input$subplotNew_loc_name %in% data$all_ts[data$all_ts$parameter_id == input$subplotNew_param, "name"]) input$subplotNew_loc_name else character(0))
+                           choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "name"]),
+                           selected = if (input$subplotNew_loc_name %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "name"]) input$subplotNew_loc_name else character(0))
     }, ignoreInit = TRUE)
     
     observeEvent(input$subplotNew_loc_code, {
-      if (input$subplotNew_loc_code %in% data$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
-        updateSelectizeInput(session, "subplotNew_loc_name", selected = unique(data$all_ts[data$all_ts$location == input$subplotNew_loc_code, "name"]))
+      if (input$subplotNew_loc_code %in% moduleData$all_ts$location) { #otherwise it runs without actually getting any information, which results in an error
+        updateSelectizeInput(session, "subplotNew_loc_name", selected = unique(moduleData$all_ts[moduleData$all_ts$location == input$subplotNew_loc_code, "name"]))
       }
     }, ignoreInit = TRUE)
     
     observeEvent(input$subplotNew_loc_name, {
-      updateSelectizeInput(session, "subplotNew_loc_code", selected = unique(data$all_ts[data$all_ts$name == input$subplotNew_loc_name, "location"]))
+      updateSelectizeInput(session, "subplotNew_loc_code", selected = unique(moduleData$all_ts[moduleData$all_ts$name == input$subplotNew_loc_name, "location"]))
     }, ignoreInit = TRUE)
     
     share_axes_run <- reactiveVal(FALSE)
@@ -635,8 +635,8 @@ continuousPlot <- function(id, language, windowDims) {
         subplots$subplot2 <- list(subplot = "subplot2",
                                   parameter = as.numeric(input$subplotNew_param),
                                   location = input$subplotNew_loc_code)
-        button1Text <- HTML(paste0("<b>Subplot 1</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot1$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"])))
-        button2Text <- HTML(paste0("<b>Subplot 2</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot2$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot2$location, "name"])))
+        button1Text <- HTML(paste0("<b>Subplot 1</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots$subplot1$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot1$location, "name"])))
+        button2Text <- HTML(paste0("<b>Subplot 2</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots$subplot2$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot2$location, "name"])))
         output$subplot1_ui <- renderUI({
           actionButton(ns("subplot1"), button1Text)
         })
@@ -653,7 +653,7 @@ continuousPlot <- function(id, language, windowDims) {
         subplots$subplot3 <- list(subplot = "subplot3",
                                   parameter = as.numeric(input$subplotNew_param),
                                   location = input$subplotNew_loc_code)
-        button3Text <- HTML(paste0("<b>Subplot 3</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot3$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot3$location, "name"])))
+        button3Text <- HTML(paste0("<b>Subplot 3</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots$subplot3$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot3$location, "name"])))
         output$subplot3_ui <- renderUI({
           actionButton(ns("subplot3"), button3Text)
         })
@@ -663,7 +663,7 @@ continuousPlot <- function(id, language, windowDims) {
         subplots$subplot4 <- list(subplot = "subplot4",
                                   parameter = as.numeric(input$subplotNew_param),
                                   location = input$subplotNew_loc_code)
-        button4Text <- HTML(paste0("<b>Subplot 4</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots$subplot4$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots$subplot4$location, "name"])))
+        button4Text <- HTML(paste0("<b>Subplot 4</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots$subplot4$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot4$location, "name"])))
         output$subplot4_ui <- renderUI({
           actionButton(ns("subplot4"), button4Text)
         })
@@ -679,9 +679,9 @@ continuousPlot <- function(id, language, windowDims) {
     clicked_subplot <- reactiveVal(NULL)
     observeEvent(input$subplot1, {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot1$parameter),
-        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot1$parameter, "location"]), selected = subplots$subplot1$location),
-        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot1$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"])),
+        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot1$parameter),
+        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, "location"]), selected = subplots$subplot1$location),
+        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot1$location, "name"])),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -693,9 +693,9 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$subplot2, {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot2$parameter),
-        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot2$parameter, "location"]), selected = subplots$subplot2$location),
-        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot2$parameter, "name"]), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot2$location, "name"])),
+        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot2$parameter),
+        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, "location"]), selected = subplots$subplot2$location),
+        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot2$location, "name"])),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -707,9 +707,9 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$subplot3, {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot3$parameter),
-        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot3$parameter, "location"]), selected = subplots$subplot3$location),
-        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot3$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot3$location, "name"]),
+        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot3$parameter),
+        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, "location"]), selected = subplots$subplot3$location),
+        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, "name"])), selected = unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot3$location, "name"]),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -721,9 +721,9 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$subplot4, {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot4$parameter),
-        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot4$parameter, "location"]), selected = subplots$subplot4$location),
-        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(data$all_ts[data$all_ts$parameter_id == subplots$subplot4$parameter, "name"])), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot4$location, "name"]),
+        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot4$parameter),
+        selectizeInput(ns("subplotNew_loc_code"), "Select location by code", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, "location"]), selected = subplots$subplot4$location),
+        selectizeInput(ns("subplotNew_loc_name"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, "name"])), selected = unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot4$location, "name"]),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -745,9 +745,9 @@ continuousPlot <- function(id, language, windowDims) {
       
       # Update the subplot button text
       if (target_subplot == "subplot1") {
-        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots[[target_subplot]]$location, "name"])))
+        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == subplots[[target_subplot]]$location, "name"])))
       } else {
-        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots[[target_subplot]]$location, "name"])))
+        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == subplots[[target_subplot]]$location, "name"])))
       }
       
       output[[paste0(target_subplot, "_ui")]] <- renderUI({
@@ -778,9 +778,9 @@ continuousPlot <- function(id, language, windowDims) {
       # Re-render text for all buttons
       for (i in 1:subplotCount()) {
         if (i == 1) {
-          button_text <- HTML(paste0("<b>Subplot ", i, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots[[paste0("subplot", i)]]$location, "name"])))
+          button_text <- HTML(paste0("<b>Subplot ", i, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == subplots[[paste0("subplot", i)]]$location, "name"])))
         } else {
-          button_text <- HTML(paste0("<b>Subplot ", i, "</b><br>", titleCase(data$parameters[data$parameters$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]), "<br>", unique(data$all_ts[data$all_ts$location == subplots[[paste0("subplot", i)]]$location, "name"])))
+          button_text <- HTML(paste0("<b>Subplot ", i, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location == subplots[[paste0("subplot", i)]]$location, "name"])))
         }
         updateActionButton(session, paste0("subplot", i), label = button_text)
       }
@@ -794,9 +794,9 @@ continuousPlot <- function(id, language, windowDims) {
         shinyjs::show("loc_code")
         shinyjs::show("loc_name")
         shinyjs::show("add_trace")
-        updateSelectizeInput(session, "param", choices = stats::setNames(data$parameters$parameter_id, titleCase(data$parameters$param_name)), selected = subplots$subplot1$parameter)
-        updateSelectizeInput(session, "loc_code", choices =  unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"])[order(unique(data$all_ts[data$all_ts$parameter_id == input$param, "location"]))], selected = subplots$subplot1$location)
-        updateSelectizeInput(session, "loc_name", choices = unique(data$all_ts[data$all_ts$parameter_id == input$param, "name"]), selected = unique(data$all_ts[data$all_ts$location == subplots$subplot1$location, "name"]))
+        updateSelectizeInput(session, "param", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot1$parameter)
+        updateSelectizeInput(session, "loc_code", choices =  unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"])[order(unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "location"]))], selected = subplots$subplot1$location)
+        updateSelectizeInput(session, "loc_name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location == subplots$subplot1$location, "name"]))
       } else {
         shinyjs::show("subplot1_ui")
       }

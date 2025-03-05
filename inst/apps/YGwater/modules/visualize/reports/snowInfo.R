@@ -15,7 +15,7 @@ snowInfoMod <- function(id, language) {
     
     ns <- session$ns  # Used to create UI elements in the server code
     
-    data <- reactiveValues(
+    moduleData <- reactiveValues(
       locs = dbGetQueryDT(session$userData$AquaCache, "
               SELECT DISTINCT l.location_id, l.location, l.name, l.name_fr
               FROM locations AS l
@@ -38,7 +38,7 @@ snowInfoMod <- function(id, language) {
     
     # This observe block is used to render the UI elements for the menu. It is reactive to the language selection.
     output$menu <- renderUI({
-      req(data, language$language, language$abbrev)
+      req(moduleData, language$language, language$abbrev)
       tagList(
         textOutput(ns("info")), # Information about the app
         # dividing blank space
@@ -47,9 +47,9 @@ snowInfoMod <- function(id, language) {
         selectizeInput(ns("loc"), 
                        label = tr("gen_loc_select", language$language),
                        choices = stats::setNames(
-                         c("all", data$locs$location),
+                         c("all", moduleData$locs$location),
                          c(tr("all_locs", language$language),
-                           titleCase(data$locs[[tr("generic_name_col", language$language)]], language$abbrev))
+                           titleCase(moduleData$locs[[tr("generic_name_col", language$language)]], language$abbrev))
                        ),
                        selected = selections$loc,
                        multiple = TRUE,
@@ -89,7 +89,7 @@ snowInfoMod <- function(id, language) {
         
       ) # End tagList
     }) %>% # End renderUI
-      bindEvent(language$language, data$locs) # Re-render the UI if the language or data changes
+      bindEvent(language$language, moduleData$locs) # Re-render the UI if the language or moduleData changes
     
     output$info <- renderText({
       tr("gen_snowInfo_info", language$language)
