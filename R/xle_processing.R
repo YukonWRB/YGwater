@@ -44,13 +44,13 @@ xle_processing <- function(file,
       stop("Master Excel file found but not not the sheet named 'YOWN_MASTER', check the file and try again.")
     })
     # Make sure the table has the required columns
-    
-    
-    #... please fill this in...
-    
-    
-    
+    tryCatch({
+      publish <- master$Publish
+    }, error = function(e) {
+      stop("Master Excel file found but not not the column named 'Publish', check the file and try again.")
+    })
   }
+}
   
   if (!file.exists(logger_tracking)) {
     stop("Logger tracking sheet not found, check file location")
