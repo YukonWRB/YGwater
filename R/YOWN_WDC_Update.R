@@ -29,7 +29,6 @@ YOWN_WDC_Update <- function(
       stop("Master Excel file found but not not the column named 'Publish', check the file and try again.")
     })
   }
-}
   
   # Iterate through YOWNIDs
   for (i in YOWNIDs) {

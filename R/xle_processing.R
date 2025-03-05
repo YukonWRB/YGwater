@@ -50,7 +50,6 @@ xle_processing <- function(file,
       stop("Master Excel file found but not not the column named 'Publish', check the file and try again.")
     })
   }
-}
   
   if (!file.exists(logger_tracking)) {
     stop("Logger tracking sheet not found, check file location")
