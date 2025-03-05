@@ -50,7 +50,7 @@
 <text x='594.68' y='391.59' style='font-size: 8.00px; font-family: sans;' textLength='17.78px' lengthAdjust='spacingAndGlyphs'>        </text>
 <text x='594.68' y='403.11' style='font-size: 8.00px; font-family: sans;' textLength='119.18px' lengthAdjust='spacingAndGlyphs'>        Périodes de retour calculées</text>
 <text x='594.68' y='414.63' style='font-size: 8.00px; font-family: sans;' textLength='113.83px' lengthAdjust='spacingAndGlyphs'>        en utilisant les mois de mai</text>
-<text x='594.68' y='426.15' style='font-size: 8.00px; font-family: sans;' textLength='122.76px' lengthAdjust='spacingAndGlyphs'>        à sept. et les années de 2011</text>
+<text x='594.68' y='426.15' style='font-size: 8.00px; font-family: sans;' textLength='120.54px' lengthAdjust='spacingAndGlyphs'>        à sept et les années de 2011</text>
 <text x='594.68' y='437.67' style='font-size: 8.00px; font-family: sans;' textLength='123.21px' lengthAdjust='spacingAndGlyphs'>        à 2022. 11 points de données</text>
 <text x='594.68' y='449.19' style='font-size: 8.00px; font-family: sans;' textLength='116.51px' lengthAdjust='spacingAndGlyphs'>        conservés après avoir retiré</text>
 <text x='594.68' y='460.71' style='font-size: 8.00px; font-family: sans;' textLength='111.86px' lengthAdjust='spacingAndGlyphs'>        les années avec &gt; 10% de</text>
@@ -71,12 +71,12 @@
 <polyline points='321.56,558.47 321.56,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
 <polyline points='414.09,558.47 414.09,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
 <polyline points='505.13,558.47 505.13,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<text x='51.43' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='38.53px' lengthAdjust='spacingAndGlyphs'>01 janv.</text>
-<text x='139.48' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='39.75px' lengthAdjust='spacingAndGlyphs'>01 mars</text>
-<text x='230.52' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='33.02px' lengthAdjust='spacingAndGlyphs'>01 mai</text>
-<text x='321.56' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='31.79px' lengthAdjust='spacingAndGlyphs'>01 juil.</text>
-<text x='414.09' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='39.14px' lengthAdjust='spacingAndGlyphs'>01 sept.</text>
-<text x='505.13' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='36.09px' lengthAdjust='spacingAndGlyphs'>01 nov.</text>
+<text x='51.43' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='29.36px' lengthAdjust='spacingAndGlyphs'>1 janv</text>
+<text x='139.48' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='33.63px' lengthAdjust='spacingAndGlyphs'>1 mars</text>
+<text x='230.52' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='26.90px' lengthAdjust='spacingAndGlyphs'>1 mai</text>
+<text x='321.56' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='22.62px' lengthAdjust='spacingAndGlyphs'>1 juil</text>
+<text x='414.09' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='29.97px' lengthAdjust='spacingAndGlyphs'>1 sept</text>
+<text x='505.13' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='26.91px' lengthAdjust='spacingAndGlyphs'>1 nov</text>
 <text transform='translate(13.74,288.72) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='91.01px' lengthAdjust='spacingAndGlyphs'>Niveau d'eau (m)</text>
 <rect x='605.64' y='42.82' width='51.52' height='41.78' style='stroke-width: 1.07; stroke: none; fill: #FFFFFF;' />
 <text x='611.12' y='55.43' style='font-size: 9.00px; font-family: sans;' textLength='26.03px' lengthAdjust='spacingAndGlyphs'>Année</text>

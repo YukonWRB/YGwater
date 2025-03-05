@@ -127,7 +127,7 @@ snowBulletinStats <- function(year,
                          dplyr::summarise(value = stats::median(.data$value), 
                                           type = "median", years = dplyr::n()))
     # Add period column
-    precip_allyrs$period <- paste0("All years")
+    precip_allyrs$period <- paste0("all years")
     
     # Calculate stats. For last 40 years
     precip_40yrs <- precip_years[precip_years$fake_year > year - 40,]
@@ -143,7 +143,7 @@ snowBulletinStats <- function(year,
                          dplyr::summarise(value = stats::median(.data$value), 
                                           type = "median", years = dplyr::n()))
     # Add period column
-    precip_40yrs$period <- paste0("Last 40 years")
+    precip_40yrs$period <- paste0("last 40 years")
     
     # Calculate stats. For last 1991-2020 period
     precip_9120 <- precip_years[precip_years$fake_year >= 1991 & 
@@ -324,7 +324,7 @@ snowBulletinStats <- function(year,
                          dplyr::summarise(value = stats::median(.data$value), 
                                           type = "median", years = dplyr::n()))
     # Add period column
-    cddf_allyrs$period <- paste0("All years")
+    cddf_allyrs$period <- paste0("all years")
     
     # Calculate stats. For last 40 years
     cddf_40yrs <- cddf[cddf$year > year - 40,]
@@ -340,7 +340,7 @@ snowBulletinStats <- function(year,
                          dplyr::summarise(value = stats::median(.data$value), 
                                           type = "median", years = dplyr::n()))
     # Add period column
-    cddf_40yrs$period <- paste0("Last 40 years")
+    cddf_40yrs$period <- paste0("last 40 years")
     
     # Calculate stats. For last 1991-2020 period
     cddf_9120 <- cddf[cddf$year >= 1991 & 
