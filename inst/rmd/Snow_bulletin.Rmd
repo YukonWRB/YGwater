@@ -492,7 +492,6 @@ swe_basins <- SWE_basin(year = year_param,
 swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
 # Get stats for text
 stats <- snowBulletinStats(year = year_param, month = month_param, excel_output = FALSE, con = con)
-
 ```
 
 <br>
