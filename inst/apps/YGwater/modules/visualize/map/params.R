@@ -40,7 +40,7 @@ mapParamUI <- function(id) {
   ) # End of tagList
 } # End of mapParamsUI
 
-mapParamServer <- function(id, data, language) {
+mapParamServer <- function(id, moduleData, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -60,7 +60,7 @@ mapParamServer <- function(id, data, language) {
     )
     # Generate all controls in a renderUI
     output$controls_ui <- renderUI({
-      req(data, language$language, language$abbrev)
+      req(moduleData, language$language, language$abbrev)
       
       tagList(
         #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
@@ -414,10 +414,10 @@ mapParamServer <- function(id, data, language) {
           closest_measurements2 <- range2[, .SD[1], by = timeseries_id]
         }
         
-        locs_tsids2 <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements2$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
+        locs_tsids2 <- merge(moduleData$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], moduleData$timeseries[moduleData$timeseries$timeseries_id %in% closest_measurements2$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
         
-        locs_tsids2$param_name <- data$parameters[data$parameters$parameter_id == map_params$param2,  get(translations[id == "param_name_col", get(language$language)])]
-        locs_tsids2$param_unit <- data$parameters[data$parameters$parameter_id == map_params$param2,  "unit_default"]
+        locs_tsids2$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(translations[id == "param_name_col", get(language$language)])]
+        locs_tsids2$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  "unit_default"]
         
         
         # Merge the two sets of locations and timeseries IDs

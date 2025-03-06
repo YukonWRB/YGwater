@@ -281,7 +281,7 @@ snowBulletinStats <- function(year,
                                                 INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
                                                 INNER JOIN locations ON timeseries.location = locations.location
                                                 WHERE measurements_continuous_corrected.timeseries_id IN ('", paste0(tsid, collapse = "', '"),
-                                        "')"))# ", timeseries_id))
+                                        "')"))
     
     attr(tabl$datetime, "tzone") <- "MST"
     
@@ -399,15 +399,31 @@ snowBulletinStats <- function(year,
   }
   
   #### ----------------- Pillows with historical record ----------------- ####
-  pillow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
-                    locations.location AS location_id, date, parameters.param_name AS variable, 
-                    value, q50 AS median, min, max, doy_count AS years 
-                    FROM measurements_calculated_daily_corrected 
-                    INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id
-                    INNER JOIN locations ON timeseries.location = locations.location
-                    INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
-                    WHERE measurements_calculated_daily_corrected.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
-                    AND date = '", year, "-0", month, "-01'"))
+  pillow_stats <- DBI::dbGetQuery(con, paste0(
+    "WITH latest_measurements AS (
+  SELECT 
+    l.name AS location_name,
+    l.location AS location_id,
+    m.date,
+    p.param_name AS variable,
+    m.value,
+    m.q50 AS median,
+    m.min,
+    m.max,
+    m.doy_count AS years,
+    m.timeseries_id,
+    ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
+  FROM measurements_calculated_daily_corrected m
+    INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
+    INNER JOIN locations l ON t.location = l.location
+    INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+  WHERE m.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
+    AND m.date BETWEEN ('", year, "-0", month, "-01'::date - INTERVAL '7 day') AND '", year, "-0", month, "-01'
+)
+SELECT location_name, location_id, date, variable, value, median, min, max, years
+FROM latest_measurements
+WHERE rn = 1;"
+  ))
   pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$median * 100)
   
   #### -----------------------  SWE stations ---------------------------- ####
@@ -481,14 +497,31 @@ snowBulletinStats <- function(year,
   
   #### ------------------------- Flow/level stats ----------------------- ####
   
-  flow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
-                    locations.location AS location_id, date, parameters.param_name AS variable, 
-                    value, q50 AS median, min, max, doy_count AS years FROM measurements_calculated_daily_corrected 
-                    INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id
-                    INNER JOIN locations ON timeseries.location = locations.location
-                    INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
-                    WHERE measurements_calculated_daily_corrected.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
-                    AND date = '", year, "-0", month, "-01'"))
+  flow_stats <- DBI::dbGetQuery(con, paste0(
+    "WITH latest_measurements AS (
+  SELECT 
+    l.name AS location_name,
+    l.location AS location_id,
+    m.date,
+    p.param_name AS variable,
+    m.value,
+    m.q50 AS median,
+    m.min,
+    m.max,
+    m.doy_count AS years,
+    m.timeseries_id,
+    ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
+  FROM measurements_calculated_daily_corrected m
+    INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
+    INNER JOIN locations l ON t.location = l.location
+    INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+  WHERE m.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
+    AND m.date BETWEEN ('", year, "-0", month, "-01'::date - INTERVAL '7 day') AND '", year, "-0", month, "-01'
+)
+SELECT location_name, location_id, date, variable, value, median, min, max, years
+FROM latest_measurements
+WHERE rn = 1;"
+  ))
   flow_stats$perc_hist_med <- round(flow_stats$value / flow_stats$median * 100)
   # Add description of % median
   flow_stats <- flow_stats %>%

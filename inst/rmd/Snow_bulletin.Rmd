@@ -410,13 +410,6 @@ snowbullCDDF <- function(timeseries_id,
   } else {
     plot <- plot + ggplot2::labs(y = "CDDF (\u00B0C days)")
   }
-  
-  
-  # stats_d <- plot$data[plot$data$datetime == paste0(year, "-0", month, "-01"),]
-  # #stats_d <- plot$data[plot$data$datetime == paste0(2024, "-0", 2, "-28"),]
-  # stats_d <- c(round(stats_d$value / stats_d$md *100), round(stats_d$value))
-  
-  #return(list(plot, stats_d))
   return(plot)
 }
 
@@ -1421,12 +1414,10 @@ par(mfrow = c(1, 2))
 snowBullPrecip(664, year_param, scale_param, "Dawson", language = language_param)
 # Create plot D
 snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = substr(language_param, 1, 2))
-
 ```
 
 The estimated Yukon River discharge above White River is currently
-`r officer::ftext(paste0(if (nchar(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description) > 0) paste0(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description, " "),
-"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description))` 
+`r officer::ftext(paste0(if (nchar(stats$flow_stats[stats$flow_stats$location_id == "09CD001",]$description) > 0) paste0(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description, " "), "average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description))`
 (Figure`r knitr::asis_output("\U00A0")`E). The \-\-\-\-- average
 snowpack combined with \-\-\-\-- average winter flows suggests spring
 freshet flow volumes will be \-\-\-\-- average with a \-\-\-\--
@@ -1633,7 +1624,8 @@ if ("Liard" %in% params$basins) {
 ```
 
 The Liard River Basin snowpack is
-`r officer::ftext(if (nchar(paste0(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description) > 0 ) paste0(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description, " "),
+`r 
+officer::ftext(paste0(if (nchar(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description) > 0 ) paste0(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description, " "),
 "average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description))`.
 At Hyland Meteorological Station, Snow Water Equivalent (SWE)
 is estimated to be
@@ -1795,6 +1787,14 @@ snowbullWater(location = station_id,
 
 tabl <- stats$station_stats
 
+# Find which locations are compound
+cmpd <- DBI::dbGetQuery(con, "SELECT l.location 
+                      FROM locations l
+                      JOIN sample_series ss ON l.location_id = ss.location_id
+                      WHERE ss.source_fx_args LIKE '%old_loc%' 
+                      AND ss.source_fx = 'downloadSnowCourse'")
+
+
 # Round values
 tabl$elevation <- round(as.numeric(tabl$elevation), 0)
 tabl$depth <- round(tabl$depth, 0)
@@ -1820,6 +1820,12 @@ if (length(tabl[tabl$estimate_flag == TRUE,]$swe) > 0) {
 # Add B next to swe outside of sampling period
 if (length(tabl[tabl$date_flag == TRUE,]$swe) > 0) {
   tabl[tabl$date_flag == TRUE,]$swe <- paste0(tabl[tabl$date_flag == TRUE,]$swe, " B")
+}
+# Add C next to compound locations
+if (nrow(cmpd) > 0) {
+  tabl[tabl$location_id %in% cmpd$location, "years"] <- paste0(tabl[tabl$location_id %in% cmpd$location, "years"], " C")
+  tabl[tabl$location_id %in% cmpd$location, "swe_med"] <- paste0(tabl[tabl$location_id %in% cmpd$location, "swe_med"], " C")
+
 }
 
 
@@ -1924,36 +1930,56 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
 if (language_param == "english") {
 "
 
-#### Date notes:
+::: {custom-style=tbl_notes}
+Date notes:
+:::
+
 N.S. - No survey
 
-#### SWE notes:
+::: {custom-style=tbl_notes}
+SWE notes:
+:::
+
 E - Estimate  
 B - Survey date is outside of valid sampling range  
 R - New record  
 
-#### Median historical SWE and Years of record notes:
+::: {custom-style=tbl_notes}
+Median historical SWE and Years of record notes:
+:::
+
 C - Composite record. Current location measurements combined with historical record from discontinued nearby location, adjusted based on overlapping years of record.
-- Whitehorse Airport combines records from the old Whitehorse Airport snow course located within the airport grounds with new measurements taken a few hundred meters to the West of the airport. Two years of overlapping records were used to adjust the historical station data (1965-2022) to the new location.
-- Twin Creeks B combines records from  old Twin Creeks A snow course located at the West end of the Twin Creeks air strip with new measurements taken at the East end of the air strip. Five years of overlapping records are currently used to adjust the historical station data (1977-2015) to the new location.
-- Hyland River B combines records from the old Hyland River snow course located near the Hyland River air strip with new measurements taken 6 kilometers to the north of the old station. Five years of overlapping records were used to adjust the historical station data (1976-2017) to the new location.
+
+* Whitehorse Airport combines records from the old Whitehorse Airport snow course located within the airport grounds with new measurements taken a few hundred meters to the West of the airport. Two years of overlapping records were used to adjust the historical station data (1965-2022) to the new location.
+* Twin Creeks B combines records from  old Twin Creeks A snow course located at the West end of the Twin Creeks air strip with new measurements taken at the East end of the air strip. Five years of overlapping records are currently used to adjust the historical station data (1977-2015) to the new location.
+* Hyland River B combines records from the old Hyland River snow course located near the Hyland River air strip with new measurements taken 6 kilometers to the north of the old station. Five years of overlapping records were used to adjust the historical station data (1976-2017) to the new location.
 "
 } else {
 "
 
-#### Notes au sujet des dates :
+::: {custom-style=tbl_notes}
+Notes au sujet des dates :
+:::
+
 A.R. - Aucun relevé
 
-#### Notes au sujet de l'EEN :
+::: {custom-style=tbl_notes}
+Notes au sujet de l'EEN :
+:::
+
 E - Estimation  
 B - Date du relevé en dehors de la plage d’échantillonnage valide  
 R - Nouveau record  
 
-#### Notes au sujet de la médiane historique de l'EEN et du nombre d'années avec données :
+::: {custom-style=tbl_notes}
+Notes au sujet de la médiane historique de l'EEN et du nombre d'années avec données :
+:::
+
 C - Enregistrement composite. Les mesures actuelles de l'emplacement sont combinées avec l'enregistrement historique de l'emplacement voisin abandonné, ajusté en fonction des années d'enregistrement chevauchantes.
-- L'aéroport de Whitehorse combine les enregistrements de l'ancien parcours nivométrique de l'aéroport de Whitehorse situé dans l'enceinte de l'aéroport avec les nouvelles mesures prises à quelques centaines de mètres à l'ouest de l'aéroport. Deux années d'enregistrements chevauchants ont été utilisées pour ajuster les données de l'ancienne station (1965-2022) à l'emplacement de la nouvelle station.
-- Twin Creeks B combine les enregistrements de l'ancien parcours nivométrique de Twin Creeks A situé à l'extrémité ouest de la piste d'atterrissage de Twin Creeks avec les nouvelles mesures prises à l'extrémité est de la piste d'atterrissage. Cinq années d'enregistrements chevauchants sont actuellement utilisées pour ajuster les données de l'ancienne station (1977-2015) à l'emplacement de la nouvelle station.
-- Hyland River B combine les enregistrements de l'ancien parcours nivométrique de la rivière Hyland situé près la piste d'atterrissage de la rivière Hyland avec les nouvelles mesures prises à 6 kilomètres au nord de l'ancienne station. Cinq années d'enregistrements chevauchants ont été utilisées pour ajuster les données de l'ancienne station (1976-2017) à l'emplacement de la nouvelle station.
+
+* L'aéroport de Whitehorse combine les enregistrements de l'ancien parcours nivométrique de l'aéroport de Whitehorse situé dans l'enceinte de l'aéroport avec les nouvelles mesures prises à quelques centaines de mètres à l'ouest de l'aéroport. Deux années d'enregistrements chevauchants ont été utilisées pour ajuster les données de l'ancienne station (1965-2022) à l'emplacement de la nouvelle station.
+* Twin Creeks B combine les enregistrements de l'ancien parcours nivométrique de Twin Creeks A situé à l'extrémité ouest de la piste d'atterrissage de Twin Creeks avec les nouvelles mesures prises à l'extrémité est de la piste d'atterrissage. Cinq années d'enregistrements chevauchants sont actuellement utilisées pour ajuster les données de l'ancienne station (1977-2015) à l'emplacement de la nouvelle station.
+* Hyland River B combine les enregistrements de l'ancien parcours nivométrique de la rivière Hyland situé près la piste d'atterrissage de la rivière Hyland avec les nouvelles mesures prises à 6 kilomètres au nord de l'ancienne station. Cinq années d'enregistrements chevauchants ont été utilisées pour ajuster les données de l'ancienne station (1976-2017) à l'emplacement de la nouvelle station.
 "
 }
 `
