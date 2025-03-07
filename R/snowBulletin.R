@@ -23,6 +23,7 @@
 #' @param cddf_period The period to use for the cumulative degree day plot historic range. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".
 #' @param snow_period The period to use for the snow survey plot historic range. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.
 #' @param water_period The period to use for the water level/flow historic ranges. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.
+#' @param lookback The number of past years to consider for all plots and statistics. Default is 30. NOT CURRENTLY USED, but will replace other _period parameters.
 #' @param con A connection to the AquaCache database. If left NULL connection will be attempted with function [AquaConnect()] using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!
 #'
 #' @return A snow bulletin in Microsoft Word format.
@@ -41,6 +42,7 @@ snowBulletin <- function(year,
                          cddf_period = "last 40 years",
                          snow_period = "all years",
                          water_period = "all years",
+                         lookback = 40,
                          con = NULL) {
 
   #Check parameters
@@ -132,8 +134,12 @@ snowBulletin <- function(year,
     for (b in basins) {
       if (!(b %in%  c("Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", 
                       "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek"))) {
+        basins <- basins[!basins %in% b]
         message(b, " is not a basin option and was not output in the snow bulletin word document. Please check spelling.")
       }
+    }
+    if (length(basins) == 0) {
+      stop("There are no valid basins requested. Please check the basin names and try again.")
     }
   }
   
@@ -153,6 +159,7 @@ snowBulletin <- function(year,
                   cddf_period = cddf_period,
                   snow_period= snow_period,
                   water_period = water_period,
+                  lookback = lookback,
                   con = con)
   )
 }

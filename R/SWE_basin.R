@@ -6,8 +6,9 @@
 
 #' @param year The year of interest. If summarise = TRUE, the stats will be calculated based on all years prior to 'year'. If summarise = FALSE, only data from the current year and before are taken.
 #' @param month The month of interest. Options are 3, 4 and 5 for March, April and May, respectively. Can also give multiple months as a vector. Historical stats are given for the first day of this month.
+#' @param lookback The number of years to look back for historical stats. Default is 30. NOT YET IMPLEMENTED.
 #' @param threshold A number between 1 and 10 giving the threshold below which the SWE for that basin and year are ignored. These numbers represent the sum of the factors of the stations for a basin which are not missing data for that year. 10 means that the swe values calculated from less than all the stations of that basin are ignored. 1 means that only the swe calculated from less than 1 out of 10 are ignored.
-#' @param summarise TRUE to summarise the data into a data.frame with the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.
+#' @param summarise TRUE to summarise the data into a data.frame with the current SWE, historical median, the swe relative to the median (swe/swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
 #' @param source Database from which to fetch this data. Options are: aquacache or snow.
 #' @param con A connection to the database specified in `source`. If NULL, a new connection will be created with [AquaConnect()] or [snowConnect()] (depending on 'source' parameter) and automatically closed.
@@ -17,6 +18,7 @@
 
 SWE_basin <- function(year,
                       month,
+                      lookback = 30,
                       threshold = 7,
                       csv = FALSE,
                       summarise = FALSE,
@@ -42,11 +44,13 @@ SWE_basin <- function(year,
       on.exit(DBI::dbDisconnect(con), add = TRUE)
     }
     
-    samples <- DBI::dbGetQuery(con, 
+    samples <- DBI::dbGetQuery(con, paste0(
                                "SELECT s.sample_id, l.location, s.target_datetime 
                                FROM samples s 
                                INNER JOIN locations l ON l.location_id = s.location_id 
-                               WHERE media_id = 7 AND collection_method = 1") # media = 'atmospheric', collection_method = 'observation'
+                               WHERE media_id = 7 
+                               AND collection_method = 1
+                               AND target_datetime >= '", year - lookback, "-01-01';")) # media = 'atmospheric', collection_method = 'observation'
     
     Meas <- DBI::dbGetQuery(con, 
                             paste0("SELECT r.sample_id, r.result AS value
@@ -64,8 +68,7 @@ SWE_basin <- function(year,
       on.exit(DBI::dbDisconnect(con), add = TRUE)
     }
     
-    Meas <- DBI::dbGetQuery(con, "SELECT location, swe, target_date
-                            FROM means")
+    Meas <- DBI::dbGetQuery(con, paste0("SELECT location, swe, target_date FROM means WHERE target_date >= '", year - lookback, "-01-01'"))
     # Rename columns:
     colnames(Meas) <- c("location_id", "SWE", "target_date")
   }

@@ -22,7 +22,7 @@
 #' @param plot_scale Adjusts/scales the size of plot text elements. 1 = standard size, 0.5 = half size, 2 = double the size, etc. Standard size works well in a typical RStudio environment.
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
-#' @param discrete_data A dataframe with the data to be plotted. Must contain the following columns: year, month, value and units.
+#' @param discrete_data A data.frame with the data to be plotted. Must contain the following columns: year, month, value and units.
 #' 
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
 #' @export
@@ -199,6 +199,7 @@ hydrometDiscrete <- function(location = NULL,
     # add fake_date
     all_discrete$fake_date <- NA
     all_discrete$fake_date <- as.Date(all_discrete$fake_date)
+    
     #Make a fake date
     if (overlaps) {
       # Add monthday column
@@ -225,7 +226,7 @@ hydrometDiscrete <- function(location = NULL,
     for (i in years) {
       start <- as.Date(paste0(i, substr(startDay, 5, 10)))
       if (overlaps) {
-        end <- as.Date(paste0(i+1, substr(endDay, 5, 10)))
+        end <- as.Date(paste0(i + 1, substr(endDay, 5, 10)))
       } else {end <- as.Date(paste0(i, substr(endDay, 5, 10)))}
 
       # if (overlaps) {
@@ -263,11 +264,9 @@ hydrometDiscrete <- function(location = NULL,
       stats_discrete$fake_date <- NA
       # Fake_date for those before Jan
       mon <- lubridate::month(startDay)
-      #mon <- lubridate::month(lubridate::ymd("2024-01-01") + lubridate::days(startDay - 1))
       stats_discrete[as.numeric(stats_discrete$month) >= mon,]$fake_date <- as.Date(paste0(max(years), "-", stats_discrete[as.numeric(stats_discrete$month) >= mon,]$month, "-01"))
       # Fake_date for those after Jan
       mon <- lubridate::month(endDay)
-      #mon <- lubridate::month(lubridate::ymd("2024-01-01") + lubridate::days(endDay - 1))
       stats_discrete[as.numeric(stats_discrete$month) <= mon,]$fake_date <- as.Date(paste0(max(years+1), "-", stats_discrete[as.numeric(stats_discrete$month) <= mon,]$month, "-01"))
     } else {
       stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
@@ -295,14 +294,16 @@ hydrometDiscrete <- function(location = NULL,
                             ggplot2::aes(color = .data$type, yend = value,
                                          x = .data$fake_date - 12, xend = .data$fake_date + 12)) +
       ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
-      ggnewscale::new_scale_color()
-
+      ggnewscale::new_scale_color() +
+      ggplot2::scale_y_continuous(limits = c(min(min(all_discrete$value), min(stats_discrete$value)), max(max(all_discrete$value), max(stats_discrete$value))), expand = c(0.01, 0.05))
   } else if (plot_type == "violin") {
     plot <- plot +
-      ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width") #Using a scale other than "width" may result in issues for locations where there are many "0" values.
+      ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width") + # Using a scale other than "width" may result in issues for locations where there are many "0" values.        
+      ggplot2::scale_y_continuous(limits = c(min(all_discrete$value), max(all_discrete$value)), expand = c(0.01, 0.05))
   } else if (plot_type == "boxplot") {
     plot <- plot +
-      ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE)
+      ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE) +
+      ggplot2::scale_y_continuous(limits = c(min(all_discrete$value), max(all_discrete$value)), expand = c(0.01, 0.05))
   }
 
   if (nrow(discrete) > 0) {
@@ -318,12 +319,6 @@ hydrometDiscrete <- function(location = NULL,
         ggplot2::geom_segment(data = discrete, linewidth = plot_scale*1.5,
                               ggplot2::aes(yend = value,
                                            x = .data$fake_date - 12, xend = .data$fake_date + 12), color = 'black')
-      # plot <- plot +
-      #   ggplot2::geom_point(data = discrete, mapping = ggplot2::aes(x = .data$fake_date, y = .data$value, colour = as.factor(.data$year), fill = as.factor(.data$year)), size = plot_scale*3.5, shape = 21)
-
-      # plot <- plot +
-      #   ggplot2::scale_colour_manual(name = "Year", labels = unique(years), values = colours[1:length(years)], aesthetics = c("colour", "fill"), na.translate = FALSE, breaks=unique(stats::na.omit(years))[1:length(years)])
-
     }
   }
 
@@ -341,7 +336,6 @@ hydrometDiscrete <- function(location = NULL,
         }
       }
     } else (titl <- custom_title)
-
 
     plot <- plot +
       ggplot2::labs(title = titl) +

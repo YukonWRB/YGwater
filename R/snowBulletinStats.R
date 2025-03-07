@@ -463,6 +463,7 @@ WHERE rn = 1;"
   #### --------------------------- Basins ------------------------------- ####
   basin_stats <- SWE_basin(year = year,
                            month = month,
+                           lookback = 100,
                            threshold = 6,
                            csv = FALSE,
                            summarise = TRUE,

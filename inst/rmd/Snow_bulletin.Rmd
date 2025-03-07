@@ -15,6 +15,7 @@ params:
   cddf_period: cddf_period
   snow_period: snow_period
   water_period: water_period
+  lookback: lookback
   con: con
 editor_options: 
   markdown: 
@@ -146,9 +147,12 @@ snowbullpillow <- function(location, custom_title, year, month, language = "en",
     lang = language,
     gridx = FALSE,
     gridy = FALSE
+    # lookback = lookback
   )
   
-  plot <- plot + ggplot2::theme(legend.position = "none") 
+  # Remove the legend
+  plot <- plot + ggplot2::theme(legend.position = "none")
+    
   
   if (language == "fr") {
     plot <- plot + ggplot2::labs(y = "EEN (mm)")
@@ -169,25 +173,33 @@ snowbullpillow2 <- function(location_pil,
                             year = year_param, 
                             scale = scale_param, 
                             month = month_param) {
-  # Get this years snow pillow
+  # Get this years snow pillow data
   snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily_corrected ",
                                         "WHERE timeseries_id = ", location_pil,
                                         " AND date >= '", year - 1, "-09-01' ", #year_param
                                         "AND date <= '", year, "-0", month, "-01' ")) #year_param
   snow_p$date <- as.POSIXct(snow_p$date)
-  if (max(snow_p$date) > paste0(format(Sys.Date(), "%Y-%m"), "-01")) {
-    snow_p[snow_p$date > paste0(format(Sys.Date(), "%Y-%m"), "-01"),]$value <- NA
-  }
+  # if (max(snow_p$date) > paste0(format(Sys.Date(), "%Y-%m"), "-01")) {
+  #   snow_p[snow_p$date > paste0(format(Sys.Date(), "%Y-%m"), "-01"),]$value <- NA
+  # }
   
-  # Get historical snow survey data
-  # snow_s <- DBI::dbGetQuery(con, paste0("SELECT target_datetime, value FROM measurements_discrete ",
-  #                             "WHERE timeseries_id = ", location_surv))
+  # Get historical snow survey data 
   snow_s <- DBI::dbGetQuery(con, paste0("SELECT s.target_datetime, r.result AS value FROM results r
                                       JOIN samples s ON r.sample_id = s.sample_id
-                                      WHERE s.location_id = ", location_surv, " AND r.parameter_id = 21"))
-  snow_s$fake_date <- as.Date(paste0(year, "-", format(snow_s$target_datetime, "%m-%d"))) #params$year
+                                      WHERE s.location_id = ", location_surv, " 
+                                      AND r.parameter_id = 21"))
+  
+    # snow_s <- DBI::dbGetQuery(con, paste0("SELECT s.target_datetime, r.result AS value FROM results r
+    #                                   JOIN samples s ON r.sample_id = s.sample_id
+    #                                   WHERE s.location_id = ", location_surv, "
+    #                                   AND r.parameter_id = 21 
+    #                                   AND s.target_datetime > '", year - lookback, "-03-01';"))
+    
+  snow_s$fake_date <- as.Date(paste0(year, "-", format(snow_s$target_datetime, "%m-%d")))
+  
   # Only keep those for March, April, May
   snow_s <- snow_s[format(snow_s$fake_date, "%m-%d") %in% c("03-01", "04-01", "05-01"),]
+  
   # Calculate stats
   snow_s <- snow_s %>%
     dplyr::group_by(.data$fake_date) %>%
@@ -206,11 +218,6 @@ snowbullpillow2 <- function(location_pil,
   } else {
     labs = "%b %d"
   }
-  
-  eng_months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-  fr_months  <- c("janv", "févr", "mars", "avr", "mai", "juin",
-                  "juil", "août", "sept", "oct", "nov", "déc")
   
   # Define a custom date labeling function
   custom_date_labels <- function(x) {
@@ -236,8 +243,9 @@ snowbullpillow2 <- function(location_pil,
     ggplot2::theme_classic() +
     ggplot2::geom_line(data = snow_p, ggplot2::aes(y = value, x = date), linewidth = plot_scale * 1) +
     ggplot2::geom_point(dat = snow_s, ggplot2::aes(y = value, x = fake_date, colour = type), size = plot_scale * 2) +
-    ggplot2::scale_x_datetime(date_breaks = "2 months", labels = custom_date_labels, expand = c(0,0), 
-                              limits = c(as.POSIXct(paste0(year - 1, "-09-01")), as.POSIXct(paste0(year, "-06-30")))) + 
+    ggplot2::scale_x_datetime(date_breaks = "2 months", labels = custom_date_labels, expand = c(0, 0), 
+                              limits = c(as.POSIXct(paste0(year - 1, "-09-01"), tz = "UTC"), as.POSIXct(paste0(year, "-06-30"), tz = "UTC"))) + 
+    ggplot2::scale_y_continuous(limits = c(min(min(snow_p$value), min(snow_s$value)), max(max(snow_p$value), max(snow_s$value))), expand = c(0.01, 0.05)) +
     ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
     ggplot2::theme(legend.position = "none") +
     ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale), plot.title = ggplot2::element_text(hjust = 0.05, size = 12*plot_scale, face = "bold")) +
@@ -272,10 +280,15 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale = scal
 
 #### ------------- C: Function to create monthly precip plots ------------- ####
 snowBullPrecip <- function(tsid, year, scale = scale_param, custom_title, language, month = month_param) {
-  tab <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, datetime, value_corrected AS value, period, imputed FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid,
-                                     " AND datetime >= '", year - 40, "-10-01'",
-                                     " AND datetime <= '", year, "-0", month_param, "-02'"))
-  
+    tab <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, datetime, value_corrected AS value, period, imputed
+                                       FROM measurements_continuous_corrected 
+                                       WHERE timeseries_id = ", tsid,
+                                       " AND datetime >= '", year - 40, "-10-01'",
+                                       " AND datetime <= '", year, "-0", month_param, "-02'"))
+    # tab <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, datetime, value_corrected AS value, period, imputed FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid,
+    #                                    " AND datetime >= '", year - lookback, "-10-01'",
+    #                                    " AND datetime <= '", year, "-0", month_param, "-02'"))
+
   attr(tab$datetime, "tzone") <- "MST"
   tab$month <- format(tab$datetime, "%m")
   tab$year <- format(tab$datetime, "%Y")
@@ -289,12 +302,16 @@ snowBullPrecip <- function(tsid, year, scale = scale_param, custom_title, langua
   
   plot <- hydrometDiscrete(location = NULL, parameter = "Total precipitation",
                            tzone = "MST",
-                           years = year - 1,#c(params$year),
-                           startDay = "2023-10-01", # 275
-                           endDay = "2024-05-01", #120
-                           title = TRUE, custom_title = custom_title,
-                           plot_type = "linedbox", plot_scale = scale,
-                           save_path = NULL, discrete_data = tab, con = con)
+                           years = year - 1,
+                           startDay = "2023-10-01",
+                           endDay = "2024-05-01",
+                           title = TRUE, 
+                           custom_title = custom_title,
+                           plot_type = "linedbox", 
+                           plot_scale = scale,
+                           save_path = NULL, 
+                           discrete_data = tab, 
+                           con = con)
   plot <- plot + ggplot2::theme(legend.position = "none")
   
   if (language == "french") {
@@ -329,7 +346,6 @@ getCDDF <- function(temps, year) {
     }
     return(temps)
   } 
-  
   
   # Keep only sept-june data
   temps <- temps[format(temps$datetime, "%m") %in% c("09", "10", "11", "12", "01", "02", "03", "04", "05", "06"),]
@@ -366,14 +382,23 @@ getCDDF <- function(temps, year) {
 
 # Function to create CDDF plots
 snowbullCDDF <- function(timeseries_id, 
-                         custom_title, language="en", 
+                         custom_title, 
+                         language = "en", 
                          year = year_param, 
                          month = month_param, 
                          scale = scale_param) {
+  
   location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value
                                           FROM measurements_continuous_corrected
                                           WHERE timeseries_id = ", timeseries_id, 
-                                          " AND datetime <= '", year, "-0", month, "-01' "))
+                                          " AND datetime <= '", year, "-0", month, "-01';"))
+  
+  # location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value
+  #                                       FROM measurements_continuous_corrected
+  #                                       WHERE timeseries_id = ", timeseries_id, 
+  #                                       " AND datetime <= '", year, "-0", month, "-01'
+  #                                       AND datetime >= '", year - lookback, "-01-01';"))
+  
   
   location <- getCDDF(location, year)
   
@@ -435,6 +460,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
         lang = language,
         gridx = FALSE,
         gridy = FALSE
+        # lookback = lookback
       )
     
     if (exists('flood') &
@@ -446,15 +472,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
             linetype = "dashed",
             color = "red",
             size = 1
-          ) # +
-        # ggplot2::annotate(
-        #   "text",
-        #   x = as.POSIXct(paste0(year+1, "-03-25")),
-        #   y = dplyr::filter(flood, ID == location)$Flood_level_asl, #+ (max(plot$data$max)-min(plot$data$min))/20,
-        #   label = "Flood level",
-        #   colour = "red",
-        #   vjust = -0.5
-        # )
+          )
         if (language == "fr") {
           plot <- plot + ggplot2::labs(y = "Niveau d'eau (m)")
         } 
@@ -467,21 +485,12 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
             color = "red",
             size = 1
           ) +
-          # ggplot2::annotate(
-          #   "text",
-          #   x = as.POSIXct(paste0(year+1, "-03-25")),
-          #   y = dplyr::filter(flood, ID == location)$Flood_flow,  #+ (max(plot$data$max)-min(plot$data$min)),
-          #   label = "Flood level",
-          #   colour = "red",
-          #   vjust = -0.5
-          #   ) + 
           ggplot2::scale_y_log10()
         
         if (language == "fr") {
           plot <- plot + ggplot2::labs(y = expression(paste("Débit (",m^3, "/s)")))
         } 
       }
-      
     } else {
       plot <- plot
     }
@@ -489,10 +498,8 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
     plot <- plot + ggplot2::theme(legend.position = "none") 
     
     return(plot)
-  },
-  error = function(e) {
+  }, error = function(e) {
     message("Error when plotting flow data. It is possible that data is missing.")})
-  
 }
 
 
@@ -503,6 +510,8 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
 # Get SWE data for basins 
 swe_basins <- SWE_basin(year = year_param,
                         month = c(3, 4, 5),
+                        # TODO FIX THIS LOOKBACK
+                        lookback = 100,
                         threshold = 6,
                         csv = FALSE,
                         summarise = FALSE,
@@ -579,13 +588,11 @@ if (language_param == "french") {
                      legend.text = ggplot2::element_text(size = 12, margin = ggplot2::margin(b = 0.2, t = 0.2, unit = "cm")), 
                      legend.title = ggplot2::element_text(size = 12),
                      legend.spacing.x = ggplot2::unit(0.5, 'cm'),
-                     #legend.spacing.y = ggplot2::unit(5, 'cm'),
                      legend.key.width = ggplot2::unit(2, "cm"),
                      legend.key.height = ggplot2::unit(1, "cm"),
                      aspect.ratio = 1,
                      legend.background = ggplot2::element_blank(),
                      legend.box.background = ggplot2::element_rect(colour = "black"),
-                     #legend.title.margin = ggplot2::margin(b = 10),
                      legend.margin = ggplot2::margin(t = 0.3, r = 0.3, b = 0.3, l = 0.3, unit = "cm")
       ) +  # Adjust legend position as needed
       ggplot2::scale_color_manual(name = legend_title, values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
@@ -611,13 +618,11 @@ if (language_param == "french") {
                      legend.text = ggplot2::element_text(size = 12, margin = ggplot2::margin(b = 0.2, t = 0.2, unit = "cm")), 
                      legend.title = ggplot2::element_text(size = 12),
                      legend.spacing.x = ggplot2::unit(0.5, 'cm'),
-                     #legend.spacing.y = ggplot2::unit(5, 'cm'),
                      legend.key.width = ggplot2::unit(2, "cm"),
                      legend.key.height = ggplot2::unit(1, "cm"),
                      aspect.ratio = 1,
                      legend.background = ggplot2::element_blank(),
                      legend.box.background = ggplot2::element_rect(colour = "black"),
-                     #legend.title.margin = ggplot2::margin(b = 10),
                      legend.margin = ggplot2::margin(t = 0.3, r = 0.3, b = 0.3, l = 0.3, unit = "cm")
       ) +  # Adjust legend position as needed
       ggplot2::scale_color_manual(name = legend_title, values = c("#0097A9", "#834333", "#7A9A01", "black", "red", "gray80", "gray90"), labels = lines) +  # Customize legend entries for color
@@ -632,9 +637,6 @@ if (language_param == "french") {
     knitr::include_graphics(system.file("rmd/legend_plot_en.png", package = "YGwater"))
   }
 }
-
-
-
 ```
 
 For information about the bulletin, snowpack conditions, or streamflow
@@ -1377,9 +1379,9 @@ par(mfrow = c(1, 2))
 
 ## A King Solomon Dome
 if (language_param == "french") {
-  snowbullpillow2(location_pil=85, location_surv=136, custom_title="A : Équivalent en eau de la neige à King Solomon Dome" , year=year_param, scale=scale_param)
+  snowbullpillow2(location_pil = 85, location_surv = 136, custom_title="A : Équivalent en eau de la neige à King Solomon Dome" , year = year_param, scale = scale_param)
 } else {
-  snowbullpillow2(location_pil=85, location_surv=136, custom_title="A: King Solomon Dome Snow Water Equivalent" , year=year_param, scale=scale_param)
+  snowbullpillow2(location_pil = 85, location_surv = 136, custom_title="A: King Solomon Dome Snow Water Equivalent" , year = year_param, scale = scale_param)
 }
 
 # B
@@ -1656,10 +1658,10 @@ if (language == "french") {
 # B
 # Plotting 
 if (language_param == "french") {
-  snowbullSWE(loc= "Liard", basin = "Liard",
+  snowbullSWE(loc = "Liard", basin = "Liard",
               year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Liard", language = language_param)
 } else {
-  snowbullSWE(loc= "Liard", basin = "Liard",
+  snowbullSWE(loc = "Liard", basin = "Liard",
               year = year_param, swe_basins = swe_basins, custom_title = "B: Liard Basin Monthly Snow Course", language = language_param)
 }
 
