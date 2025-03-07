@@ -1,7 +1,9 @@
 #' Discrete hydrometric data plotting
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
+#' `r lifecycle::badge('deprecated')`
+#' 
+#' Deprecated for general usage but retained for use with snow bulletin. Use [plotDiscrete()] instead.
 #'
 #' Generate plots of snow survey data (snow water equivalent and snow depth) or other variables sampled at regular intervals (weekly or monthly).
 #'
@@ -294,16 +296,16 @@ hydrometDiscrete <- function(location = NULL,
                             ggplot2::aes(color = .data$type, yend = value,
                                          x = .data$fake_date - 12, xend = .data$fake_date + 12)) +
       ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
-      ggnewscale::new_scale_color() +
-      ggplot2::scale_y_continuous(limits = c(min(min(all_discrete$value), min(stats_discrete$value)), max(max(all_discrete$value), max(stats_discrete$value))), expand = c(0.01, 0.05))
+      ggnewscale::new_scale_color() # +
+      # ggplot2::scale_y_continuous(limits = c(min(min(all_discrete$value), min(stats_discrete$value)), max(max(all_discrete$value), max(stats_discrete$value))), expand = c(0.01, 0.05))
   } else if (plot_type == "violin") {
     plot <- plot +
-      ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width") + # Using a scale other than "width" may result in issues for locations where there are many "0" values.        
-      ggplot2::scale_y_continuous(limits = c(min(all_discrete$value), max(all_discrete$value)), expand = c(0.01, 0.05))
+      ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width") #+ # Using a scale other than "width" may result in issues for locations where there are many "0" values.        
+      # ggplot2::scale_y_continuous(limits = c(min(all_discrete$value), max(all_discrete$value)), expand = c(0.01, 0.05))
   } else if (plot_type == "boxplot") {
     plot <- plot +
-      ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE) +
-      ggplot2::scale_y_continuous(limits = c(min(all_discrete$value), max(all_discrete$value)), expand = c(0.01, 0.05))
+      ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE) #+
+      # ggplot2::scale_y_continuous(limits = c(min(all_discrete$value), max(all_discrete$value)), expand = c(0.01, 0.05))
   }
 
   if (nrow(discrete) > 0) {
