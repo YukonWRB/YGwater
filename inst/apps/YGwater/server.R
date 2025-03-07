@@ -108,7 +108,7 @@ app_server <- function(input, output, session) {
                                             username = config$dbUser,
                                             password = config$dbPass,
                                             silent = TRUE)
-
+  
   print("Connected to AquaCache")
   
   session$onUnhandledError(function() {
@@ -166,7 +166,7 @@ app_server <- function(input, output, session) {
   
   # Log in/out for edits ##########################################
   log_attempts <- reactiveVal(0) # counter for login attempts
-  user_logged_in <- reactiveVal(FALSE) # Reactive value to track login status
+  session$userData$user_logged_in <- FALSE # value to track login status
   
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
@@ -212,6 +212,7 @@ $(document).keyup(function(event) {
       return()
     }
     log_attempts(log_attempts() + 1)
+
     tryCatch({
       session$userData$AquaCache_new <- AquaConnect(name = session$userData$config$dbName, 
                                                     host = session$userData$config$dbHost,
@@ -237,7 +238,7 @@ $(document).keyup(function(event) {
         session$userData$config$dbUser <- input$username
         session$userData$config$dbPass <- input$password
         
-        user_logged_in(TRUE)
+        session$userData$user_logged_in <- TRUE
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
@@ -260,7 +261,7 @@ $(document).keyup(function(event) {
       } else {
         showModal(modalDialog(
           title = "Login Failed",
-          "Invalid username or password.",
+          "Invalid username or password or insufficient privileges.",
           easyClose = TRUE,
           footer = modalButton(tr("close", languageSelection$language))
         ))
@@ -288,7 +289,7 @@ $(document).keyup(function(event) {
   ## Log out #####################################################
   observeEvent(input$logoutBtn, {
     
-    user_logged_in(FALSE)  # Set login status to FALSE
+    session$userData$user_logged_in <- FALSE  # Set login status to FALSE
     # Hide the 'admin' tabs upon logout
     hideTab(inputId = "navbar", target = "admin")
     showTab(inputId = "navbar", target = "viz", select = TRUE)
@@ -301,11 +302,15 @@ $(document).keyup(function(event) {
     DBI::dbDisconnect(session$userData$AquaCache)
     # Re-create the connection with the base 'config' parameters, no edit privileges
     session$userData$AquaCache <- AquaConnect(name = config$dbName, 
-                              host = config$dbHost,
-                              port = config$dbPort,
-                              username = config$dbUser,
-                              password = config$dbPass,
-                              silent = TRUE)
+                                              host = config$dbHost,
+                                              port = config$dbPort,
+                                              username = config$dbUser,
+                                              password = config$dbPass,
+                                              silent = TRUE)
+    
+    # Reset the session userData with the default credentials
+    session$userData$config$dbUser <- config$dbUser
+    session$userData$config$dbPass <- config$dbPass
     
     # Redirect to last 'viz' tab
     updateTabsetPanel(session, "navbar", selected = last_viz_tab())
@@ -331,7 +336,7 @@ $(document).keyup(function(event) {
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
   last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
-
+  
   # Move between tabs/modules
   observeEvent(input$navbar, {
     if (programmatic_change()) {
@@ -354,7 +359,7 @@ $(document).keyup(function(event) {
       showTab(inputId = "navbar", target = "img")
       showTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       # don't show 'admin' tab unless logged in
-      if (user_logged_in()) {  # this UI element is generated upon successful login
+      if (session$userData$user_logged_in) {  # this UI element is generated upon successful login
         showTab(inputId = "navbar", target = "admin")
       }
       
@@ -380,7 +385,7 @@ $(document).keyup(function(event) {
                   tabPanel(title = "Switch to View mode", value = "viz",
                            uiOutput("viz_ui")),
                   target = "home", position = "before"
-                  )
+        )
         tab_created$viz <- TRUE
       }
       if (!tab_created$locs) {
@@ -433,7 +438,7 @@ $(document).keyup(function(event) {
                              tabPanel(title = "Images", value = "addImgs",
                                       uiOutput("addImgs_ui"))
                              #.... plus extra tabs for vectors and rasters when built
-                             ),
+                  ),
                   target = "data", position = "after")
         tab_created$files <- TRUE
         tab_created$addDocs <- TRUE

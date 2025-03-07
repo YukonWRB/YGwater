@@ -58,6 +58,7 @@ Imports:
     zoo
 Suggests:
     AquaCache,
+    bslib,
     DT,
     exifr,
     flextable,

@@ -22,10 +22,9 @@ floodAtlas <- function(app, host = getOption("shiny.host", "127.0.0.1"), port = 
   
   rlang::check_installed("shiny", reason = "required to use floodAtlas app")
   rlang::check_installed("shinyjs", reason = "required to use floodAtlas app")
-  
-  # Add these in the suggests if used
   rlang::check_installed("promises", reason = "required to enable asynchronous operations in floodAtlas apps")
   rlang::check_installed("future", reason = "required to enable asynchronous operations in floodAtlas apps")
+  rlang::check_installed("bslib", reason = "required to enable bootstrap 5 themes and elements in floodAtlas apps")
   
   # If on Windows OR running interactively, use multisession, else use multicore
   if (Sys.info()["sysname"] == "Windows" | interactive()) {
@@ -33,8 +32,6 @@ floodAtlas <- function(app, host = getOption("shiny.host", "127.0.0.1"), port = 
   } else {
     future::plan("multicore")
   }
-  
-  # future::plan("multisession")
   
   if (app == "overlap") {
     appDir <- system.file("apps/floodAtlas_over", package = "YGwater")
