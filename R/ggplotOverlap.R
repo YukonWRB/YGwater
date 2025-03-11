@@ -65,7 +65,7 @@
 # years <- "2024"
 # datum <- FALSE
 # title <- TRUE
-# custom_title <- "A2 : Équivalent en eau de la neige - Wolf Creek"
+# custom_title <- "A2 : equivalent en eau de la neige - Wolf Creek"
 # filter <- NULL
 # historic_range <- "all"
 # returns <- "none"
@@ -722,8 +722,8 @@ ggplotOverlap <- function(location,
   
   eng_months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-  fr_months  <- c("janv", "févr", "mars", "avr", "mai", "juin",
-                  "juil", "août", "sept", "oct", "nov", "déc")
+  fr_months  <- c("janv", "f\u00E9vr", "mars", "avr", "mai", "juin",
+                  "juil", "ao\u00FBt", "sept", "oct", "nov", "d\u00E9c")
   
   # Define a custom date labeling function
   custom_date_labels <- function(x) {

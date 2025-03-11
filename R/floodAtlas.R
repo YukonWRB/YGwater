@@ -22,7 +22,6 @@ floodAtlas <- function(app, host = getOption("shiny.host", "127.0.0.1"), port = 
   
   rlang::check_installed("shiny", reason = "required to use floodAtlas app")
   rlang::check_installed("shinyjs", reason = "required to use floodAtlas app")
-  rlang::check_installed("promises", reason = "required to enable asynchronous operations in floodAtlas apps")
   rlang::check_installed("future", reason = "required to enable asynchronous operations in floodAtlas apps")
   rlang::check_installed("bslib", reason = "required to enable bootstrap 5 themes and elements in floodAtlas apps")
   

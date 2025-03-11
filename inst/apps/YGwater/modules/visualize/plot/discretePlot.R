@@ -443,7 +443,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
       }
 
       tryCatch({
-        withProgress(message = translations[id == "generating_working", get(language$language)][[1]], value = 0, {
+        withProgress(message = tr("generating_working", language$language), value = 0, {
           incProgress(0.5)
           if (input$data_source == "EQ") {
             plot <- plotDiscrete(start = input$date_range[1],
