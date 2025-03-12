@@ -72,24 +72,32 @@ initialize_csv <- function(dat, filename) {
   dat_with_tags_notes <- dat %>%
     select(FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude) %>%
     rename(filename = FileName, latitude = GPSLatitude, longitude = GPSLongitude, altitude = GPSAltitude, datetime = DateTimeOriginal) %>%
-    mutate(Tags = "", Notes = "")
+    mutate(Tags = "", Notes = "", visibility = "Private")
   
   # Write the new data frame to a CSV file
   write.csv(dat_with_tags_notes, filename, row.names = FALSE)
+  return(dat_with_tags_notes)
 }
 
 preprocess_exif <- function(dat) {
-  dat <- dat %>%
+  stopifnot("FileName" %in% colnames(dat))
+  stopifnot("GPSLatitude" %in% colnames(dat))
+  stopifnot("GPSLongitude" %in% colnames(dat))
+  stopifnot("GPSAltitude" %in% colnames(dat))
+  stopifnot("DateTimeOriginal" %in% colnames(dat))
+
+  dat_out <- dat %>%
     select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude) %>%
     rename(sourcefile = SourceFile, filename = FileName, latitude = GPSLatitude, longitude = GPSLongitude, altitude = GPSAltitude, datetime = DateTimeOriginal) %>%
-    mutate(Tags = "", Notes = "") %>%
+    mutate(Tags = "", Notes = "", visibility = "Private") %>%
     filter(latitude != 0 & longitude != 0)
     
-  return(dat)
+  return(dat_out)
 }
 
 # Define a dictionary to map checkbox choices to tags
-tag_list = list(" ", "Head", "Tail", "Smooth Ice")
+tag_list = list(" ", "Head", "Toe", "Smooth ice", "In flood")
+share_list = list("Private", "Public")
 
 # Create a temporary directory and CSV file
 temp_dir <- tempdir()
@@ -138,6 +146,7 @@ ui <- fluidPage(
       br(),
       br(),
       selectInput("image_tags", "Select tags:", choices = tag_list, multiple = FALSE),
+      selectInput("share_tag", "Select visibility:", choices = share_list, multiple = FALSE),
       textAreaInput("notes", "Notes:", value = "", width = "100%", height = "100px"),
       actionButton("save_notes", "Save Notes")
     ),
@@ -323,6 +332,18 @@ server <- function(input, output, session) {
       
       # Reset the dropdown menu and reload table (to show updated tags)
       updateSelectInput(session, "image_tags", selected = " ")
+      renderDataTable()
+    }
+  })
+
+  observeEvent(input$share_tag, {
+    if (length(input$table_rows_selected) > 0) {
+      for (row in input$table_rows_selected) {
+        dat$df$visibility[row] <- input$share_tag
+      }
+      
+      # Reset the dropdown menu and reload table (to show updated tags)
+      updateSelectInput(session, "share_tag", selected = "Private")
       renderDataTable()
     }
   })

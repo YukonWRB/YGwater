@@ -1,0 +1,441 @@
+"standards.StdId","standards.StdCode","standards.StdFlag","standards.StdDesc","standards.StdName","standards.StdNotes","standards.udf_StnGroup","standards.udf_StartDate","standards.udf_EndDate","standards.udf_Licence","standards.udf_LastUpdated","standards.udf_StnCodeApplicability","standards.udf_Status"
+111,"OC_WUL_EFF_OCL-6or7_2017","L","Old Crow Lagoons WL (OCL-6 and OCL-7)","Old Crow Primary MN17-028",NA,"OC",2017-08-03,NA,"MN17-028
+MN17-028-1","2018 Dec by TW","OCL-6
+OCL-7",NA
+112,"EG_WUL_WQO_W4/29/99/23","Q","WQO for Haggart Creek","EG_WUL_WQO","updated from EMSAMP v2019-01","EG",NA,NA,"QZ14-041","2019 May by TW","W4
+W29
+W99
+W23",NA
+113,"FEQGs","F","Federal water quality guidelines - freshwater aquatic life","FEQGs",NA,"XX",NA,NA,NA,NA,NA,NA
+114,"OC_WUL_EFF_OCL3_2017","L","Old Crow Lagoons WL (OCL-3)","Old Crow Secondary MN17-028",NA,"OC",2017-08-03,NA,"MN17-028","2018 Dec by TW","OCL-3",NA
+115,"KNO_WUL_EFF_KV-43_2013","L","Bellekeno (KV-43) effluent standard","KNO_WUL_EFF_KV-43_2013",NA,"KNO",2010-08-20,NA,"QZ09-02
+QZ12-053
+QZ09-092-2","2018 Aug by TW","KV-43",NA
+116,"KNO_WUL_EFF_KV-104C","L","Flame and Moth site effluent standard when discharging to Christal Ck","KNO_WUL_EFF_KV-104C","standards are flow dependent","KNO",2017-12-22,NA,"QZ09-092-2","2018 Aug by TW","KV-104C",NA
+117,"KNO_WUL_EFF_KV-104L","L","Flame and Moth site effluent standard when discharging to Lightning Ck","KNO_WUL_EFF_KV-104L","standards are flow dependent","KNO",2017-12-22,NA,"QZ09-092-2","2018 Aug by TW","KV-104L",NA
+118,"MYO_WUL_RWC_1990","L","WUL standards for groundwater moitoring wells T-4 and T-5 effective 1990","MYO_RWC_1990",NA,"MYO",1990-09-25,2010-09-01,"MN90-002
+MN00-029","2018 Aug by TW","T-4
+T-5","Expired"
+119,"MYO_WUL_EFF_1990","L","WUL standards for discharge from wastewater treatment emergency overflow (T-7)","MYO_WUL_EFF_1990",NA,"MYO",1993-05-06,2010-09-01,"MN90-002
+MN00-029","2018 Aug by TW","T-7","Expired"
+120,"WH_WUL_EFF_WH-7-97_1994","L","Whitehorse Sewage Lagoon standards at the point of discharge","WUL_EFF_WH-7-97_1994",NA,"WH",1994-04-01,2013-08-15,"MN93-001","2021 July by MD","WH-7-97","Expired"
+121,"WH_WUL_EFF_WH-9b_2008","L","LTECF standards for discharge to Yukon River or Pothole Lake","WUL_EFF_WH-9b_2008",NA,"WH",2008-10-30,2013-08-15,"MN08-076","2021 July by MD","WH-9b","Expired"
+122,"CC_WUL_EFF_2011","L","Carcross effluent discharged from treatment lagoons (CC-4)","CC_WUL_EFF_2011",NA,"CC",2011-10-14,2016-06-14,"MN10-082
+MN10-082-2","2018 Aug by TW","CC-4",NA
+123,"ICY_WUL_EFF_2017","L","Effluent standards for PS-2b and PS-5a starting June 30, 2017","ICY_WUL_EFF_2017","PO4T and TSS dependent on background conditions","ICY",2017-06-30,NA,"MS11-041","2018 Aug by TW","PS-2b
+PS-5a",NA
+124,"KNO_AMP_WQO_KV-50_2018","A","KV-50 short-term WQOs, Apr2018 Production AMP","KNO_AMP_WQO_KV-50_2018","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",NA,NA,"QZ09-092-2","2018 Aug by TW","KV-50",NA
+277,"KNO_AMP_WQO_KV-88D_2021","A","KV-88D WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-88D_2021","Many objectives are linked to YCSR. Date range ( Oct 2011- Jul 2021).","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-88D",NA
+278,"KNO_AMP_WQO_KV-88S_2021","A","KV-88S WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-88S_2021","Many objectives are linked to YCSR. Data from June 2012; Well mostly frozen/dry since 2013.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-88S",NA
+279,"KNO_AMP_WQO_KV-89D_2021","A","KV-89D WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-89D_2021","Many objectives are linked to YCSR. Date range (Oct 2011- Oct 2017).","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-89D",NA
+280,"KNO_AMP_WQO_KV-89S_2021","A","KV-89S WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-89S_2021","Many objectives are linked to YCSR. Date range (Jun 2018 to Aug 2021).","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-89S",NA
+281,"KNO_AMP_WQO_KV-109_2021","A","KV-109 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-109_2021","Many objectives are linked to YCSR. Date range (Jun 2018 to Jul 2021).","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-109",NA
+282,"KNO_AMP_WQO_RB-MW-1_2021","A","RB-MW-1 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_RB-MW-1_2021","Many objectives are linked to YCSR. Date range (Sept 2013 to Jul 2021).","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","RB-MW-1",NA
+283,"KNO_AMP_WQO_KV-116_2021","A","KV-116 WQOs, Oct 2021 AMP, Newly installed well.","KNO_AMP_WQO_KV-116_2021","Many objectives are linked to YCSR. Date range (Nov 2020 to Aug 2021). Needs to be updated annually until three years of data collected.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-116",NA
+284,"KNO_AMP_WQO_NC-MW-1_2021","A","NC-MW-1 WQOs, Oct 2021 AMP, Newly installed well.","KNO_AMP_WQO_NC-MW-1_2021","Many objectives are linked to YCSR. Date range (Nov 2020 to Aug 2021). Needs to be updated annually until three years of data collected.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","NC-MW-1",NA
+285,"KNO_AMP_WQO_KV-122_2021","A","KV-122 WQOs, Oct 2021 AMP, Newly installed well.","KNO_AMP_WQO_KV-122_2021","Many objectives are linked to YCSR. Date range (Nov 2020 to Aug 2021). Needs to be updated annually until three years of data collected.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-122",NA
+286,"KNO_AMP_WQO_KV-123_2021","A","KV-123 WQOs, Oct 2021 AMP, Newly installed well.","KNO_AMP_WQO_KV-123_2021","Many objectives are linked to YCSR. Date range (Nov 2020 to Aug 2021). Needs to be updated annually until three years of data collected.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-123",NA
+287,"KNO_AMP_WQO_KV-125_2021","A","KV-125 WQOs, Oct 2021 AMP, Newly installed well.","KNO_AMP_WQO_KV-125_2021","Many objectives are linked to YCSR. Date range (Nov 2020 to Aug 2021). Needs to be updated annually until three years of data collected.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-125",NA
+288,"KNO_AMP_WQO_KV-126_2021","A","KV-126 WQOs, Oct 2021 AMP, Newly installed well.","KNO_AMP_WQO_KV-126_2021","Many objectives are linked to YCSR. Date range (Nov 2020 to Aug 2021). Needs to be updated annually until three years of data collected.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-126",NA
+289,"SDH-AMP_SPT2_MH-02_2018","A","AMP Specific Threshold 2 for MH-02 (2018 revisions)","SDH MH-02 ST2_2018","an increase of no more than 50% above max observed concentrations. AMP revisions 2018-02.","SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","MH-02",NA
+290,"SDH-AMP_SPT2_MH-22_2018","A","AMP Specific Threshold 2 for MH-22 (2018 revisions)","SDH MH-22 ST2_2018","an increase of no more than 50% above max observed concentrations. AMP revisions 2018-02.","SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","MH-22",NA
+291,"SDH-AMP_SPT2_SDH-S2_2018","A","AMP Specific Threshold 2 for SDH-S2 (2018 revisions)","SDH SDH-S2 ST2_2018","an increase of no more than 50% above max observed concentrations. AMP revisions 2018-02.","SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","SDH-S2",NA
+292,"SDH-AMP_SPT1_MH-02_2018","A","AMP Specific Threshold 1 for MH-02 (2018 revisions)","SDH MH-02 ST1_2018","an increase of no more than 25% above max observed concentrations. AMP revisions 2018-02.","SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","MH-02",NA
+293,"SDH-AMP_SPT1_MH-22_2018","A","AMP Specific Threshold 1 for MH-22 (2018 revisions)","SDH MH-22 ST1_2018","an increase of no more than 25% above max observed concentrations. AMP revisions 2018-02.","SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","MH-22",NA
+294,"SDH-AMP_SPT1_SDH-S2_2018","A","AMP Specific Threshold 1 for SDH-S2  (2018 revisions)","SDH SDH-S2 ST1_2018","an increase of no more than 25% above max observed concentrations. AMP revisions 2018-02.","SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","SDH-S2",NA
+295,"SDH-AMP_SPT2_MW13-01_2018","A","AMP Specific Threshold 2 for MW13-01 (2018 revisions)","SDH MW13-01 ST2_2018",NA,"SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","MW13-01",NA
+296,"SDH-AMP_SPT2_MW13-06_2018","A","AMP Specific Threshold 2 for MW13-06 (2018 revisions)","SDH MW13-06 ST2_2018",NA,"SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","MW13-06",NA
+297,"SDH-AMP_SPT2_MW13-08_2018","A","AMP Specific Threshold 2 for MW13-08 (2018 revisions)","SDH MW13-08 ST2_2018",NA,"SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","MW13-08",NA
+298,"SDH-AMP_SPT2_MW13-13_2018","A","AMP Specific Threshold 2 for MW13-13 (2018 revisions)","SDH MW13-13 ST2_2018",NA,"SDH",2018-02-12,NA,"QZ16-051","2022-04-05 by TH and JVZ","MW13-13",NA
+299,"CCME_ST","S","CCME guidelines for the protection of aquatic life, short term exposure","CCME PAL Short Term Exposure",NA,"XX",NA,NA,NA,"2022 Dec by MDucha",NA,NA
+300,"BC_MOE_fAL_LT_P","P","BC Ministry of Env , Protect. Freshwater, Long Term, Phototoxic Conditions","BC MOE PAL LT Phototoxic",NA,"XX",NA,NA,NA,"2022 Dec by MDucha",NA,NA
+301,"CCME_D_LT","l","CCME guidelines for protection of aquatic life, long term exp,  DISSOLVED Metal","CCME PAL Long Term Exp Dissolved","To apply for dissolved metals.....be aware when using that most CCME guidelines apply to TOTAL metals.","XX",NA,NA,NA,"Created 2023 Jan by MUCHA",NA,NA
+302,"CCME_D_ST","s","CCME guidelines for protection of aquatic life, short term exp, DISSOLVED Metal","CCME PAL Short Term Exp Dissolved","To apply for dissolved metals.....be aware when using that most CCME guidelines apply to TOTAL metals.","XX",NA,NA,NA,"Created 2023 Jan by MUCHA",NA,NA
+303,"MYO_WUL_Disch",NA,"Village of Mayo,  MN10-055-4 clause 28 (T6e) ends in 2023-11-01","MN10-055-4_28",NA,"MYO",2023-03-14,NA,"MN10-055-4","2023-03-MDUCHA","T-6e","Active"
+304,"MLTF_WUL_WQO","L","MN20-058 WUl WQO that aplies to ML3 and MW12-03-ML","Marsh Lake TF WUL WQO","added in September 2023 by Mducha. Still needs ammonia calculation","MLTF",2031-06-25,2031-06-25,"MN20-058","2023-Sept-MDucha","ML-3, MW12-03 ML",NA
+305,"NSN_AMP_MillArea_Mod","A","Mill Area (MW09-16, MW09-18, MW09-19) moderate trigger","Nansen AMP Mill Area wells moderate trigger","source: September 2022 AMP memo","NSN",2022-10-31,NA,"QZ19-055","2023-Oct-TW","MW09-16, MW09-18, MW09-19","Active"
+306,"NSN_AMP_MillArea_High","A","Mill Area (MW09-16, MW09-18, MW09-19) high AMP trigger","Nansen AMP Mill Area wells high trigger","source: September 2022 AMP memo","NSN",2022-10-31,NA,"QZ19-055","2023-Oct-TW","MW09-16, MW09-18, MW09-19","Active"
+307,"NSN_AMP_GSI-HA-04A_Mod","A","GSI-HA-04 moderate AMP trigger","Nansen AMP GSI-HA-04A moderate trigger","source: September 2022 AMP memo","NSN",2022-10-31,NA,"QZ19-055","2023-Oct-TW","GSI-HA-04A","Active"
+308,"NSN_AMP_GSI-HA-04A_High","A","GSI-HA-04 high AMP trigger","Nansen AMP GSI-HA-04A high trigger","source: September 2022 AMP memo","NSN",2022-10-31,NA,"QZ19-055","2023-Oct-TW","GSI-HA-04A","Active"
+309,"NSN_AMP_MP09-09_Mod","A",NA,"Nansen AMP MP09-09 moderate trigger","source: October 2022 AMP memo","NSN",2022-11-30,NA,"QZ19-055","2023-Oct-TW","MP09-09","Active"
+310,"NSN_AMP_MP09-09_High","A",NA,"Nansen AMP MP09-09 high trigger","source: October 2022 AMP memo","NSN",2022-11-30,NA,"QZ19-055","2023-Oct-TW","MP09-09","Active"
+311,"NSN_AMP_MW09-02_Mod","A",NA,"Nansen AMP MW09-02 moderate trigger","source: October 2022 AMP memo","NSN",2022-11-30,NA,"QZ19-055","2023-Oct-TW","MW09-02","Active"
+312,"NSN_AMP_MW09-02_High","A",NA,"Nansen AMP MW09-02 high trigger","source: October 2022 AMP memo","NSN",2022-11-30,NA,"QZ19-055","2023-Oct-TW","MW09-02","Active"
+313,"NSN_AMP_MW09-04_Mod","A",NA,"Nansen AMP MW09-04 moderate trigger","source: October 2022 AMP memo","NSN",2022-11-30,NA,"QZ19-055","2023-Oct-TW","MW09-04","Active"
+314,"NSN_AMP_MW09-04_High","A",NA,"Nansen AMP MW09-04 high trigger","source: October 2022 AMP memo","NSN",2022-11-30,NA,"QZ19-055","2023-Oct-TW","MW09-04","Active"
+315,"NSN_AMP_AMI2_Mod","A","Mt Nansen AMP moderate trigger for SEEP (AMI2)","Nansen AMP SEEP moderate trigger","source: December 2022 AMP memo","NSN",2023-01-30,NA,"QZ19-055","2023-Oct-TW","SEEP","Active"
+316,"NSN_AMP_AMI2_High","A","Mt Nansen AMP high trigger for SEEP (AMI2)","Nansen AMP SEEP high trigger","source: December 2022 AMP memo","NSN",2023-01-30,NA,"QZ19-055","2023-Oct-TW","SEEP","Active"
+317,"NBB-TSS-WUL2024","f","Nisutlin Bridge WUL MS21-058","Nisutlin Bridge WUL MS21-058","Turbidity and pH only. Turbidity standard based on background from upstream sampling sites","NB",NA,NA,"MS21-058","2024-03-TdJ",NA,"Active"
+318,"HJ_WUL","L","Direct use of water and operation of a municipal wastewater treatment system.","HJ_WUL_2024","Any discharge from the wastewater treatment facility must meet the following effluentquality standards at monitoring stations HJ-4 and HJ-4a, as described in Schedule A of thisLicence","HJ",2024-05-01,NA,"MN21-029
+","2024-05-TdJ",NA,"Active"
+319,"HJ_WQO_HJ-10","L","Water Quality Objectives at HJ-10","HJ_WQO_HJ-10","Water Quality Objectives at HJ-10","HJ",2024-05-01,NA,NA,NA,NA,NA
+321,"CCME_livestock","A","Water Quality Guidelines for the Protection of Agriculture Irrigation, Livestock","CCME Protection of Agriculture, Livestock","Water Quality Guidelines for the Protection of Agriculture, Livestock","XX",NA,NA,NA,"2024-07tdJ",NA,NA
+322,"S_McQ_WQO_max","M","South McQuesten WQO (maximum) developed for YT09DD0008 (Minnow, 2022)","South McQuesten River max WQO",NA,NA,NA,NA,NA,"2024 Jul by TW",NA,NA
+323,"S_McQ_WQO_avg","Y","South McQuesten WQO (central tendancy) developed for YT09DD0008 (Minnow, 2022)","South McQuesten River central tendancy WQO",NA,NA,NA,NA,NA,"2024 Jul by TW",NA,NA
+324,"HCDW_MAC2024","C",NA,"Health Canada Drinking Water (MAC) 2024","Health Canada DW guidelines. Maximum Allowable Concentration (MAC). NOT A COMPLETE SET.","XX",NA,NA,NA,"2024 Jul by TdJ",NA,NA
+326,"95pSW_EG","P",NA,"NinetyFivePercentile_SW_EG","*not complete","EG",2024-07-23,NA,NA,NA,"LDSP-UND
+W21
+W22
+W23
+W27
+W29
+W4-mix
+W45
+W49
+W8
+W99
+",NA
+327,"95pGW_EG","p",NA,"EG 95 percentile GW","*not complete","EG",2024-07-23,NA,NA,NA,"BH-BGC11-72
+MW18-DG2R
+MW18-LDSP1
+MW19-DG6Ra
+MW19-DG6Rb
+MW19-EVP1b
+MW19-LDSP2a
+MW19-LDSP2b
+",NA
+328,"(EG)W22_95th","P","Calculated, In EQWIN, 1/2 for <DL for all dates previous to June 24th","W22 95th Perc Pre Fail, <DL not included","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,"Sept 25 2024, MD","(EG)W22","Active"
+329,"(EG)W4-mix_95th","P","Calculated, In EQWIN, half values for <DL for all dates previous to June 24th","W4-mix 95th Perc Pre Fail, <DL not includ","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,"Sept 25 2024, MD","(EG)W4-mix","Active"
+330,"(EG)W4_95th","P","Calculated, In EQWIN, half values for <DL for all dates previous to June 24th","W4 95th Perc Pre Fail, <DL not included","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,"Sept 25 2024, MD","(EG)W4","Active"
+331,"(EG)W25_95th","P","Calculated, In EQWIN, half values for <DL for all dates previous to June 24th","W25 95th Perc Pre Fail, <DL not included","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,"Sept 25 2024, MD","(EG)W25","Active"
+332,"(EG)W29_95th","P","Calculated, In EQWIN, half values for <DL for all dates previous to June 24th","W29 95th Perc Pre Fail, <DL not included","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,"Sept 25 2024, MD","(EG)W29","Active"
+333,"(EG)W99_95th","P","Calculated, In EQWIN, half values for <DL for all dates previous to June 24th","W99 95th Perc Pre Fail, <DL not included","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,"Sept 25 2024, MD","(EG)W99","Active"
+42,"NSN_WUL_EFF_1996","L","Mt Nansen : applies to all effluent discharged from the project","QZ94-004",NA,"NSN",1996-03-14,2000-09-30,"QZ94-004
+QZ99-043",NA,"E7","Expired"
+46,"SDH-WUL_EFF_1991","L","Effluent standards for all points of entry to recieving waters","Water Licence Discharge",NA,"SDH",1991-01-31,2002-01-27,"QZ90-002
+QZ97-025
+QZ00-047
+QZ00-048","2018 Aug by TW",NA,NA
+47,"SDH-WUL_EFF_2002","L","Effluent standards for all points of entry to recieving waters amended Jan 2002","Water Licence QZ99-045",NA,"SDH",2002-01-28,2017-03-30,"QZ99-045
+QZ05-070
+QZ09-093
+QZ15-082
+QZ16-080","2018 Aug by TW",NA,NA
+50,"SEK_AMP_SPT_W13","A","95th percentile threshold Adaptive Management Plan for W13, June 2016","W13-AMP",NA,"SEK",NA,NA,NA,NA,"W13",NA
+51,"SEK_WUL_EFF_W5_2016","L","Waste discharged at Station W5 or other points of entry into receiving waters","QZ15-060",NA,"SEK",2016-04-29,NA,"QZ15-060-1","2018 Sep by TW","W5",NA
+52,"SEK_AMP_SPT_W6","A","threshold Adaptive Management Plan for W6, June 2016","W6-AMP","requires two consecutive exceedances. Zinc WQO was determined by the board (others are 95th percentile)","SEK",NA,NA,NA,"2022 May by TW","W6",NA
+53,"SEK_AMP_SPT_W8","A","95th percentile threshold Adaptive Management Plan for W8, June 2016","W8-AMP",NA,"SEK",NA,NA,NA,NA,"W8",NA
+54,"WLV_WUL_EFF_2009","L","Type B ammended standards for waste rock storage, settling pond, sump","WLV_WUL_EFF_2009",NA,"WLV",2009-07-10,2015-01-11,"QZ01-051","2018 Aug by TW",NA,NA
+55,"WLV_WUL_EFF_2005","L","Type B licence effluent standards for waste rock storage, settling pond, sump","WLV_WUL_EFF_2005",NA,"WLV",2005-04-04,2009-07-10,"QZ01-051","2018 Aug by TW",NA,NA
+56,"WLV_WUL_EFF_GoCrk_2007","L","WUL standards for any water discharged to Go Creek","WLV_WUL_EFF_GoCrk_2007",NA,"WLV",2007-10-04,NA,"QZ04-065","2018 Aug by TW",NA,NA
+57,"WLV_WUL_EFF_WlvCk_2007","L","WUL standards for discharge from dewatering wells to Wolverine Creek","WLV_WUL_EFF_WlvCk_2007","Dewatering wells were never constructed so the standards were never applied","WLV",2007-10-04,NA,"QZ04-065","2018 Aug by TW",NA,NA
+58,"MYB_WUL_EFF","L","Mayo B standards for runoff from waste rock stockpiles","HY99-012","checked in July 2022 by MDUCHA","MYB",2011-05-12,NA,"HY99-012, HY10-056",NA,"WR-1
+WR-2
+WR-3",NA
+59,"RR_WUL_EFF_2003","L","Ross River GW compliance MW standards for discharge from infiltration pit","RR_WUL_EFF_2003",NA,"RR",2003-05-20,2013-04-30,"MN02-044",NA,"RR-MW01
+RR-MW02
+RR-MW03",NA
+60,"BL_WUL_EFF_BL-3","L","Burwash effluent standards for discharge from the end of the wetlands (BL-3)","BL_WUL_EFF_BL-3","Oil and Grease standard of ""not detectable""","BL",2003-09-03,2013-10-11,"MN02-046","2018 Sep by TW","BL-3",NA
+164,"KNO_AMP_SPT_GT-8_GS","A","AMP maximum threshold for GT-8 updated 2018","KNO_AMP_SPT_GT-8_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","GT-8",NA
+165,"KNO_AMP_SPT_H6D_GS","A","AMP maximum threshold for H6D updated 2018","KNO_AMP_SPT_H6D_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H6D",NA
+166,"KNO_AMP_SPT_H5D_GS","A","AMP maximum threshold for H5D updated 2018","KNO_AMP_SPT_H5D_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H5D",NA
+167,"KNO_AMP_SPT_H5S_GS","A","AMP maximum threshold for H5S updated 2018","KNO_AMP_SPT_H5S_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H5S",NA
+168,"KNO_AMP_SPT_H4D_GS","A","AMP maximum threshold for H4D updated 2018","KNO_AMP_SPT_H4D_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H4D",NA
+169,"KNO_AMP_SPT_H4S_GS","A","AMP maximum threshold for H4S updated 2018","KNO_AMP_SPT_H4S_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H4S",NA
+170,"KNO_AMP_SPT_SK-MW-1_GS","A","AMP maximum threshold for SK-MW-1 updated 2018","KNO_AMP_SPT_SK-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","SK-MW-1",NA
+171,"KNO_AMP_SPT_HS-MW-1_GS","A","AMP maximum threshold for HS-MW-1 updated 2018","KNO_AMP_SPT_HS-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","HS-MW-1",NA
+172,"KNO_AMP_SPT_HS-MW-2_GS","A","AMP maximum threshold for HS-MW-2 updated 2018","KNO_AMP_SPT_HS-MW-2_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","HS-MW-2",NA
+173,"KNO_AMP_SPT_ST-MW-1_GS","A","AMP maximum threshold for ST-MW-1 updated 2018","KNO_AMP_SPT_ST-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","ST-MW-1",NA
+174,"KNO_AMP_SPT_RB-MW-1_GS","A","AMP maximum threshold for RB-MW-1 updated 2018","KNO_AMP_SPT_RB-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","RB-MW-1",NA
+175,"KNO_AMP_SPT_BH-MW-1_GS","A","AMP maximum threshold for BH-MW-1 updated 2018","KNO_AMP_SPT_BH-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","BH-MW-1",NA
+176,"KNO_AMP_SPT_G300-MW-1_GS","A","AMP maximum threshold for G300-MW-1 updated 2018","KNO_AMP_SPT_G300-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","G300-MW-1",NA
+177,"KNO_AMP_SPT_G900-MW-1_GS","A","AMP maximum threshold for G900-MW-1 updated 2018","KNO_AMP_SPT_G900-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","G900-MW-1",NA
+191,"KNO_AMP_SPT_ST-MW-1_CTE","A","AMP annual rolling median threshold for ST-MW-1 updated 2018","KNO_AMP_SPT_ST-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","ST-MW-1",NA
+192,"KNO_AMP_SPT_RB-MW-1_CTE","A","AMP annual rolling median threshold for RB-MW-1 updated 2018","KNO_AMP_SPT_RB-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","RB-MW-1",NA
+193,"KNO_AMP_SPT_BH-MW-1_CTE","A","AMP annual rolling median threshold for BH-MW-1 updated 2018","KNO_AMP_SPT_BH-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","BH-MW-1",NA
+194,"KNO_AMP_SPT_G300-MW-1_CTE","A","AMP annual rolling median threshold for G300-MW-1 updated 2018","KNO_AMP_SPT_G300-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","G300-MW-1",NA
+195,"KNO_AMP_SPT_G900-MW-1_CTE","A","AMP annual rolling median threshold for G900-MW-1 updated 2018","KNO_AMP_SPT_G900-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","G900-MW-1",NA
+196,"KNO_AMP_SPT_ON-MW-4_CTE","A","AMP annual rolling median threshold for ON-MW-4 updated 2018","KNO_AMP_SPT_ON-MW-4_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","ON-MW-4",NA
+197,"KNO_AMP_SPT_K700-MW-1_CTE","A","AMP annual rolling median threshold for K700-MW-1 updated 2018","KNO_AMP_SPT_K700-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","K700-MW-1",NA
+198,"KNO_AMP_SPT_SL-MW-1_CTE","A","AMP annual rolling median threshold for SL-MW-1 updated 2018","KNO_AMP_SPT_SL-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","SL-MW-1",NA
+199,"KNO_AMP_SPT_KC-MW-1B_GS","A","AMP maximum threshold for KC-MW-1B updated 2018","KNO_AMP_SPT_KC-MW-1B_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KC-MW-1B",NA
+200,"KNO_AMP_SPT_KC-MW-2_GS","A","AMP maximum threshold for KC-MW-2 updated 2018","KNO_AMP_SPT_KC-MW-2_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KC-MW-2",NA
+201,"KNO_AMP_SPT_KC-MW-3_GS","A","AMP maximum threshold for KC-MW-3 updated 2018","KNO_AMP_SPT_KC-MW-3_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KC-MW-3",NA
+202,"KNO_AMP_SPT_KV-84_GS","A","AMP maximum threshold for KV-84 updated 2018","KNO_AMP_SPT_KV-84_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-84",NA
+203,"KNO_AMP_SPT_KV-84ND_GS","A","AMP maximum threshold for KV-84ND updated 2018","KNO_AMP_SPT_KV-84ND_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-84ND",NA
+1,"CCME_LT","L","CCME guidelines for the protection of aquatic life, long term exposure","CCME PAL Long Term Exposure",NA,"XX",NA,NA,NA,"2022 Dec by MDucha",NA,NA
+2,"CSR_s3_fAL","Y","Yukon Contaminated Sites Regs Schedule 3 Aquatic Life freshwater","Yukon CSR Sched3 fAL",NA,"XX",NA,NA,NA,"Updated NH3 by TdJ (May 2024)",NA,NA
+3,"BC_WUL_EFF_BC-28/WTP","L","Discharge limits set on BC-28 or WTP to the land application area","WL Land App Feed",NA,"BC",NA,NA,"QZ96-007,.....?","2018 Aug by TW","BC-28
+WTP",NA
+4,"BC_WUL_RWC_BC-65/BC-66","L","Land application area ground water limts (BC-65, BC-66, and any lysimeter >5m)","Land app GW limit","WQ stations BC-65, 66 and any lysimeter below 5 meters","BC",NA,NA,"QZ96-007,.....?","2018 Aug by TW","BC-65
+BC-66",NA
+5,"BC_WUL_EFF_BC-28/BC-28b","L","Discharge limits set on BC-28 for discharge to surface waters.","Surface water discharge BC-28",NA,"BC",NA,NA,"QZ96-007,.....?","2018 Aug by TW","BC-28",NA
+7,"CM_WUL_EFF","L","Carmacks effluent discharge standards from wastewater treatment facility (CM-1)","CM_WUL_EFF",NA,"CM",2009-10-30,NA,"MN08-077","2018 Aug by TW","CM-1",NA
+8,"WH_WUL_EFF_WH-7-97_2013","L","Whitehorse Sewage Lagoon standards at the point of discharge Amended Aug 2013","WUL_EFF_WH-7-97_2013",NA,"WH",2013-08-15,2020-05-01,"MN93-001","2021 July by MD","WH-7-97 (WSL-1)","Expired"
+9,"WH_WUL_EFF_WH-9b_2013","L","LTECF standards for discharge to Yukon River or Pothole Lake amendeded Aug 2013","WUL_EFF_WH-9b_2013",NA,"WH",2013-08-15,2020-05-01,"MN93-001","2021 July by MD","WH-9b","Expired"
+10,"WH_WUL_RWC_WH-11","L","Receiving water standard for 300m d/s point of discharge on Yukon River","Receiving Water 300m","Will be replaced by WQO in time. Includes 'negligible increase' for metals and floating solids and scum","WH",1994-04-01,2018-11-01,"MN93-001","2018 Aug by TW","WH-11","Expired"
+11,"WH_WUL_RWC_WH-12","L","Receiving water standard for 750m d/s point of discharge on Yukon River","Receiving Water 750m","Will be replaced by WQO in time. Receiving Water Standard: Yukon River 750 meters downstream of the LTECF","WH",1994-04-01,2018-11-01,"MN93-001","2018 Aug by TW","WH-12","Expired"
+12,"DC_WUL_EFF","L","Wastewater Treatment Facility effluent quality standard for DC-3","DC WWTF Efflunent Quality Standard","Applies to effluent monitoring station DC-3","DC",2011-05-02,NA,"MN10-086","2018 Sep by TW","DC-3",NA
+13,"DON_WUL_EFF","L","Type B; wastewater treatment systems discharge standards at W61","Water Licence Type B",NA,"DON",2011-04-20,NA,"QZ10-042",NA,"W61",NA
+20,"ICY_WUL_EFF_2012","L","Effluent standards for PS-2b and PS-5a","ICY_WUL_EFF_2012","PO4T and TSS dependent on background conditions","ICY",2012-06-30,2017-06-29,"MS11-041","2018 Aug by TW","PS-2b
+PS-5a",NA
+23,"KNO_WUL_EFF_KV-83","L","Keno Hill Silver District Mill (KV-83) effluent standard","KNO_WUL_EFF_KV-83",NA,"KNO",2010-08-20,NA,"QZ09-02
+QZ12-053
+QZ09-02-2","2018 Aug by TW","KV-83",NA
+24,"KNO_WUL_EFF_KV-96","L","Onek (KV-96) effluent standard","KNO_WUL_EFF_KV-96",NA,"KNO",2013-05-16,NA,"QZ12-053
+QZ09-02-2","2018 Aug by TW","KV-96",NA
+25,"KNO_WUL_EFF_KV-97/KV-101_2013","L","Lucky Queen (KV-97 and/or KV-101) effluent standard","KNO_WUL_EFF_KV-97/KV-101_2013",NA,"KNO",2013-05-16,NA,"QZ12-053
+QZ09-02-2","2018 Aug by TW","KV-97
+KV-101",NA
+27,"KNO_WUL_EFF_KV-12/14/28/32/95","L","Keno Hill Mines Property effluent standards","KNO_WUL_EFF_KV-12/14/28/32/95",NA,"KNO",2007-11-14,NA,"QZ06-074
+QZ12-057
+QZ17-076","2018 Aug by TW","KV-12
+KV-14
+KV-28
+KV-32
+KV-95",NA
+28,"KNO_WUL_EFF_KV-10/12/32/43_1994","L","Water Licence from Nov 10/94 to Nov 30/96","KNO_WUL_EFF_KV-10/12/32/43_1994",NA,"KNO",1994-11-10,1996-11-30,"QZ94-001",NA,NA,NA
+29,"KNO_WUL_EFF_1996","L","Water Licence from Oct 02/96 to Sept 30/98.","QZ94-002",NA,"KNO",1996-10-02,1998-09-30,"QZ94-002",NA,NA,NA
+30,"KNO_WUL_EFF_1998","L","Water Licence from Jan 26/98 to Dec 31/03.","QZ96-001",NA,"KNO",1998-01-26,2003-12-31,"QZ96-001",NA,NA,NA
+31,"KNO_WUL_EFF_1975","L","Water Licence from April 10/75 to March 31/80.","Y2L3-0013",NA,"KNO",1975-04-10,1980-03-31,"Y2L3-0013",NA,NA,NA
+32,"KNO_WUL_EFF_1980","L","Water Licence from Aug 01/80 to July 31/85","Y2L3-2014",NA,"KNO",1980-08-01,1985-07-31,"Y2L3-2014",NA,NA,NA
+33,"KNO_WUL_EFF_1985","L","Water Licence from Sept 26/85 to Sept 25/90","YIN85-02RL",NA,"KNO",1985-09-26,1990-09-25,"YIN85-02RL",NA,NA,NA
+34,"KR_WUL_EFF","L","WL limits for KR-4N3, KR-5S2 and KR-9a","KR_WUL_EFF",NA,"KR",2007-07-27,2009-12-31,"QZ04-063",NA,"KR-43N
+KR-5S2
+KR-9a",NA
+35,"MNT_WUL/AMP_WQO_RO","L","QZ14-031 Table 2 WQOs for reverse osmosis (RO) plant (exceedances triggers AMP)","RO Water Quality Objectives",NA,"MNT",2015-08-05,NA,"QZ14-031",NA,"RO",NA
+36,"MNT_WUL/AMP_WQO_W2/W50","L","QZ14-031 Table 2 WQO applies to W2 when flow at W15&W35, else applies to W50","*Applies to one of W2 OR W50",NA,"MNT",2015-08-05,NA,"QZ14-031",NA,"W2
+W50",NA
+37,"MNT_WUL_EFF_WTP/W50/W16a/W17","L","Effluent Standards on Licence QZ14-031 for W16a, W17, W50, WTP","Effluent Standard","TSS March-May stand is 30 mg/L grab, 15 mg/L monthly mean, all other times 15 mg/L applies.","MNT",2015-08-05,NA,"QZ14-031","2023 Feb by TW (just TSS)","W16a
+W17
+W50
+WTP",NA
+40,"MNT_WUL_EFF_WTP","L","Water Use Licence Amendment #7.","WUL Amend 7",NA,"MNT",NA,NA,NA,NA,NA,NA
+41,"MNT_WUL_RWC_W2","L","Water Use Licence Amend #7 Receiving Environment.","WUL Amend 8 Receiveing.",NA,"MNT",NA,NA,NA,NA,"W2",NA
+61,"WAT_WUL_EFF","L","Applies to treated wastewater contained in the long-term storage lagoon","WAT_WUL_EFF","applies to a composite sample","WAT",2004-06-10,NA,"MN03-050","2018 Aug by TW","WL-5",NA
+62,"EP_WUL_EFF","L","Eagle Plains complex wastewater treatment effluent standards","EP_WUL_EFF",NA,"EP",2008-08-07,NA,"MN07-075","2018 Aug by TW","EP-Effluent",NA
+63,"FA_WUL_EFF","L","Faro municipal wastewater treatment facility effluent standard","FA_WUL_EFF",NA,"FA",2009-10-15,NA,"MN08-078","2018 Sep by TW","FA-4",NA
+64,"MYO_WUL_RWC_2012","L","Village of Mayo, MN10-055-4 clause 26  (T-4 and T-5) ends in 2023-11-01","MN10-055-4_26",NA,"MYO",2012-01-09,NA,"MN10-055-4","2023-03-MDUCHA","T-4
+T-5","Active"
+65,"MYO_WUL_EFF_2012","L","Village of Mayo,  MN10-055-4 clause 26 (T-7) ends in 2023-11-01","MN10-055-4_29","No samples ever submitted.","MYO",2012-01-09,NA,"MN10-055-4","2023-03-MDUCHA","T-7","Active"
+66,"CC_WUL_EFF_2016","L","Carcross Effluent discharged from treament lagoons (CC-4) amended","CC_WUL_EFF_2016","Station CC-4 (TSS time dependent)","CC",2016-06-15,NA,"MN10-082-3
+MN10-082-4","2018 Aug by TW","CC-4",NA
+67,"CC_WUL_RWC","L","Carcross groundwater quality monitoring standards","CC_WUL_RWC","oil and grease standard ""nil""
+faecal coliforms standard ""0""","CC",2011-10-14,NA,"MN10-082
+MN10-082-2
+MN10-082-3
+MN10-082-4","2018 Aug by TW","CC-5
+CC-6
+CC-7
+CC-8
+NW-1
+NW-2
+NW-3
+NW-4",NA
+68,"HJ_WUL_EFF_2012","L","Haines Junction wastewater treatment facility effluent standards HJ-4 and HJ-4a","HJ_WUL_EFF_2012",NA,"HJ",2012-01-30,NA,"MN11-030","2018 Sep by TW","HJ-4
+HJ-4a","Expired"
+69,"OC_WUL_EFF_OCL-6_2012","L","Old Crow Lagoons WL (OCL-6)","Old Crow Primary MN11-064",NA,"OC",2012-05-25,2017-08-02,"MN11-064","2018 Dec by TW","OCL-6",NA
+70,"OC_WUL_EFF_OCL-3_2012","L","Old Crow Lagoons WL (OCL-3) effective May 25, 2012","Old Crow Secondary MN11-064",NA,"OC",2012-05-25,2017-08-02,"MN11-064","2018 Dec by TW","OCL-3",NA
+71,"EPN_WUL_EFF_main","L","Eagle Plains wastewater treatment standards for NC main camp","EPN_WUL_EFF_main",NA,"EPN",2012-12-10,NA,"MN12-061","2018 Aug by TW",NA,NA
+72,"EPN_WUL_EFF_mobile","L","Eagle Plains wastewater treatment standards for NC mobile and drill camps","EPN_WUL_EFF_mobile",NA,"EPN",2012-12-10,NA,"MN12-061","2018 Aug by TW",NA,NA
+73,"BL_WUL_EFF_BL-2","L","Burwash effluent standards for discharge from the long term storage lagoon","BL_WUL_EFF_BL-2","TSS standard does not apply between July and October","BL",2014-02-28,NA,"MN13-043","2018 Sep by TW","BL-2",NA
+74,"RR_WUL_EFF_2017","L","Ross River effluent standards for discharge from treatment lagoons","RR_WUL_EFF_2017",NA,"RR",2017-01-09,NA,"MN15-043","2018 Sep by TW","RR-13",NA
+75,"TSL_WUL_EFF_T-4","L","Teslin effluent standards at T-4","MN19-064","changed from a BOD to a CBOD5 standard with MN99-025 on Oct 29, 2015; for MN19-064, no change in effluent qulaity standards.","TSL",2021-05-19,NA,"MN19-064
+MN99-025","2022 Aug by MDUCHA","T-4",NA
+77,"WHF_WUL_EFF","L","Yukon Energy Effluent standard for water deposited into the Yukon River","WHF_WUL_EFF","TSS standard is defined as 10mg/L above background","WHF",1994-08-02,2019-06-30,"MS94-005
+MS01-181","2021 July by MD","WH4","Expired"
+78,"HC_DWQ","F","Health Canada Drinking Water Quality Guidelines","Health Canada Drinking Water Quality","https://www.canada.ca/content/dam/hc-sc/migration/hc-sc/ewh-semt/alt_formats/pdf/pubs/water-eau/sum_guide-res_recom/summary-tables-sept-2022-eng.pdf","XX",NA,NA,NA,"July 2023, MDUCHA",NA,NA
+79,"MNT_AMP_SPT2_MW12-05/MW12-06","A","AMP SPT-2 Threshold for MW12-05 and MW12-06","Minto Creek GW AMP SPT-2",NA,"MNT",NA,NA,NA,NA,"MW12-05
+MW12-06",NA
+80,"MNT_AMP_SPT3_MW12-05/MW12-06","A","AMP SPT-3 Threshold for MW12-05 and MW12-06","Minto Creek GW AMP SPT-3",NA,"MNT",NA,NA,NA,NA,"MW12-05
+MW12-06",NA
+81,"MNT_AMP_SPT2_MW09-03-01","A","AMP Specific Threshold 2 for MW09-03-01. Requires 3 consecutive","McGinty Ck MW09-03-01 STP-2","Determined by 95th percentile of baseline data","MNT",NA,NA,NA,NA,"MW09-03-01",NA
+82,"MNT_AMP_SPT1_MW09-03-01","A","AMP Specific Threshold 1 for MW09-03-01. Requires 3 consecutive","McGinty Ck MW09-03-01 STP-1","Determined by 75th percentile of baseline data","MNT",NA,NA,NA,NA,"MW09-03-01",NA
+83,"MNT_AMP_SPT2_MW09-03-02","A","AMP Specific Threshold 2 for MW09-03-02. Requires 3 consecutive","McGinty Ck MW09-03-02 STP-2","Determined by 95th percentile of baseline data","MNT",NA,NA,NA,NA,"MW09-03-02",NA
+84,"MNT_AMP_SPT1_MW09-03-02","A","AMP Specific Threshold 1 for MW09-03-02. Requires 3 consecutive","McGinty Ck MW09-03-02 STP-1","Determined by 75th percentile of baseline data","MNT",NA,NA,NA,NA,"MW09-03-02",NA
+85,"MNT_AMP_SPT2_MW09-03-03","A","AMP Specific Threshold 2 for MW09-03-03. Requires 3 consecutive","McGinty Ck MW09-03-03 STP-2","Determined by 95th percentile of baseline data","MNT",NA,NA,NA,NA,"MW09-03-03",NA
+86,"MNT_AMP_SPT1_MW09-03-03","A","AMP Specific Threshold 1 for MW09-03-03. Requires 3 consecutive","McGinty Ck MW09-03-03 STP-1","Determined by 75th percentile of baseline data","MNT",NA,NA,NA,NA,"MW09-03-03",NA
+87,"MNT_AMP_SPT1_MN-4.5","A","AMP STP-1 for MN-4.5. Requires two consecutive.","McGinty Ck MN-4.5 STP-1","Specific Threshold 1 (85th percentile)","MNT",NA,NA,NA,NA,"MN-4.5",NA
+88,"MNT_AMP_WQO/SPT2/SPT3_MN-4.5_GS","A","AMP WQO & STP-2 and STP-3 for MN-4.5 (Individual grab sample)","McGinty Ck MN-4.5 WQO GS","Applied to individual data points. Determined by 95th percentile of baseline data","MNT",NA,NA,NA,NA,"MN-4.5",NA
+89,"MNT_AMP_WQO/SPT2/SPT3_MN-4.5_CTE","A","AMP WQO & STP-2 and STP-3 for MN-4.5 (Central Tendency Evaluator)","McGinty Ck MN-4.5 WQO CTE","Applied as Central Tendency Evaluator. Determined by 95th percentile of annual medians.","MNT",NA,NA,NA,NA,"MN-4.5",NA
+90,"MNT_AMP_exPRED_W2","A","Expected Case Water Quality Predictions at W2 – Operational Period","W2 AMP Prediction",NA,"MNT",NA,NA,NA,NA,"W2",NA
+91,"MNT_AMP_wcPRED_W2","A","Worst Case Water Quality Predictions at W2 – Operational Period","W2 AMP Worst Case Prediction",NA,"MNT",NA,NA,NA,NA,"W2",NA
+92,"SEK_AMP_SPT_BH01-05","A","AMP threshold for QZ15-060 BH01-05. Requires two consecuative exceedances","Seepage Waste Rock AMP BH01-05","Determined by 75th percentile of reference period","SEK",NA,NA,NA,NA,"BH01-05",NA
+93,"SEK_AMP_SPT_BH03-05","A","AMP threshold for QZ15-060 BH03-05. Requires two consecuative exceedances","Seepage Waste Rock AMP BH03-05","Determined by 75th percentile of reference period","SEK",NA,NA,NA,NA,"BH03-05",NA
+94,"SEK_AMP_SPT_BH04-05","A","AMP threshold for QZ15-060 BH04-05. Requires two consecuative exceedances","Seepage Waste Rock AMP BH04-05","Determined by 75th percentile of reference period","SEK",NA,NA,NA,NA,"BH04-05",NA
+95,"SDH-WUL_RWS_MH-11","L","Sa Dena Hes QZ16-051 recieving water standards, MH-11","SDH-MH-11",NA,"SDH",2017-04-01,NA,"QZ16-051",NA,"MH-11",NA
+96,"SDH-WUL_RWS_MH-12","L","Sa Dena Hes QZ16-051 recieving water standards, MH-12","SDH-MH-12",NA,"SDH",2017-04-01,NA,"QZ16-051",NA,"MH-12",NA
+97,"SDH-WUL_RWS_MH-15","L","Sa Dena Hes QZ16-051 recieving water standards, MH-15","SDH-MH-15",NA,"SDH",2017-04-01,NA,"QZ16-051",NA,"MH-15",NA
+99,"MMER-grab","F","Metal Mining Effluent Regulations (MMER), in a grab sample","Metal Mining Effluent Reg grab",NA,"XX",NA,NA,NA,NA,NA,NA
+100,"MMER-comp","F","Metal Mining Effluent Regulations (MMER), in a composite sample","Metal Mining Effluent Reg comp",NA,"XX",NA,NA,NA,NA,NA,NA
+101,"MMER-month","F","Metal Mining Effluent Regulations (MMER), monthly mean","Metal Mining Effluent Reg mon",NA,"XX",NA,NA,NA,NA,NA,NA
+102,"SDH-AMP_SPT2_MH-02","A","AMP Specific Threshold 2 for MH-02","SDH MH-02 ST2","an increase of no more than 50% above max observed concentrations","SDH",NA,NA,NA,NA,"MH-02",NA
+103,"SDH-AMP_SPT2_MH-22","A","AMP Specific Threshold 2 for MH-22","SDH MH-22 ST2","an increase of no more than 50% above max observed concentrations","SDH",NA,NA,NA,NA,"MH-22",NA
+104,"SDH-AMP_SPT2_SDH-S2","A","AMP Specific Threshold 2 for SDH-S2","SDH SDH-S2 ST2","an increase of no more than 50% above max observed concentrations","SDH",NA,NA,NA,NA,"SDH-S2",NA
+105,"SDH-AMP_SPT2_MW13-01","A","AMP Specific Threshold 2 for MW13-01","SDH MW13-01 ST2",NA,"SDH",NA,NA,NA,NA,"MW13-01",NA
+106,"SDH-AMP_SPT2_MW13-08","A","AMP Specific Threshold 2 for MW13-08","SDH MW13-08 ST2",NA,"SDH",NA,NA,NA,NA,"MW13-08",NA
+107,"SDH-AMP_SPT2_MW13-13","A","AMP Specific Threshold 2 for MW13-13","SDH MW13-13 ST2",NA,"SDH",NA,NA,NA,NA,"MW13-13",NA
+108,"SDH-AMP_SPT2_MW13-06","A","AMP Specific Threshold 2 for MW13-06","SDH MW13-06 ST2",NA,"SDH",NA,NA,NA,NA,"MW13-06",NA
+109,"BC_MOE_fAL_ST","B","C Ministry of Env , Protect. Freshwater, Short Term","British Columbia MOE S-T fAL","Updated copper guideline which is rather complicated; seems to require BLM software as the guideline is based on 11 different parameters.","XX",NA,NA,NA,"2022 Dec by MDucha",NA,NA
+110,"CSR_s3_fAL-SW","Y","Yukon Contaminated Sites Regs Schedule 3 Aquatic Life freshwater - Surface Water","Yukon CSR Sched3 fAL-SW",NA,"XX",NA,NA,NA,NA,NA,NA
+125,"KNO_AMP_WQO_KV-6_2018","A","KV-6 short-term WQOs, Apr2018 Production AMP","KNO_AMP_WQO_KV-6_2018","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",NA,NA,"QZ09-092-2","2018 Aug by TW","KV-6",NA
+126,"KNO_AMP_WQO_KV-7_2018","A","KV-7 short-term WQOs, Apr2018 Production AMP","KNO_AMP_WQO_KV-7_2018","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",NA,NA,"QZ09-092-2","2018 Aug by TW","KV-7",NA
+127,"KNO_AMP_WQO_KV-81_2018","A","KV-81 short-term WQOs, Apr2018 Production AMP","KNO_AMP_WQO_KV-81_2018","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",NA,NA,"QZ09-092-2","2018 Aug by TW","KV-81",NA
+128,"HJ_WUL_EFF_2001","L","Haines Junction wastewater treatment facility effluent standards","HJ_WUL_EFF_2001",NA,"HJ",2001-11-09,2012-01-29,"MN99-027","2018 Sep by TW","HJ-4","Expired"
+129,"SEK_WUL_EFF_W5_2012",NA,"Grab sample of any waste discharged at W5 or any other point of entry","SEK_WUL_EFF_W5_2012","W5 standards had been previously put in place and then ammended prior to implementation data numerous times previously, dating back to at least 2005","SEK",2012-09-30,2016-04-28,"QZ09-087
+QZ12-042-6
+QZ15-060","2018 Sep by TW","W5",NA
+130,"WLV_APP_WQO_W80","L","Water Quality Objectives in Go Creek","WLV_APP_WQO_W80",NA,"WLV",NA,NA,"QZ04-065",NA,"W-80",NA
+131,"KNO_AMP_SPT_KV-6_GS","A","AMP maximum threshold for KV-6 updated 2018","KNO_AMP_SPT_KV-6_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-6",NA
+132,"KNO_AMP_SPT_KV-7_GS","A","AMP maximum threshold for KV-7 updated 2018","KNO_AMP_SPT_KV-7_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-7",NA
+133,"KNO_AMP_SPT_KV-41_GS","A","AMP maximum threshold for KV-41 updated 2018","KNO_AMP_SPT_KV-41_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-41",NA
+134,"KNO_AMP_SPT_KV-9_GS","A","AMP maximum threshold for KV-9 updated 2018","KNO_AMP_SPT_KV-9_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-9",NA
+135,"KNO_AMP_SPT_KL-12_GS","A","AMP maximum threshold for KL-12 updated 2018","KNO_AMP_SPT_KL-12_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KL-12",NA
+136,"KNO_AMP_SPT_KV-21_GS","A","AMP maximum threshold for KV-21 updated 2018","KNO_AMP_SPT_KV-21_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-21",NA
+137,"KNO_AMP_SPT_KV-6_CTE","A","AMP annual rolling median threshold for KV-6 updated 2018","KNO_AMP_SPT_KV-6_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-6",NA
+138,"KNO_AMP_SPT_KV-7_CTE","A","AMP annual rolling median threshold for KV-7 updated 2018","KNO_AMP_SPT_KV-7_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-7",NA
+139,"KNO_AMP_SPT_KV-41_CTE","A","AMP annual rolling median threshold for KV-41 updated 2018","KNO_AMP_SPT_KV-41_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-41",NA
+140,"KNO_AMP_SPT_KV-9_CTE","A","AMP annual rolling median threshold for KV-9 updated 2018","KNO_AMP_SPT_KV-9_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-9",NA
+141,"KNO_AMP_SPT_KL-12_CTE","A","AMP annual rolling median threshold for KL-12 updated 2018","KNO_AMP_SPT_KL-12_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KL-12",NA
+142,"KNO_AMP_SPT_KV-21_CTE","A","AMP annual rolling median threshold for KV-21 updated 2018","KNO_AMP_SPT_KV-21_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-21",NA
+143,"KNO_AMP_SPT_KV-17_GS","A","AMP maximum threshold for KV-17 updated 2018","KNO_AMP_SPT_KV-17_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-17",NA
+144,"KNO_AMP_SPT_KV-18_GS","A","AMP maximum threshold for KV-18 updated 2018","KNO_AMP_SPT_KV-18_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-18",NA
+145,"KNO_AMP_SPT_KV-19_GS","A","AMP maximum threshold for KV-19 updated 2018","KNO_AMP_SPT_KV-19_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-19",NA
+146,"KNO_AMP_SPT_KV-20_GS","A","AMP maximum threshold for KV-20 updated 2018","KNO_AMP_SPT_KV-20_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-20",NA
+147,"KNO_AMP_SPT_KV-33_GS","A","AMP maximum threshold for KV-33 updated 2018","KNO_AMP_SPT_KV-33_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-33",NA
+148,"KNO_AMP_SPT_KV-34_GS","A","AMP maximum threshold for KV-34 updated 2018","KNO_AMP_SPT_KV-34_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-34",NA
+149,"KNO_AMP_SPT_KV-35_GS","A","AMP maximum threshold for KV-35 updated 2018","KNO_AMP_SPT_KV-35_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-35",NA
+150,"KNO_AMP_SPT_KV-45_GS","A","AMP maximum threshold for KV-45 updated 2018","KNO_AMP_SPT_KV-45_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-45",NA
+151,"KNO_AMP_SPT_KV-53_GS","A","AMP maximum threshold for KV-53 updated 2018","KNO_AMP_SPT_KV-53_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-53",NA
+152,"KNO_AMP_SPT_KV-66_GS","A","AMP maximum threshold for KV-66 updated 2018","KNO_AMP_SPT_KV-66_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-66",NA
+153,"KNO_AMP_SPT_KV-17_CTE","A","AMP annual rolling median threshold for KV-17 updated 2018","KNO_AMP_SPT_KV-17_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-17",NA
+154,"KNO_AMP_SPT_KV-18_CTE","A","AMP annual rolling median threshold for KV-18 updated 2018","KNO_AMP_SPT_KV-18_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-18",NA
+155,"KNO_AMP_SPT_KV-19_CTE","A","AMP annual rolling median threshold for KV-19 updated 2018","KNO_AMP_SPT_KV-19_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-19",NA
+156,"KNO_AMP_SPT_KV-20_CTE","A","AMP annual rolling median threshold for KV-20 updated 2018","KNO_AMP_SPT_KV-20_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-20",NA
+157,"KNO_AMP_SPT_KV-33_CTE","A","AMP annual rolling median threshold for KV-33 updated 2018","KNO_AMP_SPT_KV-33_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-33",NA
+158,"KNO_AMP_SPT_KV-34_CTE","A","AMP annual rolling median threshold for KV-34 updated 2018","KNO_AMP_SPT_KV-34_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-34",NA
+159,"KNO_AMP_SPT_KV-35_CTE","A","AMP annual rolling median threshold for KV-35 updated 2018","KNO_AMP_SPT_KV-35_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-35",NA
+160,"KNO_AMP_SPT_KV-45_CTE","A","AMP annual rolling median threshold for KV-45 updated 2018","KNO_AMP_SPT_KV-45_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-45",NA
+161,"KNO_AMP_SPT_KV-53_CTE","A","AMP annual rolling median threshold for KV-53 updated 2018","KNO_AMP_SPT_KV-53_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-53",NA
+162,"KNO_AMP_SPT_KV-66_CTE","A","AMP annual rolling median threshold for KV-66 updated 2018","KNO_AMP_SPT_KV-66_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-66",NA
+163,"KNO_AMP_SPT_GT-9_GS","A","AMP maximum threshold for GT-9 updated 2018","KNO_AMP_SPT_GT-9_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","GT-9",NA
+178,"KNO_AMP_SPT_ON-MW-4_GS","A","AMP maximum threshold for ON-MW-4 updated 2018","KNO_AMP_SPT_ON-MW-4_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","ON-MW-4",NA
+179,"KNO_AMP_SPT_K700-MW-1_GS","A","AMP maximum threshold for K700-MW-1 updated 2018","KNO_AMP_SPT_K700-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","K700-MW-1",NA
+180,"KNO_AMP_SPT_SL-MW-1_GS","A","AMP maximum threshold for SL-MW-1 updated 2018","KNO_AMP_SPT_SL-MW-1_GS","set as maximum observed concentration in 2013-2017 period","KNO",NA,NA,"QZ17-076","2018 Dec by TW","SL-MW-1",NA
+181,"KNO_AMP_SPT_GT-9_CTE","A","AMP annual rolling median threshold for GT-9 updated 2018","KNO_AMP_SPT_GT-9_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","GT-9",NA
+182,"KNO_AMP_SPT_GT-8_CTE","A","AMP annual rolling median threshold for GT-8 updated 2018","KNO_AMP_SPT_GT-8_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","GT-8",NA
+183,"KNO_AMP_SPT_H6D_CTE","A","AMP annual rolling median threshold for H6D updated 2018","KNO_AMP_SPT_H6D_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H6D",NA
+184,"KNO_AMP_SPT_H5D_CTE","A","AMP annual rolling median threshold for H5D updated 2018","KNO_AMP_SPT_H5D_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H5D",NA
+185,"KNO_AMP_SPT_H5S_CTE","A","AMP annual rolling median threshold for H5S updated 2018","KNO_AMP_SPT_H5S_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H5S",NA
+186,"KNO_AMP_SPT_H4D_CTE","A","AMP annual rolling median threshold for H4D updated 2018","KNO_AMP_SPT_H4D_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H4D",NA
+187,"KNO_AMP_SPT_H4S_CTE","A","AMP annual rolling median threshold for H4S updated 2018","KNO_AMP_SPT_H4S_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","H4S",NA
+188,"KNO_AMP_SPT_SK-MW-1_CTE","A","AMP annual rolling median threshold for SK-MW-1 updated 2018","KNO_AMP_SPT_SK-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","SK-MW-1",NA
+189,"KNO_AMP_SPT_HS-MW-1_CTE","A","AMP annual rolling median threshold for HS-MW-1 updated 2018","KNO_AMP_SPT_HS-MW-1_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","HS-MW-1",NA
+190,"KNO_AMP_SPT_HS-MW-2_CTE","A","AMP annual rolling median threshold for HS-MW-2 updated 2018","KNO_AMP_SPT_HS-MW-2_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","HS-MW-2",NA
+204,"KNO_AMP_SPT_KC-MW-1B_CTE","A","AMP annual rolling median threshold for KC-MW-1B updated 2018","KNO_AMP_SPT_KC-MW-1B_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KC-MW-1B",NA
+205,"KNO_AMP_SPT_KC-MW-2_CTE","A","AMP annual rolling median threshold for KC-MW-2 updated 2018","KNO_AMP_SPT_KC-MW-2_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KC-MW-2",NA
+206,"KNO_AMP_SPT_KC-MW-3_CTE","A","AMP annual rolling median threshold for KC-MW-3 updated 2018","KNO_AMP_SPT_KC-MW-3_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KC-MW-3",NA
+207,"KNO_AMP_SPT_KV-84_CTE","A","AMP annual rolling median threshold for KV-84 updated 2018","KNO_AMP_SPT_KV-84_CTE","applies to the rolling median annual concentration; set as the median plus the median absolute deviation concentration in the 2013 to 2017 dataset","KNO",NA,NA,"QZ17-076","2018 Dec by TW","KV-84",NA
+208,"EG_AMP_SPT_2018","A","Eagle Gold Adaptive Management Thresholds for Haggart Creek","EG_AMP_SPT_2018","thresholds set at 75% of the WQO","EG",NA,NA,"QZ14-041","2019 Feb by TW","W4
+W29
+W23",NA
+209,"EG_WUL_EFF","E","Eagle Gold Effluent Discharge Standards","EG_WUL_EFF",NA,"EG",2015-12-03,NA,"QZ14-041","2019 Apr by TW","LDSP_PTS
+HLF_PTS
+HLFUMV
+OPPO
+PG-PTS
+LDSPXXX",NA
+210,"EG_AMP_ST1_Haggart","H","AMP threshold 1 for Haggart Creek","EG_AMP_ST1_Haggart","Requires two consecutive exceedances; threshold 1 set at 75% of WQO","EG",NA,NA,"QZ14-041-1","2019 May by TW","W4
+W29
+W99
+W23",NA
+211,"EG_AMP_ST2_Haggart","G","AMP threshold 2 for Haggart Creek","EG_AMP_ST2_Haggart","Requires two consecutive exceedances; threshold 2 set at 85% of WQO","EG",NA,NA,"QZ14-041-1","2019 May by TW","W4
+W29
+W99
+W23",NA
+212,"MMER-grab-2021","M","Metal Mining Effluent Regulations (MMER), in a grab sample starting in 2021","Metal Mining Effluent Reg grab 2021",NA,"XX",NA,NA,NA,"2019 Jun by TW",NA,NA
+213,"KNO_WUL_EFF_KV-104L_Q0-10","L","Flame and Moth EQS when discharging to Lightning between 0-10 L/s","KNO_WUL_EFF_KV-104L_Q0-10","The maximum possible applicable standard; used when discharge rates are between 0-10 L/s","KNO",2017-12-22,NA,"QZ09-092-2","2019 July by TW","KV-104L",NA
+214,"KNO_WUL_EFF_KV-104C_Q0-10","L","Flame and Moth EQS when discharging to Christal between 0-10 L/s","KNO_WUL_EFF_KV-104C_Q0-10","The maximum possible applicable standard; used when discharge rates are between 0-10 L/s","KNO",2017-12-22,NA,"QZ09-092-2","2019 July by TW","KV-104C",NA
+215,"EG_AMP_ST1_Discharge","A","AMP threshold 1 for effluent discharge","EG_AMP_ST1_Discharge",NA,"EG",NA,NA,"QZ14-041-1","2019 Aug by TW","LDSP_PTS
+HLF_PTS
+HLFUMV
+OPPO
+PG-PTS
+LDSPXXX",NA
+216,"EG_AMP_ST2_Discharge","A","AMP threshold 2 for effluent discharge","EG_AMP_ST2_Discharge",NA,"EG",NA,NA,"QZ14-041-1","2019 Aug by TW","LDSP_PTS
+HLF_PTS
+HLFUMV
+OPPO
+PG-PTS
+LDSPXXX",NA
+217,"EG_WUL_EFF_CS-07","L","Effluent discharge standard for CS-07 (IROSA)","EG_WUL_EFF_CS-07",NA,"EG",2015-12-03,NA,"QZ14-041-1","2019 Aug by TW","CS-07",NA
+218,"MTS_WUL_QZ05-057","L","Effluent standards for 1100m and 1300m portals, grab sample","Mt Skukum Effluent QZ05-057",NA,"MTS",2003-07-04,2009-08-12,"QZ02-057","2019 Aug by TW","MTS-1",NA
+219,"MTS_WUL_EFF_CTE","L","Effluent standards for 1100m and 1300m portals, monthly mean","Mt Skukum Effluent Monthly Mean",NA,"MTS",2003-07-04,2009-08-12,"QZ02-057","2019 Aug by TW","MTS-1",NA
+220,"WWER","F","Federal Wastewater System Effluent Regulations","WWER","Regulations apply to systems that have average daily influent volume > 100m3","XX",NA,NA,NA,"2019 Sep by TW",NA,NA
+221,"BC_MOE_fAL_LT_NP","N","C Ministry of Env , Protect. Freshwater, Long Term, NON Phototoxic Conditions","BC MOE fAL LT Non Phototoxic","Standard set for mercury based on methyl mercury fraction; copper calculation seems to require BLM software","XX",NA,NA,NA,"2022 Dec by MDucha",NA,NA
+222,"WLV_WMP_EFF_GoCrk_2020_May1_to_Oct31",NA,"MACs for TSF WTP discharge to Go Creek (May 1 to October 31)","WLV_WMP_EFF_GoCrk_2020_May1_to_Oct31","YG has applied section 37 of the Yukon Waters Act","WLV",NA,NA,NA,NA,NA,NA
+223,"KNO_WUL_EFF_KV-43_2020","L","Discharge from Bellekeno 625 water treatment systems","KNO_WUL_EFF_KV-43_2020",NA,"KNO",2020-07-23,2037-08-01,"QZ18-044
+","2020 by TH","KV-43
+",NA
+224,"KNO_WUL_EFF_KV-114_2020","L","Discharge New Bermingham water treatment systems","KNO_WUL_EFF_KV-114_2020",NA,"KNO",2020-07-23,2037-08-01,"QZ18-044
+","2020 by TH","KV-114",NA
+225,"KNO_AMP_WQO_KV-50_2019","A","KV-50 short-term WQOs, 2019 Production AMP","KNO_AMP_WQO_KV-50_2019","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-07-23,2020-10-20,"QZ18-044","2020 Dec by TW","KV-50",NA
+226,"KNO_AMP_WQO_KV-6_2019","A","KV-6 short-term WQOs, 2019 Production AMP","KNO_AMP_WQO_KV-6_2019","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-07-23,2020-10-20,"QZ18-044","2020 Dec by TW","KV-6",NA
+227,"KNO_AMP_WQO_KV-7_2019","A","KV-7 short-term WQOs, 2019 Production AMP","KNO_AMP_WQO_KV-7_2019","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-07-23,2020-10-20,"QZ18-044","2020 Dec by TW","KV-7",NA
+228,"KNO_AMP_WQO_KV-81_2019","A","KV-81 short-term WQOs, 2019 Production AMP","KNO_AMP_WQO_KV-81_2019","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-07-23,2020-10-20,"QZ18-044","2020 Dec by TW","KV-81",NA
+229,"KNO_AMP_WQO_KV-21_2019","A","KV-21 short-term WQOs, 2019 Production AMP","KNO_AMP_WQO_KV-21_2019","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-07-23,2020-10-20,"QZ18-044","2020 Dec by TW","KV-21",NA
+230,"KNO_AMP_WQO_KV-56_2019","A","KV-56 short-term WQOs, 2019 Production AMP","KNO_AMP_WQO_KV-56_2019","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-07-23,2020-10-20,"QZ18-044","2020 Dec by TW","KV-56",NA
+231,"KNO_AMP_WQO_KV-50_2020","A","KV-50 short-term WQOs, Oct2020 Production AMP","KNO_AMP_WQO_KV-50_2020","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-10-20,NA,"QZ18-044","2020 Dec by TW","KV-50",NA
+232,"KNO_AMP_WQO_KV-6_2020","A","KV-6 short-term WQOs, Oct2020 Production AMP","KNO_AMP_WQO_KV-6_2020","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-10-20,NA,"QZ18-044","2020 Dec by TW","KV-6",NA
+233,"KNO_AMP_WQO_KV-7_2020","A","KV-7 short-term WQOs, Oct2020 Production AMP","KNO_AMP_WQO_KV-7_2020","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-10-20,NA,"QZ18-044","2020 Dec by TW","KV-7",NA
+234,"KNO_AMP_WQO_KV-81_2020","A","KV-81 short-term WQOs, Oct2020 Production AMP","KNO_AMP_WQO_KV-81_2020","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-10-20,NA,"QZ18-044","2020 Dec by TW","KV-81",NA
+235,"KNO_AMP_WQO_KV-21_2020","A","KV-21 short-term WQOs, Oct2020 Production AMP","KNO_AMP_WQO_KV-21_2020","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-10-20,NA,"QZ18-044","2020 Dec by TW","KV-21",NA
+236,"KNO_AMP_WQO_KV-56_2020","A","KV-56 short-term WQOs, Oct2020 Production AMP","KNO_AMP_WQO_KV-56_2020","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-10-20,NA,"QZ18-044","2020 Dec by TW","KV-56",NA
+237,"KNO_AMP_WQO_KV-111_2020","A","KV-111 short-term WQOs, Oct2020 Production AMP","KNO_AMP_WQO_KV-111_2020","applies between May and September; several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-10-20,NA,"QZ18-044","2020 Dec by TW","KV-111",NA
+238,"KNO_AMP_WQO_KV-2_2020","A","KV-2 short-term WQOs, Oct2020 Production AMP","KNO_AMP_WQO_KV-2_2020","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available","KNO",2020-10-20,NA,"QZ18-044","2020 Dec by TW","KV-2",NA
+239,"BC_WUL_RW_BC-39","L","MAC of Selenium at station BC-39","MAC of Se-T at BC-39",NA,"BC",NA,NA,NA,NA,NA,NA
+240,"WG_WUL_EFF_1973","L","historical Wellgreen Licence Y2L3-0002","WG_WUL_EFF_1973",NA,"WGN",NA,NA,NA,NA,NA,NA
+241,"CC_WUL_EFF_2020","L","WUL MN10-082-6; Clause 29;Effluent Discharge;Station CC-4 (TSS season dependent)","CC_WUL_EFF_2020","Station CC-4 (TSS season dependent)","CC",2020-12-16,NA,"MN-10-82-6","2021 Feb by MD","CC-4",NA
+242,"CC_WUL_GW_2020","L","WUL MN10-082-6; Clause 33. GW Monitoring Locations","CC_WUL_GW_2020",NA,"CC",2020-12-16,NA,"MN10-082-6","2021 Feb by MD","CC-5  CC-6  CC-7 NW-2  NW-3  NW-4",NA
+243,"WLV_WMP_EFF_GoCrk_2020_Nov1_to_Apr30",NA,"MACs for TSF WTP discharge to Go Creek (November 1 to Apr 30)","WLV_WMP_EFF_GoCrk_2020_Nov1_to_Apr30",NA,"WLV",NA,NA,NA,NA,NA,NA
+244,"SEK_WUL_EFF_W5_2021","L","discharge from station W5 or any other discharge of a waste to recieving water","QZ19-058",NA,"SEK",2021-01-01,2030-12-31,"QZ19-058","2021 May by TH","W5",NA
+245,"CoWSew_sB","B","Whitehorse Sewer and Strom Bylaw","Whitehorse Sewer Bylaw, Shedule B","Applies only to sewer water (AKA) going to the lagoons for treatemt, not to Yukon River. MD: I have no idea where this has come from, what license it applies to.","WH",NA,NA,"BILAW","2021 Aug by MD",NA,NA
+246,"WH-EFFLUENT","L","Whitehorse Sewage Lagoon standard for discharge to Yk Rvr, Porthole Lk or LTECF","WUL_EFFLUENT_2021",NA,"WH",2021-04-01,2031-03-31,"MN20-008","2021 July by MD","WH-9b,  WH-7-97 (WSL-1)","Active"
+247,"WH_CrestvLagoon","L","Crestview Lagoon Secondary Cell Wastewater Effluent at WH5b","WUL Crestview Lagoons",NA,"WH",NA,NA,NA,"2021 July by MD","WH-5b",NA
+248,"KNO_WUL_EFF_KV-104C_2020","L","Discharge from Flame and Moth water treatment systems at KV-104C","KNO_WUL_EFF_KV-104C_2020","Standard are flow dependent","KNO",2020-07-23,2037-08-01,"QZ18-044","2021 Jul by TH","KV-104C",NA
+249,"KNO_WUL_EFF_KV-104C_Q0-10_2020","L","0-10L/s discharge EQS from the Flame and Moth Water treatment systems at KV-104C","KNO_WUL_EFF_KV-104C_Q0-10_2020","The maximum possible applicable standard; used when discharge rates are between 0-10 L/s","KNO",2020-07-22,2037-08-01,"QZ18-044","2021 Jul by TH","KV-104C",NA
+250,"NSN_WUL_EFF_WTP_2021","L","Mt Nansen Effluent Quality Standards for water treatment plant (WTP) QZ19-055","Effluent Quality","applies to all dischrge from the water treatment plant","NSN",2021-08-19,2026-08-18,"QZ19-055","MDUCHARME - FEB 2021",NA,"Active"
+251,"NSN_AMP_MP09-04",NA,"Mt Nansen AMP - Dec 2021 - Groundwater @ MP09-04 Low Trigger","Nansen AMP (2021) for MP09-04",NA,"NSN",2021-12-01,NA,NA,NA,"MW09-04","Active"
+252,"NSN_AMP_MP09-02",NA,"Mt Nansen AMP - Dec 2021 - Groundwater @ MP09-02 Low Trigger","Nansen AMP (2021) for MP09-02",NA,"NSN",2021-12-01,NA,NA,NA,"MW09-02","Active"
+253,"NSN_AMP_MP09-09",NA,"Mt Nansen AMP - Dec 2021 - Groundwater @ MP09-09 Low Trigger","Nansen AMP (2021) for MP09-09",NA,"NSN",2021-12-01,NA,NA,NA,"MP09-09","Active"
+254,"NSN_AMP_MW09-19",NA,"Mt Nansen AMP - Dec 2021 - Groundwater @ MW09-19 (low trigger)","Nansen AMP (2021) for MW09-19",NA,"NSN",2021-12-01,NA,NA,NA,"MP09-19","Active"
+255,"NSN_AMP_CH-P-13-03-50",NA,"Mt Nansen AMP - Dec 2021 - Groundwater @ CH-P-13-03-50","Nansen AMP (2021) for CH-P-13-03-50",NA,"NSN",2021-12-01,NA,NA,NA,"CH-P-13-03-50","Active"
+256,"NSN_AMP_PC-D",NA,"Mt Nansen AMP - Dec 2021 - Downstream Pony Creek @PC-D","Nansen AMP (2021) for PC-D",NA,"NSN",2021-12-01,NA,NA,NA,"PC-D","Active"
+257,"NSN_AMP_TP",NA,"Mt Nansen AMP - Dec 2021 - Tailing Pond Level @ TP WLevel_Elev","Nansen AMP (2021) for Tailing Pond Level",NA,"NSN",2021-12-01,NA,NA,NA,"TP","Active"
+258,"NSN_AMP_VC-UMN",NA,"Mt Nansen AMP - Dec 2021 - Victoria Creek @ VN-UMN","Nansen AMP (2021) for VC-UMN",NA,"NSN",2021-12-01,NA,NA,NA,"VC-UMN","Active"
+259,"NSN_AMP_DC-Ra","a","Mt Nansen AMP - Dec 2021 - Dome Cr d/s of TSF @ DC-R, after 3 mths WTP Operation","Nansen AMP (2021) for DC-R after 3 mths WTP",NA,"NSN",2021-12-01,NA,NA,NA,"DC-R","Active"
+260,"NSN_AMP_DC-Rp","p","Mt Nansen AMP - Dec 2021 - Dome Cr d/s of TSF @ DC-R, prior 3 mths WTP Operation","Nansen AMP (2021) for DC-R prior 3 mths WTP",NA,"NSN",2021-12-01,NA,NA,NA,"DC-R","Active"
+261,"NSN_AMP_DC-U",NA,"Mt Nansen AMP - Dec 2021 - Dome Creek d/s of TSF @ DC-U","Nansen AMP (2021) for DC-U)",NA,"NSN",2021-12-01,NA,NA,NA,"DC-U","Active"
+262,"WTP_AMP_WTP_EFF",NA,"Mt Nansen AMP - Dec 2021- for WTP Effluent (Discharge) - at  Station: WTP_EFF","Nansen AMP (2021) for WTP_EFF",NA,"NSN",2021-12-01,NA,NA,NA,"WTP_EFF","Active"
+263,"NSN_AMP_Seep_Pond",NA,"Mt Nansen AMP - Dec 2021 - Seepage Collection Pond @ SEEP","Nansen AMP (2021) for Seepage Collection Pond",NA,"NSN",2021-12-01,NA,NA,NA,"SEEP","Active"
+264,"NSN_AMP_DC-D1b",NA,"Mt Nansen AMP - Dec 2021 - Dome Creek @ DC-D1b","Nansen AMP (2021) for DC-D1b",NA,"NSN",2021-12-01,NA,NA,NA,"DC-D1b","Active"
+265,"KNO_AMP_WQO_KV-2_2021","A","KV-2 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-2_2021","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available. 10 year dataset used to develop triggers.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-2",NA
+266,"KNO_AMP_WQO_KV-111_2021","A","KV-111 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-111_2021","applies between May and September; several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available. 10 year dataset used to develop triggers.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-111",NA
+267,"KNO_AMP_WQO_KV-56_2021","A","KV-56 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-56_2021","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available. 10 year dataset used to develop triggers.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-56",NA
+268,"KNO_AMP_WQO_KV-21_2021","A","KV-21 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-21_2021","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available. 10 year dataset used to develop triggers.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-21",NA
+269,"KNO_AMP_WQO_KV-81_2021","A","KV-81 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-81_2021","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available. 10 year dataset used to develop triggers.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-81",NA
+270,"KNO_AMP_WQO_KV-50_2021","A","KV-50 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-50_2021","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available. 10 year dataset used to develop triggers.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-50",NA
+271,"KNO_AMP_WQO_KV-6_2021","A","KV-6 WQOs, Oct2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-6_2021","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available. 10 year dataset used to develop triggers.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-6",NA
+272,"KNO_AMP_WQO_KV-7_2021","A","KV-7 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-7_2021","several of these objectives are linked to BC, CCME, or MMER guidelines; there are also long-term objectives available. 10 year dataset used to develop triggers.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-7",NA
+273,"KNO_AMP_WQO_KV-85D_2021","A","KV-85D WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-85D_2021","Many objectives are linked to YCSR. Date range ( Sept 2011-June 2013). Dry and frozen since 2013.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-85D",NA
+274,"KNO_AMP_WQO_KV-85S_2021","A","KV-85S WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-85S_2021","Many objectives are linked to YCSR. Date range ( Oct 2011- Jul 2021).","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-85S",NA
+275,"KNO_AMP_WQO_KV-86_2021","A","KV-86 WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-86_2021","Many objectives are linked to YCSR. Date range ( Jul 2011- Nov 2020).","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-86",NA
+276,"KNO_AMP_WQO_KV-87/87N_2021","A","KV-87/87N WQOs, Oct 2021 AMP, 10 year dataset","KNO_AMP_WQO_KV-87/87N_2021","Many objectives are linked to YCSR. Combined data range from Sept 2011 to May 2018 for KV-87 and Dec. 2020 to Aug 2021 for KV-87N which replaced KV-87.","KNO",2020-10-20,NA,"QZ18-044","2022 Mar by TH","KV-87/87N",NA
+334,"(EG)W5_95th","P","Calculated, In EQWIN, half values for <DL for all dates previous to June 24th","W5 95th Perc Pre Fail, <DL not included","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,"Sept 25 2024, MD","(EG)W5","Active"
+335,"(EG)W23_95th","P","Calculated, In EQWIN, half values for <DL for all dates previous to June 24th","W23 95th Perc Pre Fail, <DL not included","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,"Sept 25 2024, MD","(EG)W23","Active"
+342,"(EG)W22_95th_1","P",NA,"W22_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)W22",NA
+343,"(EG)W23_95th_1","P",NA,"W23_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)W23",NA
+344,"(EG)W25_95th_1","P",NA,"W25_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)W25",NA
+345,"(EG)W29_95th_1","P",NA,"W29_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)W29",NA
+346,"(EG)W4_95th_1","P",NA,"W4_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)W4",NA
+347,"(EG)W4-mix_95th_1","P",NA,"W4-mix_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)W4-mix",NA
+348,"(EG)W45_95th_1","P",NA,"W45_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)45",NA
+349,"(EG)W5_95th_1","P",NA,"W5_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)W5",NA
+350,"(EG)W99_95th_1","P",NA,"W99_95th Percentile, Pre Fail with DL","95th percentile calculated with all results pre June 24th, with results under DL has such (no factor)","EG",NA,NA,NA,NA,"(EG)W99",NA
+354,"(EG)W45_95th","P",NA,"W45 95th Perc Pre Fail, <DL not included","95th percentile calculated with all results pre June 24th, with results under DLnot included in stats","EG",NA,NA,NA,NA,"(EG)45",NA
+355,"LAB_IB","X","Flags Lab IB when Greater then 10%","Lab Ionic Balance",NA,NA,NA,NA,NA,NA,NA,NA
+356,"YG_HSS_EG_DS_W23","S","YG HSS Interim Water Quality Thresholds for Haggart Creek. Target for W23.","YG HSS EG DS Target",NA,"EG",NA,NA,NA,"2024 Nov by TB",NA,NA
+357,"YG_HSS_W4Mix_Summer","S","YG HSS Interim Water Quality Thresholds for Haggart Creek. - W4 mix Summer","YG HSS EG MT W4mix - Sum",NA,"EG",NA,NA,NA,"2024 Nov by TB",NA,NA
+358,"YG_HSS_W4Mix_Winter","S","YG HSS Interim Water Quality Thresholds for Haggart Creek. W4-mix - Fall/Winter","YG HSS EG MT W4mix - F/W",NA,"EG",NA,NA,NA,"2024 Nov by TB",NA,NA
+359,"(MTS)CCME_LT_MTS1",NA,"CCME for the protection of aquatic life, long term exposure, for Skukum MTS-1","CCME PAL Long Term Exposure *","Hardwired","MTS",NA,NA,NA,"2024 Dec by MDucha","MTS1, 1300 portal",NA
+360,"(MTS)CCME_LT_Sku",NA,"CCME for the protect. of aquatic life, long term exp., for Skukum & Berney Crks","CCME PAL Long Term Exposure *","Hardwired","MTS",NA,NA,NA,"2024 Dec by MDucha","Skukum and Berney Creek",NA

@@ -1,0 +1,3503 @@
+"CalcId","CalcCode","Category","CalcScript","CalcName"
+1,"CCME_Al_lt","Calculated Standard","* CCME - Al- Protection of Aquatic Life - Long Terms Exposure
+* provides the guideline in mg/L
+
+* Updated 2022/11/03 by Marie Ducharme
+
+#Z = 1
+#S = 1
+
+P = B
+P = [pH-L]   > 0 ? [pH-L]
+P = [pH-F]   > 0 ? [pH-F]
+
+X = P = B ? ""pH Missing""
+X = P <6.5 ? 0.005 : 0.1","CCME Al PAL Long Term Exposure"
+2,"CCME_Cd_lt","Calculated Standard","* CCME - Cd- Protection of Aquatic Life - Long Term Exposure
+* provides the guideline in mg/L
+
+* Updated 2022/12/19 by Marie Ducharme
+
+#Z = 1
+#S = 2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D]) 
+
+X = H = A ? ""Hard missing""
+X = H < 17 ? 0.00004
+X = H > 280 ? 0.00037
+X = (10^((0.83*(@log(H)))-2.46))/1000","CCME Cd PAL Long Term Exposure"
+3,"CCME_Cu_lt","Calculated Standard","* CCME - Cu - Protection of Aquatic Life - Long Terms Exposure
+* provides the guideline in mg/L
+
+* Updated 2022/10 by Marie Ducharme
+* Updated 20240415 by TdJ, removing HArd-C and Hard-CaMg
+* This script first determines hardness in different ways, using increasingly preferable methods
+* overwriting less accurate ones if they are present.
+
+* If no hardness, set to 0.002 mg/L, as per CCME guideline
+
+
+#Z =1
+#S = 2 
+
+* Determines the hardness, based on preferences
+* This script assumes that hardness from dissolved is ideal
+* If not hardness values are available, calculates from Ca and Mg, if present
+
+
+* IF Hardness is unknow, guildeline is 0.002, so hardness set as 81
+H = 81
+H = [Ca-T]*[Mg-T]>0?(2.497*[Ca-T])+(4.118*[Mg-T])
+H = [Hard-T] > 0 ? [Hard-T]
+
+H = [XHard] > 0 ? [XHard]
+
+H = [Ca-D]*[Mg-D]>0?(2.497*[Ca-D])+(4.118*[Mg-D])+(1.792*[Fe-D])+(1.142*[Sr-D])+(1.822*[Mn-D])
+H = [Hard-D] > 0 ? [Hard-D]
+
+* Hardness comparison
+X = H < 82 ? 0.002
+X = H  >= 180 ? 0.004
+X = ((@exp(0.8545*@lna(H)-1.465))*0.2)/1000","CCME Cu PAL Long Term Exposure"
+4,"CCME_Pb_lt","Calculated Standard","* CCME - Pb - Protection of Aquatic Life - Long Terms Exposure
+* provides the guideline in mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+* This script first determines hardness in different ways, using increasingly preferable methods
+* overwriting less accurate ones if they are present.
+
+* If no hardness, set to 0.001 mg/L, as per CCME guideline
+
+
+#Z=1
+#S=3 
+
+*
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+
+X = H <= 60 ? 0.001
+X = H  > 180 ? 0.007
+X = @exp(@lna(H)*1.273-4.705)/1000","Pb CCME PAL Long Term Exposure"
+5,"CCME_Ni_lt","Calculated Standard","* CCME - Ni- Protection of Aquatic Life - Long Terms Exposure
+* converts from µg/L to mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? 0.025
+X = H  <60 ? 0.250
+X = H<=180?(@exp(0.76*@lna(H)+1.06))/1000
+X = H>180 ? 0.15","Ni CCME guideline standard"
+6,"NH3u(calc)","Parameter","#S=3
+#Z=0
+*NH3 unionized calculation
+A=[Temp-F]+273.14
+B=.0901821+(2729.92/A)
+C=B-[pH-F]
+D=1/((10^C)+1)
+X=[N-NH4]*D","Un-ionized ammonia calculation"
+7,"C3_AW_NH4","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for NH4
+* converts from µg/L to mg/L
+
+
+#Z=1
+#S=3
+
+* Updated 2022/11/02 by Marie Ducharme
+
+
+
+C = A
+C = [pH-L] >0 ? [pH-L]
+C = [pH-F] >0 ? [pH-F]
+
+X = C = A ? ""pH is missing""
+X = C < 7 ? 18.4
+X = C < 7.5 ? 18.5
+X = C < 8 ? 11.3
+X = C < 8.5 ? 3.7
+X = C >= 8.5 ? 1.31","Contam. Sites S3 Aquatic Life"
+8,"C3_AW_Cd","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Cadmium
+* converts from µg/L to mg/L
+
+* Updated 2022/11/02 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H < 30 ? 0.0001
+X = H < 90 ? 0.0003
+X = H <150 ? 0.0005
+X = H <=210 ? 0.0006","Contam. sites S3 Aquatic Life"
+9,"C3_AW_Cu","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Copper
+* converts from µg/L to mg/L
+
+
+* Updated 2022/11/03 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <50 ? 0.02
+X = H <75 ? 0.03
+X = H <100 ? 0.04
+X = H <125 ? 0.05
+X = H <150 ? 0.06
+X = H <175 ? 0.07
+X = H < 200 ? 0.08
+X = H >= 200 ? 0.09","Contam. sites S3 Aquatic Life"
+10,"C3_AW_Flu","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Copper
+* converts from µg/L to mg/L and 
+
+
+* Updated 2022/11/03 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H < 50 ? 2
+X = H >=50 ? 3","Contam. sites S3 Aquatic Life"
+11,"C3_AW_Pb","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Lead
+* converts from µg/L to mg/L 
+
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H < 50 ? 0.04
+X = H < 100 ? 0.05
+X = H < 200 ? 0.06
+X = H < 300 ? 0.11
+X = H >= 300 ? 0.16","Contam. sites S3 Aquatic Life"
+12,"C3_AW_Ni","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for nickel
+* converts from µg/L to mg/L
+
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = C < 60 ? 0.25
+X = C <120 ? 0.65
+X = C <180 ? 0.011
+X = C >=180 ? 1.5","Contam. sites S3 Aquatic Life"
+13,"C3_AW_NO2","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater Nitrite
+* converts from µg/L to mg/L
+
+* Updated 2022/11/02 by Marie Ducharme
+
+
+#Z=1
+
+A = C
+A = [XChloride] > 0 ? [XChloride] 
+
+X = A = C ?  ""Chlord. is missing""
+X = A < 2 ? 0.2
+X = A < 4 ? 0.4
+X = A < 6 ? 0.6
+X = A < 8 ? 0.8
+X = A < 10 ? 1
+X = A >=10 ? 2","Contam. sites S3 Aquatic Life"
+14,"C3_AW_Ag","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Silver
+* converts from µg/L to mg/L
+
+
+* Updated 2022/11/03 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <100 ? 0.5/1000
+X = H >=100 ? 15/1000","Contam. sites S3 Aquatic Life"
+15,"C3_AW_Zn","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Zinc
+* converts from µg/L to mg/L
+
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+
+
+X = H < 90 ? 0.075
+X = H < 100 ? 0.15
+X = H < 200 ? 0.9
+X = H <= 300 ? 16.5
+X = H > 300 ? 2.4","Contam. sites S3 Aquatic Life"
+26,"MNT_Cd","Calculated Standard","*Updated for hardness selection on 2022/11/03 by Marie Ducharme
+*Updated for proper calculation on 2024/07/29 by Ghislain de Laplante
+
+#Z=1
+#S=2
+
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])
+X = H = 0 ? ""Hard missing""
+*line above modified by Ghislain: original was H = A but A is not defined and should be 0 at any rate
+
+G = 3*(@exp((0.736*(@lna(H)))-4.943))
+
+*above equation is what is in license, says Cadmium in ug/L so to *convert
+
+X=G/1000","Effluent Standards Cadmium"
+27,"MNT_Cu","Calculated Standard","*Calculate Cu limit based on sample data.
+#D=3
+A=[2.CollectDateTime]
+X=A<#yyyy-04-01#?.05
+X=A>#yyyy-05-31#?.05
+X=A<=#yyyy-05-31#?.08","Variable Cu on Date"
+28,"MNT_TSS","Calculated Standard","*Calculate TSS limit based on sample data.
+#D=0
+A=[2.CollectDateTime]
+X=A<#yyyy-04-01#?15
+X=A>#yyyy-05-31#?15
+X=A<=#yyyy-05-31#?30","Variable TSS on Date"
+29,"Hard-C(D)_CaMg","Parameter","*Calculates Hardness from Dissolved Ca and Mg
+
+#Z=0
+
+X = (2.497*[Ca-D])+(4.118*[Mg-D])","Hard Calc from Dis Ca & Mg"
+32,"CC-4_TSS","Calculated Standard","*Effluent standard for Carcross CC-4 was amended in 2016 and the TSS *standard now only applies outside of the discharge period between *July 15 and October 15
+
+X= [2.CollectDateTime] < #2016-07-15# ? 100 : 
+X= [2.CollectDateTime] < #2016-10-16# ?  9999 : 
+X= [2.CollectDateTime] < #2017-07-15# ? 100 :
+X= [2.CollectDateTime] < #2017-10-16# ? 9999  : 
+X= [2.CollectDateTime] < #2018-07-15# ? 100 :
+X= [2.CollectDateTime] < #2018-10-16# ?  9999 : 
+X= [2.CollectDateTime] < #2019-07-15# ? 100 :
+X= [2.CollectDateTime] < #2019-10-16# ? 9999  : 
+X= [2.CollectDateTime] < #2020-07-15# ? 100 :
+X= [2.CollectDateTime] < #2020-10-16# ? 9999  : 
+X= [2.CollectDateTime] < #2021-07-15# ? 100 :
+X= [2.CollectDateTime] < #2021-10-16# ? 9999 : 
+X= [2.CollectDateTime] < #2022-07-15# ? 100 :
+X= [2.CollectDateTime] < #2022-10-16# ? 9999 :
+X= [2.CollectDateTime] < #2023-07-15# ? 100 :
+X= [2.CollectDateTime] < #2023-10-16# ? 9999 :
+X= [2.CollectDateTime] < #2024-07-15# ? 100 :
+X= [2.CollectDateTime] < #2024-10-16# ? 9999 :","Carcross TSS Effluent Standard"
+33,"MNT_W2_Cu","Calculated Standard","* Minto W2 Copper WQO dependent on DOC
+#S=2
+#Z=1
+A = [C-DOC]
+B = 0.013
+B = A > 10 ? 0.02
+X = B","Minto W2 Copper"
+34,"MNT_Eff_Cu","Calculated Standard","* Minto Effluent Copper dependent on DOC
+#S=2
+#Z=1
+A = [C-DOC]
+B = 0.039
+B = A > 10 ? 0.06
+X = B","Effluent Copper Standard"
+35,"SDH_Al-D","Calculated Standard","#S=3
+#L=Q
+#Z=1
+* Al-D recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051
+A = [pH-L]
+B = [pH-F]
+C=B=0?A:B
+X=C<6.5?@exp((1.6-(3.327*C))+(0.402*(C^2)))
+X=0.05","Sa Dena Hes standard for Al-D"
+36,"SDH_Cd-D","Calculated Standard","*Updated for hardness selection on 2022/11/03 by Marie Ducharme
+* Cd-D recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051
+* equation converts to mg/L
+
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D]) 
+
+X = H = A ? ""Hard missing""
+X=@exp((0.736*@lna(H))-4.943)/1000","Sa Dena Hes standard for Cd-D"
+37,"SDH_Cu-T","Calculated Standard","#Z=1
+* Cu-T recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+C=B=0?A:B
+*licenced values convereted to mg/L
+*apply 'E' if month is May, otherwise apply 'D'
+D=C>50?0.00004*C:0.002
+E=C>50?0.00008*C:0.004
+X= [2.CollectDateTime] < #2017-05-01# ? D :
+X= [2.CollectDateTime] < #2017-06-01# ? E :
+X= [2.CollectDateTime] < #2018-05-01# ? D :
+X= [2.CollectDateTime] < #2018-06-01# ? E :
+X= [2.CollectDateTime] < #2019-05-01# ? D :
+X= [2.CollectDateTime] < #2019-06-01# ? E :
+X= [2.CollectDateTime] < #2020-05-01# ? D :
+X= [2.CollectDateTime] < #2020-06-01# ? E :
+X= [2.CollectDateTime] < #2021-05-01# ? D :
+X= [2.CollectDateTime] < #2021-06-01# ? E :
+X= [2.CollectDateTime] < #2022-05-01# ? D :
+X= [2.CollectDateTime] < #2022-06-01# ? E :
+X= [2.CollectDateTime] < #2023-05-01# ? D :
+X= [2.CollectDateTime] < #2023-06-01# ? E :
+X= [2.CollectDateTime] < #2024-05-01# ? D :
+X= [2.CollectDateTime] < #2024-06-01# ? E :
+X= [2.CollectDateTime] < #2025-05-01# ? D :
+X= [2.CollectDateTime] < #2025-06-01# ? E :
+X= [2.CollectDateTime] < #2026-05-01# ? D :
+X= [2.CollectDateTime] < #2026-06-01# ? E :
+X= [2.CollectDateTime] < #2027-05-01# ? D :
+X= [2.CollectDateTime] < #2027-06-01# ? E :
+X= [2.CollectDateTime] < #2028-05-01# ? D :
+X= [2.CollectDateTime] < #2028-06-01# ? E :
+X= [2.CollectDateTime] < #2029-05-01# ? D :
+X= [2.CollectDateTime] < #2029-06-01# ? E :
+X= [2.CollectDateTime] < #2030-05-01# ? D :
+X= [2.CollectDateTime] < #2030-06-01# ? E :
+X= [2.CollectDateTime] < #2031-05-01# ? D :
+X= [2.CollectDateTime] < #2031-06-01# ? E :
+X= [2.CollectDateTime] < #2032-05-01# ? D :
+X= [2.CollectDateTime] < #2032-06-01# ? E :
+X= [2.CollectDateTime] < #2033-05-01# ? D :
+X= [2.CollectDateTime] < #2033-06-01# ? E :
+X= [2.CollectDateTime] < #2034-05-01# ? D :
+X= [2.CollectDateTime] < #2034-06-01# ? E :
+X= [2.CollectDateTime] < #2035-05-01# ? D :
+X= [2.CollectDateTime] < #2035-06-01# ? E :
+X= [2.CollectDateTime] < #2036-05-01# ? D :
+X= [2.CollectDateTime] < #2036-06-01# ? E :
+X= [2.CollectDateTime] < #2037-05-01# ? D :
+X= [2.CollectDateTime] < #2037-06-01# ? E :
+X= [2.CollectDateTime] < #2038-05-01# ? D :
+X= [2.CollectDateTime] < #2038-06-01# ? E :
+X= [2.CollectDateTime] < #2039-05-01# ? D :
+X= [2.CollectDateTime] < #2039-06-01# ? E :
+X= [2.CollectDateTime] < #2040-05-01# ? D :
+X= [2.CollectDateTime] < #2040-06-01# ? E :","Sa Dena Hes standard for Cu-T"
+38,"SDH_Pb-T","Calculated Standard","#Z=1
+* Pb-T recieving water quality standard for MH-12 and MH-15 ,calculation for  Sa Dena Hes as defined in QZ16-051
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+D= [TSS]
+C=B=0?A:B
+*standard equation:
+E=3.31+ @exp((1.273*@lna(C))-4.704)
+*convert licenced equation in ug/L to mg/L
+F=0.001*E
+*Only applies if TSS is <4mg/L, otherwise standard applies to dissolved lead so leave blank
+X=D<4?F","Sa Dena Hes MH-12/15 for Pb-T"
+39,"SDH-Pb-D","Calculated Standard","#Z=1
+* Pb-D recieving water quality standard for MH-12 and MH-15 ,calculation for  Sa Dena Hes as defined in QZ16-051
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+D= [TSS]
+C=B=0?A:B
+*standard equation:
+E=3.31+ @exp((1.273*@lna(C))-4.704)
+*convert licenced equation in ug/L to mg/L
+F=0.001*E
+*Only applies if TSS is >=4mg/L, otherwise standard applies to total lead so leave blank
+X=D>=4?F","Sa Dena Hes MH-12/15 for Pb-D"
+40,"SDH-Pb-D_2","Calculated Standard","#Z=1
+* Pb-D recieving water quality standard for MH-11 ,calculation for  Sa Dena Hes as defined in QZ16-051
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+D= [TSS]
+C=B=0?A:B
+*standard equation:
+E=3.31+ 1.928*(@exp((1.273*@lna(C))-4.704))
+*convert licenced equation in ug/L to mg/L
+F=0.001*E
+*Only applies if TSS is >=4mg/L, otherwise standard applies to total lead so leave blank
+X=D>=4?F","Sa Dena Hes MH-11 for Pb-D"
+41,"SDH-Pb-T_2","Calculated Standard","#Z=1
+* Pb-T recieving water quality standard for MH-12 and MH-15 ,calculation for  Sa Dena Hes as defined in QZ16-051
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+D= [TSS]
+C=B=0?A:B
+*standard equation:
+E=1.928*(3.31+ @exp((1.273*@lna(C))-4.704))
+*convert licenced equation in ug/L to mg/L
+F=0.001*E
+*Only applies if TSS is <4mg/L, otherwise standard applies to dissolved lead so leave blank
+X=D<4?F","Sa Dena Hes MH-11 for Pb-T"
+42,"SDH-Ni-T","Calculated Standard","#Z=1
+* Ni-T recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+C=B=0?A:B
+*Licence equation in ug/L, altered for mg/L
+X=C<=60?25
+X=C<=180? (@exp(0.76*@lna(C)+1.06))/1000
+X=150","Sa Dena Hes standard for Ni-T"
+43,"SDH-SO4T","Calculated Standard","#Z=1
+* SO4-T recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+C=B=0?A:B
+X=C<=30?128
+X=C<=75?218
+X=C<=180?309
+X=429","Sa Dena Hes standard for SO4-T"
+44,"SDH-Zn-T","Calculated Standard","#S=3
+#Z=1
+* Zn-T recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051 for MH-12 and MH-15
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+D= [TSS]
+C=B=0?A:B
+*apply licence hardness dependent equation
+E=C<=90?7.5:(7.5+(0.75*(C-90)))
+*convert units from ug/L to mg/L
+F=0.001*E
+*Only applies if TSS is <4mg/L, otherwise standard applies to dissolved lead so leave blank
+X=D<4?F","Sa Dena Hes MH-12/15 for Zn-T"
+45,"SDH-Zn-T_2","Calculated Standard","#S=3
+#Z=1
+* Zn-T recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051 for MH-11
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+D= [TSS]
+C=B=0?A:B
+*apply licence hardness dependent equation
+E=C<=90?18.75:(2.5*(7.5+(0.75*(C-90))))
+*convert units from ug/L to mg/L
+F=0.001*E
+*Only applies if TSS is <4mg/L, otherwise standard applies to dissolved lead so leave blank
+X=D<4?F","Sa Dena Hes MH-11 for Zn-T"
+46,"CCME-NH4","Calculated Standard","* CCME -NH4 - Table for water quality guidelines for total ammonia (2010)
+* table represents a standard equal to 0.0156 / f , where f is the fraction of total unionized ammonia that is pH and temperature dependent.
+
+*pH and Temp selection (ONLY) updated on 2024/08-28 by Marie Ducharme
+
+#D=2
+#Z=01
+#S=3
+
+P = B
+P = [pH-L]   > 0 ? [pH-L]
+P = [pH-F]   > 0 ? [pH-F]
+
+X = P = B ? ""pH Missing""
+
+T =  K
+T = [Temp-F] > 0-10  ? [Temp-F]
+X = T =K  ? ""Temp is missing""
+
+
+X = 0.019/(1/((10^(0.0901821+(2729.92/(T+273.15))-P))+1))*0.8224","CCME table for ammonia"
+47,"SDH-Fe","Calculated Standard","*QZ16-051 standard for iron, 3.9mg/L applies in month of May, otherwise standard is 1mg/L
+X= [2.CollectDateTime] < #2017-05-01# ? 1 :
+X= [2.CollectDateTime] < #2017-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2018-05-01# ? 1 :
+X= [2.CollectDateTime] < #2018-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2019-05-01# ? 1 :
+X= [2.CollectDateTime] < #2019-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2020-05-01# ? 1 :
+X= [2.CollectDateTime] < #2020-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2021-05-01# ? 1 :
+X= [2.CollectDateTime] < #2021-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2022-05-01# ? 1 :
+X= [2.CollectDateTime] < #2022-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2023-05-01# ? 1 :
+X= [2.CollectDateTime] < #2023-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2024-05-01# ? 1 :
+X= [2.CollectDateTime] < #2024-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2025-05-01# ? 1 :
+X= [2.CollectDateTime] < #2025-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2026-05-01# ? 1 :
+X= [2.CollectDateTime] < #2026-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2027-05-01# ? 1 :
+X= [2.CollectDateTime] < #2027-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2028-05-01# ? 1 :
+X= [2.CollectDateTime] < #2028-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2029-05-01# ? 1 :
+X= [2.CollectDateTime] < #2029-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2030-05-01# ? 1 :
+X= [2.CollectDateTime] < #2030-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2031-05-01# ? 1 :
+X= [2.CollectDateTime] < #2031-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2032-05-01# ? 1 :
+X= [2.CollectDateTime] < #2032-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2033-05-01# ? 1 :
+X= [2.CollectDateTime] < #2033-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2034-05-01# ? 1 :
+X= [2.CollectDateTime] < #2034-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2035-05-01# ? 1 :
+X= [2.CollectDateTime] < #2035-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2036-05-01# ? 1 :
+X= [2.CollectDateTime] < #2036-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2037-05-01# ? 1 :
+X= [2.CollectDateTime] < #2037-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2038-05-01# ? 1 :
+X= [2.CollectDateTime] < #2038-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2039-05-01# ? 1 :
+X= [2.CollectDateTime] < #2039-06-01# ? 3.9 :
+X= [2.CollectDateTime] < #2040-05-01# ? 1 :
+X= [2.CollectDateTime] < #2040-06-01# ? 3.9 :","Sa Dena Hes standard for Fe-T"
+48,"SDH-Zn-D","Calculated Standard","#S=3
+#Z=1
+* Zn-D recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051 for MH-12 and MH-15
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+D= [TSS]
+C=B=0?A:B
+*apply licence hardness dependent equation
+E=C<=90?7.5:(7.5+(0.75*(C-90)))
+*convert units from ug/L to mg/L
+F=0.001*E
+*Only applies if TSS is >=4mg/L, otherwise standard applies to dissolved lead so leave blank
+X=D>=4?F","Sa Dena Hes MH-12/15 for Zn-D"
+49,"SDH-Zn-D_2","Calculated Standard","#S=3
+#Z=1
+* Zn-T recieving water quality standard calculation for  Sa Dena Hes as defined in QZ16-051 for MH-11
+* Use total hardness, otherwise look for dissolved
+A = [Hard-D]
+B = [Hard-T]
+D= [TSS]
+C=B=0?A:B
+*apply licence hardness dependent equation
+E=C<=90?18.75:(2.5*(7.5+(0.75*(C-90))))
+*convert units from ug/L to mg/L
+F=0.001*E
+*Only applies if TSS is >=4mg/L, otherwise standard applies to dissolved lead so leave blank
+X=D>=4?F","Sa Dena Hes MH-11 for Zn-D"
+50,"BCmoe_st_Al-D","Calculated Standard","* BC MOE Al-T freshwater aquatic life short term maximum
+* Equation converts guideline value from ug/L to mg/L
+
+* Updated 2022/11/02 by Marie Ducharme
+
+#S=3
+#Z=1
+
+P = B
+P = [pH-L]   > 0 ? [pH-L]
+P = [pH-F]   > 0 ? [pH-F]
+
+X = P = B ? ""pH Missing""
+X = P < 6.5 ? @exp(1.209-(2.426*P)+(0.286*(P^2)))
+X = 0.1","BC MOE Freshwater AL ST Al-D"
+51,"BCmoe_st_Cd-D","Calculated Standard","* BC MOE Cd-D freshwater aquatic life short term acute
+* converts results to mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <= 7 ? ""Hard. too low"" 
+X =(@exp((1.03*@lna(H))-5.274))/1000","BC MOE Freshwater AL ST Cd-D"
+52,"BCmoe_st_Cu-T","Calculated Standard","NEED TO FIX*standard only applies when hardness between 13-400mg/L
+*equation modified to convert to mg/L
+X=C<13?99999
+X=C<=400?((0.094*C)+2)/1000
+X=C>400?99999
+
+* BC MOE Cu-T freshwater aquatic life short term accute
+* standard only applies when hardness between 13-400mg/L
+* equation converts to mg/L
+#S=3
+#Z=1
+
+* Updated 2022/11/15 by Marie Ducharme
+
+X = X
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <13 ? 9""Hard. too low""
+X = H <= 400?((0.094*H)+2)/1000
+X = H > 400 ? ""Hard. too high""","BC MOE Freshwater AL ST Cu-T"
+53,"BCmoe_st_Fluord","Calculated Standard","* BC MOE Cd-D freshwater aquatic life INTERIM  short term acute
+* converts results to mg/L
+* standard only applies when hardness between 13-400mg/L
+
+* Updated 2022/11/02 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D]) 
+
+
+X=X
+X = H = A ? ""Hard missing""
+ 
+X = H <= 10 ? 0.4
+X = (92.57*@log(H)-51.73)*0.01","BC MOE Freshwater AL Fluoride"
+54,"BCmoe_st_Pb-T","Calculated Standard","* BC MOE Pb-T freshwater aquatic life Long term chronic
+* Equation converts guideline value from ug/L to mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+
+#S=3
+#Z=1
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <=8 ? 0.003
+X =  @exp(1.273*@ln(H)-1.460)/1000","BC MOE Freshwater AL ST  Pb-T"
+55,"C3AWNH4SW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for N-NH4
+* converts from µg/L to mg/L and
+* modified (dividing by 10) for surface water factor
+
+#Z=1
+#S=3
+
+* Updated 2022/11/02 by Marie Ducharme
+
+
+
+C = A
+C = [pH-L] >0 ? [pH-L]
+C = [pH-F] >0 ? [pH-F]
+
+X = C = A ? ""pH is missing""
+X = C < 7 ? 1.84
+X = C < 7.5 ? 1.85
+X = C < 8 ? 1.13
+X = C <8.5 ? 0.37
+X = C >= 8.5 ? 0.131","Contam. Sites S3 AL SW for NH4"
+56,"C3AWCdSW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Cadmium
+* converts from µg/L to mg/L and 
+* modified (dividing by 10) for surface water factor
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <30 ? 0.00001
+X = H < 90 ? 0.00003
+X = H <150 ? 0.00005
+X = H <= 210 ? 0.00006","Contam. Sites S3 AL SW for Cd"
+57,"C3AWCuSW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Copper
+* converts from µg/L to mg/L and 
+* modified (dividing by 10) for surface water factor
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <50 ? 0.002
+X = H <75 ? 0.003
+X = H <100 ? 0.004
+X = H <125 ? 0.005
+X = H <150 ? 0.006
+X = H <175 ? 0.007
+X = H < 200 ? 0.008
+X = H >=200 ? 0.009","Contam. Sites S3 AL SW for Cu"
+58,"C3AWFluSW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Copper
+* converts from µg/L to mg/L and 
+* modified (dividing by 10) for surface water factor
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H < 50 ? 0.2
+X = H >=50 ? 0.3","Contam. Sites S3 AL SW for Flu"
+59,"C3AWPbSW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Lead
+* converts from µg/L to mg/L and 
+* modified (dividing by 10) for surface water factor
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H < 50 ? 0.004
+X = H < 100 ? 0.005
+X = H < 200 ? 0.006
+X = H < 300 ? 0.011
+X = H >= 300 ? 0.016","Contam. Sites S3 AL SW for Pb"
+60,"C3AWNiSW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for nickel
+* converts from µg/L to mg/L and 
+* modified (dividing by 10) for surface water factor
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = C < 60 ? 0.0250
+X = C <120 ? 0.0650
+X = C <180 ? 0.110
+X = C >=180 ? 0.150","Contam. Sites S3 AL SW for Ni"
+61,"C3AWNO2SW","Calculated Standard","*Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater nitrite
+*Modified by surface water factor (dividing by 10)
+
+#Z=1
+
+A = C
+A = [XChloride] > 0 ? [XChloride] 
+
+X = A = C ?  ""Chlord. is missing""
+X = A < 2 ? 0.02
+X = A < 4 ? 0.04
+X = A < 6 ? 0.06
+X = A < 8 ? 0.08
+X = A < 10 ? 0.1
+X = A >=10 ? 0.2","Contam. Sites S3 AL SW for NO2"
+62,"C3AWAgSW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Silver
+* converts from µg/L to mg/L and 
+* modified (dividing by 10) for surface water factor
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <100 ? 0.5/1000/10
+X = H >=100 ? 15/1000/10","Contam. Sites S3 AL SW for Ag"
+63,"C3AWZnSW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for Zinc
+* converts from µg/L to mg/L and 
+* modified (dividing by 10) for surface water factor
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H < 90 ? 0.0075
+X = H < 100 ? 0.015
+X = H < 200 ? 0.09
+X = H < 300 ? 0.165
+X = H <= 400 ? 0.24","Contam. Sites S3 AL SW for Zn"
+64,"BCmoe_st_Mn-T","Calculated Standard","* BC MOE Mn-T freshwater aquatic life Short term acute
+* standard only applies when hardness between 25-259mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#S=4
+#Z=1
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+
+
+*standard only applies when hardness between 25-259mg/L
+X=C=0?9999
+X=C<25?9999
+X=C<=259?0.01102*C+0.54
+X=C>259?9999","BC MOE Freshwater AL ST Mn-T"
+65,"BCmoe_st_NO2","Calculated Standard","* BC MOE N-NH2 freshwater aquatic life Short term accute
+
+* Updated 2022/11/03 by Marie Ducharme
+
+#S=1
+#Z=1
+
+A = C
+A = [XChloride] > 0 ? [XChloride] 
+
+X = C = A  ? ""Chloride is missing""
+
+X = A < 2 ? 0.06
+X = A <= 4 ? 0.12
+X = A <= 6 ? 0.18
+X = A <=8 ? 0.24
+X = A <=10 ? 0.30
+X = A >10 ? 0.60","BC MOE Freshwater AL ST N-NO2"
+66,"BCmoe_st_N-NH4","Calculated Standard","NEEDS REVIEW #S=3
+#Z=0
+*BC MOE Fresh Water Short Term Aquatic Life Table for water quality guidelines for total ammonia 
+A=[pH-F]
+B=[Temp-F]
+*Dummy variable to provide a single value to the different possible combinations of pH and Temperature
+E =B+(A/10)
+X=E<0.655?28.7
+X=E<0.665?27.9
+X=E<0.675?26.9
+X=E<0.685?25.8
+X=E<0.695?24.6
+X=E<0.705?23.2
+X=E<0.715?21.6
+X=E<0.725?19.9
+X=E<0.735?18.1
+X=E<0.745?16.2
+X=E<0.755?14.4
+X=E<0.765?12.6
+X=E<0.775?10.8
+X=E<0.785?9.26
+X=E<0.795?7.82
+X=E<0.805?6.55
+X=E<0.815?5.21
+X=E<0.825?4.15
+X=E<0.835?3.31
+X=E<0.845?2.64
+X=E<0.855?2.11
+X=E<0.865?1.69
+X=E<0.875?1.35
+X=E<0.885?1.08
+X=E<0.895?0.871
+X=E<1?0.703
+X=E<1.655?28.3
+X=E<1.665?27.5
+X=E<1.675?26.5
+X=E<1.685?25.5
+X=E<1.695?24.2
+X=E<1.705?22.8
+X=E<1.715?21.3
+X=E<1.725?19.6
+X=E<1.735?17.8
+X=E<1.745?16
+X=E<1.755?14.1
+X=E<1.765?12.4
+X=E<1.775?10.7
+X=E<1.785?9.12
+X=E<1.795?7.71
+X=E<1.805?6.46
+X=E<1.815?5.14
+X=E<1.825?4.09
+X=E<1.835?3.27
+X=E<1.845?2.61
+X=E<1.855?2.08
+X=E<1.865?1.67
+X=E<1.875?1.33
+X=E<1.885?1.07
+X=E<1.895?0.863
+X=E<2?0.697
+X=E<2.655?27.9
+X=E<2.665?27.2
+X=E<2.675?26.2
+X=E<2.685?25.1
+X=E<2.695?23.9
+X=E<2.705?22.5
+X=E<2.715?20.9
+X=E<2.725?19.3
+X=E<2.735?17.5
+X=E<2.745?15.7
+X=E<2.755?14
+X=E<2.765?12
+X=E<2.775?10.5
+X=E<2.785?8.98
+X=E<2.795?7.6
+X=E<2.805?6.37
+X=E<2.815?5.07
+X=E<2.825?4.04
+X=E<2.835?3.22
+X=E<2.845?2.57
+X=E<2.855?2.06
+X=E<2.865?1.65
+X=E<2.875?1.32
+X=E<2.885?1.06
+X=E<2.895?0.856
+X=E<3?0.692
+X=E<3.655?27.5
+X=E<3.665?26.8
+X=E<3.675?25.9
+X=E<3.685?24.8
+X=E<3.695?23.6
+X=E<3.705?22.2
+X=E<3.715?20.7
+X=E<3.725?19
+X=E<3.735?17.3
+X=E<3.745?15.5
+X=E<3.755?13.8
+X=E<3.765?11.9
+X=E<3.775?10.4
+X=E<3.785?8.88
+X=E<3.795?7.51
+X=E<3.805?6.29
+X=E<3.815?5.01
+X=E<3.825?3.99
+X=E<3.835?3.19
+X=E<3.845?2.54
+X=E<3.855?2.03
+X=E<3.865?1.63
+X=E<3.875?1.31
+X=E<3.885?1.05
+X=E<3.895?0.849
+X=E<4?0.688
+X=E<4.655?27.2
+X=E<4.665?26.4
+X=E<4.675?25.5
+X=E<4.685?24.5
+X=E<4.695?23.3
+X=E<4.705?21.9
+X=E<4.715?20.4
+X=E<4.725?18.8
+X=E<4.735?17.1
+X=E<4.745?15.3
+X=E<4.755?13.6
+X=E<4.765?11.9
+X=E<4.775?10.3
+X=E<4.785?8.77
+X=E<4.795?7.42
+X=E<4.805?6.22
+X=E<4.815?4.95
+X=E<4.825?3.95
+X=E<4.835?3.15
+X=E<4.845?2.52
+X=E<4.855?2.01
+X=E<4.865?1.61
+X=E<4.875?1.3
+X=E<4.885?1.04
+X=E<4.895?0.844
+X=E<5?0.685
+X=E<5.655?26.8
+X=E<5.665?26.1
+X=E<5.675?25.2
+X=E<5.685?24.2
+X=E<5.695?23
+X=E<5.705?21.6
+X=E<5.715?20.2
+X=E<5.725?18.6
+X=E<5.735?16.9
+X=E<5.745?15.2
+X=E<5.755?13.4
+X=E<5.765?11.7
+X=E<5.775?10.1
+X=E<5.785?8.67
+X=E<5.795?7.33
+X=E<5.805?6.14
+X=E<5.815?4.9
+X=E<5.825?3.9
+X=E<5.835?3.12
+X=E<5.845?2.49
+X=E<5.855?1.99
+X=E<5.865?1.6
+X=E<5.875?1.29
+X=E<5.885?1.04
+X=E<5.895?0.839
+X=E<6?0.682
+X=E<6.655?26.5
+X=E<6.665?25.8
+X=E<6.675?24.9
+X=E<6.685?23.9
+X=E<6.695?22.7
+X=E<6.705?21.4
+X=E<6.715?19.9
+X=E<6.725?18.3
+X=E<6.735?16.7
+X=E<6.745?15
+X=E<6.755?13.3
+X=E<6.765?11.6
+X=E<6.775?10
+X=E<6.785?8.57
+X=E<6.795?7.25
+X=E<6.805?6.08
+X=E<6.815?4.84
+X=E<6.825?3.86
+X=E<6.835?3.09
+X=E<6.845?2.47
+X=E<6.855?1.98
+X=E<6.865?1.59
+X=E<6.875?1.28
+X=E<6.885?1.03
+X=E<6.895?0.836
+X=E<7?0.681
+X=E<7.655?26.2
+X=E<7.665?25.5
+X=E<7.675?24.6
+X=E<7.685?23.6
+X=E<7.695?22.5
+X=E<7.705?21.1
+X=E<7.715?19.7
+X=E<7.725?18.1
+X=E<7.735?16.5
+X=E<7.745?14.8
+X=E<7.755?13.1
+X=E<7.765?11.5
+X=E<7.775?9.92
+X=E<7.785?8.48
+X=E<7.795?7.17
+X=E<7.805?6.02
+X=E<7.815?4.8
+X=E<7.825?3.83
+X=E<7.835?3.06
+X=E<7.845?2.45
+X=E<7.855?1.96
+X=E<7.865?1.58
+X=E<7.875?1.27
+X=E<7.885?1.03
+X=E<7.895?0.833
+X=E<8?0.681
+X=E<8.655?26
+X=E<8.665?25.2
+X=E<8.675?24.4
+X=E<8.685?23.4
+X=E<8.695?22.2
+X=E<8.705?20.9
+X=E<8.715?19.5
+X=E<8.725?17.9
+X=E<8.735?16.3
+X=E<8.745?14.7
+X=E<8.755?13
+X=E<8.765?11.4
+X=E<8.775?9.83
+X=E<8.785?8.4
+X=E<8.795?7.1
+X=E<8.805?5.96
+X=E<8.815?4.75
+X=E<8.825?3.8
+X=E<8.835?3.03
+X=E<8.845?2.43
+X=E<8.855?1.95
+X=E<8.865?1.57
+X=E<8.875?1.26
+X=E<8.885?1.02
+X=E<8.895?0.832
+X=E<9?0.681
+X=E<9.655?25.7
+X=E<9.665?25
+X=E<9.675?24.1
+X=E<9.685?23.1
+X=E<9.695?22
+X=E<9.705?20.7
+X=E<9.715?19.3
+X=E<9.725?17.8
+X=E<9.735?16.2
+X=E<9.745?14.5
+X=E<9.755?12.9
+X=E<9.765?11.3
+X=E<9.775?9.73
+X=E<9.785?8.32
+X=E<9.795?7.04
+X=E<9.805?5.91
+X=E<9.815?4.71
+X=E<9.825?3.76
+X=E<9.835?3.01
+X=E<9.845?2.41
+X=E<9.855?1.94
+X=E<9.865?1.56
+X=E<9.875?1.26
+X=E<9.885?1.02
+X=E<9.895?0.831
+X=E<10?0.681
+X=E<10.655?25.5
+X=E<10.665?24.7
+X=E<10.675?23.9
+X=E<10.685?22.9
+X=E<10.695?21.8
+X=E<10.705?20.5
+X=E<10.715?19.1
+X=E<10.725?17.6
+X=E<10.735?16
+X=E<10.745?14.4
+X=E<10.755?12.7
+X=E<10.765?11.2
+X=E<10.775?9.65
+X=E<10.785?8.25
+X=E<10.795?6.98
+X=E<10.805?5.86
+X=E<10.815?4.67
+X=E<10.825?3.74
+X=E<10.835?2.99
+X=E<10.845?2.4
+X=E<10.855?1.93
+X=E<10.865?1.55
+X=E<10.875?1.25
+X=E<10.885?1.02
+X=E<10.895?0.831
+X=E<11?0.682
+X=E<11.655?25.2
+X=E<11.665?24.5
+X=E<11.675?23.7
+X=E<11.685?22.7
+X=E<11.695?21.6
+X=E<11.705?20.3
+X=E<11.715?18.9
+X=E<11.725?17.4
+X=E<11.735?15.9
+X=E<11.745?14.2
+X=E<11.755?12.6
+X=E<11.765?11.1
+X=E<11.775?9.57
+X=E<11.785?8.18
+X=E<11.795?6.92
+X=E<11.805?5.81
+X=E<11.815?4.64
+X=E<11.825?3.71
+X=E<11.835?2.97
+X=E<11.845?2.38
+X=E<11.855?1.92
+X=E<11.865?1.55
+X=E<11.875?1.25
+X=E<11.885?1.02
+X=E<11.895?0.832
+X=E<12?0.684
+X=E<12.655?25
+X=E<12.665?24.3
+X=E<12.675?23.5
+X=E<12.685?22.5
+X=E<12.695?21.4
+X=E<12.705?20.2
+X=E<12.715?18.8
+X=E<12.725?17.3
+X=E<12.735?15.7
+X=E<12.745?14.1
+X=E<12.755?12.5
+X=E<12.765?11
+X=E<12.775?9.5
+X=E<12.785?8.12
+X=E<12.795?6.88
+X=E<12.805?5.78
+X=E<12.815?4.61
+X=E<12.825?3.69
+X=E<12.835?2.96
+X=E<12.845?2.37
+X=E<12.855?1.91
+X=E<12.865?1.54
+X=E<12.875?1.25
+X=E<12.885?1.02
+X=E<12.895?0.834
+X=E<13?0.688
+X=E<13.655?24.8
+X=E<13.665?24.1
+X=E<13.675?23.3
+X=E<13.685?22.3
+X=E<13.695?21.3
+X=E<13.705?20
+X=E<13.715?18.7
+X=E<13.725?17.2
+X=E<13.735?15.6
+X=E<13.745?14
+X=E<13.755?12.4
+X=E<13.765?10.9
+X=E<13.775?9.43
+X=E<13.785?8.07
+X=E<13.795?6.83
+X=E<13.805?5.74
+X=E<13.815?4.59
+X=E<13.825?3.67
+X=E<13.835?2.94
+X=E<13.845?2.36
+X=E<13.855?1.91
+X=E<13.865?1.54
+X=E<13.875?1.25
+X=E<13.885?1.02
+X=E<13.895?0.838
+X=E<14?0.692
+X=E<14.655?24.6
+X=E<14.665?23.9
+X=E<14.675?23.1
+X=E<14.685?22.2
+X=E<14.695?21.1
+X=E<14.705?19.9
+X=E<14.715?18.5
+X=E<14.725?17.1
+X=E<14.735?15.5
+X=E<14.745?13.9
+X=E<14.755?12.4
+X=E<14.765?10.8
+X=E<14.775?9.37
+X=E<14.785?8.02
+X=E<14.795?6.79
+X=E<14.805?5.71
+X=E<14.815?4.56
+X=E<14.825?3.65
+X=E<14.835?2.93
+X=E<14.845?2.36
+X=E<14.855?1.9
+X=E<14.865?1.54
+X=E<14.875?1.25
+X=E<14.885?1.02
+X=E<14.895?0.842
+X=E<15?0.698
+X=E<15.655?24.5
+X=E<15.665?23.8
+X=E<15.675?23
+X=E<15.685?22
+X=E<15.695?21
+X=E<15.705?19.7
+X=E<15.715?18.4
+X=E<15.725?16.9
+X=E<15.735?15.4
+X=E<15.745?13.9
+X=E<15.755?12.3
+X=E<15.765?10.8
+X=E<15.775?9.31
+X=E<15.785?7.97
+X=E<15.795?6.75
+X=E<15.805?5.68
+X=E<15.815?4.54
+X=E<15.825?3.64
+X=E<15.835?2.92
+X=E<15.845?2.35
+X=E<15.855?1.9
+X=E<15.865?1.54
+X=E<15.875?1.25
+X=E<15.885?1.03
+X=E<15.895?0.847
+X=E<16?0.704
+X=E<16.655?24.3
+X=E<16.665?23.6
+X=E<16.675?22.8
+X=E<16.685?21.9
+X=E<16.695?20.8
+X=E<16.705?19.6
+X=E<16.715?18.3
+X=E<16.725?16.8
+X=E<16.735?15.3
+X=E<16.745?13.8
+X=E<16.755?12.2
+X=E<16.765?10.7
+X=E<16.775?9.26
+X=E<16.785?7.93
+X=E<16.795?6.72
+X=E<16.805?5.66
+X=E<16.815?4.53
+X=E<16.825?3.63
+X=E<16.835?2.92
+X=E<16.845?2.35
+X=E<16.855?1.9
+X=E<16.865?1.54
+X=E<16.875?1.26
+X=E<16.885?1.03
+X=E<16.895?0.853
+X=E<17?0.711
+X=E<17.655?24.2
+X=E<17.665?23.5
+X=E<17.675?22.7
+X=E<17.685?21.8
+X=E<17.695?20.7
+X=E<17.705?19.5
+X=E<17.715?18.2
+X=E<17.725?16.8
+X=E<17.735?15.2
+X=E<17.745?13.7
+X=E<17.755?12.2
+X=E<17.765?10.7
+X=E<17.775?9.22
+X=E<17.785?7.9
+X=E<17.795?6.69
+X=E<17.805?5.62
+X=E<17.815?4.51
+X=E<17.825?3.62
+X=E<17.835?2.91
+X=E<17.845?2.35
+X=E<17.855?1.9
+X=E<17.865?1.55
+X=E<17.875?1.26
+X=E<17.885?1.04
+X=E<17.895?0.861
+X=E<18?0.72
+X=E<18.655?24
+X=E<18.665?23.3
+X=E<18.675?22.6
+X=E<18.685?21.7
+X=E<18.695?20.6
+X=E<18.705?19.4
+X=E<18.715?18.1
+X=E<18.725?16.7
+X=E<18.735?15.2
+X=E<18.745?13.6
+X=E<18.755?12.1
+X=E<18.765?10.6
+X=E<18.775?9.18
+X=E<18.785?7.87
+X=E<18.795?6.67
+X=E<18.805?5.61
+X=E<18.815?4.5
+X=E<18.825?3.61
+X=E<18.835?2.91
+X=E<18.845?2.35
+X=E<18.855?1.9
+X=E<18.865?1.56
+X=E<18.875?1.27
+X=E<18.885?1.05
+X=E<18.895?0.87
+X=E<19?0.729
+X=E<19.655?23.9
+X=E<19.665?23.3
+X=E<19.675?22.5
+X=E<19.685?21.6
+X=E<19.695?20.5
+X=E<19.705?19.3
+X=E<19.715?18
+X=E<19.725?16.6
+X=E<19.735?15.1
+X=E<19.745?13.6
+X=E<19.755?12.1
+X=E<19.765?10.6
+X=E<19.775?9.15
+X=E<19.785?7.84
+X=E<19.795?6.65
+X=E<19.805?5.6
+X=E<19.815?4.49
+X=E<19.825?3.61
+X=E<19.835?2.91
+X=E<19.845?2.35
+X=E<19.855?1.91
+X=E<19.865?1.56
+X=E<19.875?1.28
+X=E<19.885?1.06
+X=E<19.895?0.88
+X=E<20?0.74
+X=E<20.655?23.8
+X=E<20.665?23.2
+X=E<20.675?22.4
+X=E<20.685?21.5
+X=E<20.695?20.4
+X=E<20.705?19.2
+X=E<20.715?17.9
+X=E<20.725?16.5
+X=E<20.735?15.1
+X=E<20.745?13.5
+X=E<20.755?12
+X=E<20.765?10.5
+X=E<20.775?9.12
+X=E<20.785?7.82
+X=E<20.795?6.64
+X=E<20.805?5.74
+X=E<20.815?4.49
+X=E<20.825?3.61
+X=E<20.835?2.91
+X=E<20.845?2.36
+X=E<20.855?1.92
+X=E<20.865?1.57
+X=E<20.875?1.29
+X=E<20.885?1.07
+X=E<20.895?0.891
+X=E<21?0.752","BC MOE Freshwater AL ST N-NH4"
+67,"BCmoe_st_Ag-T","Calculated Standard","* BC MOE Ag-T freshwater aquatic life short term maximum
+* Equation converts guideline value from ug/L to mg/L
+
+* Updated 2022/12/21 by Marie Ducharme
+
+#S=2
+#Z=1
+
+* Updated 2022/11/15 by Marie Ducharme
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <=100 ? 0.1/1000
+X = H >100 ? 3/1000","BC MOE Freshwater AL ST Ag-T"
+68,"BCmoe_st_Zn-T","Calculated Standard","* BC MOE Zinc freshwater aquatic life Short term accute
+* converts results to mg/L
+
+* Updated 2022/11/03 by Marie Ducharme
+
+#Z=1
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D]) 
+
+
+X = H = A ? ""Hard. missing""
+X = H <= 90 ? 0.033
+X = H >90 ? 33+(0.75*(H-90))/1000","BC MOE Freshwater AL ST Zn-T"
+69,"FEQGs_Co","Calculated Standard","* Federal Environmental Quality Guidelines Cobalt
+* Freshwater aquatic life
+
+* Updated on 2022/11/15 by Marie Ducharme
+ * Additional tweak to final equation on 2024/07-29 by Ghislain de Laplante 
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <52 ? ""Hard. too low""
+X = H >396 ? ""Hard. too high""
+X = @exp(0.414*@lna(H)-1.887)/1000","Fed Env Quality Guidelines Co"
+70,"KNO_KV-104C_N-NH4","Calculated Standard","#D=1
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?6.5
+X=A<=20?3.7
+X=A<=30?2.7
+X=2.4","KNO_KV-104C_N-NH4"
+71,"KNO_KV-104C_As-T","Calculated Standard","#D=3
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.042
+X=A<=20?0.022
+X=A<=30?0.017
+X=0.012","KNO_KV-104C_As-T"
+72,"KNO_KV-104C_Cd-T","Calculated Standard","#D=4
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.008
+X=A<=20?0.006
+X=A<=30?0.0044
+X=0.0042","KNO_KV-104C_Cd-T"
+73,"KNO_KV-104C_Cu-T","Calculated Standard","#D=3
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.043
+X=A<=20?0.026
+X=A<=30?0.021
+X=0.019","KNO_KV-104C_Cu-T"
+74,"KNO_KV-104C_Pb-T","Calculated Standard","#D=3
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.043
+X=A<=20?0.023
+X=A<=30?0.018
+X=0.016","KNO_KV-104C_Pb-T"
+75,"KNO_KV-104C_Ag-T","Calculated Standard","#S=2
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.001
+X=A<=20?0.00064
+X=A<=30?0.00053
+X=0.00052","KNO_KV-104C_Ag-T"
+76,"KNO_KV-104C_Zn-T","Calculated Standard","#D=2
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.5
+X=A<=20?0.46
+X=A<=30?0.42
+X=0.40","KNO_KV-104C_Zn-T"
+77,"KNO_KV-104L_N-NH4","Calculated Standard","#D=2
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?10
+X=A<=20?10
+X=A<=30?9.0
+X=8.1","KNO_KV-104L_N-NH4"
+78,"KNO_KV-104L-As-D","Calculated Standard","#D=3
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.035
+X=A<=20?0.020
+X=A<=30?0.015
+X=0.013","KNO_KV-104L-As-D"
+79,"KNO_KV-104L_Cd-D","Calculated Standard","#D=5
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.0012
+X=A<=20?0.00072
+X=A<=30?0.00055
+X=0.00050","KNO_KV-104L_Cd-D"
+80,"KNO_KV-104L_Cu-D","Calculated Standard","#D=3
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.043
+X=A<=20?0.023
+X=A<=30?0.017
+X=0.015","KNO_KV-104L_Cu-D"
+81,"KNO_KV-104L_Pb-D","Calculated Standard","#D=3
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.036
+X=A<=20?0.020
+X=A<=30?0.014
+X=0.012","KNO_KV-104L_Pb-D"
+82,"KNO_KV-104L_Ni-D","Calculated Standard","#D=2
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.5
+X=A<=20?0.5
+X=A<=30?0.44
+X=0.40","KNO_KV-104L_Ni-D"
+83,"KNO_KV-104L_Ag-D","Calculated Standard","#D=4
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.0029
+X=A<=20?0.0016
+X=A<=30?0.0012
+X=0.0010","KNO_KV-104L_Ag-D"
+84,"KNO_KV-104L_Zn-D","Calculated Standard","#S=2
+#L=Q
+#Z=0
+A = [Flow]
+X=A<=10?0.23
+X=A<=20?0.13
+X=A<=30?0.095
+X=0.085","KNO_KV-104L_Zn-D"
+85,"BCmoe_lt_SO4","Calculated Standard","* BC MOE SO4 freshwater aquatic long term chronic
+* equation modified to convert to mg/L
+* Only valid for Hardness values under 350 mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <30 ? 128
+X = H <=75 ? 218
+X = H <= 180 ? 309
+X = H <= 250 ? 429
+X = H > 250 ? ""Hard. is too high""","BC MOE Freshwater AL LT SO4"
+86,"BL-2_TSS","Calculated Standard","*Effluent standard for TSS at BL-2 does not apply from July through October
+X= [2.CollectDateTime] < #2014-02-28# ?  9999 : 
+X= [2.CollectDateTime] < #2014-07-1# ? 25 : 
+X= [2.CollectDateTime] < #2014-10-31# ?  9999 : 
+X= [2.CollectDateTime] < #2015-07-1# ? 25 : 
+X= [2.CollectDateTime] < #2015-10-31# ?  9999 : 
+X= [2.CollectDateTime] < #2016-07-1# ? 25 : 
+X= [2.CollectDateTime] < #2016-10-31# ?  9999 : 
+X= [2.CollectDateTime] < #2017-07-1# ? 25 :
+X= [2.CollectDateTime] < #2017-10-31# ? 9999  : 
+X= [2.CollectDateTime] < #2018-07-1# ? 25 :
+X= [2.CollectDateTime] < #2018-10-31# ?  9999 : 
+X= [2.CollectDateTime] < #2019-07-1# ? 25 :
+X= [2.CollectDateTime] < #2019-10-31# ? 9999  : 
+X= [2.CollectDateTime] < #2020-07-1# ? 25 :
+X= [2.CollectDateTime] < #2020-10-31# ? 9999  : 
+X= [2.CollectDateTime] < #2021-07-1# ? 25 :
+X= [2.CollectDateTime] < #2021-10-31# ? 9999  : 
+X= [2.CollectDateTime] < #2022-07-1# ? 25 :
+X= [2.CollectDateTime] < #2022-10-31# ? 9999  : 
+X= [2.CollectDateTime] < #2023-07-1# ? 25 :
+X= [2.CollectDateTime] < #2023-10-31# ? 9999  :","Burwash TSS Effluent Standard"
+87,"pH","Validation","#Z=0
+A = [pH-F]
+B = [pH-L]
+X = A-B > 1 ? ""field and lab pH differ by more than 1""
+X = B-A > 1 ? ""field and lab pH differ by more than 1""","pH field and lab comparison"
+88,"Cond","Validation","#Z=0
+A = [Cond-F]
+B = [Cond-L]
+X = A-B > 100 ? ""field and lab specific conductance differ by more than 100 us/cm""
+X = B-A > 100 ? ""field and lab specific conductance differ by more than 100 us/cm""","Cond-F and Cond-L comparison"
+89,"Cd-D_Calc","Other","#L=Q
+#Z=0
+X=[Flow]*[Cd-D]","Cd Dissolved Load Calculation"
+90,"Hard-C(T)_CaMg","Parameter","*Calculates Hardness from Total Ca and Mg
+
+#Z=0
+
+X = (2.497*[Ca-T])+(4.118*[Mg-T])","Hard Calc from Tot Ca & Mg"
+91,"BCmoe_lt_Zn-T","Calculated Standard","* BCMOE Zn-T freshwater aquatic life Long term chronic
+* equation modified to convert to mg/L
+
+* Updated 2022/11/02 by Marie Ducharme
+
+#S=3
+#Z=1
+
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <= 90 ? 0.0075
+X = H < 330 ? 7.5+(0.75*(H-90))/1000
+X = 188/1000","BC MOE Freshwater AL LT Zn-T"
+92,"BCmoe_lt_Ag-T","Calculated Standard","* BC MOE Ag-T freshwater aquatic life Long term chronic
+* Equation converts guideline value from ug/L to mg/L
+
+#S=2
+#Z=1
+
+* Updated 2022/12/21 by Marie Ducharme
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H <=100 ? 0.05/1000
+X = H >100 ? 1.5/1000","BC MOE Freshwater AL LT Ag-T"
+93,"BCmoe_lt_N-NH4","Calculated Standard","NEEDS REVIEW* BC MOE N-NH4 freshwater aquatic life long term chronic
+* Not found in litterature. Not sure where this came from use with care
+#S=3
+#Z=1
+
+P = B
+P = [pH-L]   > 0 ? [pH-L]
+P = [pH-F]   > 0 ? [pH-F] 
+
+T = K
+T = [Temp-F] > 0 ?   [Temp-F]
+
+*Dummy variable to provide a single value to the different possible combinations of pH and Temperature
+
+X = P = B ? ""pH missing""
+X = T = K ? ""Temp missing""
+E =T +(P/10)
+
+X=E<0.655?2.08
+X=E<0.665?2.08
+X=E<0.675?2.08
+X=E<0.685?2.08
+X=E<0.695?2.08
+X=E<0.705?2.08
+X=E<0.715?2.08
+X=E<0.725?2.08
+X=E<0.735?2.08
+X=E<0.745?2.08
+X=E<0.755?2.08
+X=E<0.765?2.09
+X=E<0.775?2.09
+X=E<0.785?1.78
+X=E<0.795?1.5
+X=E<0.805?1.26
+X=E<0.815?1
+X=E<0.825?0.799
+X=E<0.835?0.636
+X=E<0.845?0.508
+X=E<0.855?0.405
+X=E<0.865?0.324
+X=E<0.875?0.26
+X=E<0.885?0.208
+X=E<0.895?0.168
+X=E<1?0.135
+X=E<1.655?2.05
+X=E<1.665?2.05
+X=E<1.675?2.05
+X=E<1.685?2.05
+X=E<1.695?2.05
+X=E<1.705?2.05
+X=E<1.715?2.05
+X=E<1.725?2.05
+X=E<1.735?2.05
+X=E<1.745?2.05
+X=E<1.755?2.05
+X=E<1.765?2.05
+X=E<1.775?2.05
+X=E<1.785?1.75
+X=E<1.795?1.48
+X=E<1.805?1.24
+X=E<1.815?0.989
+X=E<1.825?0.788
+X=E<1.835?0.628
+X=E<1.845?0.501
+X=E<1.855?0.4
+X=E<1.865?0.32
+X=E<1.875?0.257
+X=E<1.885?0.206
+X=E<1.895?0.166
+X=E<2?0.134
+X=E<2.655?2.02
+X=E<2.665?2.02
+X=E<2.675?2.02
+X=E<2.685?2.02
+X=E<2.695?2.02
+X=E<2.705?2.02
+X=E<2.715?2.02
+X=E<2.725?2.02
+X=E<2.735?2.02
+X=E<2.745?2.02
+X=E<2.755?2.02
+X=E<2.765?2.03
+X=E<2.775?2.03
+X=E<2.785?1.73
+X=E<2.795?1.46
+X=E<2.805?1.23
+X=E<2.815?0.976
+X=E<2.825?0.777
+X=E<2.835?0.62
+X=E<2.845?0.495
+X=E<2.855?0.396
+X=E<2.865?0.317
+X=E<2.875?0.254
+X=E<2.885?0.204
+X=E<2.895?0.165
+X=E<3?0.133
+X=E<3.655?1.99
+X=E<3.665?1.99
+X=E<3.675?1.99
+X=E<3.685?1.99
+X=E<3.695?1.99
+X=E<3.705?1.99
+X=E<3.715?1.99
+X=E<3.725?1.99
+X=E<3.735?1.99
+X=E<3.745?2
+X=E<3.755?2
+X=E<3.765?2
+X=E<3.775?2
+X=E<3.785?1.71
+X=E<3.795?1.44
+X=E<3.805?1.21
+X=E<3.815?0.963
+X=E<3.825?0.768
+X=E<3.835?0.613
+X=E<3.845?0.489
+X=E<3.855?0.381
+X=E<3.865?0.313
+X=E<3.875?0.251
+X=E<3.885?0.202
+X=E<3.895?0.163
+X=E<4?0.132
+X=E<4.655?1.97
+X=E<4.665?1.97
+X=E<4.675?1.97
+X=E<4.685?1.97
+X=E<4.695?1.97
+X=E<4.705?1.97
+X=E<4.715?1.97
+X=E<4.725?1.97
+X=E<4.735?1.97
+X=E<4.745?1.97
+X=E<4.755?1.97
+X=E<4.765?1.97
+X=E<4.775?1.98
+X=E<4.785?1.69
+X=E<4.795?1.43
+X=E<4.805?1.2
+X=E<4.815?0.952
+X=E<4.825?0.759
+X=E<4.835?0.606
+X=E<4.845?0.484
+X=E<4.855?0.387
+X=E<4.865?0.31
+X=E<4.875?0.249
+X=E<4.885?0.201
+X=E<4.895?0.162
+X=E<5?0.132
+X=E<5.655?1.94
+X=E<5.665?1.94
+X=E<5.675?1.94
+X=E<5.685?1.94
+X=E<5.695?1.94
+X=E<5.705?1.94
+X=E<5.715?1.94
+X=E<5.725?1.94
+X=E<5.735?1.94
+X=E<5.745?1.95
+X=E<5.755?1.95
+X=E<5.765?1.95
+X=E<5.775?1.95
+X=E<5.785?1.67
+X=E<5.795?1.41
+X=E<5.805?1.18
+X=E<5.815?0.942
+X=E<5.825?0.751
+X=E<5.835?0.599
+X=E<5.845?0.479
+X=E<5.855?0.384
+X=E<5.865?0.308
+X=E<5.875?0.247
+X=E<5.885?0.2
+X=E<5.895?0.161
+X=E<6?0.131
+X=E<6.655?1.92
+X=E<6.665?1.92
+X=E<6.675?1.92
+X=E<6.685?1.92
+X=E<6.695?1.92
+X=E<6.705?1.92
+X=E<6.715?1.92
+X=E<6.725?1.92
+X=E<6.735?1.92
+X=E<6.745?1.92
+X=E<6.755?1.92
+X=E<6.765?1.93
+X=E<6.775?1.93
+X=E<6.785?1.65
+X=E<6.795?1.39
+X=E<6.805?1.17
+X=E<6.815?0.932
+X=E<6.825?0.743
+X=E<6.835?0.594
+X=E<6.845?0.475
+X=E<6.855?0.38
+X=E<6.865?0.305
+X=E<6.875?0.246
+X=E<6.885?0.198
+X=E<6.895?0.161
+X=E<7?0.131
+X=E<7.655?1.9
+X=E<7.665?1.9
+X=E<7.675?1.9
+X=E<7.685?1.9
+X=E<7.695?1.9
+X=E<7.705?1.9
+X=E<7.715?1.9
+X=E<7.725?1.9
+X=E<7.735?1.9
+X=E<7.745?1.9
+X=E<7.755?1.91
+X=E<7.765?1.91
+X=E<7.775?1.91
+X=E<7.785?1.63
+X=E<7.795?1.38
+X=E<7.805?1.16
+X=E<7.815?0.922
+X=E<7.825?0.736
+X=E<7.835?0.588
+X=E<7.845?0.471
+X=E<7.855?0.377
+X=E<7.865?0.303
+X=E<7.875?0.244
+X=E<7.885?0.197
+X=E<7.895?0.16
+X=E<8?0.131
+X=E<8.655?1.88
+X=E<8.665?1.88
+X=E<8.675?1.88
+X=E<8.685?1.88
+X=E<8.695?1.88
+X=E<8.705?1.88
+X=E<8.715?1.88
+X=E<8.725?1.88
+X=E<8.735?1.88
+X=E<8.745?1.88
+X=E<8.755?1.88
+X=E<8.765?1.89
+X=E<8.775?1.89
+X=E<8.785?1.62
+X=E<8.795?1.36
+X=E<8.805?1.15
+X=E<8.815?0.914
+X=E<8.825?0.73
+X=E<8.835?0.583
+X=E<8.845?0.467
+X=E<8.855?0.375
+X=E<8.865?0.301
+X=E<8.875?0.243
+X=E<8.885?0.197
+X=E<8.895?0.16
+X=E<9?0.131
+X=E<9.655?1.86
+X=E<9.665?1.86
+X=E<9.675?1.86
+X=E<9.685?1.86
+X=E<9.695?1.86
+X=E<9.705?1.86
+X=E<9.715?1.86
+X=E<9.725?1.86
+X=E<9.735?1.86
+X=E<9.745?1.87
+X=E<9.755?1.87
+X=E<9.765?1.87
+X=E<9.775?1.87
+X=E<9.785?1.6
+X=E<9.795?1.35
+X=E<9.805?1.14
+X=E<9.815?0.906
+X=E<9.825?0.724
+X=E<9.835?0.579
+X=E<9.845?0.464
+X=E<9.855?0.372
+X=E<9.865?0.3
+X=E<9.875?0.242
+X=E<9.885?0.196
+X=E<9.895?0.16
+X=E<10?0.131
+X=E<10.655?1.84
+X=E<10.665?1.84
+X=E<10.675?1.84
+X=E<10.685?1.84
+X=E<10.695?1.84
+X=E<10.705?1.84
+X=E<10.715?1.84
+X=E<10.725?1.85
+X=E<10.735?1.85
+X=E<10.745?1.85
+X=E<10.755?1.85
+X=E<10.765?1.85
+X=E<10.775?1.86
+X=E<10.785?1.59
+X=E<10.795?1.34
+X=E<10.805?1.13
+X=E<10.815?0.899
+X=E<10.825?0.718
+X=E<10.835?0.575
+X=E<10.845?0.461
+X=E<10.855?0.37
+X=E<10.865?0.298
+X=E<10.875?0.241
+X=E<10.885?0.196
+X=E<10.895?0.16
+X=E<11?0.131
+X=E<11.655?1.82
+X=E<11.665?1.82
+X=E<11.675?1.83
+X=E<11.685?1.83
+X=E<11.695?1.83
+X=E<11.705?1.83
+X=E<11.715?1.83
+X=E<11.725?1.83
+X=E<11.735?1.83
+X=E<11.745?1.83
+X=E<11.755?1.83
+X=E<11.765?1.84
+X=E<11.775?1.84
+X=E<11.785?1.57
+X=E<11.795?1.33
+X=E<11.805?1.12
+X=E<11.815?0.893
+X=E<11.825?0.714
+X=E<11.835?0.571
+X=E<11.845?0.458
+X=E<11.855?0.369
+X=E<11.865?0.297
+X=E<11.875?0.241
+X=E<11.885?0.196
+X=E<11.895?0.16
+X=E<12?0.132
+X=E<12.655?1.81
+X=E<12.665?1.81
+X=E<12.675?1.81
+X=E<12.685?1.81
+X=E<12.695?1.81
+X=E<12.705?1.81
+X=E<12.715?1.81
+X=E<12.725?1.81
+X=E<12.735?1.82
+X=E<12.745?1.82
+X=E<12.755?1.82
+X=E<12.765?1.82
+X=E<12.775?1.83
+X=E<12.785?1.56
+X=E<12.795?1.32
+X=E<12.805?1.11
+X=E<12.815?0.887
+X=E<12.825?0.709
+X=E<12.835?0.568
+X=E<12.845?0.456
+X=E<12.855?0.367
+X=E<12.865?0.297
+X=E<12.875?0.24
+X=E<12.885?0.196
+X=E<12.895?0.161
+X=E<13?0.132
+X=E<13.655?1.8
+X=E<13.665?1.8
+X=E<13.675?1.8
+X=E<13.685?1.8
+X=E<13.695?1.8
+X=E<13.705?1.8
+X=E<13.715?1.8
+X=E<13.725?1.8
+X=E<13.735?1.8
+X=E<13.745?1.8
+X=E<13.755?1.81
+X=E<13.765?1.81
+X=E<13.775?1.81
+X=E<13.785?1.55
+X=E<13.795?1.31
+X=E<13.805?1.1
+X=E<13.815?0.882
+X=E<13.825?0.706
+X=E<13.835?0.566
+X=E<13.845?0.455
+X=E<13.855?0.366
+X=E<13.865?0.296
+X=E<13.875?0.24
+X=E<13.885?0.196
+X=E<13.895?0.161
+X=E<14?0.133
+X=E<14.655?1.78
+X=E<14.665?1.78
+X=E<14.675?1.78
+X=E<14.685?1.78
+X=E<14.695?1.78
+X=E<14.705?1.79
+X=E<14.715?1.79
+X=E<14.725?1.79
+X=E<14.735?1.79
+X=E<14.745?1.79
+X=E<14.755?1.8
+X=E<14.765?1.8
+X=E<14.775?1.8
+X=E<14.785?1.54
+X=E<14.795?1.31
+X=E<14.805?1.1
+X=E<14.815?0.878
+X=E<14.825?0.703
+X=E<14.835?0.564
+X=E<14.845?0.453
+X=E<14.855?0.366
+X=E<14.865?0.296
+X=E<14.875?0.241
+X=E<14.885?0.197
+X=E<14.895?0.162
+X=E<15?0.134
+X=E<15.655?1.77
+X=E<15.665?1.77
+X=E<15.675?1.77
+X=E<15.685?1.77
+X=E<15.695?1.77
+X=E<15.705?1.77
+X=E<15.715?1.77
+X=E<15.725?1.78
+X=E<15.735?1.78
+X=E<15.745?1.78
+X=E<15.755?1.78
+X=E<15.765?1.79
+X=E<15.775?1.79
+X=E<15.785?1.53
+X=E<15.795?1.3
+X=E<15.805?1.09
+X=E<15.815?0.874
+X=E<15.825?0.7
+X=E<15.835?0.562
+X=E<15.845?0.452
+X=E<15.855?0.365
+X=E<15.865?0.296
+X=E<15.875?0.241
+X=E<15.885?0.198
+X=E<15.895?0.163
+X=E<16?0.135
+X=E<16.655?1.64
+X=E<16.665?1.64
+X=E<16.675?1.64
+X=E<16.685?1.64
+X=E<16.695?1.64
+X=E<16.705?1.64
+X=E<16.715?1.65
+X=E<16.725?1.65
+X=E<16.735?1.65
+X=E<16.745?1.65
+X=E<16.755?1.66
+X=E<16.765?1.66
+X=E<16.775?1.66
+X=E<16.785?1.42
+X=E<16.795?1.21
+X=E<16.805?1.02
+X=E<16.815?0.812
+X=E<16.825?0.651
+X=E<16.835?0.523
+X=E<16.845?0.421
+X=E<16.855?0.341
+X=E<16.865?0.277
+X=E<16.875?0.226
+X=E<16.885?0.185
+X=E<16.895?0.153
+X=E<17?0.128
+X=E<17.655?1.52
+X=E<17.665?1.52
+X=E<17.675?1.52
+X=E<17.685?1.52
+X=E<17.695?1.53
+X=E<17.705?1.53
+X=E<17.715?1.53
+X=E<17.725?1.53
+X=E<17.735?1.53
+X=E<17.745?1.53
+X=E<17.755?1.54
+X=E<17.765?1.54
+X=E<17.775?1.54
+X=E<17.785?1.32
+X=E<17.795?1.12
+X=E<17.805?0.944
+X=E<17.815?0.756
+X=E<17.825?0.606
+X=E<17.835?0.487
+X=E<17.845?0.393
+X=E<17.855?0.318
+X=E<17.865?0.259
+X=E<17.875?0.212
+X=E<17.885?0.174
+X=E<17.895?0.144
+X=E<18?0.121
+X=E<18.655?1.41
+X=E<18.665?1.41
+X=E<18.675?1.41
+X=E<18.685?1.42
+X=E<18.695?1.42
+X=E<18.705?1.42
+X=E<18.715?1.42
+X=E<18.725?1.42
+X=E<18.735?1.42
+X=E<18.745?1.42
+X=E<18.755?1.43
+X=E<18.765?1.43
+X=E<18.775?1.44
+X=E<18.785?1.23
+X=E<18.795?1.04
+X=E<18.805?0.878
+X=E<18.815?0.704
+X=E<18.825?0.565
+X=E<18.835?0.455
+X=E<18.845?0.367
+X=E<18.855?0.298
+X=E<18.865?0.242
+X=E<18.875?0.198
+X=E<18.885?0.164
+X=E<18.895?0.136
+X=E<19?0.114
+X=E<19.655?1.31
+X=E<19.665?1.31
+X=E<19.675?1.31
+X=E<19.685?1.32
+X=E<19.695?1.32
+X=E<19.705?1.32
+X=E<19.715?1.32
+X=E<19.725?1.32
+X=E<19.735?1.32
+X=E<19.745?1.32
+X=E<19.755?1.33
+X=E<19.765?1.33
+X=E<19.775?1.34
+X=E<19.785?1.14
+X=E<19.795?0.97
+X=E<19.805?0.818
+X=E<19.815?0.655
+X=E<19.825?0.527
+X=E<19.835?0.424
+X=E<19.845?0.343
+X=E<19.855?0.278
+X=E<19.865?0.227
+X=E<19.875?0.186
+X=E<19.885?0.154
+X=E<19.895?0.128
+X=E<20?0.108
+X=E<20.655?1.22
+X=E<20.665?1.22
+X=E<20.675?1.22
+X=E<20.685?1.22
+X=E<20.695?1.22
+X=E<20.705?1.22
+X=E<20.715?1.23
+X=E<20.725?1.23
+X=E<20.735?1.23
+X=E<20.745?1.23
+X=E<20.755?1.23
+X=E<20.765?1.24
+X=E<20.775?1.24
+X=E<20.785?1.07
+X=E<20.795?0.904
+X=E<20.805?0.762
+X=E<20.815?0.611
+X=E<20.825?0.491
+X=E<20.835?0.396
+X=E<20.845?0.321
+X=E<20.855?0.261
+X=E<20.865?0.213
+X=E<20.875?0.175
+X=E<20.885?0.145
+X=E<20.895?0.121
+X=E<21?0.102","BC MOE Freshwater AL LT N-NH4"
+94,"BCmoe_lt_NO2","Calculated Standard","* BC MOE N-NH2 freshwater aquatic life Long term chronic
+
+* Updated 2022/11/02 by Marie Ducharme
+
+#S=3
+#Z=1
+
+A = C
+A = [XChloride] > 0 ? [XChloride] 
+
+
+X = C = A  ? ""Chloride is missing""
+X = A < 2  ? 0.02
+X = A < 4 ? 0.04
+X = A < 6 ? 0.06
+X = A < 8  ? 0.08
+X = A <10 ? 0.10
+X = A >10 ? 0.20","BC MOE Freshwater AL LT N-NO2"
+95,"BCmoe_lt_Mn-T","Calculated Standard","* BC MOE Mn-T freshwater aquatic life Long term chronic
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#S=4
+#Z=1
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X =  0.0044*H+0.605","BC MOE Freshwater AL LT Mn-T"
+96,"BCmoe_lt_Pb-T","Calculated Standard","* BC MOE Pb-T freshwater aquatic life Long term chronic
+* Equation converts guideline value from ug/L to mg/L
+* * no guidelines for water with a hardness lower then 8 mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#S=3
+#Z=1
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+* no guidelines for water with a hardness lower then 8 mg/L
+X = H <=8 ? ""99999""
+X =  (3.31+(@exp(1.273*@ln(H)-4.704)))/1000","BC MOE Freshwater AL LT Pb-T"
+97,"BCmoe_lt_Cd-D","Calculated Standard","* BC MOE Cd-D freshwater aquatic life Long term chronic
+* converts results to mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = (@exp((0.736*@lna(H))-4.943))/1000","BC MOE Freshwater AL LT Cd-D"
+98,"BCmoe_lt_Al-D","Calculated Standard","* BC MOE Al-D freshwater aquatic life Long term chronic
+* Would be better if calculation would use the median of long-term pH
+
+* Updated 2022/11/01 by Marie Ducharme
+
+#S=3
+#Z=1
+
+*Calculation will use pH F is available, and pH-L as second choice.
+
+P = B
+P = [pH-L]   > 0 ? [pH-L]
+P = [pH-F]   > 0 ? [pH-F]
+
+X = P = B ? ""pH Missing""
+X = P<6.5?@exp(1.6-(3.327*P)+(0.402*(P^2)))
+X = 0.05","BC MOE Freshwater AL LT Al-D"
+99,"CCME_Mn-D_st","Calculated Standard","*CCME 2019 - Mn - freshwater aquatic life,  short term exposure
+* Guideline applies to dissolved, though recommends when totals exceed guideline to resample for dissolved
+* equation converts to mg/L
+
+
+* Updated 2022/12/19 by Marie Ducharme, error is last line.
+
+#Z=1
+#S=2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+
+
+X =(@exp((0.878*@lna(H))+4.76))/1000","CCME Mn PAL ShortTerm Exposure"
+100,"CCME_Mn-D_lt","Calculated Standard","*CCME 2019 - Mn - freshwater aquatic life, long term exposure
+*Guideline applies to dissolved, though recommends when totals exceed guideline to resample for dissolved
+
+* Updated 2022/12/19 by Marie Ducharme (eliminated upper max for hardness)
+
+
+#D=0
+#Z=1
+
+C = B
+C = [pH-L]   > 0 ? [pH-L]
+C = [pH-F]   > 0 ? [pH-F]
+
+X = C  =B ? ""pH missing""
+
+X = C <= 5.4 ? 280
+X = C  > 9.1 ? 100
+
+G = A
+G = [XHard] > 0 ? [XHard]
+G = [Hard-T] > 0 ? [Hard-T]
+G = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+G = [Hard-D] > 0 ? [Hard-D]
+G = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = G = A ? ""Hard missing""
+X = G < 25 ? ""Hard. too low""
+
+
+
+
+*Look up row (R) in guideline table
+R = (C-5.4) * 10
+
+* Calculate dummy variable (D) based on hardness column and pH row
+D = R + (G/10000)
+
+
+*Look up dummpy variable
+X=D<1.0024?190
+X=D<1.0049?280
+X=D<1.0074?380
+X=D<1.0099?450
+X=D<1.0124?510
+X=D<1.0149?560
+X=D<1.0174?610
+X=D<1.0199?650
+X=D<1.0299?690
+X=D<1.0399?830
+X=D<1.0669?940
+X=D<1.2?1200
+X=D<2.0024?190
+X=D<2.0049?280
+X=D<2.0074?380
+X=D<2.0099?450
+X=D<2.0124?510
+X=D<2.0149?560
+X=D<2.0174?610
+X=D<2.0199?650
+X=D<2.0299?690
+X=D<2.0399?830
+X=D<2.0669?940
+X=D<2.2?1200
+X=D<3.0024?190
+X=D<3.0049?280
+X=D<3.0074?380
+X=D<3.0099?450
+X=D<3.0124?510
+X=D<3.0149?560
+X=D<3.0174?610
+X=D<3.0199?650
+X=D<3.0299?690
+X=D<3.0399?830
+X=D<3.0669?940
+X=D<3.2?1200
+X=D<4.0024?190
+X=D<4.0049?290
+X=D<4.0074?390
+X=D<4.0099?470
+X=D<4.0124?530
+X=D<4.0149?590
+X=D<4.0174?640
+X=D<4.0199?690
+X=D<4.0299?730
+X=D<4.0399?880
+X=D<4.0669?1000
+X=D<4.2?1300
+X=D<5.0024?190
+X=D<5.0049?290
+X=D<5.0074?390
+X=D<5.0099?470
+X=D<5.0124?530
+X=D<5.0149?590
+X=D<5.0174?640
+X=D<5.0199?690
+X=D<5.0299?730
+X=D<5.0399?880
+X=D<5.0669?1000
+X=D<5.2?1300
+X=D<6.0024?200
+X=D<6.0049?290
+X=D<6.0074?400
+X=D<6.0099?480
+X=D<6.0124?550
+X=D<6.0149?620
+X=D<6.0174?670
+X=D<6.0199?720
+X=D<6.0299?770
+X=D<6.0399?940
+X=D<6.0669?1100
+X=D<6.2?1400
+X=D<7.0024?200
+X=D<7.0049?290
+X=D<7.0074?400
+X=D<7.0099?480
+X=D<7.0124?550
+X=D<7.0149?620
+X=D<7.0174?670
+X=D<7.0199?720
+X=D<7.0299?770
+X=D<7.0399?940
+X=D<7.0669?1100
+X=D<7.2?1400
+X=D<8.0024?200
+X=D<8.0049?290
+X=D<8.0074?400
+X=D<8.0099?480
+X=D<8.0124?550
+X=D<8.0149?620
+X=D<8.0174?670
+X=D<8.0199?720
+X=D<8.0299?770
+X=D<8.0399?940
+X=D<8.0669?1100
+X=D<8.2?1400
+X=D<9.0024?200
+X=D<9.0049?310
+X=D<9.0074?430
+X=D<9.0099?530
+X=D<9.0124?610
+X=D<9.0149?670
+X=D<9.0174?740
+X=D<9.0199?790
+X=D<9.0299?840
+X=D<9.0399?1000
+X=D<9.0669?1200
+X=D<9.2?1500
+X=D<10.0024?200
+X=D<10.0049?310
+X=D<10.0074?430
+X=D<10.0099?530
+X=D<10.0124?610
+X=D<10.0149?670
+X=D<10.0174?740
+X=D<10.0199?790
+X=D<10.0299?840
+X=D<10.0399?1000
+X=D<10.0669?1200
+X=D<10.2?1400
+X=D<11.0024?210
+X=D<11.0049?330
+X=D<11.0074?460
+X=D<11.0099?560
+X=D<11.0124?640
+X=D<11.0149?710
+X=D<11.0174?770
+X=D<11.0199?830
+X=D<11.0299?880
+X=D<11.0399?1000
+X=D<11.0669?1200
+X=D<11.2?1400
+X=D<12.0024?210
+X=D<12.0049?330
+X=D<12.0074?460
+X=D<12.0099?560
+X=D<12.0124?640
+X=D<12.0149?710
+X=D<12.0174?770
+X=D<12.0199?830
+X=D<12.0299?880
+X=D<12.0399?1000
+X=D<12.0669?1200
+X=D<12.2?1400
+X=D<13.0024?230
+X=D<13.0049?350
+X=D<13.0074?490
+X=D<13.0099?590
+X=D<13.0124?670
+X=D<13.0149?730
+X=D<13.0174?790
+X=D<13.0199?840
+X=D<13.0299?890
+X=D<13.0399?1000
+X=D<13.0669?1200
+X=D<13.2?1400
+X=D<14.0024?230
+X=D<14.0049?350
+X=D<14.0074?490
+X=D<14.0099?590
+X=D<14.0124?650
+X=D<14.0149?710
+X=D<14.0174?750
+X=D<14.0199?790
+X=D<14.0299?830
+X=D<14.0399?940
+X=D<14.0669?1000
+X=D<14.2?1200
+X=D<15.0024?230
+X=D<15.0049?350
+X=D<15.0074?490
+X=D<15.0099?590
+X=D<15.0124?650
+X=D<15.0149?710
+X=D<15.0174?750
+X=D<15.0199?790
+X=D<15.0299?830
+X=D<15.0399?940
+X=D<15.0669?1000
+X=D<15.2?1200
+X=D<16.0024?250
+X=D<16.0049?380
+X=D<16.0074?500
+X=D<16.0099?590
+X=D<16.0124?650
+X=D<16.0149?710
+X=D<16.0174?750
+X=D<16.0199?790
+X=D<16.0299?830
+X=D<16.0399?940
+X=D<16.0669?1000
+X=D<16.2?1200
+X=D<17.0024?250
+X=D<17.0049?380
+X=D<17.0074?490
+X=D<17.0099?560
+X=D<17.0124?610
+X=D<17.0149?660
+X=D<17.0174?700
+X=D<17.0199?730
+X=D<17.0299?760
+X=D<17.0399?860
+X=D<17.0669?930
+X=D<17.2?1100
+X=D<18.0024?260
+X=D<18.0049?380
+X=D<18.0074?490
+X=D<18.0099?560
+X=D<18.0124?610
+X=D<18.0149?660
+X=D<18.0174?700
+X=D<18.0199?730
+X=D<18.0299?760
+X=D<18.0399?860
+X=D<18.0669?930
+X=D<18.2?1100
+X=D<19.0024?260
+X=D<19.0049?350
+X=D<19.0074?430
+X=D<19.0099?490
+X=D<19.0124?530
+X=D<19.0149?570
+X=D<19.0174?600
+X=D<19.0199?620
+X=D<19.0299?640
+X=D<19.0399?710
+X=D<19.0669?770
+X=D<19.2?860
+X=D<20.0024?260
+X=D<20.0049?350
+X=D<20.0074?430
+X=D<20.0099?490
+X=D<20.0124?530
+X=D<20.0149?570
+X=D<20.0174?600
+X=D<20.0199?620
+X=D<20.0299?640
+X=D<20.0399?710
+X=D<20.0669?770
+X=D<20.2?860
+X=D<21.0024?260
+X=D<21.0049?350
+X=D<21.0074?430
+X=D<21.0099?490
+X=D<21.0124?530
+X=D<21.0149?570
+X=D<21.0174?600
+X=D<21.0199?620
+X=D<21.0299?640
+X=D<21.0399?710
+X=D<21.0669?770
+X=D<21.2?860
+X=D<22.0024?240
+X=D<22.0049?320
+X=D<22.0074?390
+X=D<22.0099?440
+X=D<22.0124?470
+X=D<22.0149?500
+X=D<22.0174?520
+X=D<22.0199?540
+X=D<22.0299?560
+X=D<22.0399?610
+X=D<22.0669?650
+X=D<22.2?720
+X=D<23.0024?240
+X=D<23.0049?320
+X=D<23.0074?390
+X=D<23.0099?440
+X=D<23.0124?470
+X=D<23.0149?500
+X=D<23.0174?520
+X=D<23.0199?540
+X=D<23.0299?560
+X=D<23.0399?610
+X=D<23.0669?650
+X=D<23.2?720
+X=D<24.0024?210
+X=D<24.0049?270
+X=D<24.0074?320
+X=D<24.0099?350
+X=D<24.0124?370
+X=D<24.0149?390
+X=D<24.0174?400
+X=D<24.0199?420
+X=D<24.0299?430
+X=D<24.0399?460
+X=D<24.0669?480
+X=D<24.2?520
+X=D<25.0024?210
+X=D<25.0049?270
+X=D<25.0074?320
+X=D<25.0099?350
+X=D<25.0124?370
+X=D<25.0149?390
+X=D<25.0174?400
+X=D<25.0199?420
+X=D<25.0299?430
+X=D<25.0399?460
+X=D<25.0669?480
+X=D<25.2?520
+X=D<26.0024?210
+X=D<26.0049?270
+X=D<26.0074?320
+X=D<26.0099?350
+X=D<26.0124?370
+X=D<26.0149?390
+X=D<26.0174?400
+X=D<26.0199?420
+X=D<26.0299?430
+X=D<26.0399?460
+X=D<26.0669?480
+X=D<26.2?520
+X=D<27.0024?160
+X=D<27.0049?200
+X=D<27.0074?220
+X=D<27.0099?240
+X=D<27.0124?250
+X=D<27.0149?260
+X=D<27.0174?260
+X=D<27.0199?270
+X=D<27.0299?270
+X=D<27.0399?290
+X=D<27.0669?300
+X=D<27.2?320
+X=D<28.0024?160
+X=D<28.0049?200
+X=D<28.0074?220
+X=D<28.0099?240
+X=D<28.0124?250
+X=D<28.0149?260
+X=D<28.0174?260
+X=D<28.0199?270
+X=D<28.0299?270
+X=D<28.0399?290
+X=D<28.0669?300
+X=D<28.2?320
+X=D<29.0024?160
+X=D<29.0049?200
+X=D<29.0074?220
+X=D<29.0099?240
+X=D<29.0124?250
+X=D<29.0149?260
+X=D<29.0174?260
+X=D<29.0199?270
+X=D<29.0299?270
+X=D<29.0399?290
+X=D<29.0669?300
+X=D<29.2?320
+X=D<30.0024?160
+X=D<30.0049?200
+X=D<30.0074?220
+X=D<30.0099?240
+X=D<30.0124?250
+X=D<30.0149?260
+X=D<30.0174?260
+X=D<30.0199?270
+X=D<30.0299?270
+X=D<30.0399?290
+X=D<30.0669?300
+X=D<30.2?320
+X=D<31.0024?150
+X=D<31.0049?180
+X=D<31.0074?200
+X=D<31.0099?210
+X=D<31.0124?220
+X=D<31.0149?230
+X=D<31.0174?230
+X=D<31.0199?240
+X=D<31.0299?240
+X=D<31.0399?260
+X=D<31.0669?270
+X=D<31.2?280
+X=D<32.0024?120
+X=D<32.0049?140
+X=D<32.0074?160
+X=D<32.0099?170
+X=D<32.0124?170
+X=D<32.0149?180
+X=D<32.0174?180
+X=D<32.0199?190
+X=D<32.0299?190
+X=D<32.0399?200
+X=D<32.0669?210
+X=D<32.2?220
+X=D<33.0024?120
+X=D<33.0049?140
+X=D<33.0074?160
+X=D<33.0099?170
+X=D<33.0124?170
+X=D<33.0149?180
+X=D<33.0174?180
+X=D<33.0199?190
+X=D<33.0299?190
+X=D<33.0399?200
+X=D<33.0669?210
+X=D<33.2?220
+X=D<34.0024?90
+X=D<34.0049?100
+X=D<34.0074?110
+X=D<34.0099?120
+X=D<34.0124?120
+X=D<34.0149?120
+X=D<34.0174?130
+X=D<34.0199?130
+X=D<34.0299?130
+X=D<34.0399?140
+X=D<34.0669?140
+X=D<34.2?150
+X=D<35.0024?90
+X=D<35.0049?100
+X=D<35.0074?110
+X=D<35.0099?120
+X=D<35.0124?120
+X=D<35.0149?120
+X=D<35.0174?130
+X=D<35.0199?130
+X=D<35.0299?130
+X=D<35.0399?140
+X=D<35.0669?140
+X=D<35.2?150
+X=D<36.0024?90
+X=D<36.0049?100
+X=D<36.0074?110
+X=D<36.0099?120
+X=D<36.0124?120
+X=D<36.0149?120
+X=D<36.0174?130
+X=D<36.0199?130
+X=D<36.0299?130
+X=D<36.0399?140
+X=D<36.0669?140
+X=D<36.2?150","CCME Mn PAL Long Term Exposure"
+103,"WWElevation","Parameter","* Calculates the Water level elevation [WLevel_ElevC]
+* Requires the Elevation of the TOC and the Water Level Below the TOC.
+* As some licensees provide the calculated water level themselves  the calculation pulls that paramter first
+
+
+
+#Z=1
+A = [DTW_btoc]
+B = [1.udf_TOC_Elev]
+C = A-B
+D = [WLevel_ElevC]
+
+X = D > 0 ? D : C","Well Water Elevation"
+104,"TOC_Elev","Parameter","* Calculates the TOC Elevation
+* uses TOC_Elevation from Stn table. If the TOC Elevation is a variable (such as in the YOWN wells, this field must be NULL in the stn atble for this well.
+
+#Z=1
+
+A = [1.udf_TOC_Elev]
+B = ground elevation from stn table
+
+X = A > 0 ?","Top of Casing Elevation"
+105,"NSN_WTP-NH3u","Standard","#S=3
+#Z=0
+*NH3 unionized calculation
+A=[Temp-F]+273.14
+B=.0901821+(2729.92/A)
+C=B-[pH-F]
+D=1/((10^C)+1)
+X=[N-NH4]*D","NSN_WTP-NH3u"
+106,"BCmoe_lt_Mn-T_75","Calculated Standard","* 75 BC MOE Mn-T freshwater aquatic life Long term chronic
+* 75% of as in many AMPs
+
+* Updated 2022/11/15 by Marie Ducharme
+
+
+#S=4
+#Z=1
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D])
+
+X = H = A ? ""Hard missing""
+X =  (0.0044*H+0.605)*0.75","BC MOE FreshwAL LT Mn-T (75%)"
+107,"BCmoe_lt_SO4_75","Calculated Standard","* 75% BC MOE SO4 freshwater aquatic long term chronic
+* equation modified to convert to mg/L
+* Only valid for Hardness values under 350 mg/L
+*
+
+* Updated 2022/11/15 by Marie Ducharme
+
+#Z=1
+#S=3
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D])
+
+X = H = A ? ""Hard missing""
+X = H <30 ? 128*0.75
+X = H <=75 ? 218*0.75
+X = H <= 180 ? 309*0.75
+X = H <= 250 ? 429*0.75
+X = H > 250 ? ""Hard. is too high""","BC MOE Freshw AL LT SO4 (75%)"
+108,"AlkT_vs_B_Check","Validation","*Checks if Alk-T is greater than Alk-B
+
+
+*Calculation only proceeds if all values are available (Alk-T and Alk-B)
+#Z=0
+
+
+T = [Alk-T]
+B = [Alk-B]
+
+X  = B >T  ? ""Total Alkalinity Greather than Alk-B""","Total Alk vs Alk-B Import Test"
+109,"CCME_Zn_lt","Calculated Standard","* CCME - Zn -  Protection of Aquatic Life - Long Terms Exposure
+* provides the guideline in mg/L
+
+* Updated 2022/11/15 by Marie Ducharme
+
+
+* calculated from DOC (Dissolved Organic Carbon),pH and the Hardness of the water.
+* This script first determines hardness in a variety of ways, using increasingly preferable methods
+* overwriting less accurate ones if they are present.  It then checks to see that all required parameters 
+* are present to calculate the zinc criteria, and within the designated range for the calculation. Error messages
+* are returned if they are not. If everything is good, it completes the calculation.
+
+#Z=1
+#S=3  
+
+* Sets 'A' as a placeholder variable for error messages.  A similar thing happens with later parameters
+H = A
+
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+
+
+* Checks if pH is present. If not, a placeholder variable is set which later reports an error message.
+P = B
+P = [pH-L]   > 0 ? [pH-L]
+P = [pH-F]   > 0 ? [pH-F]   
+
+* Checks if DOC is present. If not, a placeholder variable is set which later reports an error message.
+D = C
+D = [C-DOC] > 0 ? [C-DOC]
+
+* Checks to see if any of the above parameters was not assigned a value to overwrite the placeholder 
+* If any were, then this section stops the calculation and returns an appropriate error message.
+X = H = A ? ""Hard missing""
+X = P = B ? ""pH missing""
+X = D = C ? ""DOC missing""
+
+* Checks to see if any parameters are out of the specified range for the Zn calculation
+X = H < 23.4 ? ""Hard low""
+X = H > 399 ? ""Hard high""
+X = P < 6.5 ?  ""pH too low""
+X = P > 8.13 ? ""pH too high""
+X = D < 0.3 ? ""DOC too low""
+X = D > 22.9 ? ""DOC too high""
+
+*Finally, the calculation is performed if no error message is generated
+X = @exp(0.947*@lna(H) - (0.815*P) + (0.398*@lna(D)) + 4.625)/1000","Zn CCME PAL Long Term Exposure"
+110,"Hard-C(D)_Complete","Parameter","*Calculates Hardness  from Dissolved Cations (all)
+
+#Z=0
+
+X =(2.497*[Ca-D])+(4.118*[Mg-D])+(1.792*[Fe-D])+(1.142*[Sr-D])+(1.822*[Mn-D])","Hard Calc from Dis All"
+111,"Hard-Best","Parameter","* Determines the hardness, based on preferences
+* From decreasing preference to increasing preference agreed upoon by YG WQ team
+* This is used in many other scripts that require hardness.
+
+* Updated 2022/11/15 by Marie Ducharme
+
+* Calculates Best Hardness Values
+* From decreasing preference to increasing preference
+* Historical Hardness (_Hard), Hardness calculated from cations from a unfiltered sample, 
+* Hard-T from lab, Hardness calculated from cations from a filtered sample, Hart-D from Lab
+
+
+#Z = 1
+#S = 3
+
+H = A
+
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+X = H = A ? ""Hard missing""
+X = H","Best Hardness Finder"
+114,"FWQG_Ld","Standard","* FWQG lead for the protection of freshwater aquatic life.
+* Applies to dissolved lead
+* is calculated from DOC (Dissolved Organic Carbon)and the Hardness of the water.
+
+*  Is valid for DOC 0.5- 31.5 mg/L and hardness 4.7-511 mg/L.
+*  As in the Lead-FWQG-calculator excel workbook provided by Gov of Canada:
+*  if the DOC or Hardness are out of the range, the values are rounded up/down,
+*  if the DOC is missing, a value of 0.5 is assigned to DOC
+*  if the Hardness is missing, a value of 4.7 is assigned to Hardness
+*  if both are missing, the guideline value is set to 1.48 (DOC = 0.5/ Hardnes = 4.7)
+*  two significant digits for guideline
+
+#Z=1
+#S=2  
+
+* This section determines the hardness, based on preferences
+* This script assumes that hardness from dissolved is ideal
+* If not hardness values are available, calculates from Ca and Mg, if present
+
+
+H = 4.7
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])
+
+* Set hardness according to range
+H = H < 4.7 ? 4.7
+H = H > 511 ? 511
+
+* Set DOC according to range
+D = 0.5
+D = [C-DOC]
+D = D < 0.5 ? 0.5
+D = D > 31.5 ? 31.5
+
+* Finally, the calculation is performed using Hard and DOC determined above
+X = (@exp(0.514*@lna(D) + (0.214*@lna(H))+ 0.4152))/1000","FWQG Lead"
+115,"Hard-C(T)_Complete","Parameter","*Calculates Hardness from Total Cations (all)
+
+#Z=0
+
+X =(2.497*[Ca-T])+(4.118*[Mg-T])+(1.792*[Fe-T])+(1.142*[Sr-T])+(1.822*[Mn-T])","Hard Calc from Tot All"
+117,"CCME_Cd_st","Calculated Standard","* CCME - Cd- Protection of Aquatic Life - Short Term Exposure
+* provides the guideline in mg/L
+
+* Updated 2022/12/20 by Marie Ducharme
+
+#Z = 1
+#S = 2
+
+H = A
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D]) 
+
+X = H = A ? ""Hard missing""
+X = H < 5.3 ? 0.00011
+X = H > 360 ? 0.0077
+X = (10^((1.016*(@log(H)))-1.71))/1000","CCME Cd PAL ShortTerm Exposure"
+118,"CCME_Zn_st","Calculated Standard","* CCME - Zn -  Protection of Aquatic Life - Short Terms Exposure
+* provides the guideline in mg/L
+
+* Created 2022/12/20 by Marie Ducharme
+
+
+* calculated from DOC (Dissolved Organic Carbon) and the Hardness of the water.
+* This script first determines hardness in a variety of ways, using increasingly preferable methods
+* overwriting less accurate ones if they are present.  It then checks to see that all required parameters 
+* are present to calculate the zinc criteria, and within the designated range for the calculation. Error messages
+* are returned if they are not. If everything is good, it completes the calculation.
+
+#Z=1
+#S=2  
+
+* Sets 'A' as a placeholder variable for error messages.  A similar thing happens with later parameters
+H = A
+
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+
+
+* Checks if DOC is present. If not, a placeholder variable is set which later reports an error message.
+D = C
+D = [C-DOC] > 0 ? [C-DOC]
+
+* Checks to see if any of the above parameters was not assigned a value to overwrite the placeholder 
+* If any were, then this section stops the calculation and returns an appropriate error message.
+X = H = A ? ""Hard missing""
+X = D = C ? ""DOC missing""
+
+* Checks to see if any parameters are out of the specified range for the Zn calculation
+X = H < 13.8 ? ""Hard too low""
+X = H > 250.5 ? ""Hard too high""
+X = D < 0.3 ? ""DOC too low""
+X = D > 17.3 ? ""DOC too high""
+
+*Finally, the calculation is performed if no error message is generated
+
+X = @exp(0.833*@lna(H) + (0.240*@lna(D)) + 0.526)/1000","Zn CCME PAL ShortTerm Exposure"
+119,"DvsT_Ca","Validation","#Z=0
+A=[Ca-D]
+B=[Ca-T]
+C=A>=B?((A-B)/((A+B)/2))*100
+C=A<B?0
+X=C>20?""Dissolved Ca is > Total Ca, and RPD is >20%""","Dissolved vs Total Calcium"
+120,"AnionsSumAlkX","Parameter","*Calculates Sum Anions using Alk B and Alk-C
+* was created in 2023 with a formula provided by Brendan Mulligan
+*if values lower than DL, used half DL value
+
+
+
+#L=.5
+#Z=1
+
+B = [Alk-B]/61.0158 *(0-1)
+C = [Alk-C]/60.008 *(0-2)
+H = [XChloride]/35.453 *(0-1)
+S =[SO4]/96.061*(0-2)
+X = B + C + H + S","Major Anions Calculated"
+121,"CationSum","Parameter","*Calculates Cation Sums
+*Uses dissolved values, unless unavailable, else uses total values
+*if results under the DL, uses half DL for calculations
+
+
+#S=3
+#L=.5
+#Z=1
+
+C = [Ca-T] > 0 ? [Ca-T]
+C = [Ca-D] > 0 ? [Ca-D]
+A = C/40.078 *  2
+
+K = [K-T] > 0 ? [K-T]
+K = [K-D] > 0 ? [K-D]
+B = K/39.098 * 1
+
+M = [Mg-T] > 0 ? [Mg-T]
+M = [Mg-D] > 0 ? [Mg-D]
+C = M/24.305 * 2
+
+N = [Na-T] > 0 ? [Na-T]
+N = [Na-D] > 0 ? [Na-D]
+D = N/ 22.99 * 1
+
+X= A + B + C + D","Major Cations Calculated"
+122,"DvsT_K","Validation","#Z=0
+A=[K-D]
+B=[K-T]
+C=A>=B?((A-B)/((A+B)/2))*100
+C=A<B?0
+X=C>20?""Dissolved K is > Total K, and RPD is >20%""","Dissolved vs Total Potassium"
+123,"DvsT_Mg","Validation","#Z=0
+A=[Mg-D]
+B=[Mg-T]
+C=A>=B?((A-B)/((A+B)/2))*100
+C=A<B?0
+X=C>20?""Dissolved Mg is > Total Mg, and RPD is >20%""","Dissolved vs Total Magnesium"
+124,"DvsT_Na","Validation","#Z=0
+A=[Na-D]
+B=[Na-T]
+C=A>=B?((A-B)/((A+B)/2))*100
+C=A<B?0
+X=C>20?""Dissolved Na is > Total Na, and RPD is >20%""","Dissolved vs Total Sodium"
+125,"DvsT_P","Validation","#Z=0
+A=[P-D]
+B=[P-T]
+C=A>=B?((A-B)/((A+B)/2))*100
+C=A<B?0
+X=C>20?""Dissolved P is > Total P, and RPD is >20%""","Dissolved vs Total Phophorus"
+126,"NH4_1","Validation","#Z=0
+
+A=[N-NH3u@15C]
+B=[N-NH4]
+
+C = A>=B? ((A-B)/((A+B)/2))*100
+
+C = A <B ?0
+
+X = C > 20 ? ""Unionized Ammonia is > Total Ammonia, and RPD is >20%""","Ammonia Checks 1"
+127,"C3AWNH3SW","Calculated Standard","* Contaminated Sites, Schedule 3 (water) Aquatic Life freshwater for N-NH3
+* converts from µg/L to mg/L and
+* modified (dividing by 10) for surface water factor
+*taken from CONTAMINATED SITES REGULATION — B.C. Reg. 375/96 Schedule 6
+*https://www.bclaws.gov.bc.ca/civix/document/id/loo64/loo64/375_96sch6#footnote2
+*I'm thinking the calculated standard for NH4 is actually meant for NH3 (TdJ)
+
+
+
+#Z=1
+#S=3
+
+* added May 2024 by TdJ
+
+
+
+C = A
+C = [pH-L] >0 ? [pH-L]
+C = [pH-F] >0 ? [pH-F]
+
+X = C = A ? ""pH is missing""
+X = C < 7 ? 1.84
+X = C < 7.5 ? 1.85
+X = C < 8 ? 1.13
+X = C <8.5 ? 0.37
+X = C >= 8.5 ? 0.131","Contam. Sites S3 AL SW for NH3"
+128,"HJ10tss","Calculated Standard","F = [TSS-BG]
+X=F+5","TSS WQO at HJ10"
+129,"SCN-as-N","Parameter","x=[CN-CNS]*(14/(12+14+32))","Nitrogen-Thiocyanate"
+130,"CNO-as-N","Parameter","x=[CN-CNO]*(14/(12+14+16))","Nitrogen-Cyanate"
+131,"CN-WAD-as-N","Parameter","*calculation assumes all WAD CN is Free cyanide
+x=[CN-WAD]*(14/(12+14))","Nitrogen-WAD-CN"
+132,"N-from-NO3-NO2-Amm-CNWAD-CNO-SCN","Parameter","A=[CN-CNS]*(14/(12+14+32))
+B=[CN-CNO]*(14/(12+14+16))
+C=[CN-WAD]*(14/(12+14))
+x=A+B+C+[N-NO2]+[N-NO3]+[N-NH4]","CN-nitrogen-calc"
+133,"AnionSumAlkT","Parameter","*Calculates Sum Anions
+* uses total alkalinity
+*if a result is lower than DL, uses half DL for calculations
+* if a parameter is missing, the formula will use zero
+
+#S=3
+#L=.5
+#Z=1
+
+A = [Alk-T] / 100.086 * 2
+B = [XChloride] / 35.453 
+C = [Fluord]/ 1 8.998
+D = [N-NO3] / 14.007
+E = [N-NO2] / 14.007
+F = [SO4] / 96.056 * 2
+G = [CN-CNS] / 58.083 
+X = (A + B + C + D + E + F + G )","Sum Anions wt Alk-T"
+134,"CationsCheck","Parameter","*Checks the Cations Sum vs Conductivity
+
+#Z = 1
+#S = 3
+
+* calculate cation sum
+C = [Ca-D] > 0 ? [Ca-D]
+C = [Ca-T] > 0 ? [Ca-T]
+A = C/40.078 *  2
+
+K = [K-D] > 0 ? [K-D]
+K = [K-T] > 0 ? [K-T]
+B = K/39.098 * 1
+
+M = [Mg-D] > 0 ? [Mg-D]
+M = [Mg-T] > 0 ? [Mg-T]
+C = M/24.305 * 2
+
+N = [Na-D] > 0 ? [Na-D]
+N = [Na-T] > 0 ? [Na-T]
+D = N/ 22.99 * 1
+
+P = A + B + C + D
+
+*conductivity
+G = [Cond-F] > 0 ? [Cond-F] 
+G = [Cond-L] > 0 ? [Cond-L]
+H = G/100
+
+X = ((H-P)/(H+P))*100","RDB Cations vs SCond"
+135,"IB-EQ","Parameter","*Calculates Cation Sums, Anion Sum, then Ionic Balance
+*Uses total, if not available, uses dissolved.
+* if a result is lower than DL, uses half DL for calculations
+* if a parameter is missing, the formula will use zero
+
+A = [Ca-T] > 0 ? [Ca-T]
+A = [Ca-D] > 0 ? [Ca-D]
+B = A/40.078 *  2
+
+C = [K-T] > 0 ? [K-T]
+C = [K-D] > 0 ? [K-D]
+D = C/39.098 * 1
+
+E = [Mg-T] > 0 ? [Mg-T]
+E = [Mg-D] > 0 ? [Mg-D]
+F = E/24.305 * 2
+
+I = [Na-T] > 0 ? [Na-T]
+I = [Na-D] > 0 ? [Na-D]
+J = I/ 22.99 * 1
+
+K = (B + D + F + J)
+
+L = [Alk-T] / 100.086 * 2
+M = [XChloride] / 35.453 
+N = [Fluord]/ 1 8.998
+O = [N-NO3] / 14.007
+P = [N-NO2] / 14.007
+Q = [SO4] / 96.056 * 2
+R = [CN-CNS] / 58.083 
+S = (L + M + N + O + P + Q + R )
+
+X = (K-S)/(K+S)*100","Ionic Balance, Calculated inEQ"
+136,"AnionsCheck","Parameter","*Checks the Cations Sum vs Conductivity
+
+#Z = 1
+#S = 3
+
+
+T = [Alk-T]/61.0158 * (0-1)
+C = [XChloride]/35.453 * (0-1)
+F = [Fluord]/18.998 * (0-1)
+N =[N-NO3]/14.007 * (0-1)
+S = [SO4]/96.056 * (0-2)
+
+V = T + C + F + N + S
+
+V = (0-1)*14.932
+
+
+*conductivity
+G = [Cond-F] > 0 ? [Cond-F] 
+G = [Cond-L] > 0 ? [Cond-L]
+H = G/100
+
+X = (H-(V*(0-1))))/(H+(V*(0-1)))*100","RDP Anions vs SCond"
+137,"CCME_Zn_lt_Alt_DOC","Calculated Standard","* CCME - Zn -  Protection of Aquatic Life - Long Terms Exposure
+* provides the guideline in mg/L
+
+* Updated 2024/12/5 by Marie Ducharme
+
+
+* calculated from DOC (Dissolved Organic Carbon),pH and the Hardness of the water.
+* This script first determines hardness in a variety of ways, using increasingly preferable methods
+* overwriting less accurate ones if they are present.  It then checks to see that all required parameters 
+* are present to calculate the zinc criteria, and within the designated range for the calculation. * Error messages
+* are returned if they are not. If everything is good, it completes the calculation.
+*This particular Script is adapted for instances when DOC is NOT present and assigns the DOC to 0.3, to obtain the most stringent guideline
+
+#Z=1
+#S=3  
+
+* Sets 'A' as a placeholder variable for error messages.  A similar thing happens with later parameters
+H = A
+
+H = [XHard] > 0 ? [XHard]
+H = [Hard-T] > 0 ? [Hard-T]
+H = [Ca-T] * [Mg-T] > 0 ? (2.497*[Ca-T])+(4.118 * [Mg-T]) 
+H = [Hard-D] > 0 ? [Hard-D]
+H = [Ca-D] * [Mg-D] > 0 ? (2.497*[Ca-D])+(4.118 *[Mg-D]) 
+
+
+
+* Checks if pH is present. If not, a placeholder variable is set which later reports an error message.
+P = B
+P = [pH-L]   > 0 ? [pH-L]
+P = [pH-F]   > 0 ? [pH-F]   
+
+* Assigns DOC to 0.3
+D = 0.3
+D = [C-DOC] > 0 ? 0.3
+
+* Checks to see if any of the above parameters was not assigned a value to overwrite the placeholder 
+* If any were, then this section stops the calculation and returns an appropriate error message.
+X = H = A ? ""Hard missing""
+X = P = B ? ""pH missing""
+X = D = C ? ""DOC missing""
+
+* Checks to see if any parameters are out of the specified range for the Zn calculation
+X = H < 23.4 ? ""Hard low""
+X = H > 399 ? ""Hard high""
+X = P < 6.5 ?  ""pH too low""
+X = P > 8.13 ? ""pH too high""
+X = D < 0.3 ? ""DOC too low""
+X = D > 22.9 ? ""DOC too high""
+
+*Finally, the calculation is performed if no error message is generated
+X = @exp(0.947*@lna(H) - (0.815*P) + (0.398*@lna(D)) + 4.625)/1000","Zn CCME Long Term Exp DO Miss"
