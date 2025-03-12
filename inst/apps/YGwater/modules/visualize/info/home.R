@@ -18,13 +18,13 @@ home <- function(id, language) {
     ns <- session$ns
     
     observe({
+      req(language$language)
       output$title <- renderUI({
         HTML(paste0('<div class="montserrat" style="font-size: 24px; font-weight: 600; font-style: normal">',
                     tr("homeTitle", language$language),
                     '</div>'
         ))
       })
-      
       output$text <- renderUI({
         HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
                     tr("homeText", language$language),

@@ -31,7 +31,7 @@ map <- function(id, language) {
     ns <- session$ns
     
     # Load common mapping data
-    data <- reactiveValues(
+    moduleData <- reactiveValues(
       locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
       timeseries = dbGetQueryDT(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.period_type, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"),
       projects = dbGetQueryDT(session$userData$AquaCache, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
@@ -67,7 +67,7 @@ map <- function(id, language) {
           where = "beforeEnd",
           ui = mapLocsUI(ns("locs"))
         )
-        subModuleOutputs <- mapLocsServer("locs", data, language)
+        subModuleOutputs <- mapLocsServer("locs", moduleData, language)
         observe({
           if (!is.null(subModuleOutputs$locs$change_tab)) {
             mainModuleOutputs$change_tab <- subModuleOutputs$locs$change_tab
@@ -83,7 +83,7 @@ map <- function(id, language) {
       #     where = "beforeEnd",
       #     ui = mapPrecipUI(ns("precip"))
       #   )
-      #   mapPrecipServer("precip", data, language)
+      #   mapPrecipServer("precip", moduleData, language)
       # }
       
       # Parameter module
@@ -94,7 +94,7 @@ map <- function(id, language) {
           where = "beforeEnd",
           ui = mapParamUI(ns("params"))
         )
-        mapParamServer("params", data, language)
+        mapParamServer("params", moduleData, language)
       }
       
       # Show only the relevant module using shinyjs

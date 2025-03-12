@@ -2,11 +2,6 @@
 dataUI <- function(id) {
   ns <- NS(id)
   tagList(
-    # tags$head(
-    #   # Load the little "i" button for the tooltip
-    #   # tags$link(rel = "stylesheet", href = "https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css")
-    # ),
-    
     tags$style(
       HTML(
         "// Make the ...preparing download... notification stand out more
@@ -25,8 +20,6 @@ dataUI <- function(id) {
       )
     ),
     tags$script(
-      HTML(""
-      ),
       HTML("
       // Handles tooltip updates outside of the datatable, binds tooltip properties to elements
       Shiny.addCustomMessageHandler('update-tooltip', function(message) {

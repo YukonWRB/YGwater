@@ -91,11 +91,11 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
       if (is.null(snowCon)) { # Create new connection
         tryCatch({
           snowCon <- snowConnect(silent = TRUE)
+          on.exit(DBI::dbDisconnect(snowCon), add = TRUE)
           maintenance <- DBI::dbGetQuery(snowCon, paste0("SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance ",
                                                      "INNER JOIN locations ON maintenance.location = locations.location " ,
                                                      "WHERE completed = FALSE AND name IN ('", paste(courses, collapse = "', '"), "') ",
                                                      "AND completed = FALSE"))
-          on.exit(DBI::dbDisconnect(snowCon))
           snowCon_flag <- TRUE
         }, error = function(e) {
           snowCon_flag <<- FALSE
@@ -165,7 +165,8 @@ createSnowTemplate <- function(target_date, circuit = "all", save_path = "choose
       summary <- SWE_station(year = as.numeric(substr(target_date, start = 1, stop = 4)),
                              month = as.numeric(substr(target_date, start = 7, stop = 7)),
                              return_missing = TRUE, 
-                             source = "snow")
+                             source = "snow",
+                             snowCon = snowCon)
       # Subset to locations of interest and columns of interest
       summary <- summary[summary$location_name %in% courses, c("location_name", "location_id", "swe_prevyear", "swe_med")]
       # Add locations to summary that are not in database

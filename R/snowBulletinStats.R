@@ -3,7 +3,7 @@
 #' @description
 #' `r lifecycle::badge('experimental')`
 #'
-#' This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package.
+#' This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package OR from the snow database.
 #'
 #' @details
 #' To download data, you MUST have your aquacache credentials added to your .Renviron file. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
@@ -46,7 +46,7 @@ snowBulletinStats <- function(year,
   }
   
   if (is.null(con)) {
-    con <- AquaConnect()
+    con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
   
@@ -127,7 +127,7 @@ snowBulletinStats <- function(year,
                          dplyr::summarise(value = stats::median(.data$value), 
                                           type = "median", years = dplyr::n()))
     # Add period column
-    precip_allyrs$period <- paste0("All years")
+    precip_allyrs$period <- paste0("all years")
     
     # Calculate stats. For last 40 years
     precip_40yrs <- precip_years[precip_years$fake_year > year - 40,]
@@ -143,7 +143,7 @@ snowBulletinStats <- function(year,
                          dplyr::summarise(value = stats::median(.data$value), 
                                           type = "median", years = dplyr::n()))
     # Add period column
-    precip_40yrs$period <- paste0("Last 40 years")
+    precip_40yrs$period <- paste0("last 40 years")
     
     # Calculate stats. For last 1991-2020 period
     precip_9120 <- precip_years[precip_years$fake_year >= 1991 & 
@@ -281,7 +281,7 @@ snowBulletinStats <- function(year,
                                                 INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
                                                 INNER JOIN locations ON timeseries.location = locations.location
                                                 WHERE measurements_continuous_corrected.timeseries_id IN ('", paste0(tsid, collapse = "', '"),
-                                        "')"))# ", timeseries_id))
+                                        "')"))
     
     attr(tabl$datetime, "tzone") <- "MST"
     
@@ -324,7 +324,7 @@ snowBulletinStats <- function(year,
                          dplyr::summarise(value = stats::median(.data$value), 
                                           type = "median", years = dplyr::n()))
     # Add period column
-    cddf_allyrs$period <- paste0("All years")
+    cddf_allyrs$period <- paste0("all years")
     
     # Calculate stats. For last 40 years
     cddf_40yrs <- cddf[cddf$year > year - 40,]
@@ -340,7 +340,7 @@ snowBulletinStats <- function(year,
                          dplyr::summarise(value = stats::median(.data$value), 
                                           type = "median", years = dplyr::n()))
     # Add period column
-    cddf_40yrs$period <- paste0("Last 40 years")
+    cddf_40yrs$period <- paste0("last 40 years")
     
     # Calculate stats. For last 1991-2020 period
     cddf_9120 <- cddf[cddf$year >= 1991 & 
@@ -399,19 +399,42 @@ snowBulletinStats <- function(year,
   }
   
   #### ----------------- Pillows with historical record ----------------- ####
-  pillow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
-                    locations.location AS location_id, date, parameters.param_name AS variable, 
-                    value, q50 AS median, min, max, doy_count AS years FROM measurements_calculated_daily_corrected 
-                    INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id
-                    INNER JOIN locations ON timeseries.location = locations.location
-                    INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
-                    WHERE measurements_calculated_daily_corrected.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
-                    AND date = '", year, "-0", month, "-01'"))
+  pillow_stats <- DBI::dbGetQuery(con, paste0(
+    "WITH latest_measurements AS (
+  SELECT 
+    l.name AS location_name,
+    l.location AS location_id,
+    m.date,
+    p.param_name AS variable,
+    m.value,
+    m.q50 AS median,
+    m.min,
+    m.max,
+    m.doy_count AS years,
+    m.timeseries_id,
+    ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
+  FROM measurements_calculated_daily_corrected m
+    INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
+    INNER JOIN locations l ON t.location = l.location
+    INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+  WHERE m.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
+    AND m.date BETWEEN ('", year, "-0", month, "-01'::date - INTERVAL '7 day') AND '", year, "-0", month, "-01'
+)
+SELECT location_name, location_id, date, variable, value, median, min, max, years
+FROM latest_measurements
+WHERE rn = 1;"
+  ))
   pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$median * 100)
   
   #### -----------------------  SWE stations ---------------------------- ####
-  station_stats <- SWE_station(stations = "all", year = year, month = month, return_missing = TRUE, 
-                               active = TRUE, source = source, summarise = TRUE)
+  station_stats <- SWE_station(stations = "all", 
+                               year = year, 
+                               month = month, 
+                               return_missing = TRUE, 
+                               active = TRUE, 
+                               source = source, 
+                               summarise = TRUE, 
+                               aquaCon = con)  # If source == 'aquacache', the (mandatory) snow DB connection will by default use the same ip and host as the aquacache connection
   # Remove 'Snow Course' from name
   
   #### ---------------- Pillows with snow survey record ----------------- ####
@@ -423,7 +446,7 @@ snowBulletinStats <- function(year,
     pillow_stats[pillow_stats$location_id == "09AA-M2", ]$perc_hist_med <- round((pillow_stats[pillow_stats$location_id == "09AA-M2", ]$value /
                                                                                     pillow_stats[pillow_stats$location_id == "09AA-M2", ]$median) * 100)
   } else {
-    message("Log Cabin does not have pillow stats for this year")
+    message("Log Cabin does not have pillow stats for this year and month combo")
   }
   
   # King Solomon Dome
@@ -434,16 +457,18 @@ snowBulletinStats <- function(year,
     pillow_stats[pillow_stats$location_id == "09EA-M1", ]$perc_hist_med <- round((pillow_stats[pillow_stats$location_id == "09EA-M1", ]$value /
                                                                                     pillow_stats[pillow_stats$location_id == "09EA-M1", ]$median) * 100)
   } else {
-    message("King Solomon Dome does not have pillow stats for this year")
+    message("King Solomon Dome does not have pillow stats for this year and month combo")
   }
   
   #### --------------------------- Basins ------------------------------- ####
   basin_stats <- SWE_basin(year = year,
                            month = month,
+                           lookback = 100,
                            threshold = 6,
                            csv = FALSE,
                            summarise = TRUE,
-                           source = "AquaCache")
+                           source = "aquacache",
+                           con = con)
   basin_stats$perc_hist_med <- basin_stats$swe_relative * 100
   basin_stats$swe <- round(basin_stats$swe)
   # Add description of % median
@@ -473,14 +498,31 @@ snowBulletinStats <- function(year,
   
   #### ------------------------- Flow/level stats ----------------------- ####
   
-  flow_stats <- DBI::dbGetQuery(con, paste0("SELECT locations.name AS location_name,
-                    locations.location AS location_id, date, parameters.param_name AS variable, 
-                    value, q50 AS median, min, max, doy_count AS years FROM measurements_calculated_daily_corrected 
-                    INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id
-                    INNER JOIN locations ON timeseries.location = locations.location
-                    INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id
-                    WHERE measurements_calculated_daily_corrected.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
-                    AND date = '", year, "-0", month, "-01'"))
+  flow_stats <- DBI::dbGetQuery(con, paste0(
+    "WITH latest_measurements AS (
+  SELECT 
+    l.name AS location_name,
+    l.location AS location_id,
+    m.date,
+    p.param_name AS variable,
+    m.value,
+    m.q50 AS median,
+    m.min,
+    m.max,
+    m.doy_count AS years,
+    m.timeseries_id,
+    ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
+  FROM measurements_calculated_daily_corrected m
+    INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
+    INNER JOIN locations l ON t.location = l.location
+    INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+  WHERE m.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
+    AND m.date BETWEEN ('", year, "-0", month, "-01'::date - INTERVAL '7 day') AND '", year, "-0", month, "-01'
+)
+SELECT location_name, location_id, date, variable, value, median, min, max, years
+FROM latest_measurements
+WHERE rn = 1;"
+  ))
   flow_stats$perc_hist_med <- round(flow_stats$value / flow_stats$median * 100)
   # Add description of % median
   flow_stats <- flow_stats %>%
