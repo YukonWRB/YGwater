@@ -64,13 +64,15 @@ discData <- function(id, language) {
     ns <- session$ns  # Used to create UI elements within the server code
     
     # Functions and data fetch ################
-    # Adjust multiple selection based on if 'All' is selected
+    # Adjust multiple selection based on if 'all' is selected
     observeFilterInput <- function(inputId) {
       observeEvent(input[[inputId]], {
         # Check if 'all' is selected and adjust accordingly
-        if (length(input[[inputId]]) > 1) {
-          if ("all" %in% input[[inputId]]) {
+        if (length(input[[inputId]]) > 1) { # If 'all' was selected last, remove all other selections
+          if (input[[inputId]][length(input[[inputId]])] == "all") {
             updateSelectizeInput(session, inputId, selected = "all")
+          } else if ("all" %in% input[[inputId]]) { # If 'all' is already selected and another option is selected, remove 'all'
+            updateSelectizeInput(session, inputId, selected = input[[inputId]][length(input[[inputId]])])
           }
         }
       })
@@ -84,13 +86,23 @@ discData <- function(id, language) {
                                     "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
       parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache,
                                                 "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
-      projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
-      networks =  DBI::dbGetQuery(session$userData$AquaCache, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),    locations_projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations_projects;"),
-      locations_networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations_networks;"),
       range = DBI::dbGetQuery(session$userData$AquaCache, "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM samples;"),
       sample_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM sample_types AS st WHERE EXISTS (SELECT 1 FROM samples AS s WHERE st.sample_type_id = s.sample_type);"),
       samples = DBI::dbGetQuery(session$userData$AquaCache, "SELECT sample_id, location_id, media_id, datetime, sample_type FROM samples;")
     )
+    
+    moduleData$locations_projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_projects WHERE location_id IN (", paste(moduleData$locs$location_id, collapse = ", "), ");"))
+    if (nrow(moduleData$locations_projects) > 0) {
+      moduleData$projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM projects WHERE location_id IN (", paste(moduleData$locations_projects$project_id, collapse = ", "), ");"))
+    } else {
+      moduleData$locations_projects <- data.frame(location_id = numeric(), project_id = numeric())
+      moduleData$projects <- data.frame(project_id = numeric(), name = character(), ame_fr = character())
+    }
+    
+    moduleData$locations_networks <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_networks WHERE location_id IN (", paste(moduleData$locs$location_id, collapse = ", "), ");"))
+    if (nrow(moduleData$locations_networks) > 0) {
+      moduleData$networks <-  DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM networks WHERE network_id IN (", paste(moduleData$locations_networks$network_id, collapse = ", "), ");"))
+    }
     
     if (any(!is.na(moduleData$parameter_relationships$group_id))) {
       groups <- moduleData$parameter_relationships$group_id[!is.na(moduleData$parameter_relationships$group_id)]
@@ -107,7 +119,7 @@ discData <- function(id, language) {
       moduleData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
     }
     
-    # moduleData$samples_sub <- moduleData$samples
+    
     
     # Create UI elements ################
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made or the reset button is pressed. If the user had selected a location, for example, and then changes the language, the location selection will be reset.
@@ -127,7 +139,8 @@ discData <- function(id, language) {
                        choices = 
                          stats::setNames(c("all", moduleData$locs$location_id),
                                          c(tr("all", language$language), moduleData$locs[, tr("generic_name_col", language$language)])),
-                       multiple = TRUE
+                       multiple = TRUE,
+                       selected = "all"
                        ),
         # Selectize input for media type
         selectizeInput(ns("mType"),
@@ -135,7 +148,8 @@ discData <- function(id, language) {
                        choices = 
                          stats::setNames(c("all", moduleData$media_types$media_id),
                                          c(tr("all", language$language), moduleData$media_types[, tr("media_type_col", language$language)])),
-                       multiple = TRUE
+                       multiple = TRUE,
+                       selected = "all"
                        ),
         # Selectize input for sample types
         selectizeInput(ns("sample_types"),
@@ -143,7 +157,8 @@ discData <- function(id, language) {
                        choices = 
                          stats::setNames(c("all", moduleData$sample_types$sample_type_id),
                                          c(tr("all", language$language), moduleData$sample_types[, tr("sample_type_col", language$language)])),
-                       multiple = TRUE
+                       multiple = TRUE,
+                       selected = "all"
         ),
         # Selectize input for networks
         selectizeInput(ns("networks"),
@@ -151,7 +166,8 @@ discData <- function(id, language) {
                        choices = 
                          stats::setNames(c("all", moduleData$networks$network_id),
                                          c(tr("all", language$language), moduleData$networks[, tr("generic_name_col", language$language)])),
-                       multiple = TRUE
+                       multiple = TRUE,
+                       selected = "all"
         ),
         # Selectize input for projects
         selectizeInput(ns("projects"),
@@ -159,14 +175,16 @@ discData <- function(id, language) {
                        choices = 
                          stats::setNames(c("all", moduleData$projects$project_id),
                                          c(tr("all", language$language), moduleData$projects[, tr("generic_name_col", language$language)])),
-                       multiple = TRUE
+                       multiple = TRUE,
+                       selected = "all"
         ),
         # Selectize input for parameter groups
         selectizeInput(ns("pGrps"),
                        label = tr("param_group(s)", language$language),
                        choices = stats::setNames(c("all", moduleData$param_groups$group_id),
                                                  c(tr("all", language$language), moduleData$param_groups[, tr("param_group_col", language$language)])),
-                       multiple = TRUE
+                       multiple = TRUE,
+                       selected = "all"
         ),
         # parameter sub-group
         selectizeInput(ns("pSubGrps"),
@@ -174,7 +192,8 @@ discData <- function(id, language) {
                        choices = 
                          stats::setNames(c("all", moduleData$param_sub_groups$sub_group_id),
                                          c(tr("all", language$language), moduleData$param_sub_groups[, tr("param_sub_group_col", language$language)])),
-                       multiple = TRUE
+                       multiple = TRUE,
+                       selected = "all"
         ),
         # Selectize input for parameters
         selectizeInput(ns("params"),
@@ -182,7 +201,8 @@ discData <- function(id, language) {
                        choices = 
                          stats::setNames(c("all", moduleData$params$parameter_id),
                                          c(tr("all", language$language), moduleData$params[, tr("param_name_col", language$language)])),
-                       multiple = TRUE
+                       multiple = TRUE,
+                       selected = "all"
         ),
         
         actionButton(ns("reset"),
@@ -220,10 +240,12 @@ discData <- function(id, language) {
     observeFilterInput("projects")
     observeFilterInput("sample_types")
     
+    
+    ## Cross-filtering of inputs based on the sidebar selections #####
 
     
 
-    # Create the datatable ################
+    ## Create the datatable ################
     table_data <- reactive({
       
     })
