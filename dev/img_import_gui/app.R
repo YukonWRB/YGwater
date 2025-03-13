@@ -89,7 +89,7 @@ preprocess_exif <- function(dat) {
   dat_out <- dat %>%
     select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude) %>%
     rename(sourcefile = SourceFile, filename = FileName, latitude = GPSLatitude, longitude = GPSLongitude, altitude = GPSAltitude, datetime = DateTimeOriginal) %>%
-    mutate(Tags = "", Notes = "", visibility = "Private") %>%
+    mutate(Tags = "", Notes = "", visibility = "Private", UTC=-7) %>%
     filter(latitude != 0 & longitude != 0)
     
   return(dat_out)
@@ -98,6 +98,8 @@ preprocess_exif <- function(dat) {
 # Define a dictionary to map checkbox choices to tags
 tag_list = list(" ", "Head", "Toe", "Smooth ice", "In flood")
 share_list = list("Private", "Public")
+tz_corrections = list(-12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+
 
 # Create a temporary directory and CSV file
 temp_dir <- tempdir()
@@ -122,20 +124,24 @@ ui <- fluidPage(
         br(),
         br(),
         br(),
-        uiOutput("edit_button")
+        fluidRow(
+            div(style = "float: left;", uiOutput("edit_button")),
+            div(style = "float: right;",
+              actionButton("update_pos", "Update location of selection"),
+              actionButton("clear_pos", "Clear")
+            )
+        )
       )
     ),
     fluidRow(
       column(width = 6,
-        imageOutput("imgprev"),
+        imageOutput("imgprev", width = "100%", height = "auto"),
         textOutput("image_index")
       ),
       column(width = 6,
         leafletOutput("map", width = "100%"),
-        fluidRow(
-          actionButton("update_pos", "Update location of selection"),
-          actionButton("clear_pos", "Clear")
-        )
+        br(),
+
       )
     ),
   fluidRow(
@@ -144,11 +150,15 @@ ui <- fluidPage(
       actionButton("select_all", "Select All"),
       actionButton("clear_selection", "Clear Selection"),
       br(),
-      br(),
-      selectInput("image_tags", "Select tags:", choices = tag_list, multiple = FALSE),
-      selectInput("share_tag", "Select visibility:", choices = share_list, multiple = FALSE),
+      selectizeInput("image_tags", "Select tags:", choices = tag_list, multiple = TRUE, width = "100%", options = list(create = TRUE)),
+      fluidRow(
+        column(width = 8, selectInput("share_tag", "Select visibility:", choices = share_list, multiple = FALSE)),
+        column(width = 4, selectInput("tz_correction", "UTC offset:", choices = tz_corrections, multiple = FALSE, selected = -7))
+      ),
       textAreaInput("notes", "Notes:", value = "", width = "100%", height = "100px"),
-      actionButton("save_notes", "Save Notes")
+      actionButton("save_notes", "Save Notes"),
+      br(),
+      actionButton("upload_to_ac", "Upload to AquaCache", style = "background-color: #007BFF; color: white;")
     ),
     column(width = 8, 
       DT::dataTableOutput("table")
@@ -348,6 +358,20 @@ server <- function(input, output, session) {
     }
   })
 
+
+  observeEvent(input$tz_correction, {
+    if (length(input$table_rows_selected) > 0) {
+      for (row in input$table_rows_selected) {
+        dat$df$UTC[row] <- input$tz_correction
+      }
+      
+      # Reset the dropdown menu and reload table (to show updated tags)
+      updateSelectInput(session, "tz_correction", selected = -7)
+      renderDataTable()
+    }
+  })
+
+
   # Observe changes in the text area input and update the notes on save button press
   observeEvent(input$save_notes, {
     if (length(input$table_rows_selected) > 0) {
@@ -358,8 +382,19 @@ server <- function(input, output, session) {
       # Reset the text area input and reload table (to show updated notes)
       updateTextAreaInput(session, "notes", value = "")
       renderDataTable()
+    } else {
+      showModal(modalDialog(
+        title = "No Rows Selected",
+        "Please select row(s) in the data table to save notes.",
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
     }
   })
+
+
 
   # Observe clear button click and remove map click marker and lines
   observeEvent(input$clear_pos, {
@@ -405,13 +440,16 @@ server <- function(input, output, session) {
   renderImagePlot <- function() {
     output$imgprev <- renderImage({
       filename <- normalizePath(dat$df$sourcefile[imgid()])
-      width <- session$clientData$output_imgprev_width
-      height <- session$clientData$output_imgprev_height 
       img <- readJPEG(filename, native = TRUE)
-      aspect_ratio <- dim(img)[2] / dim(img)[1]
-      height <- session$clientData$output_imgprev_height
-      width <- height * aspect_ratio
-      list(src = filename, contentType = 'image/jpeg', width = width, height = height)
+
+      # this is a sort of janky way to handle vertical images
+      # 
+      img_dims <- dim(img)
+      if (img_dims[1] > img_dims[2]) {
+        list(src = filename, contentType = 'image/jpeg', width = "50%", height = "auto")
+      } else {
+        list(src = filename, contentType = 'image/jpeg', width = "100%", height = "auto")
+      }
     }, deleteFile = FALSE)
   }
 
