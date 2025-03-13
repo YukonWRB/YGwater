@@ -7,6 +7,7 @@
 SWE_basin(
   year,
   month,
+  lookback = 30,
   threshold = 7,
   csv = FALSE,
   summarise = FALSE,
@@ -19,11 +20,13 @@ SWE_basin(
 
 \item{month}{The month of interest. Options are 3, 4 and 5 for March, April and May, respectively. Can also give multiple months as a vector. Historical stats are given for the first day of this month.}
 
+\item{lookback}{The number of years to look back for historical stats. Default is 30. NOT YET IMPLEMENTED.}
+
 \item{threshold}{A number between 1 and 10 giving the threshold below which the SWE for that basin and year are ignored. These numbers represent the sum of the factors of the stations for a basin which are not missing data for that year. 10 means that the swe values calculated from less than all the stations of that basin are ignored. 1 means that only the swe calculated from less than 1 out of 10 are ignored.}
 
 \item{csv}{TRUE or FALSE. If TRUE, a csv will be created.}
 
-\item{summarise}{TRUE to summarise the data into a data.frame with the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.}
+\item{summarise}{TRUE to summarise the data into a data.frame with the current SWE, historical median, the swe relative to the median (swe/swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin.}
 
 \item{source}{Database from which to fetch this data. Options are: aquacache or snow.}
 

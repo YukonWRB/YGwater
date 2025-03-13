@@ -18,9 +18,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # equipment sub-modules
   source(system.file("apps/YGwater/modules/admin/calibrate/cal_main.R", package = "YGwater"))
   # calibration sub-modules
-  source(system.file("apps/YGwater/modules/admin/contData/contData_main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/addContData/addContData_main.R", package = "YGwater"))
   # continuous data sub-modules
-  source(system.file("apps/YGwater/modules/admin/discData/discData_main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/addDiscData/addDiscData_main.R", package = "YGwater"))
   # discrete data sub-modules
   source(system.file("apps/YGwater/modules/admin/field/field_main.R", package = "YGwater"))
   # Field visit sub-modules
@@ -34,9 +34,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # 'Visualize' side modules ####
   source(system.file("apps/YGwater/modules/visualize/visualize.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/plot/discrete.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/plot/continuous.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/plot/mix.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/plot/discretePlot.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/plot/continuousPlot.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/plot/mixPlot.R", package = "YGwater"))
   
   source(system.file("apps/YGwater/modules/visualize/reports/basins.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/reports/WQReport.R", package = "YGwater"))
@@ -50,6 +50,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/visualize/map/locations.R", package = "YGwater"))
   
   source(system.file("apps/YGwater/modules/visualize/images/image_view.R", package = "YGwater"))
+  
+  source(system.file("apps/YGwater/modules/visualize/data/continuousData.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/data/discreteData.R", package = "YGwater"))
   
   source(system.file("apps/YGwater/modules/visualize/info/home.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/info/news.R", package = "YGwater"))

@@ -5,6 +5,9 @@
 #'
 #' This function exists to facilitate connecting to the aquacache database. You can pass your own database connection parameters, for example to connect to a dev instance instead of the default production instance.
 #' Database superusers or admins will have access to all database records (unless your instance of aquacache was set up differently), but other users will be asked to provide their row level security username and password to access records other than the 'public' ones. Note that this is *not necessarily* the same username and password as the one used to log into the database itself.
+#' 
+#' @details
+#' An attribute is added to the connection object to track if a transaction is active. This can be used by functions to determine if a transaction is already open, in which case functions can forgo opening a new transaction and instead use the existing one.
 #'
 #' @param name Database name.
 #' @param host Database host address. By default searches the .Renviron file for parameter:value pair of form aquacacheHost="hostname".
@@ -28,6 +31,9 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
                             user = username,
                             password = password)
     
+    # Add a new attribute to the connection object to track if a transaction is active
+    attr(con, "active_transaction") <- FALSE
+    
     # Explicitly set the timezone to UTC as all functions in this package work with UTC timezones
     DBI::dbExecute(con, "SET timezone = 'UTC'")
     
@@ -37,6 +43,6 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
     }
     return(con)
   }, error = function(e){
-    stop("Connection failed.")
+    stop("AquaCache database connection failed: ", e$message)
   })
 }

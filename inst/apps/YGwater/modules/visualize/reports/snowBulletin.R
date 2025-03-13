@@ -22,8 +22,8 @@ snowBulletinMod <- function(id, language) {
       month = if (lubridate::month(Sys.Date()) %in% c(3:5)) lubridate::month(Sys.Date()) else 3,
       basins = "all",
       language = "English",
-      precip_period = "Last 40 years",
-      cddf_period = "Last 40 years",
+      precip_period = "last 40 years",
+      cddf_period = "last 40 years",
       scale = 1
     )
     
@@ -80,7 +80,7 @@ snowBulletinMod <- function(id, language) {
         # Selector for precipitation period
         selectizeInput(ns("precip_period"),
                        label = tr("gen_snowBul_precip_period", language$language),
-                       choices = stats::setNames(c("Last 40 years", "All years", "1981-2010", "1991-2020"),
+                       choices = stats::setNames(c("last 40 years", "all years", "1981-2010", "1991-2020"),
                                                  c(tr("gen_snowBul_period1", language$language),
                                                    tr("gen_snowBul_period2", language$language),
                                                    tr("gen_snowBul_period3", language$language),
@@ -91,7 +91,7 @@ snowBulletinMod <- function(id, language) {
         # Selector for CDDF period
         selectizeInput(ns("cddf_period"),
                        label = tr("gen_snowBul_cddf_period", language$language),
-                       choices = stats::setNames(c("Last 40 years", "All years", "1981-2010", "1991-2020"),
+                       choices = stats::setNames(c("last 40 years", "all years", "1981-2010", "1991-2020"),
                                                  c(tr("gen_snowBul_period1", language$language),
                                                    tr("gen_snowBul_period2", language$language),
                                                    tr("gen_snowBul_period3", language$language),
@@ -197,10 +197,6 @@ snowBulletinMod <- function(id, language) {
             # 3. Call the appropriate function so it writes all files to 'dir'
             suppressWarnings({
               if (selections$stats) {
-                print(selections$year)
-                print(selections$month)
-                print(selections$basins)
-                print(dir)
                 snowBulletinStats(year = selections$year,
                                   month = selections$month,
                                   basins = if (selections$basins == "all") NULL else selections$basins,
@@ -209,9 +205,7 @@ snowBulletinMod <- function(id, language) {
                                   con = session$userData$AquaCache,
                                   source = "aquacache",
                                   synchronize = FALSE)
-                print("success!")
               } else {
-                print("here")
                 snowBulletin(year = selections$year,
                              month = selections$month,
                              basins = if (selections$basins == "all") NULL else selections$basins,
