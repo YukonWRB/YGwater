@@ -333,7 +333,7 @@ SWE_station <- function(stations = "all",
   
   # Write csv if csv = TRUE
   if (csv) {
-    utils::write.csv(tabl, file = paste0(save_path, "/SweSationSummary_", year, "-0", month, ".csv"), row.names = FALSE)
+    utils::write.csv(tabl, file = paste0(save_path, "/SweStationSummary_", year, "-0", month, ".csv"), row.names = FALSE)
   } 
   
   return(tabl)

@@ -10,21 +10,28 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlotServer <- function(id, data, language, windowDims) {
+continuousPlot <- function(id, language, windowDims) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server
     
     
     # Initial setup and data loading ########################################################################
+    
+    data <- reactiveValues(all_ts = DBI::dbGetQuery(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.location, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location ORDER BY loc.name;"),
+    parameters = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id ORDER BY parameters.param_name;")
+    )
+    data$datums <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT l.location, dc.location_id, dc.datum_id_to, dc.conversion_m, dc.current, dl.datum_name_en FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
+    data$datum_name_en <- gsub("GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (assumed)", data$datum_name_en)
+    data$datum_name_en <- gsub("CANADIAN GEODETIC VERTICAL DATUM 2013:EPOCH2010", "CGVD2013:2010", data$datum_name_en)
+    data$datum_name_en <- gsub("APPROXIMATE", "approx.", data$datum_name_en)
+    
+    
     values <- reactiveValues()
     # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth' - this is used to change default plot start/end dates and to show the datum checkbox
     values$water_level <- data$parameters$parameter_id[data$parameters$param_name == "water level"]
     values$swe <- data$parameters$parameter_id[data$parameters$param_name == "snow water equivalent"]
     values$snow_depth <- data$parameters$parameter_id[data$parameters$param_name == "snow depth"]
-    
-    # Prevention of circular updates
-    values$updating <- FALSE
     
     # Create the UI for the sidebar and main panel #########################################################
     # Render the sidebar UI

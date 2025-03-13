@@ -10,7 +10,7 @@ discretePlotUI <- function(id) {
   )
 }
 
-discretePlotServer <- function(id, mdb_files, language, windowDims) {
+discretePlot <- function(id, mdb_files, language, windowDims) {
   
   moduleServer(id, function(input, output, session) {
     

@@ -1,6 +1,6 @@
 # UI and server code for report generation tab. Modules are called depending on the plot type selected.
 
-genUI <- function(id) {
+reportsUI <- function(id) {
   ns <- NS(id)
   fluidPage(
     selectizeInput(ns("type"),
@@ -21,7 +21,7 @@ genUI <- function(id) {
   )
 }
 
-gen <- function(id, mdb_files,language) {
+reports <- function(id, mdb_files,language) {
   
   moduleServer(id, function(input, output, session) {
     
