@@ -33,9 +33,9 @@ img <- function(id, language, restoring) {
     setBookmarkExclude(c("tbl_columns_selected", "tbl_cells_selected", "tbl_rows_current", "tbl_rows_all", "tbl_state", "tbl_search", "tbl_cell_clicked", "tbl_row_last_clicked"))
     
     # Load info about last two weeks of images. More is loaded later if the user goes back further.
-    imgs <- reactiveValues(imgs = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN images_index AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
+    imgs <- reactiveValues(imgs = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
                            img_min = Sys.Date() - 14,
-                           img_meta = dbGetQueryDT(session$userData$AquaCache, "SELECT a.img_meta_id, a.img_type, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM images_index AS a JOIN locations AS l ON a.location_id = l.location_id;"))
+                           img_meta = dbGetQueryDT(session$userData$AquaCache, "SELECT a.img_meta_id, a.img_type, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM image_series AS a JOIN locations AS l ON a.location_id = l.location_id;"))
     
     tables <- reactiveValues()
     
@@ -63,9 +63,14 @@ img <- function(id, language, restoring) {
     # Get images further back in time if the date range is changed to something beyond 2 weeks ago ############################
     observeEvent(input$dates, {
       if (input$dates[1] < imgs$img_min) {
-        extra <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN images_index AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime), "';"))
-        imgs$img_min <- min(extra$datetime)
-        imgs$imgs <- rbind(imgs$imgs, extra)
+        if (nrow(imgs$imgs) == 0) {
+          imgs$imgs <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "';"))
+          imgs$img_min <- min(imgs$imgs$datetime)
+        } else {
+          extra <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime), "';"))
+          imgs$img_min <- min(extra$datetime)
+          imgs$imgs <- rbind(imgs$imgs, extra)
+        }
         data.table::setorder(imgs$imgs, -datetime)
       }
     }, ignoreInit = TRUE)
@@ -73,10 +78,10 @@ img <- function(id, language, restoring) {
     
     # Create a data table of images matching filter inputs #########################
     table_data <- reactive({
-      req(input$type, input$dates, input$loc)  # Ensure all inputs are available
-      
+      req(input$type, input$dates, input$loc, imgs$imgs)  # Ensure all inputs are available
       img_ids <- imgs$img_meta[img_type == input$type, "img_meta_id"]
       
+      # Select only the necessary name column based on the language
       generic_name_col <- translations[id == "generic_name_col", get(language$language)][[1]]
       
       if (input$loc == "All") {
@@ -94,7 +99,6 @@ img <- function(id, language, restoring) {
       
       # Rename columns
       data.table::setnames(tbl, c(translations[id == "datetime_utc_offset", get(language$language)][[1]], translations[id == "loc", get(language$language)][[1]], "image_id", "sort.dt"))
-      
       return(tbl)
     }) # End of reactive creating table
     
@@ -110,6 +114,7 @@ img <- function(id, language, restoring) {
     
     # Render the data table ########################################################
     observe({
+      req(table_data)
       tbl <- table_data()
       
       tables$tbl <- tbl # Used for image rendering later
