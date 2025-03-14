@@ -468,7 +468,7 @@ plotOverlap <- function(location,
       if (nrow(row) == 0) {
         lubridate::year(target_date) <- lubridate::year(target_date) - 1
         if (is.na(target_date)) {
-          next()
+          next
         }
         row <- daily[daily$datetime == target_date, ]
       }
