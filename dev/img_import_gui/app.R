@@ -5,15 +5,20 @@ library(jpeg)
 library(exifr)
 library(dplyr)
 library(DT)
-
+library(YGwater)
 
 # Define a named list of colors
 color_list <- list(
   "selected" = "cyan",
   "unselected" = "black",
-  "click" = "magenta",
-  "other" = "green"
+  "click" = "green",
+  "other" = "magenta",
+  "locations" = "orange"
 )
+
+# Default coordinates to repositon the map around Whitehorse
+DEFAULT_COORDS = c(-135.0568, 60.7212)
+
 
 # Function to convert latitude and longitude to meters
 latlon_to_meters <- function(lat1, lon1, lat2, lon2) {
@@ -26,6 +31,14 @@ latlon_to_meters <- function(lat1, lon1, lat2, lon2) {
   c <- 2 * atan2(sqrt(a), sqrt(1 - a))
   d <- R * c
   return(d)
+}
+
+
+# Function to check if latitude and longitude are valid
+is_valid_latlon <- function(lat, lon) {
+  valid_lat <- !is.na(lat) & !is.null(lat) & lat >= -90 & lat <= 90
+  valid_lon <- !is.na(lon) & !is.null(lat) & lon >= -180 & lon <= 180
+  return(valid_lat & valid_lon)
 }
 
 # Function to infer zoom level based on latitude and longitude arrays
@@ -60,7 +73,11 @@ infer_zoom_level <- function(latitudes, longitudes) {
 files <- list.files("data/", pattern="*jpg", recursive = TRUE, full.names = TRUE)
 dat <- read_exif(files)
 
+
+
 # Function to create a new data frame with GPS data and new empty columns
+# NOTIMPLEMENTED WARNING
+
 initialize_csv <- function(dat, filename) {
   # Assertions to check the presence of necessary columns
   stopifnot("FileName" %in% colnames(dat))
@@ -88,29 +105,27 @@ preprocess_exif <- function(dat) {
 
   dat_out <- dat %>%
     select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude) %>%
-    rename(sourcefile = SourceFile, filename = FileName, latitude = GPSLatitude, longitude = GPSLongitude, altitude = GPSAltitude, datetime = DateTimeOriginal) %>%
-    mutate(Tags = "", Notes = "", visibility = "Private", UTC=-7) %>%
-    filter(latitude != 0 & longitude != 0)
-    
+    rename(Sourcefile = SourceFile, Filename = FileName, Latitude = GPSLatitude, Longitude = GPSLongitude, Altitude = GPSAltitude, Datetime = DateTimeOriginal) %>%
+    mutate(Tags = list(character(0)), Notes = "", Visibility = "Private", UTC = -7)
   return(dat_out)
 }
 
 # Define a dictionary to map checkbox choices to tags
-tag_list = list(" ", "Head", "Toe", "Smooth ice", "In flood")
+tag_list = list("Head", "Toe", "Smooth ice", "In flood")
 share_list = list("Private", "Public")
+# Define a list of UTC timezone corrections
 tz_corrections = list(-12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
 
-
 # Create a temporary directory and CSV file
-temp_dir <- tempdir()
-csv_file <- file.path("image_data.csv")
+#temp_dir <- tempdir()
+#csv_file <- file.path("image_data.csv")
 
 # Call the function to create the data frame and write to CSV
-initialize_csv(dat, csv_file)
+#initialize_csv(dat, csv_file)
 
-load_data <- function() {
-  return(read.csv(csv_file, stringsAsFactors = FALSE))
-}
+#load_data <- function() {
+#  return(read.csv(csv_file, stringsAsFactors = FALSE))
+#}
 
 # Define the UI layout
 ui <- fluidPage(
@@ -126,10 +141,8 @@ ui <- fluidPage(
         br(),
         fluidRow(
             div(style = "float: left;", uiOutput("edit_button")),
-            div(style = "float: right;",
-              actionButton("update_pos", "Update location of selection"),
-              actionButton("clear_pos", "Clear")
-            )
+            div(style = "float: left; margin-left: 10px;", uiOutput("toggle_locations_button")),
+            div(style = "float: right;", actionButton("clear_pos", "Clear"))
         )
       )
     ),
@@ -146,25 +159,44 @@ ui <- fluidPage(
     ),
   fluidRow(
     column(
-      width = 4,
+      width = 6,
       actionButton("select_all", "Select All"),
       actionButton("clear_selection", "Clear Selection"),
       br(),
-      selectizeInput("image_tags", "Select tags:", choices = tag_list, multiple = TRUE, width = "100%", options = list(create = TRUE)),
+      selectizeInput("image_tags", "Select tags:", choices = tag_list, multiple = TRUE, width = "100%", options = list(create = TRUE), selected = NULL),
+
+
+      fluidRow(
+        column(width = 6, selectizeInput("image_location", "Select location:", choices = "Placeholder", multiple = FALSE, width = "100%", options = list(create = FALSE, placeholder="Select location"))),
+        column(width = 3, numericInput("image_latitude", "Latitude:", value = NULL, width = "100%", step = 0.1)),
+        column(width = 3, numericInput("image_longitude", "Longitude:", value = NULL, width = "100%", step=0.1))
+      ),
       fluidRow(
         column(width = 8, selectInput("share_tag", "Select visibility:", choices = share_list, multiple = FALSE)),
         column(width = 4, selectInput("tz_correction", "UTC offset:", choices = tz_corrections, multiple = FALSE, selected = -7))
       ),
       textAreaInput("notes", "Notes:", value = "", width = "100%", height = "100px"),
-      actionButton("save_notes", "Save Notes"),
-      br(),
-      actionButton("upload_to_ac", "Upload to AquaCache", style = "background-color: #007BFF; color: white;")
+      div(style = "float: right;", 
+        actionButton("apply", "Apply")
+      ),
     ),
-    column(width = 8, 
-      DT::dataTableOutput("table")
+    column(width = 6, 
+      DT::dataTableOutput("table"),
+      actionButton("upload_to_ac", "Upload to AquaCache", style = "background-color: #007BFF; color: white;")
+
     )
   )
 )
+)
+
+readRenviron("~/.Renviron")
+
+config <<- list(
+  dbName = "aquacache",
+  dbHost = Sys.getenv("aquacacheHost"),
+  dbPort = Sys.getenv("aquacachePort"),
+  dbUser = Sys.getenv("aquacacheUser"),
+  dbPass = Sys.getenv("aquacachePass")
 )
 
 # Increase the maximum upload size to 30MB
@@ -172,31 +204,40 @@ options(shiny.maxRequestSize = 30 * 1024^2)
 
 # Define the server logic
 server <- function(input, output, session) {
+
+  session$userData$config <- config
+
+  session$userData$AquaCache <- AquaConnect(name = config$dbName,
+                                            host = config$dbHost,
+                                            port = config$dbPort,
+                                            username = config$dbUser,
+                                            password = config$dbPass,
+                                            silent = TRUE)
+
+
+  locations = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.locations")
+  
   # Reactive value to track the current image index
   imgid <- reactiveVal(1)
   
-  # Reactive value to track whether the map was clicked (since afaik cannot reset map click input directly..)
-  # unintuitively, this is initialized as TRUE, since we always check that click is not null before proceeding
-  mapclicked <- reactiveVal(TRUE)
-
-  edit_mode <- reactiveVal(FALSE)
-  # Initiaze dat
+  # Initialize reactive values to track the state of the app
+  toggles <- reactiveValues(locations = FALSE, mapclicked = TRUE, edit = FALSE)
+  
+  # Initiaze dataframe to store exif data and updated attributes
   dat <- reactiveValues(df = data.frame())
-
+  
   # Render placeholder image
   output$imgprev <- renderImage({
     filename <- normalizePath("welcome.jpg")
     list(src = filename, contentType = 'image/jpeg', width = "100%", height = "100%")
   }, deleteFile = FALSE)
 
-
-
   # Render an empty leaflet map
   output$map <- renderLeaflet({
     leaflet() %>%
       addProviderTiles(providers$Esri.WorldImagery) %>%
-      setView(lng = -135.0568, lat = 60.7212, zoom = 10)
-  })
+      setView(lng = DEFAULT_COORDS[1], lat = DEFAULT_COORDS[2], zoom = 10)
+    })
 
   # Observe file input and update the data table
   observeEvent(input$files, {
@@ -208,33 +249,43 @@ server <- function(input, output, session) {
     dat$df <- read_exif(files$datapath)
     dat$df$FileName <- files$name
 
-    # Preprocess the exif data to remove images with missing data and add new attributes
+    # Grab only necessary attributes and add placeholders for new ones
     dat$df = preprocess_exif(dat$df)
 
-    # Warn user if images are filtered
-    if (length(dat$df$filename) < length(files$datapath)) {
-      showNotification(
-        "Some images do not have GPS data and will not be displayed.",
-        type = "warning",
-        duration = 5
-      )
+    # Check for null latitude or longitude values; issue a warning if any are found.
+    dat$df$Latitude[dat$df$Latitude == 0] <- NA
+    dat$df$Longitude[dat$df$Longitude == 0] <- NA
+    dat$df$Altitude[dat$df$Longitude == 0] <- NA
+
+    if (any(is.na(dat$df$Latitude)) || any(is.na(dat$df$Longitude))) {
+      num_null_latitudes <- sum(is.na(dat$df$Latitude))
+
+      showModal(modalDialog(
+        title = "Warning",
+        paste(num_null_latitudes, "image(s) do not contain a georeference. Add locations using the drop-down menu or input coordinates manually."),
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
     }
 
-    # Once the table is loaded, render the shiny elements
+      # Once the images are loaded into the app, render the GUI elements
     renderDataTable()
     renderImagePlot()
     renderLeafletMap()
     renderImageIndex()
-  })
+    })
+
 
   # Render the data table
   renderDataTable <- function() {
     output$table <- DT::renderDataTable({
       datatable(
         dat$df %>%
-          select(-sourcefile) %>%
+          select(-Sourcefile) %>%
           mutate(across(where(is.numeric), ~ round(., 3))) %>%
-          mutate(datetime = format(as.POSIXct(datetime, format="%Y:%m:%d %H:%M:%S"), "%d-%b-%Y %H:%M")),
+          mutate(Datetime = format(as.POSIXct(Datetime, format="%Y:%m:%d %H:%M:%S"), "%d-%b-%Y %H:%M")),
         selection = list(mode = "multiple", target = "row"),
         editable = TRUE,
         options = list(
@@ -249,41 +300,71 @@ server <- function(input, output, session) {
     })
   }
 
-
-  # Function to issue a modal warning if edit mode is FALSE
-  issue_edit_mode_warning <- function() {
-      showModal(modalDialog(
-        title = "Edit Mode Disabled",
-        "Please enable edit mode to make changes.",
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Close")
-        )
-      ))
-  }
-
-
+  # Render the toggle buttons here, which change colour based on the state of the app
   output$edit_button <- renderUI({
-    actionButton("edit", "Edit Mode", icon = icon("edit"), 
-           style = if (edit_mode()) "background-color: #007BFF; color: white;" else "background-color: white; color: black;")
+    actionButton("edit", "Select coordinates", icon = icon("map-location-dot"), 
+           style = if (toggles$edit) "background-color: #007BFF; color: white;" else "background-color: white; color: black;")
   })
 
-  # Observe edit button click and toggle edit mode
+  output$toggle_locations_button <- renderUI({
+    actionButton("toggle_locations", "Toggle locations", 
+           style = if (toggles$locations) "background-color: #007BFF; color: white;" else "background-color: white; color: black;")
+  })
+
+
+  # Observe 'Select coordinates' button click and toggle edit mode
   observeEvent(input$edit, {
-    edit_mode(!edit_mode())
-    if (edit_mode()) {
+    toggles$edit <- !toggles$edit
+    if (toggles$edit) {
       showNotification("Edit mode enabled.", type = "message", duration = 3)
     } else {
       showNotification("Edit mode disabled.", type = "message", duration = 3)
-      leafletProxy("map") %>% clearGroup("click_marker") %>% clearGroup("click_line")
     }
   })
 
-  # Observe changes in the data table and update the CSV file
-  # NOTE: should edits be lockable via a toggle?
+  # Add the 'current' lat-lon values (from the Latitute, Longitude input boxes) to the map
+  observeEvent(list(input$image_latitude, input$image_longitude), {
+    if (is_valid_latlon(input$image_latitude, input$image_longitude)) {
+      clearLinesFromMap()
+      leafletProxy("map") %>%
+        clearGroup("manual_marker") %>%
+        addCircleMarkers(
+          lng = input$image_longitude,
+          lat = input$image_latitude,
+          radius = 5,
+          color = color_list$click,
+          fill = TRUE,
+          fillOpacity = 0.8,
+          popup = paste("Lat:", round(input$image_latitude, 3), "Lng:", round(input$image_longitude, 3)),
+          group = "manual_marker"
+        )
+
+        # Add lines connecting 'current' lat lon with selected images (from the data table)
+        addLinesToMap()
+    }
+  }, ignoreInit = TRUE)
+
+
+
+  # Toggle aquacache locations on the map
+  observeEvent(input$toggle_locations, {
+    if (toggles$locations) {
+        leafletProxy("map") %>% clearGroup("locations")
+    }
+    else {
+        addLocationsToMap()
+    }
+    toggles$locations <- !toggles$locations
+  })
+  
+
+  # Observe changes in the data table and re-render the map
   observeEvent(input$table_cell_edit, {
     info <- input$table_cell_edit
-    dat$df[info$row, info$col] <- info$value
+    if (info$col %in% c("Latitude", "Longitude")) {
+      dat$df[info$row, info$col] <- as.numeric(info$value)
+      renderLeafletMap()
+    }
   })
 
   # Observe select all button click and select all rows in the data table
@@ -297,22 +378,26 @@ server <- function(input, output, session) {
     proxy <- dataTableProxy("table")
     selectRows(proxy, NULL)
 
-    # update the map to reflect deselection
+    # Update the map to reflect deselection
     updateMapView()
     leafletProxy(mapId = "map") %>% clearGroup("photos")
     addCirclesToMap(selection = seq_len(nrow(dat$df)), color=color_list$unselected)
+    clearLinesFromMap()
+  })
+
+  # Update the 'locations' list based on the data loaded from Aquacache
+  observe({
+    updateSelectizeInput(session, "image_location", choices = locations$name, selected = "Placeholder", options = list(create = FALSE, placeholder="Select location", maxItems = 1))
   })
 
   # Observe row selection in the data table and update the imgid
   observeEvent(input$table_rows_selected, {
-
+      updateNumericInput(session, "image_latitude", value = "")
+      updateNumericInput(session, "image_longitude", value = "")
 
     # update lines to reflect seleciton (showing geoference corrections)
     clearLinesFromMap()
-
-    if (edit_mode() == TRUE) {
-      addLinesToMap()
-    }
+    addLinesToMap()
 
     # update map view coordinates and zoom level
     updateMapView()
@@ -324,6 +409,7 @@ server <- function(input, output, session) {
       imgid(input$table_rows_selected)
     }
 
+    # case for no selection
     if (is.null(input$table_rows_selected)) {
       updateMapView()
       leafletProxy(mapId = "map") %>% clearGroup("photos")
@@ -334,54 +420,129 @@ server <- function(input, output, session) {
   
 
   # Observe changes in the drop-down input and update the tags on save button press
-  observeEvent(input$image_tags, {
-    if (length(input$table_rows_selected) > 0) {
-      for (row in input$table_rows_selected) {
-        dat$df$Tags[row] <- input$image_tags
-      }
-      
-      # Reset the dropdown menu and reload table (to show updated tags)
-      updateSelectInput(session, "image_tags", selected = " ")
-      renderDataTable()
-    }
-  })
+  # observeEvent(input$image_tags, {
+  #   if (length(input$table_rows_selected) > 0) {
+  #     for (row in input$table_rows_selected) {
+  #       dat$df$Tags[row] <- input$image_tags
+  #     }
+  #     
+  #     # Reset the dropdown menu and reload table (to show updated tags)
+  #     updateSelectInput(session, "image_tags", selected = NULL)
+  #     renderDataTable()
+  #   }
+  #   else {
+  #     updateSelectInput(session, "image_tags", selected = NULL)
+  #   }
+  # })
 
-  observeEvent(input$share_tag, {
+  #observeEvent(input$share_tag, {
+  #  if (length(input$table_rows_selected) > 0) {
+  #    for (row in input$table_rows_selected) {
+  #      dat$df$Visibility[row] <- input$share_tag
+  #    }
+  #    
+  #    # Reset the dropdown menu and reload table (to show updated tags)
+  #    updateSelectInput(session, "share_tag", selected = "Private")
+  #    renderDataTable()
+  #  }
+  #})
+
+
+  # observeEvent(input$tz_correction, {
+  #   if (length(input$table_rows_selected) > 0) {
+  #     for (row in input$table_rows_selected) {
+  #       dat$df$UTC[row] <- input$tz_correction
+  #     }
+  #     
+  #     # Reset the dropdown menu and reload table (to show updated tags)
+  #     updateSelectInput(session, "tz_correction", selected = -7)
+  #     renderDataTable()
+  #   }
+  # })
+
+
+
+
+  # keep track of whether the location was queried from AquaCache, or set by the user
+  # if the cooridnates are changed by the user, or changes via map click, reset the location selection
+  queried_laton <- reactiveValues(lat=0.0, lon=0.0)
+
+  observeEvent(input$image_location, {
+      # if the location is default, don't update latlon
+      if (input$image_location == "Placeholder" | input$image_location == "") {
+        return()
+      }
+
+      lat <- locations[locations$name == input$image_location, "latitude"]
+      lon <- locations[locations$name == input$image_location, "longitude"]
+      
+      updateNumericInput(session, "image_latitude", value = lat)
+      updateNumericInput(session, "image_longitude", value = lon)
+
+      queried_laton$lat <- lat
+      queried_laton$lon <- lon
+
+      # update the map view to the selected location
+      leafletProxy("map") %>%
+        setView(lng = lon, lat = lat, zoom = 4)
+  }, ignoreInit = TRUE)
+  
+
+  # if the user manually changes the lat lon, reset the location
+  observeEvent(list(input$image_latitude, input$image_longitude), {
+    
+    if (is.na(input$image_latitude) | is.na(input$image_longitude)) {
+      updateSelectInput(session, "image_location", selected = "")
+    }
+
+    else if ((queried_laton$lat != input$image_latitude) | (queried_laton$lon != input$image_longitude)) {
+      updateSelectInput(session, "image_location", selected = "")
+    }
+
+  }, ignoreInit = TRUE)
+
+  # button used to apply changes in attribute values to the table; this is safer than modifying the table directly
+  observeEvent(input$apply, {
     if (length(input$table_rows_selected) > 0) {
       for (row in input$table_rows_selected) {
-        dat$df$visibility[row] <- input$share_tag
+        
+        # only write attributes that are not set to their default values (typically empty)
+        # this way, the user can leave attributes blank, such as lat-lon, without worrying about overwriting them
+        # while you could write everything to the table, since the table already has default values, this created a problem when you want to change multiple images at once
+        # since multiple images won't have the same 'default' lat-lons
+        if (input$notes != "") {dat$df$Notes[row] <- input$notes}
+        if (!is.null(input$image_tags)) {dat$df$Tags[row] <- paste(input$image_tags, collapse = ", ")}
+
+        # check whether the latitude and longitude are valid
+        if (!is_valid_latlon(input$image_latitude, input$image_longitude)) {
+          showModal(modalDialog(
+            title = "Invalid Coordinates",
+            "The latitude and/or longitude values are not valid. Please enter valid coordinates.",
+            easyClose = TRUE,
+            footer = tagList(
+              modalButton("Close")
+            )
+          ))
+          return()
+        }
+
+        dat$df$Latitude[row] <- input$image_latitude
+        dat$df$Longitude[row] <- input$image_longitude
+
+        if (input$share_tag != "Private") {dat$df$Visibility[row] <- input$share_tag}
+        if (input$tz_correction != -7) {dat$df$UTC[row] <- input$tz_correction}
       }
       
-      # Reset the dropdown menu and reload table (to show updated tags)
+      # Reset all of the input fields after applying changes and re-render the table/map
+      updateTextAreaInput(session, "notes", value = "")
+      updateSelectInput(session, "image_tags", selected = NULL)
+      updateSelectInput(session, "image_location", selected = "Placeholder")
       updateSelectInput(session, "share_tag", selected = "Private")
-      renderDataTable()
-    }
-  })
-
-
-  observeEvent(input$tz_correction, {
-    if (length(input$table_rows_selected) > 0) {
-      for (row in input$table_rows_selected) {
-        dat$df$UTC[row] <- input$tz_correction
-      }
-      
-      # Reset the dropdown menu and reload table (to show updated tags)
       updateSelectInput(session, "tz_correction", selected = -7)
       renderDataTable()
-    }
-  })
+      renderLeafletMap()
 
-
-  # Observe changes in the text area input and update the notes on save button press
-  observeEvent(input$save_notes, {
-    if (length(input$table_rows_selected) > 0) {
-      for (row in input$table_rows_selected) {
-        dat$df$Notes[row] <- input$notes
-      }
-      
-      # Reset the text area input and reload table (to show updated notes)
-      updateTextAreaInput(session, "notes", value = "")
-      renderDataTable()
+    # warning for no images selected case
     } else {
       showModal(modalDialog(
         title = "No Rows Selected",
@@ -396,39 +557,57 @@ server <- function(input, output, session) {
 
 
 
-  # Observe clear button click and remove map click marker and lines
+  # simple button to clear objects from map
   observeEvent(input$clear_pos, {
     leafletProxy("map") %>%
-      clearGroup("click_marker") %>%
+      clearGroup("manual_marker") %>%
       clearGroup("click_line")
-    mapclicked(FALSE)
+    toggles$mapclicked <- FALSE
   })
+
+
 
   # Set the view of the map to the current image's coordinates on button press
   updateMapView <- function() {
 
     # If no rows are selected, set the view to the centroid of all points
     selection <- input$table_rows_selected
+
+    # if none of the selected images have valid coordinates, set view to entire table
+    if (all(!is_valid_latlon(dat$df$Latitude[selection], dat$df$Longitude[selection]))) {
+      selection <- seq_len(nrow(dat$df))
+    }
+    
+    # if nothing is selected, set view to entire table
     if (length(selection) == 0) {
       selection <- seq_len(nrow(dat$df))
     }
 
 
     # if the map is clicked, include the clicked point in the centroid calculation
-    if (edit_mode() && !is.null(input$map_click) && mapclicked()) {
+    if (toggles$edit && !is.null(input$map_click) && toggles$mapclicked) {
       # Calculate the centroid of selection
-      centroid_lat <- mean(c(dat$df$latitude[selection], input$map_click$lat), na.rm = TRUE)
-      centroid_lon <- mean(c(dat$df$longitude[selection], input$map_click$lng), na.rm = TRUE)
+      centroid_lat <- mean(c(dat$df$Latitude[selection], input$map_click$lat), na.rm = TRUE)
+      centroid_lon <- mean(c(dat$df$Longitude[selection], input$map_click$lng), na.rm = TRUE)
     } 
     else {
       # Calculate the centroid of selection
-      centroid_lat <- mean(dat$df$latitude[selection], na.rm = TRUE)
-      centroid_lon <- mean(dat$df$longitude[selection], na.rm = TRUE)
+      centroid_lat <- mean(dat$df$Latitude[selection], na.rm = TRUE)
+      centroid_lon <- mean(dat$df$Longitude[selection], na.rm = TRUE)
     }
 
+      # Handle case where centroid is NA
+      if (is.na(centroid_lat) || is.na(centroid_lon)) {
+        centroid_lat <- DEFAULT_COORDS[1]
+        centroid_lon <- DEFAULT_COORDS[2]
+      }
+
+
+
+    
 
     # Infer zoom level based on the spread of the points
-    zoom <- infer_zoom_level(dat$df$latitude[selection], dat$df$longitude[selection])
+    zoom <- infer_zoom_level(dat$df$Latitude[selection], dat$df$Longitude[selection])
 
     # Update the map view
     leafletProxy(mapId = "map") %>%
@@ -439,7 +618,7 @@ server <- function(input, output, session) {
   # This output will update automatically based on the imgid() React var
   renderImagePlot <- function() {
     output$imgprev <- renderImage({
-      filename <- normalizePath(dat$df$sourcefile[imgid()])
+      filename <- normalizePath(dat$df$Sourcefile[imgid()])
       img <- readJPEG(filename, native = TRUE)
 
       # this is a sort of janky way to handle vertical images
@@ -453,18 +632,17 @@ server <- function(input, output, session) {
     }, deleteFile = FALSE)
   }
 
-
   # Render the image position text, also based on React var
   renderImageIndex <- function() {
     output$image_index <- renderText({
       paste("Image", imgid(), "of", nrow(dat$df))
     })
   }
-
   # Function to render the leaflet map
   renderLeafletMap <- function() {
+    valid_data <- dat$df %>% filter(is_valid_latlon(Latitude, Longitude))
     output$map <- renderLeaflet({
-      leaflet(data = dat$df) %>%
+      leaflet(data = valid_data) %>%
         addProviderTiles(providers$Esri.WorldImagery) %>%
         addLayersControl(
           baseGroups = c("World Topo Map","World Imagery"),
@@ -473,17 +651,17 @@ server <- function(input, output, session) {
         addProviderTiles(providers$Esri.WorldImagery, group = "World Aerial") %>%
         addProviderTiles(providers$Esri.WorldTopoMap, group = "World Topo Map") %>%
         addCircleMarkers(
-          lng = dat$df$longitude,
-          lat = dat$df$latitude,
+          lng = valid_data$Longitude,
+          lat = valid_data$Latitude,
           radius = 2,
           color = color_list$unselected,
           fill = TRUE,
-            fillOpacity = 0.5,
-            popup = ~paste("Filename:", filename, "<br>",
-                   "Date/Time:", datetime, "<br>",
-                   "Latitude:", round(latitude, 5), "<br>",
-                   "Longitude:", round(longitude, 5), "<br>",
-                   "Altitude:", round(altitude, 2), "m")
+          fillOpacity = 0.5,
+          popup = ~paste("Filename:", Filename, "<br>",
+                         "Date/Time:", Datetime, "<br>",
+                         "Latitude:", round(Latitude, 5), "<br>",
+                         "Longitude:", round(Longitude, 5), "<br>",
+                         "Altitude:", round(Altitude, 2), "m")
         ) %>%
         addScaleBar(position = "bottomleft", options = scaleBarOptions(imperial = FALSE, maxWidth = 100, metric = TRUE, updateWhenIdle = TRUE)) %>%
         htmlwidgets::onRender("function(el, x) {
@@ -493,48 +671,49 @@ server <- function(input, output, session) {
           }
         }")
     })
+
+    addLocationsToMap()
   }
 
 
   # Observe clicks on existing markers and update the data table selection based on the clicked marker
-  observeEvent(input$map_marker_click, {
-    click <- input$map_marker_click
-    if (!is.null(click)) {
-      # Find the index of the clicked marker in the data table
-
-      # CURRENTLY THERE'S A BUG WHERE AN EDITED POINT LOCATION CANNOT BE SELECTED VIA CLICK
-      # WHILE THE LAT LONS SEEM TO MATCH UP, THE WHICH FUNCTION RETURNS INTEGER(0)
-      # FOR NOW, THIS FUNCTIONALITY IS DISABLED (BY ADDING A NULL CASE)
-      clicked_index <- which(
-        dat$df$longitude == click$lng & dat$df$latitude == click$lat
-      )
 
 
+  # observeEvent(input$map_marker_click, {
+  #   click <- input$map_marker_click
+  #   if (!is.null(click)) {
+  #     # Find the index of the clicked marker in the data table
 
+  #     # CURRENTLY THERE'S A BUG WHERE AN EDITED POINT LOCATION CANNOT BE SELECTED VIA CLICK
+  #     # WHILE THE LAT LONS SEEM TO MATCH UP, THE WHICH FUNCTION RETURNS INTEGER(0)
+  #     # FOR NOW, THIS FUNCTIONALITY IS DISABLED (BY ADDING A NULL CASE)
+  #     clicked_index <- which(
+  #       dat$df$Longitude == click$lng & dat$df$Latitude == click$lat
+  #     )
 
-      if (length(clicked_index) == 0) {
-        clicked_index <- NULL
-      }
+  #     if (length(clicked_index) == 0) {
+  #       clicked_index <- NULL
+  #     }
 
-      if (!is.null(clicked_index)) {
-        if (clicked_index %in% input$table_rows_selected) {
-          selected_rows <- setdiff(input$table_rows_selected, clicked_index)
-        } else {
-          selected_rows <- c(input$table_rows_selected, clicked_index)
-        }
-        proxy <- dataTableProxy("table")
-        selectRows(proxy, selected_rows)
-      }
-    }
-  })
+  #     if (!is.null(clicked_index)) {
+  #       if (clicked_index %in% input$table_rows_selected) {
+  #         selected_rows <- setdiff(input$table_rows_selected, clicked_index)
+  #       } else {
+  #         selected_rows <- c(input$table_rows_selected, clicked_index)
+  #       }
+  #       proxy <- dataTableProxy("table")
+  #       selectRows(proxy, selected_rows)
+  #     }
+  #   }
+  # })
 
   
   # Generic-ish function to add circles to the map based on selection
   addCirclesToMap <- function(selection, color, radius=2.5) {
     leafletProxy(mapId = "map") %>%
       addCircleMarkers(
-        lng = dat$df$longitude[selection],
-        lat = dat$df$latitude[selection],
+        lng = dat$df$Longitude[selection],
+        lat = dat$df$Latitude[selection],
         radius = radius,
         color = color,
         fillColor = color,
@@ -543,6 +722,25 @@ server <- function(input, output, session) {
         group = "photos"
       )
   }
+
+  # add 'locations' table from AquaCache to the map
+  addLocationsToMap <- function() {
+    leafletProxy(mapId = "map") %>%
+      addCircleMarkers(
+        lng = locations$longitude,
+        lat = locations$latitude,
+        radius = 5,
+        color = color_list$locations,
+        opacity = 1,
+        fillColor = color_list$locations,
+        weight = 2,
+        fill = FALSE,
+        fillOpacity = 1,
+        popup = locations$name,
+        group = "locations"
+      )
+  }
+
 
   # Observe row selection in the data table and update the map marker colours
   observeEvent(input$table_rows_selected, {
@@ -562,46 +760,41 @@ server <- function(input, output, session) {
 
   # Observe map clicks and set mapclicked to TRUE
   observeEvent(input$map_click, {
-    mapclicked(TRUE)
+    toggles$mapclicked <- TRUE
   })
+
 
   # Observe map clicks, add marker on click, lines from click to selection
   observeEvent(input$map_click, {
-    if (edit_mode() == TRUE) {
-
-    clearLinesFromMap()
+    if (toggles$edit == TRUE) {
     click <- input$map_click
     if (!is.null(click)) {
-      leafletProxy("map") %>%
-        clearGroup("click_marker") %>%
-        addCircleMarkers(lng = click$lng, lat = click$lat, radius = 5, color = color_list$click, fill = TRUE, fillOpacity = 0.8, popup = paste("Lat:", round(click$lat, 3), "Lng:", round(click$lng, 3)), group = "click_marker")
+      updateNumericInput(session, "image_latitude", value = click$lat)
+      updateNumericInput(session, "image_longitude", value = click$lng)
+    }
       # Add a line between the clicked point and the selected point
-      addLinesToMap()
     }
-    }
-
   })
 
   addLinesToMap <- function() {
-    click = input$map_click
-    if (!is.null(click) && mapclicked() == TRUE) {
       if (length(input$table_rows_selected) > 0) {
         selected_rows <- input$table_rows_selected
         for (row in selected_rows) {
-          selected_lat <- dat$df$latitude[row]
-          selected_lon <- dat$df$longitude[row]
+          selected_lat <- dat$df$Latitude[row]
+          selected_lon <- dat$df$Longitude[row]
           
+
           leafletProxy("map") %>%
             addPolylines(
-              lng = c(selected_lon, click$lng),
-              lat = c(selected_lat, click$lat),
+                lng = c(selected_lon, input$image_longitude),
+                lat = c(selected_lat, input$image_latitude),
               color = color_list$click,
               weight = 2,
               dashArray = "5, 10",
               group = "click_line"
             )
         }
-      }
+
     }
   }
 
@@ -649,8 +842,8 @@ showModal(modalDialog(
   observeEvent(input$confirm_update, {
     removeModal()
     # update the coordinates in the data table
-    dat$df$latitude[input$table_rows_selected] <- input$map_click$lat
-    dat$df$longitude[input$table_rows_selected] <- input$map_click$lng
+    dat$df$Latitude[input$table_rows_selected] <- input$map_click$lat
+    dat$df$Longitude[input$table_rows_selected] <- input$map_click$lng
     renderDataTable()
     renderLeafletMap()
   })
@@ -659,46 +852,10 @@ showModal(modalDialog(
   observeEvent(input$Cancel, {
     removeModal()
   }
-  
   )
 
   # Push georefence updates to the data table
-  observeEvent(input$update_pos, {
-    if (edit_mode() == FALSE) {
-      issue_edit_mode_warning()
-      return()
-    }
-    # make sure a map click has been made
-    if (!is.null(input$map_click) && mapclicked() == TRUE) {
-      # make sure at least one row is selected
-      if (length(input$table_rows_selected) > 0) {
 
-        # if there are multiple images selected, throw up a cofirmation warning
-        if (length(input$table_rows_selected) > 1) {
-          warning_multiple_image_edit()
-        }
-        else{
-        # update the coordinates in the data table
-        dat$df$latitude[input$table_rows_selected] <- input$map_click$lat
-        dat$df$longitude[input$table_rows_selected] <- input$map_click$lng
-        renderDataTable()
-        renderLeafletMap()
-        }
-      } 
-      
-      # case for no selection
-      else {
-        error_no_rows_selected()
-      }
-    }
-
-    # case for no click
-    else {
-      error_no_map_click()
-    }
-    
-  }
-  )
   }
 
 # Run the Shiny app
