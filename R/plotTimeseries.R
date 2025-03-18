@@ -26,6 +26,7 @@
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
 #' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
+#' @param hover Should hover text be included? Default is TRUE.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
@@ -57,6 +58,7 @@ plotTimeseries <- function(location,
                            axis_scale = 1,
                            legend_scale = 1,
                            legend_position = "v",
+                           hover = TRUE,
                            gridx = FALSE,
                            gridy = FALSE,
                            rate = NULL,
@@ -467,7 +469,7 @@ plotTimeseries <- function(location,
     stop("No data found for the specified location, parameter, and time range.")
   }
   
-  if (datum != 0) {
+  if (datum$conversion_m != 0) {
     trace_data$value <- trace_data$value + datum$conversion_m
     if (historic_range) {
       range_data$min <- range_data$min + datum$conversion_m
@@ -517,7 +519,7 @@ plotTimeseries <- function(location,
                           name = if (lang == "en") "Typical" else "Typique",
                           color = I("#5f9da6"), 
                           line = list(width = 0.2), 
-                          hoverinfo = "text", 
+                          hoverinfo = if (hover) "text" else "none", 
                           text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
       plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], 
                           x = ~datetime, 
@@ -527,7 +529,7 @@ plotTimeseries <- function(location,
                           name = if (lang == "en") "Historic" else "Historique",
                           color = I("#D4ECEF"), 
                           line = list(width = 0.2), 
-                          hoverinfo = "text", 
+                          hoverinfo = if (hover) "text" else "none", 
                           text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
   
@@ -540,7 +542,7 @@ plotTimeseries <- function(location,
                       line = list(width = 2.5 * line_scale),
                       name = parameter_name, 
                       color = I("#00454e"), 
-                      hoverinfo = "text", 
+                      hoverinfo = if (hover) "text" else "none", 
                       text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
     plotly::layout(
       title = if (title) list(text = stn_name, 
@@ -565,7 +567,7 @@ plotTimeseries <- function(location,
       margin = list(b = 0,
                     t = 40 * axis_scale,
                     l = 50 * axis_scale), 
-      hovermode = "x unified",
+      hovermode = if (hover) "x unified" else ("none"),
       legend = list(font = list(size = legend_scale * 12),
                     orientation = legend_position)
     ) %>%

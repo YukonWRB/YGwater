@@ -113,7 +113,6 @@ app_server <- function(input, output, session) {
   observeEvent(input$info, {
     if (params$lang == "en") {
       showModal(modalDialog(
-        title = "Information",
         HTML("<ul>
               <li>This plot allows you to plot up to 10 years of data to compare water level or flow traces to each other and to historic ranges.</li>
               <li>The 'Typical' range is the interquartile range, which is the range of values between the 25th and 75th percentiles of the data.</li>
@@ -122,11 +121,10 @@ app_server <- function(input, output, session) {
               <li>A filter is applied to the data to remove extreme outliers and negative values.</li>
             </ul>"),
         easyClose = TRUE,
-        footer = NULL
+        footer = modalButton("Close")
       ))
     } else if (params$lang == "fr") {
       showModal(modalDialog(
-        title = "Information",
         HTML("<ul>
               <li>Ce grahique vous permettent de tracer jusqu'à 10 ans de données pour comparer les traces de niveau d'eau ou de débit les unes aux autres et aux plages historiques.</li>
               <li>La plage typique représente l'écart interquartile, qui est la plage de valeurs entre les 25e et 75e percentiles des données.</li>
@@ -135,7 +133,7 @@ app_server <- function(input, output, session) {
               <li>Un filtre est appliqué aux données pour éliminer les valeurs aberrantes extrêmes ou négatives.</li>
             </ul>"),
         easyClose = TRUE,
-        footer = NULL
+        footer = modalButton("Fermer")
       ))
     } else {
       showModal(modalDialog(
@@ -174,7 +172,7 @@ app_server <- function(input, output, session) {
                   endDay = 365,
                   years = yrs,
                   rate = "day",
-                  datum = FALSE,
+                  datum = TRUE,
                   filter = 20,
                   lang = lang,
                   line_scale = 1,
@@ -185,8 +183,14 @@ app_server <- function(input, output, session) {
                   gridx = FALSE,
                   gridy = FALSE,
                   slider = FALSE,
+                  hover = FALSE,
+                  tzone = "MST",
                   con = con)
       DBI::dbDisconnect(con)
+      
+      # Remove the plotly logo and other buttons from the top right of the plot
+      p <- plotly::config(p, displayModeBar = FALSE)
+      
       return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
     })
   }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
