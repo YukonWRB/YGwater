@@ -251,7 +251,8 @@ discData <- function(id, language) {
         htmlOutput(ns("instructions")),
         tags$div(style = "height: 10px;"),
         DT::dataTableOutput(ns("tbl")), # Table with sample data, filtered by the sidebar inputs
-        actionButton(ns("view_data"), tr("view_data", language$language)),  # Button will be hidden until a row is selected
+        actionButton(ns("select_all"), tr("select_all", language$language), style = "display: none;"),  # Button will be hidden until a row is selected
+        actionButton(ns("view_data"), "placeholder", style =  "display: none;"),  # Button will be hidden until a row is selected
         # The modal UI elements are created lower down
       ) # End of tagList
     }) %>% # End renderUI
@@ -359,6 +360,8 @@ discData <- function(id, language) {
       shinyjs::hide("apply_sample_types")
       buttons_applied$apply_params <- FALSE
       shinyjs::hide("apply_params")
+      
+      table_data <- reactiveVal()
       
     }, ignoreInit = TRUE)
     
@@ -1036,167 +1039,50 @@ discData <- function(id, language) {
     
     
     
-    # Create the table and render it ###################################
+    # Create the samples table and render it ###################################
+    # The results table will be shown only if the user clicks on the 'view results' button in the modal
+    table_data <- reactiveVal()
     observeEvent(input$filter, {
       req(filteredData)
-      samples <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM samples WHERE location_id IN (", paste(filteredData$locs$location_id, collapse = ", "), if (nrow(filteredData$sub_locs) > 0) paste0(") AND sub_location_id IN (", paste(filteredData$sub_locs$sub_location_id, collapse = ", "), ")") else ")", " AND sample_type IN (", paste(filteredData$sample_types$sample_type_id, collapse = ", "), ") AND media_id IN (", paste(filteredData$media_types$media_id, collapse = ", "), ");"))
+      samples <- dbGetQueryDT(
+        session$userData$AquaCache, 
+        paste0(
+          "SELECT DISTINCT ON (s.sample_id)
+          s.sample_id, l.location_id, l.name, sl.sub_location_name, s.z AS depth, s.datetime AS sample_datetime_utc, s.target_datetime AS target_datetime_utc, m.media_type, st.sample_type, cm.collection_method, s.sample_volume_ml, s.purge_volume_l, s.purge_time_min, s.flow_rate_l_min, s.wave_hgt_m, s.sample_grade, s.sample_approval, s.sample_qualifier, s.note FROM samples s 
+           JOIN results r ON s.sample_id = r.sample_id
+           JOIN locations l ON s.location_id = l.location_id
+           LEFT JOIN sub_locations sl ON s.sub_location_id = sl.sub_location_id
+           JOIN media_types m ON s.media_id = m.media_id
+           JOIN sample_types st ON s.sample_type = st.sample_type_id
+           JOIN parameters p ON r.parameter_id = p.parameter_id
+           JOIN collection_methods cm ON s.collection_method = cm.collection_method_id
+           LEFT JOIN organizations orgs ON s.owner = orgs.organization_id
+           WHERE s.location_id IN (", 
+          paste(filteredData$locs$location_id, collapse = ", "), 
+          if (nrow(filteredData$sub_locs) > 0) 
+            paste0(") AND s.sub_location_id IN (", paste(filteredData$sub_locs$sub_location_id, collapse = ", "), ")") 
+          else 
+            ")", 
+          " AND s.sample_type IN (", paste(filteredData$sample_types$sample_type_id, collapse = ", "), ")",
+          " AND s.media_id IN (", paste(filteredData$media_types$media_id, collapse = ", "), ")",
+          " AND s.datetime BETWEEN '", filteredData$range$min_date, "' AND '", filteredData$range$max_date, "'",
+          " AND r.parameter_id IN (", paste(filteredData$params$parameter_id, collapse = ", "), ")",
+          ";"
+        )
+      )
+      
+      # Drop columns with all NA values
+      na_cols <- names(samples)[sapply(samples, function(x) all(is.na(x)))]
+      samples[, (na_cols) := NULL]      
+      
+      table_data(samples)
     })
     
-    table_data <- reactive({ # Create the table
-      
-      # apply the location filter first, since it's the most restrictive and since the map page click through uses it as the only filter
-      if (!is.null(input$loc) & !("All" %in% input$loc)) {
-        tbl <- data$timeseries[location_id %in% input$loc]
-      } else {
-        tbl <- data$timeseries
-      }
-      
-      # Apply filters for type, pType, pGrp, param, proj, net, yrs in succession
-      if (!is.null(input$type)) {
-        if (length(input$type) > 1) {
-          tbl <- tbl[tbl$category %in% input$type, ]
-        } else {
-          if (input$type != "All") {
-            tbl <- tbl[tbl$category == input$type, ]
-          }
-        }
-      }
-      
-      if (!is.null(input$pType)) {
-        if (length(input$pType) > 1) {
-          tbl <- tbl[tbl$media_id %in% input$pType, ]
-        } else {
-          if (input$pType != "All") {
-            tbl <- tbl[tbl$media_id == input$pType, ]
-          }
-        }
-      }
-      
-      if (!is.null(input$pGrp)) {
-        if (length(input$pGrp) > 1) {
-          select.params <- data$parameters[data$parameters$group %in% input$pGrp, "parameter_id"]$parameter_id
-          tbl <- tbl[parameter %in% select.params, ]
-        } else {
-          if (input$pGrp != "All") {
-            select.params <- data$parameters[data$parameters$group == input$pGrp, "parameter_id"]$parameter_id
-            if (length(select.params) > 1) {
-              tbl <- tbl[parameter %in% select.params, ]
-            } else {
-              tbl <- tbl[parameter == select.params, ]
-            }
-          }
-        }
-      }
-      
-      if (!is.null(input$param)) {
-        if (length(input$param) > 1) {
-          tbl <- tbl[parameter %in% input$param, ]
-        } else {
-          if (input$param != "All") {
-            tbl <- tbl[parameter == input$param, ]
-          }
-        }
-      }
-      
-      if (!is.null(input$proj)) {
-        if (length(input$proj) > 1) {
-          ids <- data$locations_projects[data$locations_projects$project_id %in% input$proj, "location_id"]$location_id
-          if (length(ids) > 1) {
-            tbl <- tbl[location_id %in% ids, ]
-          } else {
-            tbl <- tbl[location_id == ids, ]
-          }
-        } else {
-          if (input$proj != "All") {
-            ids <- data$locations_projects[data$locations_projects$project_id == input$proj, "location_id"]$location_id
-            if (length(ids) > 1) {
-              tbl <- tbl[location_id %in% ids, ]
-            } else {
-              tbl <- tbl[location_id == ids, ]
-            }
-          }
-        }
-      }
-      
-      if (!is.null(input$net)) {
-        if (length(input$net) > 1) {
-          ids <- data$locations_networks[data$locations_networks$network_id %in% input$net, "location_id"]$location_id
-          if (length(ids) > 1) {
-            tbl <- tbl[location_id %in% ids, ]
-          } else {
-            tbl <- tbl[location_id == ids, ]
-          }
-        } else {
-          if (input$net != "All") {
-            ids <- data$locations_networks[data$locations_networks$network_id == input$net, "location_id"]$location_id
-            if (length(ids) > 1) {
-              tbl <- tbl[location_id %in% ids, ]
-            } else {
-              tbl <- tbl[location_id == ids, ]
-            }
-          }
-        }
-      }
-      
-      tbl <- tbl[tbl$start_datetime <= as.POSIXct(paste0(input$yrs[2], "-12-31 23:59:59"), tz = "UTC") & tbl$end_datetime >= as.POSIXct(paste0(input$yrs[1], "-01-01 00:00"), tz = "UTC"), ]
-      
-      
-      
-      # Combine period type and record rate for ease of viewing
-      tbl[, measurement_type := paste0(period_type, " (", record_rate, ")")]
-      
-      # Drop period_type
-      tbl[, period_type := NULL]
-      tbl[, record_rate := NULL]
-      
-      
-      # Attach location
-      tbl[data$locations, on = c(location_id = "location_id"), translations[id == "loc", get(language$language)] := .(get(translations[id == "generic_name_col", get(language$language)]))]
-      # Attach parameter type
-      tbl[data$media_types, on = c(media_id = "media_id"), 
-          translations[id == "type", get(language$language)] := get(translations[id == "media_type_col", get(language$language)])]
-      tbl[, media_id := NULL]
-      
-      # Attach parameter descriptions
-      tbl[data$parameters, on = c(parameter = "parameter_id"), 
-          c(translations[id == "group", get(language$language)], translations[id == "parameter", get(language$language)], translations[id == "units", get(language$language)]) 
-          := 
-            .(get(translations[id == "param_group_col", get(language$language)]), get(translations[id == "param_name_col", get(language$language)]), unit)] # data in column named "unit" is unchanging based on language
-      
-      tbl[, parameter := NULL]
-      
-      # Create sort.start, sort.end for sorting only
-      tbl[, sort.start := start_datetime]
-      tbl[, sort.end := end_datetime]
-      
-      # Nicely format datetimes (makes them a character object)
-      attr(tbl$start_datetime, "tzone") <- "MST"
-      attr(tbl$end_datetime, "tzone") <- "MST"
-      tbl[, start_datetime := format(start_datetime, format = "%Y-%m-%d %H:%M")]
-      tbl[, end_datetime := format(end_datetime, format = "%Y-%m-%d %H:%M")]
-      
-      # Modify Category depending on language
-      tbl[translations, on = .(category = id), category := get(language$language)]
-      
-      # Rename start_datetime, end_datetime, category
-      data.table::setnames(tbl, old = c("start_datetime", "end_datetime", "category", "measurement_type"), new = c(translations[id == "start", get(language$language)], translations[id == "end", get(language$language)], translations[id == "category", get(language$language)], translations[id == "measurement_type", get(language$language)]))
-      
-      # titleCase column names
-      data.table::setnames(tbl, old = names(tbl)[-c(1,2,12,13)], new = titleCase(names(tbl)[-c(1,2,12,13)], language$abbrev))
-      
-      # titleCase columns
-      for (j in c(7L)) data.table::set(tbl, j = j, value = titleCase(tbl[[j]], language$abbrev))
-      
-      # Order by location name, parameter name
-      data.table::setorderv(tbl, c(translations[id == "loc", get(language$language)], translations[id == "parameter", get(language$language)]))
-      
-      return(tbl)
-    }) # End of reactive creating table
-    
+    # 
     observe({ # Render the table
-      tbl <- table_data()
+      req(table_data())
       
-      out_tbl <- DT::datatable(tbl, 
+      out_tbl <- DT::datatable(table_data(),
                                rownames = FALSE,
                                selection = "multiple",
                                filter  = "none",
@@ -1219,7 +1105,7 @@ discData <- function(id, language) {
                                  # The code below interferes with language updates in the entire module!!!!!
                                  #     headerCallback = htmlwidgets::JS(  # This creates the tooltips!
                                  #       paste0("function(thead, data, start, end, display) {
-                                 #   var tooltips = ['", translations[id == "tooltip1", get(language$language)],"', '", translations[id == "tooltip2", get(language$language)], "', '", translations[id == "tooltip2", get(language$language)], "', 'fourth column tooltip', 'fifth column tooltip']; // Define tooltips for each column
+                                 #   var tooltips = ['", tr("tooltip1", language$language)],"', '", tr("tooltip2", language$language)], "', '", tr("tooltip2", language$language)], "', 'fourth column tooltip', 'fifth column tooltip']; // Define tooltips for each column
                                  #   $(thead).find('th').each(function(i) {
                                  #     var title = $(this).text();
                                  #     var tooltip = tooltips[i] ? tooltips[i] : title; // Use custom tooltip if available
@@ -1228,41 +1114,64 @@ discData <- function(id, language) {
                                  # }")
                                  #     ),
                                  columnDefs = list(
-                                   list(targets = 4, orderData = 12), # Order the character datetime column using the hidden true datetime. Column numbers are true.
-                                   list(targets = 5, orderData = 13), # Order the character datetime column using the hidden true datetime. Column numbers are true.
-                                   list(targets = c(0,1,11,12), visible = FALSE), #Hides the timeseries_id and datetime sorting columns. Column index numbers start at 0 here!!!
-                                   list(
-                                     targets = c(6), # Column index numbers start at 0 here again!!!
-                                     render = htmlwidgets::JS( # Truncate long strings in the table
-                                       "function(data, type, row, meta) {",
-                                       "return type === 'display' && data !== null && data.length > 20 ?",
-                                       "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
-                                       "}")
-                                   )
+                                   #   # list(targets = 4, orderData = 12), # Order the character datetime column using the hidden true datetime. Column numbers are true.
+                                   #   # list(targets = 5, orderData = 13), # Order the character datetime column using the hidden true datetime. Column numbers are true.
+                                   list(targets = c(0,1), visible = FALSE) #Hides the sample_id column. Column index numbers start at 0 here!!!
+                                   #   list(
+                                   #     targets = c(6), # Column index numbers start at 0 here again!!!
+                                   #     render = htmlwidgets::JS( # Truncate long strings in the table
+                                   #       "function(data, type, row, meta) {",
+                                   #       "return type === 'display' && data !== null && data.length > 20 ?",
+                                   #       "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
+                                   #       "}")
+                                   #   )
                                  ),
                                  language = list(
-                                   info = translations[id == "tbl_info", get(language$language)][[1]],
-                                   infoEmpty = translations[id == "tbl_info_empty", get(language$language)][[1]],
+                                   info = tr("tbl_info", language$language),
+                                   infoEmpty = tr("tbl_info_empty", language$language),
                                    paginate = list(previous = "", `next` = ""),
-                                   search = translations[id == "tbl_search", get(language$language)][[1]],
-                                   lengthMenu = translations[id == "tbl_length", get(language$language)][[1]],
-                                   infoFiltered = translations[id == "tbl_filtered", get(language$language)][[1]],
-                                   zeroRecords = translations[id == "tbl_zero", get(language$language)][[1]]
+                                   search = tr("tbl_search", language$language),
+                                   lengthMenu = tr("tbl_length", language$language),
+                                   infoFiltered = tr("tbl_filtered", language$language),
+                                   zeroRecords = tr("tbl_zero", language$language)
                                  ),
                                  pageLength = 10
                                )
       )
       output$tbl <- DT::renderDataTable(out_tbl)
+      
+      
+      if (nrow(table_data()) == 0) {
+        shinyjs::hide("select_all")
+      } else {
+        shinyjs::show("select_all")
+      }
     }) # End of table render
-    # End of creating and rendering table section 
+    # End of creating and rendering table section
+    
+    # Create the proxy for datatable manipulations
+    proxy <- DT::dataTableProxy("tbl")
     
     
-    # Show/hide the view button based on if a row is selected ################
+    # Show/hide the view button based on if a row is selected #
     observe({
       if (is.null(input$tbl_rows_selected)) {
         shinyjs::hide("view_data")
       } else {
         shinyjs::show("view_data")
+        updateActionButton(session, "view_data", label = paste0(tr("view_data1", language$language), " ", length(input$tbl_rows_selected), " ", tr("view_data2", language$language)))
+      }
+    })
+    
+    # Select/deselect all rows in the table #
+    select_all <- reactiveVal(FALSE)
+    observeEvent(input$select_all, {
+      if (select_all()) {
+        DT::selectRows(proxy, NULL)
+        select_all(FALSE)
+      } else {
+        DT::selectRows(proxy, seq_len(nrow(table_data())))
+        select_all(TRUE)
       }
     })
     
@@ -1270,33 +1179,34 @@ discData <- function(id, language) {
     # Show a modal with the data when the view button is clicked ################
     observeEvent(input$view_data, {
       # Get the timeseries_ids of the selected rows
-      selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
+      selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
       selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
       
-      # Query will be for discrete or continuous data, depending on input$type
-      # Show a modal with a subset (first 3 rows per timeseries_id) of the data. Below this, show a date range picker (with min/max preset based on the selected data), the number of rows that would be returned, and download and close buttons. The download button will give the user the entire dataset within the date range selected
       
-      # Get the timeseries and location data
-      if (input$type == "discrete") {
-        subset_list <- vector("list", length(selected_tsids)) 
-        for (i in seq_along(selected_tsids)) {
-          query <- sprintf("SELECT timeseries_id, target_datetime, datetime, value, sample_class, note FROM measurements_discrete WHERE timeseries_id = %d ORDER BY datetime LIMIT 3;", selected_tsids[i])
-          subset_list[[i]] <- dbGetQueryDT(con, query)
-        }
-        subset <- data.table::rbindlist(subset_list)
-        subset[, value := round(value, 2)]  # Round the 'value' column
-        subset[, datetime := substr(as.character(datetime), 1, 16)]  # Truncate 'datetime'
-        subset[, target_datetime := substr(as.character(target_datetime), 1, 16)]  # Truncate 'target_datetime'
-        
-      } else if (input$type == "continuous") {
-        subset_list <- vector("list", length(selected_tsids))
-        for (i in seq_along(selected_tsids)) {
-          query <- sprintf("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM measurements_calculated_daily_corrected WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
-          subset_list[[i]] <- dbGetQueryDT(con, query)
-        }
-        subset <- data.table::rbindlist(subset_list)
-        subset[, c(3, 7:15) := lapply(.SD, round, 2), .SDcols = c(3, 7:15)]
-      }
+      # Query will be for discrete or continuous data, depending on input$type
+      # Show a modal with a subset (first 3 rows per sample_id) of the data. Below this, show a date range picker (with min/max preset based on the selected data), the number of rows that would be returned, and download and close buttons. The download button will give the user the entire dataset within the date range selected
+      
+      # Get the sample results
+      # Construct a comma-separated string of sample IDs
+      sample_ids_str <- paste(selected_sampleids, collapse = ",")
+      
+      # Single query using a window function to limit to 3 rows/results per sample_id
+      query <- paste0(
+        "SELECT * FROM (SELECT r.sample_id, r.result, p.param_name AS parameter, p.unit_default AS units, rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, ROW_NUMBER() OVER (PARTITION BY sample_id ORDER BY result_id) AS rn 
+        FROM results r
+        JOIN parameters p ON r.parameter_id = p.parameter_id
+        JOIN result_types rt ON r.result_type = rt.result_type_id
+        LEFT JOIN sample_fractions sf ON r.sample_fraction = sf.sample_fraction_id
+        LEFT JOIN result_conditions rc ON r.result_condition = rc.result_condition_id
+        LEFT JOIN result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
+        LEFT JOIN result_speciations rs ON r.result_speciation = rs.result_speciation_id
+        LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
+        LEFT JOIN laboratories l ON r.laboratory = l.lab_id
+        WHERE sample_id IN (", sample_ids_str, ")) sub WHERE rn <= 3;"
+      )
+      
+      subset <- dbGetQueryDT(session$userData$AquaCache, query)
+      subset[, rn := NULL] # Drop column 'rn', left over from the window function
       
       output$modal_subset <- DT::renderDataTable({  # Create datatable for the measurements
         DT::datatable(subset,
@@ -1319,19 +1229,22 @@ discData <- function(id, language) {
                         ),
                         language = list(
                           info = "",
-                          infoEmpty = translations[id == "tbl_info_empty", get(language$language)][[1]],
+                          infoEmpty = tr("tbl_info_empty", language$language),
                           paginate = list(previous = "", `next` = ""),
-                          search = translations[id == "tbl_search", get(language$language)][[1]],
+                          search = tr("tbl_search", language$language),
                           infoFiltered = "",
-                          zeroRecords = translations[id == "tbl_zero", get(language$language)][[1]]
+                          zeroRecords = tr("tbl_zero", language$language)
                         ),
                         dom = 'rtip'
                       )
         )
       }) # End of function creating data subset datatable
       
-      location <- DBI::dbGetQuery(con, paste0("SELECT * FROM ", if (language$abbrev == "en") "location_metadata_en" else "location_metadata_fr", " WHERE location_id ", if (length(selected_loc_ids) == 1) paste0("= ", selected_loc_ids) else paste0("IN (", paste(selected_loc_ids, collapse = ", "), ")"), " LIMIT 3;")) # Get the location metadata
-      location[, c(4:6)] <- round(location[, c(4:6)], 2)
+      
+      
+      # Get location metadata
+      
+      location <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM ", if (language$abbrev == "fr") "location_metadata_fr" else "location_metadata_en", " WHERE location_id IN (", paste(selected_loc_ids, collapse = ", "), ") LIMIT 3;")) # Get the location metadata
       
       output$modal_location_metadata <- DT::renderDataTable({  # Create datatable for the locations
         DT::datatable(location,
@@ -1363,11 +1276,11 @@ discData <- function(id, language) {
                         ),
                         language = list(
                           info = "",
-                          infoEmpty = translations[id == "tbl_info_empty", get(language$language)][[1]],
+                          infoEmpty = tr("tbl_info_empty", language$language),
                           paginate = list(previous = "", `next` = ""),
                           search = "",
                           infoFiltered = "",
-                          zeroRecords = translations[id == "tbl_zero", get(language$language)][[1]]
+                          zeroRecords = tr("tbl_zero", language$language)
                         ),
                         dom = 'rt',
                         scrollX = TRUE
@@ -1375,122 +1288,42 @@ discData <- function(id, language) {
         )
       }) # End of function creating location metatadata datatable
       
-      # Get the data temporal range
-      min_date <- DBI::dbGetQuery(con, paste0("SELECT MIN(start_datetime) FROM timeseries WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), ";"))[[1]]
-      max_date <- DBI::dbGetQuery(con, paste0("SELECT MAX(end_datetime) FROM timeseries WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), ";"))[[1]]
       
       # Create the modal
       showModal(modalDialog(
-        h4(translations[id == "data_subset_msg", get(language$language)][[1]]),
+        h4(tr("discrete_subset_msg", language$language)),
         DT::dataTableOutput(ns("modal_subset")),
-        h4(translations[id == "loc_meta_msg", get(language$language)][[1]]),
+        h4(tr("loc_meta_msg", language$language)),
         DT::dataTableOutput(ns("modal_location_metadata")),
-        h4(translations[id == "extra_tbl_msg", get(language$language)][[1]]),
-        selectizeInput(ns("modal_frequency"), label = translations[id == "frequency", get(language$language)][[1]], choices = stats::setNames(c("daily", "hourly", "max"), c(translations[id == "daily", get(language$language)][[1]], translations[id == "hourly", get(language$language)][[1]], translations[id == "max", get(language$language)][[1]])), selected = "daily"),
-        dateRangeInput(ns("modal_date_range"), label = translations[id == "date_range_select", get(language$language)][[1]], start = min_date, end = max_date, min = min_date, max = max_date, format = "yyyy-mm-dd", language = language$abbrev),
         textOutput(ns("num_rows")),
-        selectizeInput(ns("modal_format"), label = translations[id == "dl_format", get(language$language)][[1]], choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(translations[id == "dl_format_xlsx", get(language$language)][[1]], translations[id == "dl_format_csv", get(language$language)][[1]], translations[id == "dl_format_sqlite", get(language$language)][[1]])), selected = "xlsx"),
-        downloadButton(ns("download"), translations[id == "dl_data", get(language$language)][[1]]),
+        selectizeInput(ns("modal_format"), label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx"),
+        downloadButton(ns("download"), tr("dl_data", language$language)),
         size = "l"
       ))
     })
     
-    observe( {
-      if (!is.null(input$type)) {
-        if (exists("input$modal_frequency")) {
-          if (input$type == "discrete") {
-            shinyjs::hide("modal_frequency")
-          } else {
-            shinyjs::show("modal_frequency")
-          }
-        }
-      }
-    }
-    )
+    
+    
     
     # Updates to modal ########################################################
     # Get the number of rows that will be returned based on the date range selected and update the subset table if necessary
     observe({
-      req(input$type, input$modal_date_range, input$tbl_rows_selected)
-      selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
-      if (input$type == "continuous") {
-        req(input$modal_frequency)
-        if (input$modal_frequency == "daily") {
-          rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM measurements_calculated_daily_corrected", " WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date", " < '", input$modal_date_range[2], "';"))[[1]]
-          
-          subset_list <- vector("list", length(selected_tsids))
-          for (i in seq_along(selected_tsids)) {
-            query <- sprintf("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM measurements_calculated_daily_corrected WHERE timeseries_id = %d ORDER BY date LIMIT 3;", selected_tsids[i])
-            subset_list[[i]] <- dbGetQueryDT(con, query)
-          }
-          subset <- data.table::rbindlist(subset_list)
-          subset[, c(3, 7:15) := lapply(.SD, round, 2), .SDcols = c(3, 7:15)]
-        } else if (input$modal_frequency == "hourly") {
-          rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM measurements_hourly_corrected WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
-          
-          subset_list <- vector("list", length(selected_tsids))
-          for (i in seq_along(selected_tsids)) {
-            subset_list[[i]] <- dbGetQueryDT(con, paste0("SELECT timeseries_id, datetime, value_corrected AS value, grade, approval, imputed FROM measurements_continuous_corrected WHERE timeseries_id = ", selected_tsids[i], " ORDER BY datetime LIMIT 3;"))
-          }
-          subset <- data.table::rbindlist(subset_list)
-          subset[, datetime := substr(as.character(datetime), 1, 16)]
-          subset[, value := round(value, 2)]
-        } else {
-          rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM measurements_continuous_corrected WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
-          
-          subset_list <- vector("list", length(selected_tsids))
-          for (i in seq_along(selected_tsids)) {
-            subset_list[[i]] <- dbGetQueryDT(con, paste0("SELECT timeseries_id, datetime, value_corrected AS value, grade, approval, imputed, period FROM measurements_continuous_corrected WHERE timeseries_id = ", selected_tsids[i], " ORDER BY datetime LIMIT 3;"))
-          }
-          subset <- data.table::rbindlist(subset_list)
-          subset[, datetime := substr(as.character(datetime), 1, 16)]
-          subset[, value := round(value, 2)]
-        } 
-        output$modal_subset <- DT::renderDataTable({ # Create datatable for the measurements
-          DT::datatable(subset,
-                        rownames = FALSE,
-                        selection = "none",
-                        filter  = "none",
-                        options = list(
-                          scrollX = TRUE,
-                          initComplete = htmlwidgets::JS(
-                            "function(settings, json) {",
-                            "$(this.api().table().header()).css({",
-                            "  'background-color': '#079',",
-                            "  'color': '#fff',",
-                            "  'font-size': '100%',",
-                            "});",
-                            "$(this.api().table().body()).css({",
-                            "  'font-size': '90%',",
-                            "});",
-                            "}"
-                          ),
-                          language = list(
-                            info = "",
-                            infoEmpty = translations[id == "tbl_info_empty", get(language$language)][[1]],
-                            paginate = list(previous = "", `next` = ""),
-                            search = translations[id == "tbl_search", get(language$language)][[1]],
-                            infoFiltered = "",
-                            zeroRecords = translations[id == "tbl_zero", get(language$language)][[1]]
-                          ),
-                          dom = 'rtip'
-                        )
-          )
-        }) # End of function re-creating data subset datatable
-      } else { # type is discrete
-        rows <- DBI::dbGetQuery(con, paste0("SELECT COUNT(*) FROM measurements_discrete WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
-      }
+      req(input$tbl_rows_selected, filteredData$params)
+      selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
+      
+      rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM results WHERE sample_id IN (", paste(selected_sampleids, collapse = ", "), ") AND parameter_id IN (", paste(filteredData$params$parameter_id, collapse = ", "), ");"))[[1]]
       
       # ouput message about number of rows
-      output$num_rows <- renderText({ paste0(translations[id == "dl_num_rows", get(language$language)][[1]], " ", rows) })
+      output$num_rows <- renderText({ paste0(tr("dl_num_results", language$language), " ", rows) })
       
       # Update selectizeInput based on number of rows
       if (rows > 1000000) {
-        updateSelectizeInput(session, "modal_format", label = translations[id == "dl_format_no_xlsx", get(language$language)][[1]],  choices = stats::setNames(c("csv", "sqlite"), c(translations[id == "dl_format_csv", get(language$language)][[1]], translations[id == "dl_format_sqlite", get(language$language)][[1]])), selected = "csv")
+        updateSelectizeInput(session, "modal_format", label = tr("dl_format_no_xlsx", language$language),  choices = stats::setNames(c("csv", "sqlite"), c(tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "csv")
       } else {
-        updateSelectizeInput(session, "modal_format", label = translations[id == "dl_format", get(language$language)][[1]], choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(translations[id == "dl_format_xlsx", get(language$language)][[1]], translations[id == "dl_format_csv", get(language$language)][[1]], translations[id == "dl_format_sqlite", get(language$language)][[1]])), selected = "xlsx")  
+        updateSelectizeInput(session, "modal_format", label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx")
       }
     }) # End of observe for number of rows
+    
     
     # Download handling #######################################################
     output$download <- downloadHandler(
@@ -1499,31 +1332,40 @@ discData <- function(id, language) {
       },
       content = function(file) {
         
-        showNotification(translations[id == "dl_prep", get(language$language)][[1]], id = "download_notification", duration = NULL, type = "message")
+        showNotification(tr("dl_prep", language$language), id = "download_notification", duration = NULL, type = "message")
         
         # Get the data together
-        selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
+        selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
+        
         selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
         
         data <- list()
-        data$location_metadata <- dbGetQueryDT(con, paste0("SELECT * FROM ", if (language$language == "Français") "location_metadata_fr" else "location_metadata_en", " WHERE location_id ", if (length(selected_loc_ids) == 1) paste0("= ", selected_loc_ids) else paste0("IN (", paste(selected_loc_ids, collapse = ", "), ")"), ";"))
-        data$timeseries_metadata <- dbGetQueryDT(con, paste0("SELECT * FROM ", if (language$language == "Français") "timeseries_metadata_fr" else "timeseries_metadata_en", " WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), ";"))
-        data$grades <- dbGetQueryDT(con, "SELECT * FROM grades;")
-        data$approvals <- dbGetQueryDT(con, "SELECT * FROM approvals;")
+        data$location_metadata <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM ", if (language$abbrev == "fr") "location_metadata_fr" else "location_metadata_en", " WHERE location_id IN (", paste(selected_loc_ids, collapse = ", "), ");")) # Get the location metadata
+        data$samples <- table_data()
+        data$results <- dbGetQueryDT(session$userData$AquaCache, paste0(
+          "SELECT r.sample_id, r.result, p.param_name AS parameter, p.unit_default AS units, rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
+        FROM results r
+        JOIN parameters p ON r.parameter_id = p.parameter_id
+        JOIN result_types rt ON r.result_type = rt.result_type_id
+        LEFT JOIN sample_fractions sf ON r.sample_fraction = sf.sample_fraction_id
+        LEFT JOIN result_conditions rc ON r.result_condition = rc.result_condition_id
+        LEFT JOIN result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
+        LEFT JOIN result_speciations rs ON r.result_speciation = rs.result_speciation_id
+        LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
+        LEFT JOIN laboratories l ON r.laboratory = l.lab_id
+        WHERE sample_id IN (", paste(selected_sampleids, collapse = ","), ");"
+        ))
         
-        if (input$type == "discrete") {
-          data$measurements <- dbGetQueryDT(con, paste0("SELECT timeseries_id, target_datetime, datetime, value, sample_class, note FROM measurements_discrete WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
-          
-        } else if (input$type == "continuous") {
-          data$measurements_daily <- dbGetQueryDT(con, paste0("SELECT timeseries_id, date, value, grade, approval, imputed, percent_historic_range, max, min, q90, q75, q50, q25, q10, mean, doy_count FROM measurements_calculated_daily_corrected WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND date > '", input$modal_date_range[1], "' AND date < '", input$modal_date_range[2], "';"))
-          
-          # Now add hourly or max resolution data if selected
-          if (input$modal_frequency == "hourly") {
-            data$measurements_hourly_corrected <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_hourly_corrected WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
-          } else if (input$modal_frequency == "max") {
-            data$measurements_max <- dbGetQueryDT(con, paste0("SELECT timeseries_id, datetime, value_corrected AS value, grade, approval, period, imputed FROM measurements_continuous_corrected WHERE timeseries_id ", if (length(selected_tsids) == 1) paste0("= ", selected_tsids) else paste0("IN (", paste(selected_tsids, collapse = ", "), ")"), " AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))
-          }
+        if ("grade" %in% names(data$samples)) {
+          data$grades <- dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM grade_types;")
         }
+        if ("approval" %in% names(data$samples)) {
+          data$approvals <- dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM approval_types;")
+        }
+        if ("qualifier" %in% names(data$samples)) {
+          data$qualifiers <- dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM qualifier_types;")
+        }
+        
         
         if (input$modal_format == "xlsx") {
           openxlsx::write.xlsx(data, file)
@@ -1546,8 +1388,8 @@ discData <- function(id, language) {
           DBI::dbDisconnect(db)
         }
         removeNotification("download_notification")
-        # session$sendCustomMessage('close-modal', list(modalId = 'downloadModal'))
       }) # End of downloadHandler
     
   }) # End moduleServer
 } # End discPlot function
+

@@ -337,18 +337,24 @@ plotTimeseries <- function(location,
     stop("It looks like data for this location begins before your requested start date.")
   }
   
-  # Find the necessary datum (latest datum)
-  if (datum) {
-    datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
-    if (is.na(datum$conversion_m)) {
-      datum <- data.frame(conversion_m = 0)
-    }
-  } else {
-    datum <- data.frame(conversion_m = 0)
-  }
-  
   # Find the ts units
   units <- parameter_tbl$unit_default[1]
+  
+  # Find the necessary datum (latest datum)
+  if (datum) {
+    if (units != "m") {
+      warning("The parameter you are plotting is not in meters. Datum will not be applied.")
+      datum_m <- 0
+      datum <- FALSE
+    } else {
+      datum_m <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))[1,1]
+      if (is.na(datum_m)) {
+        warning("No datum conversion found for this location. Datum will not be applied.")
+        datum <- FALSE
+        datum_m <- 0
+      }
+    }
+  }
   
   range <- seq.POSIXt(start_date, end_date, by = "day")
   if (is.null(rate)) {
@@ -469,13 +475,13 @@ plotTimeseries <- function(location,
     stop("No data found for the specified location, parameter, and time range.")
   }
   
-  if (datum$conversion_m != 0) {
-    trace_data$value <- trace_data$value + datum$conversion_m
+  if (datum) {
+    trace_data$value <- trace_data$value + datum_m
     if (historic_range) {
-      range_data$min <- range_data$min + datum$conversion_m
-      range_data$max <- range_data$max + datum$conversion_m
-      range_data$q25 <- range_data$q25 + datum$conversion_m
-      range_data$q75 <- range_data$q75 + datum$conversion_m
+      range_data$min <- range_data$min + datum_m
+      range_data$max <- range_data$max + datum_m
+      range_data$q25 <- range_data$q25 + datum_m
+      range_data$q75 <- range_data$q75 + datum_m
     }
   }
   trace_data <- trace_data[order(trace_data$datetime),]

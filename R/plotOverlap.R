@@ -318,12 +318,16 @@ plotOverlap <- function(location,
   if (datum) {
     if (units != "m") {
       warning("The parameter you are plotting is not in meters. Datum will not be applied.")
-      datum <- data.frame(conversion_m = 0)
+      datum_m <- 0
+      datum <- FALSE
     } else {
-      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+      datum_m <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))[1,1]
+      if (is.na(datum_m)) {
+        warning("No datum conversion found for this location. Datum will not be applied.")
+        datum <- FALSE
+        datum_m <- 0
+      }
     }
-  } else {
-    datum <- data.frame(conversion_m = 0)
   }
   
   # Get the plotting data ################
@@ -552,12 +556,12 @@ plotOverlap <- function(location,
   }
   
   # apply datum correction where necessary
-  if (datum$conversion_m != 0) {
-    ribbon$min <- ribbon$min + datum$conversion_m
-    ribbon$max <- ribbon$max + datum$conversion_m
-    ribbon$q75 <- ribbon$q75 + datum$conversion_m
-    ribbon$q25 <- ribbon$q25 + datum$conversion_m
-    realtime$value <- realtime$value + datum$conversion_m
+  if (datum) {
+    ribbon$min <- ribbon$min + datum_m
+    ribbon$max <- ribbon$max + datum_m
+    ribbon$q75 <- ribbon$q75 + datum_m
+    ribbon$q25 <- ribbon$q25 + datum_m
+    realtime$value <- realtime$value + datum_m
   }
   
   if (!is.null(filter)) {
