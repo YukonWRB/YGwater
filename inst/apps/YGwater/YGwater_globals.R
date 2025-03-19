@@ -63,10 +63,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   
   # Load translations infrastructure to the global environment
-  translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1))
-  
-  
-  # New method to gradually move to:
+
   translations <- openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1)
   # Build a list from the data.frame
   translation_cache <<- lapply(setdiff(names(translations[, -2]), "id"), function(lang) { # Removes the second, "description" column, builds lists for each language
@@ -78,8 +75,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   tr <<- function(key, lang) {
     translation_cache[[lang]][[key]]  # list 'lang', item 'key'
   }
-  
-  # When testing, the function option is ~300 times faster than the data.table option
   
   
   # Establish database connection parameters
