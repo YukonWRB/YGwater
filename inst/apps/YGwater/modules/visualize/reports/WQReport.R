@@ -318,7 +318,7 @@ WQReport <- function(id, mdb_files, language) {
       tryCatch({
         
         withProgress(
-          message = translations[id == "generating_working", get(language$language)][[1]], value = 0, 
+          message = tr("generating_working", language$language), value = 0, 
           {
             incProgress(0.5)
             

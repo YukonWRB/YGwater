@@ -221,6 +221,7 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
+        uiOutput(ns("apply_params")),
         actionButton(ns("param_modal"),
                      label = tr("param_modal", language$language),
                      width = "100%",
@@ -232,13 +233,15 @@ discData <- function(id, language) {
         # Side-by-side buttons
         splitLayout(
           cellWidths = c("50%", "50%"),
-          actionButton(ns("filter"),
-                       label = tr("filter", language$language),
-                       width = "100%"
-          ),
           actionButton(ns("reset"),
-                       label = tr("reset", language$language),
-                       width = "100%"
+                       label = tr("reset_filters", language$language),
+                       width = "100%",
+                       style = "font-size: 14px;"
+          ),
+          actionButton(ns("filter"),
+                       label = tr("view_samples", language$language),
+                       width = "100%",
+                       style = "font-size: 14px;"
           )
         )
       ) # End of tagList
@@ -590,7 +593,7 @@ discData <- function(id, language) {
         shinyjs::show("apply_locations")
       } else {
         output$apply_locations <- renderUI({
-          actionButton(ns("apply_locations_btn"), tr("apply", language$language), style = "display: block; margin-left: auto; margin-right: 0;")
+          actionButton(ns("apply_locations_btn"), tr("apply", language$language), style = "display: block; margin-left: auto; margin-right: 0; margin-top: -10px; margin-bottom: 15px;")
         })
         buttons$apply_locations <- TRUE
       }
@@ -1102,29 +1105,8 @@ discData <- function(id, language) {
                                    "});",
                                    "}"
                                  ),
-                                 # The code below interferes with language updates in the entire module!!!!!
-                                 #     headerCallback = htmlwidgets::JS(  # This creates the tooltips!
-                                 #       paste0("function(thead, data, start, end, display) {
-                                 #   var tooltips = ['", tr("tooltip1", language$language)],"', '", tr("tooltip2", language$language)], "', '", tr("tooltip2", language$language)], "', 'fourth column tooltip', 'fifth column tooltip']; // Define tooltips for each column
-                                 #   $(thead).find('th').each(function(i) {
-                                 #     var title = $(this).text();
-                                 #     var tooltip = tooltips[i] ? tooltips[i] : title; // Use custom tooltip if available
-                                 #     $(this).html('<span title=\"' + tooltip + '\" data-toggle=\"tooltip\" data-placement=\"top\">' + title + ' <i class=\"fa fa-info-circle\"></i></span>');
-                                 #   });
-                                 # }")
-                                 #     ),
                                  columnDefs = list(
-                                   #   # list(targets = 4, orderData = 12), # Order the character datetime column using the hidden true datetime. Column numbers are true.
-                                   #   # list(targets = 5, orderData = 13), # Order the character datetime column using the hidden true datetime. Column numbers are true.
                                    list(targets = c(0,1), visible = FALSE) #Hides the sample_id column. Column index numbers start at 0 here!!!
-                                   #   list(
-                                   #     targets = c(6), # Column index numbers start at 0 here again!!!
-                                   #     render = htmlwidgets::JS( # Truncate long strings in the table
-                                   #       "function(data, type, row, meta) {",
-                                   #       "return type === 'display' && data !== null && data.length > 20 ?",
-                                   #       "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
-                                   #       "}")
-                                   #   )
                                  ),
                                  language = list(
                                    info = tr("tbl_info", language$language),
@@ -1285,7 +1267,8 @@ discData <- function(id, language) {
                         dom = 'rt',
                         scrollX = TRUE
                       )
-        )
+        ) %>%
+          DT::formatRound(columns = c(4,5,5), digits = 3) # Round numbers, here index starts at 1 (not javascript)
       }) # End of function creating location metatadata datatable
       
       
@@ -1343,8 +1326,9 @@ discData <- function(id, language) {
         data$location_metadata <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM ", if (language$abbrev == "fr") "location_metadata_fr" else "location_metadata_en", " WHERE location_id IN (", paste(selected_loc_ids, collapse = ", "), ");")) # Get the location metadata
         data$samples <- table_data()
         data$results <- dbGetQueryDT(session$userData$AquaCache, paste0(
-          "SELECT r.sample_id, r.result, p.param_name AS parameter, p.unit_default AS units, rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
+          "SELECT s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, p.unit_default AS units, rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
         FROM results r
+        JOIN samples s ON r.sample_id = s.sample_id
         JOIN parameters p ON r.parameter_id = p.parameter_id
         JOIN result_types rt ON r.result_type = rt.result_type_id
         LEFT JOIN sample_fractions sf ON r.sample_fraction = sf.sample_fraction_id
@@ -1353,7 +1337,7 @@ discData <- function(id, language) {
         LEFT JOIN result_speciations rs ON r.result_speciation = rs.result_speciation_id
         LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN laboratories l ON r.laboratory = l.lab_id
-        WHERE sample_id IN (", paste(selected_sampleids, collapse = ","), ");"
+        WHERE r.sample_id IN (", paste(selected_sampleids, collapse = ","), ");"
         ))
         
         if ("grade" %in% names(data$samples)) {
