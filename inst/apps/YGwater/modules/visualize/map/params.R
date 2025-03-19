@@ -93,7 +93,7 @@ mapParamServer <- function(id, moduleData, language) {
     output$primary_param <- renderUI({
       tagList(
         h4(tr("map_primary_param", language$language)), # Text for primary parameter
-        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", get(language$language)])], language$abbrev)), # Name of primary parameter
+        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
         p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
           tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
       )
@@ -104,7 +104,7 @@ mapParamServer <- function(id, moduleData, language) {
       } else {
         tagList(
           h4(tr("map_second_param", language$language)), # Text for secondary parameter
-          p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(tr("param_name_col", get(language$language)])], language$abbrev)), # Name of secondary parameter
+          p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of secondary parameter
           p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs2, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
             tr("map_date_within_selected1", language$language), map_params$days2, tr("map_date_within_selected2", language$language)) # Text for within x days
         )
@@ -342,7 +342,7 @@ mapParamServer <- function(id, moduleData, language) {
       
       locs_tsids1 <- merge(moduleData$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], moduleData$timeseries[moduleData$timeseries$timeseries_id %in% closest_measurements1$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
       
-      locs_tsids1$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", get(language$language)])]
+      locs_tsids1$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))]
       locs_tsids1$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  "unit_default"]
       
       
@@ -416,7 +416,7 @@ mapParamServer <- function(id, moduleData, language) {
         
         locs_tsids2 <- merge(moduleData$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], moduleData$timeseries[moduleData$timeseries$timeseries_id %in% closest_measurements2$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
         
-        locs_tsids2$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(tr("param_name_col", get(language$language)])]
+        locs_tsids2$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(tr("param_name_col", language$language))]
         locs_tsids2$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  "unit_default"]
         
         
