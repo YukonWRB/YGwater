@@ -1,20 +1,37 @@
 # js code to select a row in a datatable with the arrow keys
-js_select_dt <-   "var dt = table.table().node();
+js_select_dt <- "var dt = table.table().node();
   var tblID = $(dt).closest('.datatables').attr('id');
-  var inputName = tblID + '_rows_selected'
-  var incrementName = tblID + '_rows_selected2_increment'
+  var inputName = tblID + '_rows_selected';
+
+  // Handle keyboard arrow key navigation
   table.on('key-focus', function(e, datatable, cell, originalEvent){
     if (originalEvent.type === 'keydown'){
       table.rows().deselect();
       table.row(cell[0][0].row).select();
-      row = table.rows({selected: true})
+      var row = table.rows({selected: true});
       Shiny.setInputValue(inputName, [parseInt(row[0]) + 1]);
-}
+    }
+  });
+
+  // Add mouse click event handler for row selection
+  $(dt).on('click', 'tr', function(){
+      table.rows().deselect();
+      table.row(this).select();
+      var row = table.rows({selected: true});
+      Shiny.setInputValue(inputName, [parseInt(row[0]) + 1]);
   });"
+
 
 imgUI <- function(id) {
   ns <- NS(id)
   tagList(
+    tags$style(HTML("
+    .dataTables_wrapper table.dataTable td.focus, 
+    .dataTables_wrapper table.dataTable th.focus {
+      outline: none !important;
+      box-shadow: none !important;
+    }
+  ")),
     sidebarPanel(
       selectizeInput(ns("type"), "Image Type", choices = c("auto (series)" = "auto", "manual (one-off)" = "man")),
       uiOutput(ns("dates")), # This is rendered in the server to allow updating language
@@ -121,9 +138,10 @@ img <- function(id, language, restoring) {
       
       out_tbl <- DT::datatable(tbl, 
                                rownames = FALSE, 
-                               selection = list(
-                                 mode = "single", 
-                                 selected = isolate(selected_row())),
+                               # selection = list(
+                               #   mode = "single", 
+                               #   selected = isolate(selected_row())),
+                               selection = "none",
                                filter = "none",
                                options = list(
                                  scrollX = TRUE,

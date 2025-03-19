@@ -25,6 +25,7 @@
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
 #' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
+#' @param hover Should hover text be included? Default is TRUE.
 #' @param gridx Should grid lines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should grid lines be drawn on the y-axis? Default is FALSE
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
@@ -96,6 +97,7 @@ plotOverlap <- function(location,
                         axis_scale = 1,
                         legend_scale = 1,
                         legend_position = 'v',
+                        hover = TRUE,
                         gridx = FALSE,
                         gridy = TRUE,
                         con = NULL,
@@ -316,12 +318,16 @@ plotOverlap <- function(location,
   if (datum) {
     if (units != "m") {
       warning("The parameter you are plotting is not in meters. Datum will not be applied.")
-      datum <- data.frame(conversion_m = 0)
+      datum_m <- 0
+      datum <- FALSE
     } else {
-      datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+      datum_m <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))[1,1]
+      if (is.na(datum_m)) {
+        warning("No datum conversion found for this location. Datum will not be applied.")
+        datum <- FALSE
+        datum_m <- 0
+      }
     }
-  } else {
-    datum <- data.frame(conversion_m = 0)
   }
   
   # Get the plotting data ################
@@ -468,7 +474,7 @@ plotOverlap <- function(location,
       if (nrow(row) == 0) {
         lubridate::year(target_date) <- lubridate::year(target_date) - 1
         if (is.na(target_date)) {
-          next()
+          next
         }
         row <- daily[daily$datetime == target_date, ]
       }
@@ -550,9 +556,12 @@ plotOverlap <- function(location,
   }
   
   # apply datum correction where necessary
-  if (datum$conversion_m > 0) {
-    ribbon[ , c("max", "min", "q75", "q25")] <- apply(ribbon[ , c("max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
-    realtime$value <- realtime$value + datum$conversion_m
+  if (datum) {
+    ribbon$min <- ribbon$min + datum_m
+    ribbon$max <- ribbon$max + datum_m
+    ribbon$q75 <- ribbon$q75 + datum_m
+    ribbon$q25 <- ribbon$q25 + datum_m
+    realtime$value <- realtime$value + datum_m
   }
   
   if (!is.null(filter)) {
@@ -596,8 +605,8 @@ plotOverlap <- function(location,
                         name = if (lang == "en") "Typical" else "Typique",
                         color = I("#5f9da6"), 
                         line = list(width = 0.2), 
-                        hoverinfo = "text", 
-                        text = ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")"),
+                        hoverinfo = if (hover) "text" else "none",
+                        text = if (hover) ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")"),
                         legendrank = 1) %>%
     plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], 
                         x = ~datetime, 
@@ -607,8 +616,8 @@ plotOverlap <- function(location,
                         name = if (lang == "en") "Historic" else "Historique",
                         color = I("#D4ECEF"), 
                         line = list(width = 0.2), 
-                        hoverinfo = "text", 
-                        text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"),
+                        hoverinfo = if (hover) "text" else "none",
+                        text = if (hover) ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"),
                         legendrank = 2)
   
   # Add traces
@@ -628,8 +637,8 @@ plotOverlap <- function(location,
                               line = list(width = 2.5 * line_scale),
                               name = i,
                               color = I(colors[col_idx]),
-                              hoverinfo = "text", 
-                              text = ~paste0(plot_year, ": ", round(value, 2), " (", datetime, ")"),
+                              hoverinfo = if (hover) "text" else "none", 
+                              text = if (hover) ~paste0(plot_year, ": ", round(value, 2), " (", datetime, ")"),
                               legendrank = rank)
     rank <- rank - 1
     col_idx <- col_idx + 1
@@ -675,7 +684,7 @@ plotOverlap <- function(location,
       margin = list(b = 0,
                     t = 40 * axis_scale,
                     l = 50 * axis_scale), 
-      hovermode = "x unified",
+      hovermode = if (hover) "x unified" else ("none"),
       legend = list(font = list(size = legend_scale * 12))
     ) %>%
     plotly::config(locale = lang)

@@ -11,6 +11,7 @@ continuousPlotUI <- function(id) {
 }
 
 continuousPlot <- function(id, language, windowDims) {
+  
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server

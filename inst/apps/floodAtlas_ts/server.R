@@ -66,7 +66,6 @@ app_server <- function(input, output, session) {
   observeEvent(input$info, {
     if (params$lang == "en") {
       showModal(modalDialog(
-        title = "Information",
         HTML("<ul>
               <li>This plots shows water level or flow for the past 30 days; resolution depends on your internet speed.</li>
               <li>The 'Typical' range is the interquartile range, which is the range of values between the 25th and 75th percentiles of the data.</li>
@@ -75,11 +74,10 @@ app_server <- function(input, output, session) {
               <li>A filter is applied to the data to remove extreme outliers and negative values.</li>
             </ul>"),
         easyClose = TRUE,
-        footer = NULL
+        footer = modalButton("Close")
       ))
     } else if (params$lang == "fr") {
       showModal(modalDialog(
-        title = "Information",
         HTML("<ul>
               <li>Ce graphique démontre le niveau ou débit d'eau durant les 30 derniers jours; la résolution dépends de la vitese de votre internet.</li>
               <li>La plage typique représente l'écart interquartile (la plage de valeurs entre les 25e et 75e percentiles des données).</li>
@@ -88,7 +86,7 @@ app_server <- function(input, output, session) {
               <li>Un filtre est appliqué aux données pour éliminer les valeurs aberrantes extrêmes ou négatives.</li>
             </ul>"),
         easyClose = TRUE,
-        footer = NULL
+        footer = modalButton("Fermer")
       ))
     } else {
       showModal(modalDialog(
@@ -126,7 +124,7 @@ app_server <- function(input, output, session) {
                   sub_location = NULL,
                   parameter = param,
                   start_date = Sys.Date() - 30,
-                  datum = FALSE,
+                  datum = TRUE,
                   filter = 20,
                   rate = rate,
                   lang = lang,
@@ -137,8 +135,14 @@ app_server <- function(input, output, session) {
                   gridy = FALSE,
                   slider = FALSE,
                   title = TRUE,
+                  hover = FALSE,
+                  tzone = "MST",
                   custom_title = paste0(loc_name, if (lang == "en") " (last 30 days)" else " (30 derniers jours)"),
                   con = con)
+      
+      # Remove the plotly logo and other buttons from the top right of the plot
+      p <- plotly::config(p, displayModeBar = FALSE)
+      
       DBI::dbDisconnect(con)
       return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
     })
