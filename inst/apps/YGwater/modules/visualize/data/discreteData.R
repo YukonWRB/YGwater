@@ -221,6 +221,7 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
+        uiOutput(ns("apply_params")),
         actionButton(ns("param_modal"),
                      label = tr("param_modal", language$language),
                      width = "100%",
