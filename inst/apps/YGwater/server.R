@@ -551,7 +551,7 @@ $(document).keyup(function(event) {
     if (input$navbar == "snowInfo") {
       if (!ui_loaded$snowInfo) {
         output$snowInfo_ui <- renderUI(snowInfoUIMod("snowInfo"))
-        ui_loaded$snowinfo <- TRUE
+        ui_loaded$snowInfo <- TRUE
         snowInfoMod("snowInfo", language = languageSelection) # Call the server
       }
     }
@@ -641,7 +641,7 @@ $(document).keyup(function(event) {
     }
     if (input$navbar == "addDiscData") {
       if (!ui_loaded$addDiscData) {
-        output$discData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
+        output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
         ui_loaded$addDiscData <- TRUE
         addDiscData("addDiscData")  # Call the server
       }

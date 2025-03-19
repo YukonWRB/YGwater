@@ -69,7 +69,7 @@ app_ui <- function(request) {
                tabPanel(title = "Continuous", value = "continuous",
                         uiOutput("continuous_ui")),
                tabPanel(title = "Mix", value = "mix",
-                        uiOutput("mi_ui"))
+                        uiOutput("mix_ui"))
     ),
     navbarMenu(title = "Reports", menuName = "reports",
                tabPanel(title = "Snowpack info", value = "snowInfo",
