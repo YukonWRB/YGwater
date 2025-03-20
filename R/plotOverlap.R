@@ -221,7 +221,7 @@ plotOverlap <- function(location,
   }
   
   day_seq <- seq.POSIXt(startDay, endDay, by = "day")
-
+  
   
   # Get the location and parameter metadata ###########
   location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
@@ -280,7 +280,7 @@ plotOverlap <- function(location,
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND record_rate = '", record_rate, "' AND sub_location_id = '", sub_location_id, "';"))
     }
   }
-
+  
   if (nrow(exist_check) == 0) {
     if (is.null(record_rate)) {
       stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data.")
@@ -389,7 +389,7 @@ plotOverlap <- function(location,
         
         # Retain last 20 000 records
         new_realtime <- new_realtime[(.N - 20000):.N]
-
+        
         # Add the truncated dates to the dates vector
         end_new_dates <- min(new_realtime$datetime)
         new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
@@ -413,7 +413,7 @@ plotOverlap <- function(location,
           new_realtime <- merge(df_full[,list(datetime)], new_realtime, by = "datetime", all.x = TRUE) # Drop unnecessary columns
           data.table::setorder(new_realtime, datetime)
         }
-
+        
         realtime <- data.table::rbindlist(list(realtime, new_realtime))
         get_daily <- FALSE
       } else {
@@ -531,22 +531,22 @@ plotOverlap <- function(location,
     #   fake_datetime <- ifelse(nchar(fake_datetime) > 11, fake_datetime, paste0(fake_datetime, " 00:00:00"))
     #   realtime$fake_datetime[i] <- as.POSIXct(fake_datetime, tz = tzone)
     #   realtime$plot_year[i] <- if (realtime$md[i] %in% md_sequence) paste0(realtime$year[i], "-", realtime$year[i] + 1) else paste0(realtime$year[i] - 1, "-", realtime$year[i])
-      
-      
-
-      in_md_seq <- realtime$md %in% md_sequence
-      # Format datetime as string
-      dt_str <- format(realtime$datetime, "%Y-%m-%d %H:%M:%S")
-      # Determine replacement year based on condition
-      replacement_year <- ifelse(in_md_seq, last_year - 1, last_year)
-      # Replace the year portion using a regex substitution
-      fake_dt_str <- paste0(replacement_year, substring(dt_str, 5))
-      realtime$fake_datetime <- as.POSIXct(fake_dt_str, tz = tzone)
-      realtime$plot_year <- ifelse(in_md_seq,
-                                   paste0(realtime$year, "-", realtime$year + 1),
-                                   paste0(realtime$year - 1, "-", realtime$year))
-      
-      
+    
+    
+    
+    in_md_seq <- realtime$md %in% md_sequence
+    # Format datetime as string
+    dt_str <- format(realtime$datetime, "%Y-%m-%d %H:%M:%S")
+    # Determine replacement year based on condition
+    replacement_year <- ifelse(in_md_seq, last_year - 1, last_year)
+    # Replace the year portion using a regex substitution
+    fake_dt_str <- paste0(replacement_year, substring(dt_str, 5))
+    realtime$fake_datetime <- as.POSIXct(fake_dt_str, tz = tzone)
+    realtime$plot_year <- ifelse(in_md_seq,
+                                 paste0(realtime$year, "-", realtime$year + 1),
+                                 paste0(realtime$year - 1, "-", realtime$year))
+    
+    
     # }
   } else { #Does not overlap the new year
     realtime$plot_year <- as.character(realtime$year)
@@ -673,14 +673,24 @@ plotOverlap <- function(location,
                    tickformat = if (lang == "en") "%b %-d" else "%-d %b",
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
-                   rangeslider = list(visible = if (slider & legend_position == "v") TRUE else FALSE)), 
-      yaxis = list(title = paste0(parameter_name, " (", units, ")"), 
+                   nticks = 10,
+                   rangeslider = list(visible = if (slider & legend_position == "v") TRUE else FALSE),
+                   ticks = "outside",
+                   ticklen = 5,
+                   tickwidth = 1,
+                   tickcolor = "black"), 
+      yaxis = list(title = list(text = paste0(parameter_name, " (", units, ")"), standoff = 10),
+                   automargin = TRUE,
                    showgrid = gridy, 
                    showline = TRUE,
                    zeroline = FALSE,
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
-                   autorange = if (invert) "reversed" else TRUE), 
+                   autorange = if (invert) "reversed" else TRUE,
+                   ticks = "outside",
+                   ticklen = 5,
+                   tickwidth = 1,
+                   tickcolor = "black"), 
       margin = list(b = 0,
                     t = 40 * axis_scale,
                     l = 50 * axis_scale), 
@@ -688,6 +698,6 @@ plotOverlap <- function(location,
       legend = list(font = list(size = legend_scale * 12))
     ) %>%
     plotly::config(locale = lang)
-
+  
   return(plot)
 }
