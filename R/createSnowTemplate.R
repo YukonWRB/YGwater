@@ -45,7 +45,7 @@ createSnowTemplate <- function(target_date, circuits = "all", save_path = "choos
   }
   
   if (circuits[1] == "all") {
-    circuits <- DBI::dbGetQuery(snowCon, "SELECT DISTINCT * FROM circuits")
+    circuits <- DBI::dbGetQuery(snowCon, "SELECT * FROM circuits")
   } else {
     # Make sure that the requested circuit exist in the database
     circuits <- DBI::dbGetQuery(snowCon, paste0("SELECT * FROM circuits WHERE circuit_name IN ('", paste(circuits, collapse = "', '"), "')"))
