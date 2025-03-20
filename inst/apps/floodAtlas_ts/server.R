@@ -66,25 +66,27 @@ app_server <- function(input, output, session) {
   observeEvent(input$info, {
     if (params$lang == "en") {
       showModal(modalDialog(
-        HTML("<ul>
-              <li>This plots shows water level or flow for the past 30 days; resolution depends on your internet speed.</li>
-              <li>The 'Typical' range is the interquartile range, which is the range of values between the 25th and 75th percentiles of the data.</li>
-              <li>The 'Historic' range is the full range of daily mean values.</li>
-              <li>The typical and historic ranges are calculated using all data <i><b>prior</i> </b>to the last year selected, giving relevant historical context.</li>
-              <li>A filter is applied to the data to remove extreme outliers and negative values.</li>
-            </ul>"),
+        HTML("<div style='font-size: 14px;'>
+                <ul>
+                  <li>This plots shows water level or flow for the past 30 days; resolution depends on your internet speed.</li>
+                  <li>The 'Typical' range is the range between the 25th and 75th percentiles of daily mean values.</li>
+                  <li>The 'Historic' range is the full range of daily mean values.</li>
+                  <li>Typical and historic ranges are calculated using all data <i><b>prior</i> </b>to the last year selected.</li>
+                </ul>
+              </div>"),
         easyClose = TRUE,
         footer = modalButton("Close")
       ))
     } else if (params$lang == "fr") {
       showModal(modalDialog(
-        HTML("<ul>
-              <li>Ce graphique démontre le niveau ou débit d'eau durant les 30 derniers jours; la résolution dépends de la vitese de votre internet.</li>
-              <li>La plage typique représente l'écart interquartile (la plage de valeurs entre les 25e et 75e percentiles des données).</li>
-              <li>La plage historique est la plage complète des valeurs moyennes journalières.</li>
-              <li>Les plages typiques et historiques sont calculées en utilisant toutes les données <i><b>antérieures</i></b> à la dernière année sélectionnée, donnant un contexte historique.</li>
-              <li>Un filtre est appliqué aux données pour éliminer les valeurs aberrantes extrêmes ou négatives.</li>
-            </ul>"),
+        HTML("<div style='font-size: 14px;'>
+                <ul>
+                  <li>Ce graphique démontre le niveau ou débit d'eau durant les 30 derniers jours; la résolution dépends de la vitese de votre internet.</li>
+                  <li>La plage typique représente la plage de valeurs entre les 25e et 75e percentiles des données.</li>
+                  <li>La plage historique est la plage complète des valeurs moyennes journalières.</li>
+                  <li>Les plages typiques et historiques sont calculées en utilisant toutes les données <i><b>antérieures</i></b> à la dernière année sélectionnée.</li>
+                </ul>
+              </div>"),
         easyClose = TRUE,
         footer = modalButton("Fermer")
       ))
@@ -137,7 +139,7 @@ app_server <- function(input, output, session) {
                   title = TRUE,
                   hover = FALSE,
                   tzone = "MST",
-                  custom_title = paste0(loc_name, if (lang == "en") " (last 30 days)" else " (30 derniers jours)"),
+                  custom_title = paste0(if (lang == "en") "Last 30 days: " else "30 derniers jours: ", loc_name),
                   con = con)
       
       # Remove the plotly logo and other buttons from the top right of the plot
