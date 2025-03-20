@@ -65,7 +65,7 @@ createSnowTemplate <- function(target_date, circuits = "all", save_path = "choos
     
     #### ----------------------- Create circuits ------------------------------ ####
     # Get the associated locations for the circuit
-    courses <- DBI::dbGetQuery(snowCon, paste0("SELECT name FROM locations WHERE circuit = '", circuit_id, "'"))[,1]
+    courses <- DBI::dbGetQuery(snowCon, paste0("SELECT name FROM locations WHERE circuit = '", circuit_id, "' AND active IS TRUE;"))[,1]
     
     ## Get maintenance for all courses
     maintenance <- DBI::dbGetQuery(snowCon, paste0("SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance INNER JOIN locations ON maintenance.location = locations.location WHERE maintenance.completed = FALSE AND locations.name IN ('", paste(courses, collapse = "', '"), "') AND maintenance.completed = FALSE"))
