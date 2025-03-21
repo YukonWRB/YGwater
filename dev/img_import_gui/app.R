@@ -6,6 +6,7 @@ library(exifr)
 library(dplyr)
 library(DT)
 library(YGwater)
+library(AquaCache)
 
 # Define a named list of colors
 color_list <- list(
@@ -15,6 +16,11 @@ color_list <- list(
   "other" = "magenta",
   "locations" = "orange"
 )
+
+if (Sys.info()["sysname"] == "Windows" | interactive()) {
+} else {
+  future::plan("multicore")
+}
 
 # Default coordinates to repositon the map around Whitehorse
 DEFAULT_COORDS = c(-135.0568, 60.7212)
@@ -104,9 +110,9 @@ preprocess_exif <- function(dat) {
   stopifnot("DateTimeOriginal" %in% colnames(dat))
 
   dat_out <- dat %>%
-    select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude) %>%
-    rename(Sourcefile = SourceFile, Filename = FileName, Latitude = GPSLatitude, Longitude = GPSLongitude, Altitude = GPSAltitude, Datetime = DateTimeOriginal) %>%
-    mutate(Tags = list(character(0)), Notes = "", Visibility = "Private", UTC = -7)
+    select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude, GPSImgDirection) %>%
+    rename(Sourcefile = SourceFile, Filename = FileName, Latitude = GPSLatitude, Longitude = GPSLongitude, Altitude = GPSAltitude, Datetime = DateTimeOriginal, Azimuth = GPSImgDirection) %>%
+    mutate(Tags = list(character(0)), Notes = "", Visibility = "Private", UTC = -7, Location = "")
   return(dat_out)
 }
 
@@ -195,8 +201,8 @@ config <<- list(
   dbName = "aquacache",
   dbHost = Sys.getenv("aquacacheHost"),
   dbPort = Sys.getenv("aquacachePort"),
-  dbUser = Sys.getenv("aquacacheUser"),
-  dbPass = Sys.getenv("aquacachePass")
+  dbUser = Sys.getenv("aquacacheAdminUser"),
+  dbPass = Sys.getenv("aquacacheAdminPass")
 )
 
 # Increase the maximum upload size to 30MB
@@ -236,7 +242,7 @@ server <- function(input, output, session) {
   output$map <- renderLeaflet({
     leaflet() %>%
       addProviderTiles(providers$Esri.WorldImagery) %>%
-      setView(lng = DEFAULT_COORDS[1], lat = DEFAULT_COORDS[2], zoom = 10)
+      setView(lng = DEFAULT_COORDS[1], lat = DEFAULT_COORDS[2], zoom = 4)
     })
 
   # Observe file input and update the data table
@@ -257,25 +263,13 @@ server <- function(input, output, session) {
     dat$df$Longitude[dat$df$Longitude == 0] <- NA
     dat$df$Altitude[dat$df$Longitude == 0] <- NA
 
-    if (any(is.na(dat$df$Latitude)) || any(is.na(dat$df$Longitude))) {
-      num_null_latitudes <- sum(is.na(dat$df$Latitude))
-
-      showModal(modalDialog(
-        title = "Warning",
-        paste(num_null_latitudes, "image(s) do not contain a georeference. Add locations using the drop-down menu or input coordinates manually."),
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Close")
-        )
-      ))
-    }
-
       # Once the images are loaded into the app, render the GUI elements
     renderDataTable()
     renderImagePlot()
     renderLeafletMap()
     renderImageIndex()
     })
+
 
 
   # Render the data table
@@ -316,9 +310,9 @@ server <- function(input, output, session) {
   observeEvent(input$edit, {
     toggles$edit <- !toggles$edit
     if (toggles$edit) {
-      showNotification("Edit mode enabled.", type = "message", duration = 3)
+      showNotification("Map interactivity enabled.", type = "message", duration = 3)
     } else {
-      showNotification("Edit mode disabled.", type = "message", duration = 3)
+      showNotification("Map interactivity disabled.", type = "message", duration = 3)
     }
   })
 
@@ -391,34 +385,134 @@ server <- function(input, output, session) {
   })
 
   # Observe row selection in the data table and update the imgid
-  observeEvent(input$table_rows_selected, {
-      updateNumericInput(session, "image_latitude", value = "")
-      updateNumericInput(session, "image_longitude", value = "")
+  observeEvent(input$table_rows_selected, ignoreNULL = FALSE, {
+    updateNumericInput(session, "image_latitude", value = "")
+    updateNumericInput(session, "image_longitude", value = "")
 
-    # update lines to reflect seleciton (showing geoference corrections)
+    if (is.null(input$table_rows_selected)) {
+      selection <- 0
+    } else {
+      selection <- input$table_rows_selected
+    }
+
+    # update lines to reflect selection (showing georeference corrections)
     clearLinesFromMap()
-    addLinesToMap()
+    print(input$table_rows_selected)
+    if (!is.null(selection) && length(selection) > 0) {
+        print('add')
+
+      addLinesToMap()
+    }
 
     # update map view coordinates and zoom level
-    updateMapView()
+    #updateMapView()
 
     # update the displayed image upon each new row selection
-    if (length(input$table_rows_selected) > 1) {
-      imgid(input$table_rows_selected[length(input$table_rows_selected)])
+    if (length(selection) > 1) {
+      imgid(selection[length(selection)])
     } else {
-      imgid(input$table_rows_selected)
+      imgid(1)
     }
 
     # case for no selection
-    if (is.null(input$table_rows_selected)) {
+    if (is.null(selection)) {
       updateMapView()
       leafletProxy(mapId = "map") %>% clearGroup("photos")
       addCirclesToMap(selection = seq_len(nrow(dat$df)), color = color_list$unselected)
-      }
+    }
   })
 
-  
 
+
+  # Observe the upload button and upload data to AquaCache
+  observeEvent(input$upload_to_ac, {
+    showModal(modalDialog(
+      title = "Confirm Upload",
+      "Are you sure you want to upload the images to AquaCache?",
+      easyClose = FALSE,
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton("confirm_upload", "Confirm")
+      )
+    ))
+  })
+
+  observeEvent(input$confirm_upload, {
+    removeModal()
+    print(session$userData$AquaCache)
+    print(dat$df)
+    
+    dat$df <- standardizeDataFrame(dat$df)
+    validation_result <- validateDataFrame(dat$df)
+
+    if (!validation_result$success) {
+      showNotification(validation_result$message, type = "error", duration = 5)
+    }
+
+    uploadAquacache$invoke(df=dat$df, config=session$userData$config)
+  })
+
+  uploadAquacache <- ExtendedTask$new(
+    function(df, config) {
+      promises::future_promise({
+        
+        con <- AquaConnect(name = config$dbName,
+                                          host = config$dbHost,
+                                          port = config$dbPort,
+                                          username = config$dbUser,
+                                          password = config$dbPass,
+                                          silent = TRUE)
+        on.exit(DBI::dbDisconnect(con))
+
+        # for converting app text to AquaCache reader names
+
+        for (i in seq_len(nrow(df))) {
+          
+            success <- tryCatch({
+            insertACImage(
+              object = df$Sourcefile[i],
+              datetime = df$Datetime[i],
+              latitude = df$Latitude[i],
+              longitude = df$Longitude[i],
+              elevation_msl = df$Altitude[i],
+              azimuth_true = df$Azimuth[i],
+              share_with = df$Visibility[i],
+              con = con,
+              location = if (df$Location[i] == "") NULL else df$Location[i],
+              tags = if (length(df$Tags[[i]]) == 0) NULL else df$Tags[[i]],
+              description = if (df$Notes[i] == "") NULL else df$Notes[i],
+              owner = 2
+            )
+            }, error = function(e) {
+            print(paste("Error uploading image:", e$message))
+            FALSE
+            })
+          print(success)
+          if (!success) {showNotification("Error uploading image to AquaCache.", type = "error", duration = 5)}
+          if (success) {showNotification("Images uploaded to AquaCache.", type = "message", duration = 5)}
+        }
+      })
+    }
+  )
+
+# standardize the dataframe to match AquaCache's schema
+standardizeDataFrame <- function(df){
+  reader_list <- c("Private" = "yg_reader", "Public" = "public_reader")
+  df$Sourcefile <- as.character(df$Sourcefile)
+  df$Tags <- as.character(df$Tags)
+  df$Visibility <- reader_list[df$Visibility]
+  df$Datetime <- as.POSIXct(df$Datetime, format="%Y:%m:%d %H:%M:%S", tz="UTC")
+  df$Datetime <- df$Datetime - as.difftime(df$UTC, units = "hours")
+  return(df)
+  }
+
+# verify that the dataframe is valid for upload to AquaCache
+validateDataFrame <- function(df) {
+  if (any(is.na(df$Latitude)) || any(is.na(df$Longitude))) {
+    return(list(success = FALSE, message = "Error: One or more images do not contain a georeference. Please add locations using the drop-down menu or input coordinates manually."))
+  }
+  return(list(success = TRUE, message = "Validation successful."))
+  }
   # Observe changes in the drop-down input and update the tags on save button press
   # observeEvent(input$image_tags, {
   #   if (length(input$table_rows_selected) > 0) {
@@ -514,7 +608,7 @@ server <- function(input, output, session) {
         if (!is.null(input$image_tags)) {dat$df$Tags[row] <- paste(input$image_tags, collapse = ", ")}
 
         # check whether the latitude and longitude are valid
-        if (!is_valid_latlon(input$image_latitude, input$image_longitude)) {
+        if (!is_valid_latlon(input$image_latitude, input$image_longitude) && !is.na(input$image_latitude) && !is.na(input$image_longitude)) {
           showModal(modalDialog(
             title = "Invalid Coordinates",
             "The latitude and/or longitude values are not valid. Please enter valid coordinates.",
@@ -523,19 +617,23 @@ server <- function(input, output, session) {
               modalButton("Close")
             )
           ))
+          
           return()
         }
-
-        dat$df$Latitude[row] <- input$image_latitude
-        dat$df$Longitude[row] <- input$image_longitude
-
+        if (!is.na(input$image_latitude) && !is.na(input$image_longitude)){
+          dat$df$Latitude[row] <- input$image_latitude
+          dat$df$Longitude[row] <- input$image_longitude
+          dat$df$Location[input$table_rows_selected] <- input$image_location
+        }
         if (input$share_tag != "Private") {dat$df$Visibility[row] <- input$share_tag}
         if (input$tz_correction != -7) {dat$df$UTC[row] <- input$tz_correction}
       }
       
       # Reset all of the input fields after applying changes and re-render the table/map
       updateTextAreaInput(session, "notes", value = "")
-      updateSelectInput(session, "image_tags", selected = NULL)
+      updateSelectizeInput(session, "image_tags", selected = "Placeholder")
+      updateNumericInput(session, "image_latitude", value = NA)
+      updateNumericInput(session, "image_longitude", value = NA)
       updateSelectInput(session, "image_location", selected = "Placeholder")
       updateSelectInput(session, "share_tag", selected = "Private")
       updateSelectInput(session, "tz_correction", selected = -7)
@@ -571,7 +669,11 @@ server <- function(input, output, session) {
   updateMapView <- function() {
 
     # If no rows are selected, set the view to the centroid of all points
-    selection <- input$table_rows_selected
+      if (is.null(input$table_rows_selected)) {
+      selection <- 0
+    } else {
+      selection <- input$table_rows_selected
+    }
 
     # if none of the selected images have valid coordinates, set view to entire table
     if (all(!is_valid_latlon(dat$df$Latitude[selection], dat$df$Longitude[selection]))) {
@@ -640,7 +742,15 @@ server <- function(input, output, session) {
   }
   # Function to render the leaflet map
   renderLeafletMap <- function() {
+
+
     valid_data <- dat$df %>% filter(is_valid_latlon(Latitude, Longitude))
+
+    # if no images with valid latlon, exit map rendering function
+    if (nrow(valid_data) == 0) {
+      return(NULL)
+    }
+
     output$map <- renderLeaflet({
       leaflet(data = valid_data) %>%
         addProviderTiles(providers$Esri.WorldImagery) %>%
@@ -672,7 +782,7 @@ server <- function(input, output, session) {
         }")
     })
 
-    addLocationsToMap()
+    #addLocationsToMap()
   }
 
 
@@ -786,8 +896,8 @@ server <- function(input, output, session) {
 
           leafletProxy("map") %>%
             addPolylines(
-                lng = c(selected_lon, input$image_longitude),
-                lat = c(selected_lat, input$image_latitude),
+                lng = c(selected_lon, input$map_click$lng),
+                lat = c(selected_lat, input$map_click$lat),
               color = color_list$click,
               weight = 2,
               dashArray = "5, 10",
