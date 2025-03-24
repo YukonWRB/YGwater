@@ -66,10 +66,10 @@ plotTimeseries <- function(location,
                            con = NULL) 
 {
 # 
-# location <- "08AA005"
+# location <- "09AE003"
 # sub_location <- NULL
-# parameter = 1165
-# start_date <- "2020-01-01"
+# parameter = 1251
+# start_date <- "1900-01-01"
 # end_date <- Sys.time()
 # record_rate = NULL
 # period_type = NULL
@@ -441,21 +441,26 @@ plotTimeseries <- function(location,
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
   if (!is.infinite(min_trace)) {
-    trace_data <- calculate_period(trace_data, timeseries_id = tsid)
-    trace_data[, period_secs := as.numeric(lubridate::period(period))]
-    # Shift datetime and add period_secs to compute the 'expected' next datetime
-    trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
-    # Create 'gap_exists' column to identify where gaps are
-    trace_data[, gap_exists := datetime < expected & !is.na(expected)]
-    # Find indices where gaps exist
-    gap_indices <- which(trace_data$gap_exists)
-    # Create a data.table of NA rows to be inserted
-    na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime]  + 1,  # Add 1 second to place it at the start of the gap
-                                      value = NA)
-    # Combine with NA rows
-    trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
-    # order by datetime
-    data.table::setorder(trace_data, datetime) 
+    trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid))
+    # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
+    if ("period" %in% colnames(trace_data)) {
+      trace_data[, period_secs := as.numeric(lubridate::period(period))]
+      # Shift datetime and add period_secs to compute the 'expected' next datetime
+      trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+      # Create 'gap_exists' column to identify where gaps are
+      trace_data[, gap_exists := datetime < expected & !is.na(expected)]
+      # Find indices where gaps exist
+      gap_indices <- which(trace_data$gap_exists)
+      # Create a data.table of NA rows to be inserted
+      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime]  + 1,  # Add 1 second to place it at the start of the gap
+                                        value = NA)
+      # Combine with NA rows
+      trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
+      # order by datetime
+      data.table::setorder(trace_data, datetime) 
+    }
+    
+
     
     # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
     if (min_trace > start_date) {

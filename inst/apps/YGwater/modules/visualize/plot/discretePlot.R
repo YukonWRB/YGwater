@@ -18,9 +18,10 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
     
     EQWin_selector <- reactiveVal(FALSE)  # flags whether the EQWin source UI is already rendered
     
-    if (!is.null(mdb_files)) {
-      shinyjs::delay(100, shinyjs::show("data_source"))
-    }
+    # if (!is.null(mdb_files)) {
+    #   print("showing data source")
+    #   shinyjs::delay(200, shinyjs::show("data_source"))
+    # }
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     moduleData <- reactiveValues()
@@ -29,12 +30,20 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
     moduleData$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC")
     
     output$sidebar <- renderUI({
+      print("rendering UI")
       tagList(
         # Toggle for data source
-        shinyjs::hidden(radioButtons(ns("data_source"),
+        if (is.null(mdb_files)) {
+          shinyjs::hidden(radioButtons(ns("data_source"),
                                      NULL,
                                      choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
-                                     selected = "AC")),
+                                     selected = "AC"))
+        } else {
+          radioButtons(ns("data_source"),
+                       NULL,
+                       choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
+                       selected = "AC")
+        },
         uiOutput(ns("EQWin_source_ui")),
         # start and end datetime
         dateRangeInput(ns("date_range"),
