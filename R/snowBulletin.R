@@ -157,9 +157,9 @@ snowBulletin <- function(year,
                   language = language,
                   precip_period = precip_period,
                   cddf_period = cddf_period,
-                  snow_period= snow_period,
-                  water_period = water_period,
-                  lookback = lookback,
+                  # snow_period = snow_period,
+                  # water_period = water_period,
+                  # lookback = lookback,
                   con = con)
   )
 }
