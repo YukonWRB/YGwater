@@ -1,7 +1,7 @@
 #' YOWN Water Data Catalogue Update Function
 #'
 #' @param WDC_struc Link to master directory containing folders linked to the WDC
-#' @param master_sheet Path to YOWN master sheet
+#' @param master_file Path to YOWN master sheet
 #'
 #' @return Updated files in the WDC folder structure
 #' @export

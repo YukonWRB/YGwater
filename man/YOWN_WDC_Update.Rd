@@ -7,14 +7,14 @@
 YOWN_WDC_Update(
   WDC_struc =
     "\\\\\\\\envgeoserver\\\\share\\\\WaterResources\\\\Groundwater\\\\YOWN_DATA\\\\",
-  master_sheet =
+  master_file =
     "G:\\\\water\\\\Groundwater\\\\2_YUKON_OBSERVATION_WELL_NETWORK\\\\2_SPREADSHEETS\\\\1_YOWN_MASTER_TABLE\\\\YOWN_MASTER.xlsx"
 )
 }
 \arguments{
 \item{WDC_struc}{Link to master directory containing folders linked to the WDC}
 
-\item{master_sheet}{Path to YOWN master sheet}
+\item{master_file}{Path to YOWN master sheet}
 }
 \value{
 Updated files in the WDC folder structure
