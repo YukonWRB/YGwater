@@ -42,7 +42,7 @@ for (i in 1:nrow(tsid)) {
     levels[i,5] <- NA
     levels[i,6] <- NA
     levels[i,7] <- "No data"
-    next() 
+    next
   }
   latest <- bridge_rt[[tsid$location[i]]][bridge_rt[[tsid$location[i]]]$datetime == max(as.POSIXct(bridge_rt[[i]]$datetime)), ]
   current <- round(latest$value, 1)

@@ -231,9 +231,9 @@ WQReport <- function(id, mdb_files, language) {
     })
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
-    data <- reactiveValues()
-    # data$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id")
-    # data$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id")
+    moduleData <- reactiveValues()
+    # moduleData$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT loc.location_id, loc.name FROM locations loc INNER JOIN timeseries ts ON loc.location_id = ts.location_id")
+    # moduleData$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN timeseries ts ON p.parameter_id = ts.parameter_id")
     
     observeEvent(input$EQWin_source, {
       EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
@@ -255,11 +255,11 @@ WQReport <- function(id, mdb_files, language) {
         }
       })
       
-      data$EQ_locs <- EQ_locs
-      data$EQ_loc_grps <- EQ_loc_grps
-      data$EQ_params <- EQ_params
-      data$EQ_param_grps <- EQ_param_grps
-      data$EQ_stds <- EQ_stds
+      moduleData$EQ_locs <- EQ_locs
+      moduleData$EQ_loc_grps <- EQ_loc_grps
+      moduleData$EQ_params <- EQ_params
+      moduleData$EQ_param_grps <- EQ_param_grps
+      moduleData$EQ_stds <- EQ_stds
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
     
     observe({
@@ -271,15 +271,15 @@ WQReport <- function(id, mdb_files, language) {
     })
     
     observe({
-      req(input$data_source, data)
+      req(input$data_source, moduleData)
       # !Since the report generation function is not yet compatible with AC, a modal is shown to the user and the data source is reset to EQ.
       if (input$data_source == "EQ") {
-        req(data$EQ_params)
-        updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(data$EQ_params$ParamCode, paste0(data$EQ_params$ParamCode, " (", data$EQ_params$ParamDesc, ")")), server = TRUE)
-        updateSelectizeInput(session, "parameter_groups", choices = data$EQ_param_grps$groupname, server = TRUE)
-        updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(data$EQ_locs$StnCode, paste0(data$EQ_locs$StnCode, " (", data$EQ_locs$StnDesc, ")")), server = TRUE)
-        updateSelectizeInput(session, "location_groups", choices = data$EQ_loc_grps$groupname, server = TRUE)
-        updateSelectizeInput(session, "stds", choices = stats::setNames(data$EQ_stds$StdCode, data$EQ_stds$StdName), server = TRUE)
+        req(moduleData$EQ_params)
+        updateSelectizeInput(session, "parameters_EQ", choices = stats::setNames(moduleData$EQ_params$ParamCode, paste0(moduleData$EQ_params$ParamCode, " (", moduleData$EQ_params$ParamDesc, ")")), server = TRUE)
+        updateSelectizeInput(session, "parameter_groups", choices = moduleData$EQ_param_grps$groupname, server = TRUE)
+        updateSelectizeInput(session,"locations_EQ", choices = stats::setNames(moduleData$EQ_locs$StnCode, paste0(moduleData$EQ_locs$StnCode, " (", moduleData$EQ_locs$StnDesc, ")")), server = TRUE)
+        updateSelectizeInput(session, "location_groups", choices = moduleData$EQ_loc_grps$groupname, server = TRUE)
+        updateSelectizeInput(session, "stds", choices = stats::setNames(moduleData$EQ_stds$StdCode, moduleData$EQ_stds$StdName), server = TRUE)
       } else if (input$data_source == "AC") { # AC selected
         showModal(modalDialog(
           title = "Data Source Not Implemented",
@@ -287,8 +287,8 @@ WQReport <- function(id, mdb_files, language) {
           easyClose = TRUE
         ))
         updateRadioButtons(session, "data_source", selected = "EQ")
-        # updateSelectizeInput(session, "parameters_AC", choices = data$AC_params$param_name, server = TRUE)
-        # updateSelectizeInput(session, "locations_AC", choices = data$AC_locs$name, server = TRUE)
+        # updateSelectizeInput(session, "parameters_AC", choices = moduleData$AC_params$param_name, server = TRUE)
+        # updateSelectizeInput(session, "locations_AC", choices = moduleData$AC_locs$name, server = TRUE)
       }
     })
     
@@ -318,7 +318,7 @@ WQReport <- function(id, mdb_files, language) {
       tryCatch({
         
         withProgress(
-          message = translations[id == "generating_working", get(language$language)][[1]], value = 0, 
+          message = tr("generating_working", language$language), value = 0, 
           {
             incProgress(0.5)
             

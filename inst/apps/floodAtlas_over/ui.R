@@ -1,4 +1,4 @@
-#' The floodAtlas User-Interface
+#' The floodAtlas overlap User-Interface
 #'
 #' @param request Internal parameter for `{shiny}`.
 #'     DO NOT REMOVE.
@@ -12,7 +12,7 @@ app_ui <- function(request) {
 
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # YG fonts (the CSS refers to files in the www/fonts folder so there is no external dependency)
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/buttons.css"), # YG styled buttons
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/styles.css"), # YG styled buttons
       tags$style(HTML("#loc_code { display: none; }")), # Hide the input by default
       tags$style(HTML("#param_code { display: none; }")),
       tags$style(HTML("#lang { display: none; }")),

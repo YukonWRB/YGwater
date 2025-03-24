@@ -26,6 +26,7 @@ plotTimeseries(
   axis_scale = 1,
   legend_scale = 1,
   legend_position = "v",
+  hover = TRUE,
   gridx = FALSE,
   gridy = FALSE,
   rate = NULL,
@@ -75,6 +76,8 @@ plotTimeseries(
 \item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is 1.}
 
 \item{legend_position}{The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.}
+
+\item{hover}{Should hover text be included? Default is TRUE.}
 
 \item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
 

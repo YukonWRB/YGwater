@@ -4,8 +4,6 @@ skip_on_cran()
 
 # Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 
-warning("tests on plotly objects weren't working in R 4.3.3 and up. These tests have been disabled.")
-
 test_that("timeseries plot is as expected for one year with no historic range or slider", {
   skip_on_cran()
   skip_on_ci()
