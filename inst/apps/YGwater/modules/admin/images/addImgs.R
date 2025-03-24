@@ -1,19 +1,19 @@
-# UI and server code for main discrete data module
+# UI and server code for main images module
 
-discDataUI <- function(id) {
+addImgsUI <- function(id) {
   ns <- NS(id)
   fluidPage(
     textOutput(ns("placeholder"))
   )
 }
 
-discData <- function(id) {
+addImgs <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
     
-    output$placeholder <- renderText("Placeholder for discrete data main module")
+    output$placeholder <- renderText("Placeholder for images addition/management module")
     
     
   }) # End of moduleServer

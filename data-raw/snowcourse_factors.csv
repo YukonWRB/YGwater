@@ -1,4 +1,4 @@
-﻿location_name,location_id,Liard,Pelly,Stewart,Peel,Porcupine,White,Central_Yukon,Lower_Yukon,Upper_Yukon,Teslin_Big_Salmon,Alsek
+location_name,location_id,Liard,Pelly,Stewart,Peel,Porcupine,White,Central_Yukon,Lower_Yukon,Upper_Yukon,Teslin_Big_Salmon,Alsek
 Pine Lake Airstrip,10AA-SC03,1.4,0,0,0,0,0,0,0,0,1.2,0
 Frances River,10AB-SC01,2.3,0,0,0,0,0,0,0,0,0,0
 Watson Lake Airport,10AA-SC01,0.7,0,0,0,0,0,0,0,0,0,0
@@ -10,7 +10,7 @@ Ford Lake,10AA-SC04,0.3,0,0,0,0,0,0,0,0,0.6,0
 Hoole River,09BA-SC03,0.3,0.7,0,0,0,0,0,0,0,0.6,0
 Rose Creek,09BC-SC01,0,1.95,0,0,0,0,1.5,0,0,0,0
 Pelly Farm,09CD-SC03,0,1.22,0.45,0,0,0,1.5,0,0,0,0
-Twin Creeks B,09BA-SC02B,0,1.22,0,0,0,0,0,0,0,0,0
+Twin Creeks A,09BA-SC02A,0,1.22,0,0,0,0,0,0,0,0,0
 Burns Lake,09BA-SC04,1.2,1.32,0,0,0,0,0,0,0,0,0
 Fuller Lake,09BB-SC03,0,1.22,0.45,0,0,0,0,0,0,0,0
 Plata Airstrip,09DA-SC01,0,0.45,2.1,0,0,0,0,0,0,0,0
@@ -51,7 +51,7 @@ Meadow Creek,09AD-SC01,0,0,0,0,0,0,0,0,0,2.1,0
 Jordan Lake,09AD-SC02,0,0,0,0,0,0,0,0,0,2.1,0
 Moore Creek Bridge,08AK-SC02,0,0,0,0,0,0,0,0,0.7,0,0
 Mt McIntyre B,09AB-SC01B,0,0,0,0,0,0,0,0,1,0,0
-Whitehorse Airport,09AB-SC02,0,0,0,0,0,0,0,0,0.8,0,0
+Whitehorse Airport B_Ice Lake,09AB-SC02B,0,0,0,0,0,0,0,0,0.8,0,0
 Canyon Lake,08AA-SC01,0,0,0,0,0,0,0.8,0,0.3,0,1.5
 Aishihik Lake,08AA-SC03,0,0,0,0,0,0,0.7,0,0.3,0,1.5
 Eaglecrest,08AK-SC01,0,0,0,0,0,0,0,0,0.3,0,0

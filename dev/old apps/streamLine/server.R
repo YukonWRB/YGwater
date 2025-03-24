@@ -141,7 +141,7 @@ console.log(language);")
     parameters = dbGetQueryDT(pool, "SELECT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default AS unit, p.unit_solid AS unit_solid FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter_id = p.parameter_id);"),
     projects = dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
     networks =  dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
-    has_images = dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;"),
+    has_images = dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM image_series;"),
     has_documents = dbGetQueryDT(pool, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
   )
   
@@ -197,7 +197,7 @@ console.log(language);")
         DBdata$parameters <- dbGetQueryDT(pool, "SELECT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default AS unit, p.unit_solid AS unit_solid FROM parameters AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.parameter_id = p.parameter_id);")
         DBdata$projects <- dbGetQueryDT(pool, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);")
         DBdata$networks <- dbGetQueryDT(pool, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);")
-        DBdata$has_images <- dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM images_index;")
+        DBdata$has_images <- dbGetQueryDT(pool, "SELECT DISTINCT location_id FROM image_series;")
         DBdata$has_documents <- dbGetQueryDT(pool, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
         
         # Reload the tab the user is on to incorporate the new data

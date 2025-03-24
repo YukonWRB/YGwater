@@ -12,8 +12,11 @@ snowBulletin(
   save_path = "choose",
   synchronize = FALSE,
   language = "english",
-  precip_period = "Last 40 years",
-  cddf_period = "Last 40 years",
+  precip_period = "last 40 years",
+  cddf_period = "last 40 years",
+  snow_period = "all years",
+  water_period = "all years",
+  lookback = 40,
   con = NULL
 )
 }
@@ -32,9 +35,15 @@ snowBulletin(
 
 \item{language}{The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".}
 
-\item{precip_period}{The period to use for precipitation stats. Options are "Last 40 years", "All years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "Last 40 years".}
+\item{precip_period}{The period to use for precipitation stats. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".}
 
-\item{cddf_period}{The period to use for the cumulative degree day plot historic range. Options are "Last 40 years", "All years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "Last 40 years".}
+\item{cddf_period}{The period to use for the cumulative degree day plot historic range. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".}
+
+\item{snow_period}{The period to use for the snow survey plot historic range. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.}
+
+\item{water_period}{The period to use for the water level/flow historic ranges. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.}
+
+\item{lookback}{The number of past years to consider for all plots and statistics. Default is 30. NOT CURRENTLY USED, but will replace other _period parameters.}
 
 \item{con}{A connection to the AquaCache database. If left NULL connection will be attempted with function \code{\link[=AquaConnect]{AquaConnect()}} using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!}
 }

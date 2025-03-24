@@ -40,7 +40,7 @@
 <text x='594.68' y='392.92' style='font-size: 8.00px; font-family: sans;' textLength='123.20px' lengthAdjust='spacingAndGlyphs'>        2013-2014 à 2021-2022.        </text>
 <text x='594.68' y='404.44' style='font-size: 8.00px; font-family: sans;' textLength='17.78px' lengthAdjust='spacingAndGlyphs'>        </text>
 <text x='594.68' y='415.96' style='font-size: 8.00px; font-family: sans;' textLength='119.18px' lengthAdjust='spacingAndGlyphs'>        Périodes de retour calculées</text>
-<text x='594.68' y='427.48' style='font-size: 8.00px; font-family: sans;' textLength='114.28px' lengthAdjust='spacingAndGlyphs'>        en utilisant les mois de avr.</text>
+<text x='594.68' y='427.48' style='font-size: 8.00px; font-family: sans;' textLength='112.06px' lengthAdjust='spacingAndGlyphs'>        en utilisant les mois de avr</text>
 <text x='594.68' y='439.00' style='font-size: 8.00px; font-family: sans;' textLength='118.31px' lengthAdjust='spacingAndGlyphs'>        à mai et les années de 2014</text>
 <text x='594.68' y='450.52' style='font-size: 8.00px; font-family: sans;' textLength='118.76px' lengthAdjust='spacingAndGlyphs'>        à 2022. 8 points de données</text>
 <text x='594.68' y='462.04' style='font-size: 8.00px; font-family: sans;' textLength='116.51px' lengthAdjust='spacingAndGlyphs'>        conservés après avoir retiré</text>
@@ -62,10 +62,10 @@
 <polyline points='284.07,558.47 284.07,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
 <polyline points='407.06,558.47 407.06,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
 <polyline points='534.23,558.47 534.23,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<text x='156.91' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='36.09px' lengthAdjust='spacingAndGlyphs'>01 nov.</text>
-<text x='284.07' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='38.53px' lengthAdjust='spacingAndGlyphs'>01 janv.</text>
-<text x='407.06' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='39.75px' lengthAdjust='spacingAndGlyphs'>01 mars</text>
-<text x='534.23' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='33.02px' lengthAdjust='spacingAndGlyphs'>01 mai</text>
+<text x='156.91' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='26.91px' lengthAdjust='spacingAndGlyphs'>1 nov</text>
+<text x='284.07' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='29.36px' lengthAdjust='spacingAndGlyphs'>1 janv</text>
+<text x='407.06' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='33.63px' lengthAdjust='spacingAndGlyphs'>1 mars</text>
+<text x='534.23' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='26.90px' lengthAdjust='spacingAndGlyphs'>1 mai</text>
 <text transform='translate(13.74,288.72) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='148.76px' lengthAdjust='spacingAndGlyphs'>Profondeur de la neige (cm)</text>
 <rect x='605.64' y='42.82' width='71.98' height='41.78' style='stroke-width: 1.07; stroke: none; fill: #FFFFFF;' />
 <text x='611.12' y='55.43' style='font-size: 9.00px; font-family: sans;' textLength='26.03px' lengthAdjust='spacingAndGlyphs'>Année</text>

@@ -75,12 +75,12 @@
 <polyline points='321.12,558.47 321.12,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
 <polyline points='413.50,558.47 413.50,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
 <polyline points='504.39,558.47 504.39,555.74 ' style='stroke-width: 1.07; stroke: #333333; stroke-linecap: butt;' />
-<text x='51.43' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='33.03px' lengthAdjust='spacingAndGlyphs'>Jan 01</text>
-<text x='139.34' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='34.24px' lengthAdjust='spacingAndGlyphs'>Mar 01</text>
-<text x='230.23' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='36.08px' lengthAdjust='spacingAndGlyphs'>May 01</text>
-<text x='321.12' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='29.36px' lengthAdjust='spacingAndGlyphs'>Jul 01</text>
-<text x='413.50' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='34.87px' lengthAdjust='spacingAndGlyphs'>Sep 01</text>
-<text x='504.39' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='34.86px' lengthAdjust='spacingAndGlyphs'>Nov 01</text>
+<text x='51.43' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='26.91px' lengthAdjust='spacingAndGlyphs'>Jan 1</text>
+<text x='139.34' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='28.12px' lengthAdjust='spacingAndGlyphs'>Mar 1</text>
+<text x='230.23' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='29.96px' lengthAdjust='spacingAndGlyphs'>May 1</text>
+<text x='321.12' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='23.24px' lengthAdjust='spacingAndGlyphs'>Jul 1</text>
+<text x='413.50' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='28.75px' lengthAdjust='spacingAndGlyphs'>Sep 1</text>
+<text x='504.39' y='568.24' text-anchor='middle' style='font-size: 11.00px; fill: #4D4D4D; font-family: sans;' textLength='28.74px' lengthAdjust='spacingAndGlyphs'>Nov 1</text>
 <text transform='translate(13.74,288.72) rotate(-90)' text-anchor='middle' style='font-size: 12.00px; font-family: sans;' textLength='85.36px' lengthAdjust='spacingAndGlyphs'>Water Level (m)</text>
 <rect x='604.75' y='40.23' width='51.52' height='93.62' style='stroke-width: 1.07; stroke: none; fill: #FFFFFF;' />
 <text x='610.23' y='52.84' style='font-size: 9.00px; font-family: sans;' textLength='19.01px' lengthAdjust='spacingAndGlyphs'>Year</text>

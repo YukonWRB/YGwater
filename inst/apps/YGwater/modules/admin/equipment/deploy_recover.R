@@ -1,19 +1,19 @@
 # UI and server code for main equipment module
 
-equipUI <- function(id) {
+deploy_recover_UI <- function(id) {
   ns <- NS(id)
   fluidPage(
     textOutput(ns("placeholder"))
   )
 }
 
-equip <- function(id) {
+deploy_recover <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
     
-    output$placeholder <- renderText("Placeholder for equipment main module")
+    output$placeholder <- renderText("Placeholder for equipment deloyment/recovery")
     
     
   }) # End of moduleServer

@@ -40,7 +40,7 @@ mapParamUI <- function(id) {
   ) # End of tagList
 } # End of mapParamsUI
 
-mapParamServer <- function(id, data, language) {
+mapParamServer <- function(id, moduleData, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -60,42 +60,42 @@ mapParamServer <- function(id, data, language) {
     )
     # Generate all controls in a renderUI
     output$controls_ui <- renderUI({
-      req(data, language$language, language$abbrev)
+      req(moduleData, language$language, language$abbrev)
       
       tagList(
         #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
         selectizeInput(
           ns("mapType"),
-          label = translations[id == "map_mapType", get(language$language)][[1]],
+          label = tr("map_mapType", language$language),
           choices = stats::setNames(
             c("range", "abs"),
-            c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolute1", get(language$language)][[1]])
+            c(tr("map_relative", language$language), tr("map_absolute1", language$language))
           ),
           selected = "range",
           multiple = FALSE
         ),
         dateInput(ns("target"),
-                  label = translations[id == "map_target_date", get(language$language)][[1]],
+                  label = tr("map_target_date", language$language),
                   value = Sys.Date(),
                   max = Sys.Date(),
                   format = "yyyy-mm-dd",
                   language = language$abbrev),
-        checkboxInput(ns("latest"), translations[id == "map_latest_measurements", get(language$language)][[1]], value = TRUE),
+        checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = TRUE),
         htmlOutput(ns("primary_param")),  # This will be text showing details of the selected parameter, the min yrs, within how many days, etc.
-        actionButton(ns("edit_primary_param"), translations[id == "map_edit_primary_param", get(language$language)][[1]], style = "display: block; width: 100%"),
+        actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
         htmlOutput(ns("secondary_param")),
-        actionButton(ns("edit_secondary_param"), translations[id == "map_edit_second_param", get(language$language)][[1]], style = "display: block; width: 100%")
-        # actionButton(ns("go"), translations[id == "render_map", get(language$language)][[1]], style = "display: block; width: 100%; margin-top: 10px;")
+        actionButton(ns("edit_secondary_param"), tr("map_edit_second_param", language$language), style = "display: block; width: 100%")
+        # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
       )
     })
     
     # This updates automatically when the language changes so is not part of the language observer
     output$primary_param <- renderUI({
       tagList(
-        h4(translations[id == "map_primary_param", get(language$language)][[1]]), # Text for primary parameter
-        p(titleCase(data$parameters[data$parameters$parameter_id == map_params$param1,  get(translations[id == "param_name_col", get(language$language)])], language$abbrev)), # Name of primary parameter
-        p(translations[id == "map_min_yrs_selected1", get(language$language)][[1]], " ", map_params$yrs1, " ", translations[id == "map_min_yrs_selected2", get(language$language)][[1]], # Text for min years selected
-          translations[id == "map_date_within_selected1", get(language$language)][[1]], map_params$days1, translations[id == "map_date_within_selected2", get(language$language)][[1]]) # Text for within x days
+        h4(tr("map_primary_param", language$language)), # Text for primary parameter
+        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
+        p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
+          tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
       )
     })
     output$secondary_param <- renderUI({
@@ -103,10 +103,10 @@ mapParamServer <- function(id, data, language) {
         return(NULL)
       } else {
         tagList(
-          h4(translations[id == "map_second_param", get(language$language)][[1]]), # Text for secondary parameter
-          p(titleCase(data$parameters[data$parameters$parameter_id == map_params$param2,  get(translations[id == "param_name_col", get(language$language)])], language$abbrev)), # Name of secondary parameter
-          p(translations[id == "map_min_yrs_selected1", get(language$language)][[1]], " ", map_params$yrs2, " ", translations[id == "map_min_yrs_selected2", get(language$language)][[1]], # Text for min years selected
-            translations[id == "map_date_within_selected1", get(language$language)][[1]], map_params$days2, translations[id == "map_date_within_selected2", get(language$language)][[1]]) # Text for within x days
+          h4(tr("map_second_param", language$language)), # Text for secondary parameter
+          p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of secondary parameter
+          p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs2, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
+            tr("map_date_within_selected1", language$language), map_params$days2, tr("map_date_within_selected2", language$language)) # Text for within x days
         )
       }
 
@@ -130,29 +130,29 @@ mapParamServer <- function(id, data, language) {
         title = NULL,
         selectizeInput(
           ns("param"),
-          label = translations[id == "parameter", get(language$language)][[1]],
+          label = tr("parameter", language$language),
           choices = stats::setNames(
-            data$parameters$parameter_id,
-            titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+            moduleData$parameters$parameter_id,
+            titleCase(moduleData$parameters[[tr("param_name_col", language$language)]], language$abbrev)
           ),
           selected = map_params$param1,
           multiple = FALSE
         ),
         numericInput(ns("yrs"),
-                     label = translations[id == "map_min_yrs", get(language$language)][[1]],
+                     label = tr("map_min_yrs", language$language),
                      value = map_params$yrs1,
                      min = 3,
                      max = 100,
                      step = 1),
         numericInput(ns("days"),
-                     label = translations[id == "map_date_within", get(language$language)][[1]],
+                     label = tr("map_date_within", language$language),
                      value = map_params$days1,
                      min = 0,
                      max = 365,
                      step = 1),
         footer = tagList(
-          actionButton(ns("save_primary_param"), translations[id == "save", get(language$language)][[1]]),
-          actionButton(ns("close"), translations[id == "close", get(language$language)][[1]])
+          actionButton(ns("save_primary_param"), tr("save", language$language)),
+          actionButton(ns("close"), tr("close", language$language))
         )
       ))
     })
@@ -168,32 +168,32 @@ mapParamServer <- function(id, data, language) {
         title = NULL,
         selectizeInput(
           ns("param"),
-          label = translations[id == "parameter", get(language$language)][[1]],
+          label = tr("parameter", language$language),
           choices = stats::setNames(
-            data$parameters$parameter_id,
-            titleCase(data$parameters[[translations[id == "param_name_col", get(language$language)][[1]]]], language$abbrev)
+            moduleData$parameters$parameter_id,
+            titleCase(moduleData$parameters[[tr("param_name_col", language$language)]], language$abbrev)
           ),
           selected = map_params$param2,
           multiple = FALSE
         ),
         numericInput(ns("yrs"),
-                     label = translations[id == "map_min_yrs", get(language$language)][[1]],
+                     label = tr("map_min_yrs", language$language),
                      value = map_params$yrs2,
                      min = 3,
                      max = 100,
                      step = 1),
         numericInput(ns("days"),
-                     label = translations[id == "map_date_within", get(language$language)][[1]],
+                     label = tr("map_date_within", language$language),
                      value = map_params$days2,
                      min = 0,
                      max = 365,
                      step = 1),
         footer = tagList(
-                  actionButton(ns("save_secondary_param"), translations[id == "save", get(language$language)][[1]]),
+                  actionButton(ns("save_secondary_param"), tr("save", language$language)),
                   if (map_params$params == 2) {
-                    actionButton(ns("remove_secondary_param"), translations[id == "map_rm_second_param", get(language$language)][[1]])
+                    actionButton(ns("remove_secondary_param"), tr("map_rm_second_param", language$language))
                   },
-                  actionButton(ns("close"), translations[id == "close", get(language$language)][[1]])
+                  actionButton(ns("close"), tr("close", language$language))
         )
       ))
     })
@@ -201,7 +201,7 @@ mapParamServer <- function(id, data, language) {
       if (map_params$params == 1) {
         map_params$params <- 2
       }
-      updateActionButton(session, "edit_secondary_param", translations[id == "map_edit_second_param", get(language$language)][[1]])
+      updateActionButton(session, "edit_secondary_param", tr("map_edit_second_param", language$language))
       map_params$param2 <- input$param
       map_params$yrs2 <- input$yrs
       map_params$days2 <- input$days
@@ -209,7 +209,7 @@ mapParamServer <- function(id, data, language) {
     })
     observeEvent(input$remove_secondary_param, {
       map_params$params <- 1
-      updateActionButton(session, "edit_secondary_param", translations[id == "map_add_second_param", get(language$language)][[1]])
+      updateActionButton(session, "edit_secondary_param", tr("map_add_second_param", language$language))
       removeModal()
     })
     
@@ -226,12 +226,12 @@ mapParamServer <- function(id, data, language) {
                            label = NULL,
                            choices = stats::setNames(
                              c("range", "abs"),
-                             c(translations[id == "map_relative", get(language$language)][[1]], translations[id == "map_absolute1", get(language$language)][[1]])
+                             c(tr("map_relative", language$language), tr("map_absolute1", language$language))
                            )
       )
-      updateCheckboxInput(session, "latest", label = translations[id == "map_latest_measurements", get(language$language)][[1]])
-      updateDateInput(session, "target", label = translations[id == "map_target_date", get(language$language)][[1]])
-      updateActionButton(session, "go", label = translations[id == "render_map", get(language$language)][[1]])
+      updateCheckboxInput(session, "latest", label = tr("map_latest_measurements", language$language))
+      updateDateInput(session, "target", label = tr("map_target_date", language$language))
+      updateActionButton(session, "go", label = tr("render_map", language$language))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     observeEvent(input$mapType, {
@@ -251,7 +251,7 @@ mapParamServer <- function(id, data, language) {
     
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
-      req(data, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$target, map_params$params, input$map_zoom)
+      req(moduleData, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$target, map_params$params, input$map_zoom)
 
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
@@ -262,10 +262,10 @@ mapParamServer <- function(id, data, language) {
       }
       
       # Stop if the parameter does not exist; it's possible that the user typed something in themselves
-      if (!map_params$param1 %in% data$parameters$parameter_id) {
+      if (!map_params$param1 %in% moduleData$parameters$parameter_id) {
         return()
       }
-      if (map_params$params == 2 && !map_params$param2 %in% data$parameters$parameter_id) {
+      if (map_params$params == 2 && !map_params$param2 %in% moduleData$parameters$parameter_id) {
         return()
       }
       
@@ -340,10 +340,10 @@ mapParamServer <- function(id, data, language) {
       }
       
       
-      locs_tsids1 <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements1$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
+      locs_tsids1 <- merge(moduleData$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], moduleData$timeseries[moduleData$timeseries$timeseries_id %in% closest_measurements1$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
       
-      locs_tsids1$param_name <- data$parameters[data$parameters$parameter_id == map_params$param1,  get(translations[id == "param_name_col", get(language$language)])]
-      locs_tsids1$param_unit <- data$parameters[data$parameters$parameter_id == map_params$param1,  "unit_default"]
+      locs_tsids1$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))]
+      locs_tsids1$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  "unit_default"]
       
       
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
@@ -414,10 +414,10 @@ mapParamServer <- function(id, data, language) {
           closest_measurements2 <- range2[, .SD[1], by = timeseries_id]
         }
         
-        locs_tsids2 <- merge(data$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], data$timeseries[data$timeseries$timeseries_id %in% closest_measurements2$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
+        locs_tsids2 <- merge(moduleData$locations[, c("latitude", "longitude", "location_id", "name", "name_fr")], moduleData$timeseries[moduleData$timeseries$timeseries_id %in% closest_measurements2$timeseries_id, c("timeseries_id", "location_id")], by = "location_id")
         
-        locs_tsids2$param_name <- data$parameters[data$parameters$parameter_id == map_params$param2,  get(translations[id == "param_name_col", get(language$language)])]
-        locs_tsids2$param_unit <- data$parameters[data$parameters$parameter_id == map_params$param2,  "unit_default"]
+        locs_tsids2$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(tr("param_name_col", language$language))]
+        locs_tsids2$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  "unit_default"]
         
         
         # Merge the two sets of locations and timeseries IDs
@@ -457,13 +457,13 @@ mapParamServer <- function(id, data, language) {
           weight = 1,
           radius = 8,
           popup = ~paste0(
-            "<strong>", get(translations[id == "generic_name_col", get(language$language)][[1]]),  "</strong><br/>",
+            "<strong>", get(tr("generic_name_col", language$language)),  "</strong><br/>",
             titleCase(param_name, language$abbrev), "<br>",
-            translations[id == "map_actual_date", get(language$language)][[1]], ": ", if (map_params$latest) paste0(datetime, " UTC") else paste0(date, " (daily mean)"), "<br/>",
-            translations[id == "map_relative", get(language$language)][[1]], ": ", round(percent_historic_range, 2), "% <br/>",
-            translations[id == "map_absolute2", get(language$language)][[1]], ": ", round(value, 2), " ", param_unit, "<br/>",
-            translations[id == "map_actual_hist_range", get(language$language)][[1]], ": ", round(min, 2), " ", translations[id == "to", get(language$language)][[1]], " ", round(max, 2)," ", param_unit, "<br/>",
-            translations[id == "map_actual_yrs", get(language$language)][[1]], ": ", doy_count
+            tr("map_actual_date", language$language), ": ", if (map_params$latest) paste0(datetime, " UTC") else paste0(date, " (daily mean)"), "<br/>",
+            tr("map_relative", language$language), ": ", round(percent_historic_range, 2), "% <br/>",
+            tr("map_absolute2", language$language), ": ", round(value, 2), " ", param_unit, "<br/>",
+            tr("map_actual_hist_range", language$language), ": ", round(min, 2), " ", tr("to", language$language), " ", round(max, 2)," ", param_unit, "<br/>",
+            tr("map_actual_yrs", language$language), ": ", doy_count
           )
         ) %>%
         leaflet::clearControls() %>%  # Clear existing legends

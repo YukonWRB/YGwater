@@ -26,6 +26,7 @@
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
 #' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
+#' @param hover Should hover text be included? Default is TRUE.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
@@ -57,6 +58,7 @@ plotTimeseries <- function(location,
                            axis_scale = 1,
                            legend_scale = 1,
                            legend_position = "v",
+                           hover = TRUE,
                            gridx = FALSE,
                            gridy = FALSE,
                            rate = NULL,
@@ -335,18 +337,24 @@ plotTimeseries <- function(location,
     stop("It looks like data for this location begins before your requested start date.")
   }
   
-  # Find the necessary datum (latest datum)
-  if (datum) {
-    datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
-    if (is.na(datum$conversion_m)) {
-      datum <- data.frame(conversion_m = 0)
-    }
-  } else {
-    datum <- data.frame(conversion_m = 0)
-  }
-  
   # Find the ts units
   units <- parameter_tbl$unit_default[1]
+  
+  # Find the necessary datum (latest datum)
+  if (datum) {
+    if (units != "m") {
+      warning("The parameter you are plotting is not in meters. Datum will not be applied.")
+      datum_m <- 0
+      datum <- FALSE
+    } else {
+      datum_m <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))[1,1]
+      if (is.na(datum_m)) {
+        warning("No datum conversion found for this location. Datum will not be applied.")
+        datum <- FALSE
+        datum_m <- 0
+      }
+    }
+  }
   
   range <- seq.POSIXt(start_date, end_date, by = "day")
   if (is.null(rate)) {
@@ -467,13 +475,13 @@ plotTimeseries <- function(location,
     stop("No data found for the specified location, parameter, and time range.")
   }
   
-  if (datum != 0) {
-    trace_data$value <- trace_data$value + datum$conversion_m
+  if (datum) {
+    trace_data$value <- trace_data$value + datum_m
     if (historic_range) {
-      range_data$min <- range_data$min + datum$conversion_m
-      range_data$max <- range_data$max + datum$conversion_m
-      range_data$q25 <- range_data$q25 + datum$conversion_m
-      range_data$q75 <- range_data$q75 + datum$conversion_m
+      range_data$min <- range_data$min + datum_m
+      range_data$max <- range_data$max + datum_m
+      range_data$q25 <- range_data$q25 + datum_m
+      range_data$q75 <- range_data$q75 + datum_m
     }
   }
   trace_data <- trace_data[order(trace_data$datetime),]
@@ -517,7 +525,7 @@ plotTimeseries <- function(location,
                           name = if (lang == "en") "Typical" else "Typique",
                           color = I("#5f9da6"), 
                           line = list(width = 0.2), 
-                          hoverinfo = "text", 
+                          hoverinfo = if (hover) "text" else "none", 
                           text = ~paste0("Q25: ", round(q25, 2), ", Q75: ", round(q75, 2), " (", as.Date(datetime), ")")) %>%
       plotly::add_ribbons(data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ], 
                           x = ~datetime, 
@@ -527,7 +535,7 @@ plotTimeseries <- function(location,
                           name = if (lang == "en") "Historic" else "Historique",
                           color = I("#D4ECEF"), 
                           line = list(width = 0.2), 
-                          hoverinfo = "text", 
+                          hoverinfo = if (hover) "text" else "none", 
                           text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
   }
   
@@ -540,7 +548,7 @@ plotTimeseries <- function(location,
                       line = list(width = 2.5 * line_scale),
                       name = parameter_name, 
                       color = I("#00454e"), 
-                      hoverinfo = "text", 
+                      hoverinfo = if (hover) "text" else "none", 
                       text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
     plotly::layout(
       title = if (title) list(text = stn_name, 
@@ -554,18 +562,27 @@ plotTimeseries <- function(location,
                    tickformat = if (lang == "en") "%b %-d '%y" else "%d %-b '%y",
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
-                   rangeslider = list(visible = if (slider & legend_position == "v") TRUE else FALSE)), 
-      yaxis = list(title = y_title, 
+                   nticks = 10,
+                   rangeslider = list(visible = if (slider & legend_position == "v") TRUE else FALSE),
+                   ticks = "outside",
+                   ticklen = 5,
+                   tickwidth = 1,
+                   tickcolor = "black"), 
+      yaxis = list(title = list(text = y_title, standoff = 10),
                    showgrid = gridy, 
                    showline = TRUE,
                    zeroline = FALSE,
                    titlefont = list(size = axis_scale * 14),
                    tickfont = list(size = axis_scale * 12),
-                   autorange = if (invert) "reversed" else TRUE), 
+                   autorange = if (invert) "reversed" else TRUE,
+                   ticks = "outside",
+                   ticklen = 5,
+                   tickwidth = 1,
+                   tickcolor = "black"),
       margin = list(b = 0,
                     t = 40 * axis_scale,
                     l = 50 * axis_scale), 
-      hovermode = "x unified",
+      hovermode = if (hover) "x unified" else ("none"),
       legend = list(font = list(size = legend_scale * 12),
                     orientation = legend_position)
     ) %>%

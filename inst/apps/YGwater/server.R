@@ -52,14 +52,17 @@ app_server <- function(input, output, session) {
     waterInfo = FALSE,
     WQReport = FALSE,
     snowBulletin = FALSE,
+    discData = FALSE,
+    contData = FALSE,
     news = FALSE,
     about = FALSE,
     locs = FALSE,
     ts = FALSE,
     equip = FALSE,
+    deploy_recover = FALSE,
     cal = FALSE,
-    contData = FALSE,
-    discData = FALSE,
+    addContData = FALSE,
+    addDiscData = FALSE,
     addDocs = FALSE,
     addImgs = FALSE,
     visit = FALSE)
@@ -69,12 +72,12 @@ app_server <- function(input, output, session) {
     viz = FALSE,
     locs = FALSE,
     ts = FALSE,
-    data = FALSE,
+    addData = FALSE,
     files = FALSE,
     equip = FALSE,
     cal = FALSE,
-    contData = FALSE,
-    discData = FALSE,
+    addContData = FALSE,
+    addDiscData = FALSE,
     addDocs = FALSE,
     addImgs = FALSE,
     visit = FALSE
@@ -108,7 +111,7 @@ app_server <- function(input, output, session) {
                                             username = config$dbUser,
                                             password = config$dbPass,
                                             silent = TRUE)
-
+  
   print("Connected to AquaCache")
   
   session$onUnhandledError(function() {
@@ -166,7 +169,7 @@ app_server <- function(input, output, session) {
   
   # Log in/out for edits ##########################################
   log_attempts <- reactiveVal(0) # counter for login attempts
-  user_logged_in <- reactiveVal(FALSE) # Reactive value to track login status
+  session$userData$user_logged_in <- FALSE # value to track login status
   
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
@@ -212,6 +215,7 @@ $(document).keyup(function(event) {
       return()
     }
     log_attempts(log_attempts() + 1)
+
     tryCatch({
       session$userData$AquaCache_new <- AquaConnect(name = session$userData$config$dbName, 
                                                     host = session$userData$config$dbHost,
@@ -237,7 +241,7 @@ $(document).keyup(function(event) {
         session$userData$config$dbUser <- input$username
         session$userData$config$dbPass <- input$password
         
-        user_logged_in(TRUE)
+        session$userData$user_logged_in <- TRUE
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
@@ -260,7 +264,7 @@ $(document).keyup(function(event) {
       } else {
         showModal(modalDialog(
           title = "Login Failed",
-          "Invalid username or password.",
+          "Invalid username or password or insufficient privileges.",
           easyClose = TRUE,
           footer = modalButton(tr("close", languageSelection$language))
         ))
@@ -288,7 +292,7 @@ $(document).keyup(function(event) {
   ## Log out #####################################################
   observeEvent(input$logoutBtn, {
     
-    user_logged_in(FALSE)  # Set login status to FALSE
+    session$userData$user_logged_in <- FALSE  # Set login status to FALSE
     # Hide the 'admin' tabs upon logout
     hideTab(inputId = "navbar", target = "admin")
     showTab(inputId = "navbar", target = "viz", select = TRUE)
@@ -301,11 +305,15 @@ $(document).keyup(function(event) {
     DBI::dbDisconnect(session$userData$AquaCache)
     # Re-create the connection with the base 'config' parameters, no edit privileges
     session$userData$AquaCache <- AquaConnect(name = config$dbName, 
-                              host = config$dbHost,
-                              port = config$dbPort,
-                              username = config$dbUser,
-                              password = config$dbPass,
-                              silent = TRUE)
+                                              host = config$dbHost,
+                                              port = config$dbPort,
+                                              username = config$dbUser,
+                                              password = config$dbPass,
+                                              silent = TRUE)
+    
+    # Reset the session userData with the default credentials
+    session$userData$config$dbUser <- config$dbUser
+    session$userData$config$dbPass <- config$dbPass
     
     # Redirect to last 'viz' tab
     updateTabsetPanel(session, "navbar", selected = last_viz_tab())
@@ -316,8 +324,8 @@ $(document).keyup(function(event) {
     removeTab("navbar", "ts", session = session)
     removeTab("navbar", "equip", session = session)
     removeTab("navbar", "cal", session = session)
-    removeTab("navbar", "data", session = session)
-    removeTab("navbar", "files", session = session)
+    removeTab("navbar", "addData", session = session)
+    removeTab("navbar", "addFiles", session = session)
     removeTab("navbar", "visit", session = session)
   })
   
@@ -331,7 +339,7 @@ $(document).keyup(function(event) {
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
   last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
-
+  
   # Move between tabs/modules
   observeEvent(input$navbar, {
     if (programmatic_change()) {
@@ -352,9 +360,10 @@ $(document).keyup(function(event) {
       }
       showTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
       showTab(inputId = "navbar", target = "img")
+      showTab(inputId = "navbar", target = "data") # Actually a navbarMenu, and this targets the tabs 'discData' and 'contData' as well
       showTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
       # don't show 'admin' tab unless logged in
-      if (user_logged_in()) {  # this UI element is generated upon successful login
+      if (session$userData$user_logged_in) {  # this UI element is generated upon successful login
         showTab(inputId = "navbar", target = "admin")
       }
       
@@ -364,8 +373,8 @@ $(document).keyup(function(event) {
       hideTab(inputId = "navbar", target = "ts")
       hideTab(inputId = "navbar", target = "equip")
       hideTab(inputId = "navbar", target = "cal")
-      hideTab(inputId = "navbar", target = "data") # Actually a navbarMenu, and this targets the tabs 'contData' and 'discData' as well
-      hideTab(inputId = "navbar", target = "files") # Actually a navbarMenu, and this targets the tabs 'addDocs' and 'addImgs' as well
+      hideTab(inputId = "navbar", target = "addData") # Actually a navbarMenu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      hideTab(inputId = "navbar", target = "addFiles") # Actually a navbarMenu, and this targets the tabs 'addDocs' and 'addImgs' as well
       hideTab(inputId = "navbar", target = "visit")
       
       # Select the last tab the user was on in viz mode
@@ -380,7 +389,7 @@ $(document).keyup(function(event) {
                   tabPanel(title = "Switch to View mode", value = "viz",
                            uiOutput("viz_ui")),
                   target = "home", position = "before"
-                  )
+        )
         tab_created$viz <- TRUE
       }
       if (!tab_created$locs) {
@@ -399,43 +408,44 @@ $(document).keyup(function(event) {
       }
       if (!tab_created$equip) {
         insertTab("navbar",
-                  tabPanel(title = "Manage equipment", value = "equip",
-                           uiOutput("equip_ui")),
+                  navbarMenu(title = "Equipment/instruments",
+                             menuName = "equip",
+                             tabPanel(title = "Checks + calibrations", 
+                                      value = "cal",
+                                      uiOutput("cal_ui")),
+                             tabPanel(title = "Deploy/Recover",
+                                      value = "deploy_recover",
+                                      uiOutput("deploy_recover_ui"))),
                   target = "ts", position = "after")
         tab_created$equip <- TRUE
-      }
-      if (!tab_created$cal) {
-        insertTab("navbar",
-                  tabPanel(title = "Enter checks/calibrations", value = "cal",
-                           uiOutput("cal_ui")),
-                  target = "equip", position = "after")
+        tab_created$deploy_recover <- TRUE
         tab_created$cal <- TRUE
       }
-      # Create the navbarMenu that holds the continuous and discrete data tabs
-      if (!tab_created$data) { 
+      # Create the navbarMenu that holds the 'add' continuous and discrete data tabs
+      if (!tab_created$addData) { 
         insertTab("navbar",
-                  navbarMenu(title = "Manage data", menuName = "data",
-                             tabPanel(title = "Continuous data", value = "contData",
-                                      uiOutput("contData_ui")),
-                             tabPanel(title = "Discrete data", value = "discData",
-                                      uiOutput("discData_ui"))),
+                  navbarMenu(title = "Manage data", menuName = "addData",
+                             tabPanel(title = "Continuous data", value = "addContData",
+                                      uiOutput("addContData_ui")),
+                             tabPanel(title = "Discrete data", value = "addDiscData",
+                                      uiOutput("addDiscData_ui"))),
                   target = "cal", position = "after")
-        tab_created$data <- TRUE
-        tab_created$contData <- TRUE
-        tab_created$discData <- TRUE
+        tab_created$addData <- TRUE
+        tab_created$addContData <- TRUE
+        tab_created$addDiscData <- TRUE
       }
-      # Create the navbarMenu for docs/images/vectors/rasters
+      # Create the navbarMenu for adding docs/images/vectors/rasters
       if (!tab_created$files) {
         insertTab("navbar",
-                  navbarMenu(title = "Manage files/docs", menuName = "files",
+                  navbarMenu(title = "Manage files/docs", menuName = "addFiles",
                              tabPanel(title = "Documents", value = "addDocs",
                                       uiOutput("addDocs_ui")),
                              tabPanel(title = "Images", value = "addImgs",
                                       uiOutput("addImgs_ui"))
                              #.... plus extra tabs for vectors and rasters when built
-                             ),
+                  ),
                   target = "data", position = "after")
-        tab_created$files <- TRUE
+        tab_created$addFiles <- TRUE
         tab_created$addDocs <- TRUE
         tab_created$addImgs <- TRUE
       }
@@ -453,8 +463,8 @@ $(document).keyup(function(event) {
       showTab(inputId = "navbar", target = "ts")
       showTab(inputId = "navbar", target = "equip")
       showTab(inputId = "navbar", target = "cal")
-      showTab(inputId = "navbar", target = "data") # Actually a navbarMenu, and this targets the tabs 'contData' and 'discData' as well
-      showTab(inputId = "navbar", target = "files") # Actually a navbarMenu, and this targets the tabs 'addDocs' and 'addImgs' as well
+      showTab(inputId = "navbar", target = "addData") # Actually a navbarMenu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      showTab(inputId = "navbar", target = "addFiles") # Actually a navbarMenu, and this targets the tabs 'addDocs' and 'addImgs' as well
       showTab(inputId = "navbar", target = "visit")
       
       # Hide irrelevant tabs/menus
@@ -466,16 +476,17 @@ $(document).keyup(function(event) {
       hideTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', 'snowBulletin' as well
       hideTab(inputId = "navbar", target = "img")
       hideTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
+      hideTab(inputId = "navbar", target = "data") # Actually a navbarMenu, and this targets the tabs 'discData' and 'contData' as well
       
       # Select the last tab the user was on in admin mode
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
       
     } else {
       # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "img", "about", "news")) {
+      if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "img", "about", "news", "discData", "contData")) {
         # User is in viz mode
         last_viz_tab(input$navbar)
-      } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "contData", "discData", "addDocs", "addImgs", "visit")) {
+      } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "addContData", "addDiscData", "addDocs", "addImgs", "visit")) {
         # User is in admin mode
         last_admin_tab(input$navbar) 
       }
@@ -540,7 +551,7 @@ $(document).keyup(function(event) {
     if (input$navbar == "snowInfo") {
       if (!ui_loaded$snowInfo) {
         output$snowInfo_ui <- renderUI(snowInfoUIMod("snowInfo"))
-        ui_loaded$snowinfo <- TRUE
+        ui_loaded$snowInfo <- TRUE
         snowInfoMod("snowInfo", language = languageSelection) # Call the server
       }
     }
@@ -563,6 +574,20 @@ $(document).keyup(function(event) {
         output$snowBulletin_ui <- renderUI(snowBulletinUIMod("snowBulletin"))
         ui_loaded$snowBulletin <- TRUE
         snowBulletinMod("snowBulletin", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "discData") {
+      if (!ui_loaded$discData) {
+        output$discData_ui <- renderUI(discDataUI("discData"))
+        ui_loaded$discData <- TRUE
+        discData("discData", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "contData") {
+      if (!ui_loaded$contData) {
+        output$contData_ui <- renderUI(contDataUI("contData"))
+        ui_loaded$contData <- TRUE
+        contData("contData", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "about") {
@@ -593,11 +618,11 @@ $(document).keyup(function(event) {
         ts("ts") # Call the server
       }
     }
-    if (input$navbar == "equip") {
-      if (!ui_loaded$equip) {
-        output$equip_ui <- renderUI(equipUI("equip"))  # Render the UI
-        ui_loaded$equip <- TRUE
-        equip("equip")  # Call the server
+    if (input$navbar == "deploy_recover") {
+      if (!ui_loaded$deploy_recover) {
+        output$deploy_recover_ui <- renderUI(deploy_recover_UI("deploy_recover"))  # Render the UI
+        ui_loaded$deploy_recover <- TRUE
+        deploy_recover("deploy_recover")  # Call the server
       }
     }
     if (input$navbar == "cal") {
@@ -607,18 +632,18 @@ $(document).keyup(function(event) {
         cal("cal")  # Call the server
       }
     }
-    if (input$navbar == "contData") {
-      if (!ui_loaded$contData) {
-        output$contData_ui <- renderUI(contDataUI("contData"))  # Render the UI
-        ui_loaded$contData <- TRUE
-        contData("contData")  # Call the server
+    if (input$navbar == "addContData") {
+      if (!ui_loaded$addContData) {
+        output$addContData_ui <- renderUI(addContDataUI("addContData"))  # Render the UI
+        ui_loaded$addContData <- TRUE
+        addContData("addContData")  # Call the server
       }
     }
-    if (input$navbar == "discData") {
-      if (!ui_loaded$discData) {
-        output$discData_ui <- renderUI(discDataUI("discData"))  # Render the UI
-        ui_loaded$discData <- TRUE
-        discData("discData")  # Call the server
+    if (input$navbar == "addDiscData") {
+      if (!ui_loaded$addDiscData) {
+        output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
+        ui_loaded$addDiscData <- TRUE
+        addDiscData("addDiscData")  # Call the server
       }
     }
     if (input$navbar == "addDocs") {
