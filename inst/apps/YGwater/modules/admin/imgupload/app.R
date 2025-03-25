@@ -1,131 +1,23 @@
 # Load necessary libraries
-library(shiny)
-library(leaflet)
-library(jpeg)
-library(exifr)
-library(dplyr)
-library(DT)
-library(YGwater)
-library(AquaCache)
-
-# Define a named list of colors
-color_list <- list(
-  "selected" = "cyan",
-  "unselected" = "black",
-  "click" = "green",
-  "other" = "magenta",
-  "locations" = "orange"
-)
-
-setwd(normalizePath(file.path("C:/FEWS/FEWS_MESHYukon/Import/APRFC", "../../")))
-
-if (Sys.info()["sysname"] == "Windows" | interactive()) {
-} else {
-  future::plan("multicore")
-}
-
-# Default coordinates to repositon the map around Whitehorse
-DEFAULT_COORDS = c(-135.0568, 60.7212)
-
-# Function to convert latitude and longitude to meters
-latlon_to_meters <- function(lat1, lon1, lat2, lon2) {
-  R <- 6378137 # Radius of the Earth in meters
-  dLat <- (lat2 - lat1) * pi / 180
-  dLon <- (lon2 - lon1) * pi / 180
-  a <- sin(dLat / 2) * sin(dLat / 2) +
-    cos(lat1 * pi / 180) * cos(lat2 * pi / 180) *
-    sin(dLon / 2) * sin(dLon / 2)
-  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
-  d <- R * c
-  return(d)
-}
-
-
-# Function to check if latitude and longitude are valid
-is_valid_latlon <- function(lat, lon) {
-  valid_lat <- !is.na(lat) & !is.null(lat) & lat >= -90 & lat <= 90
-  valid_lon <- !is.na(lon) & !is.null(lat) & lon >= -180 & lon <= 180
-  return(valid_lat & valid_lon)
-}
-
-# Function to infer zoom level based on latitude and longitude arrays
-infer_zoom_level <- function(latitudes, longitudes) {
-  if (length(latitudes) == 0 || length(longitudes) == 0) {
-    return(1) # Default zoom level if no points are provided
-  }
-  
-  # Calculate the bounding box
-  min_lat <- min(latitudes, na.rm = TRUE)
-  max_lat <- max(latitudes, na.rm = TRUE)
-  min_lon <- min(longitudes, na.rm = TRUE)
-  max_lon <- max(longitudes, na.rm = TRUE)
-  
-  # Calculate the zoom level based on the bounding box size
-  lat_diff <- max_lat - min_lat
-  lon_diff <- max_lon - min_lon
-  max_diff <- max(lat_diff, lon_diff)
-  
-  # Define zoom levels based on the maximum difference
-  if (max_diff < 0.01) {
-    zoom <- 10
-  } else if (max_diff < 0.1) {
-    zoom <- 10
-  } else {
-    zoom <- 5
-  }
-  return(zoom)
-}
-
-# Load image file paths from the "data" directory
-files <- list.files("data/", pattern="*jpg", recursive = TRUE, full.names = TRUE)
-dat <- read_exif(files)
-
-
-
-# Function to create a new data frame with GPS data and new empty columns
-# NOTIMPLEMENTED WARNING
-
-initialize_csv <- function(dat, filename) {
-  # Assertions to check the presence of necessary columns
-  stopifnot("FileName" %in% colnames(dat))
-  stopifnot("GPSLatitude" %in% colnames(dat))
-  stopifnot("GPSLongitude" %in% colnames(dat))
-  stopifnot("GPSAltitude" %in% colnames(dat))
-  stopifnot("DateTimeOriginal" %in% colnames(dat))
-
-  dat_with_tags_notes <- dat %>%
-    select(FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude) %>%
-    rename(filename = FileName, latitude = GPSLatitude, longitude = GPSLongitude, altitude = GPSAltitude, datetime = DateTimeOriginal) %>%
-    mutate(Tags = "", Notes = "", visibility = "Private")
-  
-  # Write the new data frame to a CSV file
-  write.csv(dat_with_tags_notes, filename, row.names = FALSE)
-  return(dat_with_tags_notes)
-}
-
-preprocess_exif <- function(dat) {
-  stopifnot("FileName" %in% colnames(dat))
-  stopifnot("GPSLatitude" %in% colnames(dat))
-  stopifnot("GPSLongitude" %in% colnames(dat))
-  stopifnot("GPSAltitude" %in% colnames(dat))
-  stopifnot("DateTimeOriginal" %in% colnames(dat))
-
-  dat_out <- dat %>%
-    select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude, GPSImgDirection) %>%
-    rename(Sourcefile = SourceFile, Filename = FileName, Latitude = GPSLatitude, Longitude = GPSLongitude, Altitude = GPSAltitude, Datetime = DateTimeOriginal, Azimuth = GPSImgDirection) %>%
-    mutate(Tags = list(character(0)), Notes = "", Visibility = "Private", UTC = -7, Location = "")
-  return(dat_out)
-}
-
-# Define a dictionary to map checkbox choices to tags
-tag_list = list("Head", "Toe", "Smooth ice", "In flood")
-share_list = list("Private", "Public")
-# Define a list of UTC timezone corrections
-tz_corrections = list(-12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+# library(shiny)
+# library(leaflet)
+# library(jpeg)
+# library(exifr)
+# library(dplyr)
+# library(DT)
+# library(YGwater)
+# library(AquaCache)
 
 # Define the UI layout
 
 imguploadUI <- function(id) {
+      # Define a dictionary to map checkbox choices to tags
+    tag_list = list("Head", "Toe", "Smooth ice", "In flood")
+    share_list = list("Private", "Public")
+    # Define a list of UTC timezone corrections
+    tz_corrections = list(-12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+
+
     ns <- NS(id)
     fluidPage(
       br(),
@@ -881,6 +773,93 @@ validateDataFrame <- function(df) {
   })
   
 # end of server
+
+
+
+
+
+
+# Define a named list of colors
+color_list <- list(
+  "selected" = "cyan",
+  "unselected" = "black",
+  "click" = "green",
+  "other" = "magenta",
+  "locations" = "orange"
+)
+
+if (Sys.info()["sysname"] == "Windows" | interactive()) {
+} else {
+  future::plan("multicore")
+}
+
+# Default coordinates to repositon the map around Whitehorse
+DEFAULT_COORDS = c(-135.0568, 60.7212)
+
+# Function to convert latitude and longitude to meters
+latlon_to_meters <- function(lat1, lon1, lat2, lon2) {
+  R <- 6378137 # Radius of the Earth in meters
+  dLat <- (lat2 - lat1) * pi / 180
+  dLon <- (lon2 - lon1) * pi / 180
+  a <- sin(dLat / 2) * sin(dLat / 2) +
+    cos(lat1 * pi / 180) * cos(lat2 * pi / 180) *
+    sin(dLon / 2) * sin(dLon / 2)
+  c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+  d <- R * c
+  return(d)
+}
+
+
+# Function to check if latitude and longitude are valid
+is_valid_latlon <- function(lat, lon) {
+  valid_lat <- !is.na(lat) & !is.null(lat) & lat >= -90 & lat <= 90
+  valid_lon <- !is.na(lon) & !is.null(lat) & lon >= -180 & lon <= 180
+  return(valid_lat & valid_lon)
+}
+
+# Function to infer zoom level based on latitude and longitude arrays
+infer_zoom_level <- function(latitudes, longitudes) {
+  if (length(latitudes) == 0 || length(longitudes) == 0) {
+    return(1) # Default zoom level if no points are provided
+  }
+  
+  # Calculate the bounding box
+  min_lat <- min(latitudes, na.rm = TRUE)
+  max_lat <- max(latitudes, na.rm = TRUE)
+  min_lon <- min(longitudes, na.rm = TRUE)
+  max_lon <- max(longitudes, na.rm = TRUE)
+  
+  # Calculate the zoom level based on the bounding box size
+  lat_diff <- max_lat - min_lat
+  lon_diff <- max_lon - min_lon
+  max_diff <- max(lat_diff, lon_diff)
+  
+  # Define zoom levels based on the maximum difference
+  if (max_diff < 0.01) {
+    zoom <- 10
+  } else if (max_diff < 0.1) {
+    zoom <- 10
+  } else {
+    zoom <- 5
+  }
+  return(zoom)
+}
+
+# Function to preprocess EXIF data
+preprocess_exif <- function(dat) {
+  stopifnot("FileName" %in% colnames(dat))
+  stopifnot("GPSLatitude" %in% colnames(dat))
+  stopifnot("GPSLongitude" %in% colnames(dat))
+  stopifnot("GPSAltitude" %in% colnames(dat))
+  stopifnot("DateTimeOriginal" %in% colnames(dat))
+
+  dat_out <- dat %>%
+    select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude, GPSImgDirection) %>%
+    rename(Sourcefile = SourceFile, Filename = FileName, Latitude = GPSLatitude, Longitude = GPSLongitude, Altitude = GPSAltitude, Datetime = DateTimeOriginal, Azimuth = GPSImgDirection) %>%
+    mutate(Tags = list(character(0)), Notes = "", Visibility = "Private", UTC = -7, Location = "")
+  return(dat_out)
+}
+
 }
 
 } # end imgupload function
