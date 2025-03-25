@@ -62,13 +62,13 @@ plotDiscrete <- function(start,
                          dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
   
   # testing parameters for EQWIN direct
-  # start <- "2024-11-01"
-  # end <- "2024-11-24"
-  # locations <- c("(EG)W4-mix")
-  # parameters <- c("N-NO2", "Cu-D", "Ni-D", "Zn-D")
+  # start <- "2024-06-24"
+  # end <- "2025-03-13"
+  # locations <- c("(EG)W29")
+  # parameters <- c("CN-WAD", "Co-T", "Cu-T")
   # locGrp <- NULL
   # paramGrp <- NULL
-  # standard = NULL
+  # standard = "CCME_LT"
   # loc_code = 'name'
   # shareX = TRUE
   # shareY = FALSE
@@ -435,8 +435,8 @@ plotDiscrete <- function(start,
         merged_df <- merge(combined_df, EQWinStd_result, by = c("CalcId", "SampleId"), all.x = TRUE)
         
         # Assign the calculated values back to data$std_max and data$std_min
-        data$std_max[merged_df$idx[merged_df$std_type == "std_max"]] <- merged_df$result[merged_df$std_type == "std_max"]
-        data$std_min[merged_df$idx[merged_df$std_type == "std_min"]] <- merged_df$result[merged_df$std_type == "std_min"]
+        data$std_max[merged_df$idx[merged_df$std_type == "std_max"]] <- merged_df$Value[merged_df$std_type == "std_max"]
+        data$std_min[merged_df$idx[merged_df$std_type == "std_min"]] <- merged_df$Value[merged_df$std_type == "std_min"]
       }
 
       
@@ -751,8 +751,9 @@ AND s.datetime > '", start, "' AND s.datetime < '", end, "';
         missing <- setdiff(unique(data[[color_by]]), unique(df[[color_by]]))
         for (m in missing) {
           if (color_by %in% c("location", "location_name")) {
-            unit_text <- unique(df$units)
-            to_bind <- data.frame(result = -Inf, datetime = min(df$datetime), param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA)
+            unit_text <- if (nrow(df) == 0) unique(conditions$units) else unique(df$units)
+            min_dt <- if (nrow(df) == 0) min(conditions$datetime) else min(df$datetime)
+            to_bind <- data.frame(result = -Inf, datetime = min_dt, param_name = NA, units = unit_text, location = m, location_name = m, result_condition = NA, result_condition_value = NA)
             df <- dplyr::bind_rows(df, to_bind)  # used instead of rbind because it automatically adds columns with NA values
           } else {
             unit_text <- unique(data[data$param_name == m, "units"])

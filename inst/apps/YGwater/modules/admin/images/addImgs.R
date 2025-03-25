@@ -13,7 +13,7 @@ addImgs <- function(id) {
     
     ns <- session$ns
     
-    output$placeholder <- renderText("Placeholder for images main module")
+    output$placeholder <- renderText("Placeholder for images addition/management module")
     
     
   }) # End of moduleServer

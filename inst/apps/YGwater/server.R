@@ -59,6 +59,7 @@ app_server <- function(input, output, session) {
     locs = FALSE,
     ts = FALSE,
     equip = FALSE,
+    deploy_recover = FALSE,
     cal = FALSE,
     addContData = FALSE,
     addDiscData = FALSE,
@@ -71,7 +72,7 @@ app_server <- function(input, output, session) {
     viz = FALSE,
     locs = FALSE,
     ts = FALSE,
-    data = FALSE,
+    addData = FALSE,
     files = FALSE,
     equip = FALSE,
     cal = FALSE,
@@ -407,16 +408,17 @@ $(document).keyup(function(event) {
       }
       if (!tab_created$equip) {
         insertTab("navbar",
-                  tabPanel(title = "Manage equipment", value = "equip",
-                           uiOutput("equip_ui")),
+                  navbarMenu(title = "Equipment/instruments",
+                             menuName = "equip",
+                             tabPanel(title = "Checks + calibrations", 
+                                      value = "cal",
+                                      uiOutput("cal_ui")),
+                             tabPanel(title = "Deploy/Recover",
+                                      value = "deploy_recover",
+                                      uiOutput("deploy_recover_ui"))),
                   target = "ts", position = "after")
         tab_created$equip <- TRUE
-      }
-      if (!tab_created$cal) {
-        insertTab("navbar",
-                  tabPanel(title = "Enter checks/calibrations", value = "cal",
-                           uiOutput("cal_ui")),
-                  target = "equip", position = "after")
+        tab_created$deploy_recover <- TRUE
         tab_created$cal <- TRUE
       }
       # Create the navbarMenu that holds the 'add' continuous and discrete data tabs
@@ -428,7 +430,7 @@ $(document).keyup(function(event) {
                              tabPanel(title = "Discrete data", value = "addDiscData",
                                       uiOutput("addDiscData_ui"))),
                   target = "cal", position = "after")
-        tab_created$data <- TRUE
+        tab_created$addData <- TRUE
         tab_created$addContData <- TRUE
         tab_created$addDiscData <- TRUE
       }
@@ -549,7 +551,7 @@ $(document).keyup(function(event) {
     if (input$navbar == "snowInfo") {
       if (!ui_loaded$snowInfo) {
         output$snowInfo_ui <- renderUI(snowInfoUIMod("snowInfo"))
-        ui_loaded$snowinfo <- TRUE
+        ui_loaded$snowInfo <- TRUE
         snowInfoMod("snowInfo", language = languageSelection) # Call the server
       }
     }
@@ -616,11 +618,11 @@ $(document).keyup(function(event) {
         ts("ts") # Call the server
       }
     }
-    if (input$navbar == "equip") {
-      if (!ui_loaded$equip) {
-        output$equip_ui <- renderUI(equipUI("equip"))  # Render the UI
-        ui_loaded$equip <- TRUE
-        equip("equip")  # Call the server
+    if (input$navbar == "deploy_recover") {
+      if (!ui_loaded$deploy_recover) {
+        output$deploy_recover_ui <- renderUI(deploy_recover_UI("deploy_recover"))  # Render the UI
+        ui_loaded$deploy_recover <- TRUE
+        deploy_recover("deploy_recover")  # Call the server
       }
     }
     if (input$navbar == "cal") {
@@ -639,7 +641,7 @@ $(document).keyup(function(event) {
     }
     if (input$navbar == "addDiscData") {
       if (!ui_loaded$addDiscData) {
-        output$discData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
+        output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
         ui_loaded$addDiscData <- TRUE
         addDiscData("addDiscData")  # Call the server
       }

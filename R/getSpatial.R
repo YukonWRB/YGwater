@@ -24,11 +24,11 @@ getRaster <- function() {
 #' @param layer_name A character vector (one or more elements) specifying the target layer_name from the 'vectors' table.
 #' @param feature_name A character vector (one or more elements) specifying the target feature_name from the 'vectors' table.
 #' @param geom_type One of c('ST_Point', 'ST_MultiPoint', 'ST_LineString', 'ST_MultiLineString', 'ST_Polygon', 'ST_MultiPolygon').
-#' @param return_cols The names of columns to return.
+#' @param return_cols The names of columns to return. The default includes all columns.
 #' @param bounds Optional bounds by which to limit the spatial extent returned. Currently returns the full extent of every feature intersecting the bounds. Refer to parameter 'boundary' of [rpostgis::pgGetGeom()] for details of how to specify this parameter.
 #' @param table The target table in the database (as character string). See 'schema' if not under the 'spatial' schema.
 #' @param schema The schema in which the target 'table' is located. Default is 'spatial'. Note that this is NOT the default for [rpostgis::pgGetGeom()].
-#' @param geom_col The name of the database table column in which to insert the geometry object.
+#' @param geom_col The name of the database table column which holds the geometry object.
 #' @param silent Should the function suppress all messages?
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'

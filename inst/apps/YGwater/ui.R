@@ -21,7 +21,7 @@ app_ui <- function(request) {
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css") # Fonts
       # css for z index control is at the bottom because it must come after the css passed on silently by navbarPage
     ),
-    # Add custom CSS to adjust tab font sizes: 'admin' and 'visualize' tabs are larger
+    # Add custom CSS to adjust tab font sizes: 'admin' and 'visualize' tabs are larger (these are created in server)
     tags$style(HTML("
         /* Reduce font size for all tabs except 'visualize' and 'admin' */
         .navbar .nav > li > a:not([data-value='visualize']):not([data-value='admin']) {
@@ -69,7 +69,7 @@ app_ui <- function(request) {
                tabPanel(title = "Continuous", value = "continuous",
                         uiOutput("continuous_ui")),
                tabPanel(title = "Mix", value = "mix",
-                        uiOutput("mi_ui"))
+                        uiOutput("mix_ui"))
     ),
     navbarMenu(title = "Reports", menuName = "reports",
                tabPanel(title = "Snowpack info", value = "snowInfo",

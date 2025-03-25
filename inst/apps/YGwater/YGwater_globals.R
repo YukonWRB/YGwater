@@ -14,20 +14,19 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   source(system.file("apps/YGwater/modules/admin/timeseries/ts_main.R", package = "YGwater"))
   # timeseries sub-modules
-  source(system.file("apps/YGwater/modules/admin/equipment/equip_main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/equipment/deploy_recover.R", package = "YGwater"))
   # equipment sub-modules
-  source(system.file("apps/YGwater/modules/admin/calibrate/cal_main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/equipment/calibrate.R", package = "YGwater"))
   # calibration sub-modules
   source(system.file("apps/YGwater/modules/admin/addContData/addContData_main.R", package = "YGwater"))
   # continuous data sub-modules
   source(system.file("apps/YGwater/modules/admin/addDiscData/addDiscData_main.R", package = "YGwater"))
   # discrete data sub-modules
   source(system.file("apps/YGwater/modules/admin/field/field_main.R", package = "YGwater"))
-  # Field visit sub-modules
-  source(system.file("apps/YGwater/modules/admin/documents/docs_main.R", package = "YGwater"))
-  # Document sub-modules
-  source(system.file("apps/YGwater/modules/admin/images/imgs_main.R", package = "YGwater"))
-  # Document sub-modules
+  
+  # Files/document/image sub-modules
+  source(system.file("apps/YGwater/modules/admin/documents/addDocs.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/images/addImgs.R", package = "YGwater"))
 
 
   
@@ -64,10 +63,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   
   # Load translations infrastructure to the global environment
-  translations <<- data.table::setDT(openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1))
-  
-  
-  # New method to gradually move to:
+
   translations <- openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1)
   # Build a list from the data.frame
   translation_cache <<- lapply(setdiff(names(translations[, -2]), "id"), function(lang) { # Removes the second, "description" column, builds lists for each language
@@ -79,8 +75,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   tr <<- function(key, lang) {
     translation_cache[[lang]][[key]]  # list 'lang', item 'key'
   }
-  
-  # When testing, the function option is ~300 times faster than the data.table option
   
   
   # Establish database connection parameters

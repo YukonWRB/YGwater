@@ -679,7 +679,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
   for (i in 1:nrow(exceed_comments)) {
     for (j in 1:ncol(exceed_comments)) {
       comment <- exceed_comments[i, j]
-      if (is.na(comment)) next()
+      if (is.na(comment)) next
       openxlsx::writeComment(wb, "Report", row = 5 + i, col = j + (1 + nrow(standards)), comment = openxlsx::createComment(comment, visible = FALSE, height = 20))
       openxlsx::addStyle(wb, "Report", exceedStyle, rows = 5 + i, cols = j + (1 + nrow(standards)), stack = TRUE)
     }

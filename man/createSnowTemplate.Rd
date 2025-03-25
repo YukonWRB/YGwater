@@ -6,7 +6,7 @@
 \usage{
 createSnowTemplate(
   target_date,
-  circuit = "all",
+  circuits = "all",
   save_path = "choose",
   snowCon = NULL
 )
@@ -14,7 +14,7 @@ createSnowTemplate(
 \arguments{
 \item{target_date}{The target date of the snow survey, given in the form yyyy-mm-dd as a text string or Date object. Example: for the march snow survey of 2024, target_date = '2024-03-01'}
 
-\item{circuit}{The circuit for which we are creating a snow survey template. Options are Carmacks, Dawson, HJ, KluaneP, Mayo, NorthSlope, OldCrow, PellyFarm, Ross, SLakes, Teslin, Watson, Whitehorse, and YEC. "all" will create a workbook for all circuits.}
+\item{circuits}{The circuit or circuits for which we are creating a snow survey template. Options are Alaska, Carmacks, Dawson, Haines Junction, Kluane National Park, Mayo, North Slope, Old Crow, Pelly Farm, Ross River, Southern Lakes, Teslin, Watson Lake, Whitehorse, YEC. "all" will create a workbook for all circuits listed in the Snow database. Default is "all".}
 
 \item{save_path}{The path where you want the circuit workbook(s) saved. Default "choose" lets you pick your folder.}
 
@@ -26,7 +26,9 @@ A snow survey template for the specified circuit(s) and target date. This excel 
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
+NOTE: locations must be associated with a circuit in the snow database for this function to work. If you are missing locations, you will need to add them to the snow database before running this function.
+
 This function creates snow survey templates for a snow survey circuit in an excel workbook. The function takes the master template and copies it into multiple sheets with circuit name, course name and snow survey target date pre-filled. The outputted template is meant to be filled out by those conducting snow surveys.
 
-You should be running this function from a computer with access to the Snow database for full functionality:
+You need to be running this function from a computer with access to the Snow database (and probably production instance) for full functionality. Note that this is a change as of March 2025, as the function used to work without a connection to the database with limited functionality. This change was done in order to use the database's set snow course groupings.
 }
