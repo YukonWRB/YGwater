@@ -89,7 +89,7 @@ plotTimeseries <- function(location,
 # legend_position = "v"
 # rate = "max"
 # tzone = "auto"
-# con = NULL
+# # con = NULL
 # gridx = FALSE
 # gridy = FALSE
 
