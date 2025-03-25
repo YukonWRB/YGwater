@@ -146,15 +146,33 @@ snowBulletin <- function(year,
   ### Generate a snow bulletin for specified basins ###
 
   
+  
   rmarkdown::render(
     input = system.file("rmd", "Snow_bulletin.Rmd", package = "YGwater"),
     output_file = paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
     output_dir = save_path,
+    output_format = rmarkdown::word_document(
+      reference_docx = if (language == "french") {
+        system.file("rmd", "style_template_snowbull_fr.docx", package = "YGwater")
+      } else {
+        system.file("rmd", "style_template_snowbull_en.docx", package = "YGwater")
+      }
+    ),
     params = list(year = year,
                   month = month,
                   scale = scale,
                   basins = basins,
                   language = language,
+                  reference_docx = if (language == "french") {
+                    "style_template_snowbull_fr.docx"
+                  } else {
+                    "style_template_snowbull_en.docx"
+                  },
+                  title_var = if (language == "english") {
+                    "  \n  \n  \nYukon Snow Survey  \nBulletin & Water  \nSupply Forecast"
+                  } else {
+                    "  \n  \n  \nBulletin des relevés  \nivométriques et des  \nprévisions hydrologiques  \ndu Yukon"
+                  },
                   precip_period = precip_period,
                   cddf_period = cddf_period,
                   # snow_period = snow_period,

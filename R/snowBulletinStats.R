@@ -199,14 +199,24 @@ snowBulletinStats <- function(year,
     precip_stats <- precip_stats %>%
       dplyr::mutate(description = dplyr::case_when(
         perc_hist_med < 66 ~ "well below",
-        perc_hist_med >= 66 & perc_hist_med < 90 ~ "below",
+        perc_hist_med >= 66 & perc_hist_med < 90 ~ "below ",
+        perc_hist_med >= 90 & perc_hist_med < 98 ~ "close to ",
         perc_hist_med >= 98 & perc_hist_med < 103 ~ "",
-        perc_hist_med >= 90 & perc_hist_med < 110 ~ "close to",
-        perc_hist_med >= 110 & perc_hist_med < 135 ~ "above",
-        perc_hist_med >= 135 ~ "well above",
-        # Add more conditions as needed
-        TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
-      ))
+        perc_hist_med >= 103 & perc_hist_med < 110 ~ "close to ",
+        perc_hist_med >= 110 & perc_hist_med < 135 ~ "above ",
+        perc_hist_med >= 135 ~ "well above ",
+        TRUE ~ "NO DATA "  # This acts as an 'else' statement to catch all other cases
+      ),
+      description_fr = dplyr::case_when(
+        perc_hist_med < 66 ~ "tr\u00E8s inf\u00E9rieur \u00E0 ",
+        perc_hist_med >= 66 & perc_hist_med < 90 ~ "inf\u00E9rieur \u00E0 ",
+        perc_hist_med >= 90 & perc_hist_med < 98 ~ "pr\u00E8s de ",
+        perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans la ",
+        perc_hist_med >= 103 & perc_hist_med < 110 ~ "pr\u00E8s de ",
+        perc_hist_med >= 110 & perc_hist_med < 135 ~ "sup\u00E9rieur \u00E0 ",
+        perc_hist_med >= 135 ~ "tr\u00E8s sup\u00E9rieur \u00E0 ",
+        TRUE ~ "DONEES MANQUANTES"  # This acts as an 'else' statement to catch all other cases
+        ))
     # Reorder columns
     precip_stats <- precip_stats[, c("location_name", "location_id", "variable", "period", "value",
                                      "median", "min", "max", "perc_hist_med", "description", "years")]
@@ -475,14 +485,25 @@ WHERE rn = 1;"
   basin_stats <- basin_stats %>%
     dplyr::mutate(description = dplyr::case_when(
       perc_hist_med < 66 ~ "well below",
-      perc_hist_med >= 66 & perc_hist_med < 90 ~ "below",
-      perc_hist_med >= 90 & perc_hist_med < 98 ~ "close to",
+      perc_hist_med >= 66 & perc_hist_med < 90 ~ "below ",
+      perc_hist_med >= 90 & perc_hist_med < 98 ~ "close to ",
       perc_hist_med >= 98 & perc_hist_med < 103 ~ "",
-      perc_hist_med >= 103 & perc_hist_med < 110 ~ "close to",
-      perc_hist_med >= 110 & perc_hist_med < 135 ~ "above",
-      perc_hist_med >= 135 ~ "well above",
+      perc_hist_med >= 103 & perc_hist_med < 110 ~ "close to ",
+      perc_hist_med >= 110 & perc_hist_med < 135 ~ "above ",
+      perc_hist_med >= 135 ~ "well above ",
       # Add more conditions as needed
-      TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
+      TRUE ~ "NO DATA "  # This acts as an 'else' statement to catch all other cases
+    ),
+    description_fr = dplyr::case_when(
+      perc_hist_med < 66 ~ "tr\u00E8s inf\u00E9rieur \u00E0 ",
+      perc_hist_med >= 66 & perc_hist_med < 90 ~ "inf\u00E9rieur \u00E0 ",
+      perc_hist_med >= 90 & perc_hist_med < 98 ~ "pr\u00E8s de ",
+      perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans la ",
+      perc_hist_med >= 103 & perc_hist_med < 110 ~ "pr\u00E8s de ",
+      perc_hist_med >= 110 & perc_hist_med < 135 ~ "sup\u00E9rieur \u00E0 ",
+      perc_hist_med >= 135 ~ "tr\u00E8s sup\u00E9rieur \u00E0 ",
+      # Add more conditions as needed
+      TRUE ~ "DONEES MANQUANTES"  # This acts as an 'else' statement to catch all other cases
     ))
   
   #### ------------------------- Monthly precip ------------------------- ####
@@ -528,13 +549,25 @@ WHERE rn = 1;"
   flow_stats <- flow_stats %>%
     dplyr::mutate(description = dplyr::case_when(
       perc_hist_med < 66 ~ "well below",
-      perc_hist_med >= 66 & perc_hist_med < 90 ~ "below",
-      perc_hist_med >= 90 & perc_hist_med < 110 ~ "close to",
+      perc_hist_med >= 66 & perc_hist_med < 90 ~ "below ",
+      perc_hist_med >= 90 & perc_hist_med < 98 ~ "close to ",
       perc_hist_med >= 98 & perc_hist_med < 103 ~ "",
-      perc_hist_med >= 110 & perc_hist_med < 135 ~ "above",
-      perc_hist_med >= 135 ~ "well above",
+      perc_hist_med >= 103 & perc_hist_med < 110 ~ "close to ",
+      perc_hist_med >= 110 & perc_hist_med < 135 ~ "above ",
+      perc_hist_med >= 135 ~ "well above ",
       # Add more conditions as needed
-      TRUE ~ NA_character_  # This acts as an 'else' statement to catch all other cases
+      TRUE ~ "NO DATA "  # This acts as an 'else' statement to catch all other cases
+    ),
+    description_fr = dplyr::case_when(
+      perc_hist_med < 66 ~ "tr\u00E8s inf\u00E9rieur \u00E0 ",
+      perc_hist_med >= 66 & perc_hist_med < 90 ~ "inf\u00E9rieur \u00E0 ",
+      perc_hist_med >= 90 & perc_hist_med < 98 ~ "pr\u00E8s de ",
+      perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans la ",
+      perc_hist_med >= 103 & perc_hist_med < 110 ~ "pr\u00E8s de ",
+      perc_hist_med >= 110 & perc_hist_med < 135 ~ "sup\u00E9rieur \u00E0 ",
+      perc_hist_med >= 135 ~ "tr\u00E8s sup\u00E9rieur \u00E0 ",
+      # Add more conditions as needed
+      TRUE ~ "DONEES MANQUANTES"  # This acts as an 'else' statement to catch all other cases
     ))
   
   
@@ -568,10 +601,14 @@ WHERE rn = 1;"
   
   #### -------------------- Bringing it all together -------------------- ####
   
-  tables <- list("pillow_stats" = pillow_stats, "station_stats" = station_stats, 
-                 "basin_stats" = basin_stats, "precip_stats" = precip_stats, 
-                 "cddf_stats" = cddf_stats, "flow_stats" = flow_stats,
-                 "swe_basin_summary" = swe_basin_summary, "swe_compiled" = swe_compiled)
+  tables <- list("pillow_stats" = pillow_stats, 
+                 "station_stats" = station_stats, 
+                 "basin_stats" = basin_stats, 
+                 "precip_stats" = precip_stats, 
+                 "cddf_stats" = cddf_stats, "
+                 flow_stats" = flow_stats,
+                 "swe_basin_summary" = swe_basin_summary, 
+                 "swe_compiled" = swe_compiled)
   
   if (excel_output) {
     
