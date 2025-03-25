@@ -57,7 +57,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
     stop("The database does not have the required 'application' schema, or is at minimum missing the 'page_content' table. Refer to the script 'application_tables.R' in this application's folder to create this table. You'll find this cript at ", appDir, ".")
   }
   
-  # Check that the connection can see a few tables: 'timeseries', 'locations', 'parameters', 'measurements_continuous_corrected', 'samples', 'results'
+  # Check that the connection can see a few tables: 'timeseries', 'locations', 'parameters', 'measurements_continuous_calculated', 'samples', 'results'
   if (!DBI::dbExistsTable(con, "timeseries")) {
     stop("The user you're connecting with can't see the table 'timeseries'. This table is required for the app to function.")
   }
