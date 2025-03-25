@@ -17,6 +17,8 @@ color_list <- list(
   "locations" = "orange"
 )
 
+setwd(normalizePath(file.path("C:/FEWS/FEWS_MESHYukon/Import/APRFC", "../../")))
+
 if (Sys.info()["sysname"] == "Windows" | interactive()) {
 } else {
   future::plan("multicore")
@@ -24,7 +26,6 @@ if (Sys.info()["sysname"] == "Windows" | interactive()) {
 
 # Default coordinates to repositon the map around Whitehorse
 DEFAULT_COORDS = c(-135.0568, 60.7212)
-
 
 # Function to convert latitude and longitude to meters
 latlon_to_meters <- function(lat1, lon1, lat2, lon2) {
@@ -122,80 +123,67 @@ share_list = list("Private", "Public")
 # Define a list of UTC timezone corrections
 tz_corrections = list(-12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
 
-# Create a temporary directory and CSV file
-#temp_dir <- tempdir()
-#csv_file <- file.path("image_data.csv")
-
-# Call the function to create the data frame and write to CSV
-#initialize_csv(dat, csv_file)
-
-#load_data <- function() {
-#  return(read.csv(csv_file, stringsAsFactors = FALSE))
-#}
-
 # Define the UI layout
-ui <- fluidPage(
-  br(),
-  mainPanel(
-    fluidRow(
-      column(width = 6,
-        fileInput("files", "Select image files (ctrl+A to select all)", multiple = TRUE, accept = NULL)
-      ),
-      column(width = 6,
-        br(),
-        br(),
-        br(),
+
+imguploadUI <- function(id) {
+    ns <- NS(id)
+    fluidPage(
+      br(),
+      mainPanel(
         fluidRow(
-            div(style = "float: left;", uiOutput("edit_button")),
-            div(style = "float: left; margin-left: 10px;", uiOutput("toggle_locations_button")),
-            div(style = "float: right;", actionButton("clear_pos", "Clear"))
+          column(width = 6,
+            fileInput(ns("files"), "Select image files (ctrl+A to select all)", multiple = TRUE)
+          ),
+          column(width = 6,
+            br(), br(), br(),
+            fluidRow(
+              div(style = "float: left;", uiOutput(ns("edit_button"))),
+              div(style = "float: left; margin-left: 10px;", uiOutput(ns("toggle_locations_button"))),
+              div(style = "float: right;", actionButton(ns("clear_pos"), "Clear coordinate selection"))
+            )
+          )
+        ),
+        fluidRow(
+          column(width = 6,
+            imageOutput(ns("imgprev"), width = "100%", height = "auto"),
+            textOutput(ns("image_index"))
+          ),
+          column(width = 6,
+            leafletOutput(ns("map"), width = "100%"),
+            br()
+          )
+        ),
+        fluidRow(
+          column(
+            width = 6,
+            actionButton(ns("select_all"), "Select All"),
+            actionButton(ns("clear_selection"), "Clear Selection"),
+            br(),
+            selectizeInput(ns("image_tags"), "Select tags:", choices = tag_list, 
+                           multiple = TRUE, width = "100%", options = list(create = TRUE)),
+            fluidRow(
+              column(width = 6, selectizeInput(ns("image_location"), "Select location:", 
+                                               choices = "Placeholder", multiple = FALSE, 
+                                               width = "100%", options = list(create = FALSE, placeholder = "Select location"))),
+              column(width = 3, numericInput(ns("image_latitude"), "Latitude:", value = NULL, width = "100%", step = 0.1)),
+              column(width = 3, numericInput(ns("image_longitude"), "Longitude:", value = NULL, width = "100%", step = 0.1))
+            ),
+            fluidRow(
+              column(width = 8, selectInput(ns("share_tag"), "Select visibility:", choices = share_list, multiple = FALSE)),
+              column(width = 4, selectInput(ns("tz_correction"), "UTC offset:", choices = tz_corrections, multiple = FALSE, selected = -7))
+            ),
+            textAreaInput(ns("notes"), "Notes:", value = "", width = "100%", height = "100px"),
+            div(style = "float: right;", actionButton(ns("apply"), "Apply"))
+          ),
+          column(
+            width = 6,
+            DT::dataTableOutput(ns("table")),
+            actionButton(ns("upload_to_ac"), "Upload to AquaCache", style = "background-color: #007BFF; color: white;")
+          )
         )
       )
-    ),
-    fluidRow(
-      column(width = 6,
-        imageOutput("imgprev", width = "100%", height = "auto"),
-        textOutput("image_index")
-      ),
-      column(width = 6,
-        leafletOutput("map", width = "100%"),
-        br(),
-
-      )
-    ),
-  fluidRow(
-    column(
-      width = 6,
-      actionButton("select_all", "Select All"),
-      actionButton("clear_selection", "Clear Selection"),
-      br(),
-      selectizeInput("image_tags", "Select tags:", choices = tag_list, multiple = TRUE, width = "100%", options = list(create = TRUE), selected = NULL),
-
-
-      fluidRow(
-        column(width = 6, selectizeInput("image_location", "Select location:", choices = "Placeholder", multiple = FALSE, width = "100%", options = list(create = FALSE, placeholder="Select location"))),
-        column(width = 3, numericInput("image_latitude", "Latitude:", value = NULL, width = "100%", step = 0.1)),
-        column(width = 3, numericInput("image_longitude", "Longitude:", value = NULL, width = "100%", step=0.1))
-      ),
-      fluidRow(
-        column(width = 8, selectInput("share_tag", "Select visibility:", choices = share_list, multiple = FALSE)),
-        column(width = 4, selectInput("tz_correction", "UTC offset:", choices = tz_corrections, multiple = FALSE, selected = -7))
-      ),
-      textAreaInput("notes", "Notes:", value = "", width = "100%", height = "100px"),
-      div(style = "float: right;", 
-        actionButton("apply", "Apply")
-      ),
-    ),
-    column(width = 6, 
-      DT::dataTableOutput("table"),
-      actionButton("upload_to_ac", "Upload to AquaCache", style = "background-color: #007BFF; color: white;")
-
     )
-  )
-)
-)
-
-readRenviron("~/.Renviron")
+}
 
 config <<- list(
   dbName = "aquacache",
@@ -205,9 +193,17 @@ config <<- list(
   dbPass = Sys.getenv("aquacacheAdminPass")
 )
 
+
 # Increase the maximum upload size to 30MB
 options(shiny.maxRequestSize = 30 * 1024^2)
 
+
+
+
+
+imgupload() {
+
+  ns <- session$ns
 # Define the server logic
 server <- function(input, output, session) {
 
@@ -219,6 +215,22 @@ server <- function(input, output, session) {
                                             username = config$dbUser,
                                             password = config$dbPass,
                                             silent = TRUE)
+
+  # issue warning if user does not have write privileges
+  check <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT has_table_privilege(current_user, 'files.images', 'INSERT') AS can_insert")
+
+  if (!check$can_insert) {
+    showModal(modalDialog(
+      title = "Insufficient Privileges",
+      "You do not have the necessary privileges to insert data into this database.",
+      easyClose = TRUE,
+      footer = tagList(
+        modalButton("Close")
+      )
+    ))
+    shinyjs::disable("upload_to_ac")
+  }
+
 
 
   locations = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.locations")
@@ -241,7 +253,12 @@ server <- function(input, output, session) {
   # Render an empty leaflet map
   output$map <- renderLeaflet({
     leaflet() %>%
-      addProviderTiles(providers$Esri.WorldImagery) %>%
+      addProviderTiles(providers$Esri.WorldTopoMap, group = "World Aerial") %>%
+      addProviderTiles(providers$Esri.WorldImagery, group = "World Imagery") %>%
+      addLayersControl(
+      baseGroups = c("World Aerial", "World Imagery"),
+      options = layersControlOptions(collapsed = FALSE)
+      ) %>%
       setView(lng = DEFAULT_COORDS[1], lat = DEFAULT_COORDS[2], zoom = 4)
     })
 
@@ -296,12 +313,12 @@ server <- function(input, output, session) {
 
   # Render the toggle buttons here, which change colour based on the state of the app
   output$edit_button <- renderUI({
-    actionButton("edit", "Select coordinates", icon = icon("map-location-dot"), 
+    actionButton(ns("edit"), "Manual coordinate selection", icon = icon("map-location-dot"), 
            style = if (toggles$edit) "background-color: #007BFF; color: white;" else "background-color: white; color: black;")
   })
 
   output$toggle_locations_button <- renderUI({
-    actionButton("toggle_locations", "Toggle locations", 
+    actionButton(ns("toggle_locations"), "Toggle locations", 
            style = if (toggles$locations) "background-color: #007BFF; color: white;" else "background-color: white; color: black;")
   })
 
@@ -386,6 +403,7 @@ server <- function(input, output, session) {
 
   # Observe row selection in the data table and update the imgid
   observeEvent(input$table_rows_selected, ignoreNULL = FALSE, {
+    # if table selection changes, reset the image coordinateds
     updateNumericInput(session, "image_latitude", value = "")
     updateNumericInput(session, "image_longitude", value = "")
 
@@ -397,15 +415,9 @@ server <- function(input, output, session) {
 
     # update lines to reflect selection (showing georeference corrections)
     clearLinesFromMap()
-    print(input$table_rows_selected)
-    if (!is.null(selection) && length(selection) > 0) {
-        print('add')
-
+    if (length(selection) > 0) {
       addLinesToMap()
     }
-
-    # update map view coordinates and zoom level
-    #updateMapView()
 
     # update the displayed image upon each new row selection
     if (length(selection) > 1) {
@@ -415,13 +427,12 @@ server <- function(input, output, session) {
     }
 
     # case for no selection
-    if (is.null(selection)) {
-      updateMapView()
-      leafletProxy(mapId = "map") %>% clearGroup("photos")
-      addCirclesToMap(selection = seq_len(nrow(dat$df)), color = color_list$unselected)
-    }
+    #if (is.null(selection)) {
+    #  updateMapView()
+    #  leafletProxy(mapId = "map") %>% clearGroup("photos")
+    #  addCirclesToMap(selection = seq_len(nrow(dat$df)), color = color_list$unselected)
+    #}
   })
-
 
 
   # Observe the upload button and upload data to AquaCache
@@ -432,23 +443,19 @@ server <- function(input, output, session) {
       easyClose = FALSE,
       footer = tagList(
         modalButton("Cancel"),
-        actionButton("confirm_upload", "Confirm")
+        actionButton(ns("confirm_upload"), "Confirm")
       )
     ))
   })
 
+  # Validate the uploaded dataframe and upload to AquaCache
   observeEvent(input$confirm_upload, {
     removeModal()
-    print(session$userData$AquaCache)
-    print(dat$df)
-    
     dat$df <- standardizeDataFrame(dat$df)
     validation_result <- validateDataFrame(dat$df)
-
     if (!validation_result$success) {
       showNotification(validation_result$message, type = "error", duration = 5)
     }
-
     uploadAquacache$invoke(df=dat$df, config=session$userData$config)
   })
 
@@ -465,7 +472,6 @@ server <- function(input, output, session) {
         on.exit(DBI::dbDisconnect(con))
 
         # for converting app text to AquaCache reader names
-
         for (i in seq_len(nrow(df))) {
           
             success <- tryCatch({
@@ -495,7 +501,7 @@ server <- function(input, output, session) {
     }
   )
 
-# standardize the dataframe to match AquaCache's schema
+# standardize the dataframe to match AquaCache's format
 standardizeDataFrame <- function(df){
   reader_list <- c("Private" = "yg_reader", "Public" = "public_reader")
   df$Sourcefile <- as.character(df$Sourcefile)
@@ -513,49 +519,6 @@ validateDataFrame <- function(df) {
   }
   return(list(success = TRUE, message = "Validation successful."))
   }
-  # Observe changes in the drop-down input and update the tags on save button press
-  # observeEvent(input$image_tags, {
-  #   if (length(input$table_rows_selected) > 0) {
-  #     for (row in input$table_rows_selected) {
-  #       dat$df$Tags[row] <- input$image_tags
-  #     }
-  #     
-  #     # Reset the dropdown menu and reload table (to show updated tags)
-  #     updateSelectInput(session, "image_tags", selected = NULL)
-  #     renderDataTable()
-  #   }
-  #   else {
-  #     updateSelectInput(session, "image_tags", selected = NULL)
-  #   }
-  # })
-
-  #observeEvent(input$share_tag, {
-  #  if (length(input$table_rows_selected) > 0) {
-  #    for (row in input$table_rows_selected) {
-  #      dat$df$Visibility[row] <- input$share_tag
-  #    }
-  #    
-  #    # Reset the dropdown menu and reload table (to show updated tags)
-  #    updateSelectInput(session, "share_tag", selected = "Private")
-  #    renderDataTable()
-  #  }
-  #})
-
-
-  # observeEvent(input$tz_correction, {
-  #   if (length(input$table_rows_selected) > 0) {
-  #     for (row in input$table_rows_selected) {
-  #       dat$df$UTC[row] <- input$tz_correction
-  #     }
-  #     
-  #     # Reset the dropdown menu and reload table (to show updated tags)
-  #     updateSelectInput(session, "tz_correction", selected = -7)
-  #     renderDataTable()
-  #   }
-  # })
-
-
-
 
   # keep track of whether the location was queried from AquaCache, or set by the user
   # if the cooridnates are changed by the user, or changes via map click, reset the location selection
@@ -653,8 +616,6 @@ validateDataFrame <- function(df) {
     }
   })
 
-
-
   # simple button to clear objects from map
   observeEvent(input$clear_pos, {
     leafletProxy("map") %>%
@@ -663,14 +624,11 @@ validateDataFrame <- function(df) {
     toggles$mapclicked <- FALSE
   })
 
-
-
   # Set the view of the map to the current image's coordinates on button press
   updateMapView <- function() {
-
     # If no rows are selected, set the view to the centroid of all points
       if (is.null(input$table_rows_selected)) {
-      selection <- 0
+      selection <- seq_len(nrow(dat$df))
     } else {
       selection <- input$table_rows_selected
     }
@@ -684,7 +642,6 @@ validateDataFrame <- function(df) {
     if (length(selection) == 0) {
       selection <- seq_len(nrow(dat$df))
     }
-
 
     # if the map is clicked, include the clicked point in the centroid calculation
     if (toggles$edit && !is.null(input$map_click) && toggles$mapclicked) {
@@ -704,10 +661,6 @@ validateDataFrame <- function(df) {
         centroid_lon <- DEFAULT_COORDS[2]
       }
 
-
-
-    
-
     # Infer zoom level based on the spread of the points
     zoom <- infer_zoom_level(dat$df$Latitude[selection], dat$df$Longitude[selection])
 
@@ -724,7 +677,6 @@ validateDataFrame <- function(df) {
       img <- readJPEG(filename, native = TRUE)
 
       # this is a sort of janky way to handle vertical images
-      # 
       img_dims <- dim(img)
       if (img_dims[1] > img_dims[2]) {
         list(src = filename, contentType = 'image/jpeg', width = "50%", height = "auto")
@@ -734,7 +686,7 @@ validateDataFrame <- function(df) {
     }, deleteFile = FALSE)
   }
 
-  # Render the image position text, also based on React var
+  # print image n/x
   renderImageIndex <- function() {
     output$image_index <- renderText({
       paste("Image", imgid(), "of", nrow(dat$df))
@@ -743,7 +695,7 @@ validateDataFrame <- function(df) {
   # Function to render the leaflet map
   renderLeafletMap <- function() {
 
-
+    # only render images with valid latlon
     valid_data <- dat$df %>% filter(is_valid_latlon(Latitude, Longitude))
 
     # if no images with valid latlon, exit map rendering function
@@ -873,7 +825,6 @@ validateDataFrame <- function(df) {
     toggles$mapclicked <- TRUE
   })
 
-
   # Observe map clicks, add marker on click, lines from click to selection
   observeEvent(input$map_click, {
     if (toggles$edit == TRUE) {
@@ -886,6 +837,7 @@ validateDataFrame <- function(df) {
     }
   })
 
+  # Add lines that connect GUI image coords to table seleciton coords
   addLinesToMap <- function() {
       if (length(input$table_rows_selected) > 0) {
         selected_rows <- input$table_rows_selected
@@ -893,7 +845,6 @@ validateDataFrame <- function(df) {
           selected_lat <- dat$df$Latitude[row]
           selected_lon <- dat$df$Longitude[row]
           
-
           leafletProxy("map") %>%
             addPolylines(
                 lng = c(selected_lon, input$map_click$lng),
@@ -908,49 +859,15 @@ validateDataFrame <- function(df) {
     }
   }
 
-
   # Function to clear lines from the map
   clearLinesFromMap <- function() {
     leafletProxy("map") %>% clearGroup("click_line")
   }
 
-error_no_map_click <- function() {
-showModal(modalDialog(
-          title = "Error",
-          "Please click on the map to update the position.",
-          easyClose = TRUE,
-          footer = tagList(
-            modalButton("Close")
-          )
-        ))
-}
-
-
-error_no_rows_selected <- function() {
-showModal(modalDialog(
-          title = "Error",
-          "Please select row(s) in the data table to update the position.",
-          easyClose = TRUE,
-          footer = tagList(
-            modalButton("Close")
-          )
-        ))
-}
-warning_multiple_image_edit <- function() {
-showModal(modalDialog(
-            title = "Confirm georeference changes",
-            "Are you sure you want to update the coordinates for multiple images?",
-            easyClose = FALSE,
-            footer = tagList(
-              modalButton("Cancel"),
-              actionButton("confirm_update", "Confirm")
-            )
-          ))
-}
-
   # Confirmation action for modal popup triggered by multiple simultaneous location updates
   observeEvent(input$confirm_update, {
     removeModal()
+
     # update the coordinates in the data table
     dat$df$Latitude[input$table_rows_selected] <- input$map_click$lat
     dat$df$Longitude[input$table_rows_selected] <- input$map_click$lng
@@ -961,13 +878,14 @@ showModal(modalDialog(
   # Cancel action for modal popup triggered by multiple simultaneous location updates
   observeEvent(input$Cancel, {
     removeModal()
-  }
-  )
+  })
+  
+# end of server
+}
 
-  # Push georefence updates to the data table
-
-  }
+} # end imgupload function
 
 # Run the Shiny app
-shinyApp(ui = ui, server = server)
 
+
+shinyApp(ui = ui, server = server)
