@@ -38,3 +38,13 @@ test_that("Invalid month triggers error", {
   expect_error(snowBulletinStats(year = 2020, month = 2),
                "Month must be 3, 4 or 5.")
 })
+
+test_that("Excel file are written to disk", {
+  dir <- paste0(tempdir(), "/snowBulletinStats")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE))
+  suppressMessages(snowBulletinStats(year = 2024, month = 3, excel_output = TRUE, save_path = dir))
+  files <- list.files(dir)
+  
+  expect_true(length(files) == 2)
+})
