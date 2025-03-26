@@ -363,7 +363,6 @@ plotOverlap <- function(location,
   
   
   dates <- lubridate::POSIXct(tz = tzone) #creates empty posixct vector to hold days missing realtime data and needing to be infilled with daily
-  # realtime <- data.frame()
   # Create empty data.table to hold realtime data
   realtime <- data.table::data.table()
   for (i in rev(years)) { #Using rev so that the most recent year gets realtime, if possible

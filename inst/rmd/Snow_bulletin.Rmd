@@ -887,8 +887,8 @@ snowbullCDDF(timeseries_id = 484, custom_title = "Whitehorse", language = substr
 
 ```
 
-`r if (language == "english") "The measured water surface elevation (relative to sea level) in Marsh Lake is currently" else "Le niveau d'eau (par rapport au niveau de la mer) du lac Marsh est actuellement"`
-`r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AB004",]$description, if (language == "english") "average" else " moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AB004",]$description))`
+`r if (language == "english") "The measured water surface elevation (relative to sea level) in Marsh Lake is currently" else "Le niveau d'eau (par rapport au niveau de la mer) du lac Marsh est"`
+`r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AB004",]$description, if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AB004",]$description))`
 `r if (language == "english") {
 "(Figure E1). The current snow and groundwater conditions suggest that water levels will be  ------  average this summer. However, weather conditions over the spring and summer will determine the peak water level in Marsh Lake, which typically occurs in late summer in response to peak glacial runoff and large precipitation events. Lake Laberge level is currently "
 } else {
@@ -989,11 +989,13 @@ snowbullCDDF(timeseries_id = 532, custom_title = "Teslin", language = substr(lan
 
 ```
 
-The measured water surface elevation (relative to sea level) in Teslin Lake is currently 
-`r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AE002",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AE002",]$description))` 
-(Figure E). 
-Teslin Lake typically peaks in late June and is predominantly snowmelt driven. The \-\-\-\-- snowpack and \-\-\-\-- water level suggest that summer water levels will be \-\-\-\--. Peak water levels will depend on spring weather patterns.
+`r if (language == "english") "The measured water surface elevation (relative to sea level) in Teslin Lake is currently" else "Le niveau d'eau (par rapport au niveau de la mer) du lac Teslin est"`
+`r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AE002",]$description, if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AE002",]$description))` 
+`r if (language == "english") {
+"(Figure E). Teslin Lake typically peaks in late June and is predominantly snowmelt driven. The ------ snowpack and ------ water level suggest that summer water levels will be ------ . Peak water levels will depend on spring weather patterns.)
+} else {
+"(figure E). Principalement influencé par la fonte des neiges, il atteint généralement son maximum vers la fin juin. L’accumulation de neige ------ et le niveau d’eau ------ laissent croire que les niveaux d’eau estivaux seront ------ . Les niveaux d’eau maximums dépendront des conditions météorologiques printanières.")
+}`
 
 ```{r TeslinLake, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
@@ -1007,7 +1009,7 @@ if (language_param == "french") {
 # Plotting
 snowbullWater(location = station_id,
               parameter = "water level",
-              year = year_param-1,
+              year = year_param - 1,
               custom_title = custom_title,
               scale = scale_param,
               language = substr(language_param, 1, 2))
@@ -1023,15 +1025,13 @@ if ("Central Yukon" %in% params$basins) {
 }
 ```
 
-The Central Yukon River Basin snowpack is
-`r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Central_Yukon",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Central_Yukon",]$description))`.
-The basin-averaged Snow Water Equivalent (SWE) is estimated to be
-**`r stats$basin_stats[stats$basin_stats$basin=='Central_Yukon',]$perc_hist_med`%**
-of the historical median, with
-**`r stats$basin_stats[stats$basin_stats$basin=='Central_Yukon',]$swe`**
-**mm** as of `r month_names[params$month]` 1
-(Figure B).
+`r if (language == "english") "The Central Yukon River Basin snowpack is" else "L’accumulation de neige dans le bassin central du fleuve Yukon est"`
+`r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Central_Yukon",]$description, if (language == "english") "average" else "la moyenne"), textColour(stats$basin_stats[stats$basin_stats$basin=="Central_Yukon",]$description))`.
+`r if (language == "english") {
+paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", stats$basin_stats[stats$basin_stats$basin=='Central_Yukon',]$perc_hist_med, "%** of the historical median, with **", stats$basin_stats[stats$basin_stats$basin=='Central_Yukon',]$swe, " mm** as of ", month_names[params$month], " 1 (Figure B).")
+} else {
+paste0("Au 1^er^ ", month_names[params$month], " l'EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin=='Central_Yukon',]$perc_hist_med, " %** de la médiane historique, soit **", stats$basin_stats[stats$basin_stats$basin=='Central_Yukon',]$swe, " (figure B).")
+}
 
 ```{r CentralYukon_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
@@ -1072,7 +1072,7 @@ snowbullCDDF(timeseries_id = 540, custom_title = "Carmacks", language = substr(l
 
 The estimated Nordenskiold River discharge is currently 
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09AH004",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AH004",]$description))` 
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09AH004",]$description))` 
 (Figure E). 
 The \-\-\-\-- average snowpack combined with \-\-\-\-- winter flows in the watershed suggests
 spring freshet flow volumes will be \-\-\-\-- average with a potential
@@ -1113,7 +1113,7 @@ if ("Pelly" %in% params$basins) {
 
 The Pelly River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Pelly",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Pelly",]$description))`.
+"average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Pelly",]$description))`.
 At Twin Creeks Meteorological Station, Snow Water Equivalent
 (SWE) is estimated to be
 **`r stats$pillow_stats[stats$pillow_stats$location_id=='09BA-M7',]$perc_hist_med`%**
@@ -1167,7 +1167,7 @@ snowbullCDDF(timeseries_id = 500, custom_title = "Faro", language = substr(langu
 
 The estimated Pelly River discharge at Pelly Crossing is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09BC001",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09BC001",]$description))`
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09BC001",]$description))`
 (Figure E). 
 The \-\-\-\-- average snowpack combined with \-\-\-\-- winter flows in the
 watershed suggests spring freshet flow volumes will be \-\-\-\-- average
@@ -1209,7 +1209,7 @@ if ("Stewart" %in% params$basins) {
 
 The Stewart River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Stewart",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Stewart",]$description))`.
+"average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Stewart",]$description))`.
 At Withers Lake Meteorological Station, Snow Water Equivalent
 (SWE) is estimated to be
 **`r stats$pillow_stats[stats$pillow_stats$location_id=='09DB-M1',]$perc_hist_med`%**
@@ -1241,8 +1241,6 @@ if (language_param == "french") {
   snowbullSWE(loc= "Stewart", basin = "Stewart",
               year = year_param, swe_basins = swe_basins, custom_title = "B: Stewart Basin Monthly Snow Course", language = language_param)
 }
-
-
 ```
 
 Mayo precipitation has been
@@ -1264,12 +1262,11 @@ par(mfrow = c(1, 2))
 snowBullPrecip(668, year_param, scale_param, "Mayo", language = language_param)
 # Create plot D
 snowbullCDDF(timeseries_id = 548, custom_title = "Mayo", language = substr(language_param, 1, 2))
-
 ```
 
 The estimated Stewart River discharge at the outlet is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09DD003",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09DD003",]$description))`
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09DD003",]$description))`
 (Figure E). 
 The \-\-\-\-- average snowpack combined with \-\-\-\-- winter flows in the
 watershed suggests spring freshet flow volumes will be \-\-\-\--
@@ -1311,7 +1308,7 @@ if ("White" %in% params$basins) {
 
 The White River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="White",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="White",]$description))`. 
+"average"), textColour(stats$basin_stats[stats$basin_stats$basin=="White",]$description))`. 
 The basin-averaged Snow Water Equivalent (SWE) is estimated to be
 **`r stats$basin_stats[stats$basin_stats$basin=='White',]$perc_hist_med`%**
 of the historical median, with
@@ -1329,12 +1326,11 @@ if (language_param == "french") {
   snowbullSWE(loc= "White", basin = "White",
               year = year_param, swe_basins = swe_basins, custom_title = "B: White Basin Monthly Snow Course", language = language_param)
 }
-
 ```
 
 The estimated White River discharge at the Alaska Highway is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09CB001",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CB001",]$description))` 
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CB001",]$description))` 
 (Figure E). 
 In this watershed, high flows are dominated by mountain snowmelt and glacial
 melt that are largely influenced by summer temperatures and
@@ -1377,7 +1373,7 @@ if ("Lower Yukon" %in% params$basins) {
 
 The Lower Yukon River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Lower_Yukon",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Lower_Yukon",]$description))`.
+"average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Lower_Yukon",]$description))`.
 Established in 2022, King Solomon Dome Meteorological Station
 registered Snow Water Equivalent (SWE) at
 **`r stats$pillow_stats[stats$pillow_stats$location_id=='09EA-M1',]$perc_hist_med`%**
@@ -1410,8 +1406,6 @@ if (language_param == "french") {
   snowbullSWE(loc= "Lower Yukon", basin = "Lower_Yukon",
               year = year_param, swe_basins = swe_basins, custom_title = "B: Lower Yukon Basin Monthly Snow Course", language = language_param)
 }
-
-
 ```
 
 Precipitation at Dawson Airport has been
@@ -1433,12 +1427,11 @@ par(mfrow = c(1, 2))
 snowBullPrecip(664, year_param, scale_param, "Dawson", language = language_param)
 # Create plot D
 snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = substr(language_param, 1, 2))
-
 ```
 
 The estimated Yukon River discharge above White River is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description))` 
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09CD001",]$description))` 
 (Figure E). The \-\-\-\-- average
 snowpack combined with \-\-\-\-- average winter flows suggests spring
 freshet flow volumes will be \-\-\-\-- average with a \-\-\-\--
@@ -1500,7 +1493,7 @@ if ("Porcupine" %in% params$basins) {
 
 The Porcupine River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Porcupine",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Porcupine",]$description))`.
+"average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Porcupine",]$description))`.
 The basin-averaged Snow Water Equivalent (SWE) is estimated to be
 **`r stats$basin_stats[stats$basin_stats$basin=='Porcupine',]$perc_hist_med`%**
 of the historical median, with
@@ -1518,7 +1511,6 @@ if (language_param == "french") {
   snowbullSWE(loc= "Porcupine", basin = "Porcupine",
               year = year_param, swe_basins = swe_basins, custom_title = "B: Porcupine Basin Monthly Snow Course", language = language_param)
 }
-
 ```
 
 Precipitation at Old Crow Airport has been
@@ -1540,12 +1532,11 @@ par(mfrow = c(1, 2))
 snowBullPrecip(671, year_param, scale_param, "Old Crow", language = language_param)
 # Create plot D
 snowbullCDDF(timeseries_id = 556, custom_title = "Old Crow", language = substr(language_param, 1, 2))
-
 ```
 
 The estimated Porcupine River discharge is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="09FD002",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09FD002",]$description))` 
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="09FD002",]$description))` 
 (Figure E). The \-\-\-\-- average
 snowpack in the watershed suggests spring freshet flow volumes will be
 \-\-\-\-- average with a potential for \-\-\-\-- spring freshet water
@@ -1585,7 +1576,7 @@ if ("Peel" %in% params$basins) {
 
 The Peel River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Peel",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Peel",]$description))`.
+"average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Peel",]$description))`.
 The basin-averaged Snow Water Equivalent (SWE) is estimated to be
 **`r stats$basin_stats[stats$basin_stats$basin=='Peel',]$perc_hist_med`%**
 of the historical median, with
@@ -1603,12 +1594,11 @@ if (language_param == "french") {
   snowbullSWE(loc= "Peel", basin = "Peel",
               year = year_param, swe_basins = swe_basins, custom_title = "B: Peel Basin Monthly Snow Course", language = language_param)
 }
-
 ```
 
 The estimated Peel River discharge is 
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="10MA001",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="10MA001",]$description))` 
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="10MA001",]$description))` 
 (Figure E). The \-\-\-\-- average
 snowpack suggests spring freshet flow volumes will be \-\-\-\-- average
 with a potential for \-\-\-\-- spring freshet water levels, including
@@ -1646,7 +1636,7 @@ if ("Liard" %in% params$basins) {
 
 The Liard River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description))`.
+"average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Liard",]$description))`.
 At Hyland Meteorological Station, Snow Water Equivalent (SWE)
 is estimated to be
 **`r stats$pillow_stats[stats$pillow_stats$location_id=='10AD-M2',]$perc_hist_med`%**
@@ -1682,8 +1672,6 @@ if (language_param == "french") {
   snowbullSWE(loc= "Liard", basin = "Liard",
               year = year_param, swe_basins = swe_basins, custom_title = "B: Liard Basin Monthly Snow Course", language = language_param)
 }
-
-
 ```
 
 Precipitation at Watson Lake Airport has been
@@ -1706,12 +1694,11 @@ par(mfrow = c(1, 2))
 snowBullPrecip(667, year_param, scale_param, "Watson Lake", language = language_param)
 # Create plot D
 snowbullCDDF(timeseries_id = 508, custom_title = "Watson Lake", language = substr(language_param, 1, 2))
-
 ```
 
 The estimated Liard River discharge at Upper Liard is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="10AA001",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="10AA001",]$description))`
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="10AA001",]$description))`
 (Figure E). The \-\-\-\-- average
 snowpack in the watershed combined with \-\-\-\-- average winter flows
 suggests spring freshet flows and levels will be \-\-\-\-- average.
@@ -1751,7 +1738,7 @@ if ("Alsek" %in% params$basins) {
 
 The Alsek River Basin snowpack is
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin=="Alsek",]$description,
-" average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Alsek",]$description))`.
+"average"), textColour(stats$basin_stats[stats$basin_stats$basin=="Alsek",]$description))`.
 The basin-averaged Snow Water Equivalent (SWE) is estimated to be
 **`r stats$basin_stats[stats$basin_stats$basin=='Alsek',]$perc_hist_med`%**
 of the historical median, with
@@ -1769,12 +1756,11 @@ if (language_param == "french") {
   snowbullSWE(loc = "Alsek", basin = "Alsek",
               year = year_param, swe_basins = swe_basins, custom_title = "B: Alsek Basin Monthly Snow Course", language = language_param)
 }
-
 ```
 
 The estimated Alsek River discharge is currently
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id=="08AB001",]$description,
-" average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="08AB001",]$description))`
+"average"), textColour(stats$flow_stats[stats$flow_stats$location_id=="08AB001",]$description))`
 (Figure E). High flows in this watershed
 are dominated by mountain snowmelt and glacial melt that are largely
 influenced by summer temperatures and precipitation. The snowpack in the
@@ -1930,7 +1916,6 @@ flextable::as_grouped_data(tabl, groups = "sub_basin") %>%
   flextable::fontsize(j = 2, size = 7.5) %>%
   flextable::line_spacing(space = 1) %>%
   flextable::padding(padding.top = 0.8, padding.bottom = 0.8)
-
 ```
 `r 
 if (language_param == "english") {

@@ -171,7 +171,7 @@ snowBulletin <- function(year,
                   title_var = if (language == "english") {
                     "  \n  \n  \nYukon Snow Survey  \nBulletin & Water  \nSupply Forecast"
                   } else {
-                    "  \n  \n  \nBulletin des relevés  \nivométriques et des  \nprévisions hydrologiques  \ndu Yukon"
+                    "  \n  \n  \nBulletin des relev\u00E9s  \nnivom\u00E9triques et des  \npr\u00E9visions hydrologiques  \ndu Yukon"
                   },
                   precip_period = precip_period,
                   cddf_period = cddf_period,

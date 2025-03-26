@@ -6,7 +6,7 @@
 #' This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package OR from the snow database.
 #'
 #' @details
-#' To download data, you MUST have your aquacache credentials added to your .Renviron file. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
+#' To access data, you must have your aquacache credentials added to your .Renviron file OR specify a connection via the 'con' argument. See function [AquaConnect()] or talk to the database administrator/data scientist for help.
 #'
 #' @param year Year for which the snow bulletin stats are calculated.
 #' @param month Month for which the snow bulletin stats are calculated. Options are 3, 4 or 5 as a vector of length 1.
@@ -29,7 +29,8 @@ snowBulletinStats <- function(year,
                               save_path = "choose",
                               synchronize = FALSE,
                               source = "aquacache",
-                              con = NULL) {
+                              con = NULL) 
+{
   
   # Check parameters are valid
   if (!month %in% c(3, 4, 5)) {
@@ -44,12 +45,7 @@ snowBulletinStats <- function(year,
       stop("Basins must be one or more of 'Upper Yukon', 'Teslin', 'Central Yukon', 'Pelly', 'Stewart', 'White', 'Lower Yukon', 'Porcupine', 'Peel', 'Liard', 'Alsek'.")
     }
   }
-  
-  if (is.null(con)) {
-    con <- AquaConnect(silent = TRUE)
-    on.exit(DBI::dbDisconnect(con))
-  }
-  
+
   # Set up save_path
   if (excel_output) {
     if (save_path == "choose") {
@@ -211,15 +207,15 @@ snowBulletinStats <- function(year,
         perc_hist_med < 66 ~ "tr\u00E8s inf\u00E9rieur \u00E0 ",
         perc_hist_med >= 66 & perc_hist_med < 90 ~ "inf\u00E9rieur \u00E0 ",
         perc_hist_med >= 90 & perc_hist_med < 98 ~ "pr\u00E8s de ",
-        perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans la ",
+        perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans ",
         perc_hist_med >= 103 & perc_hist_med < 110 ~ "pr\u00E8s de ",
         perc_hist_med >= 110 & perc_hist_med < 135 ~ "sup\u00E9rieur \u00E0 ",
         perc_hist_med >= 135 ~ "tr\u00E8s sup\u00E9rieur \u00E0 ",
         TRUE ~ "DONEES MANQUANTES"  # This acts as an 'else' statement to catch all other cases
-        ))
+      ))
     # Reorder columns
     precip_stats <- precip_stats[, c("location_name", "location_id", "variable", "period", "value",
-                                     "median", "min", "max", "perc_hist_med", "description", "years")]
+                                     "median", "min", "max", "perc_hist_med", "description", "description_fr", "years")]
     
     return(precip_stats)
   }
@@ -408,31 +404,36 @@ snowBulletinStats <- function(year,
     return(cddf_stats)
   }
   
+  
+  if (is.null(con)) {
+    con <- AquaConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
+  
   #### ----------------- Pillows with historical record ----------------- ####
   pillow_stats <- DBI::dbGetQuery(con, paste0(
     "WITH latest_measurements AS (
-  SELECT 
-    l.name AS location_name,
-    l.location AS location_id,
-    m.date,
-    p.param_name AS variable,
-    m.value,
-    m.q50 AS median,
-    m.min,
-    m.max,
-    m.doy_count AS years,
-    m.timeseries_id,
-    ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
-  FROM measurements_calculated_daily_corrected m
-    INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
-    INNER JOIN locations l ON t.location = l.location
-    INNER JOIN parameters p ON t.parameter_id = p.parameter_id
-  WHERE m.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
-    AND m.date BETWEEN ('", year, "-0", month, "-01'::date - INTERVAL '7 day') AND '", year, "-0", month, "-01'
-)
-SELECT location_name, location_id, date, variable, value, median, min, max, years
-FROM latest_measurements
-WHERE rn = 1;"
+        SELECT 
+          l.name AS location_name,
+          l.location AS location_id,
+          m.date,
+          p.param_name AS variable,
+          m.value,
+          m.q50 AS median,
+          m.min,
+          m.max,
+          m.doy_count AS years,
+          m.timeseries_id,
+          ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
+        FROM measurements_calculated_daily_corrected m
+          INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
+          INNER JOIN locations l ON t.location = l.location
+          INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+        WHERE m.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
+          AND m.date BETWEEN ('", year, "-0", month, "-01'::date - INTERVAL '7 day') AND '", year, "-0", month, "-01')
+      SELECT location_name, location_id, date, variable, value, median, min, max, years
+      FROM latest_measurements
+      WHERE rn = 1;"
   ))
   pillow_stats$perc_hist_med <- round(pillow_stats$value / pillow_stats$median * 100)
   
@@ -445,7 +446,6 @@ WHERE rn = 1;"
                                source = source, 
                                summarise = TRUE, 
                                aquaCon = con)  # If source == 'aquacache', the (mandatory) snow DB connection will by default use the same ip and host as the aquacache connection
-  # Remove 'Snow Course' from name
   
   #### ---------------- Pillows with snow survey record ----------------- ####
   # Log Cabin
@@ -498,7 +498,7 @@ WHERE rn = 1;"
       perc_hist_med < 66 ~ "tr\u00E8s inf\u00E9rieur \u00E0 ",
       perc_hist_med >= 66 & perc_hist_med < 90 ~ "inf\u00E9rieur \u00E0 ",
       perc_hist_med >= 90 & perc_hist_med < 98 ~ "pr\u00E8s de ",
-      perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans la ",
+      perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans ",
       perc_hist_med >= 103 & perc_hist_med < 110 ~ "pr\u00E8s de ",
       perc_hist_med >= 110 & perc_hist_med < 135 ~ "sup\u00E9rieur \u00E0 ",
       perc_hist_med >= 135 ~ "tr\u00E8s sup\u00E9rieur \u00E0 ",
@@ -507,11 +507,7 @@ WHERE rn = 1;"
     ))
   
   #### ------------------------- Monthly precip ------------------------- ####
-  # if (Sys.Date() < paste0(year, "-0", month, "-01")) {
-  #   precip_stats <- NULL
-  # } else {
   precip_stats <- suppressMessages(precipStats())
-  # }
   
   
   #### ------------------------------ CDDF ------------------------------ ####
@@ -521,28 +517,27 @@ WHERE rn = 1;"
   
   flow_stats <- DBI::dbGetQuery(con, paste0(
     "WITH latest_measurements AS (
-  SELECT 
-    l.name AS location_name,
-    l.location AS location_id,
-    m.date,
-    p.param_name AS variable,
-    m.value,
-    m.q50 AS median,
-    m.min,
-    m.max,
-    m.doy_count AS years,
-    m.timeseries_id,
-    ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
-  FROM measurements_calculated_daily_corrected m
-    INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
-    INNER JOIN locations l ON t.location = l.location
-    INNER JOIN parameters p ON t.parameter_id = p.parameter_id
-  WHERE m.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
-    AND m.date BETWEEN ('", year, "-0", month, "-01'::date - INTERVAL '7 day') AND '", year, "-0", month, "-01'
-)
-SELECT location_name, location_id, date, variable, value, median, min, max, years
-FROM latest_measurements
-WHERE rn = 1;"
+        SELECT 
+          l.name AS location_name,
+          l.location AS location_id,
+          m.date,
+          p.param_name AS variable,
+          m.value,
+          m.q50 AS median,
+          m.min,
+          m.max,
+          m.doy_count AS years,
+          m.timeseries_id,
+          ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
+        FROM measurements_calculated_daily_corrected m
+          INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
+          INNER JOIN locations l ON t.location = l.location
+          INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+        WHERE m.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
+          AND m.date BETWEEN ('", year, "-0", month, "-01'::date - INTERVAL '7 day') AND '", year, "-0", month, "-01')
+      SELECT location_name, location_id, date, variable, value, median, min, max, years
+      FROM latest_measurements
+      WHERE rn = 1;"
   ))
   flow_stats$perc_hist_med <- round(flow_stats$value / flow_stats$median * 100)
   # Add description of % median
@@ -562,7 +557,7 @@ WHERE rn = 1;"
       perc_hist_med < 66 ~ "tr\u00E8s inf\u00E9rieur \u00E0 ",
       perc_hist_med >= 66 & perc_hist_med < 90 ~ "inf\u00E9rieur \u00E0 ",
       perc_hist_med >= 90 & perc_hist_med < 98 ~ "pr\u00E8s de ",
-      perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans la ",
+      perc_hist_med >= 98 & perc_hist_med < 103 ~ "dans ",
       perc_hist_med >= 103 & perc_hist_med < 110 ~ "pr\u00E8s de ",
       perc_hist_med >= 110 & perc_hist_med < 135 ~ "sup\u00E9rieur \u00E0 ",
       perc_hist_med >= 135 ~ "tr\u00E8s sup\u00E9rieur \u00E0 ",
@@ -578,26 +573,48 @@ WHERE rn = 1;"
     swe_basin_summary <- swe_basin_summary
   } else {
     swe_basin_summary$Bulletin_Edition <- paste0(year, "-", month.name[month])
-    colnames(swe_basin_summary) <- c("SWE_Basin", "RELATIVE_SWE", "Bulletin_Edition")
+    colnames(swe_basin_summary) <- c("SWE_Basin", "Relative_SWE", "Bulletin_Edition")
   }
   
   swe_compiled <- station_stats
   # If swe = 0, swe_med = 0 ---> no snow where median zero
-    if (length( swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat) < 0) {
-      swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
-    }
+  if (length( swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat) < 0) {
+    swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
+  }
   # If swe !=0, swe_med = 0  ---> snow where median zero
-    if (length(swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat) > 0) {
-      swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
-    }
+  if (length(swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat) > 0) {
+    swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
+  }
   # If swe = 0, swe_med != 0 ---> no snow
   if (length(swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med != 0,]$swe_rat) > 0) {
     swe_compiled$swe_rat[swe_compiled$swe == 0 & swe_compiled$swe_med != 0] <- "no snow present"
   }
   
-  swe_compiled <- swe_compiled[, c("location_name", "swe_rat")]
+  swe_compiled <- swe_compiled[, c("location_id", "location_name", "swe_rat")]
   swe_compiled$Bulletin_Edition <- paste0(year, "-", month.name[month])
-  colnames(swe_compiled) <- c("Snow Course Name", "RATIO", "Bulletin_Edition")
+  colnames(swe_compiled) <- c("Snow Course ID", "Snow Course Name", "SWE_ratio", "Bulletin_Edition")
+  
+  # Add a sheet for the symbol classes (for map making)
+  symbols <- data.frame(ratio = c("0-0.49", "0.5-0.69", "0.7-0.89", "0.9-1.09", "1.1-1.29", "1.3-1.49", "1.50+"),
+                        symbol_class = c(0, 50, 70, 90, 110, 130, 150))
+  
+  # Add a column linking the ratio columns to the symbol classes
+  swe_basin_summary$symbol_class <- with(swe_basin_summary,
+                                         ifelse(Relative_SWE < 0.5, 0,
+                                                ifelse(Relative_SWE < 0.7, 50,
+                                                       ifelse(Relative_SWE < 0.9, 70,
+                                                              ifelse(Relative_SWE < 1.1, 90,
+                                                                     ifelse(Relative_SWE < 1.3, 110,
+                                                                            ifelse(Relative_SWE < 1.5, 130, 150)))))))
+  swe_compiled$symbol_class <- with(swe_compiled,
+                                    ifelse(SWE_ratio < 0.5, 0,
+                                           ifelse(SWE_ratio < 0.7, 50,
+                                                  ifelse(SWE_ratio < 0.9, 70,
+                                                         ifelse(SWE_ratio < 1.1, 90,
+                                                                ifelse(SWE_ratio < 1.3, 110,
+                                                                       ifelse(SWE_ratio < 1.5, 130, 150)))))))
+  
+  
   
   #### -------------------- Bringing it all together -------------------- ####
   
@@ -605,10 +622,11 @@ WHERE rn = 1;"
                  "station_stats" = station_stats, 
                  "basin_stats" = basin_stats, 
                  "precip_stats" = precip_stats, 
-                 "cddf_stats" = cddf_stats, "
-                 flow_stats" = flow_stats,
+                 "cddf_stats" = cddf_stats,
+                 "flow_stats" = flow_stats,
                  "swe_basin_summary" = swe_basin_summary, 
-                 "swe_compiled" = swe_compiled)
+                 "swe_compiled" = swe_compiled,
+                 "symbols" = symbols)
   
   if (excel_output) {
     
@@ -628,17 +646,24 @@ WHERE rn = 1;"
     # Save the workbook
     openxlsx::saveWorkbook(wb, paste0(save_path, "/SnowbulletinStats_", year, "-0", month, ".xlsx"), overwrite = TRUE)
     
-    ## swe_compiled workbook
+    ## swe_summaries
     wb <- openxlsx::createWorkbook()
-    openxlsx::addWorksheet(wb, "data")
+    openxlsx::addWorksheet(wb, "snow course data")
+    openxlsx::addWorksheet(wb, "basin data")
     openxlsx::writeDataTable(wb, sheet = 1, x = swe_compiled)
-    openxlsx::saveWorkbook(wb, paste0(save_path, "/swe_compiled.xlsx"), overwrite = TRUE)
+    openxlsx::writeDataTable(wb, sheet = 2, x = swe_basin_summary)
+    # Add a comment to cell B1 in the first sheet, explaining that RATIO is the ratio of current SWE to historical median SWE for this month.
+    openxlsx::writeComment(wb, sheet = 1, col = 3, row = 1, comment = openxlsx::createComment("Ratio of current SWE to historical median SWE for this month."))
+    # Add a comment to cell B1 in the second sheet, explaining that RELATIVE_SWE is the ratio of current SWE to historical median SWE for this month.
+    openxlsx::writeComment(wb, sheet = 2, col = 3, row = 1, comment = openxlsx::createComment("Ratio of current SWE to historical median SWE for this month."))
+    # Add comments explaining that symbol_class columns are for snow bulletin mapping purposes
+    openxlsx::writeComment(wb, sheet = 2, col = 4, row = 1, comment = openxlsx::createComment("Symbol class for snow bulletin mapping purposes"))
+    openxlsx::writeComment(wb, sheet = 1, col = 6, row = 1, comment = openxlsx::createComment("Symbol class for snow bulletin mapping purposes"))
     
-    ## swe_basin_summary workbook
-    wb <- openxlsx::createWorkbook()
-    openxlsx::addWorksheet(wb, "data")
-    openxlsx::writeDataTable(wb, sheet = 1, x = swe_basin_summary)
-    openxlsx::saveWorkbook(wb, paste0(save_path, "/swe_basin_summary.xlsx"), overwrite = TRUE)
+    openxlsx::addWorksheet(wb, "symbol_classes")
+    openxlsx::writeDataTable(wb, sheet = 3, x = symbols)
+    
+    openxlsx::saveWorkbook(wb, paste0(save_path, "/swe_summaries.xlsx"), overwrite = TRUE)
     
     message("Excel workbooks saved to ", save_path)
     
@@ -646,7 +671,3 @@ WHERE rn = 1;"
     return(tables)
   }
 }
-
-
-
-

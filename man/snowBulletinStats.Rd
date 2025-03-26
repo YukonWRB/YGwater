@@ -41,5 +41,5 @@ A list of data.frames OR, if requested, three Excel workbooks.
 This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package OR from the snow database.
 }
 \details{
-To download data, you MUST have your aquacache credentials added to your .Renviron file. See function \code{\link[=AquaConnect]{AquaConnect()}} or talk to the database administrator/data scientist for help.
+To access data, you must have your aquacache credentials added to your .Renviron file OR specify a connection via the 'con' argument. See function \code{\link[=AquaConnect]{AquaConnect()}} or talk to the database administrator/data scientist for help.
 }
