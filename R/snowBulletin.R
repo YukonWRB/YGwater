@@ -110,7 +110,7 @@ snowBulletin <- function(year,
       message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")
     } else {
       message("Synchronizing necessary timeseries. This could take a while, please be patient.")
-      # TODO: this now call several locations which are part of the 'sample_series' table.
+      # TODO: this now calls several locations which are part of the 'sample_series' table.
       target_sample_series <- DBI::dbGetQuery(con, "SELECT sample_series_id FROM sample_series WHERE source_fx = 'downloadSnowCourse'") # Snow survey sites 
       AquaCache::synchronize_discrete(con = con, 
                                       sample_series_id = target_sample_series$sample_series_id,
@@ -149,7 +149,7 @@ snowBulletin <- function(year,
   
   rmarkdown::render(
     input = system.file("rmd", "Snow_bulletin.Rmd", package = "YGwater"),
-    output_file = paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
+    output_file = if (language == "french") paste0("Bulletin nivometrique ", year, "-0", month, " issue ", Sys.Date()) else paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
     output_dir = save_path,
     output_format = rmarkdown::word_document(
       reference_docx = if (language == "french") {
