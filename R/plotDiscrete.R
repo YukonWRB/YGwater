@@ -30,6 +30,7 @@
 #' @param dbCon A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
 #' databases/EQWinDB/WaterResources.mdb".
+#' @param data Should the data used to create the plot be returned? Default is FALSE.
 #'
 #' @return An interactive HTML plot of the data from EQWin.
 #' @export
@@ -59,7 +60,8 @@ plotDiscrete <- function(start,
                          gridy = FALSE,
                          dbSource = "EQ", 
                          dbCon = NULL,
-                         dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
+                         dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb",
+                         data = FALSE) {
   
   # testing parameters for EQWIN direct
   # start <- "2024-06-24"
@@ -133,6 +135,8 @@ plotDiscrete <- function(start,
   # target_datetime = TRUE
 
   # initial checks, connection, and validations #######################################################################################
+  
+  return_data <- data   # data is used in this function, but keeping the argument as 'data' keeps things consistent with other functions
   
   if (!dbSource %in% c("AC", "EQ")) stop("dbSource must be either 'AC' or 'EQ'")
   
@@ -1007,7 +1011,12 @@ AND s.datetime > '", start, "' AND s.datetime < '", end, "';
     
   plot <- create_facet_plot(data, facet_by, targ_dt = target_datetime, loc_code = loc_code)
 
-  return(plot)
+  # Return the plot and data if requested ##########################
+  if (return_data) {
+    return(list(plot = plot, data = data))
+  } else {
+    return(plot)
+  }
   
-}
+} # End of plotDiscrete function
 

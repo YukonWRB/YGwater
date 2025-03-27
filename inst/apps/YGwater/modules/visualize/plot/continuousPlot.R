@@ -132,9 +132,6 @@ continuousPlot <- function(id, language, windowDims) {
                        "Modify plot aesthetics",
                        title = "Modify plot aesthetics such as language, line size, text size.",
                        style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
-          # actionButton(ns("make_plot"),
-          #              "Create Plot",
-          #              style = "display: block; width: 100%;") # Ensure block display and full width
           bslib::input_task_button(ns("make_plot"), 
                                    label = "Create Plot", 
                                    style = "display: block; width: 100%;")
@@ -833,7 +830,8 @@ continuousPlot <- function(id, language, windowDims) {
                             lang = lang,
                             gridx = gridx,
                             gridy = gridy,
-                            con = con)
+                            con = con,
+                            data = TRUE)
         return(plot)
         })
       } # End of ExtendedTask function
@@ -866,7 +864,8 @@ continuousPlot <- function(id, language, windowDims) {
                                slider = FALSE,
                                gridx = gridx,
                                gridy = gridy,
-                               con = con)
+                               con = con,
+                               data = TRUE)
         
         return(plot)
         })
@@ -903,7 +902,8 @@ continuousPlot <- function(id, language, windowDims) {
                                     gridy = gridy,
                                     shareX = shareX,
                                     shareY = shareY,
-                                    con = con)
+                                    con = con,
+                                    data = TRUE)
         
         return(plot)
         })
@@ -939,7 +939,8 @@ continuousPlot <- function(id, language, windowDims) {
                                     gridy = gridy,
                                     shareX = shareX,
                                     shareY = shareY,
-                                    con = con)
+                                    con = con,
+                                    data = TRUE)
         
         return(plot)
         })
@@ -952,7 +953,7 @@ continuousPlot <- function(id, language, windowDims) {
     # Call up the ExtendedTask and render the plot
     observeEvent(input$make_plot, {
       if (plot_created()) {
-        shinyjs::hide("full_screen")
+        shinyjs::hide("full_screen_ui")
         shinyjs::show("working")
       } else {
         output$working <- renderUI({
@@ -1004,35 +1005,38 @@ continuousPlot <- function(id, language, windowDims) {
       # Create a full screen button if necessary
         if (!plot_created()) {
           output$full_screen_ui <- renderUI({
-            actionButton(ns("full_screen"), "Full screen")
-          })
+            # Side-by-side buttons
+            fluidRow(
+              actionButton(ns("full_screen"), "Full screen"),
+              downloadButton(ns("download_data"), "Download data")
+            )          })
         } else {
-          shinyjs::show("full_screen")
+          shinyjs::show("full_screen_ui")
         }
       plot_created(TRUE)
     }, ignoreInit = TRUE)
     
     observeEvent(plot_output_overlap$result(), {
       output$plot <- plotly::renderPlotly({
-        isolate(plot_output_overlap$result())
+        isolate(plot_output_overlap$result()$plot)
       })
       shinyjs::hide("working")
     })
     observeEvent(plot_output_timeseries$result(), {
       output$plot <- plotly::renderPlotly({
-        isolate(plot_output_timeseries$result())
+        isolate(plot_output_timeseries$result()$plot)
       })
       shinyjs::hide("working")
     })
     observeEvent(plot_output_timeseries_traces$result(), {
       output$plot <- plotly::renderPlotly({
-        isolate(plot_output_timeseries_traces$result())
+        isolate(plot_output_timeseries_traces$result()$plot)
       })
       shinyjs::hide("working")
     })
     observeEvent(plot_output_timeseries_subplots$result(), {
       output$plot <- plotly::renderPlotly({
-        isolate(plot_output_timeseries_subplots$result())
+        isolate(plot_output_timeseries_subplots$result()$plot)
       })
       shinyjs::hide("working")
     })
@@ -1062,6 +1066,33 @@ continuousPlot <- function(id, language, windowDims) {
                       }, 700);
                     ")
     }, ignoreInit = TRUE)
+    
+    # Send the user the plotting data
+    output$download_data <- downloadHandler(
+      filename = function() {
+        time <- Sys.time()
+        attr(time, "tzone") <- "UTC"
+        paste0("continuous_plot_data_", gsub("-", "", gsub(" ", "_", gsub(":", "", substr(time, 0, 16)))), "_UTC.xlsx")
+      },
+      content = function(file) {
+        print(input$type)
+        if (input$type == "Overlapping years") {
+          openxlsx::write.xlsx(plot_output_overlap$result()$data, file)
+          
+        } else if (input$type == "Long timeseries") {
+          if (traceCount() == 1) { # Either a single trace or more than 1 subplot
+            if (subplotCount() > 1) { # Multiple sub plots
+              openxlsx::write.xlsx(plot_output_timeseries_subplots$result()$data, file)
+            } else {  # Single trace
+              openxlsx::write.xlsx(plot_output_timeseries$result()$data, file)
+            }
+          } else { # Multiple traces, single plot
+            
+            openxlsx::write.xlsx(plot_output_timeseries_traces$result()$data, file)
+          }
+        }
+      } # End content
+    ) # End downloadHandler
     
   }) # End of moduleServer
 }
