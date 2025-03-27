@@ -149,7 +149,7 @@ snowBulletin <- function(year,
   
   rmarkdown::render(
     input = system.file("rmd", "Snow_bulletin.Rmd", package = "YGwater"),
-    output_file = if (language == "french") paste0("Bulletin nivometrique ", year, "-0", month, " issue ", Sys.Date()) else paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
+    output_file = if (language == "french") paste0("Bulletin nivometrique ", year, "-0", month, " emit ", Sys.Date()) else paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
     output_dir = save_path,
     output_format = rmarkdown::word_document(
       reference_docx = if (language == "french") {
