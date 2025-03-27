@@ -37,13 +37,13 @@ YOWN_WDC_Update <- function(
     # Download raw data list, extract timeseries
     raw_data_list <- aq_download(loc_id = i, ts_name = "Wlevel_Hgt.level_RAW", start = "1990-01-01", end = Sys.Date())
     raw_ts <- raw_data_list[["timeseries"]]
-    write.csv(raw_ts, file = paste0(WDC_struc, i, "\\", i, "_raw.csv"))
+    utils::write.csv(raw_ts, file = paste0(WDC_struc, i, "\\", i, "_raw.csv"))
     
     # Download corrected BTOC data and metadata
     corr_data_list <- aq_download(loc_id = i, ts_name = "Wlevel_btoc.Calculated", start = "1990-01-01", end = Sys.Date())
     corr_ts <- corr_data_list[["timeseries"]]
     corr_meta <- corr_data_list[["metadata"]] %>%
-      dplyr::filter(attribute != "TS name")
+      dplyr::filter(.data$attribute != "TS name")
     utils::write.csv(corr_ts, file = paste0(WDC_struc, i, "\\", i, "_btoc_corr.csv"))
     utils::write.csv(corr_meta, file = paste0(WDC_struc, i, "\\", i, "_meta.csv"))
     
