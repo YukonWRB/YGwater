@@ -28,8 +28,9 @@
 #' @param hover Should hover text be included? Default is TRUE.
 #' @param gridx Should grid lines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should grid lines be drawn on the y-axis? Default is FALSE
-#' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
+#' @param data Should the data used to create the plot be returned? Default is FALSE.
+#' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
 #' 
 #' @return An html plot.
 #' 
@@ -100,8 +101,9 @@ plotOverlap <- function(location,
                         hover = TRUE,
                         gridx = FALSE,
                         gridy = TRUE,
-                        con = NULL,
-                        lang = "en")
+                        lang = "en",
+                        data = FALSE,
+                        con = NULL)
 {
   
   if (is.null(con)) {
@@ -523,16 +525,6 @@ plotOverlap <- function(location,
     realtime$md <- paste0(realtime$month, realtime$day)
     realtime$md <- as.numeric(realtime$md)
     
-    # Commented out to trial vectorization
-    # realtime$fake_datetime <- as.POSIXct(rep(NA, nrow(realtime)))
-    # realtime$plot_year <- NA
-    # for (i in 1:nrow(realtime)) {  #!!!This desperately needs to be vectorized in some way. Super slow!
-    #   fake_datetime <- gsub("[0-9]{4}", if (realtime$md[i] %in% md_sequence) last_year - 1 else last_year, realtime$datetime[i])
-    #   fake_datetime <- ifelse(nchar(fake_datetime) > 11, fake_datetime, paste0(fake_datetime, " 00:00:00"))
-    #   realtime$fake_datetime[i] <- as.POSIXct(fake_datetime, tz = tzone)
-    #   realtime$plot_year[i] <- if (realtime$md[i] %in% md_sequence) paste0(realtime$year[i], "-", realtime$year[i] + 1) else paste0(realtime$year[i] - 1, "-", realtime$year[i])
-    
-    
     
     in_md_seq <- realtime$md %in% md_sequence
     # Format datetime as string
@@ -541,7 +533,7 @@ plotOverlap <- function(location,
     replacement_year <- ifelse(in_md_seq, last_year - 1, last_year)
     # Replace the year portion using a regex substitution
     fake_dt_str <- paste0(replacement_year, substring(dt_str, 5))
-    realtime$fake_datetime <- as.POSIXct(fake_dt_str, tz = tzone)
+    realtime$plot_datetime <- as.POSIXct(fake_dt_str, tz = tzone)
     realtime$plot_year <- ifelse(in_md_seq,
                                  paste0(realtime$year, "-", realtime$year + 1),
                                  paste0(realtime$year - 1, "-", realtime$year))
@@ -550,9 +542,9 @@ plotOverlap <- function(location,
     # }
   } else { #Does not overlap the new year
     realtime$plot_year <- as.character(realtime$year)
-    realtime$fake_datetime <- gsub("[0-9]{4}", last_year, realtime$datetime)
-    realtime$fake_datetime <- ifelse(nchar(realtime$fake_datetime) > 11, realtime$fake_datetime, paste0(realtime$fake_datetime, " 00:00:00"))
-    realtime$fake_datetime <- as.POSIXct(realtime$fake_datetime, tz = tzone, format = '%Y-%m-%d %H:%M:%S') #Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
+    realtime$plot_datetime <- gsub("[0-9]{4}", last_year, realtime$datetime)
+    realtime$plot_datetime <- ifelse(nchar(realtime$plot_datetime) > 11, realtime$plot_datetime, paste0(realtime$plot_datetime, " 00:00:00"))
+    realtime$plot_datetime <- as.POSIXct(realtime$plot_datetime, tz = tzone, format = '%Y-%m-%d %H:%M:%S') #Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
   }
   
   # apply datum correction where necessary
@@ -629,7 +621,7 @@ plotOverlap <- function(location,
   for (i in plot_yrs) {
     plot <- plotly::add_trace(plot,
                               data = realtime[realtime$plot_year == i, ],
-                              x = ~fake_datetime,
+                              x = ~plot_datetime,
                               y = ~value,
                               # type = "scatter",
                               type = "scattergl",
@@ -699,5 +691,12 @@ plotOverlap <- function(location,
     ) %>%
     plotly::config(locale = lang)
   
-  return(plot)
+  
+  # Return the plot and data if requested ##########################
+  if (data) {
+    datalist <- list(trace_data = realtime, range_data = ribbon)
+    return(list(plot = plot, data = datalist))
+  } else {
+    return(plot)
+  }
 }
