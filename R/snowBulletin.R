@@ -110,7 +110,7 @@ snowBulletin <- function(year,
       message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")
     } else {
       message("Synchronizing necessary timeseries. This could take a while, please be patient.")
-      # TODO: this now call several locations which are part of the 'sample_series' table.
+      # TODO: this now calls several locations which are part of the 'sample_series' table.
       target_sample_series <- DBI::dbGetQuery(con, "SELECT sample_series_id FROM sample_series WHERE source_fx = 'downloadSnowCourse'") # Snow survey sites 
       AquaCache::synchronize_discrete(con = con, 
                                       sample_series_id = target_sample_series$sample_series_id,
@@ -146,15 +146,33 @@ snowBulletin <- function(year,
   ### Generate a snow bulletin for specified basins ###
 
   
+  
   rmarkdown::render(
     input = system.file("rmd", "Snow_bulletin.Rmd", package = "YGwater"),
-    output_file = paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
+    output_file = if (language == "french") paste0("Bulletin nivometrique ", year, "-0", month, " emit ", Sys.Date()) else paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
     output_dir = save_path,
+    output_format = rmarkdown::word_document(
+      reference_docx = if (language == "french") {
+        system.file("rmd", "style_template_snowbull_fr.docx", package = "YGwater")
+      } else {
+        system.file("rmd", "style_template_snowbull_en.docx", package = "YGwater")
+      }
+    ),
     params = list(year = year,
                   month = month,
                   scale = scale,
                   basins = basins,
                   language = language,
+                  reference_docx = if (language == "french") {
+                    "style_template_snowbull_fr.docx"
+                  } else {
+                    "style_template_snowbull_en.docx"
+                  },
+                  title_var = if (language == "english") {
+                    "  \n  \n  \nYukon Snow Survey  \nBulletin & Water  \nSupply Forecast"
+                  } else {
+                    "  \n  \n  \nBulletin des relev\u00E9s  \nnivom\u00E9triques et des  \npr\u00E9visions hydrologiques  \ndu Yukon"
+                  },
                   precip_period = precip_period,
                   cddf_period = cddf_period,
                   # snow_period = snow_period,
