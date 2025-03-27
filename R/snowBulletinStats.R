@@ -653,12 +653,12 @@ snowBulletinStats <- function(year,
     openxlsx::writeDataTable(wb, sheet = 1, x = swe_compiled)
     openxlsx::writeDataTable(wb, sheet = 2, x = swe_basin_summary)
     # Add a comment to cell B1 in the first sheet, explaining that RATIO is the ratio of current SWE to historical median SWE for this month.
-    openxlsx::writeComment(wb, sheet = 1, col = 3, row = 1, comment = openxlsx::createComment("Ratio of current SWE to historical median SWE for this month."))
+    openxlsx::writeComment(wb, sheet = 1, col = 3, row = 1, comment = openxlsx::createComment("Ratio of current SWE to historical median SWE for this month.", visible = FALSE))
     # Add a comment to cell B1 in the second sheet, explaining that RELATIVE_SWE is the ratio of current SWE to historical median SWE for this month.
-    openxlsx::writeComment(wb, sheet = 2, col = 3, row = 1, comment = openxlsx::createComment("Ratio of current SWE to historical median SWE for this month."))
+    openxlsx::writeComment(wb, sheet = 2, col = 3, row = 1, comment = openxlsx::createComment("Ratio of current SWE to historical median SWE for this month.", visible = FALSE))
     # Add comments explaining that symbol_class columns are for snow bulletin mapping purposes
-    openxlsx::writeComment(wb, sheet = 2, col = 4, row = 1, comment = openxlsx::createComment("Symbol class for snow bulletin mapping purposes"))
-    openxlsx::writeComment(wb, sheet = 1, col = 6, row = 1, comment = openxlsx::createComment("Symbol class for snow bulletin mapping purposes"))
+    openxlsx::writeComment(wb, sheet = 2, col = 4, row = 1, comment = openxlsx::createComment("Symbol class for snow bulletin mapping purposes", visible = FALSE))
+    openxlsx::writeComment(wb, sheet = 1, col = 5, row = 1, comment = openxlsx::createComment("Symbol class for snow bulletin mapping purposes", visible = FALSE))
     
     openxlsx::addWorksheet(wb, "symbol_classes")
     openxlsx::writeDataTable(wb, sheet = 3, x = symbols)
