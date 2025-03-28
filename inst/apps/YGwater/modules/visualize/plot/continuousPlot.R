@@ -132,7 +132,7 @@ continuousPlot <- function(id, language, windowDims) {
                        "Modify plot aesthetics",
                        title = "Modify plot aesthetics such as language, line size, text size.",
                        style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
-          bslib::input_task_button(ns("make_plot"), 
+          input_task_button(ns("make_plot"), 
                                    label = "Create Plot", 
                                    style = "display: block; width: 100%;")
         )
@@ -835,7 +835,7 @@ continuousPlot <- function(id, language, windowDims) {
         return(plot)
         })
       } # End of ExtendedTask function
-    ) |> bslib::bind_task_button("make_plot")
+    ) |> bind_task_button("make_plot")
     
     # Single timeseries plot
     plot_output_timeseries <- ExtendedTask$new(
@@ -870,7 +870,7 @@ continuousPlot <- function(id, language, windowDims) {
         return(plot)
         })
       } # End of ExtendedTask function
-    ) |> bslib::bind_task_button("make_plot")
+    ) |> bind_task_button("make_plot")
     
     # Multiple traces plot
     plot_output_timeseries_traces <- ExtendedTask$new(
@@ -908,7 +908,7 @@ continuousPlot <- function(id, language, windowDims) {
         return(plot)
         })
       } # End of ExtendedTask function
-    ) |> bslib::bind_task_button("make_plot")
+    ) |> bind_task_button("make_plot")
     
     # Multiple subplots plot
     plot_output_timeseries_subplots <- ExtendedTask$new(
@@ -945,7 +945,7 @@ continuousPlot <- function(id, language, windowDims) {
         return(plot)
         })
       } # End of ExtendedTask function
-    ) |> bslib::bind_task_button("make_plot")
+    ) |> bind_task_button("make_plot")
     
     
     # Create the plots and render ############################################################
