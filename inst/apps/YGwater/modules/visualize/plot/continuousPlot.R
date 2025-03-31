@@ -48,9 +48,9 @@ continuousPlot <- function(id, language, windowDims) {
             style = "display: flex; align-items: center;",
             span(
               id = ns("log_info"),
-              `data-toggle` = "tooltip",
-              `data-placement` = "right",
-              `data-trigger` = "click hover",
+              `data-bs-toggle` = "tooltip",
+              `data-bs-placement` = "right",
+              `data-bs-trigger` = "click hover",
               title = "The year is ignored; only the day-of-year is used.",
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )
@@ -60,9 +60,9 @@ continuousPlot <- function(id, language, windowDims) {
             style = "display: flex; align-items: center;",
             span(
               id = ns("log_info"),
-              `data-toggle` = "tooltip",
-              `data-placement` = "right",
-              `data-trigger` = "click hover",
+              `data-bs-toggle` = "tooltip",
+              `data-bs-placement` = "right",
+              `data-bs-trigger` = "click hover",
               title = "The year is ignored; only the day-of-year is used.",
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )
@@ -72,9 +72,9 @@ continuousPlot <- function(id, language, windowDims) {
             style = "display: flex; align-items: center;",
             span(
               id = ns("log_info"),
-              `data-toggle` = "tooltip",
-              `data-placement` = "right",
-              `data-trigger` = "click hover",
+              `data-bs-toggle` = "tooltip",
+              `data-bs-placement` = "right",
+              `data-bs-trigger` = "click hover",
               title = "For periods overlaping the new year select the December year.",
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )
@@ -85,9 +85,9 @@ continuousPlot <- function(id, language, windowDims) {
             style = "display: flex; align-items: center;",
             span(
               id = ns("log_info"),
-              `data-toggle` = "tooltip",
-              `data-placement` = "right",
-              `data-trigger` = "click hover",
+              `data-bs-toggle` = "tooltip",
+              `data-bs-placement` = "right",
+              `data-bs-trigger` = "click hover",
               title = "Historic ranges are plotted as a gray ribbon.",
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )

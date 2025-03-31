@@ -18,14 +18,14 @@ WQReportUI <- function(id) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Look for data within this many days of the report date", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           ),
           span(
             id = ns("date_approx_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
+            `data-bs-toggle` = "tooltip",
+            `data-bs-placement` = "right",
+            `data-bs-trigger` = "click hover",
             title = "Use this to include data up to a certain number of days of the report date. For example, you may want a single report with data from multiple locations sampled within 2-3 days. If multiple samples for a location fall within the date range, the one closest to the report date will be used.",
             icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
           )
@@ -93,14 +93,14 @@ WQReportUI <- function(id) {
                            style = "display: flex; align-items: center;",
                            tags$label(
                              "Standard deviation threshold (leave empty to not calculate)", 
-                             class = "control-label",
+                             class = "form-label",
                              style = "margin-right: 5px;"
                            ),
                            span(
                              id = ns("SD_info"),
-                             `data-toggle` = "tooltip",
-                             `data-placement` = "right",
-                             `data-trigger` = "click hover",
+                             `data-bs-toggle` = "tooltip",
+                             `data-bs-placement` = "right",
+                             `data-bs-trigger` = "click hover",
                              title = "1 SD = 68% of data distribution, 2 SD = 95%, 3 SD = 99.7%. etc.",
                              icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
                            )
@@ -112,14 +112,14 @@ WQReportUI <- function(id) {
                            style = "display: flex; align-items: center;",
                            tags$label(
                              "Start date for SD calculation", 
-                             class = "control-label",
+                             class = "form-label",
                              style = "margin-right: 5px;"
                            ),
                            span(
                              id = ns("SD_start_info"),
-                             `data-toggle` = "tooltip",
-                             `data-placement` = "right",
-                             `data-trigger` = "click hover",
+                             `data-bs-toggle` = "tooltip",
+                             `data-bs-placement` = "right",
+                             `data-bs-trigger` = "click hover",
                              title = "Leave empty to use data from the start of records.",
                              icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
                            )
@@ -131,14 +131,14 @@ WQReportUI <- function(id) {
                            style = "display: flex; align-items: center;",
                            tags$label(
                              "End date for SD calculation", 
-                             class = "control-label",
+                             class = "form-label",
                              style = "margin-right: 5px;"
                            ),
                            span(
                              id = ns("SD_end_info"),
-                             `data-toggle` = "tooltip",
-                             `data-placement` = "right",
-                             `data-trigger` = "click hover",
+                             `data-bs-toggle` = "tooltip",
+                             `data-bs-placement` = "right",
+                             `data-bs-trigger` = "click hover",
                              title = "Leave empty to use data to the end of records.",
                              icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
                            )
@@ -149,14 +149,14 @@ WQReportUI <- function(id) {
                            style = "display: flex; align-items: center;",
                            tags$label(
                              "Select date range (year is ignored)", 
-                             class = "control-label",
+                             class = "form-label",
                              style = "margin-right: 5px;"
                            ),
                            span(
                              id = ns("SD_end_info"),
-                             `data-toggle` = "tooltip",
-                             `data-placement` = "right",
-                             `data-trigger` = "click hover",
+                             `data-bs-toggle` = "tooltip",
+                             `data-bs-placement` = "right",
+                             `data-bs-trigger` = "click hover",
                              title = "Use this to exclude data outside of a certain range. For example, if you only want to include data from May to September, select May 1st and September 30th. The year is ignored.",
                              icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
                            )

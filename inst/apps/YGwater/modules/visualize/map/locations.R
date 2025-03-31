@@ -36,9 +36,9 @@ mapLocsUI <- function(id) {
                   # Panel content
                   span(
                     id = ns("info"),
-                    `data-toggle` = "tooltip",
-                    `data-placement` = "right",
-                    `data-trigger` = "click hover",
+                    `data-bs-toggle` = "tooltip",
+                    `data-bs-placement` = "right",
+                    `data-bs-trigger` = "click hover",
                     title = "placeholder",
                     icon("info-circle", style = "font-size: 150%;")),
                   uiOutput(ns("controls_ui")),

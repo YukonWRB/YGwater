@@ -87,14 +87,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
                            style = "display: flex; align-items: center;",
                            tags$label(
                              "Select a standard to apply (optional)", 
-                             class = "control-label",
+                             class = "form-label",
                              style = "margin-right: 5px;"
                            ),
                            span(
                              id = ns("standard_info"),
-                             `data-toggle` = "tooltip",
-                             `data-placement` = "right",
-                             `data-trigger` = "click hover",
+                             `data-bs-toggle` = "tooltip",
+                             `data-bs-placement` = "right",
+                             `data-bs-trigger` = "click hover",
                              title = "Warning: this adds a lot of time for plot generation!!!",
                              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
                            )
@@ -125,14 +125,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Facet on", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           ),
           span(
             id = ns("facet_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
+            `data-bs-toggle` = "tooltip",
+            `data-bs-placement` = "right",
+            `data-bs-trigger` = "click hover",
             title = "Multiple plots are built where each plot represents a different location or parameter, with the other variable represented as different traces.",
             icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
           )
@@ -148,14 +148,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Use log scale", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           ),
           span(
             id = ns("log_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
+            `data-bs-toggle` = "tooltip",
+            `data-bs-placement` = "right",
+            `data-bs-trigger` = "click hover",
             title = "Warning: negative values will be removed for log transformation.",
             icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
           )
@@ -167,7 +167,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Share X axis between subplots (dates are aligned)", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           )
         ),
@@ -178,7 +178,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Share Y axis between subplots (values are aligned)", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           )
         ),
@@ -199,14 +199,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Use target instead of actual datetime", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           ),
           span(
             id = ns("target_datetime_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
+            `data-bs-toggle` = "tooltip",
+            `data-bs-placement` = "right",
+            `data-bs-trigger` = "click hover",
             title = "Some measurements have a 'fake' datetime to line up repeated measurements with a certain date. An example are snow survey measurements: these can be taken with a few days of the 1st of the month but visualize nicely when lined up with the 1st.",
             icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
           )
@@ -230,8 +230,8 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
         fluidRow(
-          shinyjs::hidden(actionButton(ns("full_screen"), "Full screen")),
-          shinyjs::hidden(downloadButton(ns("download_data"), "Download data"))
+          actionButton(ns("full_screen"), "Full screen", style = "display: none;"),
+          downloadButton(ns("download_data"), "Download data", style = "display: none;")
         )
       ) # End of tagList
     }) %>% # End renderUI
