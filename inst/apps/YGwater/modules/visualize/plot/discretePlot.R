@@ -87,14 +87,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
                            style = "display: flex; align-items: center;",
                            tags$label(
                              "Select a standard to apply (optional)", 
-                             class = "control-label",
+                             class = "form-label",
                              style = "margin-right: 5px;"
                            ),
                            span(
                              id = ns("standard_info"),
-                             `data-toggle` = "tooltip",
-                             `data-placement` = "right",
-                             `data-trigger` = "click hover",
+                             `data-bs-toggle` = "tooltip",
+                             `data-bs-placement` = "right",
+                             `data-bs-trigger` = "click hover",
                              title = "Warning: this adds a lot of time for plot generation!!!",
                              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
                            )
@@ -125,14 +125,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Facet on", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           ),
           span(
             id = ns("facet_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
+            `data-bs-toggle` = "tooltip",
+            `data-bs-placement` = "right",
+            `data-bs-trigger` = "click hover",
             title = "Multiple plots are built where each plot represents a different location or parameter, with the other variable represented as different traces.",
             icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
           )
@@ -148,14 +148,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Use log scale", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           ),
           span(
             id = ns("log_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
+            `data-bs-toggle` = "tooltip",
+            `data-bs-placement` = "right",
+            `data-bs-trigger` = "click hover",
             title = "Warning: negative values will be removed for log transformation.",
             icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
           )
@@ -167,7 +167,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Share X axis between subplots (dates are aligned)", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           )
         ),
@@ -178,7 +178,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Share Y axis between subplots (values are aligned)", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           )
         ),
@@ -199,14 +199,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
           style = "display: flex; align-items: center;",
           tags$label(
             "Use target instead of actual datetime", 
-            class = "control-label",
+            class = "form-label",
             style = "margin-right: 5px;"
           ),
           span(
             id = ns("target_datetime_info"),
-            `data-toggle` = "tooltip",
-            `data-placement` = "right",
-            `data-trigger` = "click hover",
+            `data-bs-toggle` = "tooltip",
+            `data-bs-placement` = "right",
+            `data-bs-trigger` = "click hover",
             title = "Some measurements have a 'fake' datetime to line up repeated measurements with a certain date. An example are snow survey measurements: these can be taken with a few days of the 1st of the month but visualize nicely when lined up with the 1st.",
             icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
           )
@@ -218,8 +218,8 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
                        title = "Modify plot aesthetics such as language, color palette, point/line size, text size.",
                        style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
           input_task_button(ns("make_plot"),
-                                   "Create Plot",
-                                   style = "display: block; width: 100%;") # Ensure block display and full width
+                            "Create Plot",
+                            style = "display: block; width: 100%;") # Ensure block display and full width
         )
       ) # End of tagList
     })  %>% # End of renderUI for sidebar
@@ -230,8 +230,8 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
         fluidRow(
-          shinyjs::hidden(actionButton(ns("full_screen"), "Full screen")),
-          shinyjs::hidden(downloadButton(ns("download_data"), "Download data"))
+          actionButton(ns("full_screen"), "Full screen", style = "display: none;"),
+          downloadButton(ns("download_data"), "Download data", style = "display: none;")
         )
       ) # End of tagList
     }) %>% # End renderUI
@@ -411,8 +411,9 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
     ## ExtendedTask for plot generation ######################################################
     plot_output_discrete <- ExtendedTask$new(
       function(start, end, locations, locGrp, parameters, paramGrp, standard, log, facet_on, loc_code, shareX, shareY, rows, target_datetime, colorblind, lang, point_scale, guideline_scale, axis_scale, legend_scale, legend_position, gridx, gridy, dbSource, dbPath, config) {
-
-          promises::future_promise({
+        promises::future_promise({
+          
+          tryCatch({
             if (is.null(dbPath)) {
               con <- AquaConnect(name = config$dbName, 
                                  host = config$dbHost,
@@ -424,6 +425,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
             } else {
               con = NULL
             }
+            
             plot <- plotDiscrete(
               start = start,
               end = end,
@@ -454,7 +456,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
               data = TRUE
             )
             return(plot)
-          }) # End of future_promise
+          }, error = function(e) {
+            return(e$message)
+          },
+          warning = function(w) {
+            return(w$message)
+          }) # End of tryCatch
+        }) # End of future_promise
+        
       }
     ) |> bind_task_button("make_plot")
     # --- End ExtendedTask -------------------------------------------------------------------
@@ -500,65 +509,65 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
         }
       }
       
-        if (input$data_source == "EQ") {
-          plot_output_discrete$invoke(
-            start = input$date_range[1],
-            end = input$date_range[2],
-            locations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
-            locGrp = if (input$locs_groups == "Location Groups") input$location_groups else NULL,
-            parameters = if (input$params_groups == "Parameters") input$parameters_EQ else NULL,
-            paramGrp = if (input$params_groups == "Parameter Groups") input$parameter_groups else NULL,
-            standard = if (length(input$standard) == 0) NULL else input$standard,
-            log = input$log_scale,
-            facet_on = input$facet_on,
-            loc_code = input$loc_code,
-            shareX = input$shareX,
-            shareY = input$shareY,
-            rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
-            target_datetime = input$target_datetime,
-            colorblind = plot_aes$colorblind,
-            lang = plot_aes$lang,
-            point_scale = plot_aes$point_scale,
-            guideline_scale = plot_aes$guideline_scale,
-            axis_scale = plot_aes$axis_scale,
-            legend_scale = plot_aes$legend_scale,
-            legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
-            gridx = plot_aes$showgridx,
-            gridy = plot_aes$showgridy,
-            dbSource = input$data_source,
-            dbPath = input$EQWin_source, # EQWin connection so no need to pass config
-            config = NULL # EQWin connection so no need to pass config
-          )
-        } else if (input$data_source == "AC") {
-          plot_output_discrete$invoke(
-            start = input$date_range[1],
-            end = input$date_range[2],
-            locations = input$locations_AC,
-            locGrp = NULL,
-            parameters = input$parameters_AC,
-            paramGrp = NULL,
-            standard = NULL,  # No standards in AquaCache yet
-            log = input$log_scale,
-            facet_on = input$facet_on,
-            loc_code = input$loc_code,
-            shareX = input$shareX,
-            shareY = input$shareY,
-            rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
-            target_datetime = input$target_datetime,
-            colorblind = plot_aes$colorblind,
-            lang = plot_aes$lang,
-            point_scale = plot_aes$point_scale,
-            guideline_scale = plot_aes$guideline_scale,
-            axis_scale = plot_aes$axis_scale,
-            legend_scale = plot_aes$legend_scale,
-            legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
-            gridx = plot_aes$showgridx,
-            gridy = plot_aes$showgridy,
-            dbSource = input$data_source,
-            dbPath = NULL, # AquaCache connection so no need to pass database path
-            config = session$userData$config
-          )
-        }
+      if (input$data_source == "EQ") {
+        plot_output_discrete$invoke(
+          start = input$date_range[1],
+          end = input$date_range[2],
+          locations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
+          locGrp = if (input$locs_groups == "Location Groups") input$location_groups else NULL,
+          parameters = if (input$params_groups == "Parameters") input$parameters_EQ else NULL,
+          paramGrp = if (input$params_groups == "Parameter Groups") input$parameter_groups else NULL,
+          standard = if (length(input$standard) == 0) NULL else input$standard,
+          log = input$log_scale,
+          facet_on = input$facet_on,
+          loc_code = input$loc_code,
+          shareX = input$shareX,
+          shareY = input$shareY,
+          rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
+          target_datetime = input$target_datetime,
+          colorblind = plot_aes$colorblind,
+          lang = plot_aes$lang,
+          point_scale = plot_aes$point_scale,
+          guideline_scale = plot_aes$guideline_scale,
+          axis_scale = plot_aes$axis_scale,
+          legend_scale = plot_aes$legend_scale,
+          legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+          gridx = plot_aes$showgridx,
+          gridy = plot_aes$showgridy,
+          dbSource = input$data_source,
+          dbPath = input$EQWin_source, # EQWin connection so no need to pass config
+          config = NULL # EQWin connection so no need to pass config
+        )
+      } else if (input$data_source == "AC") {
+        plot_output_discrete$invoke(
+          start = input$date_range[1],
+          end = input$date_range[2],
+          locations = input$locations_AC,
+          locGrp = NULL,
+          parameters = input$parameters_AC,
+          paramGrp = NULL,
+          standard = NULL,  # No standards in AquaCache yet
+          log = input$log_scale,
+          facet_on = input$facet_on,
+          loc_code = input$loc_code,
+          shareX = input$shareX,
+          shareY = input$shareY,
+          rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
+          target_datetime = input$target_datetime,
+          colorblind = plot_aes$colorblind,
+          lang = plot_aes$lang,
+          point_scale = plot_aes$point_scale,
+          guideline_scale = plot_aes$guideline_scale,
+          axis_scale = plot_aes$axis_scale,
+          legend_scale = plot_aes$legend_scale,
+          legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h",
+          gridx = plot_aes$showgridx,
+          gridy = plot_aes$showgridy,
+          dbSource = input$data_source,
+          dbPath = NULL, # AquaCache connection so no need to pass database path
+          config = session$userData$config
+        )
+      }
     }, ignoreInit = TRUE) # End of plot rendering loop
     
     
@@ -567,40 +576,48 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
     first_plot <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session, in which case a modal is shown
     first_plot_with_standards <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session with standards, in which case a modal is shown
     plotData <- reactiveVal() # Holds the data for the plot in case the user wants to download it
-
+    
     observeEvent(plot_output_discrete$result(), {
-            output$plot <- plotly::renderPlotly({ isolate(plot_output_discrete$result()$plot)})
-            plotData(plot_output_discrete$result()$data)
-
-            shinyjs::show("full_screen")
-            shinyjs::show("download_data")
-
-            # If this is the first plot generated by the user in this session show them a modal
-            if (first_plot()) {
-              if (first_plot_with_standards()) {
-                showModal(
-                  modalDialog(
-                    HTML("This plot is interactive; you can zoom, pan, etc. either by using the buttons at the top left or by clicking and dragging with your mouse. To select only a single timeseries, double click on its legend entry; double click again to reselect all. Toggle timeseries one at a time by clicking on their legend entries.<br><br>Values above/below the detection limit are represented with stars<br><br>Standard/guideline values are represented with lines."),
-                    easyClose = TRUE)
-                )
-                first_plot_with_standards(FALSE)
-              } else {
-                showModal(
-                  modalDialog(
-                    HTML("This plot is interactive; you can zoom, pan, etc. either by using the buttons at the top left or by clicking and dragging with your mouse. To select only a single timeseries, double click on its legend entry; double click again to reselect all. Toggle timeseries one at a time by clicking on their legend entries.<br><br>Values above/below the detection limit are represented with stars"),
-                    easyClose = TRUE)
-                )
-              }
-              first_plot(FALSE)
-            }
-
-            if (first_plot_with_standards()) {
-              showModal(
-                modalDialog(
-                  HTML("Values above/below the detection limit are represented with stars<br><br>Standard/guideline values are represented with lines."),
-                  easyClose = TRUE))
-              first_plot_with_standards(FALSE)
-            }
+      if (inherits(plot_output_discrete$result(), "character")) {
+        showModal(modalDialog(
+          title = "Error",
+          plot_output_discrete$result(),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      output$plot <- plotly::renderPlotly({ isolate(plot_output_discrete$result()$plot)})
+      plotData(plot_output_discrete$result()$data)
+      
+      shinyjs::show("full_screen")
+      shinyjs::show("download_data")
+      
+      # If this is the first plot generated by the user in this session show them a modal
+      if (first_plot()) {
+        if (first_plot_with_standards()) {
+          showModal(
+            modalDialog(
+              HTML("This plot is interactive; you can zoom, pan, etc. either by using the buttons at the top left or by clicking and dragging with your mouse. To select only a single timeseries, double click on its legend entry; double click again to reselect all. Toggle timeseries one at a time by clicking on their legend entries.<br><br>Values above/below the detection limit are represented with stars<br><br>Standard/guideline values are represented with lines."),
+              easyClose = TRUE)
+          )
+          first_plot_with_standards(FALSE)
+        } else {
+          showModal(
+            modalDialog(
+              HTML("This plot is interactive; you can zoom, pan, etc. either by using the buttons at the top left or by clicking and dragging with your mouse. To select only a single timeseries, double click on its legend entry; double click again to reselect all. Toggle timeseries one at a time by clicking on their legend entries.<br><br>Values above/below the detection limit are represented with stars"),
+              easyClose = TRUE)
+          )
+        }
+        first_plot(FALSE)
+      }
+      
+      if (first_plot_with_standards()) {
+        showModal(
+          modalDialog(
+            HTML("Values above/below the detection limit are represented with stars<br><br>Standard/guideline values are represented with lines."),
+            easyClose = TRUE))
+        first_plot_with_standards(FALSE)
+      }
     })
     
     
