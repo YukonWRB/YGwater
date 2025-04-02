@@ -582,8 +582,8 @@ snowBulletinStats <- function(year,
     swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med == 0,]$swe_rat <- "no snow present where historical median is zero"
   }
   # If swe !=0, swe_med = 0  ---> snow where median zero
-  if (length(swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat) > 0) {
-    swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0,]$swe_rat <- "snow present where historical median is zero"
+  if (length(swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0 & !is.na(swe_compiled$swe_med) & is.na(swe_compiled$swe),]$swe_rat) > 0) {
+    swe_compiled[swe_compiled$swe != 0 & swe_compiled$swe_med == 0 & !is.na(swe_compiled$swe_med) & is.na(swe_compiled$swe),]$swe_rat <- "snow present where historical median is zero"
   }
   # If swe = 0, swe_med != 0 ---> no snow
   if (length(swe_compiled[swe_compiled$swe == 0 & swe_compiled$swe_med != 0,]$swe_rat) > 0) {
