@@ -801,7 +801,8 @@ continuousPlot <- function(id, language, windowDims) {
     # Create ExtendedTasks to render plots ############################################################
     # Overlapping years plot
     plot_output_overlap <- ExtendedTask$new(function(loc, param, start_doy, end_doy, yrs, historic_range, apply_datum, filter, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
-        promises::future_promise({
+      promises::future_promise({
+        tryCatch({
           con <- AquaConnect(name = config$dbName,
                              host = config$dbHost,
                              port = config$dbPort,
@@ -809,7 +810,7 @@ continuousPlot <- function(id, language, windowDims) {
                              password = config$dbPass,
                              silent = TRUE)
           on.exit(DBI::dbDisconnect(con))
-
+          
           plot <- plotOverlap(location = loc,
                               sub_location = NULL,
                               record_rate = NULL,
@@ -832,14 +833,20 @@ continuousPlot <- function(id, language, windowDims) {
                               con = con,
                               data = TRUE)
           return(plot)
+        }, error = function(e) {
+          return(e$message)
+        }, warning = function(w) {
+          return(w$message)
         })
-      } # End of ExtendedTask function
+      })
+    } # End of ExtendedTask function
     ) |> bind_task_button("make_plot")
     
     
     # Single timeseries plot
     plot_output_timeseries <- ExtendedTask$new(function(loc, param, start_date, end_date, historic_range, apply_datum, filter, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
-        promises::future_promise({
+      promises::future_promise({
+        tryCatch({
           con <- AquaConnect(name = config$dbName, 
                              host = config$dbHost,
                              port = config$dbPort,
@@ -867,13 +874,19 @@ continuousPlot <- function(id, language, windowDims) {
                                  data = TRUE)
           
           return(plot)
+        }, error = function(e) {
+          return(e$message)
+        }, warning = function(w) {
+          return(w$message)
         })
-      } # End of ExtendedTask function
+      })
+    } # End of ExtendedTask function
     ) |> bind_task_button("make_plot")
     
     # Multiple traces plot
     plot_output_timeseries_traces <- ExtendedTask$new(function(locs, params, lead_lags, start_date, end_date, historic_range, apply_datum, filter, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
-        promises::future_promise({
+      promises::future_promise({
+        tryCatch({
           con <- AquaConnect(name = config$dbName, 
                              host = config$dbHost,
                              port = config$dbPort,
@@ -904,13 +917,19 @@ continuousPlot <- function(id, language, windowDims) {
                                       data = TRUE)
           
           return(plot)
+        }, error = function(e) {
+          return(e$message)
+        }, warning = function(w) {
+          return(w$message)
         })
-      } # End of ExtendedTask function
+      })
+    } # End of ExtendedTask function
     ) |> bind_task_button("make_plot")
     
     # Multiple subplots plot
     plot_output_timeseries_subplots <- ExtendedTask$new(function(locs, params, start_date, end_date, historic_range, apply_datum, filter, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
-        promises::future_promise({
+      promises::future_promise({
+        tryCatch({
           con <- AquaConnect(name = config$dbName, 
                              host = config$dbHost,
                              port = config$dbPort,
@@ -940,8 +959,13 @@ continuousPlot <- function(id, language, windowDims) {
                                       data = TRUE)
           
           return(plot)
+        }, error = function(e) {
+          return(e$message)
+        }, warning = function(w) {
+          return(w$message)
         })
-      } # End of ExtendedTask function
+      })
+    } # End of ExtendedTask function
     ) |> bind_task_button("make_plot")
     
     
@@ -958,41 +982,41 @@ continuousPlot <- function(id, language, windowDims) {
         })
       }
       
-        if (input$type == "Overlapping years") {
-          if (nchar(input$loc_code) == 0) {
-            showModal(modalDialog("Please select a location.", easyClose = TRUE))
-            return()
-          }
-          if (nchar(input$param) == 0) {
-            showModal(modalDialog("Please select a parameter", easyClose = TRUE))
-            return()
-          }
-          plot_output_overlap$invoke(loc = input$loc_code, param = as.numeric(input$param), start_doy = input$start_doy, end_doy = input$end_doy, yrs = input$years, historic_range = input$historic_range_overlap, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
-        } else if (input$type == "Long timeseries") {
-          if (traceCount() == 1) { # Either a single trace or more than 1 subplot
-            if (subplotCount() > 1) { # Multiple sub plots
-              locs <- c(subplots$subplot1$location, subplots$subplot2$location, subplots$subplot3$location, subplots$subplot4$location)
-              params <- c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter)
-              plot_output_timeseries_subplots$invoke(locs = locs, params = params, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
-            } else {  # Single trace
-              if (nchar(input$loc_code) == 0) {
-                showModal(modalDialog("Please select a location.", easyClose = TRUE))
-                return()
-              }
-              if (nchar(input$param) == 0) {
-                showModal(modalDialog("Please select a parameter", easyClose = TRUE))
-                return()
-              }
-              plot_output_timeseries$invoke(loc = input$loc_code, param = as.numeric(input$param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
-            }
-          } else { # Multiple traces, single plot
-            locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
-            params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
-            lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
-            
-            plot_output_timeseries_traces$invoke(locs = locs, params = params, lead_lags = lead_lags, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
-          }
+      if (input$type == "Overlapping years") {
+        if (nchar(input$loc_code) == 0) {
+          showModal(modalDialog("Please select a location.", easyClose = TRUE))
+          return()
         }
+        if (nchar(input$param) == 0) {
+          showModal(modalDialog("Please select a parameter", easyClose = TRUE))
+          return()
+        }
+        plot_output_overlap$invoke(loc = input$loc_code, param = as.numeric(input$param), start_doy = input$start_doy, end_doy = input$end_doy, yrs = input$years, historic_range = input$historic_range_overlap, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
+      } else if (input$type == "Long timeseries") {
+        if (traceCount() == 1) { # Either a single trace or more than 1 subplot
+          if (subplotCount() > 1) { # Multiple sub plots
+            locs <- c(subplots$subplot1$location, subplots$subplot2$location, subplots$subplot3$location, subplots$subplot4$location)
+            params <- c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter)
+            plot_output_timeseries_subplots$invoke(locs = locs, params = params, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
+          } else {  # Single trace
+            if (nchar(input$loc_code) == 0) {
+              showModal(modalDialog("Please select a location.", easyClose = TRUE))
+              return()
+            }
+            if (nchar(input$param) == 0) {
+              showModal(modalDialog("Please select a parameter", easyClose = TRUE))
+              return()
+            }
+            plot_output_timeseries$invoke(loc = input$loc_code, param = as.numeric(input$param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
+          }
+        } else { # Multiple traces, single plot
+          locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
+          params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
+          lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
+          
+          plot_output_timeseries_traces$invoke(locs = locs, params = params, lead_lags = lead_lags, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
+        }
+      }
       
       # Create a full screen button if necessary
       if (!plot_created()) {
@@ -1009,29 +1033,63 @@ continuousPlot <- function(id, language, windowDims) {
       print("Plot creation observer complete")
     }, ignoreInit = TRUE)
     
-    # observeEvent(dummy_plot$result(), {
-    #   output$plot <- plotly::renderPlotly({dummy_plot$result()})
-    # })
-
+    
+    ## Observe the results of the ExtendedTasks and render the plot ##############
     observeEvent(plot_output_overlap$result(), {
+      if (inherits(plot_output_overlap$result(), "character")) {
+        showModal(modalDialog(
+          title = "Error",
+          plot_output_overlap$result(),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_overlap$result()$plot)
       })
       shinyjs::hide("working")
     })
+    
     observeEvent(plot_output_timeseries$result(), {
+      if (inherits(plot_output_timeseries$result(), "character")) {
+        showModal(modalDialog(
+          title = "Error",
+          plot_output_timeseries$result(),
+          easyClose = TRUE
+        ))
+        return()
+      }
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries$result()$plot)
       })
       shinyjs::hide("working")
     })
+    
     observeEvent(plot_output_timeseries_traces$result(), {
+      if (inherits(plot_output_timeseries_traces$result(), "character")) {
+        showModal(modalDialog(
+          title = "Error",
+          plot_output_timeseries_traces$result(),
+          easyClose = TRUE
+        ))
+        return()
+      }
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries_traces$result()$plot)
       })
       shinyjs::hide("working")
     })
+    
     observeEvent(plot_output_timeseries_subplots$result(), {
+      if (inherits(plot_output_timeseries_subplots$result(), "character")) {
+        showModal(modalDialog(
+          title = "Error",
+          plot_output_timeseries_subplots$result(),
+          easyClose = TRUE
+        ))
+        return()
+      }
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries_subplots$result()$plot)
       })
