@@ -28,8 +28,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   rlang::check_installed("zipR", reason = "required to use YGwater app")
   rlang::check_installed("future", reason = "required to enable asynchronous operations in YGwater apps")
   rlang::check_installed("bslib", reason = "required to enable bootstrap 5 themes and elements in YGwater apps")
-  
-  # rlang::check_installed("exifr", reason = "required to use YGwater app")
+  rlang::check_installed("exifr", reason = "required to use YGwater app")
   # rlang::check_installed("magick", reason = "required to use YGwater app")
   # rlang::check_installed("AquaCache", reason = "required to use YGwater app")
   
