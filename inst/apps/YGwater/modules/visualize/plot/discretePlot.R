@@ -458,9 +458,6 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
             return(plot)
           }, error = function(e) {
             return(e$message)
-          },
-          warning = function(w) {
-            return(w$message)
           }) # End of tryCatch
         }) # End of future_promise
         

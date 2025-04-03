@@ -835,8 +835,6 @@ continuousPlot <- function(id, language, windowDims) {
           return(plot)
         }, error = function(e) {
           return(e$message)
-        }, warning = function(w) {
-          return(w$message)
         })
       })
     } # End of ExtendedTask function
@@ -876,8 +874,6 @@ continuousPlot <- function(id, language, windowDims) {
           return(plot)
         }, error = function(e) {
           return(e$message)
-        }, warning = function(w) {
-          return(w$message)
         })
       })
     } # End of ExtendedTask function
@@ -919,8 +915,6 @@ continuousPlot <- function(id, language, windowDims) {
           return(plot)
         }, error = function(e) {
           return(e$message)
-        }, warning = function(w) {
-          return(w$message)
         })
       })
     } # End of ExtendedTask function
@@ -961,8 +955,6 @@ continuousPlot <- function(id, language, windowDims) {
           return(plot)
         }, error = function(e) {
           return(e$message)
-        }, warning = function(w) {
-          return(w$message)
         })
       })
     } # End of ExtendedTask function
