@@ -229,9 +229,9 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
     output$main <- renderUI({
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
-        fluidRow(
-          actionButton(ns("full_screen"), "Full screen", style = "display: none;"),
-          downloadButton(ns("download_data"), "Download data", style = "display: none;")
+        fluidPage(
+          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;")),
+          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;"))
         )
       ) # End of tagList
     }) %>% # End renderUI

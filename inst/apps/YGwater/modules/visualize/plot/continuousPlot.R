@@ -1014,10 +1014,11 @@ continuousPlot <- function(id, language, windowDims) {
       if (!plot_created()) {
         output$full_screen_ui <- renderUI({
           # Side-by-side buttons
-          fluidRow(
-            actionButton(ns("full_screen"), "Full screen"),
-            downloadButton(ns("download_data"), "Download data")
-          )          })
+          fluidPage(
+            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen")),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"))
+          )
+        })
       } else {
         shinyjs::show("full_screen_ui")
       }
