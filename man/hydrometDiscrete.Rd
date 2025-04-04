@@ -18,7 +18,8 @@ hydrometDiscrete(
   plot_scale = 1,
   save_path = NULL,
   con = NULL,
-  discrete_data = NULL
+  discrete_data = NULL,
+  lang = "en"
 )
 }
 \arguments{
@@ -49,6 +50,8 @@ hydrometDiscrete(
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 
 \item{discrete_data}{A data.frame with the data to be plotted. Must contain the following columns: year, month, value and units.}
+
+\item{lang}{The desired language for the plot.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
