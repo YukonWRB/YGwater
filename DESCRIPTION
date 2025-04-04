@@ -1,7 +1,7 @@
 Package: YGwater
 Title: Utility functions for the Yukon Water Science and Stewardship
     Branch
-Version: 1.5.8
+Version: 1.5.10
 Authors@R: c(
     person("Ghislain", "de Laplante", , "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),

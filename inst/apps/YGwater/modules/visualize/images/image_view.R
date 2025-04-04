@@ -210,5 +210,5 @@ img <- function(id, language, restoring) {
         }
       }, deleteFile = TRUE)
     }, ignoreInit = TRUE)
-  })
-}
+  }) # End of moduleServer
+} # End of img server function

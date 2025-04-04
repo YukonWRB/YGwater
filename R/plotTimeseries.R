@@ -31,9 +31,10 @@
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
+#' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
-#' @return A plotly object 
+#' @return A plotly object, plus optionally the data used to create the plot.
 #' 
 #' @export
 
@@ -63,6 +64,7 @@ plotTimeseries <- function(location,
                            gridy = FALSE,
                            rate = NULL,
                            tzone = "auto",
+                           data = FALSE,
                            con = NULL) 
 {
 # 
@@ -89,7 +91,7 @@ plotTimeseries <- function(location,
 # legend_position = "v"
 # rate = "max"
 # tzone = "auto"
-# con = NULL
+# # con = NULL
 # gridx = FALSE
 # gridy = FALSE
 
@@ -593,5 +595,11 @@ plotTimeseries <- function(location,
     ) %>%
     plotly::config(locale = lang)
   
-  return(plot)
-}
+  # Return the plot and data if requested ##########################
+  if (data) {
+    datalist <- list(trace_data = trace_data, range_data = if (historic_range) range_data else data.frame())
+    return(list(plot = plot, data = datalist))
+  } else {
+    return(plot)
+  }
+} # end of function

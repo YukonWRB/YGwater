@@ -32,14 +32,14 @@ discDataUI <- function(id) {
       $(document).ready(function() {
       // Initialize tooltips
       $('body').tooltip({
-        selector: '[data-toggle=\"tooltip\"]',
+        selector: '[data-bs-toggle=\"tooltip\"]',
         container: 'body'
       });
       // Reinitialize tooltips on table redraw
       $('#tbl').on('draw.dt', function() {
         $('.tooltip').remove();
         $('body').tooltip({
-          selector: '[data-toggle=\"tooltip\"]',
+          selector: '[data-bs-toggle=\"tooltip\"]',
           container: 'body'
         });
       });

@@ -36,16 +36,8 @@ app_ui <- function(request) {
     
     # Make visible buttons in a fluidRow (rendered in server)
     uiOutput("visible_buttons"),
-    
-    # Calculate remaining height for the plot
-    tags$style(HTML("
-  #plot {
-    height: calc(100vh - 120px) !important;
-    width: 100% !important;
-  }
-")),
+
     tags$div(
-      # style = "height: calc(100vh - 100px); width: 100%;",
       plotly::plotlyOutput("plot", height = "100%", width = "100%")
     ),
     htmlOutput("error")
