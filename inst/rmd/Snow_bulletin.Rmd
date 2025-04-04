@@ -200,6 +200,9 @@ snowbullpillow2 <- function(location_pil,
                             year = year_param, 
                             scale = scale_param, 
                             month = month_param) {
+  
+  lang <- if (language == "french") "fr" else "en"
+  
   # Get this years snow pillow
   snow_p <- DBI::dbGetQuery(con, paste0("SELECT date, value FROM measurements_calculated_daily_corrected ",
                                         "WHERE timeseries_id = ", location_pil,
@@ -231,16 +234,43 @@ snowbullpillow2 <- function(location_pil,
   plot_scale <- scale
   
   if (language == "french") {
-    labs = "%d %b"
+    labs = "%e %b"
   } else {
-    labs = "%b %d"
+    labs = "%b %e"
+  }
+  
+  eng_months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+  fr_months  <- c("janv", "f\u00E9vr", "mars", "avr", "mai", "juin",
+                  "juil", "ao\u00FBt", "sept", "oct", "nov", "d\u00E9c")
+  
+  # Define a custom date labeling function
+  custom_date_labels <- function(x) {
+    label <- format(x, format = labs)
+    
+    # Remove leading zeros from day numbers
+    label <- gsub("\\b0([1-9])", "\\1", label)
+    
+    if (lang == "fr") {
+      # Replace month abbreviations
+      for (i in seq_along(eng_months)) {
+        label <- gsub(eng_months[i], fr_months[i], label)
+      }
+      # Replace weekday abbreviations (if using %a or %A in labs)
+      eng_days <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+      fr_days  <- c("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
+      for (i in seq_along(eng_days)) {
+        label <- gsub(eng_days[i], fr_days[i], label)
+      }
+    }
+    return(label)
   }
   
   plot <- ggplot2::ggplot() +
     ggplot2::theme_classic() +
     ggplot2::geom_line(data = snow_p, ggplot2::aes(y = value, x = date), linewidth = plot_scale * 1) +
     ggplot2::geom_point(dat = snow_s, ggplot2::aes(y = value, x = fake_date, colour = type), size = plot_scale * 2) +
-    ggplot2::scale_x_datetime(date_breaks = "2 months", date_labels = labs, expand = c(0,0), 
+    ggplot2::scale_x_datetime(date_breaks = "2 months", labels = custom_date_labels, expand = c(0,0), 
                               limits = c(as.POSIXct(paste0(year - 1, "-09-01")), as.POSIXct(paste0(year, "-06-30")))) + 
     ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
     ggplot2::theme(legend.position = "none") +
@@ -261,7 +291,7 @@ snowbullSWE <- function(loc, basin, year, swe_basins, custom_title, scale=scale_
   swe_basin <- swe_basins[swe_basins$location == basin,]
   swe_basin$datetime <- as.POSIXct(swe_basin$datetime)
   # Plot
-  plot <- hydrometDiscrete(location = loc, parameter = "SWE", startDay = 1, tzone = "MST", years = c(year), title = TRUE, custom_title = custom_title, plot_type = "linedbox", save_path = NULL, discrete_data = swe_basin, con = con, plot_scale = scale)
+  plot <- hydrometDiscrete(location = loc, parameter = "SWE", startDay = 1, tzone = "MST", years = year, title = TRUE, custom_title = custom_title, plot_type = "linedbox", save_path = NULL, discrete_data = swe_basin, con = con, plot_scale = scale, lang = if (language == "french") "fr" else "en")
   
   plot <- plot + ggplot2::theme(legend.position = "none")
   
@@ -293,12 +323,13 @@ snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language
   
   plot <- hydrometDiscrete(location = NULL, parameter = "Total precipitation",
                            tzone = "MST",
-                           years = year - 1,#c(params$year),
-                           startDay = "2023-10-01", # 275
-                           endDay = "2024-05-01", #120
+                           years = year - 1,
+                           startDay = "2023-10-01",
+                           endDay = "2024-05-01",
                            title = TRUE, custom_title = custom_title,
                            plot_type = "linedbox", plot_scale = scale,
-                           save_path = NULL, discrete_data = tab, con = con)
+                           save_path = NULL, discrete_data = tab, con = con,
+                           lang = if (language == "french") "fr" else "en")
   plot <- plot + ggplot2::theme(legend.position = "none")
   
   if (language == "french") {
@@ -900,9 +931,9 @@ par(mfrow = c(1, 2))
 ## A3: Log Cabin
 tryCatch({
   if (language_param == "french") {
-    snowbullpillow2(location_pil = 649, location_surv = 46, custom_title = "A3 : Équivalent en eau de la neige - Log Cabin (C.-B.)" , year = year_param, scale = scale_param)
+    snowbullpillow2(location_pil = 649, location_surv = 46, custom_title = "A3 : Équivalent en eau de la neige - Log Cabin (C.-B.)", year = year_param, scale = scale_param)
   } else {
-    snowbullpillow2(location_pil = 649, location_surv = 46, custom_title = "A3: Log Cabin (B.C) Snow Water Equivalent" , year = year_param, scale = scale_param)
+    snowbullpillow2(location_pil = 649, location_surv = 46, custom_title = "A3: Log Cabin (B.C) Snow Water Equivalent", year = year_param, scale = scale_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -916,7 +947,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin sup. du Yukon", language = language_param)
   } else {
     snowbullSWE(loc = "Upper Yukon", basin = "Upper_Yukon",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Upper Yukon Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Upper Yukon Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -1037,7 +1068,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Teslin / Big Salmon", language = language_param)
   } else {
     snowbullSWE(loc = "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Teslin / Big Salmon Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Teslin / Big Salmon Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -1128,7 +1159,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin central du Yukon", language = language_param)
   } else {
     snowbullSWE(loc = "Central Yukon", basin = "Central_Yukon",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Central Yukon Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Central Yukon Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -1235,7 +1266,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Pelly", language = language_param)
   } else {
     snowbullSWE(loc = "Pelly", basin = "Pelly",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Pelly Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Pelly Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plotting error: ", e$message, "\n")
@@ -1333,7 +1364,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Stewart", language = language_param)
   } else {
     snowbullSWE(loc = "Stewart", basin = "Stewart",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Stewart Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Stewart Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plotting error: ", e$message, "\n")
@@ -1423,7 +1454,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin White", language = language_param)
   } else {
     snowbullSWE(loc = "White", basin = "White",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: White Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: White Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -1488,9 +1519,9 @@ par(mfrow = c(1, 2))
 ## A King Solomon Dome
 tryCatch({
   if (language_param == "french") {
-    snowbullpillow2(location_pil = 85, location_surv = 136, custom_title = "A : Équivalent en eau de la neige - dôme King Solomon" , year = year_param, scale = scale_param)
+    snowbullpillow2(location_pil = 85, location_surv = 136, custom_title = "A : Équivalent en eau de la neige - dôme King Solomon", year = year_param, scale = scale_param)
   } else {
-    snowbullpillow2(location_pil = 85, location_surv = 136, custom_title = "A: King Solomon Dome Snow Water Equivalent" , year = year_param, scale = scale_param)
+    snowbullpillow2(location_pil = 85, location_surv = 136, custom_title = "A: King Solomon Dome Snow Water Equivalent", year = year_param, scale = scale_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -1504,7 +1535,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin inf. Yukon", language = language_param)
   } else {
     snowbullSWE(loc = "Lower Yukon", basin = "Lower_Yukon",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Lower Yukon Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Lower Yukon Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plotting error: ", e$message, "\n")
@@ -1616,7 +1647,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Porcupine", language = language_param)
   } else {
     snowbullSWE(loc = "Porcupine", basin = "Porcupine",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Porcupine Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Porcupine Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -1706,7 +1737,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Peel", language = language_param)
   } else {
     snowbullSWE(loc = "Peel", basin = "Peel",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Peel Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Peel Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -1790,7 +1821,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Liard", language = language_param)
   } else {
     snowbullSWE(loc = "Liard", basin = "Liard",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Liard Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Liard Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
@@ -1881,7 +1912,7 @@ tryCatch({
                 year = year_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Alsek", language = language_param)
   } else {
     snowbullSWE(loc = "Alsek", basin = "Alsek",
-                year = year_param, swe_basins = swe_basins, custom_title = "B: Alsek Basin Monthly Snow Course", language = language_param)
+                year = year_param, swe_basins = swe_basins, custom_title = "B: Alsek Basin Snow Course", language = language_param)
   }
 }, error = function(e) {
   cat("Plot generation error: ", e$message, "\n")
