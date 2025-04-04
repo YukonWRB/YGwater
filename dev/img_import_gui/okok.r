@@ -14,3 +14,6 @@ exif_data <- read_exif(list.files(directory, full.names = TRUE))
 
 # View the EXIF data
 print(exif_data)
+
+
+is.null(NULL)

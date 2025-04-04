@@ -173,7 +173,7 @@ addImgs <- function(id) {
       
       # Once the images are loaded into the app, render the GUI elements
       renderDataTable()
-      renderImage()
+      #renderImage()
       renderLeafletMap()
       renderImageIndex()
     })
@@ -183,21 +183,24 @@ addImgs <- function(id) {
     # Render the data table
     renderDataTable <- function() {
       output$table <- DT::renderDataTable({
-        DT::datatable(
-          dat$df %>%
-            dplyr::mutate(across(where(is.numeric), ~ round(., 3))) %>%
-            dplyr::mutate(Datetime = format(as.POSIXct(Datetime, format="%Y:%m:%d %H:%M:%S"), "%d-%b-%Y %H:%M")),
-          selection = list(mode = "multiple", target = "row"),
-          editable = TRUE,
-          options = list(
-            dom = 't',
-            paging = FALSE,
-            ordering = FALSE,
-            scrollX = TRUE,
-            scrollY = "400px",
-            autoWidth = TRUE
-          )
+      DT::datatable(
+        dat$df %>%
+        dplyr::mutate(across(where(is.numeric), ~ round(., 3))) %>%
+        dplyr::mutate(Datetime = format(as.POSIXct(Datetime, format="%Y:%m:%d %H:%M:%S"), "%d-%b-%Y %H:%M")),
+        selection = list(mode = "multiple", target = "row"),
+        editable = TRUE,
+        options = list(
+        dom = 't',
+        paging = FALSE,
+        ordering = FALSE,
+        scrollX = TRUE,
+        scrollY = "400px",
+        autoWidth = TRUE,
+        columnDefs = list(
+          list(visible = FALSE, targets = which(names(dat$df) %in% c("Sourcefile", "Location_ID", "ImageWidth", "ImageHeight")))
         )
+        )
+      )
       })
     }
     
@@ -401,67 +404,101 @@ addImgs <- function(id) {
         )
       ))
     })
-    
+
+
     # Validate the uploaded dataframe and upload to AquaCache
     observeEvent(input$confirm_upload, {
       removeModal()
-      dat$df <- standardizeDataFrame(dat$df)
+      # return a standardized dataframe to AquaCache, which maps the app's text to AquaCache reader names (e.g., 'Private' to yg_reader)
+
+      df_for_ac <- standardizeDataFrame(dat$df)
+      print(paste("df_for_ac", df_for_ac$Visibility))
       validation_result <- validateDataFrame(dat$df)
       if (!validation_result$success) {
         showNotification(validation_result$message, type = "error", duration = 5)
       }
-      uploadAquacache$invoke(df=dat$df, config=session$userData$config)
+
+      res <- list()
+
+      for (i in seq_len(nrow(df_for_ac))) {
+        out <- uploadAquacache$invoke(df = df_for_ac[i,], config = session$userData$config)
+        print(out$result)
+        #res <- append(res, list(out))
+      }
+
+    #res_out <<- res
+    #res <- res[order(sapply(res, function(x) x$success), decreasing = FALSE)]
+
+    statement <- ""
+
+    showModal(modalDialog(
+            statement,
+            easyClose = TRUE,
+            footer = tagList(
+              modalButton("Close")
+            )
+          ))
+      
+      # Reset the data table and map
+      #dat$df <- data.frame()
+      #renderDataTable()
+      #renderLeafletMap()
     })
-    
+
     uploadAquacache <- ExtendedTask$new(
       function(df, config) {
-        promises::future_promise({
-          
-          con <- AquaConnect(name = config$dbName,
-                             host = config$dbHost,
-                             port = config$dbPort,
-                             username = config$dbUser,
-                             password = config$dbPass,
-                             silent = TRUE)
-          on.exit(DBI::dbDisconnect(con))
-          
-          # for converting app text to AquaCache reader names
-          for (i in seq_len(nrow(df))) {
-            
-            tryCatch({
-              AquaCache::insertACImage(
-                object = df$Sourcefile[i],
-                datetime = df$Datetime[i],
-                latitude = df$Latitude[i],
-                longitude = df$Longitude[i],
-                elevation_msl = df$Altitude[i],
-                azimuth_true = df$Azimuth[i],
-                share_with = df$Visibility[i],
-                con = con,
-                location = if (df$Location[i] == "") NULL else df$Location[i],
-                tags = if (length(df$Tags[[i]]) == 0) NULL else df$Tags[[i]],
-                description = if (df$Notes[i] == "") NULL else df$Notes[i],
-                owner = 2,
-              )
-              success <- TRUE
-            }, error = function(e) {
-              success <<- FALSE
-            })
-            if (!success) {showNotification("Error uploading image to AquaCache.", type = "error", duration = 5)}
-            if (success) {showNotification("Images uploaded to AquaCache.", type = "message", duration = 5)}
-          }
+      promises::future_promise({
+        res <- list()
+        tryCatch({
+        con <- AquaConnect(
+          name = config$dbName,
+          host = config$dbHost,
+          port = config$dbPort,
+          username = config$dbUser,
+          password = config$dbPass,
+          silent = TRUE
+        )
+        on.exit(DBI::dbDisconnect(con))
+
+        ret <- AquaCache::insertACImage(
+            object = df$Sourcefile,
+            datetime = df$Datetime,
+            latitude = df$Latitude,
+            longitude = df$Longitude,
+            elevation_msl = df$Altitude,
+            azimuth_true = df$Azimuth,
+            share_with = df$Visibility,
+            con = con,
+            location = ifelse(is.na(df$Location_ID), NULL, df$Location_ID),
+            tags = if (is.null(df$Tags) || df$Tags == "") NULL else df$Tags,
+            description = if (df$Notes == "") NULL else df$Notes,
+            owner = 2
+        )
+        }, error = function(e) {
         })
       }
+      
+      
+      
+      )
+      }
     )
+
+
     
     # standardize the dataframe to match AquaCache's format
     standardizeDataFrame <- function(df){
       reader_list <- c("Private" = "yg_reader", "Public" = "public_reader")
       df$Sourcefile <- as.character(df$Sourcefile)
       df$Tags <- as.character(df$Tags)
-      df$Visibility <- reader_list[df$Visibility]
+      df$Visibility <- as.character(reader_list[df$Visibility])
       df$Datetime <- as.POSIXct(df$Datetime, format="%Y:%m:%d %H:%M:%S", tz="UTC")
       df$Datetime <- df$Datetime - as.difftime(df$UTC, units = "hours")
+      df$Notes <- as.character(df$Notes)
+
+      for (ii in seq_len(nrow(df))) {
+        df$Tags[ii] <- if (length(df$Tags[[ii]]) == 0) "" else df$Tags[[ii]]
+      }
       return(df)
     }
     
@@ -522,11 +559,11 @@ addImgs <- function(id) {
       if (length(input$table_rows_selected) > 0) {
         for (row in input$table_rows_selected) {
           
-          distance <- latlon_to_meters(dat$df$Latitude[row], dat$df$Longitude[row], input$image_latitude, input$image_longitude)
+          #distance <- latlon_to_meters(dat$df$Latitude[row], dat$df$Longitude[row], input$image_latitude, input$image_longitude)
 
-          if (distance > 1000) {
-            showNotification("Warning: The distance between the selected image and the entered coordinates exceeds 1000 meters.", type = "warning", duration = 5)
-          }
+          #if (distance > 1000) {
+          #  showNotification("Warning: The distance between the selected image and the entered coordinates exceeds 1000 meters.", type = "warning", duration = 5)
+          #}
 
           # only write attributes that are not set to their default values (typically empty)
           # this way, the user can leave attributes blank, such as lat-lon, without worrying about overwriting them
@@ -549,11 +586,15 @@ addImgs <- function(id) {
             return()
           }
 
+          dat$df$Location_ID[input$table_rows_selected] <- input$image_location
+          dat$df$Location[input$table_rows_selected] <- locations[input$image_location == locations$location_id, "name"]
+
 
           if (!is.na(input$image_latitude) && !is.na(input$image_longitude)){
             dat$df$Latitude[row] <- input$image_latitude
             dat$df$Longitude[row] <- input$image_longitude
-            dat$df$Location[input$table_rows_selected] <- input$image_location
+            
+
           }
           if (input$share_tag != "Private") {dat$df$Visibility[row] <- input$share_tag}
           if (input$tz_correction != -7) {dat$df$UTC[row] <- input$tz_correction}
@@ -957,7 +998,7 @@ addImgs <- function(id) {
       dat_out <- dat %>%
         dplyr::select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude, GPSImgDirection, ImageWidth, ImageHeight) %>%
         dplyr::rename(Sourcefile = SourceFile, Filename = FileName, Latitude = GPSLatitude, Longitude = GPSLongitude, Altitude = GPSAltitude, Datetime = DateTimeOriginal, Azimuth = GPSImgDirection) %>%
-        dplyr::mutate(Tags = list(character(0)), Notes = "", Visibility = "Private", UTC = -7, Location = "")
+        dplyr::mutate(Tags = list(character(0)), Notes = "", Visibility = "Private", UTC = -7, Location = "", Location_ID = NA)
       return(dat_out)
     }
     
