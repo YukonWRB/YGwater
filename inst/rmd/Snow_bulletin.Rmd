@@ -553,12 +553,12 @@ Certaines choses qui DOIVENT être modifiées comprennent :
 
 Certaines autres choses nécessitent une vérification et peuvent nécessiter une modification :
 
-- Certains passages utilisant du texte ajusté automatiquement (habituellement en couleure) peuvent requérir un ajustement pour le féminin et/ou le pluriel.
+- Certains passages utilisant du texte ajusté automatiquement (habituellement en couleur) peuvent requérir un ajustement pour le féminin et/ou le pluriel.
 - Certains paragraphes doivent être attachés manuellement à leurs images, sinon ils peuvent se retrouver sur des pages différentes. Pour ce faire, sélectionnez l'image et le paragraphe qui vont ensemble, puis cliquez sur la petite flèche 'bas-droite' dans la section 'paragraphe' du volet Accueil. Cela ouvrira un menu où vous pourrez contrôler les paramètres de paragraphe. Sélectionnez le deuxième onglet et cochez les cases 'Conserver avec le suivant' et 'Conserver les lignes ensemble'. Cela garantira que l'image et le paragraphe restent ensemble sur la même page.
 - Les paragraphes immédiatement après les graphiques C et D nécessitent une modification manuelle, car ils ne sont pas toujours les mêmes et dépendent de l'interprétation experte.
 - Vérifiez soigneusement chaque hydrogramme et graphique EEN pour des données erronées. Selon la source, des modifications peuvent être nécessaires, soit à la source de données WRB (Aquarius), soit auprès du relevé hydrométrique du Canada. Une fois les modifications apportées, les nouvelles données doivent être synchronisées avec la base de données locale à l'aide de la fonction AquaCache::synchronize_contiuous.
 - Si les données de précipitations sont manquantes, assurez-vous qu'elles ont été entrées à la base de données manuellement (Mike Smith est la source des données).
-- Si les graphiques CDDF ont des points de données manquants, vous devrez imputer les données manquantes. La plupart du temps, un jour est manquant parce que quelques heures de températures sont manquantes. La base de données importe automatiquement des données de température horaires et quotidiennes en tant que séries chronologiques distinctes. vous pouvez donc utiliser les données horaires pour imputer les données quotidiennes manquantes. Utilisez la fonction AquaCache::imputeMissing pour ce faire, en commençant par les données horaires; ensuite, imputez les données quotidiennes à l'aide des données horaires. Consultez la documentation de la fonction pour obtenir de l'aide.
+- Si les graphiques CDDF ont des points de données manquants, vous devrez imputer les données manquantes. La plupart du temps, un jour est manquant parce que quelques heures de températures sont manquantes. La base de données importe automatiquement des données de température horaires et quotidiennes en tant que séries chronologiques distinctes. Vous pouvez donc utiliser les données horaires pour imputer les données quotidiennes manquantes. Utilisez la fonction AquaCache::imputeMissing pour ce faire, en commençant par les données horaires; ensuite, imputez les données quotidiennes à l'aide des données horaires. Consultez la documentation de la fonction pour obtenir de l'aide.
 
 
 RAPPELEZ VOUS DE SUPPRIMER CETTE PAGE UNE FOIS TERMINÉ.
@@ -1972,6 +1972,7 @@ tryCatch({
     tabl[,1] <- sub("Parcours nivométrique de la ", "", tabl[,1])
     tabl[,1] <- sub("Parcours nivométrique de l'", "", tabl[,1])
     tabl[,1] <- sub("Parcours nivométrique de ", "", tabl[,1])
+    tabl[,1] <- sub("Parcours nivométrique des ", "", tabl[,1])
     tabl[,1] <- sub("Parcours nivométrique d'", "", tabl[,1])
     tabl[,1] <- sub("Parcours nivométrique ", "", tabl[,1])
     # Capitalize first letter of location name
@@ -2085,7 +2086,7 @@ C - Composite historical record. Current location measurements combined with his
 - Whitehorse Airport B (Ice Lake) combines records from the old Whitehorse Airport snow course located within the airport grounds with new measurements taken a few hundred meters to the West of the airport. Two years of overlapping records exist (2023", knitr::asis_output("\U2011"), "2024). The new snow course uses historical SWE records from the old location (1965", knitr::asis_output("\U2011"), "2022) without any adjustments.
 - Twin Creeks B ccombines records from Twin Creeks A snow course located at the West end of the Twin Creeks air strip with new measurements taken at the East end of the air strip. Six years of overlapping records (2016 and 2021", knitr::asis_output("\U2011"), "2025) are currently used to adjust the historical SWE copied from Twin A into Twin B (a correction factor of ", round(twin_corrections[1], 2), " applies to 1977", knitr::asis_output("\U2011"), "2015 SWE data).
 - Twin Creeks A sampling continues and records displayed in the Twin A row in the above table are not subject to any adjustments. Twin A historical period (1977", knitr::asis_output("\U2011"), lubridate::year(Sys.Date())-1, ") is missing four year of record (2017", knitr::asis_output("\U2011"), "2020).
-- Hyland River B combines records from the old Hyland River snow course located near the Hyland River air strip with new measurements taken 6 kilometers to the north of the old station. ", twin_correction_pts, " overlapping data points were used to adjust the historical station data (1976", knitr::asis_output("\U2011"), "2017) to the new location with correction factors of ", round(hyland_corrections[1], 2), " and ", round(hyland_corrections[2], 2), " applied to the historical SWE and depth data, respectively.
+- Hyland River B combines records from the old Hyland River snow course located near the Hyland River air strip with new measurements taken 6 kilometers to the north of the old station. Five years of overlapping records (2018", knitr::asis_output("\U2011"), "2022) were used to adjust the historical SWE copied from the old location into the new one (a correction factor of ", round(hyland_corrections[1], 2), " applies to the 1976", knitr::asis_output("\U2011"), "2017).
 ")
 } else {
 paste0("
@@ -2099,7 +2100,7 @@ B - Date du relevé en dehors de la plage d’échantillonnage valide
 R - Nouveau record  
 
 ### Notes au sujet de la médiane historique de l'EEN et du nombre d'années avec données :
-C - Données historiques composite. Les relevés à la station sont combinée avec les données historique de la station voisine abandonnée, ajustées en fonction des années avec relevés concomitants.
+C - Données historiques composite. Les relevés à la station sont combinés avec les données historique de la station voisine abandonnée, ajustées en fonction des années avec relevés concomitants.
 
 - L'aéroport de Whitehorse B (Lac Ice) combine les relevés historiques de l’ancienne station nivométrique située dans l’enceinte de l’Aéroport de Whitehorse avec les nouveaux relevés pris à quelques centaines de mètres à l’ouest de l’aéroport. Deux années de relevés concomitants existent (2023", knitr::asis_output("\U2011"), "2024). La nouvelle station utilise les données historiques de l’EEN de l’ancienne station (1965", knitr::asis_output("\U2011"), "2022) sans ajustement.
 - Ruisseau Twin B combine les relevés historiques de la station nivométrique Ruisseaux Twin A située à l’extrémité ouest de la piste d’atterrissage Twin Creeks avec les nouveaux relevés pris à l’extrémité est de la piste. Six années de relevés concomitants (2016 et 2021", knitr::asis_output("\U2011"), "2025) sont actuellement utilisées pour ajuster les données historiques de l’EEN de Twin A à l’emplacement de Twin B (un facteur de correction de ", round(twin_corrections[1], 2), " s’applique aux données d’EEN de 1977", knitr::asis_output("\U2011"), "2015).
