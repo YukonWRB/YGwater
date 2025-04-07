@@ -192,7 +192,6 @@ hydrometDiscrete <- function(location = NULL,
       new_discrete <- all_discrete[all_discrete$target_datetime >= start & all_discrete$target_datetime <= end , ]
       discrete <- rbind(discrete, new_discrete)
     }
-
   }
 
 #### -------------------------- Data is given ----------------------------- ####

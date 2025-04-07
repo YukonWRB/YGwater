@@ -112,8 +112,7 @@ app_ui <- function(request) {
     if (!config$public) {
       nav_panel(title = "Manage timeseries",
                 value = "ts",
-                uiOutput("ts_ui"),
-                style = "display: hidden;")
+                uiOutput("ts_ui"))
     },
     if (!config$public) {
       nav_menu(title = "Equipment/instruments", 

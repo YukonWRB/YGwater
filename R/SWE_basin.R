@@ -185,11 +185,9 @@ SWE_basin <- function(year,
         swe_median = stats::median(swe, na.rm = TRUE)
       )
     # combine tables
-    swe_basin_summary <-
-      merge(swe_basin_summary, swe_basin_current[, c("basin", "mon", "swe")])
+    swe_basin_summary <- merge(swe_basin_summary, swe_basin_current[, c("basin", "mon", "swe")])
     # calculate relative swe
-    swe_basin_summary$swe_relative <-
-      swe_basin_summary$swe / swe_basin_summary$swe_median
+    swe_basin_summary$swe_relative <- swe_basin_summary$swe / swe_basin_summary$swe_median
     # round all values
     swe_basin_summary <- swe_basin_summary %>%
       dplyr::mutate(dplyr::across(
