@@ -264,6 +264,7 @@ $(document).keyup(function(event) {
       test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
       # Test the connection
       if (nrow(test) > 0) {
+        removeModal()
         showModal(modalDialog(
           title = tr("login_success", languageSelection$language),
           paste0(tr("login_success_msg", languageSelection$language), " ", input$username),
@@ -299,6 +300,7 @@ $(document).keyup(function(event) {
         # Other tabs are created if/when the user clicks on the 'admin' tab
         return()
       } else {
+        removeModal()
         showModal(modalDialog(
           title = "Login Failed",
           "Invalid username or password or insufficient privileges.",
@@ -312,6 +314,7 @@ $(document).keyup(function(event) {
         return()
       }
     }, error = function(e) {
+      removeModal()
       showModal(modalDialog(
         title = "Login Failed",
         "Invalid username or password.",
@@ -415,7 +418,6 @@ $(document).keyup(function(event) {
   
   
   observeEvent(input$navbar, {
-    print(input$navbar)
     # When user selects any a tab, update the last active tab for the current mode
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "img", "about", "news", "discData", "contData")) {
       # User is in viz mode
