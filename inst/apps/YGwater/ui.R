@@ -10,12 +10,6 @@ app_ui <- function(request) {
   page_fluid(
     shinyjs::useShinyjs(),
     tags$head(
-      # css rule below handles bolding selected nav menu item for dynamically created items (for some reason not handled by bslib)
-      tags$style(HTML("
-          #navbar a.active span {
-            color: white !important;
-            font-weight: bold !important;
-        }")),
       tags$script(src = "js/fullscreen.js"),  # JS to handle full screen button
       tags$script(src = "js/window_resize.js"),  # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
       # JS below is for updating the title of the page from the server, when the user changes language
@@ -109,7 +103,58 @@ app_ui <- function(request) {
                        uiOutput("news_ui")),
              nav_panel("About", value = "about",
                        uiOutput("about_ui"))
-    )
+    ),
+    if (!config$public) {
+      nav_panel(title = "Manage locations",
+                value = "locs",
+                uiOutput("locs_ui"))
+    },
+    if (!config$public) {
+      nav_panel(title = "Manage timeseries",
+                value = "ts",
+                uiOutput("ts_ui"),
+                style = "display: hidden;")
+    },
+    if (!config$public) {
+      nav_menu(title = "Equipment/instruments", 
+               value = "equip",
+               nav_panel(title = "Checks + calibrations", 
+                         value = "cal",
+                         uiOutput("cal_ui")),
+               nav_panel(title = "Deploy/Recover", 
+                         value = "deploy_recover",
+                         uiOutput("deploy_recover_ui"))
+      )
+    },
+    if (!config$public) {
+      nav_menu(title = "Manage data", 
+               value = "addData",
+               nav_panel(title = "Continuous data",
+                         value = "addContData",
+                         uiOutput("addContData_ui")),
+               nav_panel(title = "Discrete data",
+                         value = "addDiscData",
+                         uiOutput("addDiscData_ui"))
+      )
+    },
+    if (!config$public) {
+      nav_menu(title = "Manage files/docs", 
+               value = "addFiles",
+               nav_panel(title = "Documents",
+                         value = "addDocs",
+                         uiOutput("addDocs_ui")),
+               nav_panel(title = "Images",
+                         value = "addImgs",
+                         uiOutput("addImgs_ui"))
+      )
+    },
+    if (!config$public) {
+      nav_panel(title = "Add/modify field visit", 
+                value = "visit",
+                uiOutput("visit_ui"))
+    }
+    
+    
     ), # End navbarPage (though it's modified below)
     
     # Insert language selector into the navbar

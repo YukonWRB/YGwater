@@ -127,7 +127,7 @@ app_server <- function(input, output, session) {
                   parameter = param,
                   start_date = Sys.Date() - 30,
                   datum = TRUE,
-                  filter = 20,
+                  # filter = 20,
                   rate = rate,
                   lang = lang,
                   line_scale = 1,

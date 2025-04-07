@@ -10,30 +10,69 @@ app_server <- function(input, output, session) {
   
   # Initial setup #############################################################
   
+  # Hide all 'admin' side tabs if they were generated
+  
+  # Show relevant tabs for viz mode
+  showViz <- function(show = TRUE) {
+    if (show) {
+      nav_show(id = "navbar", target = "home")
+      nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
+      nav_show(id = "navbar", target = "map")
+      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
+        nav_show(id = "navbar", target = "FOD")
+      }
+      nav_show(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
+      nav_show(id = "navbar", target = "img")
+      nav_show(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
+      nav_show(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
+    } else {
+      nav_hide(id = "navbar", target = "home")
+      nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
+      nav_hide(id = "navbar", target = "map")
+      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
+        nav_hide(id = "navbar", target = "FOD")
+      }
+      nav_hide(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
+      nav_hide(id = "navbar", target = "img")
+      nav_hide(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
+      nav_hide(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
+    }
+  }
+  showAdmin <- function(show = TRUE, logout = FALSE) {
+    if (show) {
+      nav_show(id = "navbar", target = "locs")
+      nav_show(id = "navbar", target = "ts")
+      nav_show(id = "navbar", target = "equip")
+      nav_show(id = "navbar", target = "cal")
+      nav_show(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
+      nav_show(id = "navbar", target = "visit")
+    } else {
+      # Hide irrelevant tabs for viz mode
+      nav_hide(id = "navbar", target = "locs")
+      nav_hide(id = "navbar", target = "ts")
+      nav_hide(id = "navbar", target = "equip")
+      nav_hide(id = "navbar", target = "cal")
+      nav_hide(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
+      nav_hide(id = "navbar", target = "visit")
+      if (logout) {
+        shinyjs::hide("admin")
+      }
+    }
+  }
+  
+  if (!config$public) {
+    showAdmin(show = FALSE)
+  }
+  
+  
   # Automatically update URL every time an input changes
   observe({
     reactiveValuesToList(input)
     session$doBookmark()
   })
   setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))
-  
-  # Make functions to create nav menu elements that have the same style as elsewhere in the app, since bslib sucks at this (as of V 0.9)
-  # There's also a related css rule in the UI which targets navbar a.active span and bolds it when selected
-  styled_nav_panel <- function(title, value, output, class = "nav-link", style = "") {
-    nav_panel(
-      title = tags$span(title, style = style, class = class),
-      value = value,
-      uiOutput(output)
-    )
-  }
-  styled_nav_menu <- function(title, value, ..., class = "dropdown-toggle nav-link", style = "") {
-    menu_tag <- nav_menu(
-      title = tags$span(title, style = style, class = class),
-      value = value,
-      ...
-    )
-  }
-
   
   # Update the query string
   onBookmarked(updateQueryString)
@@ -81,21 +120,6 @@ app_server <- function(input, output, session) {
     addDocs = FALSE,
     addImgs = FALSE,
     visit = FALSE)
-  
-  # reactive to see if 'admin' side tabs have been created already
-  tab_created <- reactiveValues(
-    locs = FALSE,
-    ts = FALSE,
-    addData = FALSE,
-    addFiles = FALSE,
-    equip = FALSE,
-    cal = FALSE,
-    addContData = FALSE,
-    addDiscData = FALSE,
-    addDocs = FALSE,
-    addImgs = FALSE,
-    visit = FALSE
-  )
   
   ## database connections ###########
   # Look for .mdb files in the AccessPath directory
@@ -329,23 +353,9 @@ $(document).keyup(function(event) {
     
     # Redirect to last 'viz' tab
     updateTabsetPanel(session, "navbar", selected = last_viz_tab())
-    # Remove admin-related tabs on logout
-    nav_remove("navbar", "locs", session = session)
-    nav_remove("navbar", "ts", session = session)
-    nav_remove("navbar", "equip", session = session)
-    nav_remove("navbar", "cal", session = session)
-    nav_remove("navbar", "addData", session = session)
-    nav_remove("navbar", "addFiles", session = session)
-    nav_remove("navbar", "visit", session = session)
+
+    showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     
-    # Reset the flags
-    tab_created$locs <- FALSE
-    tab_created$ts <- FALSE
-    tab_created$equip <- FALSE
-    tab_created$cal <- FALSE
-    tab_created$addData <- FALSE
-    tab_created$addFiles <- FALSE
-    tab_created$visit <- FALSE
     
     # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode
     admin_vis_flag("viz")
@@ -371,25 +381,10 @@ $(document).keyup(function(event) {
       updateActionButton(session, "admin", label = "Switch to Admin mode")
       
       # Show relevant tabs for viz mode
-      nav_show(id = "navbar", target = "home")
-      nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
-      nav_show(id = "navbar", target = "map")
-      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
-        nav_show(id = "navbar", target = "FOD")
-      }
-      nav_show(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
-      nav_show(id = "navbar", target = "img")
-      nav_show(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
-      nav_show(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
+      showViz(show = TRUE)
       
       # Hide irrelevant tabs for viz mode
-      nav_hide(id = "navbar", target = "locs")
-      nav_hide(id = "navbar", target = "ts")
-      nav_hide(id = "navbar", target = "equip")
-      nav_hide(id = "navbar", target = "cal")
-      nav_hide(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
-      nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
-      nav_hide(id = "navbar", target = "visit")
+      showAdmin(show = FALSE)
       
       # Select the last tab the user was on in viz mode
       updateTabsetPanel(session, "navbar", selected = last_viz_tab())
@@ -400,96 +395,11 @@ $(document).keyup(function(event) {
       
       updateActionButton(session, "admin", label = "Switch to Vizualize mode")
       
-      # Create the tabs if they're not there yet
-      if (!tab_created$locs) {
-        nav_insert("navbar",
-                   styled_nav_panel(title = "Manage locations", 
-                                    value = "locs", 
-                                    output = "locs_ui"),
-                   target = "reports", 
-                   position = "after")
-        tab_created$locs <- TRUE
-      }
-      if (!tab_created$ts) {
-        nav_insert("navbar",
-                   styled_nav_panel(title = "Manage timeseries", 
-                                      value = "ts", 
-                                      output = "ts_ui"),
-                   target = "locs", position = "after")
-        tab_created$ts <- TRUE
-      }
-      if (!tab_created$equip) {
-        nav_insert("navbar",
-                   styled_nav_menu(title = "Equipment/instruments", value = "equip",
-                                   styled_nav_panel(title = "Checks + calibrations", 
-                                                    value = "cal",
-                                                    output = "cal_ui"),
-                                   styled_nav_panel(title = "Deploy/Recover",
-                                                    value = "deploy_recover",
-                                                    output = "deploy_recover_ui")),
-                   target = "ts", position = "after")
-        tab_created$equip <- TRUE
-        tab_created$deploy_recover <- TRUE
-        tab_created$cal <- TRUE
-      }
-      # Create the nav_menu that holds the 'add' continuous and discrete data tabs
-      if (!tab_created$addData) { 
-        nav_insert("navbar",
-                   styled_nav_menu(title = "Manage data", value = "addData",
-                            styled_nav_panel(title = "Continuous data", 
-                                             value = "addContData",
-                                             output = "addContData_ui"),
-                            styled_nav_panel(title = "Discrete data", 
-                                             value = "addDiscData",
-                                             output = "addDiscData_ui")),
-                   target = "cal", position = "after")
-        tab_created$addData <- TRUE
-        tab_created$addContData <- TRUE
-        tab_created$addDiscData <- TRUE
-      }
-      # Create the nav_menu for adding docs/images/vectors/rasters
-      if (!tab_created$addFiles) {
-        nav_insert("navbar",
-                   styled_nav_menu(title = "Manage files/docs", value = "addFiles",
-                            styled_nav_panel(title = "Documents", 
-                                             value = "addDocs",
-                                             output = "addDocs_ui"),
-                            styled_nav_panel(title = "Images", 
-                                             value = "addImgs",
-                                             output = "addImgs_ui")
-                            #.... plus extra tabs for vectors and rasters when built
-                   ),
-                   target = "data", position = "after")
-        tab_created$addFiles <- TRUE
-        tab_created$addDocs <- TRUE
-        tab_created$addImgs <- TRUE
-      }
-      if (!tab_created$visit) {
-        nav_insert("navbar",
-                   styled_nav_panel(title = "Add/modify field visit", value = "visit",
-                                    output = "visit_ui"),
-                   target = "addFiles", position = "after")
-        tab_created$visit <- TRUE
-      }
-      
       # Show relevant tabs for admin mode
-      nav_show(id = "navbar", target = "locs")
-      nav_show(id = "navbar", target = "ts")
-      nav_show(id = "navbar", target = "equip")
-      nav_show(id = "navbar", target = "cal")
-      nav_show(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
-      nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
-      nav_show(id = "navbar", target = "visit")
+      showAdmin(show = TRUE)
       
       # Hide irrelevant tabs/menus
-      nav_hide(id = "navbar", target = "home") 
-      nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
-      nav_hide(id = "navbar", target = "map")
-      nav_hide(id = "navbar", target = "FOD")
-      nav_hide(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', 'snowBulletin' as well
-      nav_hide(id = "navbar", target = "img")
-      nav_hide(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
-      nav_hide(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
+      showViz(show = FALSE)
       
       # Select the last tab the user was on in admin mode
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
