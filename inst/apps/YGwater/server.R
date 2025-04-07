@@ -406,7 +406,8 @@ $(document).keyup(function(event) {
                    styled_nav_panel(title = "Manage locations", 
                                     value = "locs", 
                                     output = "locs_ui"),
-                   target = "reports", position = "after")
+                   target = "reports", 
+                   position = "after")
         tab_created$locs <- TRUE
       }
       if (!tab_created$ts) {
@@ -504,6 +505,7 @@ $(document).keyup(function(event) {
   
   
   observeEvent(input$navbar, {
+    print(input$navbar)
     # When user selects any a tab, update the last active tab for the current mode
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "img", "about", "news", "discData", "contData")) {
       # User is in viz mode
@@ -676,6 +678,7 @@ $(document).keyup(function(event) {
     }
     if (input$navbar == "addImgs") {
       if (!ui_loaded$addImgs) {
+        print("adding images")
         output$addImgs_ui <- renderUI(addImgsUI("addImgs"))  # Render the UI
         ui_loaded$addImgs <- TRUE
         addImgs("addImgs")  # Call the server

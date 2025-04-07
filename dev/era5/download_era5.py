@@ -8,7 +8,7 @@ warnings.filterwarnings("ignore")
 os.chdir("dev/era5")
 data_dir = Path(".data")
 
-for year in tqdm(range(1999,2024)):
+for year in tqdm(range(2000,2024)):
     for month in range(1,13):
         filename = data_dir / "raw" / f"era5_reanalysis_snow_{year}-{str(month).zfill(2)}.zip"
         if filename.exists():
@@ -41,7 +41,7 @@ for year in tqdm(range(1999,2024)):
                 ],
                 "data_format": "netcdf",
                 "download_format": "zip",
-                "area": [72, -150, 55, -120]
+                "area": [72, -150, 50, -120]
             }
 
             client = cdsapi.Client(verify=False)
