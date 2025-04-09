@@ -239,15 +239,13 @@ snowbullpillow2 <- function(location_pil,
     labs = "%b %e"
   }
   
-  eng_months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-  fr_months  <- c("janv", "f\u00E9vr", "mars", "avr", "mai", "juin",
-                  "juil", "ao\u00FBt", "sept", "oct", "nov", "d\u00E9c")
-  
   # Define a custom date labeling function
   custom_date_labels <- function(x) {
     label <- format(x, format = labs)
-    
+    eng_months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    fr_months  <- c("janv", "f\u00E9vr", "mars", "avr", "mai", "juin",
+                    "juil", "ao\u00FBt", "sept", "oct", "nov", "d\u00E9c")
     # Remove leading zeros from day numbers
     label <- gsub("\\b0([1-9])", "\\1", label)
     
@@ -255,12 +253,6 @@ snowbullpillow2 <- function(location_pil,
       # Replace month abbreviations
       for (i in seq_along(eng_months)) {
         label <- gsub(eng_months[i], fr_months[i], label)
-      }
-      # Replace weekday abbreviations (if using %a or %A in labs)
-      eng_days <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-      fr_days  <- c("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
-      for (i in seq_along(eng_days)) {
-        label <- gsub(eng_days[i], fr_days[i], label)
       }
     }
     return(label)
@@ -270,11 +262,11 @@ snowbullpillow2 <- function(location_pil,
     ggplot2::theme_classic() +
     ggplot2::geom_line(data = snow_p, ggplot2::aes(y = value, x = date), linewidth = plot_scale * 1) +
     ggplot2::geom_point(dat = snow_s, ggplot2::aes(y = value, x = fake_date, colour = type), size = plot_scale * 2) +
-    ggplot2::scale_x_datetime(date_breaks = "2 months", labels = custom_date_labels, expand = c(0,0), 
-                              limits = c(as.POSIXct(paste0(year - 1, "-09-01")), as.POSIXct(paste0(year, "-06-30")))) + 
+    ggplot2::scale_x_datetime(breaks = seq(as.POSIXct(paste0(year - 1, "-09-01")), as.POSIXct(paste0(year, "-06-30")), by = "2 months"), labels = custom_date_labels, expand = c(0,0), limits = c(as.POSIXct(paste0(year - 1, "-09-01")), as.POSIXct(paste0(year, "-06-30")))) +
+    ggplot2::scale_y_continuous(expand = c(0,01.05)) + # The expand argument controls space between the data and the x axis. Default for continuous variable is 0.05
     ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
     ggplot2::theme(legend.position = "none") +
-    ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12*plot_scale), axis.text.x = ggplot2::element_text(size = 11*plot_scale), axis.text.y = ggplot2::element_text(size = 11*plot_scale), plot.title = ggplot2::element_text(hjust = 0.05, size = 12*plot_scale, face = "bold")) +
+    ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12 * plot_scale), axis.text.x = ggplot2::element_text(size = 11 * plot_scale), axis.text.y = ggplot2::element_text(size = 11 * plot_scale), plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * plot_scale, face = "bold")) +
     if (language == "french") {
       ggplot2::labs(x = NULL, y = "EEN (mm)", title = custom_title)
     } else {
@@ -350,6 +342,36 @@ snowBullPrecip <- function(tsid, year, scale=scale_param, custom_title, language
                            lang = if (language == "french") "fr" else "en")
   plot <- plot + ggplot2::theme(legend.position = "none")
   
+    # Define a custom date labeling function
+  custom_date_labels <- function(x) {
+    label <- format(x, format = "%b")
+    
+    eng_months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    fr_months  <- c("janv", "f\u00E9vr", "mars", "avr", "mai", "juin",
+                    "juil", "ao\u00FBt", "sept", "oct", "nov", "d\u00E9c")
+    
+    # Remove leading zeros from day numbers
+    label <- gsub("\\b0([1-9])", "\\1", label)
+    
+    if (language == "french") {
+      # Replace month abbreviations
+      for (i in seq_along(eng_months)) {
+        label <- gsub(eng_months[i], fr_months[i], label)
+      }
+      # Replace weekday abbreviations (if using %a or %A in labs)
+      eng_days <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+      fr_days  <- c("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
+      for (i in seq_along(eng_days)) {
+        label <- gsub(eng_days[i], fr_days[i], label)
+      }
+    }
+    return(label)
+  }
+  
+    # Remove the day portion of the x-axis labels
+    plot <- plot + ggplot2::scale_x_date(labels = custom_date_labels, date_breaks = "1 month")
+  
   if (language == "french") {
     plot <- plot + ggplot2::labs(y = "Précipitations (mm)")
   }
@@ -423,9 +445,16 @@ snowbullCDDF <- function(timeseries_id,
                          year = year_param, 
                          month = month_param, 
                          scale = scale_param) {
-  location <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", timeseries_id, " AND datetime <= '", year, "-0", month, "-01' "))
+  data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", timeseries_id, " AND datetime <= '", year, "-0", month, "-01' "))
   
-  location <- getCDDF(location, year)
+  data <- getCDDF(data, year)
+  
+    # Make sure there's a data point for the first of the month
+  min_dt <- min(data$datetime)
+  if (min_dt > as.POSIXct(paste0(lubridate::year(min_dt), "-09-01 00:00"), tz = "UTC")) {
+    add <- data.frame(datetime = as.POSIXct(paste0(lubridate::year(min_dt), "-09-01 00:00"), tz = "UTC"), value = 0)
+    data <- rbind(data, add)
+  }
   
   # Set title based on language
   if (language == "fr") {
@@ -448,7 +477,7 @@ snowbullCDDF <- function(timeseries_id,
                         legend_scale = scale,
                         save_path = NULL, 
                         con = con, 
-                        continuous_data = location, 
+                        continuous_data = data, 
                         snowbulletin = TRUE,
                         lang = language,
                         gridy = FALSE,
