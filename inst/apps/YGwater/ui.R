@@ -86,8 +86,12 @@ app_ui <- function(request) {
                          uiOutput("snowBulletin_ui"))
              }
     ), # End reports nav_menu
-    nav_panel(title = "Images", value = "img",
-              uiOutput("img_ui")),
+    nav_menu(title = "Images", value = "images",
+             nav_panel(title = "Image table view", value = "imgTableView",
+                       uiOutput("imgTableView_ui")),
+             nav_panel(title = "Image map view", value = "imgMapView",
+                       uiOutput("imgMapView_ui")),
+    ),
     nav_menu(title = "Data", value = "data",
              nav_panel(title = "Continuous data", value = "contData",
                        uiOutput("contData_ui")),
