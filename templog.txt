@@ -1,8 +1,0 @@
-DEBUG - Initializing DownloadRWISData.R log
-DEBUG - .libPaths are: H:/esniede
-C:/Program Files/R/R-4.4.2/library
-DEBUG - lib_loc is: H:/esniede
-DEBUG - output_folder is: H:/esniede/output
-DEBUG - Reading run_info.nc and determining download periods...
-ERROR - reading run_info.nc: Error in ncdf4::nc_open("run_info.nc"): Error in nc_open trying to open file run_info.nc (return_on_error= FALSE )
-
