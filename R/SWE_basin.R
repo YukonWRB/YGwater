@@ -18,7 +18,7 @@
 
 SWE_basin <- function(year,
                       month,
-                      lookback = 30,
+                      lookback = 100,
                       threshold = 7,
                       csv = FALSE,
                       summarise = FALSE,
