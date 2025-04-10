@@ -473,7 +473,7 @@ snowBulletinStats <- function(year,
   #### --------------------------- Basins ------------------------------- ####
   basin_stats <- SWE_basin(year = year,
                            month = month,
-                           lookback = 100,
+                           lookback = 100, # Essentially all years of record
                            threshold = 6,
                            csv = FALSE,
                            summarise = TRUE,
