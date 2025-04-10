@@ -4,3 +4,6 @@
 .Ruserdata
 Rprof.out
 .secret
+.venv
+.conda
+**/.data/
