@@ -49,7 +49,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/visualize/map/params.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/locations.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/images/image_view.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/images/image_table_view.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/images/image_map_view.R", package = "YGwater"))
+  
   
   source(system.file("apps/YGwater/modules/visualize/data/continuousData.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/data/discreteData.R", package = "YGwater"))

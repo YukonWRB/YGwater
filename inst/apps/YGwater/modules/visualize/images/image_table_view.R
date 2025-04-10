@@ -22,7 +22,7 @@ js_select_dt <- "var dt = table.table().node();
   });"
 
 
-imgViewUI <- function(id) {
+imgTableViewUI <- function(id) {
   ns <- NS(id)
   tagList(
     tags$style(HTML("
@@ -33,12 +33,9 @@ imgViewUI <- function(id) {
     }
   "))
   )
-  page_fluid(
-    
-  )
   layout_sidebar(
     sidebar = sidebar(
-      width = 450,
+      width = "30%",
       bg = "#f8f8f8",
       position = "left",
       open = TRUE,
@@ -54,7 +51,7 @@ imgViewUI <- function(id) {
   )
 }
 
-imgView <- function(id, language, restoring) {
+imgTableView <- function(id, language, restoring) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     setBookmarkExclude(c("tbl_columns_selected", "tbl_cells_selected", "tbl_rows_current", "tbl_rows_all", "tbl_state", "tbl_search", "tbl_cell_clicked", "tbl_row_last_clicked"))
