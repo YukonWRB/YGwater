@@ -7,5 +7,3 @@ Rprof.out
 .venv
 .conda
 **/.data/
-dev/era5/
-dev/aquacache_wqgl/
