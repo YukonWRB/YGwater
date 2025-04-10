@@ -22,7 +22,8 @@ app_server <- function(input, output, session) {
         nav_show(id = "navbar", target = "FOD")
       }
       nav_show(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
-      nav_show(id = "navbar", target = "img")
+      nav_show(id = "navbar", target = "imgTableView")
+      nav_show(id = "navbar", target = "imgMapView")
       nav_show(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
       nav_show(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
     } else {
@@ -33,7 +34,8 @@ app_server <- function(input, output, session) {
         nav_hide(id = "navbar", target = "FOD")
       }
       nav_hide(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
-      nav_hide(id = "navbar", target = "img")
+      nav_hide(id = "navbar", target = "imgTableView")
+      nav_hide(id = "navbar", target = "imgMapView")
       nav_hide(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
       nav_hide(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
     }
@@ -101,7 +103,8 @@ app_server <- function(input, output, session) {
     mixPlot = FALSE,
     map = FALSE,
     FOD = FALSE,
-    img = FALSE,
+    imgTableView = FALSE,
+    imgMapView = FALSE,
     snowInfo = FALSE,
     waterInfo = FALSE,
     WQReport = FALSE,
@@ -419,7 +422,7 @@ $(document).keyup(function(event) {
   
   observeEvent(input$navbar, {
     # When user selects any a tab, update the last active tab for the current mode
-    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "img", "about", "news", "discData", "contData")) {
+    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
       # User is in viz mode
       last_viz_tab(input$navbar)
     } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "addContData", "addDiscData", "addDocs", "addImgs", "visit")) {
@@ -476,11 +479,18 @@ $(document).keyup(function(event) {
         FOD("FOD") # Call the server
       }
     }
-    if (input$navbar == "img") {
-      if (!ui_loaded$img) {
-        output$img_ui <- renderUI(imgUI("img"))
-        ui_loaded$img <- TRUE
-        img("img", language = languageSelection, restoring = isRestoring_img) # Call the server
+    if (input$navbar == "imgTableView") {
+      if (!ui_loaded$imgTableView) {
+        output$imgTableView_ui <- renderUI(imgTableViewUI("imgTableView"))
+        ui_loaded$imgTableView <- TRUE
+        imgTableView("imgTableView", language = languageSelection, restoring = isRestoring_img) # Call the server
+      }
+    }
+    if (input$navbar == "imgMapView") {
+      if (!ui_loaded$imgMapView) {
+        output$imgMapView_ui <- renderUI(imgMapViewUI("imgMapView"))
+        ui_loaded$imgMapView <- TRUE
+        imgMapView("imgMapView", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "snowInfo") {
