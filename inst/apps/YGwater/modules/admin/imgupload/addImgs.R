@@ -48,10 +48,11 @@ addImgsUI <- function(id) {
           width = 6,
           actionButton(ns("select_all"), "Select All") |> tooltip("Select all images in the table"),
           actionButton(ns("clear_selection"), "Clear Selection") |> tooltip("Clear all selected images from the table"),
-          actionButton(ns("get_location_coordinates"), "Fetch location coordinates") |> tooltip("Fetch location coordinates from the selected location"),
+          actionButton(ns("remove_selection"), "Remove Selection") |> tooltip("Remove selected images from the table"),
+            div(style = "float: right;", actionButton(ns("get_location_coordinates"), "Fetch location coordinates") |> tooltip("Fetch location coordinates from the selected location")),
           br(),
           selectizeInput(ns("image_type"), "Visit type:", choices = NULL, multiple = TRUE, width = "100%", options = list(maxItems=1, create = FALSE, placeholder = "Select visit type")
-          ),
+          ) |> tooltip("Select visit type.", id="image_type_tt"),
           selectizeInput(ns("image_tags"), "Tag(s):",
             multiple = TRUE,
             choices = NULL, width = "100%", options = list(create = TRUE, placeholder = "Select tag(s)") |> tooltip("Add tags to image(s); you can also create new tags.")
@@ -122,8 +123,8 @@ addImgs <- function(id) {
     }
 
 
-    types <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM files.image_types")
-  
+    types <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM files.image_types")  
+
     locations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.locations")
     sublocations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.sub_locations")
 
@@ -288,6 +289,27 @@ addImgs <- function(id) {
       DT::selectRows(proxy, seq_len(nrow(dat$df)))
     })
 
+    observeEvent(input$remove_selection, {
+      if (is.null(input$table_rows_selected)) {
+        showModal(modalDialog(
+          title = "No Images Selected",
+          "Please select images from the table before attempting to remove.",
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Close")
+          )
+        ))
+        return()
+      }
+
+      # Remove selected rows from the data table
+      dat$df <- dat$df[-input$table_rows_selected, ]
+
+      # Update the data table and map
+      renderDataTable()
+      renderLeafletMap()
+    })
+
     # Observe clear selection button click and clear all selected rows in the data table
     observeEvent(input$clear_selection, {
       proxy <- DT::dataTableProxy("table")
@@ -332,6 +354,11 @@ addImgs <- function(id) {
 
 
       updateSelectizeInput(session, "image_tags", choices = image_tags, options = list(placeholder = "Select tags"))
+
+      #if (!is.na(input$image_type)){
+      #  bslib::update_tooltip(session, inputId = "image_type", title = "test", placement = "right")
+      #}      
+
     })
 
     observeEvent(input$image_location, ignoreNULL = TRUE, {
@@ -410,6 +437,20 @@ addImgs <- function(id) {
         return()
       }
 
+      if (any((is.na(dat$df$Latitude) & is.na(dat$df$Longitude)) | is.na(dat$df$Location_ID))) {
+        showModal(modalDialog(
+          title = "Error: Missing Data",
+          "Latitude/Longitude or Location is missing for one or more images. Please add a location using the drop-down menu or input coordinates manually.",
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Close")
+          )
+        ))
+        return()
+      }
+
+
+
 
 
       showModal(modalDialog(
@@ -417,8 +458,10 @@ addImgs <- function(id) {
         "Are you sure you want to upload the images to AquaCache?",
         easyClose = FALSE,
         footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("confirm_upload"), "Confirm")
+          actionButton(ns("confirm_upload"), "Upload all images"),
+          actionButton(ns("confirm_upload_selection"), "Upload selected row(s)"),
+          modalButton("Cancel")
+
         )
       ))
     })
@@ -443,6 +486,7 @@ addImgs <- function(id) {
           for (i in seq_len(nrow(df))) {
             tryCatch(
               {
+                print(if (is.na(df$ImageType_ID[i])) NULL else df$ImageType_ID[i])
                 ret <- AquaCache::insertACImage(
                   object = df$SourceFile[i],
                   datetime = df$Datetime[i],
@@ -475,49 +519,75 @@ addImgs <- function(id) {
 
     # Validate the uploaded dataframe and upload to AquaCache
     observeEvent(input$confirm_upload, {
-      removeModal()
-      # return a standardized dataframe to AquaCache, which maps the app's text to AquaCache reader names (e.g., 'Private' to yg_reader)
-
-      df_for_ac <- standardizeDataFrame(dat$df)
-      validation_result <- validateDataFrame(dat$df)
-      if (!validation_result$success) {
-        showNotification(validation_result$message, type = "error", duration = 5)
-      }
-
-      df_out <<- df_for_ac
-      uploadAquacache$invoke(df = df_for_ac, config = session$userData$config)
+      upload(dat$df)
     })
 
 
-    observeEvent(uploadAquacache$result(), {
-      # Find out if any list elements are character (which indicates an error). 
-      # Concatenate these errors to a text block which cna be passed to a modal dialog. The list element name is the file name
-      # and the value is the error message.
-      errors <- uploadAquacache$result()[sapply(uploadAquacache$result(), is.character)]
+    # Validate the uploaded dataframe and upload to AquaCache
+    observeEvent(input$confirm_upload_selection, {
 
-      if (length(errors) > 0) {
-        error_message <- paste(
-          "The following errors occurred during upload:",
-          paste(names(errors), errors, sep = ": ", collapse = "\n"),
-          sep = "\n"
-        )
+      if (length(input$table_rows_selected) == 0) {
         showModal(modalDialog(
-          error_message,
+          title = "No Images Selected",
+          "Please select images from the table before attempting to upload.",
           easyClose = TRUE,
           footer = tagList(
-        modalButton("Close")
+            modalButton("Close")
           )
         ))
-      } else {
-        showModal(modalDialog(
-          "All images were successfully uploaded to AquaCache.",
-          easyClose = TRUE,
-          footer = tagList(
-        modalButton("Close")
-          )
-        ))
+        return()
       }
+
+      upload(dat$df[input$table_rows_selected, ])
     })
+
+    # Function to handle the upload process
+    upload <- function(df) {
+      # Validate the data frame before upload
+      validation <- validateDataFrame(df)
+      if (!validation$success) {
+        showModal(modalDialog(
+          title = "Validation Error",
+          validation$message,
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Close")
+          )
+        ))
+        return()
+      }
+
+      # Standardize the data frame for AquaCache
+      standardized_df <- standardizeDataFrame(df)
+
+      # Perform the upload task
+      uploadAquacache$run(standardized_df, session$userData$config)$then(
+        onFulfilled = function(result) {
+          success_count <- sum(unlist(result) == TRUE)
+          failure_count <- length(result) - success_count
+
+          showModal(modalDialog(
+            title = "Upload Complete",
+            paste(success_count, "images uploaded successfully."),
+            if (failure_count > 0) paste(failure_count, "images failed to upload."),
+            easyClose = TRUE,
+            footer = tagList(
+              modalButton("Close")
+            )
+          ))
+        },
+        onRejected = function(error) {
+          showModal(modalDialog(
+            title = "Upload Error",
+            paste("An error occurred during the upload:", error),
+            easyClose = TRUE,
+            footer = tagList(
+              modalButton("Close")
+            )
+          ))
+        }
+      )
+    }
 
 
     # standardize the dataframe to match AquaCache's format
@@ -601,9 +671,11 @@ addImgs <- function(id) {
           # this way, the user can leave attributes blank, such as lat-lon, without worrying about overwriting them
           # while you could write everything to the table, since the table already has default values, this created a problem when you want to change multiple images at once
           # since multiple images won't have the same 'default' lat-lons
+
           if (input$notes != "") {
             dat$df$Notes[row] <- input$notes
           }
+
           if (!is.null(input$image_tags)) {
             dat$df$Tags[row] <- paste(input$image_tags, collapse = ", ")
           }
@@ -622,14 +694,13 @@ addImgs <- function(id) {
             return()
           }
 
-
           if (!is.null(input$image_type)){            
-            dat$df$ImageType_ID[input$table_rows_selected] <- input$image_type
+            dat$df$ImageType_ID[input$table_rows_selected] <- as.numeric(input$image_type)
             dat$df$ImageType[input$table_rows_selected] <- types[input$image_type == types$image_type_id, "image_type"]
           }
 
           if (!is.null(input$image_location)){            
-            dat$df$Location_ID[input$table_rows_selected] <- input$image_location
+            dat$df$Location_ID[input$table_rows_selected] <- as.numeric(input$image_location)
             dat$df$Location[input$table_rows_selected] <- locations[input$image_location == locations$location_id, "name"]
           }
 
@@ -810,17 +881,21 @@ addImgs <- function(id) {
 
     # Generic-ish function to add circles to the map based on selection
     addCirclesToMap <- function(selection, color, radius = 2.5) {
-      leaflet::leafletProxy(mapId = "map") %>%
-        leaflet::addCircleMarkers(
-          lng = dat$df$Longitude[selection],
-          lat = dat$df$Latitude[selection],
-          radius = radius,
-          color = color,
-          fillColor = color,
-          fill = TRUE,
-          fillOpacity = 1,
-          group = "photos"
-        )
+      valid_rows <- dat$df[selection, ]
+      valid_rows <- valid_rows[!is.na(valid_rows$Latitude) & !is.na(valid_rows$Longitude), ]
+      if (nrow(valid_rows) > 0){
+        leaflet::leafletProxy(mapId = "map") %>%
+          leaflet::addCircleMarkers(
+            lng = valid_rows$Longitude,
+            lat = valid_rows$Latitude,
+            radius = radius,
+            color = color,
+            fillColor = color,
+            fill = TRUE,
+            fillOpacity = 1,
+            group = "photos"
+          )
+      }
     }
 
     # add 'locations' table from AquaCache to the map
@@ -851,7 +926,10 @@ addImgs <- function(id) {
           addCirclesToMap(selection = input$table_rows_selected, color = color_list$selected, radius = 5)
           addCirclesToMap(selection = -input$table_rows_selected, color = color_list$unselected)
         } else {
-          addCirclesToMap(selection = seq_len(nrow(dat$df)), color = color_list$unselected)
+          
+            addCirclesToMap(selection = seq_len(nrow(dat$df)), color = color_list$unselected)
+
+        
         }
       },
       ignoreNULL = FALSE,
@@ -883,7 +961,9 @@ addImgs <- function(id) {
         for (row in selected_rows) {
           selected_lat <- dat$df$Latitude[row]
           selected_lon <- dat$df$Longitude[row]
-
+          if (is.na(selected_lat) | is.na(selected_lon)){
+            return()
+          }
           leaflet::leafletProxy("map") %>%
             leaflet::addPolylines(
               lng = c(selected_lon, input$map_click$lng),
@@ -951,10 +1031,12 @@ addImgs <- function(id) {
       }
 
       # Calculate the bounding box
+      suppressWarnings({
       min_lat <- min(latitudes, na.rm = TRUE)
       max_lat <- max(latitudes, na.rm = TRUE)
       min_lon <- min(longitudes, na.rm = TRUE)
       max_lon <- max(longitudes, na.rm = TRUE)
+      })
 
       # Calculate the zoom level based on the bounding box size
       lat_diff <- max_lat - min_lat
