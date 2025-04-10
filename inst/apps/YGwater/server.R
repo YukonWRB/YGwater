@@ -590,7 +590,6 @@ $(document).keyup(function(event) {
     }
     if (input$navbar == "addImgs") {
       if (!ui_loaded$addImgs) {
-        print("adding images")
         output$addImgs_ui <- renderUI(addImgsUI("addImgs"))  # Render the UI
         ui_loaded$addImgs <- TRUE
         addImgs("addImgs")  # Call the server
