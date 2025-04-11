@@ -71,7 +71,7 @@ app_server <- function(input, output, session) {
                   <li>This plots shows water level or flow for the past 30 days; resolution depends on your internet speed.</li>
                   <li>The 'Typical' range is the range between the 25th and 75th percentiles of daily mean values.</li>
                   <li>The 'Historic' range is the full range of daily mean values.</li>
-                  <li>Typical and historic ranges are calculated using all data <i><b>prior</i> </b>to the last year selected.</li>
+                  <li>Typical and historic ranges are calculated using all data <i><b>prior</i> </b>to the year displayed.</li>
                 </ul>
               </div>"),
         easyClose = TRUE,
@@ -127,7 +127,7 @@ app_server <- function(input, output, session) {
                   parameter = param,
                   start_date = Sys.Date() - 30,
                   datum = TRUE,
-                  filter = 20,
+                  # filter = 20,
                   rate = rate,
                   lang = lang,
                   line_scale = 1,

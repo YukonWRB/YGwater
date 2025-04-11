@@ -28,8 +28,9 @@ plotOverlap(
   hover = TRUE,
   gridx = FALSE,
   gridy = TRUE,
-  con = NULL,
-  lang = "en"
+  lang = "en",
+  data = FALSE,
+  con = NULL
 )
 }
 \arguments{
@@ -79,9 +80,11 @@ plotOverlap(
 
 \item{gridy}{Should grid lines be drawn on the y-axis? Default is FALSE}
 
-\item{con}{A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.}
-
 \item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
+
+\item{data}{Should the data used to create the plot be returned? Default is FALSE.}
+
+\item{con}{A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.}
 }
 \value{
 An html plot.

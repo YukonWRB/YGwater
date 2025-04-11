@@ -35,6 +35,7 @@
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
+#' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return A plotly object 
@@ -71,6 +72,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                 gridy = FALSE,
                                 rate = NULL,
                                 tzone = "auto",
+                                data = FALSE,
                                 con = NULL) {
   
   # type <- 'subplots'
@@ -106,6 +108,8 @@ plotMultiTimeseries <- function(type = 'traces',
   
   
   # Checks and initial work ##########################################
+  
+  return_data <- data   # data is used in this function, but keeping the argument as 'data' keeps things consistent with other functions
   
   if (!type %in% c('traces', 'subplots')) {
     stop("Your entry for the parameter 'type' is invalid. Please review the function documentation and try again.")
@@ -1032,6 +1036,12 @@ plotMultiTimeseries <- function(type = 'traces',
     
   }
   
-  return(plot)
+  # Return the plot and data if requested ##########################
+  if (return_data) {
+    return(list(plot = plot, data = data))
+  } else {
+    return(plot)
+  }
+  
 }
 

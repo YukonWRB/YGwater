@@ -18,7 +18,7 @@
 #' @param basins The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when AquaCache is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
 #' @param save_path The path to the directory (folder) where the report should be saved. Enter the path as a character string.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.
-#' @param language The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french". Default is "english".
+#' @param language The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french" or "francais". Default is "english".
 #' @param precip_period The period to use for precipitation stats. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".
 #' @param cddf_period The period to use for the cumulative degree day plot historic range. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".
 #' @param snow_period The period to use for the snow survey plot historic range. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.
@@ -47,7 +47,7 @@ snowBulletin <- function(year,
 
   #Check parameters
   #Language
-  if (!(language %in% c("french", "english"))) {
+  if (!(language %in% c("french", "english", "francais", "fran"))) {
     stop("Parameter 'language' must be one of the options: 'english' or 'french'.")
   }
   
@@ -110,7 +110,7 @@ snowBulletin <- function(year,
       message("User does not have read/write database privileges required for synchronizing data with source. Data was not synchronized.")
     } else {
       message("Synchronizing necessary timeseries. This could take a while, please be patient.")
-      # TODO: this now call several locations which are part of the 'sample_series' table.
+      # TODO: this now calls several locations which are part of the 'sample_series' table.
       target_sample_series <- DBI::dbGetQuery(con, "SELECT sample_series_id FROM sample_series WHERE source_fx = 'downloadSnowCourse'") # Snow survey sites 
       AquaCache::synchronize_discrete(con = con, 
                                       sample_series_id = target_sample_series$sample_series_id,
@@ -146,20 +146,38 @@ snowBulletin <- function(year,
   ### Generate a snow bulletin for specified basins ###
 
   
+  
   rmarkdown::render(
     input = system.file("rmd", "Snow_bulletin.Rmd", package = "YGwater"),
-    output_file = paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
+    output_file = if (language == "french") paste0("Bulletin nivometrique ", year, "-0", month, " emit ", Sys.Date()) else paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date()),
     output_dir = save_path,
+    output_format = rmarkdown::word_document(
+      reference_docx = if (language == "french") {
+        system.file("rmd", "style_template_snowbull_fr.docx", package = "YGwater")
+      } else {
+        system.file("rmd", "style_template_snowbull_en.docx", package = "YGwater")
+      }
+    ),
     params = list(year = year,
                   month = month,
                   scale = scale,
                   basins = basins,
                   language = language,
+                  reference_docx = if (language == "french") {
+                    "style_template_snowbull_fr.docx"
+                  } else {
+                    "style_template_snowbull_en.docx"
+                  },
+                  title_var = if (language == "english") {
+                    "  \n  \n  \nYukon Snow Survey  \nBulletin & Water  \nSupply Forecast"
+                  } else {
+                    "  \n  \n  \nBulletin des relev\u00E9s  \nnivom\u00E9triques et des  \npr\u00E9visions hydrologiques  \ndu Yukon"
+                  },
                   precip_period = precip_period,
                   cddf_period = cddf_period,
-                  snow_period= snow_period,
-                  water_period = water_period,
-                  lookback = lookback,
+                  # snow_period = snow_period,
+                  # water_period = water_period,
+                  # lookback = lookback,
                   con = con)
   )
 }

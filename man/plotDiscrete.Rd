@@ -32,7 +32,8 @@ plotDiscrete(
   dbSource = "EQ",
   dbCon = NULL,
   dbPath =
-    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
+    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb",
+  data = FALSE
 )
 }
 \arguments{
@@ -90,6 +91,8 @@ plotDiscrete(
 
 \item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
 databases/EQWinDB/WaterResources.mdb".}
+
+\item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 }
 \value{
 An interactive HTML plot of the data from EQWin.

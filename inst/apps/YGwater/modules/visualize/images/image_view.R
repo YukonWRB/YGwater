@@ -22,7 +22,7 @@ js_select_dt <- "var dt = table.table().node();
   });"
 
 
-imgUI <- function(id) {
+imgViewUI <- function(id) {
   ns <- NS(id)
   tagList(
     tags$style(HTML("
@@ -31,20 +31,30 @@ imgUI <- function(id) {
       outline: none !important;
       box-shadow: none !important;
     }
-  ")),
-    sidebarPanel(
+  "))
+  )
+  page_fluid(
+    
+  )
+  layout_sidebar(
+    sidebar = sidebar(
+      width = 450,
+      bg = "#f8f8f8",
+      position = "left",
+      open = TRUE,
+      fillable = TRUE,
+      fillable_mobile = TRUE,
       selectizeInput(ns("type"), "Image Type", choices = c("auto (series)" = "auto", "manual (one-off)" = "man")),
       uiOutput(ns("dates")), # This is rendered in the server to allow updating language
       uiOutput(ns("loc")), # This is rendered in the server to enable resetting from URL because the default value set here would conflict with the one passed via URL
       DT::dataTableOutput(ns("tbl")) # Table of images. Clicking on a row will display the image in the main panel.
     ),
-    mainPanel(
-      imageOutput(ns("img"), fill = TRUE)
-    )
+    imageOutput(ns("img"), fill = TRUE),
+    height = "1000px"
   )
 }
 
-img <- function(id, language, restoring) {
+imgView <- function(id, language, restoring) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     setBookmarkExclude(c("tbl_columns_selected", "tbl_cells_selected", "tbl_rows_current", "tbl_rows_all", "tbl_state", "tbl_search", "tbl_cell_clicked", "tbl_row_last_clicked"))
@@ -189,7 +199,7 @@ img <- function(id, language, restoring) {
       )
       output$tbl <- DT::renderDataTable(out_tbl, server = FALSE)
     })
-
+    
     
     # Render the image based on selected_row() ############################################################
     observeEvent(selected_row(), {
@@ -210,5 +220,5 @@ img <- function(id, language, restoring) {
         }
       }, deleteFile = TRUE)
     }, ignoreInit = TRUE)
-  })
-}
+  }) # End of moduleServer
+} # End of img server function

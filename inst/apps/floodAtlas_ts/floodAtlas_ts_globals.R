@@ -2,7 +2,7 @@ floodAtlas_ts_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUs
   
   library(shiny)
   library(shinyjs)
-  
+
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,

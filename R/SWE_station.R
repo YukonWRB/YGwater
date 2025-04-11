@@ -250,16 +250,9 @@ SWE_station <- function(stations = "all",
       } else if (is.na(estimate_flag)) {
         estimate_flag <- FALSE
       } 
-      # if (length(tab[tab$yr==year & tab$parameter=="SWE",]$note) == 0) {
-      #   estimate_flag <- FALSE
-      # } else if (is.na(tab[tab$yr==year & tab$parameter=="SWE",]$note)) {
-      #   estimate_flag <- FALSE
-      # } else if (tab[tab$yr==year & tab$parameter=="SWE",]$note == 'estimated') {
-      #   estimate_flag <- TRUE
-      # } else {estimate_flag <- FALSE}
       
       # create vector with all row values
-      swe_summary_loc <- c(unique(tab$location_name),                # get location name
+      swe_summary_loc <- c(unique(tab$location_name), # get location name
                            l, # location id
                            unique(tab$elevation),
                            sample_date,
@@ -274,7 +267,7 @@ SWE_station <- function(stations = "all",
                            depth_med,
                            density,
                            density_med,
-                           length(unique(tab$target_date)),  # get years of record
+                           length(unique(tab$yr)),  # get years of record
                            record_flag,
                            date_flag,
                            estimate_flag

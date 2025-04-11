@@ -175,7 +175,7 @@ app_server <- function(input, output, session) {
                   years = yrs,
                   rate = "day",
                   datum = TRUE,
-                  filter = 20,
+                  # filter = 20,
                   lang = lang,
                   line_scale = 1,
                   axis_scale = 1,
