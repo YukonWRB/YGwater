@@ -19,9 +19,14 @@ app_ui <- function(request) {
       });
     ")),
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
-      # css for z index control is at the bottom because it must come after the css passed on silently by navbarPage (NOT TRUE with page_navbar)
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc - navbarPage css overrides this, but page_navbar seems to be ok with it
-      tags$link(rel = "stylesheet", href = "css/YG_bs5.css")
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc.
+      tags$link(rel = "stylesheet", href = "css/YG_bs5.css"),
+      # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
+      tags$style(HTML("
+        a.dropdown-toggle > .shiny-html-output {
+        display: inline;
+        }
+      "))
     ),
     # Make the container for the top bar
     tagList(
@@ -49,115 +54,114 @@ app_ui <- function(request) {
         )
       )
     ),
-    page_navbar(title = tags$a(
-      class = "d-md-none", 
-      href = "#",
-      tags$img(src = "imgs/Yukon_logo.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
-    ),
-    id = "navbar",
-    window_title = NULL,
-    navbar_options = navbar_options(bg = "#244C5A",
-                                    collapsible = TRUE),
-    fluid = TRUE,
-    lang = "en",
-    theme = NULL, # Theme is set earlier by css file reference
-    gap = "10px",
-    nav_panel(title = "Home", value = "home",
-              uiOutput("home_ui")),
-    nav_panel(title = "Map", value = "map",
-              uiOutput("map_ui")),
-    nav_menu(title = "Plot", value = "plot",
-             nav_panel(title = "Discrete", value = "discrete",
-                       uiOutput("discrete_ui")),
-             nav_panel(title = "Continuous", value = "continuous",
-                       uiOutput("continuous_ui")),
-             nav_panel(title = "Mix", value = "mix",
-                       uiOutput("mix_ui"))
-    ),
-    nav_menu(title = "Reports", value = "reports",
-             nav_panel(title = "Snowpack info", value = "snowInfo",
-                       uiOutput("snowInfo_ui")),
-             nav_panel(title = "Water level/flow info", value = "waterInfo",
-                       uiOutput("waterInfo_ui")),
-             nav_panel(title = "Water quality", value = "WQReport",
-                       uiOutput("WQReport_ui")),
-             if (!config$public) {
-               nav_panel(title = "Snow Bulletin + stats", value = "snowBulletin",
-                         uiOutput("snowBulletin_ui"))
-             }
-    ), # End reports nav_menu
-    nav_menu(title = "Images", value = "images",
-             nav_panel(title = "Image table view", value = "imgTableView",
-                       uiOutput("imgTableView_ui")),
-             nav_panel(title = "Image map view", value = "imgMapView",
-                       uiOutput("imgMapView_ui")),
-    ),
-    nav_menu(title = "Data", value = "data",
-             nav_panel(title = "Continuous data", value = "contData",
-                       uiOutput("contData_ui")),
-             nav_panel(title = "Discrete (lab/field) data", value = "discData",
-                       uiOutput("discData_ui"))
-    ), # End data nav_menu
-    if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
-      nav_panel(title = "FOD comments", value = "FOD",
-                uiOutput("fod_ui"))
-    },
-    nav_menu(title = "Info", value = "info",
-             nav_panel("News", value = "news",
-                       uiOutput("news_ui")),
-             nav_panel("About", value = "about",
-                       uiOutput("about_ui"))
-    ),
-    if (!config$public) {
-      nav_panel(title = "Manage locations",
-                value = "locs",
-                uiOutput("locs_ui"))
-    },
-    if (!config$public) {
-      nav_panel(title = "Manage timeseries",
-                value = "ts",
-                uiOutput("ts_ui"))
-    },
-    if (!config$public) {
-      nav_menu(title = "Equipment/instruments", 
-               value = "equip",
-               nav_panel(title = "Checks + calibrations", 
-                         value = "cal",
-                         uiOutput("cal_ui")),
-               nav_panel(title = "Deploy/Recover", 
-                         value = "deploy_recover",
-                         uiOutput("deploy_recover_ui"))
-      )
-    },
-    if (!config$public) {
-      nav_menu(title = "Manage data", 
-               value = "addData",
-               nav_panel(title = "Continuous data",
-                         value = "addContData",
-                         uiOutput("addContData_ui")),
-               nav_panel(title = "Discrete data",
-                         value = "addDiscData",
-                         uiOutput("addDiscData_ui"))
-      )
-    },
-    if (!config$public) {
-      nav_menu(title = "Manage files/docs", 
-               value = "addFiles",
-               nav_panel(title = "Documents",
-                         value = "addDocs",
-                         uiOutput("addDocs_ui")),
-               nav_panel(title = "Images",
-                         value = "addImgs",
-                         uiOutput("addImgs_ui"))
-      )
-    },
-    if (!config$public) {
-      nav_panel(title = "Add/modify field visit", 
-                value = "visit",
-                uiOutput("visit_ui"))
-    }
-    
-    
+    page_navbar(
+      title = tags$a(
+        class = "d-md-none",
+        href = "#",
+        tags$img(src = "imgs/Yukon_logo.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
+      ),
+      id = "navbar",
+      window_title = NULL,
+      navbar_options = navbar_options(bg = "#244C5A",
+                                      collapsible = TRUE),
+      fluid = TRUE,
+      lang = "en",
+      theme = NULL, # Theme is set earlier by css file reference
+      gap = "10px",
+      nav_panel(title = uiOutput("homeNavTitle"), value = "home",
+                uiOutput("home_ui")),
+      nav_panel(title = uiOutput("mapNavMenuTitle"), value = "map",
+                uiOutput("map_ui")),
+      nav_menu(title = uiOutput("plotsNavMenuTitle"), value = "plot",
+               nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discrete",
+                         uiOutput("discrete_ui")),
+               nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
+                         uiOutput("continuous_ui")),
+               nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
+                         uiOutput("mix_ui"))
+      ),
+      nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
+               nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",
+                         uiOutput("snowInfo_ui")),
+               nav_panel(title = uiOutput("reportsNavWaterTitle"), value = "waterInfo",
+                         uiOutput("waterInfo_ui")),
+               nav_panel(title = uiOutput("reportsNavWQTitle"), value = "WQReport",
+                         uiOutput("WQReport_ui")),
+               if (!config$public) {
+                 nav_panel(title = uiOutput("reportsNavSnowbullTitle"), value = "snowBulletin",
+                           uiOutput("snowBulletin_ui"))
+               }
+      ), # End reports nav_menu
+      nav_menu(title = uiOutput("imagesNavMenuTitle"), value = "images",
+               nav_panel(title = uiOutput("imagesNavTableTitle"), value = "imgTableView",
+                         uiOutput("imgTableView_ui")),
+               nav_panel(title = uiOutput("imagesNavMapTitle"), value = "imgMapView",
+                         uiOutput("imgMapView_ui")),
+      ),
+      nav_menu(title = uiOutput("dataNavMenuTitle"), value = "data",
+               nav_panel(title = uiOutput("dataNavContTitle"), value = "contData",
+                         uiOutput("contData_ui")),
+               nav_panel(title = uiOutput("dataNavDiscTitle"), value = "discData",
+                         uiOutput("discData_ui"))
+      ), # End data nav_menu
+      if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
+        nav_panel(title = "FOD comments", value = "FOD",
+                  uiOutput("fod_ui"))
+      },
+      nav_menu(title = uiOutput("infoNavMenuTitle"), value = "info",
+               nav_panel(title = uiOutput("infoNavNewsTitle"), value = "news",
+                         uiOutput("news_ui")),
+               nav_panel(title = uiOutput("infoNavAboutTitle"), value = "about",
+                         uiOutput("about_ui"))
+      ),
+      if (!config$public) {
+        nav_panel(title = "Manage locations",
+                  value = "locs",
+                  uiOutput("locs_ui"))
+      },
+      if (!config$public) {
+        nav_panel(title = "Manage timeseries",
+                  value = "ts",
+                  uiOutput("ts_ui"))
+      },
+      if (!config$public) {
+        nav_menu(title = "Equipment/instruments", 
+                 value = "equip",
+                 nav_panel(title = "Checks + calibrations", 
+                           value = "cal",
+                           uiOutput("cal_ui")),
+                 nav_panel(title = "Deploy/Recover", 
+                           value = "deploy_recover",
+                           uiOutput("deploy_recover_ui"))
+        )
+      },
+      if (!config$public) {
+        nav_menu(title = "Manage data", 
+                 value = "addData",
+                 nav_panel(title = "Continuous data",
+                           value = "addContData",
+                           uiOutput("addContData_ui")),
+                 nav_panel(title = "Discrete data",
+                           value = "addDiscData",
+                           uiOutput("addDiscData_ui"))
+        )
+      },
+      if (!config$public) {
+        nav_menu(title = "Manage files/docs", 
+                 value = "addFiles",
+                 nav_panel(title = "Documents",
+                           value = "addDocs",
+                           uiOutput("addDocs_ui")),
+                 nav_panel(title = "Images",
+                           value = "addImgs",
+                           uiOutput("addImgs_ui"))
+        )
+      },
+      if (!config$public) {
+        nav_panel(title = "Add/modify field visit", 
+                  value = "visit",
+                  uiOutput("visit_ui"))
+      }
     ), # End navbarPage (though it's modified below)
     
     # Insert language selector into the navbar
