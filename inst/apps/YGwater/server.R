@@ -204,7 +204,35 @@ app_server <- function(input, output, session) {
     if (input$langSelect %in% names(translation_cache)) {
       languageSelection$language <- input$langSelect
       languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-      session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the title of the app based on the selected language
+      
+      # Render the navigation bar titles based on the language
+      output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
+      output$mapNavMenuTitle <- renderUI({tr("map", languageSelection$language)})
+      
+      output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
+      output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
+      output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
+      output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+      
+      output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
+      output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
+      output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
+      output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
+      output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
+      
+      output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
+      output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
+      output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
+      
+      output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
+      output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
+      output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
+      
+      output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
+      output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
+      output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
+
+      session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
     }
   })
   
@@ -359,7 +387,7 @@ $(document).keyup(function(event) {
     
     # Redirect to last 'viz' tab
     updateTabsetPanel(session, "navbar", selected = last_viz_tab())
-
+    
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     
     
