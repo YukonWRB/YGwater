@@ -3,6 +3,7 @@
 library(ecmwfr)
 
 wf_set_key(key = "5815cfa9-2642-46bd-9a7f-9ac2099b32f4")
+
 data_dir = "dev/era5/.data/rraw"
 
 download_era5 <- function(
@@ -10,12 +11,12 @@ download_era5 <- function(
     start_date,
     end_date,
     frequency = 6,
-    latency = 5
-) {
+    latency = 5,
+    ) {
 
     # make sure the frequency is a factor of 24
     if (24 %% frequency != 0) {
-        stop("Frequency must be a factor of 24.")
+        stop("Frequency must be a factor of 24 (e.g. 24 will download 00:00, 6 will download 00:00, 06:00, 12:00, 18:00)")
     }
 
     # default end date as current date minus latency days
@@ -26,7 +27,10 @@ download_era5 <- function(
 
     # check if end date is at least 5 days prior to current date
     if (end_date > Sys.time() - as.difftime(5, units = "days")) {
-        stop("end_date must be at least 5 days prior to today's date.")
+        warning("end_date must be at least 5 days prior to today's date.")
+        end_date <- format(Sys.time(), "%Y-%m-%d %H:%M")
+        end_date <- as.POSIXct(end_date, tz = "UTC") - as.difftime(latency, units = "days")
+        #stop("end_date must be at least 5 days prior to today's date.")
     }
 
     datetime_array <- seq(
@@ -68,8 +72,8 @@ download_era5 <- function(
     }
 }
 
-start_date <- "2020-01-01 00:00"
-end_date <- "2020-05-01 00:00"
+start_date <- "2025-04-01 00:00"
+end_date <- "2025-05-01 00:00"
 download_era5(data_dir = data_dir, start_date, end_date, frequency = 6, latency = 5)
 
 

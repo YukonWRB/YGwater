@@ -66,7 +66,7 @@ def download_from_cds(
                     "area": [72, -150, 55, -120]
                 }
 
-                client = cdsapi.Client(verify=False)
+                client = cdsapi.Client(verify=False, key="5815cfa9-2642-46bd-9a7f-9ac2099b32f4")
                 client.retrieve(dataset, request, target=filename)
 
 
