@@ -126,6 +126,10 @@ continuousPlot <- function(id, language, windowDims) {
         ),
         checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
         checkboxInput(ns("plot_filter"), "Filter extreme values?"),
+        checkboxInput(ns("unusable"), "Show unusable data?"),
+        checkboxInput(ns("grades"), "Show grades?"),
+        checkboxInput(ns("approvals"), "Show approvals?"),
+        checkboxInput(ns("qualifiers"), "Show qualifiers?"),
         
         div(
           actionButton(ns("extra_aes"),
@@ -149,6 +153,19 @@ continuousPlot <- function(id, language, windowDims) {
     }) %>% # End renderUI
       bindEvent(language$language) # Re-render the UI if the language or moduleData changes
     
+    # Show/hide the approvals, grades, qualifiers checkboxes based on the selected plot type
+    observe({
+      req(input$type, traceCount(), subplotCount())
+      if (input$type == "Long timeseries" && traceCount() == 1 && subplotCount() == 1) {
+        shinyjs::show("grades")
+        shinyjs::show("approvals")
+        shinyjs::show("qualifiers")
+      } else {
+        shinyjs::hide("grades")
+        shinyjs::hide("approvals")
+        shinyjs::hide("qualifiers")
+      }
+    })
     
     # Update the location choices based on the selected parameter ##########################################
     observeEvent(input$param, {
@@ -800,7 +817,7 @@ continuousPlot <- function(id, language, windowDims) {
     
     # Create ExtendedTasks to render plots ############################################################
     # Overlapping years plot
-    plot_output_overlap <- ExtendedTask$new(function(loc, param, start_doy, end_doy, yrs, historic_range, apply_datum, filter, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_overlap <- ExtendedTask$new(function(loc, param, start_doy, end_doy, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName,
@@ -822,6 +839,7 @@ continuousPlot <- function(id, language, windowDims) {
                               datum = apply_datum,
                               title = TRUE,
                               filter = filter,
+                              unusable = unusable,
                               line_scale = line_scale,
                               axis_scale = axis_scale,
                               legend_scale = legend_scale,
@@ -842,7 +860,7 @@ continuousPlot <- function(id, language, windowDims) {
     
     
     # Single timeseries plot
-    plot_output_timeseries <- ExtendedTask$new(function(loc, param, start_date, end_date, historic_range, apply_datum, filter, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_timeseries <- ExtendedTask$new(function(loc, param, start_date, end_date, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -860,6 +878,10 @@ continuousPlot <- function(id, language, windowDims) {
                                  historic_range = historic_range,
                                  datum = apply_datum,
                                  filter = filter,
+                                 unusable = unusable,
+                                 grades = grades,
+                                 approvals = approvals,
+                                 qualifiers = qualifiers,
                                  lang = lang,
                                  line_scale = line_scale,
                                  axis_scale = axis_scale,
@@ -880,7 +902,7 @@ continuousPlot <- function(id, language, windowDims) {
     ) |> bind_task_button("make_plot")
     
     # Multiple traces plot
-    plot_output_timeseries_traces <- ExtendedTask$new(function(locs, params, lead_lags, start_date, end_date, historic_range, apply_datum, filter, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
+    plot_output_timeseries_traces <- ExtendedTask$new(function(locs, params, lead_lags, start_date, end_date, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -900,6 +922,7 @@ continuousPlot <- function(id, language, windowDims) {
                                       historic_range = historic_range,
                                       datum = apply_datum,
                                       filter = filter,
+                                      unusable = unusable,
                                       lang = lang,
                                       line_scale = line_scale,
                                       axis_scale = axis_scale,
@@ -983,13 +1006,13 @@ continuousPlot <- function(id, language, windowDims) {
           showModal(modalDialog("Please select a parameter", easyClose = TRUE))
           return()
         }
-        plot_output_overlap$invoke(loc = input$loc_code, param = as.numeric(input$param), start_doy = input$start_doy, end_doy = input$end_doy, yrs = input$years, historic_range = input$historic_range_overlap, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
+        plot_output_overlap$invoke(loc = input$loc_code, param = as.numeric(input$param), start_doy = input$start_doy, end_doy = input$end_doy, yrs = input$years, historic_range = input$historic_range_overlap, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
       } else if (input$type == "Long timeseries") {
         if (traceCount() == 1) { # Either a single trace or more than 1 subplot
           if (subplotCount() > 1) { # Multiple sub plots
             locs <- c(subplots$subplot1$location, subplots$subplot2$location, subplots$subplot3$location, subplots$subplot4$location)
             params <- c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter)
-            plot_output_timeseries_subplots$invoke(locs = locs, params = params, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
+            plot_output_timeseries_subplots$invoke(locs = locs, params = params, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
           } else {  # Single trace
             if (nchar(input$loc_code) == 0) {
               showModal(modalDialog("Please select a location.", easyClose = TRUE))
@@ -999,14 +1022,14 @@ continuousPlot <- function(id, language, windowDims) {
               showModal(modalDialog("Please select a parameter", easyClose = TRUE))
               return()
             }
-            plot_output_timeseries$invoke(loc = input$loc_code, param = as.numeric(input$param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
+            plot_output_timeseries$invoke(loc = input$loc_code, param = as.numeric(input$param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, grades = input$grades, approvals = input$approvals, qualifiers = input$qualifiers, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
           }
         } else { # Multiple traces, single plot
           locs <- c(traces$trace1$location, traces$trace2$location, traces$trace3$location, traces$trace4$location)
           params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
           lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
           
-          plot_output_timeseries_traces$invoke(locs = locs, params = params, lead_lags = lead_lags, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
+          plot_output_timeseries_traces$invoke(locs = locs, params = params, lead_lags = lead_lags, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
         }
       }
       
@@ -1023,7 +1046,6 @@ continuousPlot <- function(id, language, windowDims) {
         shinyjs::show("full_screen_ui")
       }
       plot_created(TRUE)
-      print("Plot creation observer complete")
     }, ignoreInit = TRUE)
     
     
@@ -1123,7 +1145,6 @@ continuousPlot <- function(id, language, windowDims) {
         paste0("continuous_plot_data_", gsub("-", "", gsub(" ", "_", gsub(":", "", substr(time, 0, 16)))), "_UTC.xlsx")
       },
       content = function(file) {
-        print(input$type)
         if (input$type == "Overlapping years") {
           openxlsx::write.xlsx(plot_output_overlap$result()$data, file)
           
