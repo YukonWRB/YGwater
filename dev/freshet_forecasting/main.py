@@ -2,6 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from pathlib import Path
 import pandas as pd
+import os
 
 # download basin shapefiles from WSC and merge them into a single GeoDataFrame
 output_dir = Path().resolve() / "data/basins"
