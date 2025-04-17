@@ -63,6 +63,28 @@ test_that("French timeseries plot is as expected for one year with historic rang
   expect_snapshot_file(path)
 })
 
+test_that("grades, approvals, qualifiers are displayed", {
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test6.svg")
+  path <- gsub("\\\\", "/", path)
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, grades = TRUE, qualifiers = TRUE, approvals = TRUE)
+  plotly::save_image(plot, file = path)
+  expect_snapshot_file(path)
+})
+
+test_that("one of grades, approvals, qualifiers is displayed", {
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test7.svg")
+  path <- gsub("\\\\", "/", path)
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, grades = TRUE)
+  plotly::save_image(plot, file = path)
+  expect_snapshot_file(path)
+})
+
 test_that("returned plot data is as expected", {
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, data = TRUE)$data
   expect_type(plot, "list")

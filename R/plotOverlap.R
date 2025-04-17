@@ -19,6 +19,7 @@
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param unusable Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
@@ -92,6 +93,7 @@ plotOverlap <- function(location,
                         invert = NULL,
                         slider = TRUE,
                         filter = NULL,
+                        unusable = FALSE,
                         historic_range = 'last',
                         rate = "day",
                         line_scale = 1,
@@ -333,7 +335,7 @@ plotOverlap <- function(location,
   }
   
   # Get the plotting data ################
-  # start with daily means data
+  ## start with daily means data ################
   daily_end <- endDay
   daily_start <- startDay
   lubridate::year(daily_start) <- min(years) - 1
@@ -363,10 +365,12 @@ plotOverlap <- function(location,
   daily[, date := lubridate::force_tz(date, tzone)]
   data.table::setnames(daily, "date", "datetime")
   
-  
+  ## Get realtime/hourly data ################
   dates <- lubridate::POSIXct(tz = tzone) #creates empty posixct vector to hold days missing realtime data and needing to be infilled with daily
   # Create empty data.table to hold realtime data
   realtime <- data.table::data.table()
+  
+  
   for (i in rev(years)) { #Using rev so that the most recent year gets realtime, if possible
     start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
     start_UTC <- start
@@ -569,6 +573,15 @@ plotOverlap <- function(location,
       rollmad <- zoo::rollapply(realtime$value, width = filter, FUN = "mad", align = "center", fill = "extend", na.rm = TRUE)
       outlier <- abs(realtime$value - rollmedian) > 5 * rollmad
       realtime$value[outlier] <- NA
+    }
+  }
+  
+  ## Filter out unusable data from the traces
+  if (!unusable) {  # if unusable, the grades must be pulled so that we can filter them out
+    grades_dt <- dbGetQueryDT(con, paste0("SELECT start_dt, end_dt, FROM grades WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", startDay, "' AND g.start_dt <= '", endDay, "' AND grade_type_code = 'N' ORDER BY start_dt;"))
+    if (nrow(grades_dt) > 0) {
+      # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
+      realtime[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
     }
   }
   

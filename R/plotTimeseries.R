@@ -20,6 +20,10 @@
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param unusable Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.
+#' @param grades Should grades be included on the y-axis? Default is FALSE.
+#' @param approvals Should approvals be included on the y-axis? Default is FALSE.
+#' @param qualifiers Should qualifiers be included on the y-axis? Default is FALSE.
 #' @param historic_range Should the historic range be plotted? Default is TRUE.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param line_scale A scale factor to apply to the size (width) of the line. Default is 1.
@@ -53,6 +57,10 @@ plotTimeseries <- function(location,
                            title = TRUE,
                            custom_title = NULL,
                            filter = NULL,
+                           unusable = FALSE,
+                           grades = FALSE,
+                           approvals = FALSE,
+                           qualifiers = FALSE,
                            historic_range = TRUE,
                            lang = "en",
                            line_scale = 1,
@@ -67,34 +75,39 @@ plotTimeseries <- function(location,
                            data = FALSE,
                            con = NULL) 
 {
-# 
-# location <- "09AE003"
-# sub_location <- NULL
-# parameter = 1251
-# start_date <- "1900-01-01"
-# end_date <- Sys.time()
-# record_rate = NULL
-# period_type = NULL
-# z = NULL
-# z_approx = NULL
-# invert = NULL
-# slider = TRUE
-# datum = FALSE
-# title = TRUE
-# custom_title = NULL
-# filter = NULL
-# historic_range = TRUE
-# lang = "en"
-# line_scale = 1
-# axis_scale = 1
-# legend_scale = 1
-# legend_position = "v"
-# rate = "max"
-# tzone = "auto"
-# # con = NULL
-# gridx = FALSE
-# gridy = FALSE
-
+  
+  # location <- "29AB009"
+  # sub_location <- NULL
+  # parameter = 1165
+  # start_date <- "2024-01-01"
+  # end_date <- Sys.time()
+  # record_rate = NULL
+  # period_type = NULL
+  # z = NULL
+  # z_approx = NULL
+  # invert = NULL
+  # slider = TRUE
+  # datum = FALSE
+  # title = TRUE
+  # unusable = TRUE
+  # grades = TRUE
+  # approvals = TRUE
+  # qualifiers = TRUE
+  # custom_title = NULL
+  # filter = NULL
+  # historic_range = TRUE
+  # lang = "en"
+  # line_scale = 1
+  # axis_scale = 1
+  # legend_scale = 1
+  # legend_position = "v"
+  # rate = "max"
+  # tzone = "auto"
+  # # con = NULL
+  # gridx = FALSE
+  # gridy = FALSE
+  # hover = TRUE
+  
   # Checks and initial work ##########################################
   
   # Deal with non-standard evaluations from data.table to silence check() notes
@@ -149,7 +162,7 @@ plotTimeseries <- function(location,
     end_date <- as.POSIXct(end_date, tz = tzone)
     end_date <- end_date + 24*60*60
   }
-
+  
   #back to UTC because DB queries are in UTC
   attr(start_date, "tzone") <- "UTC"
   attr(end_date, "tzone") <- "UTC"
@@ -200,7 +213,7 @@ plotTimeseries <- function(location,
   
   # Where column param_name_fr is not filled in, use the English name
   parameter_tbl$param_name_fr[is.na(parameter_tbl$param_name_fr)] <- parameter_tbl$param_name[is.na(parameter_tbl$param_name_fr)]
-
+  
   if (lang == "fr") {
     parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
   } else if (lang == "en" || is.na(parameter_name)) {
@@ -384,8 +397,54 @@ plotTimeseries <- function(location,
       corrections_apply <- FALSE
     }
   }
-
   
+  ## Grades, approvals, qualifiers ############
+  if (grades | !unusable) {  # if unusable, the grades must be pulled so that we can filter them out
+    grades_dt <- dbGetQueryDT(con, paste0("SELECT g.start_dt, g.end_dt, gt.grade_type_description, gt.grade_type_description_fr, gt.color_code FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", start_date, "' AND g.start_dt <= '", end_date, "' ORDER BY start_dt;"))
+    
+    # Many rows could be adjacent repeats of grade_type_description with different start_dt and end_dt, in which case these rows should be amalgamated
+    # create a run‐length grouping over the three columns that must stay identical
+    grades_dt[, run := data.table::rleid(grade_type_description)]
+    
+    # now collapse each run into one interval
+    grades_dt <- grades_dt[, .(
+      start_dt = data.table::first(start_dt),
+      end_dt = data.table::last(end_dt),
+      grade_type_description = data.table::first(grade_type_description),
+      grade_type_description_fr = data.table::first(grade_type_description_fr),
+      color_code = data.table::first(color_code)
+    ), by = run]
+    # drop the helper
+    grades_dt[, run := NULL]
+  }
+  if (approvals) {
+    approvals_dt <- dbGetQueryDT(con, paste0("SELECT a.start_dt, a.end_dt, at.approval_type_description, at.approval_type_description_fr, at.color_code FROM approvals a LEFT JOIN approval_types at ON a.approval_type_id = at.approval_type_id WHERE a.timeseries_id = ", tsid, " AND a.end_dt >= '", start_date, "' AND a.start_dt <= '", end_date, "' ORDER BY start_dt;"))
+    # amalgamate
+    approvals_dt[, run := data.table::rleid(approval_type_description)]
+    approvals_dt <- approvals_dt[, .(
+      start_dt = data.table::first(start_dt),
+      end_dt = data.table::last(end_dt),
+      approval_type_description = data.table::first(approval_type_description),
+      approval_type_description_fr = data.table::first(approval_type_description_fr),
+      color_code = data.table::first(color_code)
+    ), by = run]
+    approvals_dt[, run := NULL]
+  }
+  if (qualifiers) {
+    qualifiers_dt <- dbGetQueryDT(con, paste0("SELECT q.start_dt, q.end_dt, qt.qualifier_type_description, qt.qualifier_type_description_fr, qt.color_code FROM qualifiers q LEFT JOIN qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE q.timeseries_id = ", tsid, " AND q.end_dt >= '", start_date, "' AND q.start_dt <= '", end_date, "' ORDER BY start_dt;"))
+    # amalgamate
+    qualifiers_dt[, run := data.table::rleid(qualifier_type_description)]
+    qualifiers_dt <- qualifiers_dt[, .(
+      start_dt = data.table::first(start_dt),
+      end_dt = data.table::last(end_dt),
+      qualifier_type_description = data.table::first(qualifier_type_description),
+      qualifier_type_description_fr = data.table::first(qualifier_type_description_fr),
+      color_code = data.table::first(color_code)
+    ), by = run]
+    qualifiers_dt[, run := NULL]
+  }
+  
+  ## trace and range data ###################
   if (historic_range) { # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous (corrected view or not). Where there isn't any data in the table fill in with the value from the daily table.
     range_end <- end_date + 1*24*60*60
     range_start <- start_date - 1*24*60*60
@@ -422,7 +481,7 @@ plotTimeseries <- function(location,
       trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY date DESC;"))
       trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     } else if (rate == "hour") {
-        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC;"))
+      trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC;"))
     } else if (rate == "max") {
       if (corrections_apply) {
         trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
@@ -431,12 +490,20 @@ plotTimeseries <- function(location,
       }
       if (nrow(trace_data) > 0) {
         if (min(trace_data$datetime) > start_date) {
-            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
+          infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
           trace_data <- rbind(infill, trace_data)
         }
       }
     }
     attr(trace_data$datetime, "tzone") <- tzone
+  }
+  
+  if (!unusable) { # Trow out unusable data (replace with NAs)
+    unus <- grades_dt[grades_dt$grade_type_code == "N"]
+    if (nrow(unus) > 0) {
+      # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
+      trace_data[unus, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
+    }
   }
   
   # fill gaps with NA values
@@ -462,7 +529,7 @@ plotTimeseries <- function(location,
       data.table::setorder(trace_data, datetime) 
     }
     
-
+    
     
     # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
     if (min_trace > start_date) {
@@ -556,7 +623,182 @@ plotTimeseries <- function(location,
                       name = parameter_name, 
                       color = I("#00454e"), 
                       hoverinfo = if (hover) "text" else "none", 
-                      text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")")) %>%
+                      text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")"))
+  
+  # Add the grades, approvals, qualifiers as ribbons below the plotting area
+  # make a function to add the bands, used for all three
+  if (any(grades, approvals, qualifiers)) {
+    slider <- FALSE
+    buildBandPlot <- function(df, category_col) {
+      #For each row, add a horizontal segment or filled area
+      p <- plotly::plot_ly()
+      
+      for (i in seq_len(nrow(df))) {
+        start_x <- df$start_dt[i]
+        end_x <- df$end_dt[i]
+        p <- p %>%
+          plotly::add_polygons(
+            x = c(start_x, start_x, end_x, end_x),
+            y = c(0, 1, 1, 0),
+            fill = "toself",
+            fillcolor = "lightblue",
+            line = list(width = 1, color = "black"),
+            hoverinfo = "text",
+            hoveron = "fills",
+            text = paste(category_col, ":", df[[category_col]][i]),
+            showlegend = FALSE
+          )
+      }
+      p <- p %>% plotly::layout(
+        yaxis = list(showticklabels = FALSE, showgrid = FALSE, range = c(0, 2), zeroline = FALSE),
+        xaxis = list(showgrid = FALSE)
+      )
+      return(p)
+    }
+    
+    bands_subplot <- plotly::plot_ly()
+    
+    # extract the start of the trace_data
+    mindt <- trace_data[, min(datetime)]
+    maxdt <- trace_data[, max(datetime)]
+    
+    if (approvals) {
+      approvals_y_set <- if (grades & qualifiers) c(2.2, 3.2, 3.2, 2.2) else if (grades) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
+      # Adjust start_dt occurrences which are before the start of the trace_data
+      approvals_dt[start_dt < mindt, "start_dt" := mindt]
+      # Adjust end_dt occurrences which are after the end of the trace_data
+      approvals_dt[end_dt > maxdt, "end_dt" := maxdt]
+      for (i in seq_len(nrow(approvals_dt))) {
+        start_x <- approvals_dt$start_dt[i]
+        end_x <- approvals_dt$end_dt[i]
+        color <- approvals_dt$color_code[i]
+        bands_subplot <- bands_subplot %>%
+          plotly::add_polygons(
+            x = c(start_x, start_x, end_x, end_x),
+            y = approvals_y_set,
+            fill = "toself",
+            fillcolor = color,
+            line = list(width = 1, color = "black"),
+            hoverinfo = "text",
+            hoveron = "fills",
+            text = if (lang == "en") paste("Approval:", approvals_dt$approval_type_description[i]) else paste0("Approbation:", approvals_dt$approval_type_description_fr[i]),
+            showlegend = FALSE
+          )
+      }
+    }
+    if (grades) {
+      grades_y_set <- if (qualifiers)  c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
+      grades_dt[start_dt < mindt, "start_dt" := mindt]
+      grades_dt[end_dt > maxdt, "end_dt" := maxdt]
+      for (i in seq_len(nrow(grades_dt))) {
+        start_x <- grades_dt$start_dt[i]
+        end_x <- grades_dt$end_dt[i]
+        color <- grades_dt$color_code[i]
+        bands_subplot <- bands_subplot %>%
+          plotly::add_polygons(
+            x = c(start_x, start_x, end_x, end_x),
+            y = grades_y_set,
+            fill = "toself",
+            fillcolor = color,
+            line = list(width = 1, color = "black"),
+            hoverinfo = "text",
+            hoveron = "fills",
+            text = if (lang == "en") paste("Grade:", grades_dt$grade_type_description[i]) else paste0("Cote:", grades_dt$grade_type_description_fr[i]),
+            showlegend = FALSE
+          )
+      }
+    }
+    if (qualifiers) {
+      qualifiers_y_set <- c(0, 1, 1, 0)
+      qualifiers_dt[start_dt < mindt, "start_dt" := mindt]
+      qualifiers_dt[end_dt > maxdt, "end_dt" := maxdt]
+      for (i in seq_len(nrow(qualifiers_dt))) {
+        start_x <- qualifiers_dt$start_dt[i]
+        end_x <- qualifiers_dt$end_dt[i]
+        color <- qualifiers_dt$color_code[i]
+        bands_subplot <- bands_subplot %>%
+          plotly::add_polygons(
+            x = c(start_x, start_x, end_x, end_x),
+            y = qualifiers_y_set,
+            fill = "toself",
+            fillcolor = color,
+            line = list(width = 1, color = "black"),
+            hoverinfo = "text",
+            hoveron = "fills",
+            text = if (lang == "en") paste("Qualifier:", qualifiers_dt$qualifier_type_description[i]) else paste0("Qualificatif:", qualifiers_dt$qualifier_type_description_fr[i]),
+            showlegend = FALSE
+          )
+      }
+    }
+    
+    # Hide the y axis labels and replace with annotations
+    annotation_list <- list()
+    
+    if (approvals) {
+      annotation_list <- c(annotation_list, list(list(
+        x = 0.0,
+        y = (approvals_y_set[1] + approvals_y_set[2]) / 2,
+        xref = "paper",
+        yref = "y",
+        text = if (lang == "en") "Approval" else "Approbation",
+        showarrow = FALSE,
+        xanchor = "right",
+        yanchor = "middle",
+        textangle = 0,
+        font = list(size = axis_scale * 10)
+      ))
+      )
+    }
+    if (grades) {
+      annotation_list <- c(annotation_list, list(list(
+        x = 0.0,
+        y = (grades_y_set[1] + grades_y_set[2]) / 2,
+        xref = "paper",
+        yref = "y",
+        text = if (lang == "en") "Grade" else "Cote",
+        showarrow = FALSE,
+        xanchor = "right",
+        yanchor = "middle",
+        textangle = 0,
+        font = list(size = axis_scale * 10)
+      ))
+      )
+    } 
+    if (qualifiers) {
+      annotation_list <- c(annotation_list, list(list(
+        x = 0.0,
+        y = (qualifiers_y_set[1] + qualifiers_y_set[2]) / 2,
+        xref = "paper",
+        yref = "y",
+        text = if (lang == "en") "Qualifier" else "Qualificatif",
+        showarrow = FALSE,
+        xanchor = "right",
+        yanchor = "middle",
+        textangle = 0,
+        font = list(size = axis_scale * 10)
+      ))
+      )
+    }
+    
+    bands_subplot <- bands_subplot %>%
+      plotly::layout(
+        yaxis = list(showticklabels = FALSE, showgrid = FALSE, zeroline = FALSE),
+        xaxis = list(showgrid = FALSE),
+        annotations = annotation_list
+      )
+    
+    
+    
+    plot <- plotly::subplot(
+      plot, bands_subplot,
+      nrows = 2,
+      shareX = TRUE,
+      margin = 0.0,        # slight vertical gap *between* the main plot & the bands
+      heights = if ((grades + qualifiers + approvals) == 3) c(0.94, 0.06) else if ((grades + qualifiers + approvals) == 2) c(0.96, 0.04) else c(0.98, 0.02)
+    )
+  }
+  
+  plot <- plot %>%
     plotly::layout(
       title = if (title) list(text = stn_name, 
                               x = 0.05, 
@@ -575,7 +817,8 @@ plotTimeseries <- function(location,
                    ticklen = 5,
                    tickwidth = 1,
                    tickcolor = "black"), 
-      yaxis = list(title = list(text = y_title, standoff = 10),
+      # Main plot yaxis layout
+      yaxis = list(title = list(text = y_title, standoff = 10),  
                    showgrid = gridy, 
                    showline = TRUE,
                    zeroline = FALSE,
