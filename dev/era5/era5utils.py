@@ -124,8 +124,8 @@ def concatenate_to_xda(data_dir, param, freq=None, resampling_function="mean"):
     xda = xr.concat(data_arrays, dim="time")
     # this code is very ugly, but 'resample' really hates numpy datetimes, and for reason this convoluted timetype is the only one that works
     # so we convert to ISO format, then to pandas timestamps, then to UTC
-    xda["time"] = [pd.to_datetime(x.isoformat()).tz_localize("UTC") for x in xda["time"].values]
-    xda = xda.assign_coords(time=pd.to_datetime(xda.time.values))
+    xda["time"] = [pd.to_datetime(x.isoformat()) for x in xda["time"].values]
+    #xda = xda.assign_coords(time=pd.to_datetime(xda.time.values))
     #xda["time"] = pd.to_datetime(xda['time'].values).tz_localize('UTC')
     return xda
 

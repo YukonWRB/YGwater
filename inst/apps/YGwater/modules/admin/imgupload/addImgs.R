@@ -49,10 +49,28 @@ addImgsUI <- function(id) {
           actionButton(ns("select_all"), "Select All") |> tooltip("Select all images in the table"),
           actionButton(ns("clear_selection"), "Clear Selection") |> tooltip("Clear all selected images from the table"),
           actionButton(ns("remove_selection"), "Remove Selection") |> tooltip("Remove selected images from the table"),
-            div(style = "float: right;", actionButton(ns("get_location_coordinates"), "Fetch location coordinates") |> tooltip("Fetch location coordinates from the selected location")),
+            div(style = "float: right;", actionButton(ns("get_location_coordinates"), "Fetch location coordinates") |> tooltip("Populates the lat/lon fields with coordinates of selected location")),
           br(),
-          selectizeInput(ns("image_type"), "Visit type:", choices = NULL, multiple = TRUE, width = "100%", options = list(maxItems=1, create = FALSE, placeholder = "Select visit type")
-          ) |> tooltip("Select visit type.", id="image_type_tt"),
+          
+            fluidRow(
+            column(
+              width = 8,
+              selectizeInput(
+              ns("image_type"),
+              "Visit type:", choices = NULL, multiple = TRUE, width = "100%",
+              options = list(maxItems = 1, create = FALSE, placeholder = "Select visit type")
+              ) |> tooltip("Select visit type.", id = "image_type_tt")
+            ),
+            column(
+              width = 4,
+              selectInput(
+              ns("share_tag"),
+              "Select visibility:", choices = share_list, multiple = FALSE
+              )
+            )
+            ),
+
+
           selectizeInput(ns("image_tags"), "Tag(s):",
             multiple = TRUE,
             choices = NULL, width = "100%", options = list(create = TRUE, placeholder = "Select tag(s)") |> tooltip("Add tags to image(s); you can also create new tags.")
@@ -60,12 +78,13 @@ addImgsUI <- function(id) {
           fluidRow(
             column(width = 6, selectizeInput(ns("image_location"), "Location:", choices = NULL, multiple = TRUE, width = "100%", options = list(maxItems=1, create = FALSE, placeholder = "Select location")) |> tooltip("Press 'Fetch location coordinates' to add location coordinates to image(s)")
             ),
-            column(width = 6, selectizeInput(ns("image_sublocation"), "Sublocation:", choices = NULL, multiple = TRUE, width = "100%", options = list(maxItems=1, create = FALSE, placeholder = "Select sublocation")))
+            column(width = 6, selectizeInput(ns("image_sublocation"), "Sublocation:", choices = NULL, multiple = TRUE, width = "100%", options = list(maxItems=1, create = FALSE, placeholder = "Optional - not all locations have sublocations")))
           ),
           fluidRow(
-            column(width = 3, numericInput(ns("image_latitude"), "Latitude:", value = NULL, width = "100%", step = 0.1)),
-            column(width = 3, numericInput(ns("image_longitude"), "Longitude:", value = NULL, width = "100%", step = 0.1)),
-            column(width = 4, selectInput(ns("share_tag"), "Select visibility:", choices = share_list, multiple = FALSE)),
+            column(width = 2, numericInput(ns("image_latitude"), "Latitude:", value = NULL, width = "100%", step = 0.1)),
+            column(width = 2, numericInput(ns("image_longitude"), "Longitude:", value = NULL, width = "100%", step = 0.1)),
+            column(width = 3, dateInput(ns("image_date"), "Date:", value = as.Date(NA), width = "100%")),
+            column(width = 3, textInput(ns("image_time"), "Time:", value = NULL, width = "100%")),
             column(width = 2, selectInput(ns("tz_correction"), "UTC:", choices = tz_corrections, multiple = FALSE, selected = -7))
           ),
           textAreaInput(ns("notes"), "Notes:", value = "", width = "100%", height = "100px"),
@@ -216,13 +235,13 @@ addImgs <- function(id) {
       actionButton(ns("edit"), "Manual coordinate selection",
         icon = icon("map-location-dot"),
         style = if (toggles$edit) "background-color: #007BFF; color: white;" else "background-color: white; color: black;"
-      ) |> tooltip("Click to toggle map interactivity")
+      ) |> tooltip("Click to toggle map interactivity - map click populates the lat/lon fields")
     })
 
     output$toggle_locations_button <- renderUI({
       actionButton(ns("toggle_locations"), "Toggle locations",
         style = if (toggles$locations) "background-color: #007BFF; color: white;" else "background-color: white; color: black;"
-      ) |> tooltip("Click to toggle locations on/off")
+      ) |> tooltip("Display locations stored in AquaCache")
     })
 
 
@@ -240,7 +259,6 @@ addImgs <- function(id) {
     observeEvent(list(input$image_latitude, input$image_longitude),
       {
         if (is_valid_latlon(input$image_latitude, input$image_longitude)) {
-          clearLinesFromMap()
           leaflet::leafletProxy("map") %>%
             leaflet::clearGroup("manual_marker") %>%
             leaflet::addCircleMarkers(
@@ -255,11 +273,39 @@ addImgs <- function(id) {
             )
 
           # Add lines connecting 'current' lat lon with selected images (from the data table)
-          addLinesToMap()
+          
         }
       },
       ignoreInit = TRUE
     )
+
+
+
+    observeEvent(list(input$image_latitude, input$image_longitude, input$table_rows_selected), {
+      if (is_valid_latlon(input$image_latitude, input$image_longitude) && length(input$table_rows_selected) > 0) {
+        selected_rows <- input$table_rows_selected
+        for (row in selected_rows) {
+          selected_lat <- dat$df$Latitude[row]
+          selected_lon <- dat$df$Longitude[row]
+          if (is.na(selected_lat) | is.na(selected_lon)){
+            return()
+          }
+          leaflet::leafletProxy("map") %>%
+          leaflet::clearGroup("manual_line") %>%
+            leaflet::addPolylines(
+              lng = c(selected_lon, input$image_longitude),
+              lat = c(selected_lat, input$image_latitude),
+              color = color_list$click,
+              weight = 2,
+              dashArray = "5, 10",
+              group = "manual_line"
+            )
+        }
+      } else{
+        leaflet::leafletProxy("map") %>%
+          leaflet::clearGroup("manual_line")
+      }
+      })
 
 
 
@@ -279,7 +325,7 @@ addImgs <- function(id) {
       info <- input$table_cell_edit
       if (info$col %in% c("Latitude", "Longitude")) {
         dat$df[info$row, info$col] <- as.numeric(info$value)
-        renderLeafletMap()
+        #renderLeafletMap()
       }
     })
 
@@ -306,8 +352,8 @@ addImgs <- function(id) {
       dat$df <- dat$df[-input$table_rows_selected, ]
 
       # Update the data table and map
-      renderDataTable()
-      renderLeafletMap()
+      #renderDataTable()
+      #renderLeafletMap()
     })
 
     # Observe clear selection button click and clear all selected rows in the data table
@@ -316,10 +362,9 @@ addImgs <- function(id) {
       DT::selectRows(proxy, NULL)
 
       # Update the map to reflect deselection
-      updateMapView()
+      #updateMapView()
       leaflet::leafletProxy(mapId = "map") %>% leaflet::clearGroup("photos")
       addCirclesToMap(selection = seq_len(nrow(dat$df)), color = color_list$unselected)
-      clearLinesFromMap()
     })
 
     observeEvent(input$get_location_coordinates, {
@@ -343,21 +388,20 @@ addImgs <- function(id) {
     })
 
     observeEvent(input$image_type, ignoreNULL = TRUE, {
+    types_out <<- types
 
-
-    image_tags <- types[input$image_type, "default_tag_options", drop = TRUE] %>%
+    image_tags <- types[types$image_type_id == as.integer(input$image_type), "default_tag_options"] %>%
       strsplit(",") %>%
       unlist() %>%
       trimws() %>%
       gsub("[{}]", "", .) %>%
       gsub('\"', "", .)
 
+    updateSelectizeInput(session, "image_tags", choices = image_tags, options = list(placeholder = "Select tags"))
 
-      updateSelectizeInput(session, "image_tags", choices = image_tags, options = list(placeholder = "Select tags"))
-
-      #if (!is.na(input$image_type)){
-      #  bslib::update_tooltip(session, inputId = "image_type", title = "test", placement = "right")
-      #}      
+    #if (!is.na(input$image_type)){
+    #  bslib::update_tooltip(session, inputId = "image_type", title = "test", placement = "right")
+    #}      
 
     })
 
@@ -398,11 +442,7 @@ addImgs <- function(id) {
       # }
 
 
-      # update lines to reflect selection (showing georeference corrections)
-      clearLinesFromMap()
-      if (!is.null(input$table_rows_selected)) {
-        addLinesToMap()
-      }
+
 
       # update the displayed image upon each new row selection
       if (is.null(input$table_rows_selected)) {
@@ -693,15 +733,44 @@ addImgs <- function(id) {
 
             return()
           }
+          
+          # check whether the time is valid
+            if (!is.null(input$image_time) && input$image_time != "") {
+              if (!is_valid_time(input$image_time)) {
+                showModal(modalDialog(
+                  title = "Invalid Time",
+                  "The time value is not valid. Make sure time is in format HH:MM",
+                  easyClose = TRUE,
+                  footer = tagList(
+                    modalButton("Close")
+                  )
+                ))
+                return()
+              }
+          }
+
+          # check whether the date is valid
+            if (!identical(input$image_date, as.Date(character(0)))) {
+              
+              if (input$image_time == "") {
+                image_time = "00:00"
+              } else{
+                image_time = input$image_time
+              }
+
+              image_datetime = as.POSIXct(paste(input$image_date, image_time), format = "%Y-%m-%d %H:%M")
+
+              dat$df$Datetime[row] <- format(image_datetime, "%Y:%m:%d %H:%M:%S")
+            }
 
           if (!is.null(input$image_type)){            
-            dat$df$ImageType_ID[input$table_rows_selected] <- as.numeric(input$image_type)
-            dat$df$ImageType[input$table_rows_selected] <- types[input$image_type == types$image_type_id, "image_type"]
+            dat$df$ImageType_ID[row] <- as.numeric(input$image_type)
+            dat$df$ImageType[row] <- types[input$image_type == types$image_type_id, "image_type"]
           }
 
           if (!is.null(input$image_location)){            
-            dat$df$Location_ID[input$table_rows_selected] <- as.numeric(input$image_location)
-            dat$df$Location[input$table_rows_selected] <- locations[input$image_location == locations$location_id, "name"]
+            dat$df$Location_ID[row] <- as.numeric(input$image_location)
+            dat$df$Location[row] <- locations[input$image_location == locations$location_id, "name"]
           }
 
           if (!is.na(input$image_latitude) && !is.na(input$image_longitude)) {
@@ -723,10 +792,13 @@ addImgs <- function(id) {
         updateNumericInput(session, "image_longitude", value = NA)
         updateSelectInput(session, "image_location", selected = NULL)
         updateSelectInput(session, "image_sublocation", selected = NULL)
+        updateSelectInput(session, "image_type", selected = NULL)
+        updateSelectInput(session, "image_date", selected = as.Date(NA))
+        updateTextInput(session, "image_time", value = NULL)
         updateSelectInput(session, "share_tag", selected = "Private")
         updateSelectInput(session, "tz_correction", selected = -7)
-        renderDataTable()
-        renderLeafletMap()
+        #renderDataTable()
+        #renderLeafletMap()
 
         # warning for no images selected case
       } else {
@@ -838,7 +910,7 @@ addImgs <- function(id) {
       # only render images with valid latlon
       valid_data <- dat$df[is_valid_latlon(dat$df$Latitude, dat$df$Longitude), ]
 
-      # if no images with valid latlon, exit map rendering function
+      # if no images with valid latlon, exit map rendering function\
       if (nrow(valid_data) == 0) {
         showNotification("No images with valid coordinates to display on the map.", type = "warning", duration = 5)
       } else {
@@ -920,7 +992,7 @@ addImgs <- function(id) {
     # Observe row selection in the data table and update the map marker colours
     observeEvent(input$table_rows_selected,
       {
-        updateMapView()
+        #updateMapView()
         leaflet::leafletProxy(mapId = "map") %>% leaflet::clearGroup("photos")
         if (length(input$table_rows_selected) > 0) {
           addCirclesToMap(selection = input$table_rows_selected, color = color_list$selected, radius = 5)
@@ -952,36 +1024,6 @@ addImgs <- function(id) {
         }
       }
     })
-
-
-    # Add lines that connect GUI image coords to table seleciton coords
-    addLinesToMap <- function() {
-      if (length(input$table_rows_selected) > 0) {
-        selected_rows <- input$table_rows_selected
-        for (row in selected_rows) {
-          selected_lat <- dat$df$Latitude[row]
-          selected_lon <- dat$df$Longitude[row]
-          if (is.na(selected_lat) | is.na(selected_lon)){
-            return()
-          }
-          leaflet::leafletProxy("map") %>%
-            leaflet::addPolylines(
-              lng = c(selected_lon, input$map_click$lng),
-              lat = c(selected_lat, input$map_click$lat),
-              color = color_list$click,
-              weight = 2,
-              dashArray = "5, 10",
-              group = "click_line"
-            )
-        }
-      }
-    }
-
-    # Function to clear lines from the map
-    clearLinesFromMap <- function() {
-      leaflet::leafletProxy("map") %>% leaflet::clearGroup("click_line")
-    }
-
 
     # Define a named list of colors
     color_list <- list(
@@ -1022,6 +1064,23 @@ addImgs <- function(id) {
       valid_lon <- !is.na(lon) & !is.null(lat) & lon >= -180 & lon <= 180
       return(valid_lat & valid_lon)
     }
+
+    is_valid_time <- function(time) {
+      # Check if the time is in the correct format (HH:MM)
+      if (grepl("^\\d{2}:\\d{2}$", time)) {
+      parts <- strsplit(time, ":")[[1]]
+      if (as.integer(parts[1]) >= 0 && as.integer(parts[1]) < 24 &&
+        as.integer(parts[2]) >= 0 && as.integer(parts[2]) < 60) {
+        # Check if hours and minutes are within valid ranges
+        return(TRUE)
+      } else {
+        return(FALSE)
+      }
+      } else {
+      return(FALSE)
+      }
+    }
+     # end of is_valid_time()
 
 
     # Function to infer zoom level based on latitude and longitude arrays
