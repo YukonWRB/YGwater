@@ -17,7 +17,7 @@ def xda_to_transform(xda):
     lat = xda.latitude.values
 
     # Create the transform
-    transform = from_bounds(lon.min(), lat.min(), lon.max(), lat.max(), len(lon), len(lat))
+    transform = from_bounds(lon.min(), lat.max(), lon.max(), lat.min(), len(lon), len(lat))
 
     # Get the shape of the data
     shape = (len(lat), len(lon))
