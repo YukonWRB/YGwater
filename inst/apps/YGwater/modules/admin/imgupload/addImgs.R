@@ -348,7 +348,7 @@ addImgs <- function(id) {
     })
     
     observeEvent(input$get_location_coordinates, {
-      if (is.na(input$image_location)) {
+      if (is.null(input$image_location)) {
         showModal(modalDialog(
           title = "No Location Selected",
           "Please select a location from the drop-down menu.",
