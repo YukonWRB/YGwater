@@ -14,6 +14,7 @@ from ..defs.config import db_url_prod as db_url
 from ..defs import DEFAULT_CRS
 
 
+
 def fetch_table(table_name, db_url=db_url):
     engine = create_engine(db_url)
     with engine.connect() as connection:
@@ -21,6 +22,23 @@ def fetch_table(table_name, db_url=db_url):
             text(f"SELECT * FROM {table_name}")
         )
     return pd.DataFrame(table_result)
+
+
+def fetch_datums(db_url=db_url):
+    engine = create_engine(db_url)
+    with engine.connect() as connection:
+        datums_table = connection.execute(
+            text(
+                """
+                SELECT d.*, l.latitude, l.longitude
+                FROM public.datum_conversions d
+                LEFT JOIN locations l ON d.location_id = l.location_id
+                """
+            )
+        )
+        datums_table = pd.DataFrame(datums_table).set_index("location_id")
+        datums_table = gpd.GeoDataFrame(datums_table, geometry=gpd.points_from_xy(datums_table.longitude, datums_table.latitude))
+        return datums_table
 
 def fetch_parameters(db_url=db_url):
     return fetch_table(table_name="parameters", db_url=db_url).set_index("parameter_id")
