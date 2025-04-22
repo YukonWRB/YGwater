@@ -103,7 +103,7 @@ plotTimeseries <- function(location,
   # legend_position = "v"
   # rate = "max"
   # tzone = "auto"
-  # # con = NULL
+  # con = NULL
   # gridx = FALSE
   # gridy = FALSE
   # hover = TRUE
@@ -111,7 +111,7 @@ plotTimeseries <- function(location,
   # Checks and initial work ##########################################
   
   # Deal with non-standard evaluations from data.table to silence check() notes
-  period_secs <- period <- expected <- datetime <- gap_exists <- NULL
+  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- NULL
   
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
@@ -499,7 +499,7 @@ plotTimeseries <- function(location,
   }
   
   if (!unusable) { # Trow out unusable data (replace with NAs)
-    unus <- grades_dt[grades_dt$grade_type_code == "N"]
+    unus <- grades_dt[grades_dt$grade_type_description == "Unusable"]
     if (nrow(unus) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
       trace_data[unus, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]

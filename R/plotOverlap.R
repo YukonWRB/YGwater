@@ -38,9 +38,9 @@
 #' @export
 
 # 
-# location <- "09EA004"
+# location <- "29AB009"
 # sub_location <- NULL
-# parameter <- "flow"
+# parameter <- 1165
 # record_rate = NULL
 # startDay <- 1
 # endDay <- 365
@@ -59,6 +59,7 @@
 # historic_range = 'all'
 # legend_position = "v"
 # invert = FALSE
+# unusable = FALSE
 
 # location <- "29AB-M3"
 # sub_location <- NULL
@@ -107,6 +108,9 @@ plotOverlap <- function(location,
                         data = FALSE,
                         con = NULL)
 {
+ 
+  # Deal with non-standard evaluations from data.table to silence check() notes
+  date <- start_dt <- end_dt <- period <- NULL 
   
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
@@ -578,7 +582,7 @@ plotOverlap <- function(location,
   
   ## Filter out unusable data from the traces
   if (!unusable) {  # if unusable, the grades must be pulled so that we can filter them out
-    grades_dt <- dbGetQueryDT(con, paste0("SELECT start_dt, end_dt FROM grades WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", startDay, "' AND g.start_dt <= '", endDay, "' AND grade_type_code = 'N' ORDER BY start_dt;"))
+    grades_dt <- dbGetQueryDT(con, paste0("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", startDay, "' AND g.start_dt <= '", endDay, "' AND gt.grade_type_code = 'N' ORDER BY start_dt;"))
     if (nrow(grades_dt) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
       realtime[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]

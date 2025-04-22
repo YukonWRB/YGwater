@@ -111,14 +111,14 @@ plotMultiTimeseries <- function(type = 'traces',
   
   # Checks and initial work ##########################################
   
-  return_data <- data   # data is used in this function, but keeping the argument as 'data' keeps things consistent with other functions
+  # Deal with non-standard evaluations from data.table to silence check() notes
+  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- NULL
+  
+  return_data <- data   # data is used in this function and this can conflict with package data, but keeping the argument as 'data' (for the user) keeps things consistent with other functions
   
   if (!type %in% c('traces', 'subplots')) {
     stop("Your entry for the parameter 'type' is invalid. Please review the function documentation and try again.")
   }
-  
-  # Deal with non-standard evaluations from data.table to silence check() notes
-  period_secs <- period <- expected <- datetime <- gap_exists <- NULL
   
   rlang::check_installed("plotly", "necessary for interactive plots")
   
@@ -654,7 +654,7 @@ plotMultiTimeseries <- function(type = 'traces',
       
       ## Filter out unusable data from the traces
       if (!unusable) {  # if unusable, the grades must be pulled so that we can filter them out
-        grades_dt <- dbGetQueryDT(con, paste0("SELECT start_dt, end_dt FROM grades WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", sub.start_date, "' AND g.start_dt <= '", sub.end_date, "' AND grade_type_code = 'N' ORDER BY start_dt;"))
+        grades_dt <- dbGetQueryDT(con, paste0("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", sub.start_date, "' AND g.start_dt <= '", sub.end_date, "' AND gt.grade_type_code = 'N' ORDER BY start_dt;"))
         if (nrow(grades_dt) > 0) {
           # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
           trace_data[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
