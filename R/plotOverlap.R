@@ -578,7 +578,7 @@ plotOverlap <- function(location,
   
   ## Filter out unusable data from the traces
   if (!unusable) {  # if unusable, the grades must be pulled so that we can filter them out
-    grades_dt <- dbGetQueryDT(con, paste0("SELECT start_dt, end_dt, FROM grades WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", startDay, "' AND g.start_dt <= '", endDay, "' AND grade_type_code = 'N' ORDER BY start_dt;"))
+    grades_dt <- dbGetQueryDT(con, paste0("SELECT start_dt, end_dt FROM grades WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", startDay, "' AND g.start_dt <= '", endDay, "' AND grade_type_code = 'N' ORDER BY start_dt;"))
     if (nrow(grades_dt) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
       realtime[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
