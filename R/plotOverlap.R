@@ -523,7 +523,7 @@ plotOverlap <- function(location,
     temp$day = lubridate::day(temp$date)
     temp$day <- stringr::str_pad(temp$day, 2, side = "left", pad = "0")
     
-    #Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)
+    # Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)
     temp$md <- paste0(temp$month, temp$day)
     temp$md <- as.numeric(temp$md)
     md_sequence <- seq(min(temp$md), max(temp$md))
@@ -586,6 +586,9 @@ plotOverlap <- function(location,
     if (nrow(grades_dt) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
       realtime[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
+      
+      # If there's an entire year with only NA, remove it
+      realtime <- realtime[, if (any(!is.na(value))) .SD, by = year]
     }
   }
   
