@@ -127,6 +127,10 @@ def concatenate_to_xda(data_dir, param, freq=None, resampling_function="mean"):
     xda["time"] = [pd.to_datetime(x.isoformat()) for x in xda["time"].values]
     #xda = xda.assign_coords(time=pd.to_datetime(xda.time.values))
     #xda["time"] = pd.to_datetime(xda['time'].values).tz_localize('UTC')
+
+    if param == "sd":
+        xda.values = xda.values * 1000 # Convert from m to mm
+        xda.attrs["units"] = "mm"
     return xda
 
 
