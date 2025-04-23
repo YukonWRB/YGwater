@@ -125,19 +125,30 @@ app_server <- function(input, output, session) {
     visit = FALSE)
   
   ## database connections ###########
-  # Look for .mdb files in the AccessPath directory
-  if (dir.exists(config$accessPath) & !config$public) {
+  # Look for .mdb files in the AccessPath directories
+  if (dir.exists(config$accessPath1) & !config$public) {
     # List the *.mdb files in the directory
-    mdb_files <- list.files(config$accessPath, pattern = "*.mdb", full.names = TRUE)
-    if (length(mdb_files) == 0) {
-      mdb_files <- NULL
+    mdb_files1 <- list.files(config$accessPath1, pattern = "*.mdb", full.names = TRUE)
+    if (length(mdb_files1) == 0) {
+      mdb_files1 <- NULL
     }
   } else {
-    mdb_files <- NULL
+    mdb_files1 <- NULL
+  }
+  if (dir.exists(config$accessPath2) & !config$public) {
+    # List the *.mdb files in the directory
+    mdb_files2 <- list.files(config$accessPath2, pattern = "*.mdb", full.names = TRUE)
+    if (length(mdb_files2) == 0) {
+      mdb_files2 <- NULL
+    }
+  } else {
+    mdb_files2 <- NULL
   }
   
+  mdb_files <- c(mdb_files1, mdb_files2)
+  
   if (is.null(mdb_files) & !config$public) {
-    print("No .mdb files found in the AccessPath directory.")
+    print("No .mdb files found in the accessPath1 directory.")
   }
   
   
