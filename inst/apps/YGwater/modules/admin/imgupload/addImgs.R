@@ -631,6 +631,9 @@ addImgs <- function(id) {
       if (any(is.na(df$Latitude)) || any(is.na(df$Longitude))) {
         return(list(success = FALSE, message = "Error: One or more images do not contain a georeference. Please add locations using the drop-down menu or input coordinates manually."))
       }
+      if (any(is.na(df$Datetime))) {
+        return(list(success = FALSE, message = "Error: One or more images do not contain a datetime. Please add datetimes using the date and time fields."))
+      }
       return(list(success = TRUE, message = "Validation successful."))
     }
     
