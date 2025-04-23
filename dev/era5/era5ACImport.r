@@ -13,7 +13,7 @@ downloadERA5 <- function(
     num_days = NA,
     frequency = 6,
     latency = 5,
-    area = c(72, -150, 55, -120),
+    area = c(72, -150, 55, -120)
     ) {
 
     # make sure the frequency is a factor of 24
