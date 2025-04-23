@@ -16,6 +16,7 @@ imgMapView <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
+
     images <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT image_id, img_meta_id, datetime, latitude, longitude, location_id FROM files.images")
     images$datetime <- as.POSIXct(images$datetime, tz = "UTC") # Ensure datetime is POSIXct
     images$datetime <- as.POSIXct(format(images$datetime, tz = "MST", usetz = TRUE), tz = "MST")
@@ -114,6 +115,7 @@ imgMapView <- function(id, language) {
             style = "display: flex; gap: 10px; margin-top: 10px;",
             actionButton(ns("reset_view"), "Reset View"),
             actionButton(ns("load_additional_layers"), "Load hydrometric layers") |> bslib::tooltip("loads basin and location layers, required good internet connection"),
+            actionButton(ns("refresh_images"), "Refresh images") |> bslib::tooltip("refresh the list of images from AquaCache"),
           ),
           width = "40%",
           bg = "#f8f8f8",
@@ -214,6 +216,16 @@ imgMapView <- function(id, language) {
     })
     
     
+    observeEvent(input$refresh_images, {
+      # Refresh the list of images from AquaCache
+      images <<- DBI::dbGetQuery(session$userData$AquaCache, "SELECT image_id, img_meta_id, datetime, latitude, longitude, location_id FROM files.images")
+      images$datetime <- as.POSIXct(images$datetime, tz = "UTC") # Ensure datetime is POSIXct
+      images$datetime <- as.POSIXct(format(images$datetime, tz = "MST", usetz = TRUE), tz = "MST")
+      
+      # Update the map with the new images
+      updateMap(selections$filter)
+    })
+
     observeEvent(input$load_additional_layers, {
       # Load additional layers (e.g., hydrometric layers) when the button is clicked
       # This is a placeholder; replace with actual loading logic
