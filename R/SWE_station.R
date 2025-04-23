@@ -72,9 +72,9 @@ SWE_station <- function(stations = "all",
     }
   }
   loc_basin <- DBI::dbGetQuery(snowCon, "SELECT location AS location_id, sub_basin, active FROM locations")
-
+  
   # Create list of stations
-  if (all(stations == "all")) {
+  if (stations == "all") {
     stations <- unique(loc_basin$location_id)
   }
   
@@ -86,10 +86,10 @@ SWE_station <- function(stations = "all",
       aquaCon <- AquaConnect(silent = TRUE)
       on.exit(DBI::dbDisconnect(aquaCon), add = TRUE)
     }
-
+    
     # Get measurements
     Meas <- DBI::dbGetQuery(aquaCon, 
-    paste0("SELECT l.name, l.name_fr, l.location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
+                            paste0("SELECT l.name, l.name_fr, l.location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
            FROM results as res
            INNER JOIN samples as samp ON res.sample_id = samp.sample_id
            INNER JOIN locations as l ON samp.location_id = l.location_id
@@ -128,7 +128,7 @@ SWE_station <- function(stations = "all",
                          FROM means
                          INNER JOIN locations ON means.location = locations.location
                          WHERE means.location IN ('", paste0(stations, collapse = "', '"), "')"))
-
+    
     # Calculate density
     Meas$density <- round((Meas$swe / Meas$depth) * 10, 2)
     
@@ -164,12 +164,11 @@ SWE_station <- function(stations = "all",
   if (summarise) {
     # For each station: calculate historical median, years of record, and retrieve last years SWE and this years SWE and depth.
     # Create empty table
-    swe_station_summary <-
-      stats::setNames(data.frame(matrix(ncol = 19, nrow = 0)),
-                      c("location_name", "location_id", "elevation", "sample_date",
-                        "swe", "swe_prevyear", "swe_med", "swe_norm_last_30yrs", "swe_rat", "swe_min", 
-                        "swe_max", "depth", "depth_med", "density", "density_med", 
-                        "years", "record_flag", "date_flag", "estimate_flag"))
+    swe_station_summary <- stats::setNames(data.frame(matrix(ncol = 19, nrow = 0)),
+                                           c("location_name", "location_id", "elevation", "sample_date",
+                                             "swe", "swe_prevyear", "swe_med", "swe_norm_last_30yrs", "swe_rat", "swe_min", 
+                                             "swe_max", "depth", "depth_med", "density", "density_med", 
+                                             "years", "record_flag", "date_flag", "estimate_flag"))
     
     for (l in unique(Meas$location_id)) {
       # Subset to location of interest
@@ -188,26 +187,28 @@ SWE_station <- function(stations = "all",
       }
       
       
-      if (return_missing == FALSE) {
-        if (length(tab[tab$yr == year,]$value) == 0) next
+      if (!return_missing) {
+        if (length(tab[tab$yr == year, "value"]) == 0) {next}
       }
       tab <- unique(tab)
       sample_date <- tab[tab$yr == year & tab$parameter == "SWE",]$sample_date
       sample_date <- as.Date(sample_date)
       if (length(sample_date) == 0) {sample_date <- NA}
       # Get current years swe
-      swe <- tab[tab$yr == year & tab$parameter == "SWE",]$value
+      swe <- tab[tab$yr == year & tab$parameter == "SWE", "value"]
       if (length(swe) == 0) {swe <- NA}
       # get previous years swe
-      swe_prevyear <- tab[tab$yr == year - 1 & tab$parameter == "SWE",]$value
+      swe_prevyear <- tab[tab$yr == year - 1 & tab$parameter == "SWE", "value"]
       if (length(swe_prevyear) == 0) {swe_prevyear <- NA}
       # Get median swe for target month not including year of interest.
-      swe_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "SWE",]$value), 0)
+      swe_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "SWE", "value"]), 0)
       if (length(swe_med) == 0) {swe_med <- NA}
       # Get normal swe for lat 30 years
       swe_norm_last_30yrs <- round(mean(tab[tab$parameter == "SWE" &
-                                             tab$yr >= year - 30 & tab$yr <= year,]$value), 0)
-      if (length(swe_norm_last_30yrs) == 0 | swe_norm_last_30yrs == "NaN") {swe_norm_last_30yrs <- NA}
+                                              tab$yr >= year - 30 & tab$yr <= year,]$value), 0)
+      if (!is.na(swe_norm_last_30yrs)) {
+        if (length(swe_norm_last_30yrs) == 0 | swe_norm_last_30yrs == "NaN") {swe_norm_last_30yrs <- NA}
+      }
       # Get ratio between current year and median
       swe_rat <- round(swe/swe_med, 2)
       if (length(swe_rat) == 0 | is.infinite(swe_rat)) {swe_rat <- NA}
@@ -272,7 +273,7 @@ SWE_station <- function(stations = "all",
                            date_flag,
                            estimate_flag
       )
-
+      
       # append to table
       swe_station_summary[nrow(swe_station_summary) + 1, ] <- swe_summary_loc
     }

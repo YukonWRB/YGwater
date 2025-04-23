@@ -12,8 +12,9 @@ YGwater(
   dbPort = Sys.getenv("aquacachePort"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
-  accessPath =
+  accessPath1 =
     "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
+  accessPath2 = "//carver/infosys/EQWin",
   server = FALSE,
   public = TRUE
 )
@@ -33,7 +34,9 @@ YGwater(
 
 \item{dbPass}{Password for the aquacache database. Default is pulled from the .Renviron file.}
 
-\item{accessPath}{Path to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.}
+\item{accessPath1}{Path to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.}
+
+\item{accessPath2}{Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.}
 
 \item{server}{Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.}
 
