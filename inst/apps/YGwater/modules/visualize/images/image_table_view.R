@@ -41,7 +41,7 @@ imgTableViewUI <- function(id) {
       open = TRUE,
       fillable = TRUE,
       fillable_mobile = TRUE,
-      selectizeInput(ns("type"), "Image Type", choices = c("auto (series)" = "auto", "manual (one-off)" = "man")),
+      selectizeInput(ns("type"), "Image Type", choices = c("placeholder")),
       uiOutput(ns("dates")), # This is rendered in the server to allow updating language
       uiOutput(ns("loc")), # This is rendered in the server to enable resetting from URL because the default value set here would conflict with the one passed via URL
       DT::dataTableOutput(ns("tbl")) # Table of images. Clicking on a row will display the image in the main panel.
@@ -57,9 +57,10 @@ imgTableView <- function(id, language, restoring) {
     setBookmarkExclude(c("tbl_columns_selected", "tbl_cells_selected", "tbl_rows_current", "tbl_rows_all", "tbl_state", "tbl_search", "tbl_cell_clicked", "tbl_row_last_clicked"))
     
     # Load info about last two weeks of images. More is loaded later if the user goes back further.
-    imgs <- reactiveValues(imgs = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
+    imgs <- reactiveValues(imgs = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
                            img_min = Sys.Date() - 14,
-                           img_meta = dbGetQueryDT(session$userData$AquaCache, "SELECT a.img_meta_id, a.img_type, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM image_series AS a JOIN locations AS l ON a.location_id = l.location_id;"))
+                           img_meta = dbGetQueryDT(session$userData$AquaCache, "SELECT a.img_meta_id, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM image_series AS a JOIN locations AS l ON a.location_id = l.location_id;"),
+                           imgs_types = dbGetQueryDT(session$userData$AquaCache, "SELECT image_type_id, image_type, description FROM image_types;"))
     
     tables <- reactiveValues()
     
@@ -71,7 +72,7 @@ imgTableView <- function(id, language, restoring) {
       choices <- c("auto", "man")
       choices <- stats::setNames(choices, c(auto, man))
       
-      updateSelectizeInput(session, "type", label = titleCase(tr("img_type_lab", language$language), language$abbrev), choices = choices, selected = input$type)
+      updateSelectizeInput(session, "type", label = titleCase(tr("img_type_lab", language$language), language$abbrev), choices = stats::setNames(c("all", imgs$imgs_types$image_type_id), c("All", imgs$imgs_types$image_type)), selected = input$type)
       
       output$dates <- renderUI({
         dateRangeInput(ns("dates"), label = tr("date_range_lab", language$language), start = if (restoring()) input$dates[1] else Sys.Date() - 2, end = if (restoring()) input$dates[2] else Sys.Date(), language = language$abbrev, separator = tr("date_sep", language$language))
@@ -88,10 +89,10 @@ imgTableView <- function(id, language, restoring) {
     observeEvent(input$dates, {
       if (input$dates[1] < imgs$img_min) {
         if (nrow(imgs$imgs) == 0) {
-          imgs$imgs <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "';"))
+          imgs$imgs <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "';"))
           imgs$img_min <- min(imgs$imgs$datetime)
         } else {
-          extra <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime), "';"))
+          extra <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime), "';"))
           imgs$img_min <- min(extra$datetime)
           imgs$imgs <- rbind(imgs$imgs, extra)
         }
@@ -103,18 +104,24 @@ imgTableView <- function(id, language, restoring) {
     # Create a data table of images matching filter inputs #########################
     table_data <- reactive({
       req(input$type, input$dates, input$loc, imgs$imgs)  # Ensure all inputs are available
-      img_ids <- imgs$img_meta[img_type == input$type, "img_meta_id"]
-      
+
       # Select only the necessary name column based on the language
       generic_name_col <- tr("generic_name_col", language$language)
       
+      if (input$type != "all") {
+        tbl <- imgs$imgs[imgs$image_type == input$type]
+      } else {
+        tbl <- imgs$imgs
+      }
+      
       if (input$loc == "All") {
-        tbl <- imgs$imgs[datetime >= input$dates[1] & datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & img_meta_id %in% img_ids$img_meta_id, 
+        tbl <- tbl[datetime >= input$dates[1] & datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")), 
                          .(datetime, get(generic_name_col), image_id)]
       } else {
-        tbl <- imgs$imgs[datetime >= input$dates[1] & datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & location_id == input$loc & img_meta_id %in% img_ids$img_meta_id, 
+        tbl <- tbl[datetime >= input$dates[1] & datetime <= as.POSIXct(paste0(input$dates[2], " 23:59")) & location_id == input$loc, 
                          .(datetime, get(generic_name_col), image_id)]
       }
+
       # create sorting column for datetimes
       tbl[, sort.dt := datetime]
       # Nicely format datetimes (makes them a character object)
