@@ -16,14 +16,15 @@ imgMapView <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-
-    images <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT image_id, img_meta_id, datetime, latitude, longitude, location_id FROM files.images")
-    images$datetime <- as.POSIXct(images$datetime, tz = "UTC") # Ensure datetime is POSIXct
-    images$datetime <- as.POSIXct(format(images$datetime, tz = "MST", usetz = TRUE), tz = "MST")
+   # Initial data fetch (reactive so it can be observed or bound to)
+    images <- reactiveValues(
+      images = DBI::dbGetQuery(session$userData$AquaCache, "SELECT image_id, img_meta_id, datetime, latitude, longitude, location_id FROM files.images")
+    )
+    attr(images$images$datetime, "tzone") <- "MST"
     
     selections = reactiveValues()
     selections$img_id = 14077
-    selections$filter <- rep(TRUE, nrow(images))
+    selections$filter <- rep(TRUE, nrow(images$images))
     
     renderSelectedImage <- function(id) {
       if (is.na(id)) {
@@ -113,9 +114,9 @@ imgMapView <- function(id, language) {
           # Row for buttons below the map
           div(
             style = "display: flex; gap: 10px; margin-top: 10px;",
-            actionButton(ns("reset_view"), "Reset View"),
-            actionButton(ns("load_additional_layers"), "Load hydrometric layers") |> bslib::tooltip("loads basin and location layers, required good internet connection"),
-            actionButton(ns("refresh_images"), "Refresh images") |> bslib::tooltip("refresh the list of images from AquaCache"),
+            actionButton(ns("reset_view"), "Reset view"),
+            actionButton(ns("load_additional_layers"), "Load hydrometric layers") |> bslib::tooltip("Loads basins and location layers, requires good internet connection"),
+            actionButton(ns("refresh_images"), "Refresh images") |> bslib::tooltip("Refresh the list of images from the database"),
           ),
           width = "40%",
           bg = "#f8f8f8",
@@ -146,7 +147,7 @@ imgMapView <- function(id, language) {
     # Function to render the map with markers
     updateMap <- function(selection) {
       # Filter images based on current selection
-      filtered_images <- images[selection, ]
+      filtered_images <- images$images[selection, ]
       
       # Create the leaflet map with markers
       if (nrow(filtered_images) == 0) {
@@ -167,7 +168,7 @@ imgMapView <- function(id, language) {
               iconUrl = "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/icons/camera-fill.svg",
               iconWidth = 24, iconHeight = 24
             ),
-            clusterOptions = leaflet::markerClusterOptions(spiderfyDistanceMultiplier=1.2, showCoverageOnHover = TRUE)
+            clusterOptions = leaflet::markerClusterOptions(spiderfyDistanceMultiplier = 1.2, showCoverageOnHover = TRUE)
           ) %>%
           leaflet::fitBounds(
             min(filtered_images$longitude, na.rm = TRUE),
@@ -188,39 +189,39 @@ imgMapView <- function(id, language) {
     
     
     
-    observe({
+    observe({  # This observer will run on module initialization
       # Filter by date range
-      date_filter <- images$datetime >= input$dates[1] & images$datetime <= input$dates[2]
+      date_filter <- images$images$datetime >= input$dates[1] & images$images$datetime <= input$dates[2]
       
       # Filter by months
       if (!is.null(input$months) && length(input$months) > 0) {
-        month_filter <- format(as.Date(images$datetime), "%B") %in% input$months
+        month_filter <- format(as.Date(images$images$datetime), "%B") %in% input$months
       } else {
         month_filter <- TRUE
       }
       
       # Filter by time of day
-      img_hour <- as.integer(format(as.POSIXct(images$datetime), "%H"))
+      img_hour <- as.integer(format(as.POSIXct(images$images$datetime), "%H"))
       toy_filter <- img_hour >= input$toy_lab[1] & img_hour <= input$toy_lab[2]
       
       # Filter by tags (placeholder logic, update as needed)
       if (!is.null(input$tags) && length(input$tags) > 0) {
-        tag_filter <- rep(TRUE, nrow(images)) # Replace with actual tag filtering
+        tag_filter <- rep(TRUE, nrow(images$images)) # Replace with actual tag filtering
       } else {
         tag_filter <- TRUE
       }
       
       # Combine all filters
       selections$filter <- date_filter & month_filter & toy_filter & tag_filter
+      
       updateMap(selections$filter)
-    })
+    }) 
     
     
     observeEvent(input$refresh_images, {
       # Refresh the list of images from AquaCache
-      images <<- DBI::dbGetQuery(session$userData$AquaCache, "SELECT image_id, img_meta_id, datetime, latitude, longitude, location_id FROM files.images")
-      images$datetime <- as.POSIXct(images$datetime, tz = "UTC") # Ensure datetime is POSIXct
-      images$datetime <- as.POSIXct(format(images$datetime, tz = "MST", usetz = TRUE), tz = "MST")
+      images$images <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT image_id, img_meta_id, datetime, latitude, longitude, location_id FROM files.images")
+      attr(images$images$datetime, "tzone") <- "MST"
       
       # Update the map with the new images
       updateMap(selections$filter)
