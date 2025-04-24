@@ -213,7 +213,7 @@ html_processing <- function(file,
   # Add pressure column
   if (!"Pressure (m)" %in% colnames(final_data)) {
     final_data$`Pressure (m)` <- final_data$`Depth (m)` * 0.999 # Account for default In Situ SG H2O of 0.999, should be 1
-  } else if("Pressure (m)" %in% colnames(final_data)){
+  } else if ("Pressure (m)" %in% colnames(final_data)){
     final_data$`Pressure (m)` <- final_data$`Pressure (m)` * 1.001 # Account for default In Situ SG H2O of 0.999, should be 1
   }
   
@@ -228,6 +228,7 @@ html_processing <- function(file,
         write(paste0("Level append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
       }, error = function(e) {
         write("Level append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+        stop()
       })
     } else if (i == "Water Temp.TEMPERATURE") {
       temp <- data.frame(Time = final_data$Date, Value = final_data$'Temperature (\u00B0C)')
@@ -238,6 +239,7 @@ html_processing <- function(file,
         write(paste0("Temperature append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
       }, error = function(e) {
         write("Temperature append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+        stop()
       })
     }
   }

@@ -35,6 +35,7 @@ plotMultiTimeseries(
   gridy = FALSE,
   rate = NULL,
   tzone = "auto",
+  data = FALSE,
   con = NULL
 )
 }
@@ -98,6 +99,8 @@ plotMultiTimeseries(
 \item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
 \item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
+
+\item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }
