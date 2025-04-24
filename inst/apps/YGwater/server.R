@@ -10,15 +10,71 @@ app_server <- function(input, output, session) {
   
   # Initial setup #############################################################
   
+  # Hide all 'admin' side tabs if they were generated
+  
+  # Show relevant tabs for viz mode
+  showViz <- function(show = TRUE) {
+    if (show) {
+      nav_show(id = "navbar", target = "home")
+      nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
+      nav_show(id = "navbar", target = "map")
+      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
+        nav_show(id = "navbar", target = "FOD")
+      }
+      nav_show(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
+      nav_show(id = "navbar", target = "imgTableView")
+      nav_show(id = "navbar", target = "imgMapView")
+      nav_show(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
+      nav_show(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
+    } else {
+      nav_hide(id = "navbar", target = "home")
+      nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
+      nav_hide(id = "navbar", target = "map")
+      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
+        nav_hide(id = "navbar", target = "FOD")
+      }
+      nav_hide(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
+      nav_hide(id = "navbar", target = "imgTableView")
+      nav_hide(id = "navbar", target = "imgMapView")
+      nav_hide(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
+      nav_hide(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
+    }
+  }
+  showAdmin <- function(show = TRUE, logout = FALSE) {
+    if (show) {
+      nav_show(id = "navbar", target = "locs")
+      nav_show(id = "navbar", target = "ts")
+      nav_show(id = "navbar", target = "equip")
+      nav_show(id = "navbar", target = "cal")
+      nav_show(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
+      nav_show(id = "navbar", target = "visit")
+    } else {
+      # Hide irrelevant tabs for viz mode
+      nav_hide(id = "navbar", target = "locs")
+      nav_hide(id = "navbar", target = "ts")
+      nav_hide(id = "navbar", target = "equip")
+      nav_hide(id = "navbar", target = "cal")
+      nav_hide(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
+      nav_hide(id = "navbar", target = "visit")
+      if (logout) {
+        shinyjs::hide("admin")
+      }
+    }
+  }
+  
+  if (!config$public) {
+    showAdmin(show = FALSE)
+  }
+  
+  
   # Automatically update URL every time an input changes
   observe({
     reactiveValuesToList(input)
     session$doBookmark()
   })
-  setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn"))
-  
-  # All other bookmark exclusions need to go here because exclusions don't seem to run until the server of each module is called. Since the UI is loaded right away, this results in the bookmarking of the excluded inputs before the exclusions are set.
-  # A possible work-around that would also decrease load times is to load the UI of each module only when the tab is selected via the server.
+  setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))
   
   # Update the query string
   onBookmarked(updateQueryString)
@@ -47,7 +103,8 @@ app_server <- function(input, output, session) {
     mixPlot = FALSE,
     map = FALSE,
     FOD = FALSE,
-    img = FALSE,
+    imgTableView = FALSE,
+    imgMapView = FALSE,
     snowInfo = FALSE,
     waterInfo = FALSE,
     WQReport = FALSE,
@@ -66,22 +123,6 @@ app_server <- function(input, output, session) {
     addDocs = FALSE,
     addImgs = FALSE,
     visit = FALSE)
-  
-  # reactive to see if 'admin' side tabs have been created already
-  tab_created <- reactiveValues(
-    viz = FALSE,
-    locs = FALSE,
-    ts = FALSE,
-    addData = FALSE,
-    files = FALSE,
-    equip = FALSE,
-    cal = FALSE,
-    addContData = FALSE,
-    addDiscData = FALSE,
-    addDocs = FALSE,
-    addImgs = FALSE,
-    visit = FALSE
-  )
   
   ## database connections ###########
   # Look for .mdb files in the AccessPath directory
@@ -215,7 +256,7 @@ $(document).keyup(function(event) {
       return()
     }
     log_attempts(log_attempts() + 1)
-
+    
     tryCatch({
       session$userData$AquaCache_new <- AquaConnect(name = session$userData$config$dbName, 
                                                     host = session$userData$config$dbHost,
@@ -226,6 +267,7 @@ $(document).keyup(function(event) {
       test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
       # Test the connection
       if (nrow(test) > 0) {
+        removeModal()
         showModal(modalDialog(
           title = tr("login_success", languageSelection$language),
           paste0(tr("login_success_msg", languageSelection$language), " ", input$username),
@@ -245,23 +287,23 @@ $(document).keyup(function(event) {
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
-        # Check if the user has admin privileges. Inspect the 'timeseries' table to see if they have write privileges.
+        # Check if the user has admin privileges. Inspect the 'timeseries' table to see if they have write privileges (checks are also performed in each writing/editing module).
         result <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT has_table_privilege('timeseries', 'UPDATE') AS can_write;"))
         if (result$can_write) {
           session$userData$config$admin <- TRUE
-          # Create the new tabs for the 'admin' mode
-          insertTab("navbar",
-                    tabPanel(title = "Switch to Admin mode", value = "admin",
-                             uiOutput("admin_ui")),
-                    target = "home", position = "before")
-          # Other tabs are created if/when the user clicks on the 'admin' tab
+          
         } else {
           session$userData$config$admin <- FALSE
         }
-        # Redirect to last 'admin' tab
-        updateTabsetPanel(session, "navbar", selected = last_admin_tab())
+        # Create the new element for the 'admin' mode
+        nav_insert("navbar",
+                   nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
+                   target = "home", position = "before")
+        
+        # Other tabs are created if/when the user clicks on the 'admin' tab
         return()
       } else {
+        removeModal()
         showModal(modalDialog(
           title = "Login Failed",
           "Invalid username or password or insufficient privileges.",
@@ -275,6 +317,7 @@ $(document).keyup(function(event) {
         return()
       }
     }, error = function(e) {
+      removeModal()
       showModal(modalDialog(
         title = "Login Failed",
         "Invalid username or password.",
@@ -293,13 +336,12 @@ $(document).keyup(function(event) {
   observeEvent(input$logoutBtn, {
     
     session$userData$user_logged_in <- FALSE  # Set login status to FALSE
-    # Hide the 'admin' tabs upon logout
-    hideTab(inputId = "navbar", target = "admin")
-    showTab(inputId = "navbar", target = "viz", select = TRUE)
     
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
     shinyjs::show("loginBtn")
+    # Remove the 'admin' button upon logout
+    removeUI(selector = "button:contains('Switch to ')")
     
     # Drop old connection
     DBI::dbDisconnect(session$userData$AquaCache)
@@ -317,179 +359,75 @@ $(document).keyup(function(event) {
     
     # Redirect to last 'viz' tab
     updateTabsetPanel(session, "navbar", selected = last_viz_tab())
-    # Remove admin-related tabs on logout
-    removeTab("navbar", "viz", session = session)
-    removeTab("navbar", "admin", session = session)
-    removeTab("navbar", "locs", session = session)
-    removeTab("navbar", "ts", session = session)
-    removeTab("navbar", "equip", session = session)
-    removeTab("navbar", "cal", session = session)
-    removeTab("navbar", "addData", session = session)
-    removeTab("navbar", "addFiles", session = session)
-    removeTab("navbar", "visit", session = session)
+
+    showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
+    
+    
+    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode
+    admin_vis_flag("viz")
+    shinyjs::click("admin")
   })
   
   # Load modules based on input$navbar ################################
   # Store information to pass between modules
   primary_outputs <- reactiveValues()
   
-  # Initialize a flag to track programmatic tab changes
-  programmatic_change <- reactiveVal(FALSE)
-  
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
   last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
   
-  # Move between tabs/modules
-  observeEvent(input$navbar, {
-    if (programmatic_change()) {
-      programmatic_change(FALSE)
-      return()
-    }
-    
-    if (input$navbar == "viz") {
+  
+  # Move between admin/visualize modes
+  admin_vis_flag <- reactiveVal("admin")
+  
+  observeEvent(input$admin, {
+    if (admin_vis_flag() == "viz") {
       # Set the flag before changing the tab programmatically
-      programmatic_change(TRUE)
+      
+      updateActionButton(session, "admin", label = "Switch to Admin mode")
       
       # Show relevant tabs for viz mode
-      showTab(inputId = "navbar", target = "home")
-      showTab(inputId = "navbar", target = "plot") # Actually a navbarMenu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
-      showTab(inputId = "navbar", target = "map")
-      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
-        showTab(inputId = "navbar", target = "FOD")
-      }
-      showTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
-      showTab(inputId = "navbar", target = "img")
-      showTab(inputId = "navbar", target = "data") # Actually a navbarMenu, and this targets the tabs 'discData' and 'contData' as well
-      showTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
-      # don't show 'admin' tab unless logged in
-      if (session$userData$user_logged_in) {  # this UI element is generated upon successful login
-        showTab(inputId = "navbar", target = "admin")
-      }
+      showViz(show = TRUE)
       
       # Hide irrelevant tabs for viz mode
-      hideTab(inputId = "navbar", target = "viz")
-      hideTab(inputId = "navbar", target = "locs")
-      hideTab(inputId = "navbar", target = "ts")
-      hideTab(inputId = "navbar", target = "equip")
-      hideTab(inputId = "navbar", target = "cal")
-      hideTab(inputId = "navbar", target = "addData") # Actually a navbarMenu, and this targets the tabs 'addContData' and 'addDiscData' as well
-      hideTab(inputId = "navbar", target = "addFiles") # Actually a navbarMenu, and this targets the tabs 'addDocs' and 'addImgs' as well
-      hideTab(inputId = "navbar", target = "visit")
+      showAdmin(show = FALSE)
       
       # Select the last tab the user was on in viz mode
       updateTabsetPanel(session, "navbar", selected = last_viz_tab())
       
-    } else if (input$navbar == "admin") {
-      programmatic_change(TRUE)
+      admin_vis_flag("admin")
       
-      # Create the tabs if they're not there yet
-      if (!tab_created$viz) {
-        insertTab("navbar",
-                  tabPanel(title = "Switch to View mode", value = "viz",
-                           uiOutput("viz_ui")),
-                  target = "home", position = "before"
-        )
-        tab_created$viz <- TRUE
-      }
-      if (!tab_created$locs) {
-        insertTab("navbar",
-                  tabPanel(title = "Manage locations", value = "locs",
-                           uiOutput("locs_ui")),
-                  target = "reports", position = "after")
-        tab_created$locs <- TRUE
-      }
-      if (!tab_created$ts) {
-        insertTab("navbar",
-                  tabPanel(title = "Manage timeseries", value = "ts",
-                           uiOutput("ts_ui")),
-                  target = "locs", position = "after")
-        tab_created$ts <- TRUE
-      }
-      if (!tab_created$equip) {
-        insertTab("navbar",
-                  navbarMenu(title = "Equipment/instruments",
-                             menuName = "equip",
-                             tabPanel(title = "Checks + calibrations", 
-                                      value = "cal",
-                                      uiOutput("cal_ui")),
-                             tabPanel(title = "Deploy/Recover",
-                                      value = "deploy_recover",
-                                      uiOutput("deploy_recover_ui"))),
-                  target = "ts", position = "after")
-        tab_created$equip <- TRUE
-        tab_created$deploy_recover <- TRUE
-        tab_created$cal <- TRUE
-      }
-      # Create the navbarMenu that holds the 'add' continuous and discrete data tabs
-      if (!tab_created$addData) { 
-        insertTab("navbar",
-                  navbarMenu(title = "Manage data", menuName = "addData",
-                             tabPanel(title = "Continuous data", value = "addContData",
-                                      uiOutput("addContData_ui")),
-                             tabPanel(title = "Discrete data", value = "addDiscData",
-                                      uiOutput("addDiscData_ui"))),
-                  target = "cal", position = "after")
-        tab_created$addData <- TRUE
-        tab_created$addContData <- TRUE
-        tab_created$addDiscData <- TRUE
-      }
-      # Create the navbarMenu for adding docs/images/vectors/rasters
-      if (!tab_created$files) {
-        insertTab("navbar",
-                  navbarMenu(title = "Manage files/docs", menuName = "addFiles",
-                             tabPanel(title = "Documents", value = "addDocs",
-                                      uiOutput("addDocs_ui")),
-                             tabPanel(title = "Images", value = "addImgs",
-                                      uiOutput("addImgs_ui"))
-                             #.... plus extra tabs for vectors and rasters when built
-                  ),
-                  target = "data", position = "after")
-        tab_created$addFiles <- TRUE
-        tab_created$addDocs <- TRUE
-        tab_created$addImgs <- TRUE
-      }
-      if (!tab_created$visit) {
-        insertTab("navbar",
-                  tabPanel(title = "Add/modify field visit", value = "visit",
-                           uiOutput("visit_ui")),
-                  target = "files", position = "after")
-        tab_created$visit <- TRUE
-      }
+    } else if (admin_vis_flag() == "admin") {
+      
+      updateActionButton(session, "admin", label = "Switch to Vizualize mode")
       
       # Show relevant tabs for admin mode
-      showTab(inputId = "navbar", target = "viz")
-      showTab(inputId = "navbar", target = "locs")
-      showTab(inputId = "navbar", target = "ts")
-      showTab(inputId = "navbar", target = "equip")
-      showTab(inputId = "navbar", target = "cal")
-      showTab(inputId = "navbar", target = "addData") # Actually a navbarMenu, and this targets the tabs 'addContData' and 'addDiscData' as well
-      showTab(inputId = "navbar", target = "addFiles") # Actually a navbarMenu, and this targets the tabs 'addDocs' and 'addImgs' as well
-      showTab(inputId = "navbar", target = "visit")
+      showAdmin(show = TRUE)
       
       # Hide irrelevant tabs/menus
-      hideTab(inputId = "navbar", target = "admin")
-      hideTab(inputId = "navbar", target = "home") 
-      hideTab(inputId = "navbar", target = "plot") # Actually a navbarMenu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
-      hideTab(inputId = "navbar", target = "map")
-      hideTab(inputId = "navbar", target = "FOD")
-      hideTab(inputId = "navbar", target = "reports") # Actually a navbarMenu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', 'snowBulletin' as well
-      hideTab(inputId = "navbar", target = "img")
-      hideTab(inputId = "navbar", target = "info") # Actually a navbarMenu, and this targets the tabs 'news' and 'about' as well
-      hideTab(inputId = "navbar", target = "data") # Actually a navbarMenu, and this targets the tabs 'discData' and 'contData' as well
+      showViz(show = FALSE)
       
       # Select the last tab the user was on in admin mode
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
       
-    } else {
-      # When user selects any other tab, update the last active tab for the current mode
-      if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "img", "about", "news", "discData", "contData")) {
-        # User is in viz mode
-        last_viz_tab(input$navbar)
-      } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "addContData", "addDiscData", "addDocs", "addImgs", "visit")) {
-        # User is in admin mode
-        last_admin_tab(input$navbar) 
-      }
+      admin_vis_flag("viz")
+      
+      shinyjs::runjs("
+  document.querySelectorAll('#navbar a[data-value=\"equip\"] b.caret')
+    .forEach(el => el.remove());
+")
+    }
+  })
+  
+  
+  observeEvent(input$navbar, {
+    # When user selects any a tab, update the last active tab for the current mode
+    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
+      # User is in viz mode
+      last_viz_tab(input$navbar)
+    } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "addContData", "addDiscData", "addDocs", "addImgs", "visit")) {
+      # User is in admin mode
+      last_admin_tab(input$navbar) 
     }
     
     # Load modules when the corresponding tabs are selected
@@ -529,7 +467,7 @@ $(document).keyup(function(event) {
       }
       observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
         if (!is.null(primary_outputs$map_main$change_tab)) {
-          updateNavbarPage(session, "navbar", selected = (primary_outputs$map_main$change_tab))
+          updateTabsetPanel(session, "navbar", selected = (primary_outputs$map_main$change_tab))
           primary_outputs$map_main$change_tab <- NULL
         }
       })
@@ -541,11 +479,18 @@ $(document).keyup(function(event) {
         FOD("FOD") # Call the server
       }
     }
-    if (input$navbar == "img") {
-      if (!ui_loaded$img) {
-        output$img_ui <- renderUI(imgUI("img"))
-        ui_loaded$img <- TRUE
-        img("img", language = languageSelection, restoring = isRestoring_img) # Call the server
+    if (input$navbar == "imgTableView") {
+      if (!ui_loaded$imgTableView) {
+        output$imgTableView_ui <- renderUI(imgTableViewUI("imgTableView"))
+        ui_loaded$imgTableView <- TRUE
+        imgTableView("imgTableView", language = languageSelection, restoring = isRestoring_img) # Call the server
+      }
+    }
+    if (input$navbar == "imgMapView") {
+      if (!ui_loaded$imgMapView) {
+        output$imgMapView_ui <- renderUI(imgMapViewUI("imgMapView"))
+        ui_loaded$imgMapView <- TRUE
+        imgMapView("imgMapView", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "snowInfo") {

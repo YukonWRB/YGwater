@@ -27,7 +27,7 @@ getVector(
 
 \item{geom_type}{One of c('ST_Point', 'ST_MultiPoint', 'ST_LineString', 'ST_MultiLineString', 'ST_Polygon', 'ST_MultiPolygon').}
 
-\item{return_cols}{The names of columns to return.}
+\item{return_cols}{The names of columns to return. The default includes all columns.}
 
 \item{bounds}{Optional bounds by which to limit the spatial extent returned. Currently returns the full extent of every feature intersecting the bounds. Refer to parameter 'boundary' of \code{\link[rpostgis:pgGetGeom]{rpostgis::pgGetGeom()}} for details of how to specify this parameter.}
 
@@ -35,7 +35,7 @@ getVector(
 
 \item{schema}{The schema in which the target 'table' is located. Default is 'spatial'. Note that this is NOT the default for \code{\link[rpostgis:pgGetGeom]{rpostgis::pgGetGeom()}}.}
 
-\item{geom_col}{The name of the database table column in which to insert the geometry object.}
+\item{geom_col}{The name of the database table column which holds the geometry object.}
 
 \item{silent}{Should the function suppress all messages?}
 

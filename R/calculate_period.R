@@ -21,22 +21,26 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
   consecutive_count <- 0
   changes <- data.frame()
   last_diff <- 0
-  if (length(smoothed_diffs) > 0) {
-    for (j in 1:length(smoothed_diffs)) {
-      if (!is.na(smoothed_diffs[j]) && smoothed_diffs[j] < 25 && smoothed_diffs[j] != last_diff) { # Check if smoothed interval is less than threshold, which is set to more than a whole day (greatest interval possible is 24 hours) as well as not the same as the last recorded diff
-        consecutive_count <- consecutive_count + 1
-        if (consecutive_count == 3) { # At three consecutive new measurements it's starting to look like a pattern
-          last_diff <- smoothed_diffs[j]
-          change <- data.frame(datetime = data[[datetime_col]][j - 3],
-                               period = last_diff)
-          changes <- rbind(changes, change)
+  
+  if (!all(is.na(smoothed_diffs))) {
+    if (length(smoothed_diffs) > 0) {
+      for (j in 1:length(smoothed_diffs)) {
+        if (!is.na(smoothed_diffs[j]) && smoothed_diffs[j] < 25 && smoothed_diffs[j] != last_diff) { # Check if smoothed interval is less than threshold, which is set to more than a whole day (greatest interval possible is 24 hours) as well as not the same as the last recorded diff
+          consecutive_count <- consecutive_count + 1
+          if (consecutive_count == 3) { # At three consecutive new measurements it's starting to look like a pattern
+            last_diff <- smoothed_diffs[j]
+            change <- data.frame(datetime = data[[datetime_col]][j - 3],
+                                 period = last_diff)
+            changes <- rbind(changes, change)
+            consecutive_count <- 0
+          }
+        } else {
           consecutive_count <- 0
         }
-      } else {
-        consecutive_count <- 0
       }
     }
   }
+
   
   # Calculate the duration in days, hours, minutes, and seconds and assign to the right location in data
   if (nrow(changes) > 0) {
@@ -56,13 +60,21 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
     }
     # Check if user can access the measurements_continuous table
     if (!DBI::dbExistsTable(con, "measurements_continuous")) {
-      tbl <- 'measurements_continuous_calculated'
+      tbl <- 'measurements_continuous_corrected'
+      # for this table, names == 'value' must be changed to 'value_corrected AS value'
+      names[names == 'value'] <- 'value_corrected AS value'
     } else {
       tbl <- 'measurements_continuous'
     }
-    no_period <- dbGetQueryDT(con, paste0("SELECT ", paste(names, collapse = ', '), " FROM ", tbl, " WHERE timeseries_id = ", timeseries_id, " ORDER BY datetime DESC LIMIT 10;"))
+    old_tz <- attr(data$datetime, "tzone")
+    attr(data$datetime, "tzone") <- "UTC"
+    no_period <- dbGetQueryDT(con, paste0("SELECT ", paste(names, collapse = ', '), " FROM ", tbl, " WHERE timeseries_id = ", timeseries_id, " AND datetime NOT IN ('", paste(data$datetime, collapse = "', '"), "') ORDER BY datetime DESC LIMIT 10;"))
     no_period$period <- NA
+    if (!"period" %in% names(data)) {
+      data$period <- NA
+    }
     data <- rbind(data, no_period)
+    attr(data$datetime, "tzone") <- old_tz
     data <- data[order(data[[datetime_col]]), ]
     diffs <- as.numeric(diff(data[[datetime_col]]), units = "hours")
     smoothed_diffs <- zoo::rollmedian(diffs, k = 3, fill = NA, align = "center")
@@ -97,6 +109,7 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
       data$period <- zoo::na.locf(zoo::na.locf(data$period, na.rm = FALSE), fromLast = TRUE)
     } else {
       data$period <- NULL
+      warning("There are too few measurements to conclusively determine a period.")
     }
   }
   return(data)

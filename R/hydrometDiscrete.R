@@ -25,6 +25,7 @@
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param discrete_data A data.frame with the data to be plotted. Must contain the following columns: year, month, value and units.
+#' @param lang The desired language for the plot.
 #' 
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
 #' @export
@@ -42,7 +43,8 @@ hydrometDiscrete <- function(location = NULL,
                              plot_scale = 1,
                              save_path = NULL,
                              con = NULL,
-                             discrete_data = NULL)
+                             discrete_data = NULL,
+                             lang = "en")
 {
 
   # TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
@@ -190,7 +192,6 @@ hydrometDiscrete <- function(location = NULL,
       new_discrete <- all_discrete[all_discrete$target_datetime >= start & all_discrete$target_datetime <= end , ]
       discrete <- rbind(discrete, new_discrete)
     }
-
   }
 
 #### -------------------------- Data is given ----------------------------- ####
@@ -231,11 +232,7 @@ hydrometDiscrete <- function(location = NULL,
         end <- as.Date(paste0(i + 1, substr(endDay, 5, 10)))
       } else {end <- as.Date(paste0(i, substr(endDay, 5, 10)))}
 
-      # if (overlaps) {
-      #   lubridate::year(end) <- lubridate::year(end) +1
-      # }
-
-      if("target_datetime" %in% colnames(all_discrete)) {
+      if ("target_datetime" %in% colnames(all_discrete)) {
         new_discrete <- all_discrete[all_discrete$target_datetime >= start & all_discrete$target_datetime <= end , ]
       } else {
         new_discrete <- all_discrete[all_discrete$datetime >= start & all_discrete$datetime <= end , ]
@@ -274,6 +271,88 @@ hydrometDiscrete <- function(location = NULL,
       stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
     }
   }
+    
+    
+    # x axis settings
+    
+    day_seq <- seq(min(stats_discrete$fake_date), max(stats_discrete$fake_date), by = "1 day")
+    if  (length(day_seq) > 200) {
+      date_breaks = "2 months"
+      if (lang == "fr") {
+        labs = "%d %b"
+      } else {
+        labs = "%b %d"
+      }
+    } else if (length(day_seq) > 60) {
+      date_breaks = "1 month"
+      if (lang == "fr") {
+        labs = "%d %b"
+      } else {
+        labs = "%b %d"
+      }
+    } else if (length(day_seq) > 14) {
+      date_breaks = "1 week"
+      if (lang == "fr") {
+        labs = "%d %b"
+      } else {
+        labs = "%b %d"
+      }
+    } else if (length(day_seq) > 7) {
+      date_breaks = "2 days"
+      if (lang == "fr") {
+        labs = "%d %b"
+      } else {
+        labs = "%b %d"
+      }
+    } else if (length(day_seq) >= 2) {
+      date_breaks = "1 days"
+      if (lang == "fr") {
+        labs = "%d %b"
+      } else {
+        labs = "%b %d"
+      }
+    } else if (length(day_seq) > 1) {
+      date_breaks = "24 hours"
+      if (lang == "fr") {
+        labs = "%H:%M"
+      } else {
+        labs = "%H:%M"
+      }
+    } else if (length(day_seq) == 1) {
+      date_breaks = "12 hour"
+      if (lang == "fr") {
+        labs = "%H:%M"
+      } else {
+        labs = "%H:%M"
+      }
+    }
+    
+    eng_months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+    fr_months  <- c("janv", "f\u00E9vr", "mars", "avr", "mai", "juin",
+                    "juil", "ao\u00FBt", "sept", "oct", "nov", "d\u00E9c")
+    
+    # Define a custom date labeling function
+    custom_date_labels <- function(x) {
+      label <- format(x, format = labs)
+      
+      # Remove leading zeros from day numbers
+      label <- gsub("\\b0([1-9])", "\\1", label)
+      
+      if (lang == "fr") {
+        # Replace month abbreviations
+        for (i in seq_along(eng_months)) {
+          label <- gsub(eng_months[i], fr_months[i], label)
+        }
+        # Replace weekday abbreviations (if using %a or %A in labs)
+        eng_days <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+        fr_days  <- c("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
+        for (i in seq_along(eng_days)) {
+          label <- gsub(eng_days[i], fr_days[i], label)
+        }
+      }
+      return(label)
+    }
 
 
 #### ---------------------------- Make the plot --------------------------- ####
@@ -296,8 +375,7 @@ hydrometDiscrete <- function(location = NULL,
                             ggplot2::aes(color = .data$type, yend = value,
                                          x = .data$fake_date - 12, xend = .data$fake_date + 12)) +
       ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
-      ggnewscale::new_scale_color() # +
-      # ggplot2::scale_y_continuous(limits = c(min(min(all_discrete$value), min(stats_discrete$value)), max(max(all_discrete$value), max(stats_discrete$value))), expand = c(0.01, 0.05))
+      ggnewscale::new_scale_color()
   } else if (plot_type == "violin") {
     plot <- plot +
       ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width") #+ # Using a scale other than "width" may result in issues for locations where there are many "0" values.        
@@ -325,6 +403,9 @@ hydrometDiscrete <- function(location = NULL,
   }
 
 #### ---------------------- Wrap things up and return() ------------------- ####
+  
+  plot <- plot +
+    ggplot2::scale_x_date(date_breaks = date_breaks, labels = custom_date_labels) # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
   if (title) {
     if (is.null(custom_title)) {
       if (is.null(discrete_data)) {
@@ -346,7 +427,7 @@ hydrometDiscrete <- function(location = NULL,
 
   #Save it if requested
   if (!is.null(save_path)) {
-    ggplot2::ggsave(filename=paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz = tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz = tzone)), ".png"), plot = plot, height = 8, width = 12, units = "in", device = "png", dpi = 500)
+    ggplot2::ggsave(filename = paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz = tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz = tzone)), ".png"), plot = plot, height = 8, width = 12, units = "in", device = "png", dpi = 500)
   }
 
   return(plot)

@@ -47,3 +47,11 @@ test_that("plotOverlap with multiple years and 'last' historic range", {
   plotly::save_image(plot, file = path)
   expect_snapshot_file(path)
 })
+
+test_that("returned plot data is as expected", {
+  plot <- plotOverlap(location = "09AB004", parameter = "water level", years = c(1990, 1991), hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE, historic_range = "all", data = TRUE)$data
+  expect_type(plot, "list")
+  expect_named(plot, c("trace_data", "range_data"))
+  expect_named(plot$trace_data, c("datetime", "value", "year", "month", "day", "plot_year", "plot_datetime"))
+  expect_named(plot$range_data, c("datetime", "value", "max", "min", "q75", "q25", "year", "month", "day"))
+})

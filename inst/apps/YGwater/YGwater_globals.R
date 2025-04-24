@@ -2,6 +2,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   library(shiny)
   library(shinyjs)
+  library(bslib)
 
   # 'Admin' side modules ###
   source(system.file("apps/YGwater/modules/admin/admin.R", package = "YGwater"))
@@ -26,7 +27,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   # Files/document/image sub-modules
   source(system.file("apps/YGwater/modules/admin/documents/addDocs.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/images/addImgs.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/imgupload/addImgs.R", package = "YGwater"))
 
 
   
@@ -48,7 +49,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/visualize/map/params.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/locations.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/images/image_view.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/images/image_table_view.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/visualize/images/image_map_view.R", package = "YGwater"))
+  
   
   source(system.file("apps/YGwater/modules/visualize/data/continuousData.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/data/discreteData.R", package = "YGwater"))
@@ -95,6 +98,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     g_drive = g_drive,
     admin = FALSE
   )
+  
+  app_theme <<- bslib::bs_theme(version = 5) %>%
+    bs_add_rules(paste(readLines(system.file("apps/YGwater/www/css/YG_bs5.css", package = "YGwater")), collapse = "\n"))
   
 }
 
