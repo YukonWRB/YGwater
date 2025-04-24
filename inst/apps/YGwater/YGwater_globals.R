@@ -1,4 +1,4 @@
-YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RLS_pass, accessPath, public) {
+YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RLS_pass, accessPath1, accessPath2, public) {
   
   library(shiny)
   library(shinyjs)
@@ -93,7 +93,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     dbPort = dbPort,
     dbUser = dbUser,
     dbPass = dbPass,
-    accessPath = accessPath,
+    accessPath1 = accessPath1,
+    accessPath2 = accessPath2,
     public = public,
     g_drive = g_drive,
     admin = FALSE
