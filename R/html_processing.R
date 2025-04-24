@@ -18,6 +18,13 @@ html_processing <- function(file,
                             logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
                             dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
                             repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
+  # Debug params 
+  file <- "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\VuSitu_Log_2024-12-04_13-00-00_YOWN-2402D_WH_Copper_Pad_2_Log_2024-12-04_YOWN-2402D.html"
+  aq_upload <- TRUE
+  master_sheet <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
+  logger_tracking <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
+  dropbox <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
+  repo <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
   
   # Ensure the 'file' has extension .html (last part of the string)
   if (tools::file_ext(file) != "html") {
@@ -206,6 +213,8 @@ html_processing <- function(file,
   # Add pressure column
   if (!"Pressure (m)" %in% colnames(final_data)) {
     final_data$`Pressure (m)` <- final_data$`Depth (m)` * 0.999 # Account for default In Situ SG H2O of 0.999, should be 1
+  } else if("Pressure (m)" %in% colnames(final_data)){
+    final_data$`Pressure (m)` <- final_data$`Pressure (m)` * 1.001 # Account for default In Situ SG H2O of 0.999, should be 1
   }
   
   # Upload data to Aquarius
