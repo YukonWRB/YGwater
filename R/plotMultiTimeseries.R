@@ -25,6 +25,7 @@
 #' @param title Should a title be included? TRUE/FALSE.
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param unusable Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.
 #' @param historic_range Default NULL will plot historic ranges for up to two traces and no historical ranges at all if more than two traces; TRUE will plot historic ranges for all traces; FALSE will not plot historic ranges.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
@@ -62,6 +63,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                 title = TRUE,
                                 custom_title = NULL,
                                 filter = NULL,
+                                unusable = FALSE,
                                 historic_range = NULL,
                                 lang = "en",
                                 line_scale = 1,
@@ -109,14 +111,14 @@ plotMultiTimeseries <- function(type = 'traces',
   
   # Checks and initial work ##########################################
   
-  return_data <- data   # data is used in this function, but keeping the argument as 'data' keeps things consistent with other functions
+  # Deal with non-standard evaluations from data.table to silence check() notes
+  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- NULL
+  
+  return_data <- data   # data is used in this function and this can conflict with package data, but keeping the argument as 'data' (for the user) keeps things consistent with other functions
   
   if (!type %in% c('traces', 'subplots')) {
     stop("Your entry for the parameter 'type' is invalid. Please review the function documentation and try again.")
   }
-  
-  # Deal with non-standard evaluations from data.table to silence check() notes
-  period_secs <- period <- expected <- datetime <- gap_exists <- NULL
   
   rlang::check_installed("plotly", "necessary for interactive plots")
   
@@ -650,7 +652,16 @@ plotMultiTimeseries <- function(type = 'traces',
       }
       trace_data <- trace_data[order(trace_data$datetime),]
       
-      if (!is.null(filter)) { # Use the same approach as in ggplotOverlap to filter the value column
+      ## Filter out unusable data from the traces
+      if (!unusable) {  # if unusable, the grades must be pulled so that we can filter them out
+        grades_dt <- dbGetQueryDT(con, paste0("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", sub.start_date, "' AND g.start_dt <= '", sub.end_date, "' AND gt.grade_type_code = 'N' ORDER BY start_dt;"))
+        if (nrow(grades_dt) > 0) {
+          # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
+          trace_data[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
+        }
+      }
+      
+      if (!is.null(filter)) { # Use the same approach as in plotOverlap to filter the value column
         if (!inherits(filter, "numeric")) {
           message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
         } else {

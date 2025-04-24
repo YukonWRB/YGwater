@@ -6,8 +6,7 @@
 #' @return Two excel documents, one with location metadata and another with the data. The snow data includes all surveys in the database. it does not include individual samples, but simply a mean of all samples.
 #' @export
 
-createSnowOpenData <-
-  function() {
+createSnowOpenData <- function() {
     
     # Pull data from snow bulletin
     con <- snowConnect(silent = TRUE)

@@ -125,19 +125,30 @@ app_server <- function(input, output, session) {
     visit = FALSE)
   
   ## database connections ###########
-  # Look for .mdb files in the AccessPath directory
-  if (dir.exists(config$accessPath) & !config$public) {
+  # Look for .mdb files in the AccessPath directories
+  if (dir.exists(config$accessPath1) & !config$public) {
     # List the *.mdb files in the directory
-    mdb_files <- list.files(config$accessPath, pattern = "*.mdb", full.names = TRUE)
-    if (length(mdb_files) == 0) {
-      mdb_files <- NULL
+    mdb_files1 <- list.files(config$accessPath1, pattern = "*.mdb", full.names = TRUE)
+    if (length(mdb_files1) == 0) {
+      mdb_files1 <- NULL
     }
   } else {
-    mdb_files <- NULL
+    mdb_files1 <- NULL
+  }
+  if (dir.exists(config$accessPath2) & !config$public) {
+    # List the *.mdb files in the directory
+    mdb_files2 <- list.files(config$accessPath2, pattern = "*.mdb", full.names = TRUE)
+    if (length(mdb_files2) == 0) {
+      mdb_files2 <- NULL
+    }
+  } else {
+    mdb_files2 <- NULL
   }
   
+  mdb_files <- c(mdb_files1, mdb_files2)
+  
   if (is.null(mdb_files) & !config$public) {
-    print("No .mdb files found in the AccessPath directory.")
+    print("No .mdb files found in the accessPath1 directory.")
   }
   
   
@@ -204,7 +215,35 @@ app_server <- function(input, output, session) {
     if (input$langSelect %in% names(translation_cache)) {
       languageSelection$language <- input$langSelect
       languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-      session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the title of the app based on the selected language
+      
+      # Render the navigation bar titles based on the language
+      output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
+      output$mapNavMenuTitle <- renderUI({tr("map", languageSelection$language)})
+      
+      output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
+      output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
+      output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
+      output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+      
+      output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
+      output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
+      output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
+      output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
+      output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
+      
+      output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
+      output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
+      output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
+      
+      output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
+      output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
+      output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
+      
+      output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
+      output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
+      output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
+
+      session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
     }
   })
   
@@ -359,7 +398,7 @@ $(document).keyup(function(event) {
     
     # Redirect to last 'viz' tab
     updateTabsetPanel(session, "navbar", selected = last_viz_tab())
-
+    
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     
     

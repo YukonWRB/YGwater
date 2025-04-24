@@ -66,7 +66,7 @@ def download_from_cds(
                     "area": [72, -150, 55, -120]
                 }
 
-                client = cdsapi.Client(verify=False)
+                client = cdsapi.Client(verify=False, key="5815cfa9-2642-46bd-9a7f-9ac2099b32f4")
                 client.retrieve(dataset, request, target=filename)
 
 
@@ -124,9 +124,13 @@ def concatenate_to_xda(data_dir, param, freq=None, resampling_function="mean"):
     xda = xr.concat(data_arrays, dim="time")
     # this code is very ugly, but 'resample' really hates numpy datetimes, and for reason this convoluted timetype is the only one that works
     # so we convert to ISO format, then to pandas timestamps, then to UTC
-    xda["time"] = [pd.to_datetime(x.isoformat()).tz_localize("UTC") for x in xda["time"].values]
-    xda = xda.assign_coords(time=pd.to_datetime(xda.time.values))
+    xda["time"] = [pd.to_datetime(x.isoformat()) for x in xda["time"].values]
+    #xda = xda.assign_coords(time=pd.to_datetime(xda.time.values))
     #xda["time"] = pd.to_datetime(xda['time'].values).tz_localize('UTC')
+
+    if param == "sd":
+        xda.values = xda.values * 1000 # Convert from m to mm
+        xda.attrs["units"] = "mm"
     return xda
 
 
