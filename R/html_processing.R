@@ -227,8 +227,8 @@ html_processing <- function(file,
         end <- Sys.time() - start
         write(paste0("Level append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
       }, error = function(e) {
-        write("Level append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-        stop("Level upload failed, check the log file for details.")
+        write(paste0("Level append FAILED", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+        stop("Level upload failed with error", e$message)
       })
     } else if (i == "Water Temp.TEMPERATURE") {
       temp <- data.frame(Time = final_data$Date, Value = final_data$'Temperature (\u00B0C)')
@@ -238,8 +238,8 @@ html_processing <- function(file,
         end <- Sys.time() - start
         write(paste0("Temperature append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
       }, error = function(e) {
-        write("Temperature append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-        stop("Temperature upload failed, check the log file for details.")
+        write(paste0("Temperature append FAILED", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+        stop("Temperature upload failed with error", e$message)
       })
     }
   }
@@ -267,6 +267,7 @@ html_processing <- function(file,
     write("Logger tracking successful", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
   }, error = function(e) { 
     write("Logger tracking FAILED, make sure nobody has the logger tracking sheet open", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+    stop()
   }, warning = function(w) {
     write("Logger tracking FAILED, make sure nobody has the logger tracking sheet open. Re-add HTML file to logger dropbox to complete tracking.", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")}
   )
