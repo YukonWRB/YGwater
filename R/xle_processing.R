@@ -20,13 +20,13 @@ xle_processing <- function(file,
                            dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
                            repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
   
-  
-  # file = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\FAILED\\1083563_YOWN-2308 Haines Junction Villag_2024_09_17_115603.xle"
-  # aq_upload = TRUE
-  # master_file = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
-  # logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
-  # dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
-  # repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
+  # Debug Params
+  file = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX/1077366_YOWN-0101 Wolf Creek_2025_04_15_120631.xle"
+  aq_upload = TRUE
+  master_file = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
+  logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
+  dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
+  repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
   
 
   
@@ -87,8 +87,6 @@ xle_processing <- function(file,
     }
   }
 
-  
-  
   # Ensure the 'file' has extension .xle (last part of the string)
   if (!file.exists(file)) {
     stop("Logger file not found, check file location")
@@ -103,9 +101,6 @@ xle_processing <- function(file,
       
     }
   }
-
-  
-
   
   #### Define helper functions ####
   # Define pressure conversion function
@@ -313,34 +308,38 @@ xle_processing <- function(file,
         temp <- data.frame(Time = final_data$Time, Value = final_data$`Level (m)`)
         tryCatch({
           start <- Sys.time()
-          result <- aq_upload(well_loc, i, temp)
+          result <- YGwater::aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
           write(paste0("Level append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
         }, error = function(e) {
-          write("Level append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+          write(paste0("Level append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+          stop("Level upload failed with error:", e$message)
         })
       } else if (i == "Water Temp.TEMPERATURE") {
         temp <- data.frame(Time = final_data$Time, Value = final_data$'Temperature (\u00B0C)')
         tryCatch({
           start <- Sys.time()
-          result <- aq_upload(well_loc, i, temp)
+          result <- YGwater::aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
           write(paste0("Temperature append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
         }, error = function(e) {
-          write("Temperature append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
+          write(paste0("Temperature append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+          stop("Temperature upload failed with error:", e$message)
+        })
       } else if (i == "Conductivity Field.Econdy-F") {
         tryCatch({
           temp <- data.frame(Time = final_data$Time, Value = final_data$'Conductivity (\u00B5S/cm)')
           start <- Sys.time()
-          result <- aq_upload(well_loc, i, temp)
+          result <- YGwater::aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
           write(paste0("Conductivity append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
         }, error = function(e) {
-          write("Conductivity append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
+          write(paste0("Conductivity append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+          stop("Conductivity upload failed with error:", e$message)
+        })
       }
     }
   }
-
   
   #### Track metadata ####
   
