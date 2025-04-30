@@ -92,7 +92,6 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   } else {
     future::plan("multicore")
   }
-  
   if (server) {
     shiny::shinyAppDir(appDir)
   } else {

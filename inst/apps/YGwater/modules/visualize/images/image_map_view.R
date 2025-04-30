@@ -16,14 +16,23 @@ imgMapView <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-   # Initial data fetch (reactive so it can be observed or bound to)
+    # Initial data fetch (reactive so it can be observed or bound to)
     images <- reactiveValues(
-      images = DBI::dbGetQuery(session$userData$AquaCache, "SELECT image_id, img_meta_id, datetime, latitude, longitude, location_id FROM files.images")
+      images = DBI::dbGetQuery(session$userData$AquaCache, "SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id")
     )
+    # Extract the unique image types for the select input
+    images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
+    # Parse tags into a list-column so they can be filtered on later
+    images$images$tags_list <- lapply(images$images$tags, function(raw){
+      if (is.na(raw) || raw == "") return(character(0))
+      # strip braces & quotes, then split on comma
+      inner <- gsub('["{}]', "", raw)
+      strsplit(inner, ",", fixed = TRUE)[[1]]
+    })
+    
     attr(images$images$datetime, "tzone") <- "MST"
     
     selections = reactiveValues()
-    selections$img_id = 14077
     selections$filter <- rep(TRUE, nrow(images$images))
     
     renderSelectedImage <- function(id) {
@@ -58,7 +67,7 @@ imgMapView <- function(id, language) {
               dateRangeInput(
                 ns("dates"),
                 label = tr("date_range_lab", language$language),
-                start = Sys.Date() - 30,
+                start = Sys.Date() - 7,
                 end = Sys.Date(),
                 language = language$abbrev,
                 separator = tr("date_sep", language$language)
@@ -94,9 +103,20 @@ imgMapView <- function(id, language) {
               class = "d-inline-block me-3 align-items-start",
               style = "vertical-align: top; display: inline-flex;",
               selectizeInput(
+                ns("img_type"),
+                label = "Image type",
+                choices = stats::setNames(images$unique_types$image_type_id, images$unique_types$image_type),
+                selected = NULL,
+                multiple = TRUE
+              )
+            ),
+            div(
+              class = "d-inline-block me-3 align-items-start",
+              style = "vertical-align: top; display: inline-flex;",
+              selectizeInput(
                 ns("tags"),
                 label = "Tag",
-                choices = c("No tags associated with these images"),
+                choices = unique(unlist(images$images$tags_list)),
                 selected = NULL,
                 multiple = TRUE
               )
@@ -129,14 +149,11 @@ imgMapView <- function(id, language) {
     
     output$map <- leaflet::renderLeaflet({
       
-      m <- leaflet::leaflet() %>%
-        leaflet::addTiles(group = "OSM (default)") %>%
-        leaflet::addProviderTiles("Esri.WorldImagery", group = "Esri Satellite") %>%
-        leaflet::addProviderTiles("CartoDB.Positron", group = "CartoDB Light") %>%
-        leaflet::addLayersControl(
-          baseGroups = c("OSM (default)", "Esri Satellite", "CartoDB Light"),
-          options = leaflet::layersControlOptions(collapsed = FALSE)
-        ) %>%
+      m <- leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 15)) %>%
+        leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographic") %>%
+        leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
+        leaflet::addLayersControl(baseGroups = c("Topographic", "Satellite"),
+                                  options = leaflet::layersControlOptions(collapsed = FALSE)) %>%
         leaflet::setView(
           lng = -135.0,
           lat = 64.0,
@@ -188,7 +205,6 @@ imgMapView <- function(id, language) {
     })
     
     
-    
     observe({  # This observer will run on module initialization
       # Filter by date range
       date_filter <- images$images$datetime >= input$dates[1] & images$images$datetime <= input$dates[2]
@@ -204,15 +220,26 @@ imgMapView <- function(id, language) {
       img_hour <- as.integer(format(as.POSIXct(images$images$datetime), "%H"))
       toy_filter <- img_hour >= input$toy_lab[1] & img_hour <= input$toy_lab[2]
       
+      # Filter by image type
+      if (!is.null(input$img_type) && length(input$img_type) > 0) {
+        type_filter <- images$images$image_type_id %in% input$img_type
+      } else {
+        type_filter <- TRUE
+      }
+      print(type_filter)
+      print(input$tags)
+      
       # Filter by tags (placeholder logic, update as needed)
       if (!is.null(input$tags) && length(input$tags) > 0) {
-        tag_filter <- rep(TRUE, nrow(images$images)) # Replace with actual tag filtering
+        
+        tag_filter <- sapply(images$images$tags_list, function(v) {any(v %in% input$tags)})
+        print(tag_filter)
       } else {
         tag_filter <- TRUE
       }
       
       # Combine all filters
-      selections$filter <- date_filter & month_filter & toy_filter & tag_filter
+      selections$filter <- date_filter & month_filter & toy_filter & tag_filter & type_filter
       
       updateMap(selections$filter)
     }) 
@@ -226,18 +253,16 @@ imgMapView <- function(id, language) {
       # Update the map with the new images
       updateMap(selections$filter)
     })
-
+    
     observeEvent(input$load_additional_layers, {
       # Load additional layers (e.g., hydrometric layers) when the button is clicked
       # This is a placeholder; replace with actual loading logic
       showNotification("Loading additional layers (30-120 seconds)...", type = "message")
       
       
-      
-      
       #basins = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.basins")
-      basins <- getVector(layer_name="Drainage basins")
-      locations <- getVector(layer_name="Locations")
+      basins <- getVector(layer_name = "Drainage basins")
+      locations <- getVector(layer_name = "Locations")
       
       
       # Example: Add a new layer to the map (replace with actual layer loading)
