@@ -120,8 +120,6 @@ plotMultiTimeseries <- function(type = 'traces',
     stop("Your entry for the parameter 'type' is invalid. Please review the function documentation and try again.")
   }
   
-  rlang::check_installed("plotly", "necessary for interactive plots")
-  
   if (!(lang %in% c("en", "fr"))) {
     stop("Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again.")
   }

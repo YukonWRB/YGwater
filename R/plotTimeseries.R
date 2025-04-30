@@ -118,8 +118,6 @@ plotTimeseries <- function(location,
     on.exit(DBI::dbDisconnect(con))
   }
   
-  rlang::check_installed("plotly", "necessary for interactive plots")
-  
   if (tzone == "auto") {
     tzone <- Sys.timezone()
   }
