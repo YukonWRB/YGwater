@@ -17,6 +17,7 @@ imgMapView <- function(id, language) {
     ns <- session$ns
     
     # Initial data fetch (reactive so it can be observed or bound to)
+    # Important!!! this reactive can be updated later on, reflect changes here
     images <- reactiveValues(
       images = DBI::dbGetQuery(session$userData$AquaCache, "SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id")
     )
@@ -247,8 +248,18 @@ imgMapView <- function(id, language) {
     
     observeEvent(input$refresh_images, {
       # Refresh the list of images from AquaCache
-      images$images <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT image_id, img_meta_id, datetime, latitude, longitude, location_id FROM files.images")
+      images$images <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id")
       attr(images$images$datetime, "tzone") <- "MST"
+      
+      # Extract the unique image types for the select input
+      images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
+      # Parse tags into a list-column so they can be filtered on later
+      images$images$tags_list <- lapply(images$images$tags, function(raw){
+        if (is.na(raw) || raw == "") return(character(0))
+        # strip braces & quotes, then split on comma
+        inner <- gsub('["{}]', "", raw)
+        strsplit(inner, ",", fixed = TRUE)[[1]]
+      })
       
       # Update the map with the new images
       updateMap(selections$filter)
