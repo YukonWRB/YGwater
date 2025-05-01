@@ -25,12 +25,12 @@ eq_fetch <- function(EQcode,
                      apply_standards = TRUE,
                      path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"){
   
-  # EQcode <- "EG"
-  # stationIDs = c("ISH-1", "LDSP-UND")
+  # EQcode <- "KNO"
+  # stationIDs = c("FORMO-01", "FORMO-CK", "FO-WQ-SE-1", "FO-WQ-SE2-1", "FO-WQ-ST1-1", "FO-WQ-ST1-2", "FO-WQ-ST1-3")
   # paramIDs = c("Fe-D", "Zn-D", "Cond-F")
-  # dates = c("2024-07-01", "2024-10-21")
+  # dates = "all"
   # BD <- 2
-  # apply_standards = FALSE
+  # apply_standards = TRUE
   # path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   
   # Set a few options

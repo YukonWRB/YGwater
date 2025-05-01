@@ -18,6 +18,13 @@ html_processing <- function(file,
                             logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
                             dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
                             repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
+  # Debug params 
+  # file <- "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\VuSitu_Log_2024-12-04_13-00-00_YOWN-2402D_WH_Copper_Pad_2_Log_2024-12-04_YOWN-2402D.html"
+  # aq_upload <- TRUE
+  # master_sheet <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
+  # logger_tracking <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
+  # dropbox <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
+  # repo <- "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
   
   # Ensure the 'file' has extension .html (last part of the string)
   if (tools::file_ext(file) != "html") {
@@ -206,6 +213,8 @@ html_processing <- function(file,
   # Add pressure column
   if (!"Pressure (m)" %in% colnames(final_data)) {
     final_data$`Pressure (m)` <- final_data$`Depth (m)` * 0.999 # Account for default In Situ SG H2O of 0.999, should be 1
+  } else if ("Pressure (m)" %in% colnames(final_data)){
+    final_data$`Pressure (m)` <- final_data$`Pressure (m)` * 1.001 # Account for default In Situ SG H2O of 0.999, should be 1
   }
   
   # Upload data to Aquarius
@@ -219,6 +228,7 @@ html_processing <- function(file,
         write(paste0("Level append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
       }, error = function(e) {
         write("Level append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+        stop("Level upload failed, check the log file for details.")
       })
     } else if (i == "Water Temp.TEMPERATURE") {
       temp <- data.frame(Time = final_data$Date, Value = final_data$'Temperature (\u00B0C)')
@@ -229,6 +239,7 @@ html_processing <- function(file,
         write(paste0("Temperature append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
       }, error = function(e) {
         write("Temperature append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+        stop("Temperature upload failed, check the log file for details.")
       })
     }
   }
