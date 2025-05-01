@@ -19,10 +19,11 @@ imgMapView <- function(id, language) {
     # Initial data fetch (reactive so it can be observed or bound to)
     # Important!!! this reactive can be updated later on, reflect changes here
     images <- reactiveValues(
-      images = DBI::dbGetQuery(session$userData$AquaCache, "SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id")
+      images = DBI::dbGetQuery(session$userData$AquaCache, "SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE i.datetime > NOW() - INTERVAL '7 days'")
     )
     # Extract the unique image types for the select input
     images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
+    
     # Parse tags into a list-column so they can be filtered on later
     images$images$tags_list <- lapply(images$images$tags, function(raw){
       if (is.na(raw) || raw == "") return(character(0))
@@ -150,7 +151,7 @@ imgMapView <- function(id, language) {
     
     output$map <- leaflet::renderLeaflet({
       
-      m <- leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 15)) %>%
+      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 13)) %>%
         leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographic") %>%
         leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
         leaflet::addLayersControl(baseGroups = c("Topographic", "Satellite"),
@@ -205,7 +206,6 @@ imgMapView <- function(id, language) {
       
     })
     
-    
     observe({  # This observer will run on module initialization
       # Filter by date range
       date_filter <- images$images$datetime >= input$dates[1] & images$images$datetime <= input$dates[2]
@@ -227,14 +227,11 @@ imgMapView <- function(id, language) {
       } else {
         type_filter <- TRUE
       }
-      print(type_filter)
-      print(input$tags)
       
       # Filter by tags (placeholder logic, update as needed)
       if (!is.null(input$tags) && length(input$tags) > 0) {
         
         tag_filter <- sapply(images$images$tags_list, function(v) {any(v %in% input$tags)})
-        print(tag_filter)
       } else {
         tag_filter <- TRUE
       }
@@ -248,11 +245,12 @@ imgMapView <- function(id, language) {
     
     observeEvent(input$refresh_images, {
       # Refresh the list of images from AquaCache
-      images$images <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id")
+      images$images <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';"))
       attr(images$images$datetime, "tzone") <- "MST"
       
       # Extract the unique image types for the select input
       images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
+      
       # Parse tags into a list-column so they can be filtered on later
       images$images$tags_list <- lapply(images$images$tags, function(raw){
         if (is.na(raw) || raw == "") return(character(0))
@@ -261,20 +259,54 @@ imgMapView <- function(id, language) {
         strsplit(inner, ",", fixed = TRUE)[[1]]
       })
       
-      # Update the map with the new images
-      updateMap(selections$filter)
-    })
+      # Update the select input for image types
+      updateSelectizeInput(session, "img_type", choices = stats::setNames(images$unique_types$image_type_id, images$unique_types$image_type))
+      # Update the select input for tags
+      updateSelectizeInput(session, "tags", choices = unique(unlist(images$images$tags_list)))
+      
+      # Map is updated automatically because of reactive dependencies
+    }, ignoreInit = TRUE)
+    
+    # If dates are requested that force pulls of data earlier than what's in images$images$datetime, pull more data
+    datesControl <- reactive(FALSE) # Controls initial run of observer below
+    observeEvent(input$dates, {
+      if (datesControl()) {
+        return()
+        datesControl(TRUE)
+      }
+      
+      if (as.POSIXct(input$dates[1], tz = "MST") - 7*60 < min(images$images$datetime)) {
+        # Refresh the list of images from AquaCache
+        images$images <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';"))
+        attr(images$images$datetime, "tzone") <- "MST"
+        
+        # Extract the unique image types for the select input
+        images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
+        
+        # Parse tags into a list-column so they can be filtered on later
+        images$images$tags_list <- lapply(images$images$tags, function(raw){
+          if (is.na(raw) || raw == "") return(character(0))
+          # strip braces & quotes, then split on comma
+          inner <- gsub('["{}]', "", raw)
+          strsplit(inner, ",", fixed = TRUE)[[1]]
+        })
+        
+        # Update the select input for image types
+        updateSelectizeInput(session, "img_type", choices = stats::setNames(images$unique_types$image_type_id, images$unique_types$image_type))
+        # Update the select input for tags
+        updateSelectizeInput(session, "tags", choices = unique(unlist(images$images$tags_list)))
+      }
+      # Map is updated automatically because of reactive dependencies
+    }, ignoreInit = TRUE)
     
     observeEvent(input$load_additional_layers, {
       # Load additional layers (e.g., hydrometric layers) when the button is clicked
       # This is a placeholder; replace with actual loading logic
       showNotification("Loading additional layers (30-120 seconds)...", type = "message")
       
-      
       #basins = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.basins")
       basins <- getVector(layer_name = "Drainage basins")
       locations <- getVector(layer_name = "Locations")
-      
       
       # Example: Add a new layer to the map (replace with actual layer loading)
       m <- leaflet::leafletProxy("map", session)
@@ -311,7 +343,6 @@ imgMapView <- function(id, language) {
             label = ~as.character(feature_name), # Show location_id as label on hover
             options = leaflet::markerOptions(interactive = FALSE, keyboard = FALSE, riseOnHover = TRUE),
           ) 
-        
         
         m <- m %>%
           leaflet::addLayersControl(
