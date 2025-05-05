@@ -117,7 +117,7 @@ SWE_station <- function(stations = "all",
     # Reformat into long format
     Meas <- wider_data %>%
       tidyr::pivot_longer(cols = c("SWE", "snow depth", "density"), names_to = "parameter", values_to = "value")
-    
+    Meas <- as.data.frame(Meas)
     ## From snow db ##
   } else if (source == "snow") {
     # Retrieve data from db
@@ -135,6 +135,7 @@ SWE_station <- function(stations = "all",
     # Reformat table
     Meas <- reshape2::melt(Meas, id.vars = c("name", "location", "target_date", "survey_date", 
                                              "elevation", "estimate_flag"), variable.name = "parameter", value.name = "value")
+    Meas <- as.data.frame(Meas)
     
     # Set swe upper case
     Meas$parameter <- as.character(Meas$parameter)
@@ -148,7 +149,9 @@ SWE_station <- function(stations = "all",
     # Extract date from sample_datetime
     Meas$sample_date <- as.Date(Meas$sample_date)
     
-  } else {stop("Parameter 'source' must be either 'aquacache' or 'snow'")}
+  } else {
+    stop("Parameter 'source' must be either 'aquacache' or 'snow'")
+    }
   
   
   # Add Day, Month and Year columns to the Meas dataframe:
@@ -157,7 +160,8 @@ SWE_station <- function(stations = "all",
   Meas$day <- lubridate::day(Meas$target_date)
   
   # Only take target_date ending in 0?-01 (to get month of interest and remove mid-month targets)
-  tabl <- Meas %>% dplyr::filter(.data$mon %in% month & .data$day == 1)
+  tabl <- Meas[Meas$mon %in% month & Meas$day == 1, ]
+  
   # Denote record years, estimate years and years outside of valid sampling range
   
   #### ------------------------- Summarise results -------------------------- ####
@@ -201,7 +205,7 @@ SWE_station <- function(stations = "all",
       swe_prevyear <- tab[tab$yr == year - 1 & tab$parameter == "SWE", "value"]
       if (length(swe_prevyear) == 0) {swe_prevyear <- NA}
       # Get median swe for target month not including year of interest.
-      swe_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "SWE", "value"]), 0)
+      swe_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "SWE", "value"], na.rm = TRUE), 0)
       if (length(swe_med) == 0) {swe_med <- NA}
       # Get normal swe for lat 30 years
       swe_norm_last_30yrs <- round(mean(tab[tab$parameter == "SWE" &
@@ -213,16 +217,16 @@ SWE_station <- function(stations = "all",
       swe_rat <- round(swe/swe_med, 2)
       if (length(swe_rat) == 0 | is.infinite(swe_rat)) {swe_rat <- NA}
       # Get min SWE not including year of interest
-      swe_min <- round(min(tab[tab$yr != year & tab$parameter == "SWE",]$value), 0)
+      swe_min <- round(min(tab[tab$yr != year & tab$parameter == "SWE",]$value, na.rm = TRUE), 0)
       if (length(swe_min) == 0 | is.infinite(swe_min)) {swe_min <- NA}
       # Get max SWE not including year of interest
-      swe_max <- round(max(tab[tab$yr != year & tab$parameter == "SWE",]$value), 0)
+      swe_max <- round(max(tab[tab$yr != year & tab$parameter == "SWE",]$value, na.rm = TRUE), 0)
       if (length(swe_max) == 0 | is.infinite(swe_max)) {swe_max <- NA}
       # Get current years depth
       depth <- tab[tab$yr == year & tab$parameter == "snow depth",]$value
       if (length(depth) == 0) {depth <- NA}
       # Get median depth not including year of interest
-      depth_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "snow depth",]$value), 0)
+      depth_med <- round(stats::median(tab[tab$yr != year & tab$parameter == "snow depth",]$value, na.rm = TRUE), 0)
       if (length(depth_med) == 0) {depth_med <- NA}
       # Get current year % density 
       density <- round(tab[tab$yr == year & tab$parameter == "density",]$value, 0)
