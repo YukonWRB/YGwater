@@ -482,7 +482,7 @@ mapParamServer <- function(id, moduleData, language) {
     output$map <- leaflet::renderLeaflet({
       mapCreated(TRUE)
       
-      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 18)) %>%
+      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 15)) %>%
         leaflet::addTiles() %>%
         leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographic") %>%
         leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%

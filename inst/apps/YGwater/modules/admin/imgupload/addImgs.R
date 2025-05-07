@@ -1,13 +1,8 @@
 # Define the UI layout
 
-
-# TODO: once aquacache is updated with 'visit type', update insertACimage call with visit type
-# TODO: pull tag_lists from AquaCache database, so that it is not hardcoded here
-
 addImgsUI <- function(id) {
   # Define a dictionary to map checkbox choices to tags
   
-  visit_list <- list("Ice observation flight", "Audit", "Field visit", "Sampling event", "Other")
   share_list <- list("Private", "Public")
   
   # Define a list of UTC timezone corrections
@@ -57,7 +52,10 @@ addImgsUI <- function(id) {
             width = 8,
             selectizeInput(
               ns("image_type"),
-              "Visit type:", choices = NULL, multiple = TRUE, width = "100%",
+              "Visit type:", 
+              choices = NULL, 
+              multiple = TRUE, 
+              width = "100%",
               options = list(maxItems = 1, create = FALSE, placeholder = "Select visit type")
             ) |> tooltip("Select visit type.", id = "image_type_tt")
           ),
@@ -69,17 +67,22 @@ addImgsUI <- function(id) {
             )
           )
         ),
-        
-        
-        selectizeInput(ns("image_tags"), "Tag(s):",
+        # Single input on row because there may be many tags
+        selectizeInput(ns("image_tags"), 
+                       "Tag(s):",
                        multiple = TRUE,
-                       choices = NULL, width = "100%", options = list(create = TRUE, placeholder = "Select tag(s)") |> tooltip("Add tags to image(s); you can also create new tags.")
-        ),
+                       choices = NULL, 
+                       width = "100%", 
+                       options = list(create = TRUE, placeholder = "Select tag(s) or type your own")
+        )|> tooltip("Add tags to image(s); you can type in your own.", id = "image_tags_tt"),
+        
+        # Row with several location and sub-location
         fluidRow(
           column(width = 6, selectizeInput(ns("image_location"), "Location:", choices = NULL, multiple = TRUE, width = "100%", options = list(maxItems=1, create = FALSE, placeholder = "Select location")) |> tooltip("Press 'Fetch location coordinates' to add location coordinates to image(s)")
           ),
           column(width = 6, selectizeInput(ns("image_sublocation"), "Sublocation:", choices = NULL, multiple = TRUE, width = "100%", options = list(maxItems=1, create = FALSE, placeholder = "Optional - not all locations have sublocations")))
         ),
+        # Row with lat/long/data/time/time zone
         fluidRow(
           column(width = 2, numericInput(ns("image_latitude"), "Latitude:", value = NULL, width = "100%", step = 0.1)),
           column(width = 2, numericInput(ns("image_longitude"), "Longitude:", value = NULL, width = "100%", step = 0.1)),
@@ -101,95 +104,14 @@ addImgsUI <- function(id) {
 }
 
 
-
 # Define the server logic
 addImgs <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    tag_lists <- list(
-      `Ice observation flight` = list("Head", "Toe", "Smooth ice", "In flood"),
-      `Audit` = list("Other", "Placeholder", "Smooth ice", "In flood"),
-      `Field visit` = list("Placeholder"),
-      `Sampling event` = list("Head", "Toe", "Smooth ice", "In flood"),
-      `Other` = NULL
-    )
-    
-    # Increase the maximum upload size to 100MB
-    options(shiny.maxRequestSize = 100 * 1024^2)
-    
-    # issue warning if user does not have write privileges
-    check <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT has_table_privilege(current_user, 'files.images', 'INSERT') AS can_insert")
-    
-    if (!check$can_insert) {
-      showModal(modalDialog(
-        title = "Insufficient Privileges",
-        "You do not have the necessary privileges to insert data into this database.",
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Close")
-        )
-      ))
-      shinyjs::disable("upload_to_ac")
-    }
     
     
-    types <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM files.image_types")  
-    
-    locations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.locations")
-    sublocations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.sub_locations")
-    
-    # Update the 'locations' list based on the data loaded from Aquacache
-    updateSelectizeInput(session, "image_location", choices = stats::setNames(locations$location_id, locations$name))
-    
-    updateSelectizeInput(session, "image_type", choices = stats::setNames(types$image_type_id, types$image_type))
-    
-    # Reactive value to track the current image index
-    imgid <- reactiveVal(1)
-    
-    # Initialize reactive values to track the state of the app
-    toggles <- reactiveValues(locations = FALSE, mapclicked = TRUE, edit = FALSE)
-    
-    # Initiaze dataframe to store exif data and updated attributes
-    dat <- reactiveValues(df = data.frame())
-    
-    # Render an empty leaflet map
-    output$map <- leaflet::renderLeaflet({
-      leaflet::leaflet() %>%
-        leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap, group = "World Aerial") %>%
-        leaflet::addProviderTiles(leaflet::providers$Esri.WorldImagery, group = "World Imagery") %>%
-        leaflet::addLayersControl(
-          baseGroups = c("World Aerial", "World Imagery"),
-          options = leaflet::layersControlOptions(collapsed = FALSE)
-        ) %>%
-        leaflet::setView(lng = DEFAULT_COORDS[1], lat = DEFAULT_COORDS[2], zoom = 4)
-    })
-    
-    # Observe file input and update the data table
-    observeEvent(input$files, ignoreNULL = TRUE, ignoreInit = TRUE, {
-      files <- input$files
-      #if (is.null(files)) {
-      #  return(NULL)
-      #}
-      
-      dat$df <- exifr::read_exif(files$datapath)
-      dat$df$FileName <- files$name
-      
-      # Grab only necessary attributes and add placeholders for new ones
-      dat$df <- preprocess_exif(dat$df)
-      
-      # Check for null latitude or longitude values; issue a warning if any are found.
-      dat$df$Latitude[dat$df$Latitude == 0] <- NA
-      dat$df$Longitude[dat$df$Longitude == 0] <- NA
-      dat$df$Altitude[dat$df$Longitude == 0] <- NA
-      
-      # Once the images are loaded into the app, render the GUI elements
-      renderDataTable()
-      # renderImage()
-      renderLeafletMap()
-      renderImageIndex()
-    })
-    
+    # Define custom functions  #######
     # Render the data table
     renderDataTable <- function() {
       output$table <- DT::renderDataTable({
@@ -213,6 +135,276 @@ addImgs <- function(id) {
         )
       })
     }
+    
+    # standardize the dataframe to match AquaCache's format
+    standardizeDataFrame <- function(df) {
+      reader_list <- c("Private" = "yg_reader", "Public" = "public_reader")
+      df$Visibility <- reader_list[df$Visibility]
+      
+      # photo exif data is recorded in local time (based on phone) and no time zone is stored
+      # UTC offset is a user-input, which defaults to -7 for the yukon
+      # here, apply the datetime offset so that the uploaded datetime in AquaCache is UTC
+      df$Datetime <- as.POSIXct(df$Datetime, format = "%Y:%m:%d %H:%M:%S", tz = "UTC")
+      df$Datetime <- df$Datetime - df$UTC * 3600
+      # df$Notes <- as.character(df$Notes)
+      
+      for (ii in seq_len(nrow(df))) {
+        df$Tags[ii] <- if (length(df$Tags[[ii]]) == 0) "" else df$Tags[[ii]]
+      }
+      return(df)
+    }
+    
+    # Function to handle the upload process
+    upload <- function(df) {
+      # Validate the data frame before upload
+      validation <- validateDataFrame(df)
+      if (!validation$success) {
+        showModal(modalDialog(
+          title = "Validation Error",
+          validation$message,
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Close")
+          )
+        ))
+        return()
+      }
+      
+      # Standardize the data frame for AquaCache
+      standardized_df <- standardizeDataFrame(df)
+      
+      # Perform the upload task
+      uploadAquacache$invoke(standardized_df, session$userData$config)
+    }
+    
+    # verify that the dataframe is valid for upload to AquaCache
+    validateDataFrame <- function(df) {
+      if (any(is.na(df$Latitude)) || any(is.na(df$Longitude))) {
+        return(list(success = FALSE, message = "Error: One or more images do not contain a georeference. Please add locations using the drop-down menu or input coordinates manually."))
+      }
+      if (any(is.na(df$Datetime))) {
+        return(list(success = FALSE, message = "Error: One or more images do not contain a datetime. Please add datetimes using the date and time fields."))
+      }
+      if (any(is.na(df$ImageType_ID))) {
+        return(list(success = FALSE, message = "Error: One or more images do not contain an image type. Please select a type from the drop-down menu."))
+      }
+      return(list(success = TRUE, message = "Validation successful."))
+    }
+    
+    # keep track of whether the location was queried from AquaCache, or set by the user
+    # if the cooridnates are changed by the user, or changes via map click, reset the location selection
+    queried_laton <- reactiveValues(lat = 0.0, lon = 0.0)
+    
+    # NOTE_ES: commenting this out for now, since we don't necessarily want the lat/lon to update when we select a location
+    # observeEvent(input$image_location, {
+    #   # if the location is default, don't update latlon
+    #   if (input$image_location == "Placeholder" | input$image_location == "") {
+    #     return()
+    #   }
+    #
+    #   lat <- locations[locations$name == input$image_location, "latitude"]
+    #   lon <- locations[locations$name == input$image_location, "longitude"]
+    #
+    #   updateNumericInput(session, "image_latitude", value = lat)
+    #   updateNumericInput(session, "image_longitude", value = lon)
+    #
+    #   queried_laton$lat <- lat
+    #   queried_laton$lon <- lon
+    #
+    #   # update the map view to the selected location
+    #   leaflet::leafletProxy("map") %>%
+    #     leaflet::setView(lng = lon, lat = lat, zoom = 4)
+    # }, ignoreInit = TRUE)
+    
+    
+    # if the user manually changes the lat lon, reset the location
+    # observeEvent(list(input$image_latitude, input$image_longitude), {
+    #
+    #   if (is.na(input$image_latitude) | is.na(input$image_longitude)) {
+    #     updateSelectInput(session, "image_location", selected = "")
+    #   }
+    #
+    #   else if ((queried_laton$lat != input$image_latitude) | (queried_laton$lon != input$image_longitude)) {
+    #     updateSelectInput(session, "image_location", selected = "")
+    #   }
+    #
+    # }, ignoreInit = TRUE)
+    
+    # Function to convert latitude and longitude to meters
+    latlon_to_meters <- function(lat1, lon1, lat2, lon2) {
+      R <- 6378137 # Radius of the Earth in meters
+      dLat <- (lat2 - lat1) * pi / 180
+      dLon <- (lon2 - lon1) * pi / 180
+      a <- sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180) * cos(lat2 * pi / 180) *
+        sin(dLon / 2) * sin(dLon / 2)
+      c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+      d <- R * c
+      return(d)
+    }
+    
+    
+    # Function to check if latitude and longitude are valid
+    is_valid_latlon <- function(lat, lon) {
+      valid_lat <- !is.na(lat) & !is.null(lat) & lat >= -90 & lat <= 90
+      valid_lon <- !is.na(lon) & !is.null(lat) & lon >= -180 & lon <= 180
+      return(valid_lat & valid_lon)
+    }
+    
+    is_valid_time <- function(time) {
+      # Check if the time is in the correct format (HH:MM)
+      if (grepl("^\\d{2}:\\d{2}$", time)) {
+        parts <- strsplit(time, ":")[[1]]
+        if (as.integer(parts[1]) >= 0 && as.integer(parts[1]) < 24 &&
+            as.integer(parts[2]) >= 0 && as.integer(parts[2]) < 60) {
+          # Check if hours and minutes are within valid ranges
+          return(TRUE)
+        } else {
+          return(FALSE)
+        }
+      } else {
+        return(FALSE)
+      }
+    }   # end of is_valid_time()
+    
+    
+    # Function to infer zoom level based on latitude and longitude arrays
+    infer_zoom_level <- function(latitudes, longitudes) {
+      if (length(latitudes) == 0 || length(longitudes) == 0) {
+        return(1) # Default zoom level if no points are provided
+      }
+      
+      # Calculate the bounding box
+      suppressWarnings({
+        min_lat <- min(latitudes, na.rm = TRUE)
+        max_lat <- max(latitudes, na.rm = TRUE)
+        min_lon <- min(longitudes, na.rm = TRUE)
+        max_lon <- max(longitudes, na.rm = TRUE)
+      })
+      
+      # Calculate the zoom level based on the bounding box size
+      lat_diff <- max_lat - min_lat
+      lon_diff <- max_lon - min_lon
+      max_diff <- max(lat_diff, lon_diff)
+      
+      # Define zoom levels based on the maximum difference
+      if (max_diff < 0.01) {
+        zoom <- 10
+      } else if (max_diff < 0.1) {
+        zoom <- 10
+      } else {
+        zoom <- 5
+      }
+      return(zoom)
+    }
+    
+    
+    # Preprocess exif data table add new attributes and rename columns
+    preprocess_exif <- function(dat) {
+      # Ensure required columns exist, create them if they don't
+      required_columns <- c("SourceFile", "FileName", "GPSLatitude", "GPSLongitude", "GPSAltitude", "DateTimeOriginal", "GPSImgDirection", "ImageWidth", "ImageHeight")
+      for (col in required_columns) {
+        if (!col %in% colnames(dat)) {
+          dat[[col]] <- NA
+        }
+      }
+      
+      dat_out <- dat %>%
+        dplyr::select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude, GPSImgDirection, ImageWidth, ImageHeight) %>%
+        dplyr::rename(Latitude = GPSLatitude, Longitude = GPSLongitude, Altitude = GPSAltitude, Datetime = DateTimeOriginal, Azimuth = GPSImgDirection) %>%
+        dplyr::mutate(Tags = NA, ImageType = NA, Notes = NA, Visibility = "Private", UTC = -7, Location = NA, Location_ID = NA, ImageType_ID = NA)
+      return(dat_out)
+    }
+    
+    
+    
+    # Setup and validation tasks #####
+    
+    # Increase the maximum upload size to 100 MB
+    options(shiny.maxRequestSize = 100 * 1024^2)
+    
+    # issue warning if user does not have write privileges
+    check <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT has_table_privilege(current_user, 'files.images', 'INSERT') AS can_insert")
+    
+    if (!check$can_insert) {
+      showModal(modalDialog(
+        title = "Insufficient Privileges",
+        "You do not have the necessary privileges to insert data into this database.",
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
+      shinyjs::disable("upload_to_ac")
+    }
+    
+    types <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM files.image_types")  
+    
+    locations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.locations")
+    sublocations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.sub_locations")
+    
+    # Update the 'locations' list based on the data loaded from Aquacache
+    updateSelectizeInput(session, "image_location", choices = stats::setNames(locations$location_id, locations$name))
+    
+    updateSelectizeInput(session, "image_type", choices = stats::setNames(types$image_type_id, types$image_type))
+    
+    # Reactive value to track the current image index
+    imgid <- reactiveVal(1)
+    
+    # Initialize reactive values to track the state of the app
+    toggles <- reactiveValues(locations = FALSE, mapclicked = TRUE, edit = FALSE)
+    
+    # Initiaze dataframe to store exif data and updated attributes
+    dat <- reactiveValues(df = data.frame())
+    
+    # Define a named list of colors
+    color_list <- list(
+      "selected" = "cyan",
+      "unselected" = "black",
+      "click" = "green",
+      "other" = "magenta",
+      "locations" = "orange",
+      "location_selected" = "yellow"
+    )
+    
+    # Default coordinates to repositon the map around Whitehorse
+    DEFAULT_COORDS <- c(-135.0568, 60.7212)
+    
+    # Render an empty leaflet map
+    output$map <- leaflet::renderLeaflet({
+      leaflet::leaflet() %>%
+        leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap, group = "World Aerial") %>%
+        leaflet::addProviderTiles(leaflet::providers$Esri.WorldImagery, group = "World Imagery") %>%
+        leaflet::addLayersControl(
+          baseGroups = c("World Aerial", "World Imagery"),
+          options = leaflet::layersControlOptions(collapsed = FALSE)
+        ) %>%
+        leaflet::setView(lng = DEFAULT_COORDS[1], lat = DEFAULT_COORDS[2], zoom = 4)
+    })
+    
+    
+    # Functional observers #####
+    # Observe file input and update the data table
+    observeEvent(input$files, ignoreNULL = TRUE, ignoreInit = TRUE, {
+      files <- input$files
+      
+      dat$df <- exifr::read_exif(files$datapath)
+      dat$df$FileName <- files$name
+      
+      # Grab only necessary attributes and add placeholders for new ones
+      dat$df <- preprocess_exif(dat$df)
+      
+      # Check for null latitude or longitude values; issue a warning if any are found.
+      dat$df$Latitude[dat$df$Latitude == 0] <- NA
+      dat$df$Longitude[dat$df$Longitude == 0] <- NA
+      dat$df$Altitude[dat$df$Longitude == 0] <- NA
+      
+      # Once the images are loaded into the app, render the GUI elements
+      renderDataTable()
+      renderLeafletMap()
+      renderImageIndex()
+    })
+    
     
     # Render the toggle buttons here, which change colour based on the state of the app
     output$edit_button <- renderUI({
@@ -263,15 +455,13 @@ addImgs <- function(id) {
                  ignoreInit = TRUE
     )
     
-    
-    
     observeEvent(list(input$image_latitude, input$image_longitude, input$table_rows_selected), {
       if (is_valid_latlon(input$image_latitude, input$image_longitude) && length(input$table_rows_selected) > 0) {
         selected_rows <- input$table_rows_selected
         for (row in selected_rows) {
           selected_lat <- dat$df$Latitude[row]
           selected_lon <- dat$df$Longitude[row]
-          if (is.na(selected_lat) | is.na(selected_lon)){
+          if (is.na(selected_lat) | is.na(selected_lon)) {
             return()
           }
           leaflet::leafletProxy("map") %>%
@@ -290,8 +480,6 @@ addImgs <- function(id) {
           leaflet::clearGroup("manual_line")
       }
     })
-    
-    
     
     # Toggle aquacache locations on the map
     observeEvent(input$toggle_locations, {
@@ -368,8 +556,7 @@ addImgs <- function(id) {
     })
     
     observeEvent(input$image_type, ignoreNULL = TRUE, {
-      types_out <<- types
-      
+
       image_tags <- types[types$image_type_id == as.integer(input$image_type), "default_tag_options"] %>%
         strsplit(",") %>%
         unlist() %>%
@@ -377,11 +564,7 @@ addImgs <- function(id) {
         gsub("[{}]", "", .) %>%
         gsub('\"', "", .)
       
-      updateSelectizeInput(session, "image_tags", choices = image_tags, options = list(placeholder = "Select tags"))
-      
-      #if (!is.na(input$image_type)){
-      #  bslib::update_tooltip(session, inputId = "image_type", title = "test", placement = "right")
-      #}      
+      updateSelectizeInput(session, "image_tags", choices = image_tags, options = list(create = TRUE, placeholder = "Select tag(s) or type your own"))
       
     })
     
@@ -414,16 +597,7 @@ addImgs <- function(id) {
       # if table selection changes, reset the image coordinateds
       updateNumericInput(session, "image_latitude", value = "")
       updateNumericInput(session, "image_longitude", value = "")
-      
-      # if (is.null(input$table_rows_selected)) {
-      #  selection <- 0
-      # } else {
-      #  selection <- input$table_rows_selected
-      # }
-      
-      
-      
-      
+
       # update the displayed image upon each new row selection
       if (is.null(input$table_rows_selected)) {
         imgid(1)
@@ -432,16 +606,7 @@ addImgs <- function(id) {
       } else {
         imgid(input$table_rows_selected[length(input$table_rows_selected)])
       }
-      
-      
-      # case for no selection
-      # if (is.null(selection)) {
-      #  updateMapView()
-      #  leafletProxy(mapId = "map") %>% clearGroup("photos")
-      #  addCirclesToMap(selection = seq_len(nrow(dat$df)), color = color_list$unselected)
-      # }
     })
-    
     
     # Observe the upload button and upload data to AquaCache
     observeEvent(input$upload_to_ac, {
@@ -546,7 +711,7 @@ addImgs <- function(id) {
                 elevation_msl = if (is.na(df$Altitude[i])) NULL else df$Altitude[i],
                 azimuth_true = if (is.na(df$Azimuth[i])) NULL else df$Azimuth[i],
                 share_with = df$Visibility[i],
-                image_type = if (is.na(df$ImageType_ID[i])) NULL else df$ImageType_ID[i],
+                image_type = df$ImageType_ID[i],
                 con = con,
                 location = if (is.na(df$Location_ID[i])) NULL else df$Location_ID[i],
                 tags = if (is.na(df$Tags[i])) NULL else paste(df$Tags[i], collapse = ", "),
@@ -560,39 +725,16 @@ addImgs <- function(id) {
             }) # End of tryCatch
           }
           return(out)
-        })
+        }) # End promise
       }
     )   # End of extendedTask$new
     
-    # Function to handle the upload process
-    upload <- function(df) {
-      # Validate the data frame before upload
-      validation <- validateDataFrame(df)
-      if (!validation$success) {
-        showModal(modalDialog(
-          title = "Validation Error",
-          validation$message,
-          easyClose = TRUE,
-          footer = tagList(
-            modalButton("Close")
-          )
-        ))
-        return()
-      }
-      
-      # Standardize the data frame for AquaCache
-      standardized_df <- standardizeDataFrame(df)
-      
-      # Perform the upload task
-      uploadAquacache$invoke(standardized_df, session$userData$config)
-    }
     
     observeEvent(uploadAquacache$result(), {
       
       success_count <- sum(unlist(uploadAquacache$result()) == TRUE)
       failure_count <- length(uploadAquacache$result()) - success_count
-      out <<- uploadAquacache$result()
-      
+
       showModal(modalDialog(
         title = "Upload Complete",
         paste(success_count, "images uploaded successfully."),
@@ -606,75 +748,6 @@ addImgs <- function(id) {
         )
       ))
     })
-    
-    
-    # standardize the dataframe to match AquaCache's format
-    standardizeDataFrame <- function(df) {
-      reader_list <- c("Private" = "yg_reader", "Public" = "public_reader")
-      df$Visibility <- reader_list[df$Visibility]
-      
-      # photo exif data is recorded in local time (based on phone) and no time zone is stored
-      # UTC offset is a user-input, which defaults to -7 for the yukon
-      # here, apply the datetime offset so that the uploaded datetime in AquaCache is UTC
-      df$Datetime <- as.POSIXct(df$Datetime, format = "%Y:%m:%d %H:%M:%S", tz = "UTC")
-      df$Datetime <- df$Datetime - df$UTC * 3600
-      # df$Notes <- as.character(df$Notes)
-      
-      for (ii in seq_len(nrow(df))) {
-        df$Tags[ii] <- if (length(df$Tags[[ii]]) == 0) "" else df$Tags[[ii]]
-      }
-      return(df)
-    }
-    
-    # verify that the dataframe is valid for upload to AquaCache
-    validateDataFrame <- function(df) {
-      if (any(is.na(df$Latitude)) || any(is.na(df$Longitude))) {
-        return(list(success = FALSE, message = "Error: One or more images do not contain a georeference. Please add locations using the drop-down menu or input coordinates manually."))
-      }
-      if (any(is.na(df$Datetime))) {
-        return(list(success = FALSE, message = "Error: One or more images do not contain a datetime. Please add datetimes using the date and time fields."))
-      }
-      return(list(success = TRUE, message = "Validation successful."))
-    }
-    
-    # keep track of whether the location was queried from AquaCache, or set by the user
-    # if the cooridnates are changed by the user, or changes via map click, reset the location selection
-    queried_laton <- reactiveValues(lat = 0.0, lon = 0.0)
-    
-    # NOTE_ES: commenting this out for now, since we don't necessarily want the lat/lon to update when we select a location
-    # observeEvent(input$image_location, {
-    #   # if the location is default, don't update latlon
-    #   if (input$image_location == "Placeholder" | input$image_location == "") {
-    #     return()
-    #   }
-    #
-    #   lat <- locations[locations$name == input$image_location, "latitude"]
-    #   lon <- locations[locations$name == input$image_location, "longitude"]
-    #
-    #   updateNumericInput(session, "image_latitude", value = lat)
-    #   updateNumericInput(session, "image_longitude", value = lon)
-    #
-    #   queried_laton$lat <- lat
-    #   queried_laton$lon <- lon
-    #
-    #   # update the map view to the selected location
-    #   leaflet::leafletProxy("map") %>%
-    #     leaflet::setView(lng = lon, lat = lat, zoom = 4)
-    # }, ignoreInit = TRUE)
-    
-    
-    # if the user manually changes the lat lon, reset the location
-    # observeEvent(list(input$image_latitude, input$image_longitude), {
-    #
-    #   if (is.na(input$image_latitude) | is.na(input$image_longitude)) {
-    #     updateSelectInput(session, "image_location", selected = "")
-    #   }
-    #
-    #   else if ((queried_laton$lat != input$image_latitude) | (queried_laton$lon != input$image_longitude)) {
-    #     updateSelectInput(session, "image_location", selected = "")
-    #   }
-    #
-    # }, ignoreInit = TRUE)
     
     
     
@@ -744,12 +817,12 @@ addImgs <- function(id) {
             dat$df$Datetime[row] <- format(image_datetime, "%Y:%m:%d %H:%M:%S")
           }
           
-          if (!is.null(input$image_type)){            
+          if (!is.null(input$image_type)) {            
             dat$df$ImageType_ID[row] <- as.numeric(input$image_type)
             dat$df$ImageType[row] <- types[input$image_type == types$image_type_id, "image_type"]
           }
           
-          if (!is.null(input$image_location)){            
+          if (!is.null(input$image_location)) {            
             dat$df$Location_ID[row] <- as.numeric(input$image_location)
             dat$df$Location[row] <- locations[input$image_location == locations$location_id, "name"]
           }
@@ -778,8 +851,6 @@ addImgs <- function(id) {
         updateTextInput(session, "image_time", value = NULL)
         updateSelectInput(session, "share_tag", selected = "Private")
         updateSelectInput(session, "tz_correction", selected = -7)
-        #renderDataTable()
-        #renderLeafletMap()
         
         # warning for no images selected case
       } else {
@@ -936,7 +1007,7 @@ addImgs <- function(id) {
     addCirclesToMap <- function(selection, color, radius = 2.5) {
       valid_rows <- dat$df[selection, ]
       valid_rows <- valid_rows[!is.na(valid_rows$Latitude) & !is.na(valid_rows$Longitude), ]
-      if (nrow(valid_rows) > 0){
+      if (nrow(valid_rows) > 0) {
         leaflet::leafletProxy(mapId = "map") %>%
           leaflet::addCircleMarkers(
             lng = valid_rows$Longitude,
@@ -969,7 +1040,6 @@ addImgs <- function(id) {
         )
     }
     
-    
     # Observe row selection in the data table and update the map marker colours
     observeEvent(input$table_rows_selected,
                  {
@@ -994,7 +1064,6 @@ addImgs <- function(id) {
       toggles$mapclicked <- TRUE
     })
     
-    
     # Observe map clicks, add marker on click, lines from click to selection
     observeEvent(input$map_click, {
       if (toggles$edit == TRUE) {
@@ -1005,111 +1074,6 @@ addImgs <- function(id) {
         }
       }
     })
-    
-    # Define a named list of colors
-    color_list <- list(
-      "selected" = "cyan",
-      "unselected" = "black",
-      "click" = "green",
-      "other" = "magenta",
-      "locations" = "orange",
-      "location_selected" = "yellow"
-    )
-    
-    if (Sys.info()["sysname"] == "Windows" | interactive()) {
-    } else {
-      future::plan("multicore")
-      future::plan(future::tweak(future::multicore, seed = TRUE))
-    }
-    
-    # Default coordinates to repositon the map around Whitehorse
-    DEFAULT_COORDS <- c(-135.0568, 60.7212)
-    
-    # Function to convert latitude and longitude to meters
-    latlon_to_meters <- function(lat1, lon1, lat2, lon2) {
-      R <- 6378137 # Radius of the Earth in meters
-      dLat <- (lat2 - lat1) * pi / 180
-      dLon <- (lon2 - lon1) * pi / 180
-      a <- sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1 * pi / 180) * cos(lat2 * pi / 180) *
-        sin(dLon / 2) * sin(dLon / 2)
-      c <- 2 * atan2(sqrt(a), sqrt(1 - a))
-      d <- R * c
-      return(d)
-    }
-    
-    
-    # Function to check if latitude and longitude are valid
-    is_valid_latlon <- function(lat, lon) {
-      valid_lat <- !is.na(lat) & !is.null(lat) & lat >= -90 & lat <= 90
-      valid_lon <- !is.na(lon) & !is.null(lat) & lon >= -180 & lon <= 180
-      return(valid_lat & valid_lon)
-    }
-    
-    is_valid_time <- function(time) {
-      # Check if the time is in the correct format (HH:MM)
-      if (grepl("^\\d{2}:\\d{2}$", time)) {
-        parts <- strsplit(time, ":")[[1]]
-        if (as.integer(parts[1]) >= 0 && as.integer(parts[1]) < 24 &&
-            as.integer(parts[2]) >= 0 && as.integer(parts[2]) < 60) {
-          # Check if hours and minutes are within valid ranges
-          return(TRUE)
-        } else {
-          return(FALSE)
-        }
-      } else {
-        return(FALSE)
-      }
-    }
-    # end of is_valid_time()
-    
-    
-    # Function to infer zoom level based on latitude and longitude arrays
-    infer_zoom_level <- function(latitudes, longitudes) {
-      if (length(latitudes) == 0 || length(longitudes) == 0) {
-        return(1) # Default zoom level if no points are provided
-      }
-      
-      # Calculate the bounding box
-      suppressWarnings({
-        min_lat <- min(latitudes, na.rm = TRUE)
-        max_lat <- max(latitudes, na.rm = TRUE)
-        min_lon <- min(longitudes, na.rm = TRUE)
-        max_lon <- max(longitudes, na.rm = TRUE)
-      })
-      
-      # Calculate the zoom level based on the bounding box size
-      lat_diff <- max_lat - min_lat
-      lon_diff <- max_lon - min_lon
-      max_diff <- max(lat_diff, lon_diff)
-      
-      # Define zoom levels based on the maximum difference
-      if (max_diff < 0.01) {
-        zoom <- 10
-      } else if (max_diff < 0.1) {
-        zoom <- 10
-      } else {
-        zoom <- 5
-      }
-      return(zoom)
-    }
-    
-    
-    # Preprocess exif data table add new attributes and rename columns
-    preprocess_exif <- function(dat) {
-      # Ensure required columns exist, create them if they don't
-      required_columns <- c("SourceFile", "FileName", "GPSLatitude", "GPSLongitude", "GPSAltitude", "DateTimeOriginal", "GPSImgDirection", "ImageWidth", "ImageHeight")
-      for (col in required_columns) {
-        if (!col %in% colnames(dat)) {
-          dat[[col]] <- NA
-        }
-      }
-      
-      dat_out <- dat %>%
-        dplyr::select(SourceFile, FileName, DateTimeOriginal, GPSLatitude, GPSLongitude, GPSAltitude, GPSImgDirection, ImageWidth, ImageHeight) %>%
-        dplyr::rename(Latitude = GPSLatitude, Longitude = GPSLongitude, Altitude = GPSAltitude, Datetime = DateTimeOriginal, Azimuth = GPSImgDirection) %>%
-        dplyr::mutate(Tags = NA, ImageType = NA, Notes = NA, Visibility = "Private", UTC = -7, Location = NA, Location_ID = NA, ImageType_ID = NA)
-      return(dat_out)
-    }
+
   }) # end of moduleServer
-}
+} # end of addImgsServer function

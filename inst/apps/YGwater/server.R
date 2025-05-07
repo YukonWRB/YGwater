@@ -92,7 +92,7 @@ app_server <- function(input, output, session) {
     req(input$window_dimensions)
     input$window_dimensions
   })
-  
+
   # Initialize reactive flags to track whether each UI has been loaded
   ui_loaded <- reactiveValues(
     viz = FALSE,

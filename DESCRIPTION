@@ -26,6 +26,7 @@ Imports:
     fasstr,
     ggnewscale,
     ggplot2,
+    plotly,
     graphics,
     grDevices,
     grid,

@@ -849,7 +849,8 @@ continuousPlot <- function(id, language, windowDims) {
                               gridx = gridx,
                               gridy = gridy,
                               con = con,
-                              data = TRUE)
+                              data = TRUE,
+                              rate = 'max')
           return(plot)
         }, error = function(e) {
           return(e$message)

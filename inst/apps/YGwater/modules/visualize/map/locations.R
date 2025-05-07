@@ -343,7 +343,7 @@ mapLocsServer <- function(id, moduleData, language) {
     
     # Create the basic map ###########################################################
     output$map <- leaflet::renderLeaflet({
-      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 18)) %>%
+      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 15)) %>%
         leaflet::addTiles() %>%
         leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographic") %>%
         leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
