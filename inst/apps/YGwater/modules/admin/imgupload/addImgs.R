@@ -3,7 +3,6 @@
 addImgsUI <- function(id) {
   # Define a dictionary to map checkbox choices to tags
   
-  visit_list <- list("Ice observation flight", "Audit", "Field visit", "Sampling event", "Other")
   share_list <- list("Private", "Public")
   
   # Define a list of UTC timezone corrections
