@@ -111,7 +111,18 @@ learnR_hint <- function(exercise) {
   }
 }
 
-learnR_answer <- function(exercise) {
+#' Answers for the learnR exercises
+#'
+#' @param exercise The exercise number for which you want the answer.
+#'
+#' @returns The answer for the specified exercise, both as text and as a command to be executed in the console.
+#' @export
+#'
+#' @examples
+#' 
+#' learnR_answer(1)
+
+learnR_answer <- function(exercise, part = 1) {
   # Ask the user if they're sure they want the answer
   cat("Are you sure you want the answer? (y/n): ")
   response <- readline()
@@ -124,8 +135,20 @@ learnR_answer <- function(exercise) {
     cat("Answer: In the R console window, usually in the bottom left of the screen in RSTudio, type in  library('YGwater'). I've added this to your console to help you out, you just need to press 'Enter'.\n")
     rstudioapi::sendToConsole("library('YGwater')", execute = FALSE)
   } else if (exercise == 2) {
-    cat("Answer: You can generate a sequence of dates using the seq.Date() function. For example, seq.Date(from = as.Date('2023-01-01'), to = as.Date('2023-01-10'), by = 'day') will give you a sequence of dates from January 1, 2023 to January 10, 2023.\n")
-}
+    if (part == 1) {
+      cat("Answer: Use df <- data.frame() to create a data.frame, and assign columns as such: data.frame(date = ???, value = ???). The date sequence can be made as such: seq.Date(from = as.Date('2023-01-01'), to = as.Date('2023-12-31'), by = 'day'), and the value sequence can be made as such: sin(seq(0, 2*pi, length.out = 365))\n")
+      rstudioapi::sendToConsole("df  <- data.frame(date = seq.Date(from = as.Date('2023-01-01'), to = as.Date('2023-12-31'), by = 'day'),\nvalue = sin(seq(0, 2*pi, length.out = 365)))", execute = FALSE)
+    } else if (part == 2) {
+      cat("Answer: df$value[1:30] means 'take df_value and select rows 1 to 30 (inclusively)'. We need the mean of that, so...\n")
+      rstudioapi::sendToConsole("mean(df$value[1:30])", execute = FALSE)
+    }
+  } else if (exercise == 3) {
+    
+    
+    
+  } else {
+    cat("No answer available for this exercise.\n")
+  }
   
 }
 

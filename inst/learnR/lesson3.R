@@ -18,16 +18,27 @@
 #                column2 = c(value1, value2, ...), 
 #                column3 = ...)
 
-# Now go ahead and create a data.frame called 'df' with two columns: date (of class 'Date') and value (of class 'numeric'). Your dates should start in 2023-01-01 and end in 2023-12-31, and the values should follow a sine wave pattern with a period of 365 days. Refer to the help files for functions 'seq', 'seq.Date', and 'sin' to help you with this.
+# Now go ahead and create a data.frame called 'df' with two columns: date (of class 'Date') and value (of class 'numeric'). Your dates should start in 2023-01-01 and end in 2023-12-31, and the values should follow a sine wave pattern with a period of 365 days. Refer to the help files for functions 'seq', 'seq.Date', and 'sin' to help you with this. This isn't easy, but give it a good shot
+
 # Make the data.frame in the console, below this window, and name it 'df'
+
 # If you need a hint, call up the function below:
 learnR_hint(exercise = 2)  # We're on Exercise 2, get it??
 
 # If you still need help and want the answer, call up the function below:
 learnR_answer(exercise = 2)
 
-# Now let's get some basic statistics from this data. What's the mean, min, max? You should know this if you remember high school math... guess!
+# Now let's get some basic statistics from this data. What's the mean, min, max of the 'value' column?
 mean(df$value)
+min(df$value)
+max(df$value)
+# You've probably figured this out, but df$value is a vector of values. Call it up in the console if you want to see what that looks like! We can't find the mean/min/max of an entire data.frame, only a vector.
+
+# What about the mean, min, max of the values in the first 30 days? Remember, df$value is a vector, so we can use the square brackets to subset it. The syntax is:
+#     df$value[1:30]
+# Find the mean in the console, then compare your answer. You'll have to have already assigned 'df' to your environment though... if it's not there go back up a few lines in this script and do that.
+learnR_answer(exercise = 2, part = 2) # This is the answer to part 2 of Exercise 2
+
 
 # Great, now let's plot this data:
 plot(df$date, df$value, type = "l", xlab = "Date", ylab = "Value", main = "Sine wave pattern")

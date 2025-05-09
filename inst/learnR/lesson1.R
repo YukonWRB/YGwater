@@ -29,10 +29,14 @@ print("Hello world!") # This line prints "Hello world!" to the console, below th
 
 # A package can only ever have one function with a certain name, but the same function name could be found in multiple packages. Because of this, we need to tell R which package to look in when we call a function. Often, this is done with a library call:
 # library(packageName)
+
 # This tells R to load the package's function names into memory. If there's a conflict with an already loaded package, R will tell you and use the last loaded package's function.
+
 # Another way to do things is to tell R which package to look in for a function directly:
 # packageName::functionName(argument1, argument2, ...)
 # This later method is more verbose but makes things crystal clear and removes any possibility for conflicts. However, library() calls are common since they make the code cleaner and easier to read. When you're starting out I **highly** recommend using fully qualified calls of packageName::functionName, as you'll get a much better understanding of what's going on.
+
+# There's one big exception to that: base R functions. You **could*** use base::print("Hello world!") but that's unnecessary. Base R functions are always available, and you don't need to load them with a library call.
 
 
 
