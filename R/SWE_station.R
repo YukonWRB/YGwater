@@ -108,14 +108,13 @@ SWE_station <- function(stations = "all",
     # Remove result_value_type
     Meas <- Meas[, -c(which(names(Meas) == "result_value_type"))]
     
-    # Calculate density
     # Spread the data into separate columns for swe and snow_depth
-    wider_data <- Meas %>%
+    Meas <- Meas %>%
       tidyr::pivot_wider(names_from = "parameter", values_from = "value")
-    # calculate
-    wider_data$density <- round(wider_data$SWE / wider_data$`snow depth` * 10, 2)
+    # calculate density
+    Meas$density <- round(Meas$SWE / Meas$`snow depth` * 10, 2)
     # Reformat into long format
-    Meas <- wider_data %>%
+    Meas <- Meas %>%
       tidyr::pivot_longer(cols = c("SWE", "snow depth", "density"), names_to = "parameter", values_to = "value")
     Meas <- as.data.frame(Meas)
     ## From snow db ##
@@ -132,10 +131,18 @@ SWE_station <- function(stations = "all",
     # Calculate density
     Meas$density <- round((Meas$swe / Meas$depth) * 10, 2)
     
-    # Reformat table
-    Meas <- reshape2::melt(Meas, id.vars = c("name", "location", "target_date", "survey_date", 
-                                             "elevation", "estimate_flag"), variable.name = "parameter", value.name = "value")
-    Meas <- as.data.frame(Meas)
+    vars <- c("swe", "depth", "density")
+    
+    Meas <- do.call(rbind, lapply(vars, function(p) {
+      df <- Meas
+      df$parameter <- p           # new column saying “swe” or “depth”
+      df$value     <- df[[p]]     # pull the measurement into a single column
+      df[vars]     <- NULL        # drop the old wide columns
+      df
+    }))
+    
+    # clean up row names
+    rownames(Meas) <- NULL
     
     # Set swe upper case
     Meas$parameter <- as.character(Meas$parameter)
@@ -151,7 +158,7 @@ SWE_station <- function(stations = "all",
     
   } else {
     stop("Parameter 'source' must be either 'aquacache' or 'snow'")
-    }
+  }
   
   
   # Add Day, Month and Year columns to the Meas dataframe:

@@ -31,6 +31,12 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
                             user = username,
                             password = password)
     
+    # Check if the connection was successful
+    check <- DBI::dbGetQuery(con, "SELECT 1")
+    if (nrow(check) == 0) {
+      stop("Could not fetch any data.")
+    }
+    
     # Add a new attribute to the connection object to track if a transaction is active
     attr(con, "active_transaction") <- FALSE
     

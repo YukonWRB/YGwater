@@ -41,7 +41,6 @@ Imports:
     openxlsx,
     plyr,
     remotes,
-    reshape2,
     rlang,
     rmarkdown,
     RPostgres,
