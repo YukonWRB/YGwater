@@ -1,4 +1,10 @@
-# Exercise 3 ##########################################################
+# LearnR Lesson 4
+
+# Working with the WRB's database
+
+
+
+
 # Note: skip this part if you don't have access to Yukon Government networks.
 # Let's explore the AquaCache database a bit. We'll connect to it using a convenience function that's part of our main R package, YGwater (which we may need to install first)
 # If you don't have YGwater installed yet, run the following line of code. If you get an error saying that 'remotes' is not installed, use install.packages("remotes") to install it.
@@ -35,7 +41,8 @@ DBI::dbListFields("locations") # This line lists all fields in the 'locations' t
 
 # If you're a bit familiar with the database structure, you'll remember that locations can have timeseries, and timeseries are unique on location, parameter, recording rate, and a few other things. Let's pull out a single entry from the locations table:
 klondike <- DBI::dbGetQuery(con, "SELECT * FROM locations WHERE name = 'Klondike River above Bonanza Creek'") # dbGetQuery passes an SQL query to the database and returns the result as a data frame.
-View(Klondike) # This line opens the 'klondike' data frame in a new window.
+View(klondike) # This line opens the 'klondike' data frame in a new window.
+
 # Cool! Now do you see the column called 'location_id'? This is a unique identifier for the location, and we can use it to get all timeseries for this location. Let's do that:
 timeseries <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE location_id = ", klondike$location_id))
 View(timeseries) # This line opens the 'timeseries' data frame in a new window. You should see a few rows!

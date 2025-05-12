@@ -2,18 +2,20 @@
 % Please edit documentation in R/learnR.R
 \name{learnR_answer}
 \alias{learnR_answer}
-\title{Answers for the learnR exercises}
+\title{Answers for the learnR lessons}
 \usage{
-learnR_answer(exercise, part = 1)
+learnR_answer(lesson, part = 1)
 }
 \arguments{
-\item{exercise}{The exercise number for which you want the answer.}
+\item{lesson}{The lesson number for which you want the answer.}
+
+\item{part}{The part of the lesson for which you want the answer.}
 }
 \value{
-The answer for the specified exercise, both as text and as a command to be executed in the console.
+The answer for the specified lesson, both as text and as a command to be executed in the console.
 }
 \description{
-Answers for the learnR exercises
+Answers for the learnR lessons
 }
 \examples{
 

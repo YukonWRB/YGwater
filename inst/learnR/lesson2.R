@@ -28,8 +28,9 @@ install.packages("swirl") # This line installs the swirl package from CRAN (the 
 # Either of these options will start the swirl package and take you through a series of interactive lessons. Now, take whichever option you prefer and run the relevant code in the console below to start swirl.
 
 # ..... 
-# Go on now, run the code and get started with swirl.
+# Go on now, run the code and get started with swirl. Use the hint below if you're unsure how to do this.
 # .....
+learnR_hint(lesson = 2, part = 1)
 
 
 

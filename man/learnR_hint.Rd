@@ -2,18 +2,20 @@
 % Please edit documentation in R/learnR.R
 \name{learnR_hint}
 \alias{learnR_hint}
-\title{Hints for the learnR exercises}
+\title{Hints for the learnR lessons}
 \usage{
-learnR_hint(exercise)
+learnR_hint(lesson, part = 1)
 }
 \arguments{
-\item{exercise}{The exercise number for which you want a hint.}
+\item{lesson}{The lesson number for which you want a hint.}
+
+\item{part}{The part of the lesson for which you want a hint.}
 }
 \value{
-A hint for the specified exercise.
+A hint for the specified lesson.
 }
 \description{
-Hints for the learnR exercises
+Hints for the learnR lessons
 }
 \examples{
 

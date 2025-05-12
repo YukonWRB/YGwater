@@ -40,13 +40,12 @@ print("Hello world!") # This line prints "Hello world!" to the console, below th
 
 
 
-## Exercise 1 ##########################################################
 
 # Now it's your turn to try it out. In the console below, make a library call to attach the YGwater package. Ask for a hint if you need one!
-learnR_hint(exercise = 1)
+learnR_hint(lesson = 1) # Look for the hint in the console!
 
 # Still stuck? Call this to give you the answer:
-learnR_answer(exercise = 1)
+learnR_answer(lesson = 1) # Look for the answer in the console!
 
 
 # That's it for this lesson! Now, run the line of code below to move on to the next lesson. R will know how to find that function since you're already done a library call.
