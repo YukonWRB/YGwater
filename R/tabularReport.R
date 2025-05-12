@@ -165,8 +165,9 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   
   
   
-  #Get the data -------------------------
+  # Get the data -------------------------
   tables <- list()
+  ## Precipitation -----------------------
   if (!is.null(precip_locations)) { #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
     precip <- data.frame()
     if (!yesterday_comments) {
@@ -176,7 +177,6 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
       tryCatch({
-        #TODO: Update code below to get polygons direct from the DB once basinPrecip is updated.
         lastWeek <- basinPrecip(location = i, start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
         lastThree <- basinPrecip(location = i, start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
         lastTwo <- basinPrecip(location = i, start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
@@ -220,6 +220,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     yesterday_comment_precip <- NA
   }
   
+  ## Water level ------------------------
   if (!is.null(level_locations)) {
     level_daily <- list()
     level_rt <- list()
@@ -242,6 +243,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     }
   }
   
+  ## Water flow ---------------------------
   if (!is.null(flow_locations)) {
     flow_daily <- list()
     flow_rt <- list()
@@ -263,6 +265,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       }
     }
   }
+  
+  ## Snow pack --------------------------
   if (!is.null(snow_locations)) {
     snow_daily <- list()
     snow_rt <- list()
@@ -284,6 +288,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       }
     }
   }
+  
+  ## Bridge freeboard --------------------------
   if (!is.null(bridge_locations)) {
     bridges_daily <- list()
     bridges_rt <- list()
@@ -308,7 +314,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   
   
   
-  #Make the remaining tables ----------------
+  # Generate tables ----------------
+  ## Level table -------------------
   if (length(level_rt) > 0) { #generate level table
     levels <- data.frame()
     for (i in names(level_rt)) {
@@ -442,7 +449,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     tables$levels <- levels
   }
   
-  
+  ## Flow table ---------------------------
   if (length(flow_rt) > 0) { #generate flow table
     flows <- data.frame()
     for (i in names(flow_rt)) {
@@ -576,6 +583,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     tables$flows <- flows
   }
   
+  ## Snow table --------------------------
   if (length(snow_rt) > 0) { #generate snow table
     snow <- data.frame()
     for (i in names(snow_rt)) {
@@ -709,6 +717,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     tables$snow <- snow
   }
   
+  ## Bridges table ----------------------
   if (length(bridges_rt) > 0) { #generate bridges table
     bridges <- data.frame()
     for (i in names(bridges_rt)) {
@@ -843,7 +852,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     tables$bridges <- bridges
   }
   
-  #Make the Excel workbook ---------------------------
+  
+  # Make the Excel workbook ---------------------------
   wb <- openxlsx::createWorkbook(creator = "Ghislain de Laplante (via automated process)", title = "Hydrometric Condition Report")
   time <- Sys.time()
   head <- data.frame(paste0("Issued at ", substr(format(time, tz = "MST"), 1, 16), " MST"),
@@ -1053,6 +1063,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     openxlsx::writeComment(wb, sheet = "precipitation", col = 4, row = 8, comment = threeDayComment)
     openxlsx::writeComment(wb, sheet = "precipitation", col = 3, row = 8, comment = weekComment)
   }
+  
+  # Save the workbook ----------------------------
   openxlsx::saveWorkbook(wb, paste0(save_path, "/HydrometricReport_", Sys.Date(), ".xlsx"), overwrite = TRUE)
 }
 

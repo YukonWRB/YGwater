@@ -11,7 +11,7 @@
 #'
 #' Additional spatial data is added to the maps when possible, Keeping in mind that large vector files can be lengthy for R to graphically represent. To ease this limitation, the watercourses file is left out when the drainage extent is greater than 30 000 km2; by that size, major water courses are expected to be represented by polygons in the waterbodies layer anyways.
 #'
-#' @param location The location above which you wish to calculate precipitation. Specify either a WSC or WSC-like station ID (e.g. `"09AB004"`) for which there is a database, or coordinates in signed decimal degrees in form latitude, longitude (`"60.1234 -139.1234"`; note the space, negative sign, and lack of comma). See details for more info if specifying coordinates.
+#' @param location The location above which you wish to calculate precipitation. Specify either a WSC or WSC-like station ID (e.g. `"09AB004"`) for which there is a database entry, or coordinates in signed decimal degrees in form latitude, longitude (`"60.1234 -139.1234"`; note the space, negative sign, and lack of comma). See details for more info if specifying coordinates.
 #' @param start The start of the time period over which to accumulate precipitation. Use format `"yyyy-mm-dd hh:mm"` (character vector) in UTC time, or a POSIXct object (e.g. `Sys.time()-60*60*24` for one day in the past). In the case of a POSIXct object, the timezone is converted to UTC without modifying the time. See details if requesting earlier than 30 days prior to now.
 #' @param end The end of the time period over which to accumulate precipitation. Other details as per `start`
 #' @param map Should a map be output to the console? See details for more info.
@@ -101,7 +101,7 @@ basinPrecip <- function(location,
       }
     }
   }
-
+  
   if (grepl("^[0-9]{2}[\\.]{1}[0-9]*[ ]{1}[-]{1}[0-9]*[\\.]{1}[0-9]*", location)) {
     tryCatch({
       location <- as.numeric(unlist(strsplit(location, " ")))
@@ -155,7 +155,7 @@ basinPrecip <- function(location,
     within <- terra::relate(location, polygons, relation = "within")
     within <- as.data.frame(polygons[which(within)])$PREABBR
   }
-
+  
   #Determine the sequence of rasters from start to end and if the clip is adequate. If not, call getHRDPA or getHRDPS to fill the gap.
   start <- as.POSIXct(start)
   end <- as.POSIXct(end)
@@ -165,7 +165,7 @@ basinPrecip <- function(location,
   if (start > end) {
     stop("The start time you specified is *after* the end time. R is not a time travel machine, please try again.")
   }
-
+  
   if (start > Sys.time() - 60*60*1.2) { #if TRUE, the start is prior to any issued HRDPA and so is the end. Only a sequence for forecast will be generated.
     hrdpa <- FALSE
     actual_times_hrdpa <- NULL
@@ -176,7 +176,7 @@ basinPrecip <- function(location,
   } else { #start is not in future, there might be hrdpa available
     hrdpa <- TRUE
   }
-
+  
   if (hrdpa) {
     start_hrdpa <- start + 60*60*4.8 #Assuming that rasters are issued at most 1.2 hours post valid time, this sets the start time so that the 6 hours before the requested start time is not included.
     start_hrdpa <- lubridate::floor_date(start_hrdpa, "6 hours")
@@ -185,35 +185,43 @@ basinPrecip <- function(location,
       end_hrdpa <- start_hrdpa
     }
     sequence_hrdpa <- seq.POSIXt(start_hrdpa, end_hrdpa, by = "6 hour")
-
-    #Check if any files exist yet to match sequence_hrdpa
+    
+    # Check if any files exist yet on the remote to match sequence_hrdpa
+    seq_days_hrdpa <- seq.Date(as.Date(start_hrdpa), as.Date(end_hrdpa), by = "day")
     available <- data.frame()
-    for (i in c("00", "06", "12", "18")) {
-      tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/model_hrdpa/2.5km/", i, "/"))
-      tmp <- rvest::html_elements(tmp, xpath = '//*[contains(@href, ".grib2")]') %>%
-        rvest::html_attr("href")
-      available <- rbind(available, as.data.frame(as.character(tmp)))
+    for (i in 1:length(seq_days_hrdpa)) {
+      for (j in c("00", "06", "12", "18")) {
+        tryCatch({
+          tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/", gsub("-", "", day), "/WXO-DD/model_hrdpa/2.5km/", j, "/"))
+          tmp <- rvest::html_elements(tmp, xpath ='//*[contains(@href, ".grib2")]') %>%
+            rvest::html_attr("href")
+          df <- data.frame(file = tmp, path = paste0("https://dd.weather.gc.ca/", gsub("-", "", day), "/WXO-DD/model_hrdpa/2.5km/", j, "/", tmp))
+          available <- rbind(available, df)
+        }, error = function(e) {
+          message(paste0("No data available for ", day, " at ", j, " UTC"))
+        })
+      }
     }
-
-    names(available) <- "link"
+    
+    
     available$cutoff <- "0700"
-    available$cutoff[grepl("Prelim", available$link)] <- "0100"
+    available$cutoff[grepl("Prelim", available$file)] <- "0100"
     available$valid <- NA
-    available$valid <- as.POSIXct(substr(available$link, 1, 11), format = "%Y%m%dT%H", tz = "UTC")
+    available$valid <- as.POSIXct(substr(available$file, 1, 11), format = "%Y%m%dT%H", tz = "UTC")
     available$integrate_time <- "6h"
-    available$integrate_time[grepl("Accum24h", available$link)] <- "24h"
-
+    available$integrate_time[grepl("Accum24h", available$file)] <- "24h"
+    
     last_available_01 <- available[available$valid == max(available$valid) & available$cutoff == "0100" & available$integrate_time == "6h", "valid"]
     if (min(sequence_hrdpa) <= last_available_01) { #TRUE means that there is at least one HRDPA available online or that there is one locally, so fetch it. Otherwise, no HRDPA is available yet and only HRDPS forecast will be used.
-
+      
       if (!is.null(hrdpa_loc)) { #Get the list of available files locally, if hrdpa_loc != NULL
         if (!dir.exists(hrdpa_loc)) { #Does the directory exist? If no, do you want to make it?
-          create <- ask(paste0("The directory you pointed to (", hrdpa_loc, ") does not exist. Do you wish to create it?"))
+          create <- ask(paste0("The directory you pointed to (", hrdpa_loc, ") to save HRDPA files does not exist. Do you wish to create it?"))
           if (create) {
             dir.create(hrdpa_loc)
           } else stop("Directory for storing the HRDPA will not be created. Try specifying the directory again.")
         }
-
+        
         # check if the local files are labelled properly and if so, sufficient for the time span requested and of the correct clip.
         available_local <- data.frame(files = list.files(hrdpa_loc, pattern = "*.tiff$")) #pattern specified so as to not get the .aux files
         available_local <- available_local %>%
@@ -221,28 +229,28 @@ basinPrecip <- function(location,
                         clipped = grepl("clipped", .data$files),
                         extent = gsub("_", " ", stringr::str_extract_all(.data$files, "(?<=clipped_)(.*)(?=_HRDPA.)", simplify = TRUE))
           )
-
+        
         available_local$timedate <- as.POSIXct(available_local$timedate, format = "%Y%m%d%H", tz = "UTC")
         available_local <- available_local[!is.na(available_local$timedate),]
-
+        
         #Match the time sequence_hrdpa to what's available, making sure the extent is ok. If not, call getHRDPA.
         missing_time <- sequence_hrdpa[which(!(sequence_hrdpa %in% available_local$timedate))] #if this is missing, then it doesn't matter if the extent is not matched!
         have_time <- available_local[which(available_local$timedate %in% sequence_hrdpa),]
-
+        
         have_extent <- data.frame()
         for (j in within) { #Since within could actually be many polygons
           have_extent <- rbind(have_extent, have_time[which((stringr::str_detect(have_time$extent, j))),])
         }
         have_extent <- rbind(have_extent, have_time[have_time$clipped == FALSE,]) #add in the unclipped ones too
-
+        
         missing_extent <- have_time[!(have_time$files %in% have_extent$files), ]
-
+        
         #Check if have_time and/or have_extent are length 0, if they are, getHRDPA(clip) should get assigned the smallest clip polygon possible.
         if (length(missing_time) > 0) {
           if (is.na(have_time$extent[1])) {
             smallest <- as.data.frame(prov_buff[prov_buff$PREABBR %in% within,])
             smallest <- smallest[order(smallest$Shape_Area),][1,2]
-
+            
             for (j in 1:length(missing_time)) {
               getHRDPA(start = missing_time[j], end = missing_time[j], clip = smallest, save_path = hrdpa_loc)
             }
@@ -252,12 +260,12 @@ basinPrecip <- function(location,
             }
           }
         }
-
+        
         if (nrow(missing_extent) > 0) {
           if (is.na(have_extent$extent[1])) {
             smallest <- as.data.frame(prov_buff[prov_buff$PREABBR %in% within,])  # From package data
             smallest <- smallest[order(smallest$Shape_Area),][1,2]
-
+            
             for (j in 1:length(missing_extent)) {
               getHRDPA(start = missing_extent[j,2], end = missing_extent[j,2], clip = smallest, save_path = hrdpa_loc)
             }
@@ -267,7 +275,7 @@ basinPrecip <- function(location,
             }
           }
         }
-
+        
         #finally, make the list of files to use: when a clipped and full file can both work, use either.
         available_local <- data.frame(files = list.files(hrdpa_loc, pattern = "*.tiff$"))
         available_local <- available_local %>%
@@ -275,17 +283,17 @@ basinPrecip <- function(location,
           )
         available_local$timedate <- as.POSIXct(available_local$timedate, format = "%Y%m%d%H", tz = "UTC")
         available_local <- available_local[!is.na(available_local$timedate),]
-
+        
         hrdpa_files <- available_local[which(available_local$timedate %in% sequence_hrdpa),]
         hrdpa_files <- hrdpa_files[!duplicated(hrdpa_files$timedate), ]
         actual_times_hrdpa <- c(min(hrdpa_files$timedate) - 60*60*6, max(hrdpa_files$time))
         hrdpa_files <- hrdpa_files$files
-
+        
       } else { #hrdpa_loc is NULL, so pull from the web into a tempdir
         suppressWarnings(dir.create(paste0(tempdir(), "/HRDPA")))
         hrdpa_loc <- paste0(tempdir(), "/HRDPA")
         on.exit(unlink(hrdpa_loc))
-
+        
         #compare the sequence_hrdpa against what exists in save_path, make list of files to dl.
         #check if the local files are labelled properly and if so, sufficient for the time span requested and of the correct clip.
         available_local <- data.frame(files = list.files(hrdpa_loc, pattern = "*.tiff$"))
@@ -294,21 +302,21 @@ basinPrecip <- function(location,
                         clipped = grepl("clipped", .data$files),
                         extent = gsub("_", " ", stringr::str_extract_all(.data$files, "(?<=clipped_)(.*)(?=_HRDPA.)", simplify = TRUE))
           )
-
+        
         available_local$timedate <- as.POSIXct(available_local$timedate, format = "%Y%m%d%H", tz = "UTC")
         available_local <- available_local[!is.na(available_local$timedate),]
-
+        
         #Match the sequence_hrdpa to what's available. Extent doesn't matter as anything here is temporary and will be full size anyways.
         missing_time <- sequence_hrdpa[which(!(sequence_hrdpa %in% available_local$timedate))] #if this is missing, then it doesn't matter if the extent is not matched!
         have_time <- available_local[which(available_local$timedate %in% sequence_hrdpa),]
-
-
+        
+        
         if (length(missing_time) > 0) {
           for (j in 1:length(missing_time)) {
             getHRDPA(start = missing_time[j], end = missing_time[j], clip = NULL, save_path = hrdpa_loc)
           }
         }
-
+        
         #finally, make the list of files to use: when a clipped and full file can both work, use either.
         available_local <- data.frame(files = list.files(hrdpa_loc, pattern = "*.tiff$"))
         available_local <- available_local %>%
@@ -316,7 +324,7 @@ basinPrecip <- function(location,
           )
         available_local$timedate <- as.POSIXct(available_local$timedate, format = "%Y%m%d%H", tz = "UTC")
         available_local <- available_local[!is.na(available_local$timedate),]
-
+        
         hrdpa_files <- available_local[which(available_local$timedate %in% sequence_hrdpa),]
         hrdpa_files <- hrdpa_files[!duplicated(hrdpa_files$timedate), ]
         actual_times_hrdpa <- c(min(hrdpa_files$timedate) - 60*60*6, max(hrdpa_files$time))
@@ -327,7 +335,7 @@ basinPrecip <- function(location,
       actual_times_hrdpa <- NULL
     }
   }
-
+  
   end_hrdps <- lubridate::floor_date(end, "1 hours")
   start_hrdps <- lubridate::floor_date(start, "1 hours")
   hrdps <- FALSE #overwritten if hrdps are usable
@@ -404,7 +412,7 @@ basinPrecip <- function(location,
       }
     }
   }
-
+  
   ###now the rasters are present for the extent and time required, finally! Proceed to accumulating them into a single raster.
   if (hrdpa & !hrdps) {
     if (length(hrdpa_files) > 1) {
@@ -444,12 +452,12 @@ basinPrecip <- function(location,
     total <- terra::project(total, "+proj=longlat +EPSG:3347")
     actual_times <- actual_times_hrdpa
   }
-
+  
   if (!hrdpa & hrdps) {
     total <- forecast_precip
     actual_times <- actual_times_hrdps
   }
-
+  
   if (hrdpa & hrdps) {
     #start with hrdpa
     if (length(hrdpa_files) > 1) {
@@ -488,15 +496,15 @@ basinPrecip <- function(location,
     names(total_hrdpa) <- "precip"
     total_hrdpa <- terra::project(total_hrdpa, "+proj=longlat +EPSG:3347")
     actual_times <- c(min(actual_times_hrdpa), max(actual_times_hrdps))
-
+    
     #trim one by the other (and the reverse) to get extents the same
     forecast_precip <- terra::resample(forecast_precip, total_hrdpa) #aligns the rasters
     forecast_precip <- terra::extend(forecast_precip, total_hrdpa)
     total_hrdpa <- terra::extend(total_hrdpa, forecast_precip)
-
+    
     total <- total_hrdpa + forecast_precip
   }
-
+  
   #Add zeros for the actual_times so that they are not ambiguous at midnight
   actual_times <- as.character(actual_times)
   for (i in 1:2) {
@@ -529,7 +537,7 @@ basinPrecip <- function(location,
       }
     }
   }
-
+  
   #crop to the watershed or to the point to get the precip within the basin or at the point, if no basin exists
   if (type == "DB") {
     cropped_precip <- terra::mask(total, basin)
@@ -548,7 +556,7 @@ basinPrecip <- function(location,
     min <- minmax_precip[1]
     max <- minmax_precip[2]
   }
-
+  
   ###Map the output if requested
   if (map) {
     tryCatch({
@@ -597,8 +605,8 @@ basinPrecip <- function(location,
         # Left out for now because it's a lot of lines to process and clutters the display
         streams <- getVector(layer_name = "Watercourses", feature_name = "Yukon watercourses", con = con, silent = TRUE)
         streams <- terra::project(streams, "+proj=longlat +EPSG:3347")
-          leafmap <- leafmap |>
-            terra::lines(streams, lwd = 0.08, col = "blue", alpha = 1, group = "Streams")
+        leafmap <- leafmap |>
+          terra::lines(streams, lwd = 0.08, col = "blue", alpha = 1, group = "Streams")
         
         waterbodies <- getVector(layer_name = "Waterbodies", feature_name = "Yukon waterbodies", con = con, silent = TRUE)
         waterbodies <- terra::project(waterbodies, "+proj=longlat +EPSG:3347")
@@ -667,7 +675,7 @@ basinPrecip <- function(location,
       warning(crayon::red("The map could not be generated."))
     })
   }
-
+  
   if (type == "longlat") {
     list <- list(mean_precip = mean_precip, total_time_range_UTC = actual_times, reanalysis_time_range_UTC = actual_times_hrdpa, forecast_time_range_UTC = actual_times_hrdps, point = requested_point, plot = if (map) plot else NULL)
     if (silent == FALSE) {
@@ -688,3 +696,4 @@ basinPrecip <- function(location,
   }
   return(list)
 }
+
