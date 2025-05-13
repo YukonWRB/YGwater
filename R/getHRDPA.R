@@ -57,7 +57,8 @@ getHRDPA <- function(start = Sys.time() - 60*60*24,
         df <- data.frame(file = tmp, path = paste0("https://dd.weather.gc.ca/", gsub("-", "", day), "/WXO-DD/model_hrdpa/2.5km/", j, "/", tmp))
         available <- rbind(available, df)
       }, error = function(e) {
-        message(paste0("No raster available for ", day, " at ", j, " UTC"))
+
+        message(paste0("No reanalysis data available for ", day, " at ", j, " UTC"))
       })
     }
   }

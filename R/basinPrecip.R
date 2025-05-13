@@ -190,6 +190,7 @@ basinPrecip <- function(location,
     seq_days_hrdpa <- seq.Date(as.Date(start_hrdpa), as.Date(end_hrdpa), by = "day")
     available <- data.frame()
     for (i in 1:length(seq_days_hrdpa)) {
+      day <- seq_days_hrdpa[i]
       for (j in c("00", "06", "12", "18")) {
         tryCatch({
           tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/", gsub("-", "", day), "/WXO-DD/model_hrdpa/2.5km/", j, "/"))
@@ -198,7 +199,7 @@ basinPrecip <- function(location,
           df <- data.frame(file = tmp, path = paste0("https://dd.weather.gc.ca/", gsub("-", "", day), "/WXO-DD/model_hrdpa/2.5km/", j, "/", tmp))
           available <- rbind(available, df)
         }, error = function(e) {
-          message(paste0("No data available for ", day, " at ", j, " UTC"))
+          if (!silent) {message(paste0("No reanalysis data available for ", day, " at ", j, " UTC"))}
         })
       }
     }

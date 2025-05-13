@@ -30,10 +30,10 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   # flow_locations = "all"
   # snow_locations = "all"
   # bridge_locations = "all"
-  # precip_locations = NULL
+  # precip_locations = "default"
   # past = 28
   # save_path = "choose"
-  # archive_path = "choose"
+  # archive_path = NULL
   # con = NULL
   
   
@@ -173,16 +173,17 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     if (!yesterday_comments) {
       yesterday_comment_precip <- NA
     }
+    message("Fetching precipitation rasters and calculating a per-basin average. This could take a while.")
     for (i in precip_locations) {
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
       tryCatch({
-        lastWeek <- basinPrecip(location = i, start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
-        lastThree <- basinPrecip(location = i, start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
-        lastTwo <- basinPrecip(location = i, start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
-        lastOne <- basinPrecip(location = i, start = Sys.time() - 60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
-        next24 <- basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE, con = con)
-        next48 <- basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE, con = con)
+        lastWeek <- suppressMessages(basinPrecip(location = i, start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE, con = con))
+        lastThree <- suppressMessages(basinPrecip(location = i, start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE, con = con))
+        lastTwo <- suppressMessages(basinPrecip(location = i, start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE, con = con))
+        lastOne <- suppressMessages(basinPrecip(location = i, start = Sys.time() - 60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE, con = con))
+        next24 <- suppressMessages(basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE, con = con))
+        next48 <- suppressMessages(basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE, con = con))
         yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
         
         precip <- rbind(precip,
@@ -1066,5 +1067,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   
   # Save the workbook ----------------------------
   openxlsx::saveWorkbook(wb, paste0(save_path, "/HydrometricReport_", Sys.Date(), ".xlsx"), overwrite = TRUE)
+  
+  message("Tabular report created and saved in ", save_path, " with name HydrometricReport_", Sys.Date(), ".xlsx. \n")
 }
 
