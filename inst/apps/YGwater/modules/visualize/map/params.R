@@ -1,48 +1,79 @@
 mapParamsUI <- function(id) {
   ns <- NS(id)
-  tagList(
-    tags$head(
-      tags$style(
-        # Remove the regular leaflet zoom control to decrease map business
-        HTML("
-      .leaflet-left .leaflet-control{
-        visibility: hidden;
-      }"
-        ))
-    ),
-    tags$script(
-      HTML("
-       // Handles custom tooltips updates, binds tooltip properties to elements
-            Shiny.addCustomMessageHandler('update-tooltip', function(message) {
-                var selector = '#' + message.id;
-                $(selector).attr('title', message.title)
-                .tooltip('fixTitle').tooltip('hide');
-            });
-            
-             // Function to change tabs based on namespace and input target, utilized in map popups
-      function changeTab(namespace, target_input, locationId) {
-        Shiny.setInputValue(namespace + target_input, locationId, {priority: 'event'});
-      }
-      
-      // Resets Shiny input values to null, preventing unwanted reactive triggers
-      shinyjs.resetInput = function(params) {
-            Shiny.setInputValue(params.name, null, {priority: 'event'});
-        }
-    ")
-    ),
-    leaflet::leafletOutput(ns("map"), height = '80vh'),
-    absolutePanel(id = ns("controls"), class = "panel panel-default", fixed = TRUE,
-                  draggable = TRUE, top = 210, left = "auto", width = "240px",
-                  # Panel content
-                  uiOutput(ns("controls_ui")),
-                  style = "opacity: 1; z-index: 400;"  # Adjust styling
-    ) # End of absolutePanel
-  ) # End of tagList
+  
+  # All UI elements rendered in server function to allow multi-language functionality
+  page_fluid(
+    uiOutput(ns("sidebar_page"))
+  )
 } # End of mapParamsUI
 
-mapParams <- function(id, moduleData, language) {
+mapParams <- function(id, language) {
   moduleServer(id, function(input, output, session) {
+
+    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click"))
+    
     ns <- session$ns
+    
+    moduleData <- reactiveValues(
+      locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
+      timeseries = dbGetQueryDT(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.period_type, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"),
+      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;")
+    )
+    
+    output$sidebar_page <- renderUI({
+      req(moduleData, language)
+      page_sidebar(
+        sidebar = sidebar(
+          title = NULL,
+            tagList(
+              #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
+              selectizeInput(
+                ns("mapType"),
+                label = tr("map_mapType", language$language),
+                choices = stats::setNames(
+                  c("range", "abs"),
+                  c(tr("map_relative", language$language), tr("map_absolute1", language$language))
+                ),
+                selected = "range",
+                multiple = FALSE
+              ),
+              dateInput(ns("target"),
+                        label = tr("map_target_date", language$language),
+                        value = Sys.Date(),
+                        max = Sys.Date(),
+                        format = "yyyy-mm-dd",
+                        language = language$abbrev),
+              checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = TRUE),
+              tagList(
+                h4(tr("map_primary_param", language$language)), # Text for primary parameter
+                p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
+                p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
+                  tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
+              ),
+              actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
+              htmlOutput(ns("secondary_param")),
+              actionButton(ns("edit_secondary_param"), tr("map_edit_second_param", language$language), style = "display: block; width: 100%")
+              # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
+            )
+        ),
+        # Main panel (left)
+        leaflet::leafletOutput(ns("map"), height = '80vh')
+      )
+    })
+    
+    output$secondary_param <- renderUI({
+      req(map_params$params, language)
+      if (map_params$params == 1) {
+        return(NULL)
+      } else {
+        tagList(
+          h4(tr("map_second_param", language$language)), # Text for secondary parameter
+          p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of secondary parameter
+          p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs2, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
+            tr("map_date_within_selected1", language$language), map_params$days2, tr("map_date_within_selected2", language$language)) # Text for within x days
+        )
+      }
+    })
 
     # Create the filter inputs ############################################################################
     map_params <- reactiveValues(
@@ -58,59 +89,6 @@ mapParams <- function(id, moduleData, language) {
       bins = c(0, 20, 40, 60, 80, 100),
       colors = c("#d8b365", "#FEE090", "#74ADD1", "#4575D2", "#313695",  "#A50026")
     )
-    # Generate all controls in a renderUI
-    output$controls_ui <- renderUI({
-      req(moduleData, language$language, language$abbrev)
-      
-      tagList(
-        #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
-        selectizeInput(
-          ns("mapType"),
-          label = tr("map_mapType", language$language),
-          choices = stats::setNames(
-            c("range", "abs"),
-            c(tr("map_relative", language$language), tr("map_absolute1", language$language))
-          ),
-          selected = "range",
-          multiple = FALSE
-        ),
-        dateInput(ns("target"),
-                  label = tr("map_target_date", language$language),
-                  value = Sys.Date(),
-                  max = Sys.Date(),
-                  format = "yyyy-mm-dd",
-                  language = language$abbrev),
-        checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = TRUE),
-        htmlOutput(ns("primary_param")),  # This will be text showing details of the selected parameter, the min yrs, within how many days, etc.
-        actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
-        htmlOutput(ns("secondary_param")),
-        actionButton(ns("edit_secondary_param"), tr("map_edit_second_param", language$language), style = "display: block; width: 100%")
-        # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
-      )
-    })
-    
-    # This updates automatically when the language changes so is not part of the language observer
-    output$primary_param <- renderUI({
-      tagList(
-        h4(tr("map_primary_param", language$language)), # Text for primary parameter
-        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
-        p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
-          tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
-      )
-    })
-    output$secondary_param <- renderUI({
-      if (map_params$params == 1) {
-        return(NULL)
-      } else {
-        tagList(
-          h4(tr("map_second_param", language$language)), # Text for secondary parameter
-          p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param2,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of secondary parameter
-          p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs2, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
-            tr("map_date_within_selected1", language$language), map_params$days2, tr("map_date_within_selected2", language$language)) # Text for within x days
-        )
-      }
-
-    })
     
     # Observe 'map_latest_measurements'. If TRUE, 'target' is adjusted to Sys.Date()
     observeEvent(input$latest, {
@@ -494,7 +472,7 @@ mapParams <- function(id, moduleData, language) {
     
     # Observe the map being created and update it when the parameters change
     observe({
-      req(mapCreated())  # Ensure the map has been created before updating
+      req(mapCreated(), map_params)  # Ensure the map has been created before updating
       reactiveValuesToList(map_params)  # Triggers whenever map_params changes
       
       try({
@@ -502,9 +480,5 @@ mapParams <- function(id, moduleData, language) {
       })
        
     })
-    
-    # observeEvent(input$go, { # Reloads the map when the user requests it
-    #   updateMap()
-    # }, ignoreInit = TRUE, ignoreNULL = TRUE)
   })
 }

@@ -74,15 +74,15 @@ app_ui <- function(request) {
       #           uiOutput("map_ui")),
       nav_menu(title = uiOutput("mapsNavMenuTitle"), value = "maps",
                nav_panel(title = uiOutput("mapsNavLocsTitle"), value = "monitoringLocations",
-                         uiOutput("mapsLocs_ui")),
+                         uiOutput("mapLocs_ui")),
                nav_panel(title = uiOutput("mapsNavParamsTitle"), value = "parameterValues",
-                         uiOutput("mapsParams_ui"))
+                         uiOutput("mapParams_ui"))
       ),
       nav_menu(title = uiOutput("plotsNavMenuTitle"), value = "plot",
                nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discrete",
-                         uiOutput("plotsDiscrete_ui")),
+                         uiOutput("plotDiscrete_ui")),
                nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
-                         uiOutput("plotsContinuous_ui")),
+                         uiOutput("plotContinuous_ui")),
                nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
                          uiOutput("plotsMix_ui"))
       ),
