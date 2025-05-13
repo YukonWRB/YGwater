@@ -1,4 +1,4 @@
-mapParamUI <- function(id) {
+mapParamsUI <- function(id) {
   ns <- NS(id)
   tagList(
     tags$head(
@@ -40,7 +40,7 @@ mapParamUI <- function(id) {
   ) # End of tagList
 } # End of mapParamsUI
 
-mapParamServer <- function(id, moduleData, language) {
+mapParams <- function(id, moduleData, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
