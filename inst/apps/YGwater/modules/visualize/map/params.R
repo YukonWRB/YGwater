@@ -231,7 +231,6 @@ mapParams <- function(id, language) {
     
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
-      req(moduleData, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$target, map_params$params, input$map_zoom)
       
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
@@ -474,7 +473,7 @@ mapParams <- function(id, language) {
     
     # Observe the map being created and update it when the parameters change
     observe({
-      req(mapCreated(), map_params)  # Ensure the map has been created before updating
+      req(mapCreated(), map_params, input$map_zoom)  # Ensure the map has been created before updating
       reactiveValuesToList(map_params)  # Triggers whenever map_params changes
       
       try({

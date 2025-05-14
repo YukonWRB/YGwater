@@ -97,8 +97,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     public = public,
     g_drive = g_drive,
     admin = FALSE,
-    sidebar_bg = "#FFFCF5",
-    main_bg = "#D9EFF2"
+    sidebar_bg = "#FFFCF5", # Default background color for all sidebars
+    main_bg = "#D9EFF2" # Default background color for all main panels
     )
   
   # Load the YG BS 5 theme

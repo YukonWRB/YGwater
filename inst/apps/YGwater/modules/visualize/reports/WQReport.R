@@ -1,6 +1,6 @@
 WQReportUI <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  page_fluid(
     # Custom CSS below is for consistency with the sidebarPanel look elsewhere in the app.
     tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/background_style.css")),
     div(class = "custom-panel container",   # This div holds all UI elements for the menu
@@ -189,8 +189,9 @@ WQReportUI <- function(id) {
         actionButton(ns("go"), "Create report"),
         downloadButton(ns("download"), "download", style = "visibility: hidden;") # Hidden; triggered automatically if 'go' is successful
     ) # End div that holds all UI buttons/selectors
-  ) # End fluidPage
+  ) # End page_fluid
 } # End WQReportUI
+
 
 WQReport <- function(id, mdb_files, language) {
   moduleServer(id, function(input, output, session) {
