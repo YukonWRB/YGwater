@@ -1,12 +1,15 @@
 continuousPlotUI <- function(id) {
   ns <- NS(id)
-  sidebarLayout(
-    sidebarPanel(
-      uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
+  
+  page_sidebar(
+    sidebar = sidebar(
+      title = NULL,
+      width = 350,
+      bg = config$sidebar_bg,
+      open = list(mobile = "always-above"),
+      uiOutput(ns("sidebar"))
     ),
-    mainPanel(
-      uiOutput(ns("main"))
-    )
+    uiOutput(ns("main"))
   )
 }
 

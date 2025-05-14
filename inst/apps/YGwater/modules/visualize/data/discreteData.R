@@ -46,13 +46,15 @@ discDataUI <- function(id) {
     });"
       )
     ),
-    sidebarLayout(
-      sidebarPanel(
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        width = 350,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
         uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
       ),
-      mainPanel(
         uiOutput(ns("main"))
-      )
     )
   )
 }

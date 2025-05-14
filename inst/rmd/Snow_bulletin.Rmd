@@ -638,7 +638,6 @@ Certaines autres choses nécessitent une vérification et peuvent nécessiter un
 
 RAPPELEZ VOUS DE SUPPRIMER CETTE PAGE UNE FOIS TERMINÉ.
 "
-
 }`
 
 \newpage
