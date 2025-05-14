@@ -1,10 +1,11 @@
 WQReportUI <- function(id) {
   ns <- NS(id)
-  page_fluid(
-    # Custom CSS below is for consistency with the sidebarPanel look elsewhere in the app.
-    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/background_style.css")),
-    div(class = "custom-panel container",   # This div holds all UI elements for the menu
-        
+  tagList(
+    # Custom CSS below is for consistency with the look elsewhere in the app.
+    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/card_background.css")),
+    card(
+      card_body(
+        class = "custom-card",
         # Toggle for data source
         # ! Data source 'AC' is not implemented in the report generation function yet; the code is here but a modal dialogue will appear if AC is selected and the user will get shunted back to EQ.
         radioButtons(ns("data_source"),
@@ -12,8 +13,7 @@ WQReportUI <- function(id) {
                      choices = stats::setNames(c("AC", "EQ"), c("AquaCache", "EQWin")),
                      selected = "EQ"),
         uiOutput(ns("EQWin_source_ui")),
-        dateInput(ns("date"), "Report Date", value = Sys.Date() - 30,
-                  width = "100%"),
+        dateInput(ns("date"), "Report Date", value = Sys.Date() - 30),
         div(
           style = "display: flex; align-items: center;",
           tags$label(
@@ -30,22 +30,19 @@ WQReportUI <- function(id) {
             icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
           )
         ),
-        numericInput(ns("date_approx"), NULL, value = 1,
-                     width = "100%"),
+        numericInput(ns("date_approx"), NULL, value = 1),
         conditionalPanel(ns = ns,
                          condition = "input.data_source == 'EQ'",
                          # Toggle button for locations or location groups (only show if data source  == EQWin)
                          radioButtons(ns("locs_groups"),
                                       NULL,
                                       choices = c("Locations", "Location Groups"),
-                                      selected = "Locations",
-                                      width = "100%"),
+                                      selected = "Locations"),
                          # Selectize input for locations, populated once connection is established
                          selectizeInput(ns("locations_EQ"),
                                         "Select locations",
                                         choices = "Placeholder",
-                                        multiple = TRUE,
-                                        width = "100%"),
+                                        multiple = TRUE),
                          # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
                          selectizeInput(ns("location_groups"),
                                         "Select a location group",
@@ -57,8 +54,7 @@ WQReportUI <- function(id) {
                          radioButtons(ns("params_groups"),
                                       NULL,
                                       choices = c("Parameters", "Parameter Groups"),
-                                      selected = "Parameters",
-                                      width = "100%"),
+                                      selected = "Parameters"),
                          # Selectize input for parameters, populated once connection is established
                          selectizeInput(ns("parameters_EQ"),
                                         "Select parameters",
@@ -106,7 +102,7 @@ WQReportUI <- function(id) {
                            )
                            
                          ),
-                         numericInput(ns("SD_SD"), NULL, value = NULL, width = "100%"),
+                         numericInput(ns("SD_SD"), NULL, value = NULL),
                          
                          div(
                            style = "display: flex; align-items: center;",
@@ -124,8 +120,7 @@ WQReportUI <- function(id) {
                              icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
                            )
                          ),
-                         dateInput(ns("SD_start"), NULL, value = NA,
-                                   width = "100%"),
+                         dateInput(ns("SD_start"), NULL, value = NA),
                          
                          div(
                            style = "display: flex; align-items: center;",
@@ -143,8 +138,7 @@ WQReportUI <- function(id) {
                              icon("info-circle", style = "font-size: 150%; margin-left: 5px;")
                            )
                          ),
-                         dateInput(ns("SD_end"), NULL, value = NA,
-                                   width = "100%"),
+                         dateInput(ns("SD_end"), NULL, value = NA),
                          div(
                            style = "display: flex; align-items: center;",
                            tags$label(
@@ -165,8 +159,7 @@ WQReportUI <- function(id) {
                            ns("SD_date_range"), 
                            label = NULL, 
                            start = "2000-01-01", 
-                           end = "2000-12-31", 
-                           width = "100%"
+                           end = "2000-12-31"
                          )
                          
         ),
@@ -188,8 +181,9 @@ WQReportUI <- function(id) {
         ),
         actionButton(ns("go"), "Create report"),
         downloadButton(ns("download"), "download", style = "visibility: hidden;") # Hidden; triggered automatically if 'go' is successful
-    ) # End div that holds all UI buttons/selectors
-  ) # End page_fluid
+      ) # End card_body
+    ) # End card
+  ) # End tagList
 } # End WQReportUI
 
 
@@ -314,7 +308,7 @@ WQReport <- function(id, mdb_files, language) {
     })
     
     outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
-
+    
     observeEvent(input$go, {
       tryCatch({
         
@@ -332,7 +326,7 @@ WQReport <- function(id, mdb_files, language) {
             dir <- paste0(tempdir(), "/WQReport")
             
             dir.create(dir, showWarnings = FALSE)
-
+            
             EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
             EQWinReport(date = input$date,
                         date_approx = as.numeric(input$date_approx),
@@ -371,7 +365,7 @@ WQReport <- function(id, mdb_files, language) {
     })
     # Create the download
     output$download <- downloadHandler(
-
+      
       filename = function() {
         paste0("water quality report for ", input$date, " Issued ", Sys.Date(), ".xlsx")
       },

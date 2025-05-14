@@ -1,11 +1,13 @@
 snowInfoUIMod <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  tagList(
     # Custom CSS below is for consistency with the sidebarPanel look elsewhere in the app.
-    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/background_style.css")),
-    div(class = "custom-panel container",   # This div holds all UI elements for the menu
+    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/card_background.css")),
+    card(
+      card_body(
+        class = "custom-card",
         uiOutput(ns("menu")) # UI is rendered in the server function below so that it can use database information as well as language selections.
-        
+      )
     )
   )
 }

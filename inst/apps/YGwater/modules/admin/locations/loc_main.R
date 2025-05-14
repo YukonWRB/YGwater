@@ -2,7 +2,7 @@
 
 locsUI <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  page_fluid(
     selectizeInput(ns("select"), NULL, choices = stats::setNames(c("main", "meta", "new_loc", "new_ts"), c("View/edit location data", "View/edit location metadata", "Add new location", "Add new timeseries at a location")), selected = "main"),
     hr(style = "border-top: 1px solid #000000;"),
     # Placeholder divs for dynamically loaded UIs

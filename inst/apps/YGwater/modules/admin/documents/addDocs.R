@@ -2,7 +2,7 @@
 
 addDocsUI <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  page_fluid(
     textOutput(ns("placeholder"))
   )
 }

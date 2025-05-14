@@ -1041,7 +1041,7 @@ continuousPlot <- function(id, language, windowDims) {
       if (!plot_created()) {
         output$full_screen_ui <- renderUI({
           # Side-by-side buttons
-          fluidPage(
+          page_fluid(
             div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen")),
             div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"))
           )

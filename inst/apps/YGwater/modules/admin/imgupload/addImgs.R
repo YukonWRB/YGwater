@@ -10,7 +10,7 @@ addImgsUI <- function(id) {
   
   ns <- NS(id)
   
-  fluidPage(
+  page_fluid(
     br(),
     fluidRow(
       column(
@@ -19,7 +19,7 @@ addImgsUI <- function(id) {
       ),
       column(
         width = 6,
-        fluidPage(
+        page_fluid(
           div(class = "d-inline-block", uiOutput(ns("edit_button"))),
           div(class = "d-inline-block", uiOutput(ns("toggle_locations_button"))),
           div(class = "d-inline-block", actionButton(ns("clear_pos"), "Clear coordinate selection") |> tooltip("Clear coordinate selection")),

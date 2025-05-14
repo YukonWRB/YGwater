@@ -75,7 +75,7 @@ imgMapView <- function(id, language) {
           id = ns("filters"),
           title = tr("filters", language$language),
           
-          fluidPage(
+          page_fluid(
             div(
               class = "d-inline-block me-3 align-items-start",
               style = "vertical-align: top; display: inline-flex;",
