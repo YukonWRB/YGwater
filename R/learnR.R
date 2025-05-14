@@ -10,7 +10,7 @@
 #' @returns A file with lessons to learn R.
 #' @export
 #'
-#' @examples
+#' @examplesIf interactive()
 #' 
 #' # Open the last lesson you worked on, or lesson 1 is you haven't opened a lesson yet:
 #' learnR()
@@ -60,7 +60,7 @@ learnR <- function(lesson = NULL) {
 #' @returns A hint for the specified lesson.
 #' @export
 #'
-#' @examples
+#' @examplesIf interactive()
 #' 
 #' learnR_hint(1)
 
@@ -137,7 +137,7 @@ learnR_hint <- function(lesson, part = 1) {
 #' @returns The answer for the specified lesson, both as text and as a command to be executed in the console.
 #' @export
 #'
-#' @examples
+#' @examplesIf interactive()
 #' 
 #' learnR_answer(1)
 
