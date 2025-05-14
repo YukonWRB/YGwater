@@ -2,13 +2,25 @@
 
 imgMapViewUI <- function(id) {
   ns <- NS(id)
-  
-  # All UI elements are rendered in the server function to allow multi-language functionality
-  page_fluid(
-    # Top row with filters (collapsible using bslib accordion)
-    uiOutput(ns("accordion")),
-    # Map and selected image in a side-by-side layout, with collapsible map.
-    uiOutput(ns("sidebar_page"))
+  tagList(
+    tags$style(HTML(sprintf("
+     /* Add colors to the accordion. Using ns() makes it specific to this module. */
+      #%s .accordion {
+        /* body background */
+        --bs-accordion-bg:          #FFFCF5;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #FBE5B2;
+        /* expanded header */
+        --bs-accordion-active-bg:   #FBE5B2;
+      }
+    ", ns("accordion")))),
+    # All UI elements are rendered in the server function to allow multi-language functionality
+    page_fluid(
+      # Top row with filters (collapsible using bslib accordion)
+      uiOutput(ns("accordion")),
+      # Map and selected image in a side-by-side layout, with collapsible map.
+      uiOutput(ns("sidebar_page"))
+    )
   )
 }
 
@@ -57,6 +69,7 @@ imgMapView <- function(id, language) {
     # Render the UI elements, re-rendered on language selection ################
     output$accordion <- renderUI({
       accordion(
+        id = "accordion",
         open = ns("filters"),
         accordion_panel(
           id = ns("filters"),
@@ -141,7 +154,7 @@ imgMapView <- function(id, language) {
             actionButton(ns("refresh_images"), "Refresh images") |> bslib::tooltip("Refresh the list of images from the database"),
           ),
           width = "40%",
-          bg = "#f8f8f8",
+          bg = config$sidebar_bg,
           position = "left",
           open = TRUE
         ),

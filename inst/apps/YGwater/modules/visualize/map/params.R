@@ -9,7 +9,7 @@ mapParamsUI <- function(id) {
 
 mapParams <- function(id, language) {
   moduleServer(id, function(input, output, session) {
-
+    
     setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click"))
     
     ns <- session$ns
@@ -23,38 +23,40 @@ mapParams <- function(id, language) {
     output$sidebar_page <- renderUI({
       req(moduleData, language)
       page_sidebar(
+        # bg = config$main_bg,  # background for the main panel
         sidebar = sidebar(
           title = NULL,
+          bg = config$sidebar_bg, # Set in globals file
+          tagList(
+            #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
+            selectizeInput(
+              ns("mapType"),
+              label = tr("map_mapType", language$language),
+              choices = stats::setNames(
+                c("range", "abs"),
+                c(tr("map_relative", language$language), tr("map_absolute1", language$language))
+              ),
+              selected = "range",
+              multiple = FALSE
+            ),
+            dateInput(ns("target"),
+                      label = tr("map_target_date", language$language),
+                      value = Sys.Date(),
+                      max = Sys.Date(),
+                      format = "yyyy-mm-dd",
+                      language = language$abbrev),
+            checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = TRUE),
             tagList(
-              #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
-              selectizeInput(
-                ns("mapType"),
-                label = tr("map_mapType", language$language),
-                choices = stats::setNames(
-                  c("range", "abs"),
-                  c(tr("map_relative", language$language), tr("map_absolute1", language$language))
-                ),
-                selected = "range",
-                multiple = FALSE
-              ),
-              dateInput(ns("target"),
-                        label = tr("map_target_date", language$language),
-                        value = Sys.Date(),
-                        max = Sys.Date(),
-                        format = "yyyy-mm-dd",
-                        language = language$abbrev),
-              checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = TRUE),
-              tagList(
-                h4(tr("map_primary_param", language$language)), # Text for primary parameter
-                p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
-                p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
-                  tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
-              ),
-              actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
-              htmlOutput(ns("secondary_param")),
-              actionButton(ns("edit_secondary_param"), tr("map_edit_second_param", language$language), style = "display: block; width: 100%")
-              # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
-            )
+              h4(tr("map_primary_param", language$language)), # Text for primary parameter
+              p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
+              p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
+                tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
+            ),
+            actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
+            htmlOutput(ns("secondary_param")),
+            actionButton(ns("edit_secondary_param"), tr("map_edit_second_param", language$language), style = "display: block; width: 100%")
+            # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
+          )
         ),
         # Main panel (left)
         leaflet::leafletOutput(ns("map"), height = '80vh')
@@ -74,7 +76,7 @@ mapParams <- function(id, language) {
         )
       }
     })
-
+    
     # Create the filter inputs ############################################################################
     map_params <- reactiveValues(
       param1 = 1150,  # Water flow
@@ -167,11 +169,11 @@ mapParams <- function(id, language) {
                      max = 365,
                      step = 1),
         footer = tagList(
-                  actionButton(ns("save_secondary_param"), tr("save", language$language)),
-                  if (map_params$params == 2) {
-                    actionButton(ns("remove_secondary_param"), tr("map_rm_second_param", language$language))
-                  },
-                  actionButton(ns("close"), tr("close", language$language))
+          actionButton(ns("save_secondary_param"), tr("save", language$language)),
+          if (map_params$params == 2) {
+            actionButton(ns("remove_secondary_param"), tr("map_rm_second_param", language$language))
+          },
+          actionButton(ns("close"), tr("close", language$language))
         )
       ))
     })
@@ -230,7 +232,7 @@ mapParams <- function(id, language) {
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
       req(moduleData, map_params$param1, map_params$param2, map_params$yrs1, map_params$yrs2, map_params$days1, map_params$days2, map_params$target, map_params$params, input$map_zoom)
-
+      
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
         return()
@@ -478,7 +480,7 @@ mapParams <- function(id, language) {
       try({
         updateMap() 
       })
-       
+      
     })
   })
 }

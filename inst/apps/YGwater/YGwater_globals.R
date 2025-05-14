@@ -44,7 +44,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/visualize/reports/waterInfo.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/reports/snowBulletin.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/map/map_main.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/precip.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/params.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/visualize/map/locations.R", package = "YGwater"))
@@ -97,9 +96,12 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     accessPath2 = accessPath2,
     public = public,
     g_drive = g_drive,
-    admin = FALSE
-  )
+    admin = FALSE,
+    sidebar_bg = "#FFFCF5",
+    main_bg = "#D9EFF2"
+    )
   
+  # Load the YG BS 5 theme
   app_theme <<- bslib::bs_theme(version = 5) %>%
     bs_add_rules(paste(readLines(system.file("apps/YGwater/www/css/YG_bs5.css", package = "YGwater")), collapse = "\n"))
   

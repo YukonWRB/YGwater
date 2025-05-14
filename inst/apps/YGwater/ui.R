@@ -24,7 +24,7 @@ app_ui <- function(request) {
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
       tags$style(HTML("
         a.dropdown-toggle > .shiny-html-output {
-        display: inline;
+        display: inline;chat
         }
       "))
     ),
