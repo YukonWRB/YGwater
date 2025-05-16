@@ -18,6 +18,8 @@ The answer for the specified lesson, both as text and as a command to be execute
 Answers for the learnR lessons
 }
 \examples{
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 
 learnR_answer(1)
+\dontshow{\}) # examplesIf}
 }

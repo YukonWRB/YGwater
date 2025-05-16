@@ -16,10 +16,12 @@ A file with lessons to learn R.
 This function takes no arguments and opens an R script where you can learn R in a Water Resources Branch context.
 }
 \examples{
+\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
 
 # Open the last lesson you worked on, or lesson 1 is you haven't opened a lesson yet:
 learnR()
 
 # Open the first lesson:
 learnR(1)
+\dontshow{\}) # examplesIf}
 }

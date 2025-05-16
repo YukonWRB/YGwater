@@ -4,7 +4,7 @@ contDataUI <- function(id) {
   tagList(
     tags$style(
       HTML(
-        "// Make the ...preparing download... notification stand out more
+        "/* Make the ...preparing download... notification stand out more */
         .shiny-notification {
           font-size: 24px;
           font-weight: bold;
@@ -19,33 +19,6 @@ contDataUI <- function(id) {
         }"
       )
     ),
-    tags$script(
-      HTML("
-      // Handles tooltip updates outside of the datatable, binds tooltip properties to elements
-      Shiny.addCustomMessageHandler('update-tooltip', function(message) {
-        var selector = '#' + message.id;
-        $(selector).attr('title', message.title)
-        .tooltip('fixTitle').tooltip('hide');
-      });
-      
-      // Handles tootip creation and update for the datatable headers
-      $(document).ready(function() {
-      // Initialize tooltips
-      $('body').tooltip({
-        selector: '[data-bs-toggle=\"tooltip\"]',
-        container: 'body'
-      });
-      // Reinitialize tooltips on table redraw
-      $('#tbl').on('draw.dt', function() {
-        $('.tooltip').remove();
-        $('body').tooltip({
-          selector: '[data-bs-toggle=\"tooltip\"]',
-          container: 'body'
-        });
-      });
-    });"
-      )
-    ),
     page_sidebar(
       sidebar = sidebar(
         title = NULL,
@@ -54,7 +27,7 @@ contDataUI <- function(id) {
         open = list(mobile = "always-above"),
         uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
       ),
-        uiOutput(ns("main"))
+      uiOutput(ns("main"))
     )
   )
 }
@@ -65,14 +38,16 @@ contData <- function(id, language) {
     
     ns <- session$ns  # Used to create UI elements within the server code
     
-    # Functions ################
-    # Adjust multiple selection based on if 'All' is selected
+    # Functions and data fetch ################
+    # Adjust multiple selection based on if 'all' is selected
     observeFilterInput <- function(inputId) {
       observeEvent(input[[inputId]], {
-        # Check if 'All' is selected and adjust accordingly
-        if (length(input[[inputId]]) > 1) {
-          if ("All" %in% input[[inputId]]) {
-            updateSelectizeInput(session, inputId, selected = "All")
+        # Check if 'all' is selected and adjust accordingly
+        if (length(input[[inputId]]) > 1) { # If 'all' was selected last, remove all other selections
+          if (input[[inputId]][length(input[[inputId]])] == "all") {
+            updateSelectizeInput(session, inputId, selected = "all")
+          } else if ("all" %in% input[[inputId]]) { # If 'all' is already selected and another option is selected, remove 'all'
+            updateSelectizeInput(session, inputId, selected = input[[inputId]][length(input[[inputId]])])
           }
         }
       })
@@ -82,14 +57,10 @@ contData <- function(id, language) {
     moduleData <- reactiveValues(
       locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"),
       params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC;"),
-      media_types = DBI::dbGetQuery(session$userData$AquaCache,
-                                    "SELECT * FROM media_types;"),
-      param_groups = DBI::dbGetQuery(session$userData$AquaCache,
-                                     "SELECT * FROM parameter_groups;"),
-      param_sub_groups = DBI::dbGetQuery(session$userData$AquaCache,
-                                         "SELECT * FROM parameter_sub_groups;"),
-      parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache,
-                                                "SELECT * FROM parameter_relationships;")
+      media_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM media_types;"),
+      param_groups = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM parameter_groups;"),
+      param_sub_groups = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM parameter_sub_groups;"),
+      parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM parameter_relationships;")
     )
     
     output$sidebar <- renderUI({
