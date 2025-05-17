@@ -37,6 +37,13 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
       stop("Could not fetch any data.")
     }
     
+    # Check if the database is at a minimum version
+    version <- DBI::dbGetQuery(con, "SELECT version FROM information.version_info WHERE item = 'Last patch number'")[1,1]
+    
+    if (version < 20) {
+      warning("This database schema is of a version older than the YGwater package is expecting. Be aware that some features may not work as expected. Please contact the database administrator to update the database schema.")
+    }
+    
     # Add a new attribute to the connection object to track if a transaction is active
     attr(con, "active_transaction") <- FALSE
     

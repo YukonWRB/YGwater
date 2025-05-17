@@ -304,11 +304,11 @@ ggplotOverlap <- function(location,
     } else if (lang == "en" || is.na(parameter_name)) {
       parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
     }
-    
+    instantaneous <- DBI::dbGetQuery(con, "SELECT aggrecation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';")[1,1]
     if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, ";"))
     } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, " AND record_rate = '", record_rate, "';"))
     }
     if (nrow(exist_check) == 0) {
       if (is.null(record_rate)) {

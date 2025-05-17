@@ -58,8 +58,8 @@ discData <- function(id, language) {
       locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"),
       sub_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT sl.sub_location_id, sl.sub_location_name, sl.sub_location_name_fr FROM sub_locations AS sl INNER JOIN locations ON sl.location_id = locations.location_id ORDER BY sl.sub_location_name ASC"),
       params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC;"),
-      media_types = DBI::dbGetQuery(session$userData$AquaCache,
-                                    "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
+      media = DBI::dbGetQuery(session$userData$AquaCache,
+                                    "SELECT DISTINCT m.* FROM media as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
       parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache,
                                                 "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
       range = DBI::dbGetQuery(session$userData$AquaCache, "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM samples;"),
@@ -95,12 +95,13 @@ discData <- function(id, language) {
       moduleData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
     }
     
+    # Create a function to create the filteredData reactiveValues object
     createFilteredData <- function() {
       data <-  reactiveValues(
         locs = isolate(moduleData$locs),
         sub_locs = isolate(moduleData$sub_locs),
         params = isolate(moduleData$params),
-        media_types = isolate(moduleData$media_types),
+        media = isolate(moduleData$media),
         parameter_relationships = isolate(moduleData$parameter_relationships),
         range = isolate(moduleData$range),
         sample_types = isolate(moduleData$sample_types),
@@ -118,14 +119,14 @@ discData <- function(id, language) {
     filteredData <- createFilteredData()
     
     
-    # Create UI elements ################
+    # Create UI elements and necessary helpers ################
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
     
     # Reactive values to store the input values so that inputs can be reset if the user ends up narrowing their selections to 0 samples
     input_values <- reactiveValues(date_range = input$date_range, 
                                    locations = input$locations, 
                                    sub_locations = input$sub_locations, 
-                                   media_types = input$media_types, 
+                                   media = input$media, 
                                    sample_types = input$sample_types, 
                                    params = input$params)
     
@@ -133,7 +134,7 @@ discData <- function(id, language) {
     render_flags <- reactiveValues(date_range = FALSE,
                                    locations = FALSE,
                                    sub_locations = FALSE,
-                                   media_types = FALSE,
+                                   media = FALSE,
                                    sample_types = FALSE,
                                    params = FALSE)
     
@@ -143,7 +144,7 @@ discData <- function(id, language) {
       render_flags$date_range <- TRUE
       render_flags$locations <- TRUE
       render_flags$sub_locations <- TRUE
-      render_flags$media_types <- TRUE
+      render_flags$media <- TRUE
       render_flags$sample_types <- TRUE
       render_flags$params <- TRUE
       
@@ -153,7 +154,8 @@ discData <- function(id, language) {
                        tr("date_range_select", language$language),
                        start = as.Date(moduleData$range$min_date),
                        end = as.Date(moduleData$range$max_date),
-                       max = Sys.Date() + 1,
+                       min = as.Date(moduleData$range$min_date),
+                       end = as.Date(moduleData$range$max_date),
                        format = "yyyy-mm-dd"
         ),
         # Selectize input for locations
@@ -165,6 +167,7 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
+        # Modal to let users filter locations by network or project
         actionButton(ns("loc_modal"),
                      label = tr("loc_modal", language$language),
                      width = "100%",
@@ -179,11 +182,11 @@ discData <- function(id, language) {
                        selected = "all"
         ),
         # Selectize input for media type
-        selectizeInput(ns("media_types"),
+        selectizeInput(ns("media"),
                        label = tr("media_type(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$media_types$media_id),
-                                         c(tr("all", language$language), moduleData$media_types[, tr("media_type_col", language$language)])),
+                         stats::setNames(c("all", moduleData$media$media_id),
+                                         c(tr("all", language$language), moduleData$media[, tr("media_type_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -204,6 +207,7 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
+        # Modal button to let users filter parameters by group or sub-group
         actionButton(ns("param_modal"),
                      label = tr("param_modal", language$language),
                      width = "100%",
@@ -249,7 +253,7 @@ discData <- function(id, language) {
     ## Run observeFilterInput for each selectize input where 'all' is an option ##### 
     observeFilterInput("locations")
     observeFilterInput("sub_locations")
-    observeFilterInput("media_types")
+    observeFilterInput("media")
     observeFilterInput("pGrps")
     observeFilterInput("pSubGrps")
     observeFilterInput("params")
@@ -257,10 +261,11 @@ discData <- function(id, language) {
     observeFilterInput("projects")
     observeFilterInput("sample_types")
     
+    # Flags to prevent running observers unecessarily when the 'reset' button is pressed
     reset_flags <- reactiveValues(date_range = FALSE,
                                   locations = FALSE,
                                   sub_locations = FALSE,
-                                  media_types = FALSE,
+                                  media = FALSE,
                                   sample_types = FALSE,
                                   params = FALSE)
     
@@ -285,7 +290,8 @@ discData <- function(id, language) {
       updateDateRangeInput(session, "date_range",
                            start = as.Date(moduleData$range$min_date),
                            end = as.Date(moduleData$range$max_date),
-                           max = Sys.Date() + 1
+                           min = as.Date(moduleData$range$min_date),
+                           max = as.Date(moduleData$range$max_date),
       )
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", moduleData$locs$location_id),
@@ -295,9 +301,9 @@ discData <- function(id, language) {
                            choices = stats::setNames(c("all", moduleData$sub_locs$sub_location_id),
                                                      c(tr("all", language$language), moduleData$sub_locs[, tr("sub_location_col", language$language)])),
                            selected = "all")
-      updateSelectizeInput(session, "media_types",
-                           choices = stats::setNames(c("all", moduleData$media_types$media_id),
-                                                     c(tr("all", language$language), moduleData$media_types[, tr("media_type_col", language$language)])),
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(c("all", moduleData$media$media_id),
+                                                     c(tr("all", language$language), moduleData$media[, tr("media_type_col", language$language)])),
                            selected = "all")
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", moduleData$sample_types$sample_type_id),
@@ -310,7 +316,7 @@ discData <- function(id, language) {
       reset_flags$date_range <- TRUE
       reset_flags$locations <- TRUE
       reset_flags$sub_locations <- TRUE
-      reset_flags$media_types <- TRUE
+      reset_flags$media <- TRUE
       reset_flags$sample_types <- TRUE
       reset_flags$params <- TRUE
       
@@ -318,7 +324,7 @@ discData <- function(id, language) {
       input_values$date_range <- input$date_range
       input_values$locations <- input$locations
       input_values$sub_locations <- input$sub_locations
-      input_values$media_types <- input$media_types
+      input_values$media <- input$media
       input_values$sample_types <- input$sample_types
       input_values$params <- input$params
       
@@ -455,7 +461,7 @@ discData <- function(id, language) {
       filteredData$samples <- filteredData$samples[filteredData$samples$datetime >= input$date_range[1] & filteredData$samples$datetime <= input$date_range[2], ]
       filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% filteredData$samples$location_id, ]
       filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% filteredData$locs$location_id, ]
-      filteredData$media_types <- filteredData$media_types[filteredData$media_types$media_id %in% filteredData$samples$media_id, ]
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$samples$media_id, ]
       filteredData$sample_types <- filteredData$sample_types[filteredData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
       
       remain_projects <- filteredData$locations_projects[filteredData$locations_projects$location_id %in% filteredData$locs$location_id, ]
@@ -490,10 +496,10 @@ discData <- function(id, language) {
                                                      c(tr("all", language$language), filteredData$sub_locs[, tr("sub_location_col", language$language)])),
                            selected = if (input$sub_locations %in% filteredData$sub_locs$sub_location_id) input$sub_locations else "all"
       )
-      updateSelectizeInput(session, "media_types",
-                           choices = stats::setNames(c("all", filteredData$media_types$media_id),
-                                                     c(tr("all", language$language), filteredData$media_types[, tr("media_type_col", language$language)])),
-                           selected = if (input$media_types %in% filteredData$media_types$media_id) input$media_types else "all"
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(c("all", filteredData$media$media_id),
+                                                     c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
+                           selected = if (input$media %in% filteredData$media$media_id) input$media else "all"
       )
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", filteredData$sample_types$sample_type_id),
@@ -538,7 +544,7 @@ discData <- function(id, language) {
       
       filteredData$locs <- moduleData$locs[moduleData$locs$location_id %in% input$locations, ]
       filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$location_id %in% filteredData$locs$location_id, ]
-      filteredData$media_types <- moduleData$media_types[moduleData$media_types$media_id %in% filteredData$samples$media_id, ]
+      filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$samples$media_id, ]
       filteredData$sample_types <- moduleData$sample_types[moduleData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
       
       remain_projects <- moduleData$locations_projects[moduleData$locations_projects$location_id %in% input$locations, ]
@@ -568,10 +574,10 @@ discData <- function(id, language) {
                                                      c(tr("all", language$language), filteredData$sub_locs[, tr("sub_location_col", language$language)])),
                            selected = if (input$sub_locations %in% filteredData$sub_locs$sub_location_id) input$sub_locations else "all"
       )
-      updateSelectizeInput(session, "media_types",
-                           choices = stats::setNames(c("all", filteredData$media_types$media_id),
-                                                     c(tr("all", language$language), filteredData$media_types[, tr("media_type_col", language$language)])),
-                           selected = if (input$media_types %in% filteredData$media_types$media_id) input$media_types else "all"
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(c("all", filteredData$media$media_id),
+                                                     c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
+                           selected = if (input$media %in% filteredData$media$media_id) input$media else "all"
       )
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", filteredData$sample_types$sample_type_id),
@@ -616,7 +622,7 @@ discData <- function(id, language) {
       }
       
       filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$sub_location_id %in% input$sub_locations, ]
-      filteredData$media_types <- moduleData$media_types[moduleData$media_types$media_id %in% filteredData$samples$media_id, ]
+      filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$samples$media_id, ]
       filteredData$sample_types <- moduleData$sample_types[moduleData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
       
       # No impact on projects or networks as these are location based and we're past that point
@@ -638,10 +644,10 @@ discData <- function(id, language) {
       }
       
       # Update the downstream selectize inputs with the filtered data
-      updateSelectizeInput(session, "media_types",
-                           choices = stats::setNames(c("all", filteredData$media_types$media_id),
-                                                     c(tr("all", language$language), filteredData$media_types[, tr("media_type_col", language$language)])),
-                           selected = if (input$media_types %in% filteredData$media_types$media_id) input$media_types else "all"
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(c("all", filteredData$media$media_id),
+                                                     c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
+                           selected = if (input$media %in% filteredData$media$media_id) input$media else "all"
       )
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", filteredData$sample_types$sample_type_id),
@@ -658,34 +664,34 @@ discData <- function(id, language) {
       input_values$sub_locations <- input$sub_locations
     }, ignoreInit = TRUE)
     
-    ### media_types filter #########
-    observeEvent(input$media_types, {
-      req(input$media_types, filteredData)
+    ### media filter #########
+    observeEvent(input$media, {
+      req(input$media, filteredData)
       
       # Flags to prevent running the observer when the media types are reset or initially rendered
-      if (reset_flags$media_types) {
-        reset_flags$media_types <- FALSE
+      if (reset_flags$media) {
+        reset_flags$media <- FALSE
         return()
       }
-      if (render_flags$media_types) {
-        render_flags$media_types <- FALSE
+      if (render_flags$media) {
+        render_flags$media <- FALSE
         return()
       }
       
       # Filter the data based on the selected media types
       stash <- filteredData$samples
-      filteredData$samples <- moduleData$samples[moduleData$samples$media_id %in% input$media_types, ]
+      filteredData$samples <- moduleData$samples[moduleData$samples$media_id %in% input$media, ]
       if (nrow(filteredData$samples) == 0) {
-        # If no samples are found, reset the samples to the original data, show a notification, and reset input$media_types to its previous value
+        # If no samples are found, reset the samples to the original data, show a notification, and reset input$media to its previous value
         filteredData$samples <- stash
-        updateSelectizeInput(session, "media_types",
-                             selected = input_values$media_types
+        updateSelectizeInput(session, "media",
+                             selected = input_values$media
         )
         showNotification(tr("no_samps_medias", language$language), type = "error", duration = 5)
         return()
       }
       
-      filteredData$media_types <- moduleData$media_types[moduleData$media_types$media_id %in% input$media_types, ]
+      filteredData$media <- moduleData$media[moduleData$media$media_id %in% input$media, ]
       filteredData$sample_types <- moduleData$sample_types[moduleData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
       
       # No impact on projects or networks as we're no longer narrowing locations
@@ -719,7 +725,7 @@ discData <- function(id, language) {
       )
       
       # Reset the input values reactiveValues to the current selection
-      input_values$media_types <- input$media_types
+      input_values$media <- input$media
     }, ignoreInit = TRUE)
     
     ### sample_types filter #########
@@ -819,7 +825,7 @@ discData <- function(id, language) {
            JOIN results r ON s.sample_id = r.sample_id
            JOIN locations l ON s.location_id = l.location_id
            LEFT JOIN sub_locations sl ON s.sub_location_id = sl.sub_location_id
-           JOIN media_types m ON s.media_id = m.media_id
+           JOIN media m ON s.media_id = m.media_id
            JOIN sample_types st ON s.sample_type = st.sample_type_id
            JOIN parameters p ON r.parameter_id = p.parameter_id
            JOIN collection_methods cm ON s.collection_method = cm.collection_method_id
@@ -831,7 +837,7 @@ discData <- function(id, language) {
           else 
             ")", 
           " AND s.sample_type IN (", paste(filteredData$sample_types$sample_type_id, collapse = ", "), ")",
-          " AND s.media_id IN (", paste(filteredData$media_types$media_id, collapse = ", "), ")",
+          " AND s.media_id IN (", paste(filteredData$media$media_id, collapse = ", "), ")",
           " AND s.datetime BETWEEN '", filteredData$range$min_date, "' AND '", filteredData$range$max_date, "'",
           " AND r.parameter_id IN (", paste(filteredData$params$parameter_id, collapse = ", "), ")",
           ";"

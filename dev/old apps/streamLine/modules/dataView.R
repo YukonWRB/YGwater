@@ -380,10 +380,10 @@ data <- function(id, con, language, restoring, data, inputs) {
       
       
       # Combine period type and record rate for ease of viewing
-      tbl[, measurement_type := paste0(period_type, " (", record_rate, ")")]
+      tbl[, measurement_type := paste0(aggregation_type, " (", record_rate, ")")]
       
-        # Drop period_type
-        tbl[, period_type := NULL]
+        # Drop aggregation_type
+        tbl[, aggregation_type := NULL]
         tbl[, record_rate := NULL]
         
         

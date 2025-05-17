@@ -219,7 +219,7 @@ plotOverlap <- function(location,
   
   
   
-  if (startDay > Sys.Date()) { #If left like this it results in wonky ribbon plotting and extra 'ghost' timeseries. Since there would be no data anyways change the year, endDay can stay in the future to enable plotting graphs with only the ribbon beyond the last day.
+  if (startDay > Sys.Date()) { # If left like this it results in wonky ribbon plotting and extra 'ghost' timeseries. Since there would be no data anyways change the year, endDay can stay in the future to enable plotting graphs with only the ribbon beyond the last day.
     diff <- as.numeric(endDay - startDay)
     lubridate::year(startDay) <- lubridate::year(Sys.Date())
     if (startDay > Sys.Date()) { #Depending on where we are in the year and what the startDay is, startDay could still be in the future.
@@ -265,10 +265,12 @@ plotOverlap <- function(location,
       stop("There are multiple sub-locations for this location and parameter. Please specify a sub-location.")
     }
     
+    inst_agg <- DBI::dbGetQuery(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';")
+    
     if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", inst_agg, ";"))
     } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", inst_agg, " AND record_rate = '", record_rate, "';"))
     }
   } else { # sub location is specified
     # Find the sub location_id
@@ -283,9 +285,9 @@ plotOverlap <- function(location,
       sub_location_id <- sub_location
     }
     if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND sub_location_id = '", sub_location_id, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", inst_agg, " AND sub_location_id = '", sub_location_id, "';"))
     } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND record_rate = '", record_rate, "' AND sub_location_id = '", sub_location_id, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", inst_agg, " AND record_rate = '", record_rate, "' AND sub_location_id = '", sub_location_id, "';"))
     }
   }
   
