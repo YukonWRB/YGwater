@@ -133,7 +133,7 @@ console.log(language);")
   # Get info from database (passed to multiple modules). Data is re-fetched after successful login via an observeEvent.
   DBdata <- reactiveValues(
     locations = dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;"),
-    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter_id, media_id, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;"),
+    timeseries = dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter_id, media_id, aggregation_type, record_rate, category, start_datetime, end_datetime FROM timeseries;"),
     locations_projects = dbGetQueryDT(pool, "SELECT * FROM locations_projects;"),
     locations_networks = dbGetQueryDT(pool, "SELECT * FROM locations_networks;"),
     media_types = dbGetQueryDT(pool, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_id = p.media_id);"),
@@ -189,7 +189,7 @@ console.log(language);")
         
         # Re-fetch data from the database after successful login
         DBdata$locations <- dbGetQueryDT(pool, "SELECT location, location_id, name, latitude, longitude, geom_id, name_fr FROM locations;")
-        DBdata$timeseries <- dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter_id, media_id, period_type, record_rate, category, start_datetime, end_datetime FROM timeseries;")
+        DBdata$timeseries <- dbGetQueryDT(pool, "SELECT timeseries_id, location_id, parameter_id, media_id, aggregation_type, record_rate, category, start_datetime, end_datetime FROM timeseries;")
         DBdata$locations_projects <- dbGetQueryDT(pool, "SELECT * FROM locations_projects;")
         DBdata$locations_networks <- dbGetQueryDT(pool, "SELECT * FROM locations_networks;")
         DBdata$media_types <- dbGetQueryDT(pool, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_id = p.media_id);")

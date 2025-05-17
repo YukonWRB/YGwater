@@ -2,7 +2,7 @@
 
 addUI <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  page_fluid(
     selectizeInput(ns("ts_loc"),
                    NULL,
                    choices = stats::setNames(c("loc", "ts", "users"), c("Add/edit location", "Add/edit timeseries", "Add users/user groups")),

@@ -25,23 +25,23 @@
 # TODO: Adapt to use new DB
 
 tabularReport <- function(level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose", con = NULL) {
-
+  
   # level_locations = "all"
   # flow_locations = "all"
   # snow_locations = "all"
   # bridge_locations = "all"
-  # precip_locations = NULL
+  # precip_locations = "default"
   # past = 28
   # save_path = "choose"
-  # archive_path = "choose"
+  # archive_path = NULL
   # con = NULL
   
-
+  
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
-
+  
   if (!is.null(level_locations)) {
     if (level_locations[1] == "default") {
       level_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
@@ -52,7 +52,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       level_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name = 'water level' AND t.location IN ('", paste(level_locations, collapse = "', '"), "') ORDER BY location;"))
     }
   }
-
+  
   if (!is.null(flow_locations)) {
     if (flow_locations[1] == "default") {
       flow_locations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
@@ -63,7 +63,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       flow_locations <- DBI::dbGetQuery(con, paste0("SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.param_name = 'flow' AND t.location IN ('", paste(flow_locations, collapse = "', '"), "') ORDER BY location;"))
     }
   }
-
+  
   if (!is.null(snow_locations)) {
     if (snow_locations[1] == "default") {
       snow_locations <- c("09AA-M1", "09BA-M7", "09DB-M1", "09EA-M1", "10AD-M2", "29AB-M3")
@@ -97,7 +97,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     }
   }
   
-
+  
   if (save_path == "choose") {
     if (!interactive()) {
       stop("You must specify a save path when running in non-interactive mode.")
@@ -114,8 +114,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       archive_path <- rstudioapi::selectFile(caption = "Select Yesterday's File", path = save_path, filter = "Excel files  (*.xlsx)")
     }
   }
-
-
+  
+  
   #Set the days for which to generate tables
   if (past < 8) {
     past <- 7
@@ -129,7 +129,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   if (past >= 22) {
     past <- 28
   }
-
+  
   #Load yesterday's workbook -----------------
   yesterday <- list(yesterday_general = NULL, yesterday_locs = NULL, yesterday_public_comments = NULL)
   if (!is.null(archive_path)) {
@@ -137,16 +137,20 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
       for (i in names(yesterday_workbook)) {
         if (!(i %in% c("precipitation", "comments"))) {
-          yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
-          yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6)
+          yesterday[["yesterday_general"]][[i]] <- suppressWarnings(openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE))
+          data <- suppressWarnings(openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 6))
+          data <- unique(data)  # Gets rid of repeated rows
+          yesterday[["yesterday_locs"]][[i]] <- data
         } else if (i == "precipitation") {
-          yesterday[["yesterday_general"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE)
-          yesterday[["yesterday_locs"]][[i]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8)
+          yesterday[["yesterday_general"]][[i]] <- suppressWarnings(openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = 3, cols = 2, colNames = FALSE))
+          data <- suppressWarnings(openxlsx::read.xlsx(yesterday_workbook, sheet = i, startRow = 8))
+          data <- unique(data) # Gets rid of repeated rows
+          yesterday[["yesterday_locs"]][[i]] <- data
         } else if (i == "comments") {
           if ("precipitation" %in% names(yesterday_workbook)) {
-            yesterday[["yesterday_public_comments"]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(12,13), cols = 2, colNames = FALSE)
+            yesterday[["yesterday_public_comments"]] <- suppressWarnings(openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(12,13), cols = 2, colNames = FALSE))
           } else {
-            yesterday[["yesterday_public_comments"]] <- openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(11,12), cols = 2, colNames = FALSE)
+            yesterday[["yesterday_public_comments"]] <- suppressWarnings(openxlsx::read.xlsx(yesterday_workbook, sheet = i, rows = c(11,12), cols = 2, colNames = FALSE))
           }
         }
       }
@@ -158,29 +162,30 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   } else {
     yesterday_comments <- FALSE
   }
-
-
-
-  #Get the data -------------------------
+  
+  
+  
+  # Get the data -------------------------
   tables <- list()
+  ## Precipitation -----------------------
   if (!is.null(precip_locations)) { #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
     precip <- data.frame()
     if (!yesterday_comments) {
       yesterday_comment_precip <- NA
     }
+    message("Fetching precipitation rasters and calculating a per-basin average. This could take a while.")
     for (i in precip_locations) {
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(con, paste0("SELECT name FROM locations WHERE location = '", i, "'"))))
       yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
       tryCatch({
-        #TODO: Update code below to get polygons direct from the DB once basinPrecip is updated.
-        lastWeek <- basinPrecip(location = i, start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
-        lastThree <- basinPrecip(location = i, start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
-        lastTwo <- basinPrecip(location = i, start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
-        lastOne <- basinPrecip(location = i, start = Sys.time() - 60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE, con = con)
-        next24 <- basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE, con = con)
-        next48 <- basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE, con = con)
+        lastWeek <- suppressMessages(basinPrecip(location = i, start = Sys.time() - 60*60*24*7, end = Sys.time(), silent = TRUE, map = FALSE, con = con))
+        lastThree <- suppressMessages(basinPrecip(location = i, start = Sys.time() - 60*60*24*3, end = Sys.time(), silent = TRUE, map = FALSE, con = con))
+        lastTwo <- suppressMessages(basinPrecip(location = i, start = Sys.time() - 60*60*24*2, end = Sys.time(), silent = TRUE, map = FALSE, con = con))
+        lastOne <- suppressMessages(basinPrecip(location = i, start = Sys.time() - 60*60*24*1, end = Sys.time(), silent = TRUE, map = FALSE, con = con))
+        next24 <- suppressMessages(basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*24, silent = TRUE, map = FALSE, con = con))
+        next48 <- suppressMessages(basinPrecip(location = i, start = Sys.time(), end = Sys.time() + 60*60*48, silent = TRUE, map = FALSE, con = con))
         yesterday_comment_precip <- if (yesterday_comments) yesterday$yesterday_locs$precipitation[yesterday$yesterday_locs$precipitation$Location == i, "Location.specific.comments"] else NA
-
+        
         precip <- rbind(precip,
                         data.frame("loc" = i,
                                    "name" = name,
@@ -216,6 +221,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     yesterday_comment_precip <- NA
   }
   
+  ## Water level ------------------------
   if (!is.null(level_locations)) {
     level_daily <- list()
     level_rt <- list()
@@ -237,7 +243,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       }
     }
   }
-
+  
+  ## Water flow ---------------------------
   if (!is.null(flow_locations)) {
     flow_daily <- list()
     flow_rt <- list()
@@ -259,6 +266,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       }
     }
   }
+  
+  ## Snow pack --------------------------
   if (!is.null(snow_locations)) {
     snow_daily <- list()
     snow_rt <- list()
@@ -280,6 +289,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       }
     }
   }
+  
+  ## Bridge freeboard --------------------------
   if (!is.null(bridge_locations)) {
     bridges_daily <- list()
     bridges_rt <- list()
@@ -301,10 +312,11 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       }
     }
   }  #End of data acquisition
-
-
-
-  #Make the remaining tables ----------------
+  
+  
+  
+  # Generate tables ----------------
+  ## Level table -------------------
   if (length(level_rt) > 0) { #generate level table
     levels <- data.frame()
     for (i in names(level_rt)) {
@@ -322,7 +334,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
       yesterday_comment_levels <- if (yesterday_comments) yesterday$yesterday_locs$levels[yesterday$yesterday_locs$levels$Location == i, "Location.specific.comments"] else NA
-
+      
       if (past <= 7) {
         levels <- rbind(levels,
                         data.frame("loc" = i,
@@ -437,8 +449,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     levels <- hablar::rationalize(levels)
     tables$levels <- levels
   }
-
-
+  
+  ## Flow table ---------------------------
   if (length(flow_rt) > 0) { #generate flow table
     flows <- data.frame()
     for (i in names(flow_rt)) {
@@ -456,23 +468,23 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
       yesterday_comment_flows <- if (yesterday_comments) yesterday$yesterday_locs$flows[yesterday$yesterday_locs$flows$Location == i, "Location.specific.comments"] else NA
-
+      
       if (past <= 7) {
         flows <- rbind(flows,
-                        data.frame("loc" = i,
-                                   "name" = names_flow[i],
-                                   "flow" = if (!is.na(latest)) round(latest, 1) else NA,
-                                   "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                   "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                   "24" = if (!is.na(day)) round((latest - day), 1) else NA,
-                                   "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
-                                   "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
-                                   "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-                                   "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                   "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                   "location_comment" = NA,
-                                   "yesterday_comments" = if (length(yesterday_comment_flows) < 1 | is.null(yesterday_comment_flows)) NA else yesterday_comment_flows
-                        ))
+                       data.frame("loc" = i,
+                                  "name" = names_flow[i],
+                                  "flow" = if (!is.na(latest)) round(latest, 1) else NA,
+                                  "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                  "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                  "24" = if (!is.na(day)) round((latest - day), 1) else NA,
+                                  "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
+                                  "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
+                                  "week" = if (!is.na(week)) round((latest - week), 1) else NA,
+                                  "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                  "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                  "location_comment" = NA,
+                                  "yesterday_comments" = if (length(yesterday_comment_flows) < 1 | is.null(yesterday_comment_flows)) NA else yesterday_comment_flows
+                       ))
       }
       if (past > 7 & past <= 14) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -480,21 +492,21 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
         flows <- rbind(flows,
-                        data.frame("loc" = i,
-                                   "name" = names_flow[i],
-                                   "flow" = if (!is.na(latest)) round(latest, 1) else NA,
-                                   "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                   "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                   "24" = if (!is.na(day)) round((latest - day), 1) else NA,
-                                   "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
-                                   "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
-                                   "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-                                   "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
-                                   "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                   "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                   "location_comment" = NA,
-                                   "yesterday_comments" = if (length(yesterday_comment_flows) < 1 | is.null(yesterday_comment_flows)) NA else yesterday_comment_flows
-                        ))
+                       data.frame("loc" = i,
+                                  "name" = names_flow[i],
+                                  "flow" = if (!is.na(latest)) round(latest, 1) else NA,
+                                  "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                  "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                  "24" = if (!is.na(day)) round((latest - day), 1) else NA,
+                                  "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
+                                  "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
+                                  "week" = if (!is.na(week)) round((latest - week), 1) else NA,
+                                  "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
+                                  "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                  "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                  "location_comment" = NA,
+                                  "yesterday_comments" = if (length(yesterday_comment_flows) < 1 | is.null(yesterday_comment_flows)) NA else yesterday_comment_flows
+                       ))
       }
       if (past > 14 & past <= 21) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -506,22 +518,22 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
         flows <- rbind(flows,
-                        data.frame("loc" = i,
-                                   "name" = names_flow[i],
-                                   "flow" = if (!is.na(latest)) round(latest, 1) else NA,
-                                   "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                   "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                   "24" = if (!is.na(day)) round((latest - day), 1) else NA,
-                                   "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
-                                   "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
-                                   "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-                                   "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
-                                   "threeweek" = if (!is.na(threeweek)) round((latest - threeweek), 1) else NA,
-                                   "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                   "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                   "location_comment" = NA,
-                                   "yesterday_comments" = if (length(yesterday_comment_flows) < 1 | is.null(yesterday_comment_flows)) NA else yesterday_comment_flows
-                        ))
+                       data.frame("loc" = i,
+                                  "name" = names_flow[i],
+                                  "flow" = if (!is.na(latest)) round(latest, 1) else NA,
+                                  "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                  "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                  "24" = if (!is.na(day)) round((latest - day), 1) else NA,
+                                  "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
+                                  "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
+                                  "week" = if (!is.na(week)) round((latest - week), 1) else NA,
+                                  "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
+                                  "threeweek" = if (!is.na(threeweek)) round((latest - threeweek), 1) else NA,
+                                  "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                  "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                  "location_comment" = NA,
+                                  "yesterday_comments" = if (length(yesterday_comment_flows) < 1 | is.null(yesterday_comment_flows)) NA else yesterday_comment_flows
+                       ))
       }
       if (past > 21) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -537,23 +549,23 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*667 & rt$datetime >= last_time - 60*60*677 , ]$value)
         }
         flows <- rbind(flows,
-                        data.frame("loc" = i,
-                                   "name" = names_flow[i],
-                                   "flow" = if (!is.na(latest)) round(latest, 1) else NA,
-                                   "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                   "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                   "24" = if (!is.na(day)) round((latest - day), 1) else NA,
-                                   "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
-                                   "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
-                                   "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-                                   "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
-                                   "threeweek" = if (!is.na(threeweek)) round((latest - threeweek), 1) else NA,
-                                   "fourweek" = if (!is.na(fourweek)) round((latest - fourweek), 1) else NA,
-                                   "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                   "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                   "location_comment" = NA,
-                                   "yesterday_comments" = if (length(yesterday_comment_flows) < 1 | is.null(yesterday_comment_flows)) NA else yesterday_comment_flows
-                        ))
+                       data.frame("loc" = i,
+                                  "name" = names_flow[i],
+                                  "flow" = if (!is.na(latest)) round(latest, 1) else NA,
+                                  "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                  "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                  "24" = if (!is.na(day)) round((latest - day), 1) else NA,
+                                  "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
+                                  "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
+                                  "week" = if (!is.na(week)) round((latest - week), 1) else NA,
+                                  "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
+                                  "threeweek" = if (!is.na(threeweek)) round((latest - threeweek), 1) else NA,
+                                  "fourweek" = if (!is.na(fourweek)) round((latest - fourweek), 1) else NA,
+                                  "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                  "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                  "location_comment" = NA,
+                                  "yesterday_comments" = if (length(yesterday_comment_flows) < 1 | is.null(yesterday_comment_flows)) NA else yesterday_comment_flows
+                       ))
       }
     }
     if (past <= 7) {
@@ -571,7 +583,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     flows <- hablar::rationalize(flows)
     tables$flows <- flows
   }
-
+  
+  ## Snow table --------------------------
   if (length(snow_rt) > 0) { #generate snow table
     snow <- data.frame()
     for (i in names(snow_rt)) {
@@ -589,23 +602,23 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
       yesterday_comment_snow <- if (yesterday_comments) yesterday$yesterday_locs$snow[yesterday$yesterday_locs$snow$Location == i, "Location.specific.comments"] else NA
-
+      
       if (past <= 7) {
         snow <- rbind(snow,
-                       data.frame("loc" = i,
-                                  "name" = names_snow[i],
-                                  "SWE" = if (!is.na(latest)) round(latest, 1) else NA,
-                                  "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                  "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                  "24" = if (!is.na(day)) round((latest - day), 1) else NA,
-                                  "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
-                                  "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
-                                  "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-                                  "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                  "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                  "location_comment" = NA,
-                                  "yesterday_comments" = if (length(yesterday_comment_snow) < 1 | is.null(yesterday_comment_snow)) NA else yesterday_comment_snow
-                       ))
+                      data.frame("loc" = i,
+                                 "name" = names_snow[i],
+                                 "SWE" = if (!is.na(latest)) round(latest, 1) else NA,
+                                 "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                 "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                 "24" = if (!is.na(day)) round((latest - day), 1) else NA,
+                                 "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
+                                 "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
+                                 "week" = if (!is.na(week)) round((latest - week), 1) else NA,
+                                 "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                 "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                 "location_comment" = NA,
+                                 "yesterday_comments" = if (length(yesterday_comment_snow) < 1 | is.null(yesterday_comment_snow)) NA else yesterday_comment_snow
+                      ))
       }
       if (past > 7 & past <= 14) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -613,21 +626,21 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
         snow <- rbind(snow,
-                       data.frame("loc" = i,
-                                  "name" = names_snow[i],
-                                  "SWE" = if (!is.na(latest)) round(latest, 1) else NA,
-                                  "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                  "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                  "24" = if (!is.na(day)) round((latest - day), 1) else NA,
-                                  "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
-                                  "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
-                                  "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-                                  "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
-                                  "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                  "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                  "location_comment" = NA,
-                                  "yesterday_comments" = if (length(yesterday_comment_snow) < 1 | is.null(yesterday_comment_snow)) NA else yesterday_comment_snow
-                       ))
+                      data.frame("loc" = i,
+                                 "name" = names_snow[i],
+                                 "SWE" = if (!is.na(latest)) round(latest, 1) else NA,
+                                 "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                 "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                 "24" = if (!is.na(day)) round((latest - day), 1) else NA,
+                                 "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
+                                 "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
+                                 "week" = if (!is.na(week)) round((latest - week), 1) else NA,
+                                 "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
+                                 "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                 "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                 "location_comment" = NA,
+                                 "yesterday_comments" = if (length(yesterday_comment_snow) < 1 | is.null(yesterday_comment_snow)) NA else yesterday_comment_snow
+                      ))
       }
       if (past > 14 & past <= 21) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -639,22 +652,22 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
         snow <- rbind(snow,
-                       data.frame("loc" = i,
-                                  "name" = names_snow[i],
-                                  "SWE" = if (!is.na(latest)) round(latest, 1) else NA,
-                                  "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                  "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                  "24" = if (!is.na(day)) round((latest - day), 1) else NA,
-                                  "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
-                                  "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
-                                  "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-                                  "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
-                                  "threeweek" = if (!is.na(threeweek)) round((latest - threeweek), 1) else NA,
-                                  "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                  "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                  "location_comment" = NA,
-                                  "yesterday_comments" = if (length(yesterday_comment_snow) < 1 | is.null(yesterday_comment_snow)) NA else yesterday_comment_snow
-                       ))
+                      data.frame("loc" = i,
+                                 "name" = names_snow[i],
+                                 "SWE" = if (!is.na(latest)) round(latest, 1) else NA,
+                                 "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                 "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                 "24" = if (!is.na(day)) round((latest - day), 1) else NA,
+                                 "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
+                                 "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
+                                 "week" = if (!is.na(week)) round((latest - week), 1) else NA,
+                                 "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
+                                 "threeweek" = if (!is.na(threeweek)) round((latest - threeweek), 1) else NA,
+                                 "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                 "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                 "location_comment" = NA,
+                                 "yesterday_comments" = if (length(yesterday_comment_snow) < 1 | is.null(yesterday_comment_snow)) NA else yesterday_comment_snow
+                      ))
       }
       if (past > 21) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -670,23 +683,23 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*667 & rt$datetime >= last_time - 60*60*677 , ]$value)
         }
         snow <- rbind(snow,
-                       data.frame("loc" = i,
-                                  "name" = names_snow[i],
-                                  "SWE" = if (!is.na(latest)) round(latest, 1) else NA,
-                                  "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                  "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                  "24" = if (!is.na(day)) round((latest - day), 1) else NA,
-                                  "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
-                                  "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
-                                  "week" = if (!is.na(week)) round((latest - week), 1) else NA,
-                                  "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
-                                  "threeweek" = if (!is.na(threeweek)) round((latest - threeweek), 1) else NA,
-                                  "fourweek" = if (!is.na(fourweek)) round((latest - fourweek), 1) else NA,
-                                  "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                  "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                  "location_comment" = NA,
-                                  "yesterday_comments" = if (length(yesterday_comment_snow) < 1 | is.null(yesterday_comment_snow)) NA else yesterday_comment_snow
-                       ))
+                      data.frame("loc" = i,
+                                 "name" = names_snow[i],
+                                 "SWE" = if (!is.na(latest)) round(latest, 1) else NA,
+                                 "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                 "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                 "24" = if (!is.na(day)) round((latest - day), 1) else NA,
+                                 "48" = if (!is.na(twoday)) round((latest - twoday), 1) else NA,
+                                 "72" = if (!is.na(threeday)) round((latest - threeday), 1) else NA,
+                                 "week" = if (!is.na(week)) round((latest - week), 1) else NA,
+                                 "twoweek" = if (!is.na(twoweek)) round((latest - twoweek), 1) else NA,
+                                 "threeweek" = if (!is.na(threeweek)) round((latest - threeweek), 1) else NA,
+                                 "fourweek" = if (!is.na(fourweek)) round((latest - fourweek), 1) else NA,
+                                 "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                 "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                 "location_comment" = NA,
+                                 "yesterday_comments" = if (length(yesterday_comment_snow) < 1 | is.null(yesterday_comment_snow)) NA else yesterday_comment_snow
+                      ))
       }
     }
     if (past <= 7) {
@@ -704,7 +717,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     snow <- hablar::rationalize(snow)
     tables$snow <- snow
   }
-
+  
+  ## Bridges table ----------------------
   if (length(bridges_rt) > 0) { #generate bridges table
     bridges <- data.frame()
     for (i in names(bridges_rt)) {
@@ -722,24 +736,24 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
         week <- stats::median(rt[rt$datetime <= last_time - 60*60*165 & rt$datetime >= last_time - 60*60*171 , ]$value)
       }
       yesterday_comment_bridges <- if (yesterday_comments) yesterday$yesterday_locs$bridges[yesterday$yesterday_locs$bridges$Location == i, "Location.specific.comments"] else NA
-
-
+      
+      
       if (past <= 7) {
         bridges <- rbind(bridges,
-                      data.frame("loc" = i,
-                                 "name" = names_bridges[i],
-                                 "distance" = if (!is.na(latest)) round(latest, 1) else NA,
-                                 "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                 "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                 "24" = if (!is.na(day)) round((latest - day) * 100, 1) else NA,
-                                 "48" = if (!is.na(twoday)) round((latest - twoday) * 100, 1) else NA,
-                                 "72" = if (!is.na(threeday)) round((latest - threeday) * 100, 1) else NA,
-                                 "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
-                                 "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                 "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                 "location_comment" = NA,
-                                 "yesterday_comments" = if (length(yesterday_comment_bridges) < 1 | is.null(yesterday_comment_bridges)) NA else yesterday_comment_bridges
-                      ))
+                         data.frame("loc" = i,
+                                    "name" = names_bridges[i],
+                                    "distance" = if (!is.na(latest)) round(latest, 1) else NA,
+                                    "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                    "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                    "24" = if (!is.na(day)) round((latest - day) * 100, 1) else NA,
+                                    "48" = if (!is.na(twoday)) round((latest - twoday) * 100, 1) else NA,
+                                    "72" = if (!is.na(threeday)) round((latest - threeday) * 100, 1) else NA,
+                                    "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
+                                    "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                    "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                    "location_comment" = NA,
+                                    "yesterday_comments" = if (length(yesterday_comment_bridges) < 1 | is.null(yesterday_comment_bridges)) NA else yesterday_comment_bridges
+                         ))
       }
       if (past > 7 & past <= 14) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -747,21 +761,21 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*331 & rt$datetime >= last_time - 60*60*341 , ]$value)
         }
         bridges <- rbind(bridges,
-                      data.frame("loc" = i,
-                                 "name" = names_bridges[i],
-                                 "distance" = if (!is.na(latest)) round(latest, 1) else NA,
-                                 "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                 "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                 "24" = if (!is.na(day)) round((latest - day) * 100, 1) else NA,
-                                 "48" = if (!is.na(twoday)) round((latest - twoday) * 100, 1) else NA,
-                                 "72" = if (!is.na(threeday)) round((latest - threeday) * 100, 1) else NA,
-                                 "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
-                                 "twoweek" = if (!is.na(twoweek)) round((latest - twoweek) * 100, 1) else NA,
-                                 "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                 "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                 "location_comment" = NA,
-                                 "yesterday_comments" = if (length(yesterday_comment_bridges) < 1 | is.null(yesterday_comment_bridges)) NA else yesterday_comment_bridges
-                      ))
+                         data.frame("loc" = i,
+                                    "name" = names_bridges[i],
+                                    "distance" = if (!is.na(latest)) round(latest, 1) else NA,
+                                    "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                    "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                    "24" = if (!is.na(day)) round((latest - day) * 100, 1) else NA,
+                                    "48" = if (!is.na(twoday)) round((latest - twoday) * 100, 1) else NA,
+                                    "72" = if (!is.na(threeday)) round((latest - threeday) * 100, 1) else NA,
+                                    "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
+                                    "twoweek" = if (!is.na(twoweek)) round((latest - twoweek) * 100, 1) else NA,
+                                    "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                    "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                    "location_comment" = NA,
+                                    "yesterday_comments" = if (length(yesterday_comment_bridges) < 1 | is.null(yesterday_comment_bridges)) NA else yesterday_comment_bridges
+                         ))
       }
       if (past > 14 & past <= 21) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -773,22 +787,22 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           threeweek <- stats::median(rt[rt$datetime <= last_time - 60*60*497 & rt$datetime >= last_time - 60*60*511 , ]$value)
         }
         bridges <- rbind(bridges,
-                      data.frame("loc" = i,
-                                 "name" = names_bridges[i],
-                                 "distance" = if (!is.na(latest)) round(latest, 1) else NA,
-                                 "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                 "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                 "24" = if (!is.na(day)) round((latest - day) * 100, 1) else NA,
-                                 "48" = if (!is.na(twoday)) round((latest - twoday) * 100, 1) else NA,
-                                 "72" = if (!is.na(threeday)) round((latest - threeday) * 100, 1) else NA,
-                                 "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
-                                 "twoweek" = if (!is.na(twoweek)) round((latest - twoweek) * 100, 1) else NA,
-                                 "threeweek" = if (!is.na(threeweek)) round((latest - threeweek) * 100, 1) else NA,
-                                 "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                 "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                 "location_comment" = NA,
-                                 "yesterday_comments" = if (length(yesterday_comment_bridges) < 1 | is.null(yesterday_comment_bridges)) NA else yesterday_comment_bridges
-                      ))
+                         data.frame("loc" = i,
+                                    "name" = names_bridges[i],
+                                    "distance" = if (!is.na(latest)) round(latest, 1) else NA,
+                                    "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                    "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                    "24" = if (!is.na(day)) round((latest - day) * 100, 1) else NA,
+                                    "48" = if (!is.na(twoday)) round((latest - twoday) * 100, 1) else NA,
+                                    "72" = if (!is.na(threeday)) round((latest - threeday) * 100, 1) else NA,
+                                    "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
+                                    "twoweek" = if (!is.na(twoweek)) round((latest - twoweek) * 100, 1) else NA,
+                                    "threeweek" = if (!is.na(threeweek)) round((latest - threeweek) * 100, 1) else NA,
+                                    "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                    "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                    "location_comment" = NA,
+                                    "yesterday_comments" = if (length(yesterday_comment_bridges) < 1 | is.null(yesterday_comment_bridges)) NA else yesterday_comment_bridges
+                         ))
       }
       if (past > 21) {
         twoweek <- stats::median(rt[rt$datetime <= last_time - 60*60*335 & rt$datetime >= last_time - 60*60*337 , ]$value)
@@ -804,23 +818,23 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
           fourweek <- stats::median(rt[rt$datetime <= last_time - 60*60*667 & rt$datetime >= last_time - 60*60*677 , ]$value)
         }
         bridges <- rbind(bridges,
-                      data.frame("loc" = i,
-                                 "name" = names_bridges[i],
-                                 "distance" = if (!is.na(latest)) round(latest, 1) else NA,
-                                 "percent" = if (length(percent_historic == 1)) percent_historic else NA,
-                                 "mean" = if (length(percent_mean == 1)) percent_mean else NA,
-                                 "24" = if (!is.na(day)) round((latest - day) * 100, 1) else NA,
-                                 "48" = if (!is.na(twoday)) round((latest - twoday) * 100, 1) else NA,
-                                 "72" = if (!is.na(threeday)) round((latest - threeday) * 100, 1) else NA,
-                                 "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
-                                 "twoweek" = if (!is.na(twoweek)) round((latest - twoweek) * 100, 1) else NA,
-                                 "threeweek" = if (!is.na(threeweek)) round((latest - threeweek) * 100, 1) else NA,
-                                 "fourweek" = if (!is.na(fourweek)) round((latest - fourweek) * 100, 1) else NA,
-                                 "age" = substr(format(last_time, tz = "MST"), 1, 16),
-                                 "Hrs" = as.numeric(paste0(round(age[1],1))),
-                                 "location_comment" = NA,
-                                 "yesterday_comments" = if (length(yesterday_comment_bridges) < 1 | is.null(yesterday_comment_bridges)) NA else yesterday_comment_bridges
-                      ))
+                         data.frame("loc" = i,
+                                    "name" = names_bridges[i],
+                                    "distance" = if (!is.na(latest)) round(latest, 1) else NA,
+                                    "percent" = if (length(percent_historic == 1)) percent_historic else NA,
+                                    "mean" = if (length(percent_mean == 1)) percent_mean else NA,
+                                    "24" = if (!is.na(day)) round((latest - day) * 100, 1) else NA,
+                                    "48" = if (!is.na(twoday)) round((latest - twoday) * 100, 1) else NA,
+                                    "72" = if (!is.na(threeday)) round((latest - threeday) * 100, 1) else NA,
+                                    "week" = if (!is.na(week)) round((latest - week) * 100, 1) else NA,
+                                    "twoweek" = if (!is.na(twoweek)) round((latest - twoweek) * 100, 1) else NA,
+                                    "threeweek" = if (!is.na(threeweek)) round((latest - threeweek) * 100, 1) else NA,
+                                    "fourweek" = if (!is.na(fourweek)) round((latest - fourweek) * 100, 1) else NA,
+                                    "age" = substr(format(last_time, tz = "MST"), 1, 16),
+                                    "Hrs" = as.numeric(paste0(round(age[1],1))),
+                                    "location_comment" = NA,
+                                    "yesterday_comments" = if (length(yesterday_comment_bridges) < 1 | is.null(yesterday_comment_bridges)) NA else yesterday_comment_bridges
+                         ))
       }
     }
     if (past <= 7) {
@@ -838,8 +852,9 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     bridges <- hablar::rationalize(bridges)
     tables$bridges <- bridges
   }
-
-  #Make the Excel workbook ---------------------------
+  
+  
+  # Make the Excel workbook ---------------------------
   wb <- openxlsx::createWorkbook(creator = "Ghislain de Laplante (via automated process)", title = "Hydrometric Condition Report")
   time <- Sys.time()
   head <- data.frame(paste0("Issued at ", substr(format(time, tz = "MST"), 1, 16), " MST"),
@@ -869,7 +884,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   percHistComment <- openxlsx::createComment("0 = historic min, 100 = historic max. Yellow = >75%, red: >100%.", author = "Ghislain", visible = FALSE)
   percMeanComment <- openxlsx::createComment("Current level / hist. mean (excl. current yr). 100 = historic mean. Yellow: >125%, Red: >150%.", author = "Ghislain", visible = FALSE)
   percMeanAdjComment <- openxlsx::createComment("Adjusted to historic min due to arbitrary 0 point. 100 = historic mean, 0 = historic min. Yellow: >150%, Red: >200%.", author = "Ghislain", visible = FALSE)
-
+  
   
   # Create the first tab with general internal + external comments
   openxlsx::addWorksheet(wb, "comments")
@@ -992,7 +1007,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     openxlsx::conditionalFormatting(wb, sheet = i, rule = if (i == "bridges") ">0" else "<0", cols = if (past == 7) c(6:9) else if (past == 14) c(6:10) else if (past == 21) c(6:11) else if (past == 28) c(6:12), rows = 1:nrow(tables[[i]]) + 6, style = decreasingStyle)
     openxlsx::conditionalFormatting(wb, sheet = i, rule = '=""', cols = if (past == 7) c(3, 6:9) else if (past == 14) c(3, 6:10) else if (past == 21) c(3, 6:11) else if (past == 28) c(3, 6:12), rows = 1:nrow(tables[[i]]) + 6, style = missingDataStyle)
   }
-
+  
   if ("precipitation" %in% names(tables)) {
     openxlsx::addWorksheet(wb, "precipitation")
     #Create/format the header
@@ -1049,6 +1064,10 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     openxlsx::writeComment(wb, sheet = "precipitation", col = 4, row = 8, comment = threeDayComment)
     openxlsx::writeComment(wb, sheet = "precipitation", col = 3, row = 8, comment = weekComment)
   }
+  
+  # Save the workbook ----------------------------
   openxlsx::saveWorkbook(wb, paste0(save_path, "/HydrometricReport_", Sys.Date(), ".xlsx"), overwrite = TRUE)
+  
+  message("Tabular report created and saved in ", save_path, " with name HydrometricReport_", Sys.Date(), ".xlsx. \n")
 }
 

@@ -24,7 +24,7 @@ app_ui <- function(request) {
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
       tags$style(HTML("
         a.dropdown-toggle > .shiny-html-output {
-        display: inline;
+        display: inline;chat
         }
       "))
     ),
@@ -70,15 +70,21 @@ app_ui <- function(request) {
       gap = "10px",
       nav_panel(title = uiOutput("homeNavTitle"), value = "home",
                 uiOutput("home_ui")),
-      nav_panel(title = uiOutput("mapNavMenuTitle"), value = "map",
-                uiOutput("map_ui")),
+      # nav_panel(title = uiOutput("mapsNavMenuTitle"), value = "map",
+      #           uiOutput("map_ui")),
+      nav_menu(title = uiOutput("mapsNavMenuTitle"), value = "maps",
+               nav_panel(title = uiOutput("mapsNavLocsTitle"), value = "monitoringLocations",
+                         uiOutput("mapLocs_ui")),
+               nav_panel(title = uiOutput("mapsNavParamsTitle"), value = "parameterValues",
+                         uiOutput("mapParams_ui"))
+      ),
       nav_menu(title = uiOutput("plotsNavMenuTitle"), value = "plot",
                nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discrete",
-                         uiOutput("discrete_ui")),
+                         uiOutput("plotDiscrete_ui")),
                nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
-                         uiOutput("continuous_ui")),
+                         uiOutput("plotContinuous_ui")),
                nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
-                         uiOutput("mix_ui"))
+                         uiOutput("plotsMix_ui"))
       ),
       nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
                nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",

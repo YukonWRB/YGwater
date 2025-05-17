@@ -1,11 +1,13 @@
 snowBulletinUIMod <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  tagList(
     # Custom CSS below is for consistency with the sidebarPanel look elsewhere in the app.
-    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/background_style.css")),
-    div(class = "custom-panel container",   # This div holds all UI elements for the menu
+    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/card_background.css")),
+    card(
+      card_body(
+        class = "custom-card",
         uiOutput(ns("menu")) # UI is rendered in the server function below so that it can use database information as well as language selections.
-        
+      )
     )
   )
 }
@@ -179,7 +181,7 @@ snowBulletinMod <- function(id, language) {
     outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
     
     observeEvent(input$go, {
-
+      
       tryCatch({
         withProgress(
           message = tr("dl_prep", language$language), 
@@ -218,33 +220,33 @@ snowBulletinMod <- function(id, language) {
                 )
               }
             })
-        
-        incProgress(0.7)
-        
-        if (selections$stats) {
-          # Zip up everything in 'dir' and write the zip to `file`
-          files <- list.files(dir, full.names = TRUE)
-          
-          zip::zipr(zipfile = paste0(dir, "/report.zip"), files = files)
-          outputFile(paste0(dir, "/report.zip"))
-          
-          # Delete everything in the 'dir' except for the .zip file
-          files <- list.files(dir, full.names = TRUE)
-          files <- files[!grepl("report.zip", files)]
-          if (length(files) > 0) unlink(files, recursive = TRUE, force = TRUE)
-        } else {
-          file <- list.files(dir, full.names = TRUE)
-          outputFile(file)
-        }
-
-        # 5. Now programmatically click the hidden download button
-        shinyjs::click("download")
-        
-        incProgress(1)
-        
+            
+            incProgress(0.7)
+            
+            if (selections$stats) {
+              # Zip up everything in 'dir' and write the zip to `file`
+              files <- list.files(dir, full.names = TRUE)
+              
+              zip::zipr(zipfile = paste0(dir, "/report.zip"), files = files)
+              outputFile(paste0(dir, "/report.zip"))
+              
+              # Delete everything in the 'dir' except for the .zip file
+              files <- list.files(dir, full.names = TRUE)
+              files <- files[!grepl("report.zip", files)]
+              if (length(files) > 0) unlink(files, recursive = TRUE, force = TRUE)
+            } else {
+              file <- list.files(dir, full.names = TRUE)
+              outputFile(file)
+            }
+            
+            # 5. Now programmatically click the hidden download button
+            shinyjs::click("download")
+            
+            incProgress(1)
+            
           } # End withProgress content
-      ) # End withProgress
-      
+        ) # End withProgress
+        
       }, error = function(e) {
         showNotification(
           if (selections$stats) {
@@ -258,29 +260,29 @@ snowBulletinMod <- function(id, language) {
         )
       })
     })
-  
-  # Listen for the 'go' and make the report when called
-  output$download <- downloadHandler(
-    filename = function() {
+    
+    # Listen for the 'go' and make the report when called
+    output$download <- downloadHandler(
+      filename = function() {
+        if (selections$stats) {
+          paste0("Snow bulletin stats issued ", Sys.Date(), ".zip")
+        } else {
+          paste0("Snow bulletin issued ", Sys.Date(), ".docx")
+        }
+      },
+      content = function(file) {
+        file.copy(outputFile(), file)
+        # Now delete the zip file and the directory it's in
+        unlink(dirname(outputFile()), recursive = TRUE, force = TRUE)
+      }, # End content
       if (selections$stats) {
-        paste0("Snow bulletin stats issued ", Sys.Date(), ".zip")
+        contentType = "application/zip"
       } else {
-        paste0("Snow bulletin issued ", Sys.Date(), ".docx")
+        contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       }
-    },
-    content = function(file) {
-      file.copy(outputFile(), file)
-      # Now delete the zip file and the directory it's in
-      unlink(dirname(outputFile()), recursive = TRUE, force = TRUE)
-    }, # End content
-    if (selections$stats) {
-      contentType = "application/zip"
-    } else {
-      contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    }
-
-  ) # End downloadHandler
-  
+      
+    ) # End downloadHandler
+    
   }) # End moduleServer
 } # End snowInfoServer
 

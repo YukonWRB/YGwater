@@ -4,7 +4,7 @@
 
 vizUI <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  page_fluid(
 
   )
 }

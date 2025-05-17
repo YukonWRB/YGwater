@@ -101,7 +101,8 @@ app_server <- function(input, output, session) {
     discretePlot = FALSE,
     continuousPlot = FALSE,
     mixPlot = FALSE,
-    map = FALSE,
+    mapParamValues = FALSE,
+    mapMonitoringLocations = FALSE,
     FOD = FALSE,
     imgTableView = FALSE,
     imgMapView = FALSE,
@@ -218,7 +219,9 @@ app_server <- function(input, output, session) {
       
       # Render the navigation bar titles based on the language
       output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
-      output$mapNavMenuTitle <- renderUI({tr("map", languageSelection$language)})
+      output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
+      output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
+      output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
       
       output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
       output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
@@ -409,7 +412,7 @@ $(document).keyup(function(event) {
   
   # Load modules based on input$navbar ################################
   # Store information to pass between modules
-  primary_outputs <- reactiveValues()
+  moduleOutputs <- reactiveValues()
   
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
@@ -470,6 +473,8 @@ $(document).keyup(function(event) {
     }
     
     # Load modules when the corresponding tabs are selected
+    ## Visulize mode tabs ##########################
+    ### Home nav_menu ##########################
     if (input$navbar == "home") {
       if (!ui_loaded$home) {
         output$home_ui <- renderUI(homeUI("home"))
@@ -477,40 +482,48 @@ $(document).keyup(function(event) {
         home("home", language = languageSelection) # Call the server
       }
     }
-    if (input$navbar == "discrete") {
+    ### Plots nav_menu ##########################
+    if (input$navbar == "discrete") {  # This is reached through a nav_menu
       if (!ui_loaded$discretePlot) {
-        output$discrete_ui <- renderUI(discretePlotUI("discretePlot"))
+        output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
         ui_loaded$discretePlot <- TRUE
         discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
-    if (input$navbar == "continuous") {
+    if (input$navbar == "continuous") { # This is reached through a nav_menu
       if (!ui_loaded$continuousPlot) {
-        output$continuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
+        output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
         ui_loaded$continuousPlot <- TRUE
         continuousPlot("continuousPlot", language = languageSelection, windowDims) # Call the server
       }
     }
-    if (input$navbar == "mix") {
+    if (input$navbar == "mix") { # This is reached through a nav_menu
       if (!ui_loaded$mixPlot) {
-        output$mix_ui <- renderUI(mixPlotUI("mixPlot"))
+        output$plotMix_ui <- renderUI(mixPlotUI("mixPlot"))
         ui_loaded$mixPlot <- TRUE
         mixPlot("mixPlot", mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
-    if (input$navbar == "map") {
-      if (!ui_loaded$map) {
-        output$map_ui <- renderUI(mapUI("map"))
-        ui_loaded$map <- TRUE
-        primary_outputs$map_main <- map("map", language = languageSelection) # Call the server
+    ### Maps nav_menu ##########################
+    if (input$navbar == "monitoringLocations") { # This is reached through a nav_menu
+      if (!ui_loaded$mapMonitoringLocations) {
+        output$mapLocs_ui <- renderUI(mapLocsUI("mapLocs"))
+        ui_loaded$mapMonitoringLocations <- TRUE
+        moduleOutputs$mapLocs <- mapLocs("mapLocs", language = languageSelection) # Call the server
       }
-      observe({  # Observe the map_outputs reactive to see if the tab should be changed, for example when the user clicks on a location's pop-up links to go to data or plot tabs.
-        if (!is.null(primary_outputs$map_main$change_tab)) {
-          updateTabsetPanel(session, "navbar", selected = (primary_outputs$map_main$change_tab))
-          primary_outputs$map_main$change_tab <- NULL
-        }
-      })
+      if (!is.null(moduleOutputs$mapLocs$change_tab)) {
+        moduleOutputs$mapLocs$change_tab <- NULL # Reset to NULL
+        nav_select(session = session, "navbar", selected = (moduleOutputs$mapLocs$change_tab)) # Change tabs
+      }
     }
+    if (input$navbar == "parameterValues") {
+      if (!ui_loaded$mapParamValues) {
+        output$mapParams_ui <- renderUI(mapParamsUI("mapParams"))
+        ui_loaded$mapParams <- TRUE
+        mapParams("mapParams", language = languageSelection) # Call the server
+      }
+    }
+    ### FOD nav_menu ##########################
     if (input$navbar == "FOD") {
       if (!ui_loaded$FOD) {
         output$fod_ui <- renderUI(FODUI("FOD"))
@@ -518,6 +531,7 @@ $(document).keyup(function(event) {
         FOD("FOD") # Call the server
       }
     }
+    ### Image nav_menu ##########################
     if (input$navbar == "imgTableView") {
       if (!ui_loaded$imgTableView) {
         output$imgTableView_ui <- renderUI(imgTableViewUI("imgTableView"))
@@ -532,6 +546,7 @@ $(document).keyup(function(event) {
         imgMapView("imgMapView", language = languageSelection) # Call the server
       }
     }
+    ### Reports nav_menu ##########################
     if (input$navbar == "snowInfo") {
       if (!ui_loaded$snowInfo) {
         output$snowInfo_ui <- renderUI(snowInfoUIMod("snowInfo"))
@@ -560,6 +575,7 @@ $(document).keyup(function(event) {
         snowBulletinMod("snowBulletin", language = languageSelection) # Call the server
       }
     }
+    ### Data download nav_menu ##########################
     if (input$navbar == "discData") {
       if (!ui_loaded$discData) {
         output$discData_ui <- renderUI(discDataUI("discData"))
@@ -574,6 +590,7 @@ $(document).keyup(function(event) {
         contData("contData", language = languageSelection) # Call the server
       }
     }
+    ### Info nav_menu ##########################
     if (input$navbar == "about") {
       if (!ui_loaded$about) {
         output$about_ui <- renderUI(aboutUI("about"))
@@ -588,6 +605,8 @@ $(document).keyup(function(event) {
         news("news", language = languageSelection) # Call the server
       }
     }
+    
+    ## Admin mode tabs ##########################
     if (input$navbar == "locs") {
       if (!ui_loaded$locs) {
         output$locs_ui <- renderUI(locsUI("locs"))

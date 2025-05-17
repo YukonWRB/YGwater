@@ -1,4 +1,4 @@
-basinsUI <- function(id) {
+basinsUIMod <- function(id) {
   ns <- NS(id)
   sidebarLayout(
     sidebarPanel(
@@ -10,7 +10,7 @@ basinsUI <- function(id) {
   )
 }
 
-basinsServer <- function(id) {
+basinsServerMod <- function(id) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns  # Used to create UI elements in the server code

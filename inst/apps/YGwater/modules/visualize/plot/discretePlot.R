@@ -1,12 +1,15 @@
 discretePlotUI <- function(id) {
   ns <- NS(id)
-  sidebarLayout(
-    sidebarPanel(
-      uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
+
+  page_sidebar(
+    sidebar = sidebar(
+      title = NULL,
+      width = 350,
+      bg = config$sidebar_bg,
+      open = list(mobile = "always-above"),
+      uiOutput(ns("sidebar"))
     ),
-    mainPanel(
-      uiOutput(ns("main"))
-    )
+    uiOutput(ns("main"))
   )
 }
 
@@ -42,14 +45,14 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
         uiOutput(ns("EQWin_source_ui")),
         # start and end datetime
         dateRangeInput(ns("date_range"),
-                       "Select date range",
+                       tr("date_range_lab", language$language),
                        start = Sys.Date() - 30,
                        end = Sys.Date(),
                        max = Sys.Date() + 1,
                        format = "yyyy-mm-dd"),
         conditionalPanel(ns = ns,
                          condition = "input.data_source == 'EQ'",
-                         # Toggle button for locations or location groups (only show if data source  == EQWin)
+                         # Toggle button for locations or location groups (only show if data source == EQWin)
                          radioButtons(ns("locs_groups"),
                                       NULL,
                                       choices = c("Locations", "Location Groups"),
@@ -110,12 +113,12 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
                          condition = "input.data_source == 'AC'",
                          # Selectize input for locations, populated once connection is established
                          selectizeInput(ns("locations_AC"),
-                                        "Select locations",
+                                        tr("loc(s)", language$language),
                                         choices = NULL,
                                         multiple = TRUE),
                          # Selectize input for parameters, populated once connection is established
                          selectizeInput(ns("parameters_AC"),
-                                        "Select parameters",
+                                        tr("parameter(s)", language$language),
                                         choices = NULL,
                                         multiple = TRUE)
         ),
@@ -137,6 +140,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
             icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
           )
         ),
+        
         radioButtons(ns("facet_on"),
                      NULL,
                      choices = stats::setNames(c("locs", "params"), c("Locations", "Parameters")),
@@ -229,7 +233,7 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
     output$main <- renderUI({
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
-        fluidPage(
+        page_fluid(
           div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;")),
           div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;"))
         )
