@@ -59,7 +59,7 @@ titles <- list(
     PORCUPINE = "Porcupine River Basin",
     PEEL = "Peel River Basin",
     LIARD = "Liard River Basin",
-    ALSEK = "Alesk River Basin",
+    ALSEK = "Alsek River Basin",
     TABLE = "Drainage Basin and Snow Course",
     MAP4 = "Map 4. Location of Water Resources Snow Courses"
   ),
@@ -638,7 +638,6 @@ Certaines autres choses nécessitent une vérification et peuvent nécessiter un
 
 RAPPELEZ VOUS DE SUPPRIMER CETTE PAGE UNE FOIS TERMINÉ.
 "
-
 }`
 
 \newpage

@@ -1,11 +1,13 @@
 waterInfoUIMod <- function(id) {
   ns <- NS(id)
-  fluidPage(
-    # Custom CSS below is for consistency with the sidebarPanel look elsewhere in the app.
-    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/background_style.css")),
-    div(class = "custom-panel container",   # This div holds all UI elements for the menu
-        uiOutput(ns("menu")) # UI is rendered in the server function below so that it can use database information as well as language selections.
-        
+  tagList(
+    # Custom CSS below is for consistency with the look elsewhere in the app.
+    tags$head(tags$link(rel = "stylesheet", type = "text/css", href = "css/card_background.css")),
+    card(
+      card_body(
+        class = "custom-card",
+        uiOutput(ns("menu"))
+      )
     )
   )
 }
@@ -31,40 +33,40 @@ waterInfoMod <- function(id, language) {
       ptype = "combined"
     )
     
-      # This observe block is used to render the UI elements for the menu. It is reactive to the language selection.
-      output$menu <- renderUI({
-        req(moduleData, language$language, language$abbrev)
-        tagList(
-          textOutput(ns("info")),
-          tags$hr(), # dividing blank space
-          # selector for one parameter (flow if exists, else level) or both
-          selectizeInput(ns("param"),
-                         label = tr("gen_waterInfo_param_select", language$language),
-                         choices = stats::setNames(
-                           c("one", "both"),
-                           c(tr("gen_waterInfo_param_select_one", language$language), tr("gen_waterInfo_param_select_both", language$language))
-                         ), 
-                         selected = selections$param,
-                         multiple = FALSE,
-                         width = "100%"),
-          
-          # selector for location
-          selectizeInput(ns("loc"), 
-                         label = tr("gen_loc_select", language$language),
-                         choices = stats::setNames(
-                           c("all", moduleData$locs$location),
-                           c(tr("all_locs", language$language),
-                             titleCase(moduleData$locs[[tr("generic_name_col", language$language)]], language$abbrev))
-                         ),
-                         selected = selections$loc,
-                         multiple = TRUE,
-                         width = "100%"),
-          
-          # end date to use in calculations
-          dateInput(ns("end"), 
-                    label = tr("gen_waterInfo_end_date", language$language),
-                    value = selections$end,
-                    width = "100%"),
+    # This observe block is used to render the UI elements for the menu. It is reactive to the language selection.
+    output$menu <- renderUI({
+      req(moduleData, language$language, language$abbrev)
+      tagList(
+        textOutput(ns("info")),
+        tags$hr(), # dividing blank space
+        # selector for one parameter (flow if exists, else level) or both
+        selectizeInput(ns("param"),
+                       label = tr("gen_waterInfo_param_select", language$language),
+                       choices = stats::setNames(
+                         c("one", "both"),
+                         c(tr("gen_waterInfo_param_select_one", language$language), tr("gen_waterInfo_param_select_both", language$language))
+                       ), 
+                       selected = selections$param,
+                       multiple = FALSE,
+                       width = "100%"),
+        
+        # selector for location
+        selectizeInput(ns("loc"), 
+                       label = tr("gen_loc_select", language$language),
+                       choices = stats::setNames(
+                         c("all", moduleData$locs$location),
+                         c(tr("all_locs", language$language),
+                           titleCase(moduleData$locs[[tr("generic_name_col", language$language)]], language$abbrev))
+                       ),
+                       selected = selections$loc,
+                       multiple = TRUE,
+                       width = "100%"),
+        
+        # end date to use in calculations
+        dateInput(ns("end"), 
+                  label = tr("gen_waterInfo_end_date", language$language),
+                  value = selections$end,
+                  width = "100%"),
         
         # month ranges
         selectizeInput(ns("min_m"),
@@ -115,137 +117,137 @@ waterInfoMod <- function(id, language) {
         # Make it happen
         actionButton(ns("go"), label = tr("create_report", language$language)),
         downloadButton(ns("download"), "download", style = "visibility: hidden;") # Hidden; triggered automatically but left hidden if 'go' is successful
-      
-        ) # End tagList
-      }) %>% # End renderUI
-        bindEvent(language$language, moduleData$locs) # Re-render the UI if the language or moduleData changes
-      
-      output$info <- renderText({
-        tr("gen_waterInfo_info", language$language)
-        }) %>% bindEvent(language$language) # Re-render the text if the language changes
-      
-      # Observe inputs and store in object 'selections'
-      observeEvent(input$param, {
-        selections$param <- input$param
-      }, ignoreInit = TRUE)
-      observeEvent(input$loc, {
-        selections$loc <- input$loc
-      }, ignoreInit = TRUE)
-      observeEvent(input$end, {
-        selections$end <- input$end
-      }, ignoreInit = TRUE)
-      observeEvent(input$min_m, {
-        selections$min_m <- input$min_m
-      }, ignoreInit = TRUE)
-      observeEvent(input$max_m, {
-        selections$max_m <- input$max_m
-      }, ignoreInit = TRUE)
-      observeEvent(input$prct, {
-        selections$prct <- input$prct
-      }, ignoreInit = TRUE)
-      observeEvent(input$plots, {
-        selections$plots <- input$plots
-        if (input$plots) {
-          shinyjs::show("ptype")
-        } else {
-          shinyjs::hide("ptype")
-        }
-      }, ignoreInit = TRUE)
-      observeEvent(input$ptype, {
-        selections$ptype <- input$ptype
-      }, ignoreInit = TRUE)
-      
-      # Adjust filter selections based on if 'all' is selected (remove selections other than 'all') ################
-      observeFilterInput <- function(inputId) {
-        observeEvent(input[[inputId]], {
-          # Check if 'all' is selected and adjust accordingly
-          if (length(input[[inputId]]) > 1) { # If 'all' was selected last, remove all other selections
-            if (input[[inputId]][length(input[[inputId]])] == "all") {
-              updateSelectizeInput(session, inputId, selected = "all")
-            } else if ("all" %in% input[[inputId]]) { # If 'all' is already selected and another option is selected, remove 'all'
-              updateSelectizeInput(session, inputId, selected = input[[inputId]][length(input[[inputId]])])
-            }
-          }
-        })
+        
+      ) # End tagList
+    }) %>% # End renderUI
+      bindEvent(language, moduleData) # Re-render the UI if the language or moduleData changes
+    
+    output$info <- renderText({
+      tr("gen_waterInfo_info", language$language)
+    }) %>% bindEvent(language$language) # Re-render the text if the language changes
+    
+    # Observe inputs and store in object 'selections'
+    observeEvent(input$param, {
+      selections$param <- input$param
+    }, ignoreInit = TRUE)
+    observeEvent(input$loc, {
+      selections$loc <- input$loc
+    }, ignoreInit = TRUE)
+    observeEvent(input$end, {
+      selections$end <- input$end
+    }, ignoreInit = TRUE)
+    observeEvent(input$min_m, {
+      selections$min_m <- input$min_m
+    }, ignoreInit = TRUE)
+    observeEvent(input$max_m, {
+      selections$max_m <- input$max_m
+    }, ignoreInit = TRUE)
+    observeEvent(input$prct, {
+      selections$prct <- input$prct
+    }, ignoreInit = TRUE)
+    observeEvent(input$plots, {
+      selections$plots <- input$plots
+      if (input$plots) {
+        shinyjs::show("ptype")
+      } else {
+        shinyjs::hide("ptype")
       }
-      observeFilterInput("loc")
-      
-      outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
-      
-      observeEvent(input$go, {
-        tryCatch({
-          withProgress(
-            message = tr("dl_prep", language$language), 
-            value = 0, 
-            {
-              incProgress(0.2)
-              
-              # 1. Create a temporary folder
-              dir <- paste0(tempdir(), "/waterInfoOutput")
-              dir.create(dir, showWarnings = FALSE)
-              # Delete all files in the folder (if any)
-              files <- list.files(dir, full.names = TRUE)
-              if (length(files) > 0) unlink(files, recursive = TRUE, force = TRUE)
-              
-              # 3. Call waterInfo() so it writes all files to 'dir'
-              suppressWarnings(waterInfo(
-                con = session$userData$AquaCache,
-                locations = selections$loc,
-                level_flow = selections$param,
-                end_date = selections$end,
-                months_min = as.numeric(selections$min_m),
-                months_max = as.numeric(selections$max_m),
-                allowed_missing = selections$prct,
-                plots = selections$plots,
-                plot_type = selections$ptype,
-                save_path = dir,
-                quiet = TRUE
-              ))
-              
-              incProgress(0.7)
-              
-              # 4. Zip up everything in 'dir' and write the zip to `file`
-              files <- list.files(dir, full.names = TRUE)
-              
-              zip::zipr(zipfile = paste0(dir, "/report.zip"), files = files)
-              outputFile(paste0(dir, "/report.zip"))
-              
-              # Delete everything in the 'dir' except for the .zip file
-              files <- list.files(dir, full.names = TRUE)
-              files <- files[!grepl("report.zip", files)]
-              if (length(files) > 0) unlink(files, recursive = TRUE, force = TRUE)
-              
-              # 5. Now programmatically click the hidden download button
-              shinyjs::click("download")
-              
-              incProgress(1)
-              
-            } # End withProgress content
-          ) # End withProgress
-          
-        }, error = function(e) {
-          showNotification(
-            paste("Error generating water quantity/info report:", e$message),
-            type = "error",
-            duration = NULL,
-            closeButton = TRUE
-          )
-        })
+    }, ignoreInit = TRUE)
+    observeEvent(input$ptype, {
+      selections$ptype <- input$ptype
+    }, ignoreInit = TRUE)
+    
+    # Adjust filter selections based on if 'all' is selected (remove selections other than 'all') ################
+    observeFilterInput <- function(inputId) {
+      observeEvent(input[[inputId]], {
+        # Check if 'all' is selected and adjust accordingly
+        if (length(input[[inputId]]) > 1) { # If 'all' was selected last, remove all other selections
+          if (input[[inputId]][length(input[[inputId]])] == "all") {
+            updateSelectizeInput(session, inputId, selected = "all")
+          } else if ("all" %in% input[[inputId]]) { # If 'all' is already selected and another option is selected, remove 'all'
+            updateSelectizeInput(session, inputId, selected = input[[inputId]][length(input[[inputId]])])
+          }
+        }
       })
-      
-      # Listen for the 'go' and make the report when called
-      output$download <- downloadHandler(
-        filename = function() {
-          paste0("water info report issued ", Sys.Date(), ".zip")
-        },
-        content = function(file) {
-          file.copy(outputFile(), file)
-          # Now delete the zip file and the directory it's in
-          unlink(dirname(outputFile()), recursive = TRUE, force = TRUE)
-        }, # End content
-        contentType = "application/zip"
-      ) # End downloadHandler
-      
+    }
+    observeFilterInput("loc")
+    
+    outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
+    
+    observeEvent(input$go, {
+      tryCatch({
+        withProgress(
+          message = tr("dl_prep", language$language), 
+          value = 0, 
+          {
+            incProgress(0.2)
+            
+            # 1. Create a temporary folder
+            dir <- paste0(tempdir(), "/waterInfoOutput")
+            dir.create(dir, showWarnings = FALSE)
+            # Delete all files in the folder (if any)
+            files <- list.files(dir, full.names = TRUE)
+            if (length(files) > 0) unlink(files, recursive = TRUE, force = TRUE)
+            
+            # 3. Call waterInfo() so it writes all files to 'dir'
+            suppressWarnings(waterInfo(
+              con = session$userData$AquaCache,
+              locations = selections$loc,
+              level_flow = selections$param,
+              end_date = selections$end,
+              months_min = as.numeric(selections$min_m),
+              months_max = as.numeric(selections$max_m),
+              allowed_missing = selections$prct,
+              plots = selections$plots,
+              plot_type = selections$ptype,
+              save_path = dir,
+              quiet = TRUE
+            ))
+            
+            incProgress(0.7)
+            
+            # 4. Zip up everything in 'dir' and write the zip to `file`
+            files <- list.files(dir, full.names = TRUE)
+            
+            zip::zipr(zipfile = paste0(dir, "/report.zip"), files = files)
+            outputFile(paste0(dir, "/report.zip"))
+            
+            # Delete everything in the 'dir' except for the .zip file
+            files <- list.files(dir, full.names = TRUE)
+            files <- files[!grepl("report.zip", files)]
+            if (length(files) > 0) unlink(files, recursive = TRUE, force = TRUE)
+            
+            # 5. Now programmatically click the hidden download button
+            shinyjs::click("download")
+            
+            incProgress(1)
+            
+          } # End withProgress content
+        ) # End withProgress
+        
+      }, error = function(e) {
+        showNotification(
+          paste("Error generating water quantity/info report:", e$message),
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+      })
+    })
+    
+    # Listen for the 'go' and make the report when called
+    output$download <- downloadHandler(
+      filename = function() {
+        paste0("water info report issued ", Sys.Date(), ".zip")
+      },
+      content = function(file) {
+        file.copy(outputFile(), file)
+        # Now delete the zip file and the directory it's in
+        unlink(dirname(outputFile()), recursive = TRUE, force = TRUE)
+      }, # End content
+      contentType = "application/zip"
+    ) # End downloadHandler
+    
   }) # End moduleServer
 } # End waterInfoServer
 

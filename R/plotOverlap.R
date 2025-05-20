@@ -8,7 +8,7 @@
 #' @param location The location for which you want a plot.
 #' @param sub_location Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).
 #' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
-#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
+#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
 #' @param tzone The timezone to use for graphing. Only really evident for a small number of days.
@@ -38,14 +38,14 @@
 #' @export
 
 # 
-# location <- "29AB009"
+# location <- "09AB004"
 # sub_location <- NULL
 # parameter <- 1165
 # record_rate = NULL
 # startDay <- 1
 # endDay <- 365
 # tzone <- "MST"
-# years <- c(2024, 2023, 2022, 2025)
+# years <- NULL
 # datum <- FALSE
 # title <- TRUE
 # filter <- 20
@@ -60,6 +60,9 @@
 # legend_position = "v"
 # invert = FALSE
 # unusable = FALSE
+# hover = FALSE
+# custom_title = NULL
+
 
 # location <- "29AB-M3"
 # sub_location <- NULL
@@ -138,7 +141,7 @@ plotOverlap <- function(location,
   }
   
   if (!is.null(record_rate)) {
-    if (!(record_rate %in% c('< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'))) {
+    if (!lubridate::is.period(lubridate::period(record_rate))) {
       warning("Your entry for parameter record_rate is invalid. It's been reset to the default NULL.")
       record_rate <- NULL
     }
@@ -219,7 +222,7 @@ plotOverlap <- function(location,
   
   
   
-  if (startDay > Sys.Date()) { #If left like this it results in wonky ribbon plotting and extra 'ghost' timeseries. Since there would be no data anyways change the year, endDay can stay in the future to enable plotting graphs with only the ribbon beyond the last day.
+  if (startDay > Sys.Date()) { # If left like this it results in wonky ribbon plotting and extra 'ghost' timeseries. Since there would be no data anyways change the year, endDay can stay in the future to enable plotting graphs with only the ribbon beyond the last day.
     diff <- as.numeric(endDay - startDay)
     lubridate::year(startDay) <- lubridate::year(Sys.Date())
     if (startDay > Sys.Date()) { #Depending on where we are in the year and what the startDay is, startDay could still be in the future.
@@ -258,6 +261,7 @@ plotOverlap <- function(location,
     parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
   }
   
+  inst_agg <- DBI::dbGetQuery(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';")
   if (is.null(sub_location)) {
     # Check if there are multiple timeseries for this parameter_code, location regardless of sub_location. If so, throw a stop
     sub_loc_check <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
@@ -265,10 +269,11 @@ plotOverlap <- function(location,
       stop("There are multiple sub-locations for this location and parameter. Please specify a sub-location.")
     }
     
+    
     if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", inst_agg, ";"))
     } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND record_rate = '", record_rate, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", inst_agg, " AND record_rate = '", record_rate, "';"))
     }
   } else { # sub location is specified
     # Find the sub location_id
@@ -283,9 +288,9 @@ plotOverlap <- function(location,
       sub_location_id <- sub_location
     }
     if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND sub_location_id = '", sub_location_id, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", inst_agg, " AND sub_location_id = '", sub_location_id, "';"))
     } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = 'instantaneous' AND record_rate = '", record_rate, "' AND sub_location_id = '", sub_location_id, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", inst_agg, " AND record_rate = '", record_rate, "' AND sub_location_id = '", sub_location_id, "';"))
     }
   }
   
@@ -298,22 +303,9 @@ plotOverlap <- function(location,
   } else if (nrow(exist_check) > 1) {
     if (is.null(record_rate)) {
       warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one with the most frequent recording rate.")
-      tsid <- exist_check[exist_check$record_rate == "< 1 day", "timeseries_id"]
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "1 day", "timeseries_id"]
-      }
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "1 week", "timeseries_id"]
-      }
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "4 weeks", "timeseries_id"]
-      }
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "1 month", "timeseries_id"]
-      }
-      if (is.na(tsid)) {
-        tsid <- exist_check[exist_check$record_rate == "year", "timeseries_id"]
-      }
+      exist_check$record_rate <- lubridate::as.period(exist_check$record_rate)
+      exist_check <- exist_check[order(exist_check$record_rate), ]
+      tsid <- exist_check[1, "timeseries_id"]
     }
   } else if (nrow(exist_check) == 1) {
     tsid <- exist_check$timeseries_id
@@ -374,7 +366,6 @@ plotOverlap <- function(location,
   # Create empty data.table to hold realtime data
   realtime <- data.table::data.table()
   
-  
   for (i in rev(years)) { #Using rev so that the most recent year gets realtime, if possible
     start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
     start_UTC <- start
@@ -394,16 +385,16 @@ plotOverlap <- function(location,
         new_realtime <- data.table::data.table()
       }
       
-      if (nrow(new_realtime) > 20000) {
-        
-        # Retain last 20 000 records
-        new_realtime <- new_realtime[(.N - 20000):.N]
-        
-        # Add the truncated dates to the dates vector
-        end_new_dates <- min(new_realtime$datetime)
-        new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
-        dates <- c(dates, new_dates)
-      }
+      # if (nrow(new_realtime) > 20000) {
+      #   
+      #   # Retain last 20 000 records
+      #   new_realtime <- new_realtime[(.N - 20000):.N]
+      #   
+      #   # Add the truncated dates to the dates vector
+      #   end_new_dates <- min(new_realtime$datetime)
+      #   new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
+      #   dates <- c(dates, new_dates)
+      # }
       if (nrow(new_realtime) > 0) {
         # Fill in any missing hours in realtime with NAs
         # Must use calculate_period to get the correct number of hours in the period as it can change.

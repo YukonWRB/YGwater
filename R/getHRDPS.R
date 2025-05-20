@@ -27,7 +27,7 @@ getHRDPS <- function(clip = c("YT"),
     if (!interactive()) {
       stop("You must specify a save path when running in non-interactive mode.")
     }
-    message("Select the path to the folder where you want this report saved.")
+    message("Select the path to the folder where you want these rasters saved.")
     save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder")
   }
 
@@ -66,7 +66,7 @@ getHRDPS <- function(clip = c("YT"),
   clipped <- FALSE #So that clip happens the first time around
   tryCatch({
     for (i in 1:48) {
-      if (nchar(i) == 1) { #format i so that it works in creating the url
+      if (nchar(i) == 1) { # format i so that it works in creating the url
         i <- paste0("0", i)
       }
 
@@ -75,7 +75,7 @@ getHRDPS <- function(clip = c("YT"),
       } else {
         name <- paste0(param, "_", issue_timedate, "_", i, ".tiff")
       }
-      if (!(TRUE %in% grepl(name, existing))) { #Checks if the file exists already, runs if not.
+      if (!(TRUE %in% grepl(name, existing))) { # Checks if the file exists already, runs if not.
         raster <- terra::rast(paste0("https://dd.weather.gc.ca/model_hrdps/continental/2.5km/", issue_hour, "/0", i, "/", issue_timedate, "_MSC_HRDPS_", param, "_RLatLon0.0225_PT0", i, "H.grib2"))
 
         if (clipped == FALSE) {
@@ -96,6 +96,7 @@ getHRDPS <- function(clip = c("YT"),
     cat(crayon::red(paste0("Fetching rasters failed on at least one file for the most recent release (issue time ", issue_hour, "UTC); fetching the prior issue time forecasts. This is probably temporary, try again once the files have been written to the url.")))
     failed <<- TRUE
   })
+  
   if (failed) {
     #Clear the folder in case some rasters were in fact downloaded in previous loop
     existing <- list.files(save_path, full.names = TRUE)

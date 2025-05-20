@@ -2,7 +2,7 @@
 
 FODUI <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  page_fluid(
     sidebarPanel(
       selectInput(ns("comment_type"), "Select comment type", choices = c("General comments", "Location-specific comments"), selected = "General comments"),
       selectInput(ns("comment_data_type"), "Select a data type", choices = c("All", "Water levels", "Water flows", "Bridge freeboard", "Snow pillows", "Precipitation")),

@@ -1,6 +1,6 @@
 checksUI <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  page_fluid(
     textOutput(ns("text_output")),
     sidebarLayout(
       sidebarPanel(

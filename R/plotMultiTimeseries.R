@@ -10,8 +10,8 @@
 #' @param sub_locations Your desired sub-locations, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-locations (character) or the sub-location IDs (numeric). Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param parameters The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.
-#' @param period_types The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
-#' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/period_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
+#' @param aggregation_types The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes (you can also specify the numeric entry from the aggregation_types AquaCache table). NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
+#' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/aggregation_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
@@ -48,7 +48,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                 sub_locations = NULL,
                                 parameters,
                                 record_rates = NULL,
-                                period_types = NULL,
+                                aggregation_types = NULL,
                                 z = NULL,
                                 z_approx = NULL,
                                 start_date = Sys.Date() - 1,
@@ -82,7 +82,7 @@ plotMultiTimeseries <- function(type = 'traces',
   # sub_locations <- NULL
   # parameters <- c("water level", "flow", "water level")
   # record_rates <- NULL
-  # period_types <- NULL
+  # aggregation_types <- NULL
   # z <- NULL
   # z_approx <- NULL
   # start_date <- Sys.Date() - 30
@@ -207,16 +207,16 @@ plotMultiTimeseries <- function(type = 'traces',
       z_approx <- rep(z_approx, length(locations))
     }
   }
-  if (!is.null(period_types)) {
-    if (length(period_types) == 1 & length(locations) > 1) {
-      period_types <- rep(period_types, length(locations))
+  if (!is.null(aggregation_types)) {
+    if (length(aggregation_types) == 1 & length(locations) > 1) {
+      aggregation_types <- rep(aggregation_types, length(locations))
     }
   }
   
   if (length(locations) != length(parameters)) {
     stop("The number of locations and parameters must be the same, or one must be a vector of length 1.")
   }
-
+  
   
   if (!is.null(record_rates)) {
     if (length(record_rates) != length(locations)) {
@@ -247,21 +247,36 @@ plotMultiTimeseries <- function(type = 'traces',
   } else {
     z_approx <- NA
   }
-
-  if (!is.null(period_types)) {
-    if (length(period_types) != length(locations)) {
+  
+  if (!is.null(aggregation_types)) {
+    if (length(aggregation_types) != length(locations)) {
       stop("The number of locations and record rates must be the same, or one must be a vector of length 1 or left to the default NULL.")
     }
-    for (i in 1:length(period_types)) {
-      if (!(period_types %in% c('instantaneous', 'sum', 'min', 'max', '(min+max)/2'))) {
-        warning("Your entry ", i, " for parameter period_types is invalid. It's been reset to the default NULL.")
-        period_types[i] <- NA
+    if (inherits(aggregation_types, "character")) {
+      aggregation_types <- data.frame(aggregation_type = tolower(aggregation_types), aggregation_type_id = NA)
+      for (i in 1:nrow(aggregation_types)) {
+        aggregation_types[i, 2] <- DBI::dbGetQuery(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = '", aggregation_types[i, 1], "';")[1,1]
+        if (is.na(aggregation_types[i, 2])) {
+          warning("Your entry ", i, " for parameter aggregation_types is invalid. It's been reset to the default NULL.")
+          aggregation_types[i, 1] <- NA
+        }
       }
+    } else if (inherits(aggregation_types, "numeric")) {
+      aggregation_types <- data.frame(aggregation_type = NA, aggregation_type_id = aggregation_types)
+      for (i in 1:nrow(aggregation_types)) {
+        aggregation_types[i, 1] <- DBI::dbGetQuery(con, paste0("SELECT aggregation_type FROM aggregation_types WHERE aggregation_type_id = ", aggregation_types[i, 2], ";"))[1,1]
+        if (is.na(aggregation_types[i, 1])) {
+          warning("Your entry ", i, " for parameter aggregation_types is invalid. It's been reset to the default NULL.")
+          aggregation_types[i, 2] <- NA
+        }
+      }
+    } else {
+      stop("Your entry for the parameter 'aggregation_types' is invalid. Please review the function documentation and try again.")
     }
   } else {
-    period_types <- NA
+    aggregation_types <- NA
   }
-  
+
   if (tzone == "auto") {
     tzone <- Sys.timezone()
   }
@@ -303,9 +318,9 @@ plotMultiTimeseries <- function(type = 'traces',
   if (is.null(sub_locations)) {
     sub_locations <- rep(NA, length(locations))
   }
-  timeseries <- data.frame(location = locations, sub_location = sub_locations, parameter = parameters, record_rate = record_rates, period_type = period_types, z = z, z_approx = z_approx, lead_lag = lead_lag)
+  timeseries <- data.frame(location = locations, sub_location = sub_locations, parameter = parameters, record_rate = record_rates, aggregation_type_id = if (!is.na(aggregation_types)) aggregation_types[,2] else NA, z = z, z_approx = z_approx, lead_lag = lead_lag)
   if (nrow(unique(timeseries)) != nrow(timeseries)) {
-    stop("You have duplicate entries in your locations and/or parameters and/or record_rates and/or period_types. Please review the function documentation and try again.")
+    stop("You have duplicate entries in your locations and/or parameters and/or record_rates and/or aggregation_types. Please review the function documentation and try again.")
   }
   
   data <- list()
@@ -315,7 +330,7 @@ plotMultiTimeseries <- function(type = 'traces',
     sub_location <- if (is.na(timeseries$sub_location[i])) NULL else timeseries$sub_location[i]
     parameter <- timeseries$parameter[i]
     record_rate <- if (is.na(timeseries$record_rate[i])) NULL else timeseries$record_rate[i]
-    period_type <- if (is.na(timeseries$period_type[i])) NULL else timeseries$period_type[i]
+    aggregation_type_id <- if (is.na(timeseries$aggregation_type_id[i])) NULL else timeseries$aggregation_type_id[i]
     z <- if (is.na(timeseries$z[i])) NULL else timeseries$z[i]
     z_approx <- if (is.na(timeseries$z_approx[i])) NULL else timeseries$z_approx[i]
     lead_lag <- if (is.na(timeseries$lead_lag[i])) 0 else timeseries$lead_lag[i]
@@ -379,31 +394,31 @@ plotMultiTimeseries <- function(type = 'traces',
         remove <- c(remove, i)
         next
       }
-      if (is.null(record_rate)) { # period_type may or may not be NULL
-        if (is.null(period_type)) { #both record_rate and period_type are NULL
-          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
-        } else { #period_type is not NULL but record_rate is
-          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND period_type = '", period_type, "';"))
+      if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
+        if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+        } else { #aggregation_type_id is not NULL but record_rate is
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
         }
-      } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
-      } else { #both record_rate and period_type are not NULL
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+      } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+      } else { #both record_rate and aggregation_type_id are not NULL
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
       }
     } else { # sub_location is specified
-      if (is.null(record_rate)) { # period_type may or may not be NULL
-        if (is.null(period_type)) { #both record_rate and period_type are NULL
-          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, ";"))
-        } else { #period_type is not NULL but record_rate is
-          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND period_type = '", period_type, "';"))
+      if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
+        if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, ";"))
+        } else { #aggregation_type_id is not NULL but record_rate is
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
         }
-      } else if (is.null(period_type)) { #record_rate is not NULL but period_type is
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, period_type, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
-      } else { #both record_rate and period_type are not NULL
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND period_type = '", period_type, "';"))
+      } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+      } else { #both record_rate and aggregation_type_id are not NULL
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
       }
     }
-
+    
     # Narrow down by z if necessary
     if (!is.null(z)) {
       if (is.null(z_approx)) {
@@ -414,51 +429,40 @@ plotMultiTimeseries <- function(type = 'traces',
     }
     
     if (nrow(exist_check) == 0) {
-      if (is.null(record_rate) & is.null(period_type) & is.null(z)) {
+      if (is.null(record_rate) & is.null(aggregation_type_id) & is.null(z)) {
         warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Moving on to the next entry.")
         remove <- c(remove, i)
         next
       } else {
-        warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", if (is.null(record_rate)) "(not specified)" else record_rate, ", period type ", if (is.null(period_type)) "(not specified)" else period_type, ", z of ", if (is.null(z)) "(not specified)" else z, " and continuous category data. You could try leaving the record rate and/or period_type to the default 'NULL', or explore different z or z_approx values. Moving on to the next entry.")
+        warning("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", if (is.null(record_rate)) "(not specified)" else record_rate, ", aggregation type ", if (is.null(aggregation_type_id)) "(not specified)" else aggregation_types[i,1], ", z of ", if (is.null(z)) "(not specified)" else z, " and continuous category data. You could try leaving the record rate and/or aggregation_type to the default 'NULL', or explore different z or z_approx values. Moving on to the next entry.")
         remove <- c(remove, i)
         next
       }
     } else if (nrow(exist_check) > 1) {
       if (is.null(record_rate)) {
         warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate.")
-        temp <- exist_check[exist_check$record_rate == "< 1 day", ]
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "1 day", ]
-        }
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "1 week", ]
-        }
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "4 weeks", ]
-        }
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "1 month", ]
-        }
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "year", ]
-        }
+        exist_check$record_rate <- lubridate::period(exist_check$record_rate)
+        exist_check <- exist_check[order(exist_check$record_rate), ]
+        temp <- exist_check[1, ]
       }
       if (nrow(temp) > 1) {
         exist_check <- temp
-        if (is.null(period_type)) {
-          warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the period_type as NULL, selecting the one(s) with the most frequent period type.")
-          exist_check <- exist_check[exist_check$period_type == "instantaneous", ]
+        if (is.null(aggregation_type_id)) {
+          warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the aggregation_type as NULL, selecting the one(s) with the most frequent aggregation type.")
+          agg_types <- DBI::dbGetQuery(con, "SELECT aggregation_type_id, aggregation_type FROM aggregation_types;")
+          
+          exist_check <- exist_check[exist_check$aggregation_type_id == agg_types[agg_types$aggregation_type == "instantaneous", "aggregation_type_id"], ]
           if (nrow(exist_check) == 0) {
-            exist_check <- exist_check[exist_check$period_type == "mean", ]
+            exist_check <- exist_check[exist_check$aggregation_type_id == agg_types[agg_types$aggregation_type == "mean", "aggregation_type_id"], ]
           }
           if (nrow(exist_check) == 0) {
-            exist_check <- exist_check[exist_check$period_type == "(min+max)/2", ]
+            exist_check <- exist_check[exist_check$aggregation_type_id == agg_types[agg_types$aggregation_type == "(min+max)/2", "aggregation_type_id"], ]
           }
           if (nrow(exist_check) == 0) {
-            exist_check <- exist_check[exist_check$period_type == "min", ]
+            exist_check <- exist_check[exist_check$aggregation_type_id == agg_types[agg_types$aggregation_type == "minimum", "aggregation_type_id"], ]
           }
           if (nrow(exist_check) == 0) {
-            exist_check <- exist_check[exist_check$period_type == "max", ]
+            exist_check <- exist_check[exist_check$aggregation_type_id == agg_types[agg_types$aggregation_type == "maximum", "aggregation_type_id"], ]
           }
         }
       } else if (nrow(temp) == 1) {
@@ -472,7 +476,7 @@ plotMultiTimeseries <- function(type = 'traces',
     }
     
     timeseries[i, "record_rate"] <- exist_check$record_rate
-    timeseries[i, "period_type"] <- exist_check$period_type
+    timeseries[i, "aggregation_type_id"] <- exist_check$aggregation_type_id
     timeseries[i, "z"] <- exist_check$z
     
     if (start_date > exist_check$end_datetime) {
@@ -546,7 +550,7 @@ plotMultiTimeseries <- function(type = 'traces',
         trace_data <- dbGetQueryDT(con, paste0("SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY date DESC;"))
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
       } else if (rate == "hour") {
-          trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC;"))
+        trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC;"))
       } else if (rate == "max") {  # limit to 200 000 records for plotting performance
         if (corrections_apply) {
           trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
@@ -555,7 +559,7 @@ plotMultiTimeseries <- function(type = 'traces',
         }
         if (nrow(trace_data) > 0) {
           if (min(trace_data$datetime) > sub.start_date) {
-              infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
+            infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
             trace_data <- rbind(infill, trace_data)
           }
         }
@@ -617,7 +621,7 @@ plotMultiTimeseries <- function(type = 'traces',
       attr(trace_data$datetime, "tzone") <- tzone
       trace_data <- rbind(trace_data, trace_data)
     }
-
+    
     if (historic_range) {
       if (datum.conv$conversion_m != 0) {
         range_data$min <- range_data$min + datum.conv$conversion_m
@@ -762,7 +766,7 @@ plotMultiTimeseries <- function(type = 'traces',
   if (type == "traces") {
     
     timeseries$axis <- paste0("y", seq_along(1:nrow(timeseries)))
-
+    
     # Create lists of y-axis properties
     n_axes <- nrow(timeseries)
     for (i in 1:n_axes) {

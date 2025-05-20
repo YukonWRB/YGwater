@@ -36,7 +36,7 @@ imgTableViewUI <- function(id) {
   layout_sidebar(
     sidebar = sidebar(
       width = "30%",
-      bg = "#f8f8f8",
+      bg = config$sidebar_bg,
       position = "left",
       open = TRUE,
       fillable = TRUE,

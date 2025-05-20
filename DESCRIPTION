@@ -1,7 +1,7 @@
 Package: YGwater
 Title: Utility functions for the Yukon Water Science and Stewardship
     Branch
-Version: 1.5.12
+Version: 1.5.14
 Authors@R: c(
     person("Ghislain", "de Laplante", , "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -41,7 +41,6 @@ Imports:
     openxlsx,
     plyr,
     remotes,
-    reshape2,
     rlang,
     rmarkdown,
     RPostgres,
@@ -74,7 +73,6 @@ Suggests:
     odbc,
     officer,
     officedown,
-    plotly,
     pool,
     purrr,
     R.utils,

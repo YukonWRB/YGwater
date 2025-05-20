@@ -2,7 +2,7 @@
 
 locsNewLocUI <- function(id) {
   ns <- NS(id)
-  fluidPage(
+  page_fluid(
     fluidRow(
       # On larger screens, a 6-column width centered with offset
       # On smaller screens, it naturally adjusts to full width

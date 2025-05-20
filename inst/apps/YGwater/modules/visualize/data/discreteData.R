@@ -4,7 +4,7 @@ discDataUI <- function(id) {
   tagList(
     tags$style(
       HTML(
-        "// Make the ...preparing download... notification stand out more
+        "/* Make the ...preparing download... notification stand out more */
         .shiny-notification {
           font-size: 24px;
           font-weight: bold;
@@ -19,40 +19,15 @@ discDataUI <- function(id) {
         }"
       )
     ),
-    tags$script(
-      HTML("
-      // Handles tooltip updates outside of the datatable, binds tooltip properties to elements
-      Shiny.addCustomMessageHandler('update-tooltip', function(message) {
-        var selector = '#' + message.id;
-        $(selector).attr('title', message.title)
-        .tooltip('fixTitle').tooltip('hide');
-      });
-      
-      // Handles tootip creation and update for the datatable headers
-      $(document).ready(function() {
-      // Initialize tooltips
-      $('body').tooltip({
-        selector: '[data-bs-toggle=\"tooltip\"]',
-        container: 'body'
-      });
-      // Reinitialize tooltips on table redraw
-      $('#tbl').on('draw.dt', function() {
-        $('.tooltip').remove();
-        $('body').tooltip({
-          selector: '[data-bs-toggle=\"tooltip\"]',
-          container: 'body'
-        });
-      });
-    });"
-      )
-    ),
-    sidebarLayout(
-      sidebarPanel(
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        width = 350,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
         uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
       ),
-      mainPanel(
         uiOutput(ns("main"))
-      )
     )
   )
 }
@@ -83,7 +58,7 @@ discData <- function(id, language) {
       locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"),
       sub_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT sl.sub_location_id, sl.sub_location_name, sl.sub_location_name_fr FROM sub_locations AS sl INNER JOIN locations ON sl.location_id = locations.location_id ORDER BY sl.sub_location_name ASC"),
       params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC;"),
-      media_types = DBI::dbGetQuery(session$userData$AquaCache,
+      media = DBI::dbGetQuery(session$userData$AquaCache,
                                     "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
       parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache,
                                                 "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
@@ -112,38 +87,54 @@ discData <- function(id, language) {
     } else {
       moduleData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
     }
-    if (any(!is.na(moduleData$parameter_relationships$subgroup_id))) {
-      sub_groups <- moduleData$parameter_relationships$group_id[!is.na(moduleData$parameter_relationships$sub_group_id)]
+    if (any(!is.na(moduleData$parameter_relationships$sub_group_id))) {
+      sub_groups <- moduleData$parameter_relationships$sub_group_id[!is.na(moduleData$parameter_relationships$sub_group_id)]
       moduleData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache,
                                                      paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
     } else {
       moduleData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
     }
     
-    filteredData <- reactiveValues(
-      locs = isolate(moduleData$locs),
-      sub_locs = isolate(moduleData$sub_locs),
-      params = isolate(moduleData$params),
-      media_types = isolate(moduleData$media_types),
-      parameter_relationships = isolate(moduleData$parameter_relationships),
-      range = isolate(moduleData$range),
-      sample_types = isolate(moduleData$sample_types),
-      samples = isolate(moduleData$samples),
-      projects = isolate(moduleData$projects),
-      networks = isolate(moduleData$networks),
-      locations_networks = isolate(moduleData$locations_networks),
-      locations_projects = isolate(moduleData$locations_projects),
-      param_groups = isolate(moduleData$param_groups),
-      param_sub_groups = isolate(moduleData$param_sub_groups)
-    )
+    # Create a function to create the filteredData reactiveValues object
+    createFilteredData <- function() {
+      data <-  reactiveValues(
+        locs = isolate(moduleData$locs),
+        sub_locs = isolate(moduleData$sub_locs),
+        params = isolate(moduleData$params),
+        media = isolate(moduleData$media),
+        parameter_relationships = isolate(moduleData$parameter_relationships),
+        range = isolate(moduleData$range),
+        sample_types = isolate(moduleData$sample_types),
+        samples = isolate(moduleData$samples),
+        projects = isolate(moduleData$projects),
+        networks = isolate(moduleData$networks),
+        locations_networks = isolate(moduleData$locations_networks),
+        locations_projects = isolate(moduleData$locations_projects),
+        param_groups = isolate(moduleData$param_groups),
+        param_sub_groups = isolate(moduleData$param_sub_groups)
+      )
+      return(data)
+    }
+    
+    filteredData <- createFilteredData()
     
     
-    # Create UI elements ################
+    # Create UI elements and necessary helpers ################
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
+    
+    # Reactive values to store the input values so that inputs can be reset if the user ends up narrowing their selections to 0 samples
+    input_values <- reactiveValues(date_range = input$date_range, 
+                                   locations = input$locations, 
+                                   sub_locations = input$sub_locations, 
+                                   media = input$media, 
+                                   sample_types = input$sample_types, 
+                                   params = input$params)
+    
+    # flags to prevent running observers when the sidebar is first rendered
     render_flags <- reactiveValues(date_range = FALSE,
                                    locations = FALSE,
                                    sub_locations = FALSE,
-                                   media_types = FALSE,
+                                   media = FALSE,
                                    sample_types = FALSE,
                                    params = FALSE)
     
@@ -153,7 +144,7 @@ discData <- function(id, language) {
       render_flags$date_range <- TRUE
       render_flags$locations <- TRUE
       render_flags$sub_locations <- TRUE
-      render_flags$media_types <- TRUE
+      render_flags$media <- TRUE
       render_flags$sample_types <- TRUE
       render_flags$params <- TRUE
       
@@ -163,11 +154,9 @@ discData <- function(id, language) {
                        tr("date_range_select", language$language),
                        start = as.Date(moduleData$range$min_date),
                        end = as.Date(moduleData$range$max_date),
-                       max = Sys.Date() + 1,
+                       min = as.Date(moduleData$range$min_date),
                        format = "yyyy-mm-dd"
         ),
-        uiOutput(ns("apply_date_range")),
-        
         # Selectize input for locations
         selectizeInput(ns("locations"),
                        label = tr("loc(s)", language$language),
@@ -177,12 +166,11 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
-        uiOutput(ns("apply_locations")),
-        
+        # Modal to let users filter locations by network or project
         actionButton(ns("loc_modal"),
                      label = tr("loc_modal", language$language),
                      width = "100%",
-                     style = "font-size: 14px; margin-top: -10px;"
+                     style = "font-size: 14px; margin-top: 5px;"
         ),
         selectizeInput(ns("sub_locations"),
                        label = tr("sub_loc(s)", language$language),
@@ -192,17 +180,15 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
-        uiOutput(ns("apply_sub_locations")),
         # Selectize input for media type
-        selectizeInput(ns("media_types"),
+        selectizeInput(ns("media"),
                        label = tr("media_type(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$media_types$media_id),
-                                         c(tr("all", language$language), moduleData$media_types[, tr("media_type_col", language$language)])),
+                         stats::setNames(c("all", moduleData$media$media_id),
+                                         c(tr("all", language$language), moduleData$media[, tr("media_type_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
-        uiOutput(ns("apply_media_types")),
         # Selectize input for sample types
         selectizeInput(ns("sample_types"),
                        label = tr("sample_type(s)", language$language),
@@ -212,7 +198,6 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
-        uiOutput(ns("apply_sample_types")),
         selectizeInput(ns("params"),
                        label = tr("parameter(s)", language$language),
                        choices = 
@@ -221,11 +206,11 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
-        uiOutput(ns("apply_params")),
+        # Modal button to let users filter parameters by group or sub-group
         actionButton(ns("param_modal"),
                      label = tr("param_modal", language$language),
                      width = "100%",
-                     style = "font-size: 14px; margin-top: -10px;"
+                     style = "font-size: 14px; margin-top: 5px;"
         ),
         # Divider
         tags$div(style = "height: 15px;"),
@@ -251,21 +236,15 @@ discData <- function(id, language) {
     
     output$main <- renderUI({
       tagList(
-        htmlOutput(ns("instructions")),
+        tags$p(HTML(tr("view_data_instructions", language$language))),
         tags$div(style = "height: 10px;"),
-        DT::dataTableOutput(ns("tbl")), # Table with sample data, filtered by the sidebar inputs
+        DT::DTOutput(ns("tbl")), # Table with sample data, filtered by the sidebar inputs
         actionButton(ns("select_all"), tr("select_all", language$language), style = "display: none;"),  # Button will be hidden until a row is selected
-        actionButton(ns("view_data"), "placeholder", style =  "display: none;"),  # Button will be hidden until a row is selected
+        actionButton(ns("view_data"), tr("view_data1", language$language), style =  "display: none;"),  # Button will be hidden until a row is selected
         # The modal UI elements are created lower down
       ) # End of tagList
     }) %>% # End renderUI
       bindEvent(language$language) # Re-render the UI if the language or changes
-    
-    output$instructions <- renderUI(tr("view_data_instructions", language$language))
-    
-    
-    
-    
     
     
     
@@ -273,7 +252,7 @@ discData <- function(id, language) {
     ## Run observeFilterInput for each selectize input where 'all' is an option ##### 
     observeFilterInput("locations")
     observeFilterInput("sub_locations")
-    observeFilterInput("media_types")
+    observeFilterInput("media")
     observeFilterInput("pGrps")
     observeFilterInput("pSubGrps")
     observeFilterInput("params")
@@ -281,37 +260,37 @@ discData <- function(id, language) {
     observeFilterInput("projects")
     observeFilterInput("sample_types")
     
+    # Flags to prevent running observers unecessarily when the 'reset' button is pressed
     reset_flags <- reactiveValues(date_range = FALSE,
                                   locations = FALSE,
                                   sub_locations = FALSE,
-                                  media_types = FALSE,
+                                  media = FALSE,
                                   sample_types = FALSE,
                                   params = FALSE)
     
     ## Reset button observer ############
     observeEvent(input$reset, {
       # Reset the filteredData to its original state
-      filteredData <- reactiveValues(
-        locs = isolate(moduleData$locs),
-        sub_locs = isolate(moduleData$sub_locs),
-        params = isolate(moduleData$params),
-        media_types = isolate(moduleData$media_types),
-        parameter_relationships = isolate(moduleData$parameter_relationships),
-        range = isolate(moduleData$range),
-        sample_types = isolate(moduleData$sample_types),
-        samples = isolate(moduleData$samples),
-        projects = isolate(moduleData$projects),
-        networks = isolate(moduleData$networks),
-        locations_networks = isolate(moduleData$locations_networks),
-        locations_projects = isolate(moduleData$locations_projects),
-        param_groups = isolate(moduleData$param_groups),
-        param_sub_groups = isolate(moduleData$param_sub_groups)
-      )
+      # pull back the originals
+      newData <- createFilteredData()
+      # overwrite each slot in the reactiveValues
+      for (nm in names(newData)) {
+        filteredData[[nm]] <- newData[[nm]]
+      }
       
+      # clear out the results table and hide the 'select all' button
+      table_data(NULL)
+      output$tbl <- DT::renderDT(data.frame())
+      shinyjs::hide("select_all")
+      # clear any rows still selected in the table
+      DT::selectRows(proxy, NULL)
+      
+      # Reset the selectize inputs
       updateDateRangeInput(session, "date_range",
                            start = as.Date(moduleData$range$min_date),
                            end = as.Date(moduleData$range$max_date),
-                           max = Sys.Date() + 1
+                           min = as.Date(moduleData$range$min_date),
+                           max = as.Date(moduleData$range$max_date),
       )
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", moduleData$locs$location_id),
@@ -321,9 +300,9 @@ discData <- function(id, language) {
                            choices = stats::setNames(c("all", moduleData$sub_locs$sub_location_id),
                                                      c(tr("all", language$language), moduleData$sub_locs[, tr("sub_location_col", language$language)])),
                            selected = "all")
-      updateSelectizeInput(session, "media_types",
-                           choices = stats::setNames(c("all", moduleData$media_types$media_id),
-                                                     c(tr("all", language$language), moduleData$media_types[, tr("media_type_col", language$language)])),
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(c("all", moduleData$media$media_id),
+                                                     c(tr("all", language$language), moduleData$media[, tr("media_type_col", language$language)])),
                            selected = "all")
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", moduleData$sample_types$sample_type_id),
@@ -336,35 +315,17 @@ discData <- function(id, language) {
       reset_flags$date_range <- TRUE
       reset_flags$locations <- TRUE
       reset_flags$sub_locations <- TRUE
-      reset_flags$media_types <- TRUE
+      reset_flags$media <- TRUE
       reset_flags$sample_types <- TRUE
       reset_flags$params <- TRUE
       
-      # re-enable the disabled inputs
-      shinyjs::enable("date_range")
-      shinyjs::enable("locations")
-      shinyjs::enable("sub_locations")
-      shinyjs::enable("media_types")
-      shinyjs::enable("sample_types")
-      
-      shinyjs::show("loc_modal")
-      shinyjs::show("param_modal")
-      
-      # Hide all visible 'apply' modals
-      buttons_applied$apply_date_range <- FALSE
-      shinyjs::hide("apply_date_range")
-      buttons_applied$apply_locations <- FALSE
-      shinyjs::hide("apply_locations")
-      buttons_applied$apply_sub_locations <- FALSE
-      shinyjs::hide("apply_sub_locations")
-      buttons_applied$apply_media_types <- FALSE
-      shinyjs::hide("apply_media_types")
-      buttons_applied$apply_sample_types <- FALSE
-      shinyjs::hide("apply_sample_types")
-      buttons_applied$apply_params <- FALSE
-      shinyjs::hide("apply_params")
-      
-      table_data <- reactiveVal()
+      # Reset the input values to their original state
+      input_values$date_range <- input$date_range
+      input_values$locations <- input$locations
+      input_values$sub_locations <- input$sub_locations
+      input_values$media <- input$media
+      input_values$sample_types <- input$sample_types
+      input_values$params <- input$params
       
     }, ignoreInit = TRUE)
     
@@ -400,7 +361,6 @@ discData <- function(id, language) {
       # Filter the locations based on the selected projects and networks, update the locations selectizeInput
       req(input$projects, input$networks, filteredData$locations_projects, filteredData$locations_networks)
       
-      
       if (!("all" %in% input$networks)) {
         remain_locs <- filteredData$locations_networks[filteredData$locations_networks$network_id %in% input$networks, ]
       } else {
@@ -413,9 +373,7 @@ discData <- function(id, language) {
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", remain_locs$location_id),
                                                      c(tr("all", language$language), remain_locs[, tr("generic_name_col", language$language)])),
-                           selected = "all"
-      )
-      
+                           selected = "all")
       removeModal()
     })
     
@@ -456,14 +414,13 @@ discData <- function(id, language) {
         remain_params <- filteredData$parameter_relationships
       }
       if (!("all" %in% input$pSubGrps)) {
-        remain_params <- filteredData$parameter_relationships[filteredData$parameter_relationships$subgroup_id %in% input$pSubGrps, ]
+        remain_params <- filteredData$parameter_relationships[filteredData$parameter_relationships$sub_group_id %in% input$pSubGrps, ]
       }
       remain_params <- filteredData$params[filteredData$params$parameter_id %in% remain_params$parameter_id, ]
       updateSelectizeInput(session, "params",
                            choices = stats::setNames(c("all", remain_params$parameter_id),
                                                      c(tr("all", language$language), remain_params[, tr("param_name_col", language$language)])),
-                           selected = "all"
-      )
+                           selected = "all")
       removeModal()
     })
     
@@ -471,24 +428,11 @@ discData <- function(id, language) {
     # Now apply filters top to bottom. If date range gets narrowed, the other filters will be applied to the narrowed date range. If locations gets narrowed, the other filters will be applied to the narrowed locations EXCEPT for date range, and so on down the line.
     
     ## Filters ###########
-    # Flags to determine if the apply buttons have been rendered
-    buttons <- reactiveValues(apply_date_range = FALSE,
-                              apply_locations = FALSE,
-                              apply_sub_locations = FALSE,
-                              apply_media_types = FALSE,
-                              apply_sample_types = FALSE,
-                              apply_params = FALSE)
-    
-    # Flags to determine if the apply buttons have been clicked
-    buttons_applied <- reactiveValues(apply_date_range = FALSE,
-                                      apply_locations = FALSE,
-                                      apply_sub_locations = FALSE,
-                                      apply_media_types = FALSE,
-                                      apply_sample_types = FALSE,
-                                      apply_params = FALSE)
-    
     ### date_range application button and filter ############
     observeEvent(input$date_range, {
+      req(input$date_range, filteredData)
+      
+      # Flags to prevent running the observer when the date range is reset or initially rendered
       if (reset_flags$date_range) {
         reset_flags$date_range <- FALSE
         return()
@@ -497,34 +441,26 @@ discData <- function(id, language) {
         render_flags$date_range <- FALSE
         return()
       }
-      if (buttons_applied$apply_date_range) {
-        return()
-      }
-      if (buttons$apply_date_range) {
-        shinyjs::show("apply_date_range")
-      } else {
-        output$apply_date_range <- renderUI({
-          actionButton(ns("apply_date_range_btn"), tr("apply", language$language), style = "display: block; margin-left: auto; margin-right: 0;")
-        })
-        buttons$apply_date_range <- TRUE
-      }
-    }, ignoreInit = TRUE)
-    
-    observeEvent(input$apply_date_range_btn, {
-      req(input$date_range, filteredData)
       
-      # disable the input
-      shinyjs::disable("date_range")
-      shinyjs::hide("apply_date_range")
-      buttons_applied$apply_date_range <- TRUE
+      # Since this is the top-level filter, we reset the data.
+      # There's no need to check for 0 samples here, because the date range is always valid.
+      newData <- createFilteredData()
+      # overwrite each slot in the reactiveValues
+      for (nm in names(newData)) {
+        filteredData[[nm]] <- newData[[nm]]
+      }
       
+      # clear out the results table
+      table_data(NULL)
+      
+      # Filter the data based on the selected date range
       filteredData$range$min_date <- input$date_range[1]
       filteredData$range$max_date <- input$date_range[2]
       
       filteredData$samples <- filteredData$samples[filteredData$samples$datetime >= input$date_range[1] & filteredData$samples$datetime <= input$date_range[2], ]
       filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% filteredData$samples$location_id, ]
       filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% filteredData$locs$location_id, ]
-      filteredData$media_types <- filteredData$media_types[filteredData$media_types$media_id %in% filteredData$samples$media_id, ]
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$samples$media_id, ]
       filteredData$sample_types <- filteredData$sample_types[filteredData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
       
       remain_projects <- filteredData$locations_projects[filteredData$locations_projects$location_id %in% filteredData$locs$location_id, ]
@@ -540,44 +476,49 @@ discData <- function(id, language) {
         } else {
           filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
         }
-        if (length(filteredData$parameter_relationships$subgroup_id) > 0) {
-          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(filteredData$parameter_relationships$subgroup_id, collapse = ", "), ");"))
+        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
+        if (length(sub_groups) > 0) {
+          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
           filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
-      
+      # Update the downstream selectize inputs with the filtered data
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", filteredData$locs$location_id),
                                                      c(tr("all", language$language), filteredData$locs[, tr("generic_name_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$locations %in% filteredData$locs$location_id) input$locations else "all"
       )
       updateSelectizeInput(session, "sub_locations",
                            choices = stats::setNames(c("all", filteredData$sub_locs$sub_location_id),
                                                      c(tr("all", language$language), filteredData$sub_locs[, tr("sub_location_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$sub_locations %in% filteredData$sub_locs$sub_location_id) input$sub_locations else "all"
       )
-      updateSelectizeInput(session, "media_types",
-                           choices = stats::setNames(c("all", filteredData$media_types$media_id),
-                                                     c(tr("all", language$language), filteredData$media_types[, tr("media_type_col", language$language)])),
-                           selected = "all"
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(c("all", filteredData$media$media_id),
+                                                     c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
+                           selected = if (input$media %in% filteredData$media$media_id) input$media else "all"
       )
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", filteredData$sample_types$sample_type_id),
                                                      c(tr("all", language$language), filteredData$sample_types[, tr("sample_type_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$sample_types %in% filteredData$sample_types$sample_type_id) input$sample_types else "all"
       )
       updateSelectizeInput(session, "params",
                            choices = stats::setNames(c("all", filteredData$params$parameter_id),
                                                      c(tr("all", language$language), filteredData$params[, tr("param_name_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$params %in% filteredData$params$parameter_id) input$params else "all"
       )
+      
+      input_values$date_range <- input$date_range
     }, ignoreInit = TRUE)
-    
     
     ### locations filter ############
     observeEvent(input$locations, {
+      req(input$locations, filteredData)
+      
+      # Flags to prevent running the observer when the locations are reset or initially rendered
       if (reset_flags$locations) {
         reset_flags$locations <- FALSE
         return()
@@ -586,52 +527,29 @@ discData <- function(id, language) {
         render_flags$locations <- FALSE
         return()
       }
-      if (buttons_applied$apply_locations) {
+      
+      # Filter the data based on the selected locations
+      stash <- filteredData$samples
+      filteredData$samples <- moduleData$samples[moduleData$samples$location_id %in% input$locations, ]
+      if (nrow(filteredData$samples) == 0) {
+        # If no samples are found, reset the samples to the original data, show a notification, and reset input$locations to its previous value
+        filteredData$samples <- stash
+        updateSelectizeInput(session, "locations",
+                             selected = input_values$locations
+        )
+        showNotification(tr("no_samps_locs", language$language), type = "error", duration = 5)
         return()
       }
-      if (buttons$apply_locations) {
-        shinyjs::show("apply_locations")
-      } else {
-        output$apply_locations <- renderUI({
-          actionButton(ns("apply_locations_btn"), tr("apply", language$language), style = "display: block; margin-left: auto; margin-right: 0; margin-top: -10px; margin-bottom: 15px;")
-        })
-        buttons$apply_locations <- TRUE
-      }
       
-      # Check if apply_date_range_btn was rendered and not clicked. If so, reset the date range to what's in the filteredData and hide the button
-      if (!buttons_applied$apply_date_range) {
-        buttons_applied$apply_date_range <- TRUE
-        updateDateRangeInput(session, "date_range",
-                             start = as.Date(filteredData$range$min_date),
-                             end = as.Date(filteredData$range$max_date),
-                             max = Sys.Date() + 1
-        )
-        shinyjs::hide("apply_date_range")
-      }
-    }, ignoreInit = TRUE)
-    
-    observeEvent(input$apply_locations_btn, {
-      req(input$locations, filteredData)
+      filteredData$locs <- moduleData$locs[moduleData$locs$location_id %in% input$locations, ]
+      filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$location_id %in% filteredData$locs$location_id, ]
+      filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$samples$media_id, ]
+      filteredData$sample_types <- moduleData$sample_types[moduleData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
       
-      # Disable the inputs for date range and locations and hide the apply button
-      shinyjs::disable("date_range")
-      shinyjs::disable("locations")
-      shinyjs::hide("apply_locations")
-      buttons_applied$apply_locations <- TRUE
-      
-      shinyjs::hide("loc_modal")
-      
-      
-      filteredData$samples <- filteredData$samples[filteredData$samples$location_id %in% input$locations, ]
-      filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% input$locations, ]
-      filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% filteredData$locs$location_id, ]
-      filteredData$media_types <- filteredData$media_types[filteredData$media_types$media_id %in% filteredData$samples$media_id, ]
-      filteredData$sample_types <- filteredData$sample_types[filteredData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
-      
-      remain_projects <- filteredData$locations_projects[filteredData$locations_projects$location_id %in% input$locations, ]
-      filteredData$projects <- filteredData$projects[filteredData$projects$project_id %in% remain_projects$project_id, ]
-      remain_networks <- filteredData$locations_networks[filteredData$locations_networks$location_id %in% input$locations, ]
-      filteredData$networks <- filteredData$networks[filteredData$networks$network_id %in% remain_networks$network_id, ]
+      remain_projects <- moduleData$locations_projects[moduleData$locations_projects$location_id %in% input$locations, ]
+      filteredData$projects <- moduleData$projects[moduleData$projects$project_id %in% remain_projects$project_id, ]
+      remain_networks <- moduleData$locations_networks[moduleData$locations_networks$location_id %in% input$locations, ]
+      filteredData$networks <- moduleData$networks[moduleData$networks$network_id %in% remain_networks$network_id, ]
       
       filteredData$params <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (", paste(filteredData$samples$sample_id, collapse = ", "), ");"))
       if (nrow(filteredData$params) > 0) {
@@ -641,37 +559,45 @@ discData <- function(id, language) {
         } else {
           filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
         }
-        if (length(filteredData$parameter_relationships$subgroup_id) > 0) {
-          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(filteredData$parameter_relationships$subgroup_id, collapse = ", "), ");"))
+        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
+        if (length(sub_groups) > 0) {
+          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
           filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
+      # Update the downstream selectize inputs with the filtered data
       updateSelectizeInput(session, "sub_locations",
                            choices = stats::setNames(c("all", filteredData$sub_locs$sub_location_id),
                                                      c(tr("all", language$language), filteredData$sub_locs[, tr("sub_location_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$sub_locations %in% filteredData$sub_locs$sub_location_id) input$sub_locations else "all"
       )
-      updateSelectizeInput(session, "media_types",
-                           choices = stats::setNames(c("all", filteredData$media_types$media_id),
-                                                     c(tr("all", language$language), filteredData$media_types[, tr("media_type_col", language$language)])),
-                           selected = "all"
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(c("all", filteredData$media$media_id),
+                                                     c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
+                           selected = if (input$media %in% filteredData$media$media_id) input$media else "all"
       )
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", filteredData$sample_types$sample_type_id),
                                                      c(tr("all", language$language), filteredData$sample_types[, tr("sample_type_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$sample_types %in% filteredData$sample_types$sample_type_id) input$sample_types else "all"
       )
       updateSelectizeInput(session, "params",
                            choices = stats::setNames(c("all", filteredData$params$parameter_id),
                                                      c(tr("all", language$language), filteredData$params[, tr("param_name_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$params %in% filteredData$params$parameter_id) input$params else "all"
       )
+      
+      # Reset the input values reactiveValues to the current selection
+      input_values$locations <- input$locations
     }, ignoreInit = TRUE)
     
     ### sub_locations filter #########
     observeEvent(input$sub_locations, {
+      req(input$sub_locations, filteredData)
+      
+      # Flags to prevent running the observer when the sub-locations are reset or initially rendered
       if (reset_flags$sub_locations) {
         reset_flags$sub_locations <- FALSE
         return()
@@ -680,57 +606,27 @@ discData <- function(id, language) {
         render_flags$sub_locations <- FALSE
         return()
       }
-      if (buttons_applied$apply_sub_locations) {
+      
+      # Filter the data based on the selected sub-locations
+      stash <- filteredData$samples
+      filteredData$samples <- moduleData$samples[moduleData$samples$sub_location_id %in% input$sub_locations, ]
+      if (nrow(filteredData$samples) == 0) {
+        # If no samples are found, reset the samples to the original data, show a notification, and reset input$sub_locations to its previous value
+        filteredData$samples <- stash
+        updateSelectizeInput(session, "sub_locations",
+                             selected = input_values$sub_locations
+        )
+        showNotification(tr("no_samps_sub_locs", language$language), type = "error", duration = 5)
         return()
       }
-      if (buttons$apply_sub_locations) {
-        shinyjs::show("apply_sub_locations")
-      } else {
-        output$apply_sub_locations <- renderUI({
-          actionButton(ns("apply_sub_locations_btn"), tr("apply", language$language), style = "display: block; margin-left: auto; margin-right: 0;")
-        })
-        buttons$apply_sub_locations <- TRUE
-      }
       
-      # Check if apply_date_range_btn and apply_locations_btn were rendered and not clicked. If so, reset both and hide the buttons
-      if (!buttons_applied$apply_date_range) {
-        buttons_applied$apply_date_range <- TRUE
-        updateDateRangeInput(session, "date_range",
-                             start = as.Date(filteredData$range$min_date),
-                             end = as.Date(filteredData$range$max_date),
-                             max = Sys.Date() + 1
-        )
-        shinyjs::hide("apply_date_range")
-      }
-      if (!buttons_applied$apply_locations) {
-        buttons_applied$apply_locations <- TRUE
-        updateSelectizeInput(session, "locations",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_locations")
-      }
-      
-    }, ignoreInit = TRUE)
-    
-    observeEvent(input$apply_sub_locations_btn, {
-      req(input$sub_locations, filteredData)
-      
-      # Disable the inputs for date range, locations, and sub-locations and hide the apply button
-      shinyjs::disable("date_range")
-      shinyjs::disable("locations")
-      shinyjs::disable("sub_locations")
-      shinyjs::hide("apply_sub_locations")
-      buttons_applied$apply_sub_locations <- TRUE
-      
-      filteredData$samples <- filteredData$samples[filteredData$samples$sub_location_id %in% input$sub_locations, ]
-      filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$sub_location_id %in% input$sub_locations, ]
-      filteredData$media_types <- filteredData$media_types[filteredData$media_types$media_id %in% filteredData$samples$media_id, ]
-      filteredData$sample_types <- filteredData$sample_types[filteredData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
+      filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$sub_location_id %in% input$sub_locations, ]
+      filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$samples$media_id, ]
+      filteredData$sample_types <- moduleData$sample_types[moduleData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
       
       # No impact on projects or networks as these are location based and we're past that point
       
       filteredData$params <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (", paste(filteredData$samples$sample_id, collapse = ", "), ");"))
-      
       if (nrow(filteredData$params) > 0) {
         filteredData$parameter_relationships <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (", paste(filteredData$samples$sample_id, collapse = ", "), "));"))
         if (length(filteredData$parameter_relationships$group_id) > 0) {
@@ -738,98 +634,68 @@ discData <- function(id, language) {
         } else {
           filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
         }
-        if (length(filteredData$parameter_relationships$subgroup_id) > 0) {
-          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(filteredData$parameter_relationships$subgroup_id, collapse = ", "), ");"))
+        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
+        if (length(sub_groups) > 0) {
+          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
           filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
-      updateSelectizeInput(session, "media_types",
-                           choices = stats::setNames(c("all", filteredData$media_types$media_id),
-                                                     c(tr("all", language$language), filteredData$media_types[, tr("media_type_col", language$language)])),
-                           selected = "all"
+      # Update the downstream selectize inputs with the filtered data
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(c("all", filteredData$media$media_id),
+                                                     c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
+                           selected = if (input$media %in% filteredData$media$media_id) input$media else "all"
       )
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", filteredData$sample_types$sample_type_id),
                                                      c(tr("all", language$language), filteredData$sample_types[, tr("sample_type_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$sample_types %in% filteredData$sample_types$sample_type_id) input$sample_types else "all"
       )
       updateSelectizeInput(session, "params",
                            choices = stats::setNames(c("all", filteredData$params$parameter_id),
                                                      c(tr("all", language$language), filteredData$params[, tr("param_name_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$params %in% filteredData$params$parameter_id) input$params else "all"
       )
+      
+      # Reset the input values reactiveValues to the current selection
+      input_values$sub_locations <- input$sub_locations
     }, ignoreInit = TRUE)
     
-    
-    ### media_types filter #########
-    observeEvent(input$media_types, {
-      if (reset_flags$media_types) {
-        reset_flags$media_types <- FALSE
+    ### media filter #########
+    observeEvent(input$media, {
+      req(input$media, filteredData)
+      
+      # Flags to prevent running the observer when the media types are reset or initially rendered
+      if (reset_flags$media) {
+        reset_flags$media <- FALSE
         return()
       }
-      if (render_flags$media_types) {
-        render_flags$media_types <- FALSE
+      if (render_flags$media) {
+        render_flags$media <- FALSE
         return()
       }
-      if (buttons_applied$apply_media_types) {
+      
+      # Filter the data based on the selected media types
+      stash <- filteredData$samples
+      filteredData$samples <- moduleData$samples[moduleData$samples$media_id %in% input$media, ]
+      if (nrow(filteredData$samples) == 0) {
+        # If no samples are found, reset the samples to the original data, show a notification, and reset input$media to its previous value
+        filteredData$samples <- stash
+        updateSelectizeInput(session, "media",
+                             selected = input_values$media
+        )
+        showNotification(tr("no_samps_medias", language$language), type = "error", duration = 5)
         return()
       }
-      if (buttons$apply_media_types) {
-        shinyjs::show("apply_media_types")
-      } else {
-        output$apply_media_types <- renderUI({
-          actionButton(ns("apply_media_types_btn"), tr("apply", language$language), style = "display: block; margin-left: auto; margin-right: 0;")
-        })
-        buttons$apply_media_types <- TRUE
-      }
       
-      # Check if apply_date_range_btn, apply_locations_btn, apply_sub_locations_btn were rendered and not clicked. If so, reset and hide the buttons
-      if (!buttons_applied$apply_date_range) {
-        buttons_applied$apply_date_range <- TRUE
-        updateDateRangeInput(session, "date_range",
-                             start = as.Date(filteredData$range$min_date),
-                             end = as.Date(filteredData$range$max_date),
-                             max = Sys.Date() + 1
-        )
-        shinyjs::hide("apply_date_range")
-      }
-      if (!buttons_applied$apply_locations) {
-        buttons_applied$apply_locations <- TRUE
-        updateSelectizeInput(session, "locations",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_locations")
-      }
-      if (!buttons_applied$apply_sub_locations) {
-        buttons_applied$apply_sub_locations <- TRUE
-        updateSelectizeInput(session, "sub_locations",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_sub_locations")
-      }
-    }, ignoreInit = TRUE)
-    
-    observeEvent(input$apply_media_types_btn, {
-      req(input$media_types, filteredData)
-      
-      # Disable the inputs for date range, locations, sub-locations, and media types and hide the apply button
-      shinyjs::disable("date_range")
-      shinyjs::disable("locations")
-      shinyjs::disable("sub_locations")
-      shinyjs::disable("media_types")
-      shinyjs::hide("apply_media_types")
-      buttons_applied$apply_media_types <- TRUE
-      
-      filteredData$samples <- filteredData$samples[filteredData$samples$media_id %in% input$media_types, ]
-      filteredData$media_types <- filteredData$media_types[filteredData$media_types$media_id %in% input$media_types, ]
-      filteredData$sample_types <- filteredData$sample_types[filteredData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
+      filteredData$media <- moduleData$media[moduleData$media$media_id %in% input$media, ]
+      filteredData$sample_types <- moduleData$sample_types[moduleData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
       
       # No impact on projects or networks as we're no longer narrowing locations
       
       filteredData$params <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (", paste(filteredData$samples$sample_id, collapse = ", "), ");"))
-      
       if (nrow(filteredData$params) > 0) {
         filteredData$parameter_relationships <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (", paste(filteredData$samples$sample_id, collapse = ", "), "));"))
         if (length(filteredData$parameter_relationships$group_id) > 0) {
@@ -837,28 +703,35 @@ discData <- function(id, language) {
         } else {
           filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
         }
-        if (length(filteredData$parameter_relationships$subgroup_id) > 0) {
-          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(filteredData$parameter_relationships$subgroup_id, collapse = ", "), ");"))
+        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
+        if (length(sub_groups) > 0) {
+          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
           filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
+      # Update the downstream selectize inputs with the filtered data
       updateSelectizeInput(session, "sample_types",
                            choices = stats::setNames(c("all", filteredData$sample_types$sample_type_id),
                                                      c(tr("all", language$language), filteredData$sample_types[, tr("sample_type_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$sample_types %in% filteredData$sample_types$sample_type_id) input$sample_types else "all"
       )
       updateSelectizeInput(session, "params",
                            choices = stats::setNames(c("all", filteredData$params$parameter_id),
                                                      c(tr("all", language$language), filteredData$params[, tr("param_name_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$params %in% filteredData$params$parameter_id) input$params else "all"
       )
       
+      # Reset the input values reactiveValues to the current selection
+      input_values$media <- input$media
     }, ignoreInit = TRUE)
     
     ### sample_types filter #########
     observeEvent(input$sample_types, {
+      req(input$sample_types, filteredData)
+      
+      # Flags to prevent running the observer when the sample types are reset or initially rendered
       if (reset_flags$sample_types) {
         reset_flags$sample_types <- FALSE
         return()
@@ -867,70 +740,25 @@ discData <- function(id, language) {
         render_flags$sample_types <- FALSE
         return()
       }
-      if (buttons_applied$apply_sample_types) {
+      
+      # Filter the data based on the selected sample types
+      stash <- filteredData$samples
+      filteredData$samples <- moduleData$samples[moduleData$samples$sample_type %in% input$sample_types, ]
+      if (nrow(filteredData$samples) == 0) {
+        # If no samples are found, reset the samples to the original data, show a notification, and reset input$sample_types to its previous value
+        filteredData$samples <- stash
+        updateSelectizeInput(session, "sample_types",
+                             selected = input_values$sample_types
+        )
+        showNotification(tr("no_samps_types", language$language), type = "error", duration = 5)
         return()
       }
-      if (buttons$apply_sample_types) {
-        shinyjs::show("apply_sample_types")
-      } else {
-        output$apply_sample_types <- renderUI({
-          actionButton(ns("apply_sample_types_btn"), tr("apply", language$language), style = "display: block; margin-left: auto; margin-right: 0;")
-        })
-        buttons$apply_sample_types <- TRUE
-      }
       
-      # Check if apply_date_range_btn, apply_locations_btn, apply_sub_locations_btn, and apply_media_types_btn were rendered and not clicked. If so, reset and hide the buttons
-      if (!buttons_applied$apply_date_range) {
-        buttons_applied$apply_date_range <- TRUE
-        updateDateRangeInput(session, "date_range",
-                             start = as.Date(filteredData$range$min_date),
-                             end = as.Date(filteredData$range$max_date),
-                             max = Sys.Date() + 1
-        )
-        shinyjs::hide("apply_date_range")
-      }
-      if (!buttons_applied$apply_locations) {
-        buttons_applied$apply_locations <- TRUE
-        updateSelectizeInput(session, "locations",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_locations")
-      }
-      if (!buttons_applied$apply_sub_locations) {
-        buttons_applied$apply_sub_locations <- TRUE
-        updateSelectizeInput(session, "sub_locations",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_sub_locations")
-      }
-      if (!buttons_applied$apply_media_types) {
-        buttons_applied$apply_media_types <- TRUE
-        updateSelectizeInput(session, "media_types",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_media_types")
-      }
-    }, ignoreInit = TRUE)
-    
-    observeEvent(input$apply_sample_types_btn, {
-      req(input$sample_types, filteredData)
-      
-      # Disable the inputs for date range, locations, sub-locations, media types, and sample types and hide the apply button
-      shinyjs::disable("date_range")
-      shinyjs::disable("locations")
-      shinyjs::disable("sub_locations")
-      shinyjs::disable("media_types")
-      shinyjs::disable("sample_types")
-      shinyjs::hide("apply_sample_types")
-      buttons_applied$apply_sample_types <- TRUE
-      
-      filteredData$samples <- filteredData$samples[filteredData$samples$sample_type %in% input$sample_types, ]
-      filteredData$sample_types <- filteredData$sample_types[filteredData$sample_types$sample_type_id %in% input$sample_types, ]
+      filteredData$sample_types <- moduleData$sample_types[moduleData$sample_types$sample_type_id %in% input$sample_types, ]
       
       # No impact on projects or networks as we're no longer narrowing locations
       
       filteredData$params <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (", paste(filteredData$samples$sample_id, collapse = ", "), ");"))
-      
       if (nrow(filteredData$params) > 0) {
         filteredData$parameter_relationships <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (", paste(filteredData$samples$sample_id, collapse = ", "), "));"))
         if (length(filteredData$parameter_relationships$group_id) > 0) {
@@ -938,23 +766,30 @@ discData <- function(id, language) {
         } else {
           filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
         }
-        if (length(filteredData$parameter_relationships$subgroup_id) > 0) {
-          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(filteredData$parameter_relationships$subgroup_id, collapse = ", "), ");"))
+        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
+        if (length(sub_groups) > 0) {
+          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
           filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
+      # Update the downstream selectize inputs with the filtered data
       updateSelectizeInput(session, "params",
                            choices = stats::setNames(c("all", filteredData$params$parameter_id),
                                                      c(tr("all", language$language), filteredData$params[, tr("param_name_col", language$language)])),
-                           selected = "all"
+                           selected = if (input$params %in% filteredData$params$parameter_id) input$params else "all"
       )
+      
+      # Reset the input values reactiveValues to the current selection
+      input_values$sample_types <- input$sample_types
     }, ignoreInit = TRUE)
-    
     
     ### params filter #########
     observeEvent(input$params, {
+      req(input$params, filteredData)
+      
+      # Flags to prevent running the observer when the params are reset or initially rendered
       if (reset_flags$params) {
         reset_flags$params <- FALSE
         return()
@@ -963,83 +798,17 @@ discData <- function(id, language) {
         render_flags$params <- FALSE
         return()
       }
-      if (buttons_applied$apply_params) {
-        return()
-      }
-      if (buttons$apply_params) {
-        shinyjs::show("apply_params")
-      } else {
-        output$apply_params <- renderUI({
-          actionButton(ns("apply_params_btn"), tr("apply", language$language), style = "display: block; margin-left: auto; margin-right: 0;")
-        })
-        buttons$apply_params <- TRUE
-      }
       
-      # Check if apply_date_range_btn, apply_locations_btn, apply_sub_locations_btn, apply_media_types_btn, and apply_sample_types_btn were rendered and not clicked. If so, reset and hide the buttons
-      if (!buttons_applied$apply_date_range) {
-        buttons_applied$apply_date_range <- TRUE
-        updateDateRangeInput(session, "date_range",
-                             start = as.Date(filteredData$range$min_date),
-                             end = as.Date(filteredData$range$max_date),
-                             max = Sys.Date() + 1
-        )
-        shinyjs::hide("apply_date_range")
-        
-      }
-      if (!buttons_applied$apply_locations) {
-        buttons_applied$apply_locations <- TRUE
-        updateSelectizeInput(session, "locations",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_locations")
-      }
-      if (!buttons_applied$apply_sub_locations) {
-        buttons_applied$apply_sub_locations <- TRUE
-        updateSelectizeInput(session, "sub_locations",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_sub_locations")
-      }
-      if (!buttons_applied$apply_media_types) {
-        buttons_applied$apply_media_types <- TRUE
-        updateSelectizeInput(session, "media_types",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_media_types")
-      }
-      if (!buttons_applied$apply_sample_types) {
-        buttons_applied$apply_sample_types <- TRUE
-        updateSelectizeInput(session, "sample_types",
-                             selected = "all"
-        )
-        shinyjs::hide("apply_sample_types")
-      }
-    }, ignoreInit = TRUE)
-    
-    observeEvent(input$apply_params_btn, {
-      req(input$params, filteredData)
-      
-      # Disable the inputs for date range, locations, sub-locations, media types, sample types, and params and hide the apply button
-      shinyjs::disable("date_range")
-      shinyjs::disable("locations")
-      shinyjs::disable("sub_locations")
-      shinyjs::disable("media_types")
-      shinyjs::disable("sample_types")
-      shinyjs::disable("params")
-      shinyjs::hide("apply_params")
-      buttons_applied$apply_params <- TRUE
-      
-      shinyjs::hide("param_modal")
-      
+      # Filter the data based on the selected params
       filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% input$params, ]
       
       # No impact on projects or networks as we're no longer narrowing locations
-      
       # No impact on parameters as we're no longer narrowing parameters
+      # No inputs to update as this is the last filter
       
+      # Reset the input values reactiveValues to the current selection
+      input_values$params <- input$params
     }, ignoreInit = TRUE)
-    
-    
     
     
     # Create the samples table and render it ###################################
@@ -1067,7 +836,7 @@ discData <- function(id, language) {
           else 
             ")", 
           " AND s.sample_type IN (", paste(filteredData$sample_types$sample_type_id, collapse = ", "), ")",
-          " AND s.media_id IN (", paste(filteredData$media_types$media_id, collapse = ", "), ")",
+          " AND s.media_id IN (", paste(filteredData$media$media_id, collapse = ", "), ")",
           " AND s.datetime BETWEEN '", filteredData$range$min_date, "' AND '", filteredData$range$max_date, "'",
           " AND r.parameter_id IN (", paste(filteredData$params$parameter_id, collapse = ", "), ")",
           ";"
@@ -1120,7 +889,7 @@ discData <- function(id, language) {
                                  pageLength = 10
                                )
       )
-      output$tbl <- DT::renderDataTable(out_tbl)
+      output$tbl <- DT::renderDT(out_tbl)
       
       
       if (nrow(table_data()) == 0) {
@@ -1190,7 +959,7 @@ discData <- function(id, language) {
       subset <- dbGetQueryDT(session$userData$AquaCache, query)
       subset[, rn := NULL] # Drop column 'rn', left over from the window function
       
-      output$modal_subset <- DT::renderDataTable({  # Create datatable for the measurements
+      output$modal_subset <- DT::renderDT({  # Create datatable for the measurements
         DT::datatable(subset,
                       rownames = FALSE,
                       selection = "none",
@@ -1228,7 +997,7 @@ discData <- function(id, language) {
       
       location <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM ", if (language$abbrev == "fr") "location_metadata_fr" else "location_metadata_en", " WHERE location_id IN (", paste(selected_loc_ids, collapse = ", "), ") LIMIT 3;")) # Get the location metadata
       
-      output$modal_location_metadata <- DT::renderDataTable({  # Create datatable for the locations
+      output$modal_location_metadata <- DT::renderDT({  # Create datatable for the locations
         DT::datatable(location,
                       rownames = FALSE,
                       selection = "none",
@@ -1275,9 +1044,9 @@ discData <- function(id, language) {
       # Create the modal
       showModal(modalDialog(
         h4(tr("discrete_subset_msg", language$language)),
-        DT::dataTableOutput(ns("modal_subset")),
+        DT::DTOutput(ns("modal_subset")),
         h4(tr("loc_meta_msg", language$language)),
-        DT::dataTableOutput(ns("modal_location_metadata")),
+        DT::DTOutput(ns("modal_location_metadata")),
         textOutput(ns("num_rows")),
         selectizeInput(ns("modal_format"), label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx"),
         downloadButton(ns("download"), tr("dl_data", language$language)),
@@ -1291,7 +1060,7 @@ discData <- function(id, language) {
     # Updates to modal ########################################################
     # Get the number of rows that will be returned based on the date range selected and update the subset table if necessary
     observe({
-      req(input$tbl_rows_selected, filteredData$params)
+      req(input$tbl_rows_selected, filteredData$params, table_data())
       selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
       
       rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM results WHERE sample_id IN (", paste(selected_sampleids, collapse = ", "), ") AND parameter_id IN (", paste(filteredData$params$parameter_id, collapse = ", "), ");"))[[1]]
@@ -1375,5 +1144,5 @@ discData <- function(id, language) {
       }) # End of downloadHandler
     
   }) # End moduleServer
-} # End discPlot function
+} # End discData function
 
