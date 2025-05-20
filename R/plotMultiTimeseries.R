@@ -726,9 +726,7 @@ plotMultiTimeseries <- function(type = 'traces',
   }
   
   # Make the title ###################################
-  use_title <- FALSE
   if (title) {
-    use_title <- TRUE
     if (is.null(custom_title)) {
       generate_plot_title <- function(tbl) {
         # Group by location to handle different parameters per location

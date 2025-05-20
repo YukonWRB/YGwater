@@ -352,10 +352,10 @@ plotTimeseries <- function(location,
   if (title) {
     if (is.null(custom_title)) {
       if (lang == "fr") {
-        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
+        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location_id = '", location_id, "'"))[1,1]
       } 
       if (lang == "en" || is.na(stn_name)) {
-        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
+        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location_id = '", location_id, "'"))[1,1]
       }
       stn_name <- titleCase(stn_name, lang)
     } else {

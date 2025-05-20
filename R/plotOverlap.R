@@ -235,7 +235,28 @@ plotOverlap <- function(location,
   
   
   # Get the location and parameter metadata ###########
-  location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+  if (inherits(location, "character")) {
+    # Try to find the location_id from a character string
+    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    if (is.na(location_id)) {
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
+    }
+    if (is.na(location_id)) {
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
+    }
+    # If nothing so far, maybe it's a numeric that's masquerading as a character
+    if (is.na(location_id)) {
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+    }
+  } else {
+    # Try to find the location_id from a numeric value
+    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+  }
+  if (is.na(location_id)) {
+    stop("The location you entered does not exist in the database.")
+  }
+  
+  
   #Confirm parameter and location exist in the database and that there is only one entry
   if (inherits(parameter, "character")) {
     escaped_parameter <- gsub("'", "''", parameter)
@@ -651,10 +672,10 @@ plotOverlap <- function(location,
   if (title) {
     if (is.null(custom_title)) {
       if (lang == "fr") {
-        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
+        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location_id = '", location_id, "'"))[1,1]
       } 
       if (lang == "en" || is.na(stn_name)) {
-        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
+        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location_id = '", location_id, "'"))[1,1]
       }
       stn_name <- titleCase(stn_name, lang)
     } else {
