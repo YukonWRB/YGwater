@@ -205,7 +205,27 @@ plotTimeseries <- function(location,
   }
   
   # Determine the timeseries and adjust the date range #################
-  location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+  if (inherits(location, "character")) {
+    # Try to find the location_id from a character string
+    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    if (is.na(location_id)) {
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
+    }
+    if (is.na(location_id)) {
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
+    }
+    # If nothing so far, maybe it's a numeric that's masquerading as a character
+    if (is.na(location_id)) {
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+    }
+  } else {
+    # Try to find the location_id from a numeric value
+    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+  }
+  if (is.na(location_id)) {
+    stop("The location you entered does not exist in the database.")
+  }
+  
   #Confirm parameter and location exist in the database and that there is only one entry
   if (inherits(parameter, "character")) {
     parameter <- tolower(parameter)

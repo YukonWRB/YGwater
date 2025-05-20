@@ -339,7 +339,24 @@ plotMultiTimeseries <- function(type = 'traces',
     # Determine the timeseries and adjust the date range #################
     # Confirm parameter and location, sub location exist in the database and that there is only one entry
     
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    if (inherits(location, "character")) {
+      # Try to find the location_id from a character string
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+      if (is.na(location_id)) {
+        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
+      }
+      if (is.na(location_id)) {
+        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
+      }
+      # If nothing so far, maybe it's a numeric that's masquerading as a character
+      if (is.na(location_id)) {
+        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+      }
+    } else {
+      # Try to find the location_id from a numeric value
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+    }
+    
     if (is.na(location_id)) {
       warning("The location you entered, ", location, ", does not exist in the database. Moving on to the next entry.")
       remove <- c(remove, i)
