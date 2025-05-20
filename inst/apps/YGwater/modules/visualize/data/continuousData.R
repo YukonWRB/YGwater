@@ -59,12 +59,12 @@ contData <- function(id, language) {
       sub_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT sl.sub_location_id, sl.sub_location_name, sl.sub_location_name_fr FROM sub_locations AS sl INNER JOIN locations ON sl.location_id = locations.location_id ORDER BY sl.sub_location_name ASC"),
       params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC;"),
       media = DBI::dbGetQuery(session$userData$AquaCache,
-                                    "SELECT DISTINCT m.* FROM media as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
-      aggregation_type_id = DBI::dbGetQuery(con, "SELECT DISTINCT aggretion_type FROM timeseries;"),
+                                    "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
+      aggregation_type_id = DBI::dbGetQuery(con, "SELECT DISTINCT aggregation_type_id FROM timeseries;"),
       parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache,
                                                 "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
-      range <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM timeseries;"),
-      timeseries <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT timeseries_id, location_id, sub_location_id, media_id, parameter_id, aggregation_type_id, rate, z, start_datetime, end_datetime FROM timeseries;")
+      range = DBI::dbGetQuery(session$userData$AquaCache, "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM timeseries;"),
+      timeseries = DBI::dbGetQuery(session$userData$AquaCache, "SELECT timeseries_id, location_id, sub_location_id, media_id, parameter_id, aggregation_type_id, record_rate, z, start_datetime, end_datetime FROM timeseries;")
     )
     
     moduleData$locations_projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_projects WHERE location_id IN (", paste(moduleData$locs$location_id, collapse = ", "), ");"))

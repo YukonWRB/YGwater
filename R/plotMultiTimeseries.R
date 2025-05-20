@@ -318,7 +318,7 @@ plotMultiTimeseries <- function(type = 'traces',
   if (is.null(sub_locations)) {
     sub_locations <- rep(NA, length(locations))
   }
-  timeseries <- data.frame(location = locations, sub_location = sub_locations, parameter = parameters, record_rate = record_rates, aggregation_type_id = aggregation_types[,2], z = z, z_approx = z_approx, lead_lag = lead_lag)
+  timeseries <- data.frame(location = locations, sub_location = sub_locations, parameter = parameters, record_rate = record_rates, aggregation_type_id = if (!is.na(aggregation_types)) aggregation_types[,2] else NA, z = z, z_approx = z_approx, lead_lag = lead_lag)
   if (nrow(unique(timeseries)) != nrow(timeseries)) {
     stop("You have duplicate entries in your locations and/or parameters and/or record_rates and/or aggregation_types. Please review the function documentation and try again.")
   }
@@ -441,22 +441,9 @@ plotMultiTimeseries <- function(type = 'traces',
     } else if (nrow(exist_check) > 1) {
       if (is.null(record_rate)) {
         warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate.")
-        temp <- exist_check[exist_check$record_rate == "< 1 day", ]
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "1 day", ]
-        }
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "1 week", ]
-        }
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "4 weeks", ]
-        }
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "1 month", ]
-        }
-        if (nrow(temp) == 0) {
-          temp <- exist_check[exist_check$record_rate == "year", ]
-        }
+        exist_check$record_rate <- lubridate::period(exist_check$record_rate)
+        exist_check <- exist_check[order(exist_check$record_rate), ]
+        temp <- exist_check[1, ]
       }
       if (nrow(temp) > 1) {
         exist_check <- temp

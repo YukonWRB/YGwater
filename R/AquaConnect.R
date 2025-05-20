@@ -41,7 +41,7 @@ AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), 
     version <- DBI::dbGetQuery(con, "SELECT version FROM information.version_info WHERE item = 'Last patch number'")[1,1]
     
     if (version < 20) {
-      warning("This database schema is of a version older than the YGwater package is expecting. Be aware that some features may not work as expected. Please contact the database administrator to update the database schema.")
+      warning("This database schema is of a version older than what the YGwater package is expecting. Be aware that some features may not work as expected. Contact the database administrator to update the database schema or revert to an earlier version of the YGwater package for best performance..")
     }
     
     # Add a new attribute to the connection object to track if a transaction is active

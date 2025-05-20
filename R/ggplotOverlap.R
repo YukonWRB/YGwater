@@ -24,7 +24,7 @@
 #'
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
-#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'.
+#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
 #' @param traceEnd The end day of year for the trace line. If NULL, will default to `endDay`. Must be less than `endDay`. Format as per `startDay`.
@@ -137,7 +137,7 @@ ggplotOverlap <- function(location,
   }
   
   if (!is.null(record_rate)) {
-    if (!(record_rate %in% c('< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'))) {
+    if (!lubridate::is.period(lubridate::period(record_rate))) {
       warning("Your entry for parameter record_rate is invalid. It's been reset to the default NULL.")
       record_rate <- NULL
     }
@@ -319,22 +319,9 @@ ggplotOverlap <- function(location,
     } else if (nrow(exist_check) > 1) {
       if (is.null(record_rate)) {
         warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one with the most frequent recording rate.")
-        tsid <- exist_check[exist_check$record_rate == "< 1 day", "timeseries_id"]
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "1 day", "timeseries_id"]
-        }
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "1 week", "timeseries_id"]
-        }
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "4 weeks", "timeseries_id"]
-        }
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "1 month", "timeseries_id"]
-        }
-        if (is.na(tsid)) {
-          tsid <- exist_check[exist_check$record_rate == "year", "timeseries_id"]
-        }
+        exist_check$record_rate <- lubridate::as.period(exist_check$record_rate)
+        exist_check <- exist_check[order(exist_check$record_rate), ]
+        tsid <- exist_check[1, "timeseries_id"]
       }
     } else if (nrow(exist_check) == 1) {
       tsid <- exist_check$timeseries_id

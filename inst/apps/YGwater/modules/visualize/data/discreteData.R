@@ -59,7 +59,7 @@ discData <- function(id, language) {
       sub_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT sl.sub_location_id, sl.sub_location_name, sl.sub_location_name_fr FROM sub_locations AS sl INNER JOIN locations ON sl.location_id = locations.location_id ORDER BY sl.sub_location_name ASC"),
       params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC;"),
       media = DBI::dbGetQuery(session$userData$AquaCache,
-                                    "SELECT DISTINCT m.* FROM media as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
+                                    "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
       parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache,
                                                 "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
       range = DBI::dbGetQuery(session$userData$AquaCache, "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM samples;"),
@@ -155,7 +155,6 @@ discData <- function(id, language) {
                        start = as.Date(moduleData$range$min_date),
                        end = as.Date(moduleData$range$max_date),
                        min = as.Date(moduleData$range$min_date),
-                       end = as.Date(moduleData$range$max_date),
                        format = "yyyy-mm-dd"
         ),
         # Selectize input for locations
@@ -825,7 +824,7 @@ discData <- function(id, language) {
            JOIN results r ON s.sample_id = r.sample_id
            JOIN locations l ON s.location_id = l.location_id
            LEFT JOIN sub_locations sl ON s.sub_location_id = sl.sub_location_id
-           JOIN media m ON s.media_id = m.media_id
+           JOIN media_types m ON s.media_id = m.media_id
            JOIN sample_types st ON s.sample_type = st.sample_type_id
            JOIN parameters p ON r.parameter_id = p.parameter_id
            JOIN collection_methods cm ON s.collection_method = cm.collection_method_id
