@@ -55,7 +55,7 @@ titles <- list(
     PELLY = "Pelly River Basin",
     STEWART = "Stewart River Basin",
     WHITE = "White River Basin",
-    LOWER_YUKON = "Lower Yukon River Basin (Dawson/Klondike)",
+    LOWER_YUKON = "Lower Yukon River Basin (Dawson region)",
     PORCUPINE = "Porcupine River Basin",
     PEEL = "Peel River Basin",
     LIARD = "Liard River Basin",
@@ -68,7 +68,7 @@ titles <- list(
     ACKNOWLEDGEMENTS = "Remerciements",
     DISCLAIMER = "Avis de non-responsabilité",
     WEATHER_SNOWPACK = "Conditions météorologiques et nivologiques",
-    FLOW_CONDITIONS = "Conditions d'écoulement et perspective",
+    FLOW_CONDITIONS = "Conditions d'écoulement et perspectives",
     MAP1 = "Carte 1. Anomalies des températures",
     MAP2 = "Carte 2. Précipitations",
     MAP3 = "Carte 3. Équivalent en eau de la neige",
@@ -82,7 +82,7 @@ titles <- list(
     PORCUPINE = "Bassin de la rivière Porcupine",
     PEEL = "Bassin de la rivière Peel",
     LIARD = "Bassin de la rivière Liard",
-    ALSEK = "Bassin de la rivière Alsek",
+    ALSEK = "Bassin du fleuve Alsek",
     TABLE = "Bassins hydrographiques et relevés nivométriques",
     MAP4 = "Carte 4. Emplacement des stations nivométriques"
   )
@@ -797,7 +797,7 @@ Gathering snow measurements and data from across our vast territory requires wor
 -   *Water Management Engineer, Yukon Energy Corporation*
 -   *Research Technologists, McMaster University*
 
-Agencies cooperating with Environment Yukon in the Snow Survey Program are:
+Agencies cooperating with the Yukon Ministry of Environment in the Snow Survey Program are:
 
 -   *B.C. Ministry of Environment, Water Stewardship Division*
 -   *Parks Canada, Kluane National Park and Reserve*
@@ -807,12 +807,12 @@ Agencies cooperating with Environment Yukon in the Snow Survey Program are:
 -   *Vuntut Gwitchin First Nation*
 "
 } else {
-"
+paste0("
 Le Bulletin des relevés nivométriques fait partie du Programme des relevés nivométriques du Yukon, qui relève de la Direction des ressources en eau du ministère de l’Environnement. La Direction veut assurer l’intendance de l’eau au Yukon et exercer une surveillance responsable et collaborative pour orienter la gestion et la protection des eaux du territoire.
 
-Nous sommes reconnaissants de pouvoir surveiller les niveaux de neige et d’eau sur les territoires des 14 Premières Nations du Yukon et de collaborer avec bon nombre d’entre elles pour différents aspects de notre travail. Bien que les conclusions transmises dans le présent rapport se fondent principalement sur des observations faites sur le terrain et sur des données scientifiques, nous reconnaissons le lien profond et millénaire des Premières Nations du Yukon avec la neige et l’eau ainsi que leur grand savoir en la matière.
+Nous sommes reconnaissants de pouvoir surveiller les niveaux de neige et d’eau sur les territoires des 14", knitr::asis_output("\U00A0"), "Premières Nations du Yukon et de collaborer avec bon nombre d’entre elles pour différents aspects de notre travail. Bien que les conclusions transmises dans le présent rapport se fondent principalement sur des observations faites sur le terrain et sur des données scientifiques, nous reconnaissons le lien profond et millénaire des Premières Nations du Yukon avec la neige et l’eau ainsi que leur grand savoir en la matière.
 
-Pour recueillir des données nivométriques sur l’ensemble de notre vaste territoire, nous devons travailler avec plusieurs partenaires. Nous souhaitons donc remercier les organisations et les personnes suivantes pour leur importante contribution au Bulletin des relevés nivométriques :
+Pour recueillir des données nivométriques sur l’ensemble de notre vaste territoire, nous devons travailler avec plusieurs partenaires. Nous souhaitons donc remercier les organisations et les personnes suivantes pour leur importante contribution au Bulletin des relevés nivométriques", knitr::asis_output("\U00A0"), ":
 
 -   *Responsable de la collecte des données, Service de la conservation des ressources naturelles, département de l’Agriculture des États-Unis*
 -   *Météorologue, Section de la gestion des feux de forêt, ministère des Services aux collectivités du Yukon, Whitehorse*
@@ -820,7 +820,7 @@ Pour recueillir des données nivométriques sur l’ensemble de notre vaste terr
 -   *Ingénieur en gestion des eaux, Société d’énergie du Yukon*
 -   *Technologues de la recherche, Université McMaster*
 
-Organismes collaborant avec le ministère de l’Environnement au Programme des relevés nivométriques :
+Organismes collaborant avec le ministère de l’Environnement du Yukon au Programme des relevés nivométriques", knitr::asis_output("\U00A0"), ":
 
 -   *Ministère de l’Environnement de la Colombie-Britannique, Division de l’intendance de l’eau*
 -   *Parcs Canada, parc national et réserve de parc national Kluane*
@@ -828,7 +828,7 @@ Organismes collaborant avec le ministère de l’Environnement au Programme des 
 -   *Ministère de l’Énergie, des Mines et des Ressources du Yukon, Direction de la conformité, de la surveillance et des inspections*
 -   *Ministère de l’Environnement du Yukon, Direction des solutions technologiques et des services aux particuliers et aux entreprises*
 -   *Première Nation des Gwitchin Vuntut*
-"
+")
 }`
 
 # `r titles$DISCLAIMER`
@@ -842,13 +842,13 @@ The User accepts the data "as is" and acknowledges that the Government of Yukon 
 In consideration of access to the data, the User also agrees that in no event will the Government of Yukon be liable (in tort or contract) or responsible whatsoever to the User or any other legal entity for the accuracy, availability, suitability, reliability, usability, completeness or timeliness of the data, including, without limitation, any loss of revenue or profit, or for direct, indirect, special, incidental, or consequential damages arising from or related to the data.
 '
 } else {
-"
+paste0("
 L’utilisateur comprend qu’il se sert des données à ses propres risques. Il lui revient de vérifier l’exactitude, la disponibilité, la pertinence, la fiabilité, l’utilité, l’exhaustivité et l’actualité des données.
 
-L’utilisateur accepte les données « telles quelles » et reconnaît que le gouvernement du Yukon ne fait aucune déclaration ni ne donne aucune garantie, expresses ou implicites, quant à l’exactitude, à la disponibilité, à la pertinence, à la fiabilité, à l’utilité, à l’exhaustivité et à l’actualité des données, y compris de garanties implicites de qualité marchande ou d’adaptation à un usage particulier et d’absence de contrefaçon.
+L’utilisateur accepte les données «", knitr::asis_output("\U00A0"), "telles quelles", knitr::asis_output("\U00A0"), "» et reconnaît que le gouvernement du Yukon ne fait aucune déclaration ni ne donne aucune garantie, expresses ou implicites, quant à l’exactitude, à la disponibilité, à la pertinence, à la fiabilité, à l’utilité, à l’exhaustivité et à l’actualité des données, y compris de garanties implicites de qualité marchande ou d’adaptation à un usage particulier et d’absence de contrefaçon.
 
 En ce qui concerne l’accès aux données, l’utilisateur convient que le gouvernement du Yukon ne sera jamais tenu responsable (ni soumis à une obligation délictuelle ou contractuelle), pour quelque raison que ce soit, envers lui ou une entité juridique, de l’exactitude, de la disponibilité, de la pertinence, de la fiabilité, de l’utilité, de l’exhaustivité et de l’actualité des données, y compris des pertes de revenus ou de profits ou encore des dommages directs, indirects, particuliers, accessoires ou consécutifs attribuables à l’utilisation des données ou en découlant.
-"
+")
 }`
 
 # `r titles$WEATHER_SNOWPACK`
@@ -895,7 +895,7 @@ En ce qui concerne l’accès aux données, l’utilisateur convient que le gouv
 "
 Winter discharge (or baseflow) is estimated based on a combination of periodic winter measurements as well as historic data and regional trends. While most sites have had recent measurements it should be noted that discharge estimates are provisional at all stations.
 
-Winter river discharge or lake water levels are presented at one or two important indicator sites within each basin. Winter discharge and water levels are affected by many factors including the previous year’s snowpack, annual rainfall, pre-existing groundwater conditions, freeze-up timing, and landscape changes. Increasing winter baseflow is an observed trend across the territory and is documented in the Yukon’s [State of the Environment Report](https://yukon.ca/en/state-environment). The Yukon’s climate is predicted to trend wetter over time, but permafrost degradation may also be making more groundwater available to contribute to winter baseflow.
+Winter river discharge or lake water levels are presented at one or two important indicator sites within each basin. Winter discharge and water levels are affected by many factors including the previous year’s snowpack, annual rainfall, pre-existing groundwater conditions, freeze-up timing, and landscape changes. Increasing winter baseflow is an observed trend across the territory and is documented in the Yukon’s [State of the Environment Report](https://yukon.ca/en/state-environment). The Yukon’s climate is predicted to trend wetter over time, but permafrost degradation may also be contributing to greater groundwater recharge, resulting in more winter baseflow.
 
 [PLACEHOLDER FOR FLOW CONDITIONS INTERPRETATION]
 "
@@ -921,7 +921,7 @@ Le débit hivernal des cours d’eau et le niveau des lacs sont présentés pour
 `r if (language == "english") {
 paste0("At Tagish Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", stats$pillow_stats[stats$pillow_stats$location_id == '09AA-M1',]$perc_hist_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A1) while at Wolf Creek Subalpine Meteorological Station, SWE is estimated to be **", stats$pillow_stats[stats$pillow_stats$location_id == '29AB-M3',]$perc_hist_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A2). Established in 2023, Log Cabin Meteorological Station registered SWE at **", stats$pillow_stats[stats$pillow_stats$location_id == '09AA-M2',]$perc_hist_med, "%** of the historical median when compared with the manual snow survey record for that site (Figure", knitr::asis_output("\U00A0"), "A3). The Upper Yukon basin-averaged SWE is estimated to be **", stats$basin_stats[stats$basin_stats$basin == 'Upper_Yukon',]$perc_hist_med, "%** of the historical median, with **", stats$basin_stats[stats$basin_stats$basin == 'Upper_Yukon',]$swe, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B)." )
 } else {
-paste0("À la station météorologique de Tagish, l’équivalent en eau de la neige (EEN) est estimé à **", stats$pillow_stats[stats$pillow_stats$location_id == '09AA-M1',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A1), tandis qu’à la station subalpine du ruisseau Wolf, il est estimé à **", stats$pillow_stats[stats$pillow_stats$location_id == '29AB-M3',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A2). Établie en 2023, la station météorologique de Log Cabin a enregistré un EEN de **", stats$pillow_stats[stats$pillow_stats$location_id == '09AA-M2',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique si l’on compare avec les archives du relevé manuel de l’enneigement pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A3). L’EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin == 'Upper_Yukon',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, avec **", stats$basin_stats[stats$basin_stats$basin == 'Upper_Yukon',]$swe, " mm** au 1^er^ ", month_names[params$month], " (figure", knitr::asis_output("\U00A0"), "B)." )
+paste0("À la station météorologique de Tagish, l’équivalent en eau de la neige (EEN) est estimé à **", stats$pillow_stats[stats$pillow_stats$location_id == '09AA-M1',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A1), tandis qu’à la station subalpine du ruisseau Wolf, il est estimé à **", stats$pillow_stats[stats$pillow_stats$location_id == '29AB-M3',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A2). Installé en 2023, la station météorologique de Log Cabin a enregistré un EEN de **", stats$pillow_stats[stats$pillow_stats$location_id == '09AA-M2',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique si l’on compare avec les archives du relevé manuel de l’enneigement pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A3). L’EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin == 'Upper_Yukon',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$basin_stats[stats$basin_stats$basin == 'Upper_Yukon',]$swe, " mm** au 1^er^ ", month_names[params$month], " (figure", knitr::asis_output("\U00A0"), "B)." )
 }`
 
 ```{r Upper Yukon, echo=FALSE}
@@ -1003,7 +1003,7 @@ tryCatch({
 `r if (language == "english") {
 paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", stats$precip_stats[stats$precip_stats$location_id == 48168 & stats$precip_stats$period == precip_period,]$perc_hist_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, "%** of historical median, with **", stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period,]$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period, 'perc_hist_med']), " on rivers and lakes of the region.")
 } else  {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 48168 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse croire que la couverture de glace sur les cours d'eau et les lacs de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period, 'perc_hist_med']), ".")
+paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 48168 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historiqu4e, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 48168 & stats$cddf_stats$period==cddf_period, 'perc_hist_med']), ".")
 }`
 
 ```{r UpperYukon_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", warnings=FALSE, fig.height=fig.height_half}
@@ -1029,7 +1029,7 @@ tryCatch({
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E1). The current snow and groundwater conditions suggest that water levels will be  ------  average this summer. However, weather conditions over the spring and summer will determine the peak water level in Marsh Lake, which typically occurs in late summer in response to peak glacial runoff and large precipitation events. Lake Laberge level is currently ")
 } else {
-paste0("(figure", knitr::asis_output("\U00A0"), "E1). Les conditions actuelles d'enneigement et des eaux souterraines portent à croire que les niveaux d'eau seront ------ la moyenne cet été. Toutefois, les conditions météorologiques printanières et estivales détermineront le niveau d'eau maximal du lac Marsh, qui est habituellement atteint à la fin de l'été sous l'effet d'un ruissellement glaciaire maximal et  de fortes précipitations. Le niveau du lac Laberge est actuellement ")
+paste0("(figure", knitr::asis_output("\U00A0"), "E1). Les conditions d'enneigement actuelles et des eaux souterraines portent à croire que les niveaux d'eau seront ------ la moyenne cet été. Toutefois, les conditions météorologiques printanières et estivales détermineront le niveau d'eau maximal du lac Marsh, qui est habituellement atteint à la fin de l'été sous l'effet d'un ruissellement glaciaire maximal et  de fortes précipitations. Le niveau du lac Laberge est actuellement ")
 }`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "09AB010",]$description, if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "09AB010",]$description))`
 `r if( language == "english") {
@@ -1099,7 +1099,7 @@ if ("Teslin" %in% params$basins) {
 `r if (language == "english") {
 paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated at **", stats$basin_stats[stats$basin_stats$basin == 'Teslin_Big_Salmon',]$perc_hist_med, "%** of the historical median, with **", stats$basin_stats[stats$basin_stats$basin == 'Teslin_Big_Salmon',]$swe, " mm** as of ", month_names[params$month], " (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("L’EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin == 'Teslin_Big_Salmon',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$basin_stats[stats$basin_stats$basin == 'Teslin_Big_Salmon',]$swe, " mm** au 1^er^ ", month_names[params$month], " (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[params$month], " l’EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin == 'Teslin_Big_Salmon',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$basin_stats[stats$basin_stats$basin == 'Teslin_Big_Salmon',]$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r TeslinBigSalmon_basin, echo=FALSE, eval=include, out.width="50%", fig.height=fig.height_half}
@@ -1124,7 +1124,7 @@ tryCatch({
 `r if (language == "english") {
 paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", stats$precip_stats[stats$precip_stats$location_id == 8985 & stats$precip_stats$period == precip_period,]$perc_hist_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, "%** of historical median, with **", stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), "on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 8985 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse croire que la couverture de glace sur les cours d'eau et les lacs de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
+paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 8985 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 8985 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
 }`
 
 ```{r Teslin_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -1216,7 +1216,7 @@ tryCatch({
 `r if (language == "english") {
 paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", stats$precip_stats[stats$precip_stats$location_id == 27950 & stats$precip_stats$period == precip_period,]$perc_hist_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, "%** of historical median, with **", stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), " on rivers and lakes of the region.")
 } else {
-paste0("d'octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 27950 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse croire que la couverture de glace sur les cours d'eau et les lacs de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
+paste0("d'octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 27950 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 27950 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
 }`
 
 ```{r Carmacks_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -1235,7 +1235,7 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated Nordenskiold River discharge is currently" else "On estime que le débit de la rivière Nordenskiold est "`
+`r if (language == "english") "The estimated Nordenskiold River discharge is currently" else "Le débit estimé de la rivière Nordenskiold est "`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "09AH004",]$description, if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "09AH004",]$description))` 
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E). The ------ average snowpack combined with  ------  winter flows in the watershed suggests spring freshet flow volumes will be  ------  average. A combination of local conditions such as ice thickness, freeze-up levels, and current flow volumes suggest a  ------  average ice jam risk. Weather conditions in March and April will determine the most probable spring scenario.")
@@ -1316,12 +1316,12 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "There are no precipitation data available at Faro but the snowpack data suggests it has been" else "Il n’y a pas de données de précipitations disponibles à Faro, mais les données sur l’accumulation de neige indiquent que les conditions sont"`
+`r if (language == "english") "There are no precipitation data available at Faro but the snowpack data indicates that it has been" else "Il n’y a pas de données de précipitations pour Faro, mais les données sur l’accumulation de neige indiquent que les conditions sont"`
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin == 'Pelly',]$description, if (language == "english") "normal" else "la normale"), textColour(stats$basin_stats[stats$basin_stats$basin == 'Pelly',]$description))`. 
 `r if (language == "english") {
 paste0("Cumulative degree-days of freezing (CDDF) are **", stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, "%** of historical median, with **", stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "C), which suggests ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), " on rivers and lakes of the region.")
 } else {
-paste0("Au 1^er^ ", month_names[params$month], " les degrés-jours de gel cumulés sont à **", stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours**  (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse croire que la couverture de glace sur les cours d'eau et les lacs de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
+paste0("Au 1^er^ ", month_names[params$month], " les degrés-jours de gel cumulés sont à **", stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours**  (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 8964 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
 }`
 
 ```{r Faro_CDDF, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -1333,7 +1333,7 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated Pelly River discharge at Pelly Crossing is currently" else "On estime que le débit de la rivière Pelly à Pelly Crossing est"`
+`r if (language == "english") "The estimated Pelly River discharge at Pelly Crossing is currently" else "Le débit estimé de la rivière Pelly à Pelly Crossing est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "09BC001",]$description, if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "09BC001",]$description))`
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E). The ------ average snowpack combined with  ------  winter flows in the watershed suggests spring freshet flow volumes will be  ------  average with a potential for  ------ spring freshet flows. A combination of local conditions such as ice thickness, freeze-up levels, and current flow volumes suggest a  ------  average ice jam risk. Weather patterns leading to breakup and the spring freshet will play a critical role in determining potential ice jam severity and peak water levels.")
@@ -1419,7 +1419,7 @@ tryCatch({
 `r if (language == "english") {
 paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", stats$precip_stats[stats$precip_stats$location_id == 51426 & stats$precip_stats$period == precip_period,]$perc_hist_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, "%** of historical median, with **", stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), " on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 51426 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse croire que la couverture de glace sur les cours d'eau et les lacs de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
+paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 51426 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 51426 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
 }`
 
 ```{r Mayo_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -1438,7 +1438,7 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated Stewart River discharge at the outlet is currently" else "On estime que le débit à l'embouchure de la rivière Stewart est"`
+`r if (language == "english") "The estimated Stewart River discharge at the outlet is currently" else "Le débit estimé à l'embouchure de la rivière Stewart est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "09DD003",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "09DD003",]$description))`
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E). The ------ average snowpack combined with ------ winter flows in the watershed suggests spring freshet flow volumes will be ------ average. A combination of local conditions such as ice thickness, freeze-up levels, and current flow volumes suggest a ------ average ice jam risk. Weather patterns leading to breakup and the spring freshet will play a critical role in determining potential ice jam severity and peak water levels.")
@@ -1504,12 +1504,12 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated White River discharge at the Alaska Highway is currently" else "On estime que le débit de la rivière White à la route de l’Alaska est"`
+`r if (language == "english") "The estimated White River discharge at the Alaska Highway is currently" else "Le débit estimé de la rivière White à la route de l’Alaska est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "09CB001",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "09CB001",]$description))` 
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E). In this watershed, high flows are dominated by mountain snowmelt and glacial melt that are largely influenced by summer temperatures and precipitation. The ------ average snowpack combined with ------ average winter flows suggests spring freshet flow volumes will be ------ average with a potential for ------ spring freshet water levels. Warm and/or wet weather anomalies during the next four months will ------ generate high peak flows, including in rivers and streams crossing the Alaska Highway in the Kluane region.")
 } else {
-paste0("(figure", knitr::asis_output("\U00A0"), "E). Dans ce bassin hydrographique, les débits élevés sont dominés par la fonte des neiges de montagne et des glaciers, qui sont largement influencés par les températures estivales et les précipitations. L’accumulation de neige ------ la moyenne, combinée au débit hivernal ------ la moyenne, porte à croire que le volume de ruissellement des crues printanières sera ------ la moyenne. Les anomalies météorologiques chaudes et/ou humides au cours des quatre prochains mois ------ générer des débits de pointe élevés, y compris dans les rivières et les cours d’eau traversant la route de l’Alaska dans la région de Kluane.")
+paste0("(figure", knitr::asis_output("\U00A0"), "E). Dans ce bassin hydrographique, les débits élevés sont dominés par la fonte des neiges en montagne et des glaciers, qui sont largement influencés par les températures et les précipitations estivales. L’accumulation de neige ------ la moyenne, combinée au débit hivernal ------ la moyenne, porte à croire que le volume de ruissellement des crues printanières sera ------ la moyenne. Les anomalies météorologiques chaudes et/ou humides au cours des quatre prochains mois ------ générer des débits de pointe élevés, y compris dans les les cours d’eau qui traversent la route de l’Alaska dans la région de Kluane.")
 }`
 
 ```{r WhiteRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
@@ -1552,7 +1552,7 @@ if ("Lower Yukon" %in% params$basins) {
 paste0("Established in 2022, King Solomon Dome Meteorological Station registered Snow Water Equivalent (SWE) at **", stats$pillow_stats[stats$pillow_stats$location_id == '09EA-M1',]$perc_hist_med, "%** of the historical median when compared with the manual snow survey record for that site (Figure", knitr::asis_output("\U00A0"), "A). The Lower Yukon basin-averaged SWE is estimated to be **", stats$basin_stats[stats$basin_stats$basin == 'Lower_Yukon',]$perc_hist_med, "%**
 of the historical median, with **", stats$basin_stats[stats$basin_stats$basin == 'Lower_Yukon',]$swe, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Établie en 2022, la station météorologique du dôme King Solomon a enregistré un équivalent en eau de la neige (EEN) de **", stats$pillow_stats[stats$pillow_stats$location_id == '09EA-M1',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique par rapport aux relevés nivométriques manuels pour ce site (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[params$month], " l’EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin == 'Lower_Yukon',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$basin_stats[stats$basin_stats$basin == 'Lower_Yukon',]$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Installée en 2022, la station météorologique du dôme King Solomon a enregistré un EEN de **", stats$pillow_stats[stats$pillow_stats$location_id == '09EA-M1',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique par rapport aux relevés nivométriques manuels pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[params$month], " l’EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin == 'Lower_Yukon',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$basin_stats[stats$basin_stats$basin == 'Lower_Yukon',]$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r LowerYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -1590,7 +1590,7 @@ tryCatch({
 `r if (language == "english") {
 paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "D). Cumulative winter precipitation was **", stats$precip_stats[stats$precip_stats$location_id == 10194 & stats$precip_stats$period == precip_period,]$perc_hist_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, "%** of historical median, with **", stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), " on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 10194 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse croire que la couverture de glace sur les cours d'eau et les lacs de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
+paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 10194 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 10194 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
 }`
 
 ```{r Dawson_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -1609,9 +1609,9 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated Yukon River discharge above White River is currently" else "On estime que le débit du fleuve Yukon en amont de la rivière White est"`
+`r if (language == "english") "The estimated Yukon River discharge above White River is currently" else "Le débit estimé du fleuve Yukon en amont de la rivière White est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "09CD001",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "09CD001",]$description))` 
-`r if (language == "english") "(Figure E1) while the estimated Klondike River discharge above Bonanza Creek is currently" else "(figure E1) alors que le débit de la rivière Klondike en amont du ruisseau Bonanza est"`
+`r if (language == "english") "(Figure E1) while the estimated Klondike River discharge above Bonanza Creek is currently" else "(figure E1) tandis que le débit de la rivière Klondike en amont du ruisseau Bonanza est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "09EA003",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "09EA003",]$description))`
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E2). The ------ average snowpack combined with ------ average winter flows suggests spring freshet flow volumes will be ------ average with a ------ potential for ------ spring freshet water levels. Weather conditions in ------ will determine the most probable spring scenario. A combination of local conditions such as ice thickness, freeze-up levels, and current flow volumes suggest an ------ ice jam risk. Weather patterns leading to breakup and the spring freshet will play a critical role in determining potential ice jam severity and peak water levels. These statements also apply to the Klondike River.")
@@ -1704,7 +1704,7 @@ tryCatch({
 `r if (language == "english") {
 paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", stats$precip_stats[stats$precip_stats$location_id == 26894 & stats$precip_stats$period == precip_period,]$perc_hist_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, "%** of historical median, with **", stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), " on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 26894 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse croire que la couverture de glace sur les cours d'eau et les lacs de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
+paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 26894 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 26894 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
 }`
 
 ```{r OldCrow_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -1723,7 +1723,7 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated Porcupine River discharge is currently" else "On estime que le débit de la rivière Porcupine est"`
+`r if (language == "english") "The estimated Porcupine River discharge is currently" else "Le débit estimé de la rivière Porcupine est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "09FD002",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "09FD002",]$description))` 
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E). The ------ average snowpack combined with ------ winter flows suggests that spring freshet flow volumes will be ------ average. Weather patterns leading to breakup and the spring freshet will play a critical role in determining potential ice jam severity and peak water levels")
@@ -1789,7 +1789,7 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated Peel River discharge is" else "On estime que le débit de la rivière Peel est"`
+`r if (language == "english") "The estimated Peel River discharge is" else "Le débit estimé de la rivière Peel est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "10MA001",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "10MA001",]$description))` 
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E). The ------ average snowpack combined with ------ winter flows suggests spring freshet flow volumes will be ------ average. Weather conditions in March and April will determine the most probable spring scenario.")
@@ -1836,7 +1836,7 @@ if ("Liard" %in% params$basins) {
 `r if (language == "english") {
 paste0("At Hyland Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", stats$pillow_stats[stats$pillow_stats$location_id == '10AD-M2',]$perc_hist_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A). The Liard River basin-averaged SWE is estimated to be **", stats$basin_stats[stats$basin_stats$basin == 'Liard',]$perc_hist_med, "%** of the historical median, with **", stats$basin_stats[stats$basin_stats$basin == 'Liard',]$swe, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("À la station météorologique Hyland, l’équivalent en eau de la neige (EEN) est estimé à **", stats$pillow_stats[stats$pillow_stats$location_id == '10AD-M2',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin == 'Liard',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$basin_stats[stats$basin_stats$basin == 'Liard',]$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("À la station météorologique Hyland, l’EEN est estimé à **", stats$pillow_stats[stats$pillow_stats$location_id == '10AD-M2',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est estimé à **", stats$basin_stats[stats$basin_stats$basin == 'Liard',]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$basin_stats[stats$basin_stats$basin == 'Liard',]$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r LiardRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -1878,7 +1878,7 @@ tryCatch({
 `r if (language == "english") {
 paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", stats$precip_stats[stats$precip_stats$location_id == 32293 & stats$precip_stats$period == precip_period,]$perc_hist_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, "%** of historical median, with **", stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), " on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 32293 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse croire que la couverture de glace sur les cours d'eau et les lacs de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
+paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", stats$precip_stats[stats$precip_stats$location_id == 32293 & stats$precip_stats$period == precip_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$perc_hist_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(stats$cddf_stats[stats$cddf_stats$location_id == 32293 & stats$cddf_stats$period==cddf_period,]$perc_hist_med), ".")
 }`
 
 
@@ -1898,7 +1898,7 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated Liard River discharge at Upper Liard is currently" else "On estime que le débit de la rivière Liard au croisement routier supérieur est"`
+`r if (language == "english") "The estimated Liard River discharge at Upper Liard is currently" else "Le débit estimé de la rivière Liard à Upper Liard est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "10AA001",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "10AA001",]$description))`
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E). The ------ average snowpack in the watershed combined with ------ average winter flows suggests spring freshet flows and levels will be ------ average. Weather patterns leading to spring freshet have the potential to generate ------ average water levels on small to medium creeks and rivers including those crossing the Alaska and Robert Campbell highways.")
@@ -1940,7 +1940,7 @@ if ("Alsek" %in% params$basins) {
 }
 ```
 
-`r if (language == "english") "The Alsek River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Alsek est"`
+`r if (language == "english") "The Alsek River Basin snowpack is" else "L’accumulation de neige dans le bassin du fleuve Alsek est"`
 `r officer::ftext(paste0(stats$basin_stats[stats$basin_stats$basin == "Alsek",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$basin_stats[stats$basin_stats$basin == "Alsek",]$description))`.
 `r if (language == "english") {
 paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", stats$basin_stats[stats$basin_stats$basin == 'Alsek',]$perc_hist_med, "%** of the historical median, with **", stats$basin_stats[stats$basin_stats$basin == 'Alsek',]$swe, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
@@ -1964,12 +1964,12 @@ tryCatch({
 })
 ```
 
-`r if (language == "english") "The estimated Alsek River discharge is currently" else "On estime que le débit de la rivière Alsek est"`
+`r if (language == "english") "The estimated Alsek River discharge is currently" else "Le débit estimé du fleuve Alsek est"`
 `r officer::ftext(paste0(stats$flow_stats[stats$flow_stats$location_id == "08AB001",]$description,  if (language == "english") "average" else "la moyenne"), textColour(stats$flow_stats[stats$flow_stats$location_id == "08AB001",]$description))`
 `r if (language == "english") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E). High flows in this watershed are dominated by mountain snowmelt and glacial melt that are largely influenced by summer temperatures and precipitation. The snowpack in the St. Elias Range is likely to generate ------ average freshet volumes. Weather conditions over the spring and summer will determine peak flows.")
 } else {
-paste0("(figure", knitr::asis_output("\U00A0"), "E). Les débits élevés dans ce bassin sont dominés par la fonte des neiges de montagne et des glaciers, qui sont largement influencées par les températures estivales et les précipitations. L'accumulation de neige dans la chaîne de montagnes St. Elias devrait générer des volumes de crue ------ la moyenne. Les conditions météorologiques au printemps et en été détermineront les débits maximaux.")
+paste0("(figure", knitr::asis_output("\U00A0"), "E). Les débits élevés dans ce bassin sont dominés par la fonte des neiges de montagne et des glaciers, qui sont largement influencées par les températures estivales et les précipitations. L'accumulation de neige dans les monts St. Elias entrainera vraisemblablement des volumes de crue ------ la moyenne. Les conditions météorologiques au printemps et en été détermineront les débits de pointe")
 }`
 
 ```{r AlsekRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
@@ -1978,7 +1978,7 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). Les débits élevés dans c
 station_id <- "08AB001"
 
 if (language_param == "french") {
-  custom_title  <- "E : Débit de la rivière Alsek en amont de Bates"
+  custom_title  <- "E : Débit du fleuve Alsek en amont de Bates"
 } else {
   custom_title <- "E: Alsek River Discharge above Bates"
 }
@@ -2093,7 +2093,7 @@ tryCatch({
         sub_basin == "Porcupine River Basin" ~ "Bassin de la rivière Porcupine", 
         sub_basin == "Peel River Basin" ~ "Bassin de la rivière Peel", 
         sub_basin == "Liard River Basin" ~ "Bassin de la rivière Liard", 
-        sub_basin == "Alsek River Basin" ~ "Bassin de la rivière Alsek", 
+        sub_basin == "Alsek River Basin" ~ "Bassin du fleuve Alsek", 
         sub_basin == "Coastal South-East Alaska Snow Courses" ~ "Stations nivométriques côtières en Alaska", # Example replacement
         TRUE ~ sub_basin  # Default case to keep original names if not listed
       ))
@@ -2176,7 +2176,7 @@ B - Date du relevé en dehors de la plage d’échantillonnage valide
 R - Nouveau record  
 
 ### Notes au sujet de la médiane historique de l'EEN et du nombre d'années avec données :
-C - Données historiques composite. Les relevés à la station sont combinés avec les données historique de la station voisine abandonnée, ajustées en fonction des années avec relevés concomitants.
+C - Données historiques composites. Les mesures à la station sont combinées avec les données historiques de la station voisine abandonnée, ajustées en fonction des années avec relevés concomitants.
 
 - L'aéroport de Whitehorse B (Lac Ice) combine les relevés historiques de l’ancienne station nivométrique située dans l’enceinte de l’Aéroport de Whitehorse avec les nouveaux relevés pris à quelques centaines de mètres à l’ouest de l’aéroport. Deux années de relevés concomitants existent (2023", knitr::asis_output("\U2011"), "2024). La nouvelle station utilise les données historiques de l’EEN de l’ancienne station (1965", knitr::asis_output("\U2011"), "2022) sans ajustement.
 - Ruisseau Twin B combine les relevés historiques de la station nivométrique Ruisseaux Twin A située à l’extrémité ouest de la piste d’atterrissage Twin Creeks avec les nouveaux relevés pris à l’extrémité est de la piste. Six années de relevés concomitants (2016 et 2021", knitr::asis_output("\U2011"), "2025) sont actuellement utilisées pour ajuster les données historiques de l’EEN de Twin A à l’emplacement de Twin B (un facteur de correction de ", round(twin_corrections[1], 2), " s’applique aux données d’EEN de 1977", knitr::asis_output("\U2011"), "2015).
