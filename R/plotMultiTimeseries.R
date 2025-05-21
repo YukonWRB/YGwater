@@ -107,6 +107,7 @@ plotMultiTimeseries <- function(type = 'traces',
   # legend_position <- 'v'
   # shareX = TRUE
   # shareY = TRUE
+  # unusable = FALSE
   
   
   # Checks and initial work ##########################################
@@ -129,6 +130,8 @@ plotMultiTimeseries <- function(type = 'traces',
     if (length(log) != length(locations)) {
       stop("Your entry for the parameter 'log' is invalid. Please review the function documentation and try again.")
     }
+  } else if (length(log) == 1) {
+    log <- rep(log, length(locations))
   }
   
   if (!is.null(invert)) {
@@ -152,25 +155,11 @@ plotMultiTimeseries <- function(type = 'traces',
     lead_lag <- NA
   }
   
-  if (length(log) == 1) {
-    log <- rep(log, length(locations))
-  }
   
   if (!is.null(rate)) {
     tolower(rate)
     if (!(rate %in% c("max", "hour", "day"))) {
       stop("Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again.")
-    }
-  }
-  
-  if (!is.null(z)) {
-    if (!is.numeric(z)) {
-      stop("Your entry for the parameter 'z' is invalid. Please review the function documentation and try again.")
-    }
-    if (!is.null(z_approx)) {
-      if (!is.numeric(z_approx)) {
-        stop("Your entry for the parameter 'z_approx' is invalid. Please review the function documentation and try again.")
-      }
     }
   }
   
@@ -191,63 +180,60 @@ plotMultiTimeseries <- function(type = 'traces',
   }
   if (length(parameters) == 1 & length(locations) > 1) {
     parameters <- rep(parameters, length(locations))
-  }
-  if (!is.null(record_rates)) {
-    if (length(record_rates) == 1 & length(locations) > 1) {
-      record_rates <- rep(record_rates, length(locations))
-    }
-  }
-  if (!is.null(z)) {
-    if (length(z) == 1 & length(locations) > 1) {
-      z <- rep(z, length(locations))
-    }
-  }
-  if (!is.null(z_approx)) {
-    if (length(z_approx) == 1 & length(locations) > 1) {
-      z_approx <- rep(z_approx, length(locations))
-    }
-  }
-  if (!is.null(aggregation_types)) {
-    if (length(aggregation_types) == 1 & length(locations) > 1) {
-      aggregation_types <- rep(aggregation_types, length(locations))
-    }
-  }
-  
-  if (length(locations) != length(parameters)) {
+  } else if (length(locations) != length(parameters)) {
     stop("The number of locations and parameters must be the same, or one must be a vector of length 1.")
   }
   
-  
+  # Check record_rates
   if (!is.null(record_rates)) {
-    if (length(record_rates) != length(locations)) {
-      stop("The number of locations and record rates must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    if ((length(record_rates) != length(locations)) && ((length(record_rates) != 1) | (length(locations) != 1))) {
+      stop("The number of locations and record rates must be the same, one must be a vector of length 1, or record_rates must be left as the default NULL.")
     }
     for (i in 1:length(record_rates)) {
-      if (!(record_rates[i] %in% c('< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'))) {
-        warning("Your entry ", i, " for parameter record_rates is invalid. It's been reset to the default NULL.")
+      if (!lubridate::is.period(lubridate::period(record_rates[i]))) {
+        warning("Your entry ", i, " for parameter record_rates is invalid (is not or cannot be converted to a period). It's been reset to the default NULL.")
         record_rates[i] <- NA
       }
+    }
+    if (length(record_rates) == 1 & length(locations) > 1) {
+      record_rates <- rep(record_rates, length(locations))
     }
   } else {
     record_rates <- NA
   }
   
+  # Check z
   if (!is.null(z)) {
-    if (length(z) != length(locations)) {
-      stop("The number of locations and z elements must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    if ((length(z) != length(locations)) && (length(z) != 1) | (length(locations) != 1)) {
+      stop("The number of locations and z elements must be the same, one must be a vector of length 1, or z must be left as the default NULL.")
+    }
+    if (!inherits(z, "numeric")) {
+      z <- as.numeric(z)
+    }
+    if (length(z) == 1 & length(locations) > 1) {
+      z <- rep(z, length(locations))
     }
   } else {
     z <- NA
   }
   
+  
+  # Check z_approx
   if (!is.null(z_approx)) {
-    if (length(z_approx) != length(locations)) {
+    if ((length(z_approx) != length(locations)) && (length(z_approx) != 1) | (length(locations) != 1)) {
       stop("The number of locations and z elements must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    }
+    if (!inherits(z_approx, "numeric")) {
+      z_approx <- as.numeric(z_approx)
+    }
+    if (length(z_approx) == 1 & length(locations) > 1) {
+      z_approx <- rep(z_approx, length(locations))
     }
   } else {
     z_approx <- NA
   }
   
+  # Check aggregation_types
   if (!is.null(aggregation_types)) {
     if (length(aggregation_types) != length(locations)) {
       stop("The number of locations and record rates must be the same, or one must be a vector of length 1 or left to the default NULL.")
@@ -273,10 +259,13 @@ plotMultiTimeseries <- function(type = 'traces',
     } else {
       stop("Your entry for the parameter 'aggregation_types' is invalid. Please review the function documentation and try again.")
     }
+    if (length(aggregation_types) == 1 & length(locations) > 1) {
+      aggregation_types <- rep(aggregation_types, length(locations))
+    }
   } else {
     aggregation_types <- NA
   }
-
+  
   if (tzone == "auto") {
     tzone <- Sys.timezone()
   }
@@ -728,10 +717,9 @@ plotMultiTimeseries <- function(type = 'traces',
   # Make the title ###################################
   if (title) {
     if (is.null(custom_title)) {
-      generate_plot_title <- function(tbl) {
         # Group by location to handle different parameters per location
         if (type == 'traces') {
-          title <- tbl %>%
+          title <- timeseries %>%
             dplyr::group_by(location, name) %>%
             dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
                           # Format title line by line
@@ -746,7 +734,7 @@ plotMultiTimeseries <- function(type = 'traces',
             dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
             dplyr::pull("plot_title") # Extract the plot title as a string
         } else {
-          title <- tbl %>%
+          title <- timeseries %>%
             dplyr::group_by(location, name) %>%
             dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
                           # Format title line by line
@@ -758,12 +746,8 @@ plotMultiTimeseries <- function(type = 'traces',
             dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
             dplyr::pull("plot_title") # Extract the plot title as a string
         }
-        
-        return(title)
-      }
       
-      title <- generate_plot_title(timeseries)
-      
+
     } else {
       title <- custom_title
     }
@@ -1070,6 +1054,5 @@ plotMultiTimeseries <- function(type = 'traces',
   } else {
     return(plot)
   }
-  
 }
 
