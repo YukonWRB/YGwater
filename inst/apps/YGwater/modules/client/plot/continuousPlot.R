@@ -49,7 +49,7 @@ continuousPlot <- function(id, language, windowDims) {
             dateInput(ns("start_doy"), "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
             style = "display: flex; align-items: center;",
             span(
-              id = ns("log_info"),
+              id = ns("log_info_start_doy"),
               `data-bs-toggle` = "tooltip",
               `data-placement` = "right",
               `data-trigger` = "click hover",
@@ -61,7 +61,7 @@ continuousPlot <- function(id, language, windowDims) {
             dateInput(ns("end_doy"), "End day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
             style = "display: flex; align-items: center;",
             span(
-              id = ns("log_info"),
+              id = ns("log_info_end_doy"),
               `data-bs-toggle` = "tooltip",
               `data-placement` = "right",
               `data-trigger` = "click hover",
@@ -73,7 +73,7 @@ continuousPlot <- function(id, language, windowDims) {
             selectizeInput(ns("years"), label = "Select years to plot", choices = NULL, multiple = TRUE), #Choices are populated based on the location and parameter
             style = "display: flex; align-items: center;",
             span(
-              id = ns("log_info"),
+              id = ns("log_info_years"),
               `data-bs-toggle` = "tooltip",
               `data-placement` = "right",
               `data-trigger` = "click hover",
@@ -86,7 +86,7 @@ continuousPlot <- function(id, language, windowDims) {
                            choices = c("all", "last"), selected = "all"),
             style = "display: flex; align-items: center;",
             span(
-              id = ns("log_info"),
+              id = ns("log_info_hist_range"),
               `data-bs-toggle` = "tooltip",
               `data-placement` = "right",
               `data-trigger` = "click hover",
@@ -162,10 +162,18 @@ continuousPlot <- function(id, language, windowDims) {
         shinyjs::show("grades")
         shinyjs::show("approvals")
         shinyjs::show("qualifiers")
-      } else {
+      } else if (input$type == "Long timeseries" && (traceCount() > 1 || subplotCount() > 1)) {
         shinyjs::hide("grades")
         shinyjs::hide("approvals")
         shinyjs::hide("qualifiers")
+        shinyjs::hide("loc_name") # Could have been shown again by selecting overlapping years
+        shinyjs::hide("param") # Could have been shown again by selecting overlapping years
+      } else if (input$type == "Overlapping years") {
+        shinyjs::hide("grades")
+        shinyjs::hide("approvals")
+        shinyjs::hide("qualifiers")
+        shinyjs::show("loc_name") # Would be hidden if multiple subplots or traces are still selected
+        shinyjs::show("param") # Would be hidden if multiple subplots or traces are still selected
       }
     })
     
@@ -196,11 +204,12 @@ continuousPlot <- function(id, language, windowDims) {
     }, ignoreNULL = TRUE)
     
     observeEvent(input$loc_name, {
+      req(input$loc_name, input$param)
       # Update years, used for the overlapping years plot (runs regardless of plot type selected because the user could switch plot types)
       try({
         possible_years <- seq(
-          as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location_id == input$loc_name & moduleData$all_ts$parameter_id == input$param, "end_datetime"], 1, 4)),
-          as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location_id == input$loc_name & moduleData$all_ts$parameter_id == input$param, "start_datetime"], 1, 4))
+          as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location_id == input$loc_name & moduleData$all_ts$parameter_id == input$param, "start_datetime"], 1, 4)),
+          as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location_id == input$loc_name & moduleData$all_ts$parameter_id == input$param, "end_datetime"], 1, 4))
         )
         updateSelectizeInput(session, "years", choices = possible_years)
       })
@@ -302,8 +311,11 @@ continuousPlot <- function(id, language, windowDims) {
       
       if (runTraceNew() == FALSE) {
         showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = as.numeric(input$param)),
-          selectizeInput(ns("traceNew_loc_id"), "Select location", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, tr("generic_name_col", language$language)])),
+          selectizeInput(ns("traceNew_param"), "Select parameter", 
+                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                         selected = input$param),
+          selectizeInput(ns("traceNew_loc_id"), "Select location", 
+                         choices = "placeholder"), # Choices are populated based on the parameter
           numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
           footer = tagList(
             actionButton(ns("add_new_trace"), "Add trace"),
@@ -315,9 +327,11 @@ continuousPlot <- function(id, language, windowDims) {
       } else { # The modal has already run once, use the previously selected values
         showModal(modalDialog(
           selectizeInput(ns("traceNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = as.numeric(input$traceNew_param)),
-          selectizeInput(ns("traceNew_loc_id"), "Select location by name", 
-                         choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, tr("generic_name_col", language$language)]),
+                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                         selected = input$traceNew_param),
+          selectizeInput(ns("traceNew_loc_id"), "Select location", 
+                         choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "location_id"], 
+                                                   moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, tr("generic_name_col", language$language)]),
                          selected = input$traceNew_loc_id),
           numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
           footer = tagList(
@@ -335,13 +349,13 @@ continuousPlot <- function(id, language, windowDims) {
     # Observe the param inputs for all traces and update the location choices in the modal
     observeEvent(input$traceNew_param, {
       # Update the location choices
-      locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, c(tr("generic_name_col", language$language), "location_id")])
+      locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, c(tr("generic_name_col", language$language), "location_id")])
       names(locs) <- c("name", "location_id")
       
       updateSelectizeInput(session, 
                            "traceNew_loc_id", 
                            choices = stats::setNames(locs$location_id, locs$name),
-                           selected = if (input$traceNew_loc_id %in% locs$locaction_id) input$traceNew_loc_id else character(0))
+                           selected = if (input$traceNew_loc_id %in% locs$location_id) input$traceNew_loc_id else character(0))
     }, ignoreInit = TRUE)
     
     observeEvent(input$add_new_trace, {
@@ -405,9 +419,9 @@ continuousPlot <- function(id, language, windowDims) {
                        selected = traces$trace1$parameter),
         selectizeInput(ns("traceNew_loc_id"), "Select location", 
                        choices = stats::setNames(
-                         
-                       ), 
-                       selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace1$location_id, tr("generic_name_col", language$language)])),
+                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace1$parameter, "location_id"], 
+                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace1$parameter, tr("generic_name_col", language$language)]),
+                       selected = traces$trace1$location_id),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
           actionButton(ns("remove_trace"), "Remove trace"),
@@ -419,9 +433,16 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$trace2, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace2$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace2$location_id, tr("generic_name_col", language$language)])),
-        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace2$lead_lag),
+        selectizeInput(ns("traceNew_param"), "Select parameter", 
+                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                       selected = traces$trace2$parameter),
+        selectizeInput(ns("traceNew_loc_id"), "Select location", 
+                       choices = stats::setNames(
+                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, "location_id"], 
+                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, tr("generic_name_col", language$language)]),
+                       selected = traces$trace2$location_id),
+        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", 
+                     value = traces$trace2$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
           actionButton(ns("remove_trace"), "Remove trace"),
@@ -433,8 +454,14 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$trace3, {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace3$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, "name"])), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace3$location_id, tr("generic_name_col", language$language)]),
+        selectizeInput(ns("traceNew_param"), "Select parameter", 
+                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                       selected = traces$trace3$parameter),
+        selectizeInput(ns("traceNew_loc_id"), "Select location", 
+                       choices = stats::setNames(
+                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, "location_id"], 
+                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, tr("generic_name_col", language$language)]),
+                       selected = traces$trace3$location_id),
         numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace3$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
@@ -448,9 +475,13 @@ continuousPlot <- function(id, language, windowDims) {
     observeEvent(input$trace4, {
       showModal(modalDialog(
         selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace4$parameter),
+                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                       selected = traces$trace4$parameter),
         selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, "name"])), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace4$location_id, tr("generic_name_col", language$language)]),
+                       choices = stats::setNames(
+                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, "location_id"], 
+                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, tr("generic_name_col", language$language)]),
+                       selected = traces$trace4$location_id),
         numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace4$lead_lag),
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
@@ -507,7 +538,13 @@ continuousPlot <- function(id, language, windowDims) {
           increment <- increment + 1
         }
       }
-      traces <- new_traces
+      
+      isolate({
+        for (nm in names(new_traces)) {
+          traces[[nm]] <- new_traces[[nm]]
+        }
+      })
+      
       # Re-render text for all buttons
       for (i in 1:traceCount()) {
         if (i == 1) {
@@ -524,8 +561,16 @@ continuousPlot <- function(id, language, windowDims) {
         shinyjs::show("param")
         shinyjs::show("loc_name")
         shinyjs::show("add_subplot")
-        updateSelectizeInput(session, "param", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = traces$trace1$parameter)
-        updateSelectizeInput(session, "loc_name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, tr("generic_name_col", language$language)]), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace1$location_id, tr("generic_name_col", language$language)]))
+        updateSelectizeInput(session, "param", 
+                             choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                             selected = traces$trace1$parameter)
+        
+        # Update the location choices
+        locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, c(tr("generic_name_col", language$language), "location_id")])
+        names(locs) <- c("name", "location_id")
+        updateSelectizeInput(session, "loc_name", 
+                             choices = stats::setNames(locs$location_id, locs$name), 
+                             selected = traces$trace1$location_id)
       } else {
         shinyjs::show("trace1_ui")
       }
@@ -557,8 +602,11 @@ continuousPlot <- function(id, language, windowDims) {
       
       if (runSubplotNew() == FALSE) {
         showModal(modalDialog(
-          selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = as.numeric(input$param)),
-          selectizeInput(ns("subplotNew_loc_id"), "Select location", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, tr("generic_name_col", language$language)])),
+          selectizeInput(ns("subplotNew_param"), "Select parameter", 
+                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                         selected = input$param),
+          selectizeInput(ns("subplotNew_loc_id"), "Select location", 
+                         choices = "placeholder"), # Choices are populated based on the parameter in another observer
           footer = tagList(
             actionButton(ns("add_new_subplot"), "Add subplot"),
             actionButton(ns("cancel"), "Cancel")
@@ -568,8 +616,13 @@ continuousPlot <- function(id, language, windowDims) {
         runSubplotNew(TRUE)
       } else { # The modal has already run once, use the previously selected values
         showModal(modalDialog(
-          selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = as.numeric(input$subplotNew_param)),
-          selectizeInput(ns("subplotNew_loc_id"), "Select location", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, tr("generic_name_col", language$language)])),
+          selectizeInput(ns("subplotNew_param"), "Select parameter", 
+                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                         selected = input$subplotNew_param),
+          selectizeInput(ns("subplotNew_loc_id"), "Select location", 
+                         choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location_id"], 
+                                                   moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, tr("generic_name_col", language$language)]),
+                         selected = input$subplotNew_loc_id),
           footer = tagList(
             actionButton(ns("add_new_subplot"), "Add subplot"),
             actionButton(ns("cancel"), "Cancel")
@@ -583,11 +636,14 @@ continuousPlot <- function(id, language, windowDims) {
     
     # Observe the param inputs for all traces and update the location choices in the modal
     observeEvent(input$subplotNew_param, {
+      # Update the location choices
+      locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, c(tr("generic_name_col", language$language), "location_id")])
+      names(locs) <- c("name", "location_id")
       
       updateSelectizeInput(session,
                            "subplotNew_loc_id",
-                           choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "name"]),
-                           selected = if (input$subplotNew_loc_id %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, tr("generic_name_col", language$language)]) input$subplotNew_loc_id else character(0))
+                           choices = stats::setNames(locs$location_id, locs$name),
+                           selected = if (input$subplotNew_loc_id %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location_id"]) input$subplotNew_loc_id else character(0))
     }, ignoreInit = TRUE)
     
     share_axes_run <- reactiveVal(FALSE)
@@ -661,8 +717,13 @@ continuousPlot <- function(id, language, windowDims) {
     clicked_subplot <- reactiveVal(NULL)
     observeEvent(input$subplot1, {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot1$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot1$location_id, tr("generic_name_col", language$language)])),
+        selectizeInput(ns("subplotNew_param"), "Select parameter", 
+                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                       selected = subplots$subplot1$parameter),
+        selectizeInput(ns("subplotNew_loc_id"), "Select location by name", 
+                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, "location_id"], 
+                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, tr("generic_name_col", language$language)]),
+                       selected = subplots$subplot1$location_id),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -674,8 +735,13 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$subplot2, {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot2$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location by name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, "name"]), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot2$location_id, tr("generic_name_col", language$language)])),
+        selectizeInput(ns("subplotNew_param"), "Select parameter", 
+                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                       selected = subplots$subplot2$parameter),
+        selectizeInput(ns("subplotNew_loc_id"), "Select location by name", 
+                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, "location_id"], 
+                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, tr("generic_name_col", language$language)]),
+                       selected = subplots$subplot2$location_id),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -687,8 +753,13 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$subplot3, {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot3$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, tr("generic_name_col", language$language)])), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot3$location_id, tr("generic_name_col", language$language)]),
+        selectizeInput(ns("subplotNew_param"), "Select parameter", 
+                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                       selected = subplots$subplot3$parameter),
+        selectizeInput(ns("subplotNew_loc_id"), "Select location", 
+                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, "location_id"], 
+                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, tr("generic_name_col", language$language)]),
+                       selected = subplots$subplot3$location_id),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -700,8 +771,13 @@ continuousPlot <- function(id, language, windowDims) {
     })
     observeEvent(input$subplot4, {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot4$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, "name"])), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot4$location_id, tr("generic_name_col", language$language)]),
+        selectizeInput(ns("subplotNew_param"), "Select parameter", 
+                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                       selected = subplots$subplot4$parameter),
+        selectizeInput(ns("subplotNew_loc_id"), "Select location", 
+                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, "location_id"], 
+                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, tr("generic_name_col", language$language)]),
+                       selected = subplots$subplot4$location_id),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -750,7 +826,13 @@ continuousPlot <- function(id, language, windowDims) {
           increment <- increment + 1
         }
       }
-      subplots <- new_subplots
+      
+      isolate({
+        for (nm in names(new_subplots)) {
+          subplots[[nm]] <- new_subplots[[nm]]
+        }
+      })
+      
       # Re-render text for all buttons
       for (i in 1:subplotCount()) {
         if (i == 1) {
@@ -769,8 +851,16 @@ continuousPlot <- function(id, language, windowDims) {
         shinyjs::show("param")
         shinyjs::show("loc_name")
         shinyjs::show("add_trace")
-        updateSelectizeInput(session, "param", choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = subplots$subplot1$parameter)
-        updateSelectizeInput(session, "loc_name", choices = unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, tr("generic_name_col", language$language)]), selected = unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot1$location_id, tr("generic_name_col", language$language)]))
+        updateSelectizeInput(session, "param", 
+                             choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                             selected = subplots$subplot1$parameter)
+        
+        # Update the location choices
+        locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, c(tr("generic_name_col", language$language), "location_id")])
+        names(locs) <- c("name", "location_id")
+        updateSelectizeInput(session, "loc_name", 
+                             choices = stats::setNames(locs$location_id, locs$name), 
+                             selected = subplots$subplot1$location_id)
       } else {
         shinyjs::show("subplot1_ui")
       }
@@ -908,7 +998,7 @@ continuousPlot <- function(id, language, windowDims) {
     ) |> bind_task_button("make_plot")
     
     # Multiple subplots plot
-    plot_output_timeseries_subplots <- ExtendedTask$new(function(locs, params, start_date, end_date, historic_range, apply_datum, filter, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
+    plot_output_timeseries_subplots <- ExtendedTask$new(function(locs, params, start_date, end_date, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -927,6 +1017,7 @@ continuousPlot <- function(id, language, windowDims) {
                                       historic_range = historic_range,
                                       datum = apply_datum,
                                       filter = filter,
+                                      unusable = unusable,
                                       lang = lang,
                                       line_scale = line_scale,
                                       axis_scale = axis_scale,

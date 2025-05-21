@@ -38,7 +38,7 @@
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
-#' @return A plotly object, plus optionally the data used to create the plot.
+#' @return A plotly object and a data frame with the data used to create the plot (if `data` is TRUE).
 #' 
 #' @export
 

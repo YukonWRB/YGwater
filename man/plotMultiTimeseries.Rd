@@ -67,7 +67,7 @@ plotMultiTimeseries(
 
 \item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.}
 
-\item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.}
+\item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is FALSE}
 
 \item{shareX}{Should the x-axis be shared across facets? Default is TRUE (dates are shared).}
 
@@ -79,7 +79,7 @@ plotMultiTimeseries(
 
 \item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.}
 
-\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
+\item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("d\\u00E9bit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("\\u00E9quivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
 \item{unusable}{Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.}
 
@@ -108,7 +108,7 @@ plotMultiTimeseries(
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }
 \value{
-A plotly object
+A plotly object and a data frame with the data used to create the plot (if \code{data} is TRUE).
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
