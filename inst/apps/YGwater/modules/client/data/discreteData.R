@@ -72,7 +72,7 @@ discData <- function(id, language) {
       moduleData$projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM projects WHERE location_id IN (", paste(moduleData$locations_projects$project_id, collapse = ", "), ");"))
     } else {
       moduleData$locations_projects <- data.frame(location_id = numeric(), project_id = numeric())
-      moduleData$projects <- data.frame(project_id = numeric(), name = character(), ame_fr = character())
+      moduleData$projects <- data.frame(project_id = numeric(), name = character(), name_fr = character())
     }
     
     moduleData$locations_networks <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_networks WHERE location_id IN (", paste(moduleData$locs$location_id, collapse = ", "), ");"))

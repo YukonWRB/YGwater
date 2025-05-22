@@ -847,7 +847,7 @@ addImgs <- function(id) {
         updateSelectInput(session, "image_location", selected = NULL)
         updateSelectInput(session, "image_sublocation", selected = NULL)
         updateSelectInput(session, "image_type", selected = NULL)
-        updateSelectInput(session, "image_date", selected = as.Date(NA))
+        updateDateInput(session, "image_date", value = as.Date(NA))
         updateTextInput(session, "image_time", value = NULL)
         updateSelectInput(session, "share_tag", selected = "Private")
         updateSelectInput(session, "tz_correction", selected = -7)

@@ -279,19 +279,19 @@ mapLocs <- function(id, language) {
     # Filter the map data based on user's selection and add points to map ############################
     observe({
       popup_data <- popupData()
-      if (!is.null(input$type)) {
-        if (length(input$type) > 1) {
-          timeseries.sub <- moduleData$timeseries[moduleData$timeseries$category %in% input$type, ]
-        } else {
-          if (input$type == "all") {
-            timeseries.sub <- moduleData$timeseries
-          } else {
-            timeseries.sub <- moduleData$timeseries[moduleData$timeseries$category == input$type, ]
-          }
-        }
-      } else {
+      # if (!is.null(input$type)) {
+      #   if (length(input$type) > 1) {
+      #     timeseries.sub <- moduleData$timeseries[moduleData$timeseries$category %in% input$type, ]
+      #   } else {
+      #     if (input$type == "all") {
+      #       timeseries.sub <- moduleData$timeseries
+      #     } else {
+      #       timeseries.sub <- moduleData$timeseries[moduleData$timeseries$category == input$type, ]
+      #     }
+      #   }
+      # } else {
         timeseries.sub <- moduleData$timeseries
-      }
+      # }
       
       if (!is.null(input$pType)) {
         if (length(input$pType) > 1) {
@@ -305,11 +305,11 @@ mapLocs <- function(id, language) {
       
       if (!is.null(input$pGrp)) {
         if (length(input$pGrp) > 1) {
-          select.params <- moduleData$parameters[moduleData$parameters$group %in% input$pGrp, "parameter_id"]$parameter_id
+          select.params <- moduleData$parameters[moduleData$parameters$group_id %in% input$pGrp, "parameter_id"]$parameter_id
           timeseries.sub <- timeseries.sub[parameter_id %in% select.params, ]
         } else {
           if (input$pGrp != "all") {
-            select.params <- moduleData$parameters[moduleData$parameters$group == input$pGrp, "parameter_id"]$parameter_id
+            select.params <- moduleData$parameters[moduleData$parameters$group_id == input$pGrp, "parameter_id"]$parameter_id
             if (length(select.params) > 1) {
               timeseries.sub <- timeseries.sub[parameter_id %in% select.params, ]
             } else {
