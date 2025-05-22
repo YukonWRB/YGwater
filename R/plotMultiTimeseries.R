@@ -18,13 +18,13 @@
 #' @param lead_lag The number of **hours** to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters. Not used for `type` 'subplots'.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
-#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
+#' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is FALSE.
 #' @param shareX Should the x-axis be shared across facets? Default is TRUE (dates are shared).
 #' @param shareY Should the y-axis be shared across facets? Default is FALSE (values are not shared).
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists, only for water level and distance. Default is TRUE.
 #' @param title Should a title be included? TRUE/FALSE.
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
-#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
+#' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("d\\u00E9bit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("\\u00E9quivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param unusable Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.
 #' @param historic_range Default NULL will plot historic ranges for up to two traces and no historical ranges at all if more than two traces; TRUE will plot historic ranges for all traces; FALSE will not plot historic ranges.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
@@ -39,7 +39,7 @@
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
-#' @return A plotly object 
+#' @return A plotly object and a data frame with the data used to create the plot (if `data` is TRUE).
 #' 
 #' @export
 
@@ -77,10 +77,10 @@ plotMultiTimeseries <- function(type = 'traces',
                                 data = FALSE,
                                 con = NULL) {
   
-  # type <- 'subplots'
-  # locations <- c("09FC001", "09EA004", "08AA012")
+  # type <- 'traces'
+  # locations <- c(25, 31, 29)
   # sub_locations <- NULL
-  # parameters <- c("water level", "flow", "water level")
+  # parameters <- c("water level", "water level", "water level")
   # record_rates <- NULL
   # aggregation_types <- NULL
   # z <- NULL
@@ -107,7 +107,7 @@ plotMultiTimeseries <- function(type = 'traces',
   # legend_position <- 'v'
   # shareX = TRUE
   # shareY = TRUE
-  
+  # unusable = FALSE
   
   # Checks and initial work ##########################################
   
@@ -115,6 +115,11 @@ plotMultiTimeseries <- function(type = 'traces',
   period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- NULL
   
   return_data <- data   # data is used in this function and this can conflict with package data, but keeping the argument as 'data' (for the user) keeps things consistent with other functions
+  
+  if (is.null(con)) {
+    con <- AquaConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
   
   if (!type %in% c('traces', 'subplots')) {
     stop("Your entry for the parameter 'type' is invalid. Please review the function documentation and try again.")
@@ -124,20 +129,24 @@ plotMultiTimeseries <- function(type = 'traces',
     stop("Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again.")
   }
   
+  N <- length(locations)
+  P <- length(parameters)
   
   if (length(log) != 1) {
-    if (length(log) != length(locations)) {
+    if (length(log) != N) {
       stop("Your entry for the parameter 'log' is invalid. Please review the function documentation and try again.")
     }
+  } else if (length(log) == 1) {
+    log <- rep(log, N)
   }
   
   if (!is.null(invert)) {
     if (length(invert) != 1) {
-      if (length(invert) != length(locations)) {
+      if (length(invert) != N) {
         stop("Your entry for the parameter 'invert' is invalid. Please review the function documentation and try again.")
       }
     } else {
-      invert <- rep(invert, length(locations))
+      invert <- rep(invert, N)
     }
   }
   
@@ -145,138 +154,125 @@ plotMultiTimeseries <- function(type = 'traces',
     if (!inherits(lead_lag, "numeric")) {
       stop("Your entry for the parameter 'lead_lag' is invalid; it must be numeric.")
     }
-    if (length(lead_lag) != length(locations)) {
+    if (length(lead_lag) != N) {
       stop("Your entry for the parameter 'lead_lag' is invalid; there must be one value per location.")
     }
   } else {
     lead_lag <- NA
   }
   
-  if (length(log) == 1) {
-    log <- rep(log, length(locations))
-  }
-  
   if (!is.null(rate)) {
-    tolower(rate)
+    rate <- tolower(rate)
     if (!(rate %in% c("max", "hour", "day"))) {
       stop("Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again.")
     }
   }
   
-  if (!is.null(z)) {
-    if (!is.numeric(z)) {
-      stop("Your entry for the parameter 'z' is invalid. Please review the function documentation and try again.")
-    }
-    if (!is.null(z_approx)) {
-      if (!is.numeric(z_approx)) {
-        stop("Your entry for the parameter 'z_approx' is invalid. Please review the function documentation and try again.")
-      }
-    }
-  }
-  
-  if (is.null(con)) {
-    con <- AquaConnect(silent = TRUE)
-    on.exit(DBI::dbDisconnect(con))
-  }
-  
-  if (length(locations) == 1 & length(parameters) > 1) {
-    locations <- rep(locations, length(parameters))
+  if (N == 1 & P > 1) {
+    locations <- rep(locations, P)
+    N <- length(locations)
   }
   if (!is.null(sub_locations)) {
-    if (length(sub_locations) == 1 & length(locations) > 1) {
-      sub_locations <- rep(sub_locations, length(locations))
+    if (length(sub_locations) == 1 & N > 1) {
+      sub_locations <- rep(sub_locations, N)
     } else {
       stop("The number of locations and sub_locations must be the same OR sub_locations must be NULL or of length 1.")
     }
   }
-  if (length(parameters) == 1 & length(locations) > 1) {
-    parameters <- rep(parameters, length(locations))
-  }
-  if (!is.null(record_rates)) {
-    if (length(record_rates) == 1 & length(locations) > 1) {
-      record_rates <- rep(record_rates, length(locations))
-    }
-  }
-  if (!is.null(z)) {
-    if (length(z) == 1 & length(locations) > 1) {
-      z <- rep(z, length(locations))
-    }
-  }
-  if (!is.null(z_approx)) {
-    if (length(z_approx) == 1 & length(locations) > 1) {
-      z_approx <- rep(z_approx, length(locations))
-    }
-  }
-  if (!is.null(aggregation_types)) {
-    if (length(aggregation_types) == 1 & length(locations) > 1) {
-      aggregation_types <- rep(aggregation_types, length(locations))
-    }
-  }
-  
-  if (length(locations) != length(parameters)) {
+  if (P == 1 & N > 1) {
+    parameters <- rep(parameters, N)
+    P <- length(parameters)
+  } else if (N != P) {
     stop("The number of locations and parameters must be the same, or one must be a vector of length 1.")
   }
   
-  
+  # Check record_rates
   if (!is.null(record_rates)) {
-    if (length(record_rates) != length(locations)) {
-      stop("The number of locations and record rates must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    if ((length(record_rates) != N) && ((length(record_rates) != 1) | (N != 1))) {
+      stop("The number of locations and record rates must be the same, one must be a vector of length 1, or record_rates must be left as the default NULL.")
     }
     for (i in 1:length(record_rates)) {
-      if (!(record_rates[i] %in% c('< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'))) {
-        warning("Your entry ", i, " for parameter record_rates is invalid. It's been reset to the default NULL.")
+      if (!lubridate::is.period(lubridate::period(record_rates[i]))) {
+        warning("Your entry ", i, " for parameter record_rates is invalid (is not or cannot be converted to a period). It's been reset to the default NULL.")
         record_rates[i] <- NA
       }
     }
-  } else {
-    record_rates <- NA
-  }
-  
-  if (!is.null(z)) {
-    if (length(z) != length(locations)) {
-      stop("The number of locations and z elements must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    if (length(record_rates) == 1 & N > 1) {
+      record_rates <- rep(record_rates, N)
     }
   } else {
-    z <- NA
+    record_rates <- rep(NA, N)
   }
   
+  # Check z
+  if (!is.null(z)) {
+    if ((length(z) != N) && (length(z) != 1) | (N != 1)) {
+      stop("The number of locations and z elements must be the same, one must be a vector of length 1, or z must be left as the default NULL.")
+    }
+    if (!inherits(z, "numeric")) {
+      z <- as.numeric(z)
+    }
+    if (length(z) == 1 & N > 1) {
+      z <- rep(z, N)
+    }
+  } else {
+    z <- rep(NA, N)
+  }
+  
+  # Check z_approx
   if (!is.null(z_approx)) {
-    if (length(z_approx) != length(locations)) {
+    if ((length(z_approx) != N) && (length(z_approx) != 1) | (N != 1)) {
       stop("The number of locations and z elements must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    }
+    if (!inherits(z_approx, "numeric")) {
+      z_approx <- as.numeric(z_approx)
+    }
+    if (length(z_approx) == 1 & N > 1) {
+      z_approx <- rep(z_approx, N)
     }
   } else {
     z_approx <- NA
   }
   
+  # Check aggregation_types
   if (!is.null(aggregation_types)) {
-    if (length(aggregation_types) != length(locations)) {
-      stop("The number of locations and record rates must be the same, or one must be a vector of length 1 or left to the default NULL.")
+    if (!length(aggregation_types) %in% c(1, N)) {
+      stop("`aggregation_types` must be NULL, length 1, or same length as `locations`.")
     }
-    if (inherits(aggregation_types, "character")) {
-      aggregation_types <- data.frame(aggregation_type = tolower(aggregation_types), aggregation_type_id = NA)
-      for (i in 1:nrow(aggregation_types)) {
-        aggregation_types[i, 2] <- DBI::dbGetQuery(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = '", aggregation_types[i, 1], "';")[1,1]
-        if (is.na(aggregation_types[i, 2])) {
-          warning("Your entry ", i, " for parameter aggregation_types is invalid. It's been reset to the default NULL.")
-          aggregation_types[i, 1] <- NA
+    if (length(aggregation_types) == 1 & N > 1) {
+      aggregation_types <- rep(aggregation_types, N)
+    }
+    
+    # build result
+    aggregation_types <- data.frame(
+      aggregation_type = tolower(as.character(aggregation_types)),
+      aggregation_type_id = NA_integer_)
+    # look up IDs for any non-NA entries
+    for (i in seq_len(N)) {
+      at <- aggregation_types$aggregation_type[i]
+      if (!is.na(at) && nzchar(at)) {
+        # try to find the ID in the DB
+        # use parameterized query to avoid SQL injection
+        query <- "
+        SELECT aggregation_type_id
+          FROM aggregation_types
+         WHERE LOWER(aggregation_type) = ?
+        LIMIT 1;"
+        res <- DBI::dbGetQuery(con, DBI::sqlInterpolate(con, query, at))
+        if (nrow(res) == 1) {
+          aggregation_types$aggregation_type_id[i] <- res$aggregation_type_id
+        } else {
+          warning("`aggregation_types[", i, "] = '", aggregation_types[i], "'` not found, setting to NULL.")
+          aggregation_types$aggregation_type[i]    <- NA
+          aggregation_types$aggregation_type_id[i] <- NA
         }
       }
-    } else if (inherits(aggregation_types, "numeric")) {
-      aggregation_types <- data.frame(aggregation_type = NA, aggregation_type_id = aggregation_types)
-      for (i in 1:nrow(aggregation_types)) {
-        aggregation_types[i, 1] <- DBI::dbGetQuery(con, paste0("SELECT aggregation_type FROM aggregation_types WHERE aggregation_type_id = ", aggregation_types[i, 2], ";"))[1,1]
-        if (is.na(aggregation_types[i, 1])) {
-          warning("Your entry ", i, " for parameter aggregation_types is invalid. It's been reset to the default NULL.")
-          aggregation_types[i, 2] <- NA
-        }
-      }
-    } else {
-      stop("Your entry for the parameter 'aggregation_types' is invalid. Please review the function documentation and try again.")
     }
   } else {
-    aggregation_types <- NA
+    aggregation_types <- data.frame(aggregation_type = rep(NA_character_, N), 
+                                    aggregation_type_id = rep(NA_integer_, N))
   }
-
+  
   if (tzone == "auto") {
     tzone <- Sys.timezone()
   }
@@ -306,7 +302,7 @@ plotMultiTimeseries <- function(type = 'traces',
       historic_range <- NULL
     }
   } else {
-    if (length(locations) > 2) {
+    if (N > 2) {
       historic_range <- FALSE
     } else {
       historic_range <- TRUE
@@ -316,12 +312,25 @@ plotMultiTimeseries <- function(type = 'traces',
   # Get the data for each location:parameter:record_rate combo
   # Make a list with one element per location:parameter:record_rate combo
   if (is.null(sub_locations)) {
-    sub_locations <- rep(NA, length(locations))
+    sub_locations <- rep(NA, N)
   }
-  timeseries <- data.frame(location = locations, sub_location = sub_locations, parameter = parameters, record_rate = record_rates, aggregation_type_id = if (!is.na(aggregation_types)) aggregation_types[,2] else NA, z = z, z_approx = z_approx, lead_lag = lead_lag)
+  timeseries <- data.frame(location = locations, location_id = NA, sub_location = sub_locations, sub_location_id = NA, parameter = parameters, record_rate = record_rates, aggregation_type_id = aggregation_types[,2], z = z, z_approx = z_approx, lead_lag = lead_lag)
   if (nrow(unique(timeseries)) != nrow(timeseries)) {
     stop("You have duplicate entries in your locations and/or parameters and/or record_rates and/or aggregation_types. Please review the function documentation and try again.")
   }
+  
+  # Adjust the rate parameter
+  range <- seq.POSIXt(start_date, end_date, by = "day")
+  if (is.null(rate)) {
+    if (length(range) > 3000) {
+      rate <- "day"
+    } else if (length(range) > 1000) {
+      rate <- "hour"
+    } else {
+      rate <- "max"
+    }
+  }
+  
   
   data <- list()
   remove <- numeric()
@@ -339,12 +348,31 @@ plotMultiTimeseries <- function(type = 'traces',
     # Determine the timeseries and adjust the date range #################
     # Confirm parameter and location, sub location exist in the database and that there is only one entry
     
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    if (inherits(location, "character")) {
+      # Try to find the location_id from a character string
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+      if (is.na(location_id)) {
+        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
+      }
+      if (is.na(location_id)) {
+        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
+      }
+      # If nothing so far, maybe it's a numeric that's masquerading as a character
+      if (is.na(location_id)) {
+        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+      }
+    } else {
+      # Try to find the location_id from a numeric value
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+    }
+    
     if (is.na(location_id)) {
       warning("The location you entered, ", location, ", does not exist in the database. Moving on to the next entry.")
       remove <- c(remove, i)
       next
     }
+    timeseries$location_id[i] <- location_id
+    
     if (!is.null(sub_location)) {
       if (inherits(sub_location, "character")) {
         sub_location <- tolower(sub_location)
@@ -358,6 +386,7 @@ plotMultiTimeseries <- function(type = 'traces',
         remove <- c(remove, i)
         next
       }
+      timeseries$sub_location_id[i] <- sub_location_id
     }
     if (inherits(parameter, "character")) {
       parameter <- tolower(parameter)
@@ -443,10 +472,9 @@ plotMultiTimeseries <- function(type = 'traces',
         warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate.")
         exist_check$record_rate <- lubridate::period(exist_check$record_rate)
         exist_check <- exist_check[order(exist_check$record_rate), ]
-        temp <- exist_check[1, ]
+        exist_check <- exist_check[1, ]
       }
-      if (nrow(temp) > 1) {
-        exist_check <- temp
+      if (nrow(exist_check) > 1) {
         if (is.null(aggregation_type_id)) {
           warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the aggregation_type as NULL, selecting the one(s) with the most frequent aggregation type.")
           agg_types <- DBI::dbGetQuery(con, "SELECT aggregation_type_id, aggregation_type FROM aggregation_types;")
@@ -465,8 +493,6 @@ plotMultiTimeseries <- function(type = 'traces',
             exist_check <- exist_check[exist_check$aggregation_type_id == agg_types[agg_types$aggregation_type == "maximum", "aggregation_type_id"], ]
           }
         }
-      } else if (nrow(temp) == 1) {
-        exist_check <- temp
       }
     }
     
@@ -514,17 +540,6 @@ plotMultiTimeseries <- function(type = 'traces',
     
     # Find the ts units
     timeseries[i, "units"] <- parameter_tbl$unit_default[1]
-    
-    range <- seq.POSIXt(sub.start_date, sub.end_date, by = "day")
-    if (is.null(rate)) {
-      if (length(range) > 3000) {
-        rate <- "day"
-      } else if (length(range) > 1000) {
-        rate <- "hour"
-      } else {
-        rate <- "max"
-      }
-    }
     
     # Get the data ####################################
     tsid <- exist_check$timeseries_id
@@ -577,7 +592,6 @@ plotMultiTimeseries <- function(type = 'traces',
         } else {
           trace_data <- dbGetQueryDT(con, paste0("SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", sub.end_date, "' ORDER BY datetime DESC LIMIT 200000;"))
         }
-        
         if (nrow(trace_data) > 0) {
           if (min(trace_data$datetime) > sub.start_date) {
             infill <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", sub.start_date, "' AND '", min(trace_data$datetime) - 1, "' ORDER BY datetime DESC;"))
@@ -639,9 +653,9 @@ plotMultiTimeseries <- function(type = 'traces',
       if (!historic_range) {
         warning("No data found for location ", location, " parameter ", parameter, " and time range specified.")
         remove <- c(remove, i)
-      } else if (nrow(historic_range) > 0) {
+      } else if (nrow(range_data) > 0) {
         warning("No data found for location ", location, " parameter ", parameter, " and time range specified, but historical data does exist and will be plotted.")
-      } else if (nrow(historic_range) == 0) {
+      } else if (nrow(range_data) == 0) {
         warning("No data found for location ", location, " parameter ", parameter, " and time range specified, and no historical data exists.")
         remove <- c(remove, i)
       }
@@ -672,7 +686,6 @@ plotMultiTimeseries <- function(type = 'traces',
           } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
             trace_data[trace_data$value < -100 & !is.na(trace_data$value),"value"] <- NA
           }
-          
           rollmedian <- zoo::rollapply(trace_data$value, width = filter, FUN = "median", align = "center", fill = "extend", na.rm = TRUE)
           rollmad <- zoo::rollapply(trace_data$value, width = filter, FUN = "mad", align = "center", fill = "extend", na.rm = TRUE)
           outlier <- abs(trace_data$value - rollmedian) > 5 * rollmad
@@ -694,29 +707,26 @@ plotMultiTimeseries <- function(type = 'traces',
   
   if (lang == "fr") {
     for (i in 1:nrow(timeseries)) {
-      name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
+      name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location_id = ", timeseries[i, "location_id"], ";"))[1,1]
       if (is.na(name)) {
-        name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
+        name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location_id = ", timeseries[i, "location_id"], ";"))[1,1]
       }
       timeseries[i, "name"] <- titleCase(name, lang)
     }
   }
   if (lang == "en") {
     for (i in 1:nrow(timeseries)) {
-      name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", timeseries[i, "location"], "';"))[1,1]
+      name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location_id = ", timeseries[i, "location_id"], ";"))[1,1]
       timeseries[i, "name"] <- titleCase(name, lang)
     }      
   }
   
   # Make the title ###################################
-  use_title <- FALSE
   if (title) {
-    use_title <- TRUE
     if (is.null(custom_title)) {
-      generate_plot_title <- function(tbl) {
         # Group by location to handle different parameters per location
         if (type == 'traces') {
-          title <- tbl %>%
+          title <- timeseries %>%
             dplyr::group_by(location, name) %>%
             dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
                           # Format title line by line
@@ -731,7 +741,7 @@ plotMultiTimeseries <- function(type = 'traces',
             dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
             dplyr::pull("plot_title") # Extract the plot title as a string
         } else {
-          title <- tbl %>%
+          title <- timeseries %>%
             dplyr::group_by(location, name) %>%
             dplyr::mutate(name = dplyr::if_else(nchar(name) > 40, substr(name, 1, 37) %>% paste0("..."), name),
                           # Format title line by line
@@ -743,12 +753,6 @@ plotMultiTimeseries <- function(type = 'traces',
             dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
             dplyr::pull("plot_title") # Extract the plot title as a string
         }
-        
-        return(title)
-      }
-      
-      title <- generate_plot_title(timeseries)
-      
     } else {
       title <- custom_title
     }
@@ -796,7 +800,7 @@ plotMultiTimeseries <- function(type = 'traces',
         side = if (i %% 2 == 0) "right" else "left",  # Check if even or odd
         title = list(
           text = timeseries[i, "trace_title"],
-          standoff = ((i - 1) %/% 2) * 22,
+          standoff = ((i - 1) %/% 2) * (28 * axis_scale),
           font = list(size = axis_scale * 14)
         ),
         type = if (log[i]) "log" else "linear",
@@ -811,7 +815,6 @@ plotMultiTimeseries <- function(type = 'traces',
       axis <- timeseries$axis[i]
       assign(axis, tmp)
     }
-    
     
     plot <- plotly::plot_ly()
     
@@ -869,13 +872,14 @@ plotMultiTimeseries <- function(type = 'traces',
                    xref = "container",
                    font = list(size = 18 * axis_scale)),
       margin = list(
-        l = 60 + (20 * ((n_axes - 1) %/% 2)),
-        r = 60 + (20 * ((n_axes - 1) %/% 2)),
+        l = (80 + (30 * ((n_axes - 1) %/% 2))) * axis_scale,
+        r = (80 + (30 * ((n_axes - 2) %/% 2))) * axis_scale,
         b = 0,
         t = 30 * length(unique(locations))
       ),
       xaxis = list(
-        title = list(standoff = 0, font = list(size = 1)),
+        title = list(standoff = 0, font = list(size = 14 * axis_scale)),
+        tickfont = list(size = axis_scale * 12),
         showgrid = gridx,
         showline = TRUE,
         showspikes = TRUE,
@@ -894,9 +898,7 @@ plotMultiTimeseries <- function(type = 'traces',
     
     plot <- plotly::config(plot, locale = lang)
     # End of traces plot
-    
   } else { # User has requested subplots
-    
     # Create lists of plots
     subplots <- list()
     subtitles <- list()
@@ -904,7 +906,6 @@ plotMultiTimeseries <- function(type = 'traces',
     ncols <- ceiling(length(data) / nrows)
     
     for (i in seq_along(data)) {
-      
       color <- colors[i]
       # Make axis titles
       # Truncate long strings
@@ -1031,22 +1032,18 @@ plotMultiTimeseries <- function(type = 'traces',
     # Link axes if desired
     if (shareX || shareY) {
       layout_settings <- list()
-      
       if (shareX) {
         for (i in seq_along(subplots)) {
           layout_settings[[paste0("xaxis", if (i > 1) i else "")]] <- list(matches = "x")
         }
       }
-      
       if (shareY) {
         for (i in seq_along(subplots)) {
           layout_settings[[paste0("yaxis", if (i > 1) i else "")]] <- list(matches = "y")
         }
       }
-      
       plot <- do.call(plotly::layout, c(list(plot), layout_settings))
     }
-    
   }
   
   # Return the plot and data if requested ##########################
@@ -1055,6 +1052,5 @@ plotMultiTimeseries <- function(type = 'traces',
   } else {
     return(plot)
   }
-  
 }
 

@@ -31,36 +31,34 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
 
 
   
-  # 'Visualize' side modules ####
-  source(system.file("apps/YGwater/modules/visualize/visualize.R", package = "YGwater"))
+  # 'client' side modules ####
+  source(system.file("apps/YGwater/modules/client/plot/discretePlot.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/plot/continuousPlot.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/plot/mixPlot.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/plot/discretePlot.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/plot/continuousPlot.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/plot/mixPlot.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/reports/basins.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/reports/WQReport.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/reports/snowInfo.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/reports/waterInfo.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/reports/snowBulletin.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/reports/basins.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/reports/WQReport.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/reports/snowInfo.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/reports/waterInfo.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/reports/snowBulletin.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/precip.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/params.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/locations.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/map/precip.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/map/params.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/map/locations.R", package = "YGwater"))
-  
-  source(system.file("apps/YGwater/modules/visualize/images/image_table_view.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/images/image_map_view.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/images/image_table_view.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/images/image_map_view.R", package = "YGwater"))
   
   
-  source(system.file("apps/YGwater/modules/visualize/data/continuousData.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/data/discreteData.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/data/continuousData.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/data/discreteData.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/visualize/info/home.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/info/news.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/visualize/info/about.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/info/home.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/info/news.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/info/about.R", package = "YGwater"))
   
   
-  source(system.file("apps/YGwater/modules/visualize/FOD/FOD_main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/FOD/FOD_main.R", package = "YGwater"))
   
   
   

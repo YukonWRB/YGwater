@@ -105,7 +105,7 @@ plotTimeseries(
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }
 \value{
-A plotly object, plus optionally the data used to create the plot.
+A plotly object and a data frame with the data used to create the plot (if \code{data} is TRUE).
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
