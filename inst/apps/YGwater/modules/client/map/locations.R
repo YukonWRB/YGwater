@@ -292,7 +292,8 @@ mapLocs <- function(id, language) {
       tmp[, popup_html := paste0(
         "<strong>", popup_name, "</strong><br/>",
         substr(start_time, 1, 10), " ", tr("to", language$language), " ", substr(end_time, 1, 10), "<br/><br/>",
-        "<strong>", tr("parameter(s)", language$language), ":</strong><br/><i>", parameters, "</i><br/>",
+        "<strong>", tr("parameter(s)", language$language), ":</strong><br/>",
+        "<div style='max-height:100px; overflow-y:auto;'><i>", parameters, "</i></div><br/>",  # Supposed to be scrollable
         "<strong>", tr("network(s)", language$language), ":</strong><br/><i>", networks, "</i><br/>",
         "<strong>", tr("project(s)", language$language), ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i><br/>",
         "<br/><a href='#' onclick='changeTab(\"map-locs-\", \"clicked_view_data\", \"", location_id, "\"); return false;'>", tr("view_data", language$language), "</a><br/>",
