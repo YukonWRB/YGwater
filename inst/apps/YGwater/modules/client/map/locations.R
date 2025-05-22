@@ -20,15 +20,58 @@ mapLocs <- function(id, language) {
     
     moduleData <- reactiveValues(
       locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
-      timeseries = dbGetQueryDT(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"),
+      timeseries = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, ts.z, 'continuous' AS data_type
+           FROM continuous.timeseries AS ts
+           LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id
+           LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
+         UNION ALL
+         SELECT MIN(r.result_id) AS timeseries_id, s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id, NULL AS aggregation_type_id,
+                MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime, MIN(s.z) AS z, 'discrete' AS data_type
+           FROM discrete.results r
+           JOIN discrete.samples s ON r.sample_id = s.sample_id
+           LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
+           LEFT JOIN public.media_types m ON s.media_id = m.media_id
+          GROUP BY s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id"
+      ),
       projects = dbGetQueryDT(session$userData$AquaCache, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
       networks =  dbGetQueryDT(session$userData$AquaCache, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
       locations_projects = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_projects;"),
       locations_networks = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_networks;"),
-      media_types = dbGetQueryDT(session$userData$AquaCache, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_id = p.media_id);"),
-      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"),
-      parameter_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr FROM parameter_groups AS pg LEFT JOIN parameter_relationships AS pr ON pg.group_id = pr.group_id WHERE pr.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries);"),
-      parameter_sub_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr FROM parameter_sub_groups AS psg LEFT JOIN parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id WHERE pr.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries);")
+      media_types = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT mt.* FROM public.media_types mt WHERE mt.media_id IN (
+            SELECT DISTINCT media_id FROM continuous.timeseries
+            UNION
+            SELECT DISTINCT media_id FROM discrete.samples)") ,
+      parameters = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id
+           FROM public.parameters AS p
+           LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id
+          WHERE p.parameter_id IN (
+            SELECT DISTINCT parameter_id FROM continuous.timeseries
+            UNION
+            SELECT DISTINCT parameter_id FROM discrete.results)") ,
+      parameter_groups = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr
+           FROM public.parameter_groups AS pg
+           LEFT JOIN public.parameter_relationships AS pr ON pg.group_id = pr.group_id
+          WHERE pr.parameter_id IN (
+            SELECT DISTINCT parameter_id FROM continuous.timeseries
+            UNION
+            SELECT DISTINCT parameter_id FROM discrete.results)") ,
+      parameter_sub_groups = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr
+           FROM public.parameter_sub_groups AS psg
+           LEFT JOIN public.parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id
+          WHERE pr.parameter_id IN (
+            SELECT DISTINCT parameter_id FROM continuous.timeseries
+            UNION
+            SELECT DISTINCT parameter_id FROM discrete.results)")
       # has_image_series = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT location_id FROM image_series;"),
       # has_documents = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
     )
@@ -279,19 +322,19 @@ mapLocs <- function(id, language) {
     # Filter the map data based on user's selection and add points to map ############################
     observe({
       popup_data <- popupData()
-      # if (!is.null(input$type)) {
-      #   if (length(input$type) > 1) {
-      #     timeseries.sub <- moduleData$timeseries[moduleData$timeseries$category %in% input$type, ]
-      #   } else {
-      #     if (input$type == "all") {
-      #       timeseries.sub <- moduleData$timeseries
-      #     } else {
-      #       timeseries.sub <- moduleData$timeseries[moduleData$timeseries$category == input$type, ]
-      #     }
-      #   }
-      # } else {
+      if (!is.null(input$type)) {
+        if (length(input$type) > 1) {
+          timeseries.sub <- moduleData$timeseries[moduleData$timeseries$data_type %in% input$type, ]
+        } else {
+          if (input$type == "all") {
+            timeseries.sub <- moduleData$timeseries
+          } else {
+            timeseries.sub <- moduleData$timeseries[moduleData$timeseries$data_type == input$type, ]
+          }
+        }
+      } else {
         timeseries.sub <- moduleData$timeseries
-      # }
+      }
       
       if (!is.null(input$pType)) {
         if (length(input$pType) > 1) {
