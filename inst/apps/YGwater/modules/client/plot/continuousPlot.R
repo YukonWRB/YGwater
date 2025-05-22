@@ -148,7 +148,6 @@ continuousPlot <- function(id, language, windowDims) {
     
     output$main <- renderUI({
       tagList(
-        uiOutput(ns("working")),
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
         uiOutput(ns("full_screen_ui"))
       ) # End tagList
@@ -1045,11 +1044,6 @@ continuousPlot <- function(id, language, windowDims) {
     observeEvent(input$make_plot, {
       if (plot_created()) {
         shinyjs::hide("full_screen_ui")
-        shinyjs::show("working")
-      } else {
-        output$working <- renderUI({
-          HTML(tr("generating_working", language$language))
-        })
       }
       
       if (input$type == "Overlapping years") {
@@ -1118,7 +1112,6 @@ continuousPlot <- function(id, language, windowDims) {
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_overlap$result()$plot)
       })
-      shinyjs::hide("working")
     })
     
     observeEvent(plot_output_timeseries$result(), {
@@ -1133,7 +1126,6 @@ continuousPlot <- function(id, language, windowDims) {
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries$result()$plot)
       })
-      shinyjs::hide("working")
     })
     
     observeEvent(plot_output_timeseries_traces$result(), {
@@ -1148,7 +1140,6 @@ continuousPlot <- function(id, language, windowDims) {
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries_traces$result()$plot)
       })
-      shinyjs::hide("working")
     })
     
     observeEvent(plot_output_timeseries_subplots$result(), {
@@ -1163,7 +1154,6 @@ continuousPlot <- function(id, language, windowDims) {
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries_subplots$result()$plot)
       })
-      shinyjs::hide("working")
     })
     
     # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
