@@ -1,10 +1,23 @@
 mapLocsUI <- function(id) {
   ns <- NS(id)
   
-  # All UI elements rendered in server function to allow multi-language functionality
-  
-  page_fluid(
-    uiOutput(ns("sidebar_page"))
+  tagList(
+    tags$script(
+      HTML("
+      // Function to change tabs based on namespace and input target, utilized in map popups
+      function changeTab(namespace, target_input, locationId) {
+        Shiny.setInputValue(namespace + target_input, locationId, {priority: 'event'});
+      }
+      // Resets Shiny input values to null, preventing unwanted reactive triggers
+      shinyjs.resetInput = function(params) {
+            Shiny.setInputValue(params.name, null, {priority: 'event'});
+        }
+    ")
+    ),
+    # All UI elements rendered in server function to allow multi-language functionality
+    page_fluid(
+      uiOutput(ns("sidebar_page"))
+    )
   )
 }
 
@@ -12,7 +25,7 @@ mapLocs <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     # Server setup ####
-    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click", "clicked_view_data", "clicked_view_plots"))
+    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click", "clicked_view_plots_discrete", "clicked_view_plots_continuous", "clicked_dl_data_discrete", "clicked_dl_data_continuous"))
     
     ns <- session$ns
     
@@ -20,15 +33,58 @@ mapLocs <- function(id, language) {
     
     moduleData <- reactiveValues(
       locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
-      timeseries = dbGetQueryDT(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"),
+      timeseries = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, ts.z, 'continuous' AS data_type
+           FROM continuous.timeseries AS ts
+           LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id
+           LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
+         UNION ALL
+         SELECT MIN(r.result_id) AS timeseries_id, s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id, NULL AS aggregation_type_id,
+                MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime, MIN(s.z) AS z, 'discrete' AS data_type
+           FROM discrete.results r
+           JOIN discrete.samples s ON r.sample_id = s.sample_id
+           LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
+           LEFT JOIN public.media_types m ON s.media_id = m.media_id
+          GROUP BY s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id"
+      ),
       projects = dbGetQueryDT(session$userData$AquaCache, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
       networks =  dbGetQueryDT(session$userData$AquaCache, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
       locations_projects = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_projects;"),
       locations_networks = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_networks;"),
-      media_types = dbGetQueryDT(session$userData$AquaCache, "SELECT p.* FROM media_types AS p WHERE EXISTS (SELECT 1 FROM timeseries t WHERE t.media_id = p.media_id);"),
-      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"),
-      parameter_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr FROM parameter_groups AS pg LEFT JOIN parameter_relationships AS pr ON pg.group_id = pr.group_id WHERE pr.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries);"),
-      parameter_sub_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr FROM parameter_sub_groups AS psg LEFT JOIN parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id WHERE pr.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries);")
+      media_types = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT mt.* FROM public.media_types mt WHERE mt.media_id IN (
+            SELECT DISTINCT media_id FROM continuous.timeseries
+            UNION
+            SELECT DISTINCT media_id FROM discrete.samples)") ,
+      parameters = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id
+           FROM public.parameters AS p
+           LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id
+          WHERE p.parameter_id IN (
+            SELECT DISTINCT parameter_id FROM continuous.timeseries
+            UNION
+            SELECT DISTINCT parameter_id FROM discrete.results)") ,
+      parameter_groups = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr
+           FROM public.parameter_groups AS pg
+           LEFT JOIN public.parameter_relationships AS pr ON pg.group_id = pr.group_id
+          WHERE pr.parameter_id IN (
+            SELECT DISTINCT parameter_id FROM continuous.timeseries
+            UNION
+            SELECT DISTINCT parameter_id FROM discrete.results)") ,
+      parameter_sub_groups = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr
+           FROM public.parameter_sub_groups AS psg
+           LEFT JOIN public.parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id
+          WHERE pr.parameter_id IN (
+            SELECT DISTINCT parameter_id FROM continuous.timeseries
+            UNION
+            SELECT DISTINCT parameter_id FROM discrete.results)")
       # has_image_series = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT location_id FROM image_series;"),
       # has_documents = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
     )
@@ -249,11 +305,14 @@ mapLocs <- function(id, language) {
       tmp[, popup_html := paste0(
         "<strong>", popup_name, "</strong><br/>",
         substr(start_time, 1, 10), " ", tr("to", language$language), " ", substr(end_time, 1, 10), "<br/><br/>",
-        "<strong>", tr("parameter(s)", language$language), ":</strong><br/><i>", parameters, "</i><br/>",
+        "<strong>", tr("parameter(s)", language$language), ":</strong><br/>",
+        "<div style='max-height:100px; overflow-y:auto;'><i>", parameters, "</i></div><br/>",  # Supposed to be scrollable
         "<strong>", tr("network(s)", language$language), ":</strong><br/><i>", networks, "</i><br/>",
         "<strong>", tr("project(s)", language$language), ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i><br/>",
-        "<br/><a href='#' onclick='changeTab(\"map-locs-\", \"clicked_view_data\", \"", location_id, "\"); return false;'>", tr("view_data", language$language), "</a><br/>",
-        "<a href='#' onclick='changeTab(\"map-locs\", \"clicked_view_plots\", \"", location_id, "\"); return false;'>", tr("view_plots", language$language), "</a>"
+        "<br/><a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"", location_id, "\"); return false;'>", tr("dl_data_discrete", language$language), "</a><br/>",
+        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"", location_id, "\"); return false;'>", tr("dl_data_continuous", language$language), "</a><br/>",
+        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"", location_id, "\"); return false;'>", tr("view_plots_discrete", language$language), "</a><br/>",
+        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"", location_id, "\"); return false;'>", tr("view_plots_continuous", language$language), "</a><br/>"
       )]
       
       tmp
@@ -281,12 +340,12 @@ mapLocs <- function(id, language) {
       popup_data <- popupData()
       if (!is.null(input$type)) {
         if (length(input$type) > 1) {
-          timeseries.sub <- moduleData$timeseries[moduleData$timeseries$category %in% input$type, ]
+          timeseries.sub <- moduleData$timeseries[moduleData$timeseries$data_type %in% input$type, ]
         } else {
           if (input$type == "all") {
             timeseries.sub <- moduleData$timeseries
           } else {
-            timeseries.sub <- moduleData$timeseries[moduleData$timeseries$category == input$type, ]
+            timeseries.sub <- moduleData$timeseries[moduleData$timeseries$data_type == input$type, ]
           }
         }
       } else {
@@ -305,11 +364,11 @@ mapLocs <- function(id, language) {
       
       if (!is.null(input$pGrp)) {
         if (length(input$pGrp) > 1) {
-          select.params <- moduleData$parameters[moduleData$parameters$group %in% input$pGrp, "parameter_id"]$parameter_id
+          select.params <- moduleData$parameters[moduleData$parameters$group_id %in% input$pGrp, "parameter_id"]$parameter_id
           timeseries.sub <- timeseries.sub[parameter_id %in% select.params, ]
         } else {
           if (input$pGrp != "all") {
-            select.params <- moduleData$parameters[moduleData$parameters$group == input$pGrp, "parameter_id"]$parameter_id
+            select.params <- moduleData$parameters[moduleData$parameters$group_id == input$pGrp, "parameter_id"]$parameter_id
             if (length(select.params) > 1) {
               timeseries.sub <- timeseries.sub[parameter_id %in% select.params, ]
             } else {
@@ -390,21 +449,36 @@ mapLocs <- function(id, language) {
     
     # Pass a message to the main map server when a location link is clicked ############################
     # Listen for a click in the popup
-    observeEvent(input$clicked_view_data, {
-      if (!is.null(input$clicked_view_data)) {
-        outputs$change_tab <- "data"
-        outputs$location_id <- input$clicked_view_data
-        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_data'})"))  # Reset the value to NULL to prevent an endless loop
+    observeEvent(input$clicked_dl_data_discrete, {
+      if (!is.null(input$clicked_dl_data_discrete)) {
+        outputs$change_tab <- "discData"
+        outputs$location_id <- input$clicked_dl_data_discrete
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_discrete'})"))  # Reset the value to NULL to prevent an endless loop
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_continuous'})"))  # Reset the value to NULL to prevent an endless loop
       }
     })
-    observeEvent(input$clicked_view_plots, {
-      if (!is.null(input$clicked_view_plots)) {
-        outputs$change_tab <- "plot"
-        outputs$location_id <- input$clicked_view_plots
-        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_plots'})"))  # Reset the value to NULL to prevent an endless loop
+    observeEvent(input$clicked_dl_data_continuous, {
+      if (!is.null(input$clicked_dl_data_continuous)) {
+        outputs$change_tab <- "contData"
+        outputs$location_id <- input$clicked_dl_data_continuous
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_continuous'})"))  # Reset the value to NULL to prevent an endless loop
       }
     })
-    
+    observeEvent(input$clicked_view_plots_discrete, {
+      if (!is.null(input$clicked_view_plots_discrete)) {
+        outputs$change_tab <- "discrete"
+        outputs$location_id <- input$clicked_view_plots_discrete
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_plots_discrete'})"))  # Reset the value to NULL to prevent an endless loop
+      }
+    })
+    observeEvent(input$clicked_view_plots_continuous, {
+      print(input$clicked_view_plots_continuous)
+      if (!is.null(input$clicked_view_plots_continuous)) {
+        outputs$change_tab <- "continuous"
+        outputs$location_id <- input$clicked_view_plots_continuous
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_plots_continuous'})"))  # Reset the value to NULL to prevent an endless loop
+      }
+    })
     return(outputs)  # Sends values back to the main server function
   })
 }

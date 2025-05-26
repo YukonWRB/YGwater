@@ -148,7 +148,7 @@ plotOverlap <- function(location,
   }
   
   if (!is.null(rate)) {
-    reate <- tolower(rate)
+    rate <- tolower(rate)
     if (!(rate %in% c("max", "hour", "day"))) {
       stop("Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again.")
     }

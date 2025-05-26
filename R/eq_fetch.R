@@ -61,8 +61,9 @@ eq_fetch <- function(EQcode,
   } else { # If certain stations do not exist, remove and continue but print warning
     stns <- eqstns %>%
       dplyr::filter(stringr::str_detect(.data$StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
-      dplyr::filter(.data$StnCode %in% stationIDs[!stationIDs %in% paste(setdiff(stationIDs, .data$StnCode))])
-    warning(paste0("The following stations do not match exactly what is in EQWin and were omitted: ", paste(setdiff(stationIDs, stns$StnCode), collapse = ", "), ". Check spelling and letter case"))
+      dplyr::filter(.data$StnCode %in% stationIDs[stationIDs %in% eqstns$StnCode])
+    warning(paste0("The following stations do not match exactly what is in EQWin and were omitted: ",
+      paste(setdiff(stationIDs, stns$StnCode), collapse = ", "),". Check spelling and letter case"))
   }
   
   # Download all samples for specified stations, filter by user choice
@@ -70,7 +71,7 @@ eq_fetch <- function(EQcode,
     dplyr::filter(.data$StnId %in% stns$StnId)
   
   tryCatch({
-    if (tolower(paste(dates, collapse = "") != "all")) {
+    if (tolower(paste(dates, collapse = "")) != "all") {
       samps <- eqsampls %>%
         dplyr::filter(dplyr::between(as.Date(.data$CollectDateTime), as.Date(dates[1]), as.Date(dates[2])))
     } else {
@@ -84,7 +85,7 @@ eq_fetch <- function(EQcode,
   # Check to make sure all parameters are valid, keep all params for now until after std calculations
   eqparams <- as.data.frame(DBI::dbGetQuery(EQWin, "SELECT ParamId, ParamCode, Units FROM eqparams"))
   tryCatch({
-    if (tolower(paste(paramIDs, collapse = "") == "all")) {
+    if (tolower(paste(paramIDs, collapse = "")) == "all") {
       params <- eqparams
       paramIDs <- params$ParamCode
     } else if (all(paramIDs %in% eqparams$ParamCode)) {

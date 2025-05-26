@@ -7,7 +7,6 @@
 
 app_server <- function(input, output, session) {
   
-  
   # Initial setup #############################################################
   
   # Hide all 'admin' side tabs if they were generated
@@ -92,7 +91,7 @@ app_server <- function(input, output, session) {
     req(input$window_dimensions)
     input$window_dimensions
   })
-
+  
   # Initialize reactive flags to track whether each UI has been loaded
   ui_loaded <- reactiveValues(
     viz = FALSE,
@@ -245,7 +244,7 @@ app_server <- function(input, output, session) {
       output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
       output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
       output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
-
+      
       session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
     }
   })
@@ -482,12 +481,13 @@ $(document).keyup(function(event) {
         home("home", language = languageSelection) # Call the server
       }
     }
+    
     ### Plots nav_menu ##########################
     if (input$navbar == "discrete") {  # This is reached through a nav_menu
       if (!ui_loaded$discretePlot) {
         output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
         ui_loaded$discretePlot <- TRUE
-        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims) # Call the server
+        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs$location_id) # Call the server
       }
     }
     if (input$navbar == "continuous") { # This is reached through a nav_menu
@@ -504,6 +504,7 @@ $(document).keyup(function(event) {
         mixPlot("mixPlot", mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
+    
     ### Maps nav_menu ##########################
     if (input$navbar == "monitoringLocations") { # This is reached through a nav_menu
       if (!ui_loaded$mapMonitoringLocations) {
@@ -511,10 +512,13 @@ $(document).keyup(function(event) {
         ui_loaded$mapMonitoringLocations <- TRUE
         moduleOutputs$mapLocs <- mapLocs("mapLocs", language = languageSelection) # Call the server
       }
-      if (!is.null(moduleOutputs$mapLocs$change_tab)) {
-        moduleOutputs$mapLocs$change_tab <- NULL # Reset to NULL
-        nav_select(session = session, "navbar", selected = (moduleOutputs$mapLocs$change_tab)) # Change tabs
-      }
+      observe({
+        if (!is.null(moduleOutputs$mapLocs$change_tab)) {
+          print(paste("Changing tab to", moduleOutputs$mapLocs$change_tab))
+          nav_select(session = session, "navbar", selected = (moduleOutputs$mapLocs$change_tab)) # Change tabs
+          moduleOutputs$mapLocs$change_tab <- NULL # Reset to NULL
+        }
+      })
     }
     if (input$navbar == "parameterValues") {
       if (!ui_loaded$mapParamValues) {
@@ -523,6 +527,7 @@ $(document).keyup(function(event) {
         mapParams("mapParams", language = languageSelection) # Call the server
       }
     }
+    
     ### FOD nav_menu ##########################
     if (input$navbar == "FOD") {
       if (!ui_loaded$FOD) {
