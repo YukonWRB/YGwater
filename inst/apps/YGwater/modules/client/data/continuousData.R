@@ -60,7 +60,7 @@ contData <- function(id, language) {
       params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC;"),
       media = DBI::dbGetQuery(session$userData$AquaCache,
                                     "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
-      aggregation_type_id = DBI::dbGetQuery(con, "SELECT DISTINCT aggregation_type_id FROM timeseries;"),
+      aggregation_type_id = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT aggregation_type_id FROM timeseries;"),
       parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache,
                                                 "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
       range = DBI::dbGetQuery(session$userData$AquaCache, "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM timeseries;"),

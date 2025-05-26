@@ -13,7 +13,7 @@ discretePlotUI <- function(id) {
   )
 }
 
-discretePlot <- function(id, mdb_files, language, windowDims) {
+discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -293,11 +293,13 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
     
     observeEvent(input$data_source, {
       req(moduleData)
+      print("data source was triggered")
+      print(inputs)
       if (input$data_source == "EQ") {
         # These updates are performed in the observeEvent for input$EQWin_source
       } else if (input$data_source == "AC") { # AC selected
-        updateSelectizeInput(session, "parameters_AC", choices = moduleData$AC_params$param_name, server = TRUE)
-        updateSelectizeInput(session, "locations_AC", choices = moduleData$AC_locs$name, server = TRUE)
+        updateSelectizeInput(session, "parameters_AC", choices = stats::setNames(moduleData$AC_params$parameter_id, moduleData$AC_params$param_name), server = TRUE)
+        updateSelectizeInput(session, "locations_AC", choices = stats::setNames(moduleData$AC_locs$location_id, moduleData$AC_locs$name), selected = if (!is.null(inputs)) inputs else NULL, server = TRUE)
       }
     })
     
@@ -543,9 +545,9 @@ discretePlot <- function(id, mdb_files, language, windowDims) {
         plot_output_discrete$invoke(
           start = input$date_range[1],
           end = input$date_range[2],
-          locations = input$locations_AC,
+          locations = as.numeric(input$locations_AC),
           locGrp = NULL,
-          parameters = input$parameters_AC,
+          parameters = as.numeric(input$parameters_AC),
           paramGrp = NULL,
           standard = NULL,  # No standards in AquaCache yet
           log = input$log_scale,

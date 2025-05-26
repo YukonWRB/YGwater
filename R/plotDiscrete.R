@@ -113,9 +113,9 @@ plotDiscrete <- function(start,
   # testing parameters for aquacache
   # start <- "2020-01-01"
   # end <- "2024-05-05"
-  # locations <- c("09AD-SC01", "08AA-SC01", "09AK-SC01", "09DC-SC01B")
+  # locations <- 155
   # sub_locations <- NULL
-  # parameters <- c("snow water equivalent", "snow depth")
+  # parameters <- 21
   # locGrp <- NULL
   # paramGrp <- NULL
   # standard = NULL
@@ -477,7 +477,7 @@ plotDiscrete <- function(start,
           "OR LOWER(name_fr) IN (LOWER('", paste0(locations, collapse = "'), LOWER('"), "')) "
         )
       } else {
-        query <- paste0("SELECT location_id FROM locations WHERE location_id IN (", paste0(locations, collapse = ", "), ");")
+        query <- paste0("SELECT location_id, location, name, name_fr FROM locations WHERE location_id IN (", paste0(locations, collapse = ", "), ");")
       }
       
       locIds <- DBI::dbGetQuery(AC, query)
@@ -539,7 +539,7 @@ plotDiscrete <- function(start,
           "OR LOWER(param_name_fr) IN (LOWER('", paste0(parameters, collapse = "'), LOWER('"), "'))"
         )
       } else {
-        query <- paste0("SELECT parameter_id FROM parameters WHERE parameter_id IN (", paste0(parameters, collapse = ", "), ");")
+        query <- paste0("SELECT parameter_id, param_name, param_name_fr, unit_default AS units FROM parameters WHERE parameter_id IN (", paste0(parameters, collapse = ", "), ");")
       }
       
       paramIds <- DBI::dbGetQuery(AC, query)

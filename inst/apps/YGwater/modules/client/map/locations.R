@@ -1,10 +1,23 @@
 mapLocsUI <- function(id) {
   ns <- NS(id)
   
-  # All UI elements rendered in server function to allow multi-language functionality
-  
-  page_fluid(
-    uiOutput(ns("sidebar_page"))
+  tagList(
+    tags$script(
+      HTML("
+      // Function to change tabs based on namespace and input target, utilized in map popups
+      function changeTab(namespace, target_input, locationId) {
+        Shiny.setInputValue(namespace + target_input, locationId, {priority: 'event'});
+      }
+      // Resets Shiny input values to null, preventing unwanted reactive triggers
+      shinyjs.resetInput = function(params) {
+            Shiny.setInputValue(params.name, null, {priority: 'event'});
+        }
+    ")
+    ),
+    # All UI elements rendered in server function to allow multi-language functionality
+    page_fluid(
+      uiOutput(ns("sidebar_page"))
+    )
   )
 }
 
@@ -12,7 +25,7 @@ mapLocs <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     # Server setup ####
-    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click", "clicked_view_data", "clicked_view_plots"))
+    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click", "clicked_view_plots_discrete", "clicked_view_plots_continuous", "clicked_dl_data_discrete", "clicked_dl_data_continuous"))
     
     ns <- session$ns
     
@@ -296,8 +309,10 @@ mapLocs <- function(id, language) {
         "<div style='max-height:100px; overflow-y:auto;'><i>", parameters, "</i></div><br/>",  # Supposed to be scrollable
         "<strong>", tr("network(s)", language$language), ":</strong><br/><i>", networks, "</i><br/>",
         "<strong>", tr("project(s)", language$language), ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i><br/>",
-        "<br/><a href='#' onclick='changeTab(\"map-locs-\", \"clicked_view_data\", \"", location_id, "\"); return false;'>", tr("view_data", language$language), "</a><br/>",
-        "<a href='#' onclick='changeTab(\"map-locs\", \"clicked_view_plots\", \"", location_id, "\"); return false;'>", tr("view_plots", language$language), "</a>"
+        "<br/><a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"", location_id, "\"); return false;'>", tr("dl_data_discrete", language$language), "</a><br/>",
+        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"", location_id, "\"); return false;'>", tr("dl_data_continuous", language$language), "</a><br/>",
+        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"", location_id, "\"); return false;'>", tr("view_plots_discrete", language$language), "</a><br/>",
+        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"", location_id, "\"); return false;'>", tr("view_plots_continuous", language$language), "</a><br/>"
       )]
       
       tmp
@@ -434,21 +449,36 @@ mapLocs <- function(id, language) {
     
     # Pass a message to the main map server when a location link is clicked ############################
     # Listen for a click in the popup
-    observeEvent(input$clicked_view_data, {
-      if (!is.null(input$clicked_view_data)) {
-        outputs$change_tab <- "data"
-        outputs$location_id <- input$clicked_view_data
-        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_data'})"))  # Reset the value to NULL to prevent an endless loop
+    observeEvent(input$clicked_dl_data_discrete, {
+      if (!is.null(input$clicked_dl_data_discrete)) {
+        outputs$change_tab <- "discData"
+        outputs$location_id <- input$clicked_dl_data_discrete
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_discrete'})"))  # Reset the value to NULL to prevent an endless loop
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_continuous'})"))  # Reset the value to NULL to prevent an endless loop
       }
     })
-    observeEvent(input$clicked_view_plots, {
-      if (!is.null(input$clicked_view_plots)) {
-        outputs$change_tab <- "plot"
-        outputs$location_id <- input$clicked_view_plots
-        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_plots'})"))  # Reset the value to NULL to prevent an endless loop
+    observeEvent(input$clicked_dl_data_continuous, {
+      if (!is.null(input$clicked_dl_data_continuous)) {
+        outputs$change_tab <- "contData"
+        outputs$location_id <- input$clicked_dl_data_continuous
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_continuous'})"))  # Reset the value to NULL to prevent an endless loop
       }
     })
-    
+    observeEvent(input$clicked_view_plots_discrete, {
+      if (!is.null(input$clicked_view_plots_discrete)) {
+        outputs$change_tab <- "discrete"
+        outputs$location_id <- input$clicked_view_plots_discrete
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_plots_discrete'})"))  # Reset the value to NULL to prevent an endless loop
+      }
+    })
+    observeEvent(input$clicked_view_plots_continuous, {
+      print(input$clicked_view_plots_continuous)
+      if (!is.null(input$clicked_view_plots_continuous)) {
+        outputs$change_tab <- "continuous"
+        outputs$location_id <- input$clicked_view_plots_continuous
+        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_plots_continuous'})"))  # Reset the value to NULL to prevent an endless loop
+      }
+    })
     return(outputs)  # Sends values back to the main server function
   })
 }
