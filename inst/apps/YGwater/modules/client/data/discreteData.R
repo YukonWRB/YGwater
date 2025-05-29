@@ -56,12 +56,10 @@ discData <- function(id, language) {
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     moduleData <- reactiveValues(
       locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"),
-      sub_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT sl.sub_location_id, sl.sub_location_name, sl.sub_location_name_fr FROM sub_locations AS sl INNER JOIN locations ON sl.location_id = locations.location_id ORDER BY sl.sub_location_name ASC"),
-      params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC;"),
-      media = DBI::dbGetQuery(session$userData$AquaCache,
-                                    "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
-      parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache,
-                                                "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
+      sub_locs = DBI::dbGetQuery(con, "SELECT DISTINCT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM samples) ORDER BY sub_location_name ASC;"),
+      params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameter_id, param_name, COALESCE(param_name_fr, param_name) AS param_name_fr, unit_default AS unit FROM parameters WHERE parameter_id IN (SELECT DISTINCT parameter_id FROM results) ORDER BY param_name ASC;"),
+      media = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
+      parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache, "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
       range = DBI::dbGetQuery(session$userData$AquaCache, "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM samples;"),
       sample_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM sample_types AS st WHERE EXISTS (SELECT 1 FROM samples AS s WHERE st.sample_type_id = s.sample_type);"),
       samples = DBI::dbGetQuery(session$userData$AquaCache, "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type FROM samples;")
@@ -82,15 +80,13 @@ discData <- function(id, language) {
     
     if (any(!is.na(moduleData$parameter_relationships$group_id))) {
       groups <- moduleData$parameter_relationships$group_id[!is.na(moduleData$parameter_relationships$group_id)]
-      moduleData$param_groups <- DBI::dbGetQuery(session$userData$AquaCache,
-                                                 paste0("SELECT * FROM parameter_groups WHERE group_id IN (", paste(groups, collapse = ", "), ");"))
+      moduleData$param_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_groups WHERE group_id IN (", paste(groups, collapse = ", "), ");"))
     } else {
       moduleData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
     }
     if (any(!is.na(moduleData$parameter_relationships$sub_group_id))) {
       sub_groups <- moduleData$parameter_relationships$sub_group_id[!is.na(moduleData$parameter_relationships$sub_group_id)]
-      moduleData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache,
-                                                     paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
+      moduleData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
     } else {
       moduleData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
     }
@@ -166,12 +162,13 @@ discData <- function(id, language) {
                        multiple = TRUE,
                        selected = "all"
         ),
-        # Modal to let users filter locations by network or project
+        # Button for modal to let users filter locations by network or project
         actionButton(ns("loc_modal"),
                      label = tr("loc_modal", language$language),
                      width = "100%",
                      style = "font-size: 14px; margin-top: 5px;"
         ),
+        # Selectize input for sub-locations
         selectizeInput(ns("sub_locations"),
                        label = tr("sub_loc(s)", language$language),
                        choices = 
@@ -312,6 +309,7 @@ discData <- function(id, language) {
                            choices = stats::setNames(c("all", moduleData$params$parameter_id),
                                                      c(tr("all", language$language), moduleData$params[, tr("param_name_col", language$language)])),
                            selected = "all")
+      
       reset_flags$date_range <- TRUE
       reset_flags$locations <- TRUE
       reset_flags$sub_locations <- TRUE
@@ -991,10 +989,7 @@ discData <- function(id, language) {
         )
       }) # End of function creating data subset datatable
       
-      
-      
       # Get location metadata
-      
       location <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM ", if (language$abbrev == "fr") "location_metadata_fr" else "location_metadata_en", " WHERE location_id IN (", paste(selected_loc_ids, collapse = ", "), ") LIMIT 3;")) # Get the location metadata
       
       output$modal_location_metadata <- DT::renderDT({  # Create datatable for the locations

@@ -70,7 +70,6 @@ app_server <- function(input, output, session) {
   
   # Automatically update URL every time an input changes
   observe({
-    reactiveValuesToList(input)
     session$doBookmark()
   })
   setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))

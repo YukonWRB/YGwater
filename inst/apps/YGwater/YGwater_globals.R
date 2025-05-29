@@ -57,7 +57,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/client/info/news.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/client/info/about.R", package = "YGwater"))
   
-  
   source(system.file("apps/YGwater/modules/client/FOD/FOD_main.R", package = "YGwater"))
   
   
@@ -73,6 +72,10 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
 
   # Make a helper function, send to global environment
   tr <<- function(key, lang) {
+    # Ensure that 'key' is a value in the 'id' column of the translations data.frame
+    if (!key %in% translations$id) {
+      stop(paste("Translation key", key, "not found in translations data."))
+    }
     translation_cache[[lang]][[key]]  # list 'lang', item 'key'
   }
   
