@@ -412,13 +412,12 @@ discData <- function(id, language) {
       # Filter the parameters based on the selected groups and sub-groups, update the params selectizeInput
       req(input$pGrps, input$pSubGrps, filteredData$parameter_relationships, filteredData$params)
       
+      remain_params <- filteredData$parameter_relationships
       if (!("all" %in% input$pGrps)) {
-        remain_params <- filteredData$parameter_relationships[filteredData$parameter_relationships$group_id %in% input$pGrps, ]
-      } else {
-        remain_params <- filteredData$parameter_relationships
+        remain_params <- remain_params[remain_params$group_id %in% input$pGrps, ]
       }
       if (!("all" %in% input$pSubGrps)) {
-        remain_params <- filteredData$parameter_relationships[filteredData$parameter_relationships$sub_group_id %in% input$pSubGrps, ]
+        remain_params <- remain_params[remain_params$sub_group_id %in% input$pSubGrps, ]
       }
       remain_params <- filteredData$params[filteredData$params$parameter_id %in% remain_params$parameter_id, ]
       updateSelectizeInput(session, "params",
