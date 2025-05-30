@@ -450,6 +450,7 @@ mapLocs <- function(id, language) {
     # Pass a message to the main map server when a location link is clicked ############################
     # Listen for a click in the popup
     observeEvent(input$clicked_dl_data_discrete, {
+      print(input$clicked_dl_data_discrete)
       if (!is.null(input$clicked_dl_data_discrete)) {
         outputs$change_tab <- "discData"
         outputs$location_id <- input$clicked_dl_data_discrete
@@ -458,6 +459,7 @@ mapLocs <- function(id, language) {
       }
     })
     observeEvent(input$clicked_dl_data_continuous, {
+      print(input$clicked_dl_data_continuous)
       if (!is.null(input$clicked_dl_data_continuous)) {
         outputs$change_tab <- "contData"
         outputs$location_id <- input$clicked_dl_data_continuous
@@ -465,6 +467,7 @@ mapLocs <- function(id, language) {
       }
     })
     observeEvent(input$clicked_view_plots_discrete, {
+      print(input$clicked_view_plots_discrete)
       if (!is.null(input$clicked_view_plots_discrete)) {
         outputs$change_tab <- "discrete"
         outputs$location_id <- input$clicked_view_plots_discrete

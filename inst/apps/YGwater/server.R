@@ -487,7 +487,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$discretePlot) {
         output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
         ui_loaded$discretePlot <- TRUE
-        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs$location_id) # Call the server
+        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+        moduleOutputs$mapLocs <- NULL # Reset the mapLocs output to NULL so it doesn't interfere with the next time the module is called
       }
     }
     if (input$navbar == "continuous") { # This is reached through a nav_menu
@@ -495,6 +496,7 @@ $(document).keyup(function(event) {
         output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
         ui_loaded$continuousPlot <- TRUE
         continuousPlot("continuousPlot", language = languageSelection, windowDims) # Call the server
+        moduleOutputs$mapLocs <- NULL # Reset the mapLocs output to NULL so it doesn't interfere with the next time the module is called
       }
     }
     if (input$navbar == "mix") { # This is reached through a nav_menu
@@ -584,14 +586,16 @@ $(document).keyup(function(event) {
       if (!ui_loaded$discData) {
         output$discData_ui <- renderUI(discDataUI("discData"))
         ui_loaded$discData <- TRUE
-        discData("discData", language = languageSelection) # Call the server
+        discData("discData", language = languageSelection, inputs = moduleOutputs$mapLocs) # Call the server
+        moduleOutputs$mapLocs <- NULL # Reset the mapLocs output to NULL so it doesn't interfere with the next time the module is called
       }
     }
     if (input$navbar == "contData") {
       if (!ui_loaded$contData) {
         output$contData_ui <- renderUI(contDataUI("contData"))
         ui_loaded$contData <- TRUE
-        contData("contData", language = languageSelection) # Call the server
+        contData("contData", language = languageSelection, inputs = moduleOutputs$mapLocs) # Call the server
+        moduleOutputs$mapLocs <- NULL # Reset the mapLocs output to NULL so it doesn't interfere with the next time the module is called
       }
     }
     ### Info nav_menu ##########################

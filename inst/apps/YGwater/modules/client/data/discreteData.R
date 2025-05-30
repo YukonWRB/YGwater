@@ -32,7 +32,7 @@ discDataUI <- function(id) {
   )
 }
 
-discData <- function(id, language) {
+discData <- function(id, language, inputs) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -160,7 +160,7 @@ discData <- function(id, language) {
                          stats::setNames(c("all", moduleData$locs$location_id),
                                          c(tr("all", language$language), moduleData$locs[, tr("generic_name_col", language$language)])),
                        multiple = TRUE,
-                       selected = "all"
+                       selected = if (!is.null(inputs$location_id)) inputs$location_id else "all"
         ),
         # Button for modal to let users filter locations by network or project
         actionButton(ns("loc_modal"),
