@@ -27,7 +27,7 @@ discDataUI <- function(id) {
         open = list(mobile = "always-above"),
         uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
       ),
-        uiOutput(ns("main"))
+      uiOutput(ns("main"))
     )
   )
 }
@@ -56,7 +56,7 @@ discData <- function(id, language) {
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     moduleData <- reactiveValues(
       locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"),
-      sub_locs = DBI::dbGetQuery(con, "SELECT DISTINCT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM samples) ORDER BY sub_location_name ASC;"),
+      sub_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM samples) ORDER BY sub_location_name ASC;"),
       params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameter_id, param_name, COALESCE(param_name_fr, param_name) AS param_name_fr, unit_default AS unit FROM parameters WHERE parameter_id IN (SELECT DISTINCT parameter_id FROM results) ORDER BY param_name ASC;"),
       media = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"),
       parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache, "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"),
@@ -813,7 +813,7 @@ discData <- function(id, language) {
     # The results table will be shown only if the user clicks on the 'view results' button in the modal
     table_data <- reactiveVal()
     observeEvent(input$filter, {
-      req(filteredData)
+      req(filteredData, language$language)
       samples <- dbGetQueryDT(
         session$userData$AquaCache, 
         paste0(
@@ -873,7 +873,7 @@ discData <- function(id, language) {
                                    "}"
                                  ),
                                  columnDefs = list(
-                                   list(targets = c(0,1), visible = FALSE) #Hides the sample_id column. Column index numbers start at 0 here!!!
+                                   list(targets = c(0,1), visible = FALSE) #Hides the sample_id and location_id columns. Column index numbers start at 0 here!!!
                                  ),
                                  language = list(
                                    info = tr("tbl_info", language$language),
@@ -908,7 +908,7 @@ discData <- function(id, language) {
         shinyjs::hide("view_data")
       } else {
         shinyjs::show("view_data")
-        updateActionButton(session, "view_data", label = paste0(tr("view_data1", language$language), " ", length(input$tbl_rows_selected), " ", tr("view_data2", language$language)))
+        updateActionButton(session, "view_data", label = paste0(tr("view_data1", language$language), " ", length(input$tbl_rows_selected), " ", tr("view_data2_discrete", language$language)))
       }
     })
     
@@ -1044,8 +1044,11 @@ discData <- function(id, language) {
         DT::DTOutput(ns("modal_location_metadata")),
         textOutput(ns("num_rows")),
         selectizeInput(ns("modal_format"), label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx"),
-        downloadButton(ns("download"), tr("dl_data", language$language)),
-        size = "l"
+        footer = tagList(
+          modalButton(tr("close", language$language)),
+          actionButton(ns("download"), tr("dl_data", language$language), icon = icon("download"))
+        ),
+        size = "xl"
       ))
     })
     
@@ -1075,7 +1078,7 @@ discData <- function(id, language) {
     # Download handling #######################################################
     output$download <- downloadHandler(
       filename = function() {
-        paste0("data_", format(Sys.time(), "%Y%m%d_%H%M%S%Z"), ".", if (input$modal_format == "csv") "zip" else input$modal_format)
+        paste0("discreteData_", format(Sys.time(), "%Y%m%d_%H%M%S%Z"), ".", if (input$modal_format == "csv") "zip" else input$modal_format)
       },
       content = function(file) {
         
@@ -1136,7 +1139,8 @@ discData <- function(id, language) {
           DBI::dbDisconnect(db)
         }
         removeNotification("download_notification")
-      }) # End of downloadHandler
+      } # End of content function
+    ) # End of downloadHandler
     
   }) # End moduleServer
 } # End discData function
