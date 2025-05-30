@@ -1315,7 +1315,7 @@ contData <- function(id, language) {
         size = "xl"
       ))
       
-      modal_first_load(TRUE) # Prevents re-creating the daily data subset table
+      modal_first_load(FALSE) # Inputs now available, update observers on first interaction
     }) # End of observeEvent for view_data button
     
     output$additional_data <- renderText({
@@ -1324,9 +1324,11 @@ contData <- function(id, language) {
     
     # Updates to modal ########################################################
     # Get the number of rows that will be returned based on the date range selected and update the subset table if necessary
-    observe({
-      req(input$tbl_rows_selected, filteredData$params, table_data(), input$modal_date_range, input$modal_frequency)
-      if (!modal_first_load()) {
+    observeEvent(
+      list(input$modal_frequency, input$modal_date_range),
+      {
+        req(input$tbl_rows_selected, filteredData$params, table_data(), input$modal_date_range, input$modal_frequency)
+        if (!modal_first_load()) {
         
         selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
         
@@ -1463,7 +1465,7 @@ contData <- function(id, language) {
       } else {
         modal_first_load(FALSE)
       }
-    }) # End of observe for number of rows
+    }, ignoreInit = TRUE) # End of observeEvent for number of rows
     
     
     # Download handling #######################################################
