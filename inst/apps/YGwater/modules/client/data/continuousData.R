@@ -421,15 +421,21 @@ contData <- function(id, language) {
       # Filter the locations based on the selected projects and networks, update the locations selectizeInput
       req(input$projects, input$networks, filteredData$locations_projects, filteredData$locations_networks)
       
+      remain_locs <- filteredData$locs
+
       if (!("all" %in% input$networks)) {
-        remain_locs <- filteredData$locations_networks[filteredData$locations_networks$network_id %in% input$networks, ]
-      } else {
-        remain_locs <- filteredData$locations_networks
+        net_ids <- filteredData$locations_networks$location_id[
+          filteredData$locations_networks$network_id %in% input$networks
+        ]
+        remain_locs <- remain_locs[remain_locs$location_id %in% net_ids, ]
       }
+
       if (!("all" %in% input$projects)) {
-        remain_locs <- filteredData$locations_projects[filteredData$locations_projects$project_id %in% input$projects, ]
+        proj_ids <- filteredData$locations_projects$location_id[
+          filteredData$locations_projects$project_id %in% input$projects
+        ]
+        remain_locs <- remain_locs[remain_locs$location_id %in% proj_ids, ]
       }
-      remain_locs <- filteredData$locs[filteredData$locs$location_id %in% remain_locs$location_id, ]
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", remain_locs$location_id),
                                                      c(tr("all", language$language), remain_locs[, tr("generic_name_col", language$language)])),
@@ -468,13 +474,12 @@ contData <- function(id, language) {
       # Filter the parameters based on the selected groups and sub-groups, update the params selectizeInput
       req(input$pGrps, input$pSubGrps, filteredData$parameter_relationships, filteredData$params)
       
+      remain_params <- filteredData$parameter_relationships
       if (!("all" %in% input$pGrps)) {
-        remain_params <- filteredData$parameter_relationships[filteredData$parameter_relationships$group_id %in% input$pGrps, ]
-      } else {
-        remain_params <- filteredData$parameter_relationships
+        remain_params <- remain_params[remain_params$group_id %in% input$pGrps, ]
       }
       if (!("all" %in% input$pSubGrps)) {
-        remain_params <- filteredData$parameter_relationships[filteredData$parameter_relationships$sub_group_id %in% input$pSubGrps, ]
+        remain_params <- remain_params[remain_params$sub_group_id %in% input$pSubGrps, ]
       }
       remain_params <- filteredData$params[filteredData$params$parameter_id %in% remain_params$parameter_id, ]
       updateSelectizeInput(session, "params",
