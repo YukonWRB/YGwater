@@ -488,7 +488,10 @@ $(document).keyup(function(event) {
         output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
         ui_loaded$discretePlot <- TRUE
         discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
-        moduleOutputs$mapLocs <- NULL # Reset the mapLocs output to NULL so it doesn't interfere with the next time the module is called
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "continuous") { # This is reached through a nav_menu
@@ -496,7 +499,10 @@ $(document).keyup(function(event) {
         output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
         ui_loaded$continuousPlot <- TRUE
         continuousPlot("continuousPlot", language = languageSelection, windowDims) # Call the server
-        moduleOutputs$mapLocs <- NULL # Reset the mapLocs output to NULL so it doesn't interfere with the next time the module is called
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "mix") { # This is reached through a nav_menu
@@ -516,8 +522,13 @@ $(document).keyup(function(event) {
       }
       observe({
         if (!is.null(moduleOutputs$mapLocs$change_tab)) {
-          nav_select(session = session, "navbar", selected = (moduleOutputs$mapLocs$change_tab)) # Change tabs
-          moduleOutputs$mapLocs$change_tab <- NULL # Reset to NULL
+          target <- moduleOutputs$mapLocs$change_tab
+          if (target == "discData") ui_loaded$discData <- FALSE
+          if (target == "contData") ui_loaded$contData <- FALSE
+          if (target == "discrete") ui_loaded$discretePlot <- FALSE
+          if (target == "continuous") ui_loaded$continuousPlot <- FALSE
+          nav_select(session = session, "navbar", selected = target) # Change tabs
+          moduleOutputs$mapLocs$change_tab <- NULL
         }
       })
     }
@@ -587,7 +598,10 @@ $(document).keyup(function(event) {
         output$discData_ui <- renderUI(discDataUI("discData"))
         ui_loaded$discData <- TRUE
         discData("discData", language = languageSelection, inputs = moduleOutputs$mapLocs) # Call the server
-        moduleOutputs$mapLocs <- NULL # Reset the mapLocs output to NULL so it doesn't interfere with the next time the module is called
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "contData") {
@@ -595,7 +609,10 @@ $(document).keyup(function(event) {
         output$contData_ui <- renderUI(contDataUI("contData"))
         ui_loaded$contData <- TRUE
         contData("contData", language = languageSelection, inputs = moduleOutputs$mapLocs) # Call the server
-        moduleOutputs$mapLocs <- NULL # Reset the mapLocs output to NULL so it doesn't interfere with the next time the module is called
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     ### Info nav_menu ##########################
