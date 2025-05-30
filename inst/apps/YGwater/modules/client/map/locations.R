@@ -455,7 +455,6 @@ mapLocs <- function(id, language) {
         outputs$change_tab <- "discData"
         outputs$location_id <- input$clicked_dl_data_discrete
         shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_discrete'})"))  # Reset the value to NULL to prevent an endless loop
-        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_continuous'})"))  # Reset the value to NULL to prevent an endless loop
       }
     })
     observeEvent(input$clicked_dl_data_continuous, {
