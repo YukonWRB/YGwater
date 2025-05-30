@@ -1391,7 +1391,7 @@ contData <- function(id, language) {
           timeseries_id,
           MIN(datetime) AS first_datetime,
           MAX(datetime) AS last_datetime
-          FROM measurements_hourly_corrected
+          FROM measurements_continuous_corrected
           WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
           GROUP BY timeseries_id
         )
@@ -1517,7 +1517,7 @@ contData <- function(id, language) {
         
         if (input$modal_frequency == "hourly") {
           data$hourly_means <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM measurements_hourly_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND datetime >= '", input$modal_date_range[1], "' AND datetime <= '", input$modal_date_range[2], "';"))
-        } else if (input$odal_frequency == "max") {
+        } else if (input$modal_frequency == "max") {
           data$max_resolution <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM measurements_continuous_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND datetime >= '", input$modal_date_range[1], "' AND datetime <= '", input$modal_date_range[2], "';"))
         }
         
