@@ -422,14 +422,14 @@ contData <- function(id, language) {
       req(input$projects, input$networks, filteredData$locations_projects, filteredData$locations_networks)
       
       remain_locs <- filteredData$locs
-
+      
       if (!("all" %in% input$networks)) {
         net_ids <- filteredData$locations_networks$location_id[
           filteredData$locations_networks$network_id %in% input$networks
         ]
         remain_locs <- remain_locs[remain_locs$location_id %in% net_ids, ]
       }
-
+      
       if (!("all" %in% input$projects)) {
         proj_ids <- filteredData$locations_projects$location_id[
           filteredData$locations_projects$project_id %in% input$projects
@@ -1310,32 +1310,127 @@ contData <- function(id, language) {
         selectizeInput(ns("modal_format"), label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx"),
         footer = tagList(
           downloadButton(ns("download"), tr("dl_data", language$language), icon = icon("download")),
-          modalButton(tr("close", language$language))
+          actionButton(ns("modal_close"), tr("close", language$language))
         ),
         size = "xl"
       ))
       
-      modal_first_load(FALSE) # Inputs now available, update observers on first interaction
+      modal_first_load(TRUE) # Set/reset to TRUE to prevent unecessary updates the number of rows selected and redraw of table until user changes date range or frequency
     }) # End of observeEvent for view_data button
     
+    # Observer for the modal close button
+    observeEvent(input$modal_close, {
+      removeModal()
+      modal_first_load(TRUE)  # Reset the modal first load flag
+    })
+    
+    # Text for the modal
     output$additional_data <- renderText({
       tr("dl_additional_data", language$language)
     })
     
+    
     # Updates to modal ########################################################
     # Get the number of rows that will be returned based on the date range selected and update the subset table if necessary
-    observeEvent(
-      list(input$modal_frequency, input$modal_date_range),
-      {
-        req(input$tbl_rows_selected, filteredData$params, table_data(), input$modal_date_range, input$modal_frequency)
-        if (!modal_first_load()) {
+    observeEvent(list(input$modal_frequency, input$modal_date_range), {
+      req(!is.null(input$modal_date_range), !is.null(input$modal_frequency))
+      req(input$tbl_rows_selected, filteredData$params, table_data(), input$modal_date_range, input$modal_frequency)
+      if (!modal_first_load()) {
         
         selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
         
         if (input$modal_frequency == "daily") {
           rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM measurements_calculated_daily_corrected", " WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND date > '", input$modal_date_range[1], "' AND date", " < '", input$modal_date_range[2], "';"))[[1]]
           
-          # Single query using a window function to limit to first and last rows per timeseries_id
+        #   query <- paste0("WITH extremes AS (
+        #   SELECT
+        #   timeseries_id,
+        #   MIN(date) AS first_date,
+        #   MAX(date) AS last_date
+        #   FROM measurements_calculated_daily_corrected
+        #   WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
+        #   AND date >= '", input$modal_date_range[1], "' AND date <= '", input$modal_date_range[2], "'
+        #   GROUP BY timeseries_id
+        # )
+        # SELECT
+        # m.timeseries_id,
+        # m.date AS date_UTC,
+        # m.value,
+        # m.percent_historic_range,
+        # m.max, m.min, m.q90, m.q75, m.q50, m.q25, m.q10, m.mean,
+        # m.doy_count
+        # FROM measurements_calculated_daily_corrected AS m
+        # JOIN extremes AS e
+        # ON m.timeseries_id = e.timeseries_id
+        # AND (m.date = e.first_date OR m.date = e.last_date)
+        # ORDER BY m.timeseries_id,
+        # m.doy_count;
+        # ")
+        #   subset <- dbGetQueryDT(session$userData$AquaCache, query)
+        #   subset[, c(3:12) := lapply(.SD, round, 2), .SDcols = c(3:12)]
+          
+        } else if (input$modal_frequency == "hourly") {
+          rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM measurements_hourly_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
+
+        #   query <- paste0("WITH extremes AS (
+        #   SELECT
+        #   timeseries_id,
+        #   MIN(datetime) AS first_datetime,
+        #   MAX(datetime) AS last_datetime
+        #   FROM measurements_hourly_corrected
+        #   WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
+        #   AND datetime >= '", input$modal_date_range[1], "' AND datetime <= '", input$modal_date_range[2], "'
+        #   GROUP BY timeseries_id
+        # )
+        # SELECT
+        # m.timeseries_id,
+        # m.datetime AS datetime_UTC,
+        # m.value_raw,
+        # m.value_corrected,
+        # m.imputed
+        # FROM measurements_hourly_corrected AS m
+        # JOIN extremes AS e
+        # ON m.timeseries_id = e.timeseries_id
+        # AND (m.datetime = e.first_datetime OR m.datetime = e.last_datetime)
+        # ORDER BY m.timeseries_id,
+        # m.datetime;
+        # ")
+        #   subset <- dbGetQueryDT(session$userData$AquaCache, query)
+        #   subset[, c(3,4) := lapply(.SD, round, 2), .SDcols = c(3,4)]
+        #   subset[, datetime := substr(as.character(datetime), 1, 16)] # Truncate datetime to the first 16 characters (YYYY-MM-DD HH:MM)
+        } else {
+          rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM measurements_continuous_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
+          
+        #   query <- paste0("WITH extremes AS (
+        #   SELECT
+        #   timeseries_id,
+        #   MIN(datetime) AS first_datetime,
+        #   MAX(datetime) AS last_datetime
+        #   FROM measurements_continuous_corrected
+        #   WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
+        #   AND datetime >= '", input$modal_date_range[1], "' AND datetime <= '", input$modal_date_range[2], "'
+        #   GROUP BY timeseries_id
+        # )
+        # SELECT
+        # m.timeseries_id,
+        # m.datetime AS datetime_UTC,
+        # m.value_raw,
+        # m.value_corrected,
+        # m.imputed,
+        # m.period
+        # FROM measurements_continuous_corrected AS m
+        # JOIN extremes AS e
+        # ON m.timeseries_id = e.timeseries_id
+        # AND (m.datetime = e.first_datetime OR m.datetime = e.last_datetime)
+        # ORDER BY m.timeseries_id,
+        # m.datetime;
+        # ")
+        #   subset <- dbGetQueryDT(session$userData$AquaCache, query)
+        #   subset[, c(3,4) := lapply(.SD, round, 2), .SDcols = c(3,4)]
+        #   subset[, datetime := substr(as.character(datetime), 1, 16)] # Truncate datetime to the first 16 characters (YYYY-MM-DD HH:MM)
+        }
+        
+        # This only fetches the first/last daily mean data as other resolutions take way too long.
           query <- paste0("WITH extremes AS (
           SELECT
           timeseries_id,
@@ -1343,6 +1438,7 @@ contData <- function(id, language) {
           MAX(date) AS last_date
           FROM measurements_calculated_daily_corrected
           WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
+          AND date >= '", input$modal_date_range[1], "' AND date <= '", input$modal_date_range[2], "'
           GROUP BY timeseries_id
         )
         SELECT
@@ -1361,65 +1457,7 @@ contData <- function(id, language) {
         ")
           subset <- dbGetQueryDT(session$userData$AquaCache, query)
           subset[, c(3:12) := lapply(.SD, round, 2), .SDcols = c(3:12)]
-          
-        } else if (input$modal_frequency == "hourly") {
-          rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM measurements_hourly_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
-          
-          query <- paste0("WITH extremes AS (
-          SELECT
-          timeseries_id,
-          MIN(datetime) AS first_datetime,
-          MAX(datetime) AS last_datetime
-          FROM measurements_hourly_corrected
-          WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
-          GROUP BY timeseries_id
-        )
-        SELECT
-        m.timeseries_id,
-        m.datetime AS datetime_UTC,
-        m.value_raw,
-        m.value_corrected,
-        m.imputed
-        FROM measurements_hourly_corrected AS m
-        JOIN extremes AS e
-        ON m.timeseries_id = e.timeseries_id
-        AND (m.datetime = e.first_datetime OR m.datetime = e.last_datetime)
-        ORDER BY m.timeseries_id,
-        m.datetime;
-        ")
-          subset <- dbGetQueryDT(session$userData$AquaCache, query)
-          subset[, c(3,4) := lapply(.SD, round, 2), .SDcols = c(3,4)]
-          subset[, datetime := substr(as.character(datetime), 1, 16)] # Truncate datetime to the first 16 characters (YYYY-MM-DD HH:MM)
-        } else {
-          rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM measurements_continuous_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND datetime > '", input$modal_date_range[1], "' AND datetime < '", input$modal_date_range[2], "';"))[[1]]
-          
-          query <- paste0("WITH extremes AS (
-          SELECT
-          timeseries_id,
-          MIN(datetime) AS first_datetime,
-          MAX(datetime) AS last_datetime
-          FROM measurements_continuous_corrected
-          WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
-          GROUP BY timeseries_id
-        )
-        SELECT
-        m.timeseries_id,
-        m.datetime AS datetime_UTC,
-        m.value_raw,
-        m.value_corrected,
-        m.imputed,
-        m.period
-        FROM measurements_continuous_corrected AS m
-        JOIN extremes AS e
-        ON m.timeseries_id = e.timeseries_id
-        AND (m.datetime = e.first_datetime OR m.datetime = e.last_datetime)
-        ORDER BY m.timeseries_id,
-        m.datetime;
-        ")
-          subset <- dbGetQueryDT(session$userData$AquaCache, query)
-          subset[, c(3,4) := lapply(.SD, round, 2), .SDcols = c(3,4)]
-          subset[, datetime := substr(as.character(datetime), 1, 16)] # Truncate datetime to the first 16 characters (YYYY-MM-DD HH:MM)
-        }
+        
         output$modal_timeseries_subset <- DT::renderDT({  # Create datatable for the measurements
           DT::datatable(subset,
                         rownames = FALSE,
@@ -1474,8 +1512,7 @@ contData <- function(id, language) {
         paste0("continuousData_", format(Sys.time(), "%Y%m%d_%H%M%S%Z"), ".", if (input$modal_format == "csv") "zip" else input$modal_format)
       },
       content = function(file) {
-        print("preparing download")
-        
+
         showNotification(tr("dl_prep", language$language), id = "download_notification", duration = NULL, type = "message")
         
         # Get the data together

@@ -68,22 +68,23 @@ app_server <- function(input, output, session) {
   }
   
   
-  # Automatically update URL every time an input changes
-  observe({
-    session$doBookmark()
-  })
-  setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))
-  
-  # Update the query string
-  onBookmarked(updateQueryString)
-  
-  isRestoring <- reactiveVal(FALSE)
-  isRestoring_img <- reactiveVal(FALSE)
-  
-  onRestore(function(state) {
-    isRestoring(TRUE)
-    isRestoring_img(TRUE)
-  })
+  # # Automatically update URL every time an input changes
+  # observe({
+  #   reactiveValuesToList(input) # This will trigger the observer whenever any input changes
+  #   session$doBookmark()
+  # })
+  # 
+  # setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))
+  # # Update the query string
+  # onBookmarked(updateQueryString)
+  # 
+  # isRestoring <- reactiveVal(FALSE)
+  # isRestoring_img <- reactiveVal(FALSE)
+  # 
+  # onRestore(function(state) {
+  #   isRestoring(TRUE)
+  #   isRestoring_img(TRUE)
+  # })
   
   # Track window dimensions (used to modify plot appearance)
   windowDims <- reactive({
@@ -185,13 +186,13 @@ app_server <- function(input, output, session) {
   
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
-    if (!isRestoring()) {
+    # if (!isRestoring()) {
       shinyjs::runjs("
       var language =  window.navigator.userLanguage || window.navigator.language;
       console.log('Detected browser language: ' + language);
       Shiny.setInputValue('userLang', language, {priority: 'event'});
                      ")
-    }
+    # }
   })
   
   # Set initial language based on browser language
@@ -224,7 +225,7 @@ app_server <- function(input, output, session) {
       output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
       output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
       output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-      output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+      # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
       
       output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
       output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
@@ -513,7 +514,6 @@ $(document).keyup(function(event) {
       }
       observe({
         if (!is.null(moduleOutputs$mapLocs$change_tab)) {
-          print(paste("Changing tab to", moduleOutputs$mapLocs$change_tab))
           nav_select(session = session, "navbar", selected = (moduleOutputs$mapLocs$change_tab)) # Change tabs
           moduleOutputs$mapLocs$change_tab <- NULL # Reset to NULL
         }
@@ -540,7 +540,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$imgTableView) {
         output$imgTableView_ui <- renderUI(imgTableViewUI("imgTableView"))
         ui_loaded$imgTableView <- TRUE
-        imgTableView("imgTableView", language = languageSelection, restoring = isRestoring_img) # Call the server
+        imgTableView("imgTableView", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "imgMapView") {

@@ -82,9 +82,9 @@ app_ui <- function(request) {
                nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discrete",
                          uiOutput("plotDiscrete_ui")),
                nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
-                         uiOutput("plotContinuous_ui")),
-               nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
-                         uiOutput("plotsMix_ui"))
+                         uiOutput("plotContinuous_ui"))
+               # nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
+                         # uiOutput("plotsMix_ui"))
       ),
       nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
                nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",
