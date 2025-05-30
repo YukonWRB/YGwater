@@ -421,15 +421,21 @@ contData <- function(id, language) {
       # Filter the locations based on the selected projects and networks, update the locations selectizeInput
       req(input$projects, input$networks, filteredData$locations_projects, filteredData$locations_networks)
       
+      remain_locs <- filteredData$locs
+
       if (!("all" %in% input$networks)) {
-        remain_locs <- filteredData$locations_networks[filteredData$locations_networks$network_id %in% input$networks, ]
-      } else {
-        remain_locs <- filteredData$locations_networks
+        net_ids <- filteredData$locations_networks$location_id[
+          filteredData$locations_networks$network_id %in% input$networks
+        ]
+        remain_locs <- remain_locs[remain_locs$location_id %in% net_ids, ]
       }
+
       if (!("all" %in% input$projects)) {
-        remain_locs <- filteredData$locations_projects[filteredData$locations_projects$project_id %in% input$projects, ]
+        proj_ids <- filteredData$locations_projects$location_id[
+          filteredData$locations_projects$project_id %in% input$projects
+        ]
+        remain_locs <- remain_locs[remain_locs$location_id %in% proj_ids, ]
       }
-      remain_locs <- filteredData$locs[filteredData$locs$location_id %in% remain_locs$location_id, ]
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", remain_locs$location_id),
                                                      c(tr("all", language$language), remain_locs[, tr("generic_name_col", language$language)])),
