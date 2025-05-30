@@ -120,6 +120,39 @@ contData <- function(id, language, inputs) {
     }
     
     filteredData <- createFilteredData()
+
+    # If a location was provided from the map module, pre-filter the data
+    if (!is.null(inputs$location_id)) {
+      loc_id <- inputs$location_id
+      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$location_id %in% loc_id, ]
+      filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% loc_id, ]
+      filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% loc_id, ]
+      filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$timeseries$media_id, ]
+      filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
+      filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
+
+      remain_projects <- filteredData$locations_projects[filteredData$locations_projects$location_id %in% loc_id, ]
+      filteredData$projects <- filteredData$projects[filteredData$projects$project_id %in% remain_projects$project_id, ]
+      remain_networks <- filteredData$locations_networks[filteredData$locations_networks$location_id %in% loc_id, ]
+      filteredData$networks <- filteredData$networks[filteredData$networks$network_id %in% remain_networks$network_id, ]
+
+      filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
+      if (nrow(filteredData$params) > 0) {
+        filteredData$parameter_relationships <- filteredData$parameter_relationships[filteredData$parameter_relationships$parameter_id %in% filteredData$params$parameter_id, ]
+        if (length(filteredData$parameter_relationships$group_id) > 0) {
+          filteredData$param_groups <- filteredData$param_groups[filteredData$param_groups$group_id %in% filteredData$parameter_relationships$group_id, ]
+        } else {
+          filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
+        }
+        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
+        if (length(sub_groups) > 0) {
+          filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
+        } else {
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+        }
+      }
+    }
     
     
     # Create UI elements and necessary helpers ################
@@ -128,7 +161,7 @@ contData <- function(id, language, inputs) {
     # Reactive values to store the input values so that inputs can be reset if the user ends up narrowing their selections to 0 samples
     input_values <- reactiveValues(date_start = input$date_start,
                                    date_end = input$date_end,
-                                   locations = input$locations, 
+                                   locations = if (!is.null(inputs$location_id)) inputs$location_id else input$locations,
                                    sub_locations = input$sub_locations,
                                    z = input$z,
                                    aggregation = input$aggregation,

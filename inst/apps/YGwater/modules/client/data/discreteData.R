@@ -113,17 +113,60 @@ discData <- function(id, language, inputs) {
     }
     
     filteredData <- createFilteredData()
+
+    # If a location was provided from the map module, pre-filter the data
+    if (!is.null(inputs$location_id)) {
+      loc_id <- inputs$location_id
+      filteredData$samples <- filteredData$samples[filteredData$samples$location_id %in% loc_id, ]
+      filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% loc_id, ]
+      filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% loc_id, ]
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$samples$media_id, ]
+      filteredData$sample_types <- filteredData$sample_types[filteredData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
+
+      remain_projects <- filteredData$locations_projects[filteredData$locations_projects$location_id %in% loc_id, ]
+      filteredData$projects <- filteredData$projects[filteredData$projects$project_id %in% remain_projects$project_id, ]
+      remain_networks <- filteredData$locations_networks[filteredData$locations_networks$location_id %in% loc_id, ]
+      filteredData$networks <- filteredData$networks[filteredData$networks$network_id %in% remain_networks$network_id, ]
+
+      filteredData$params <- DBI::dbGetQuery(session$userData$AquaCache,
+        paste0("SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+               paste(filteredData$samples$sample_id, collapse = ", "), ");"))
+      if (nrow(filteredData$params) > 0) {
+        filteredData$parameter_relationships <- DBI::dbGetQuery(session$userData$AquaCache,
+          paste0("SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
+                 paste(filteredData$samples$sample_id, collapse = ", "), "));"))
+        if (length(filteredData$parameter_relationships$group_id) > 0) {
+          filteredData$param_groups <- DBI::dbGetQuery(session$userData$AquaCache,
+            paste0("SELECT * FROM parameter_groups WHERE group_id IN (",
+                   paste(filteredData$parameter_relationships$group_id, collapse = ", "), ");"))
+        } else {
+          filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(),
+                                                 group_name_fr = character(), description = character(),
+                                                 description_fr = character())
+        }
+        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
+        if (length(sub_groups) > 0) {
+          filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache,
+            paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
+                   paste(sub_groups, collapse = ", "), ");"))
+        } else {
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(),
+                                                     sub_group_name_fr = character(), description = character(),
+                                                     description_fr = character())
+        }
+      }
+    }
     
     
     # Create UI elements and necessary helpers ################
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
     
     # Reactive values to store the input values so that inputs can be reset if the user ends up narrowing their selections to 0 samples
-    input_values <- reactiveValues(date_range = input$date_range, 
-                                   locations = input$locations, 
-                                   sub_locations = input$sub_locations, 
-                                   media = input$media, 
-                                   sample_types = input$sample_types, 
+    input_values <- reactiveValues(date_range = input$date_range,
+                                   locations = if (!is.null(inputs$location_id)) inputs$location_id else input$locations,
+                                   sub_locations = input$sub_locations,
+                                   media = input$media,
+                                   sample_types = input$sample_types,
                                    params = input$params)
     
     # flags to prevent running observers when the sidebar is first rendered
