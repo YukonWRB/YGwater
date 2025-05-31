@@ -307,25 +307,41 @@ mapLocs <- function(id, language) {
         has_discrete = any(data_type == "discrete"),
         has_continuous = any(data_type == "continuous")
       ), by = location_id]
-      tmp[loc_data_types, on = .(location_id), `:=`(has_discrete = i.has_discrete,
-                                                    has_continuous = i.has_continuous)]
-
+      tmp[loc_data_types, on = .(location_id), `:=`(
+        has_discrete = i.has_discrete,
+        has_continuous = i.has_continuous
+      )]
+      
       tmp[, popup_links := {
         links <- character(0)
         if (isTRUE(has_discrete)) {
-          links <- c(links,
-            sprintf("<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"%s\"); return false;'>%s</a>",
-                    location_id, tr("dl_data_discrete", language$language)),
-            sprintf("<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"%s\"); return false;'>%s</a>",
-                    location_id, tr("view_plots_discrete", language$language))
+          links <- c(
+            links,
+            sprintf(
+              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"%s\"); return false;'>%s</a>",
+              location_id,
+              tr("dl_data_discrete", language$language)
+            ),
+            sprintf(
+              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"%s\"); return false;'>%s</a>",
+              location_id,
+              tr("view_plots_discrete", language$language)
+            )
           )
         }
         if (isTRUE(has_continuous)) {
-          links <- c(links,
-            sprintf("<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"%s\"); return false;'>%s</a>",
-                    location_id, tr("dl_data_continuous", language$language)),
-            sprintf("<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"%s\"); return false;'>%s</a>",
-                    location_id, tr("view_plots_continuous", language$language))
+          links <- c(
+            links,
+            sprintf(
+              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"%s\"); return false;'>%s</a>",
+              location_id,
+              tr("dl_data_continuous", language$language)
+            ),
+            sprintf(
+              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"%s\"); return false;'>%s</a>",
+              location_id,
+              tr("view_plots_continuous", language$language)
+            )
           )
         }
         if (length(links) > 0) {
@@ -333,7 +349,7 @@ mapLocs <- function(id, language) {
         } else {
           ""
         }
-      }]
+      }, by = location_id]
 
       tmp[, popup_html := paste0(
         "<strong>", popup_name, "</strong><br/>",
