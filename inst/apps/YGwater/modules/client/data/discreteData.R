@@ -112,11 +112,19 @@ discData <- function(id, language, inputs) {
       return(data)
     }
     
-    filteredData <- createFilteredData()
-
-    # If a location was provided from the map module, pre-filter the data
-    if (!is.null(inputs$location_id)) {
-      loc_id <- inputs$location_id
+    # Assign the input value to a reactive right away as it's reset to NULL as soon as this module is loaded
+    moduleInputs <- reactiveValues(location_id = as.numeric(inputs$location_id))
+    
+    # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
+    if (!is.null(moduleInputs$location_id)) {
+      filteredData <- createFilteredData()
+      # If the location_id is not in the filteredData$locs, return early
+      if (!moduleInputs$location_id %in% filteredData$locs$location_id) {
+        moduleInputs$location_id <- NULL
+        return()
+      }
+      
+      loc_id <- moduleInputs$location_id
       filteredData$samples <- filteredData$samples[filteredData$samples$location_id %in% loc_id, ]
       filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% loc_id, ]
       filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% loc_id, ]
@@ -155,6 +163,8 @@ discData <- function(id, language, inputs) {
                                                      description_fr = character())
         }
       }
+    } else {
+      filteredData <- createFilteredData()
     }
     
     
@@ -162,12 +172,7 @@ discData <- function(id, language, inputs) {
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
     
     # Reactive values to store the input values so that inputs can be reset if the user ends up narrowing their selections to 0 samples
-    input_values <- reactiveValues(date_range = input$date_range,
-                                   locations = if (!is.null(inputs$location_id)) inputs$location_id else input$locations,
-                                   sub_locations = input$sub_locations,
-                                   media = input$media,
-                                   sample_types = input$sample_types,
-                                   params = input$params)
+    input_values <- reactiveValues()
     
     # flags to prevent running observers when the sidebar is first rendered
     render_flags <- reactiveValues(date_range = FALSE,
@@ -187,7 +192,7 @@ discData <- function(id, language, inputs) {
       render_flags$sample_types <- TRUE
       render_flags$params <- TRUE
       
-      tagList(
+      tags <- tagList(
         # start and end datetime
         dateRangeInput(ns("date_range"),
                        tr("date_range_select", language$language),
@@ -203,7 +208,7 @@ discData <- function(id, language, inputs) {
                          stats::setNames(c("all", moduleData$locs$location_id),
                                          c(tr("all", language$language), moduleData$locs[, tr("generic_name_col", language$language)])),
                        multiple = TRUE,
-                       selected = if (!is.null(inputs$location_id)) inputs$location_id else "all"
+                       selected = if (!is.null(moduleInputs$location_id)) moduleInputs$location_id else "all"
         ),
         # Button for modal to let users filter locations by network or project
         actionButton(ns("loc_modal"),
@@ -270,6 +275,15 @@ discData <- function(id, language, inputs) {
           )
         )
       ) # End of tagList
+      
+      input_values$date_range <- input$date_range
+      input_values$locations <- input$locations
+      input_values$sub_locations <- input$sub_locations
+      input_values$media <- input$media
+      input_values$sample_types <- input$sample_types
+      input_values$params <- input$params
+      
+      return(tags)
     })  %>% # End of renderUI for sidebar
       bindEvent(language$language)
     

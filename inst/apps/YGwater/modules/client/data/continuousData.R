@@ -119,11 +119,19 @@ contData <- function(id, language, inputs) {
       return(data)
     }
     
-    filteredData <- createFilteredData()
-
-    # If a location was provided from the map module, pre-filter the data
-    if (!is.null(inputs$location_id)) {
-      loc_id <- inputs$location_id
+    # Assign the input value to a reactive right away as it's reset to NULL as soon as this module is loaded
+    moduleInputs <- reactiveValues(location_id = as.numeric(inputs$location_id))
+    
+    # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
+    if (!is.null(moduleInputs$location_id)) {
+      filteredData <- createFilteredData()
+      # If the location_id is not in the filteredData$locs, return early
+      if (!moduleInputs$location_id %in% filteredData$locs$location_id) {
+        moduleInputs$location_id <- NULL
+        return()
+      }
+      
+      loc_id <- moduleInputs$location_id
       filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$location_id %in% loc_id, ]
       filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% loc_id, ]
       filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% loc_id, ]
@@ -152,22 +160,15 @@ contData <- function(id, language, inputs) {
           filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
+    } else {
+      filteredData <- createFilteredData()
     }
-    
     
     # Create UI elements and necessary helpers ################
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
     
     # Reactive values to store the input values so that inputs can be reset if the user ends up narrowing their selections to 0 samples
-    input_values <- reactiveValues(date_start = input$date_start,
-                                   date_end = input$date_end,
-                                   locations = if (!is.null(inputs$location_id)) inputs$location_id else input$locations,
-                                   sub_locations = input$sub_locations,
-                                   z = input$z,
-                                   aggregation = input$aggregation,
-                                   rate = input$rate,
-                                   media = input$media, 
-                                   params = input$params)
+    input_values <- reactiveValues()
     
     # flags to prevent running observers when the sidebar is first rendered
     render_flags <- reactiveValues(date_start = FALSE,
@@ -182,7 +183,7 @@ contData <- function(id, language, inputs) {
     
     output$sidebar <- renderUI({
       req(moduleData)
-      
+
       render_flags$date_start <- TRUE
       render_flags$date_end <- TRUE
       render_flags$locations <- TRUE
@@ -193,30 +194,30 @@ contData <- function(id, language, inputs) {
       render_flags$media <- TRUE
       render_flags$params <- TRUE
       
-      tagList(
+      tags <- tagList(
         # start and end datetime
         dateInput(ns("date_start"),
                   tr("date_start", language$language),
-                  value = as.Date(moduleData$range$min_date),
-                  min = as.Date(moduleData$range$min_date),
-                  max = as.Date(moduleData$range$max_date),
+                  value = as.Date(filteredData$range$min_date),
+                  min = as.Date(filteredData$range$min_date),
+                  max = as.Date(filteredData$range$max_date),
                   format = "yyyy-mm-dd"
         ),
         # start and end datetime
         dateInput(ns("date_end"),
                   tr("date_end", language$language),
-                  value = as.Date(moduleData$range$max_date),
-                  min = as.Date(moduleData$range$min_date),
-                  max = as.Date(moduleData$range$max_date),
+                  value = as.Date(filteredData$range$max_date),
+                  min = as.Date(filteredData$range$min_date),
+                  max = as.Date(filteredData$range$max_date),
                   format = "yyyy-mm-dd"
         ),
         # Selectize input for locations
         selectizeInput(ns("locations"),
                        label = tr("loc(s)", language$language),
-                       choices =  stats::setNames(c("all", moduleData$locs$location_id),
-                                                  c(tr("all", language$language), moduleData$locs[, tr("generic_name_col", language$language)])),
+                       choices =  stats::setNames(c("all", filteredData$locs$location_id),
+                                                  c(tr("all", language$language), filteredData$locs[, tr("generic_name_col", language$language)])),
                        multiple = TRUE,
-                       selected = if (!is.null(inputs$location_id)) inputs$location_id else "all"
+                       selected = if (!is.null(moduleInputs$location_id)) moduleInputs$location_id else "all"
         ),
         # Button for modal to let users filter locations by network or project
         actionButton(ns("loc_modal"),
@@ -227,16 +228,16 @@ contData <- function(id, language, inputs) {
         # Selectize input for sub-locations
         selectizeInput(ns("sub_locations"),
                        label = tr("sub_loc(s)", language$language),
-                       choices = stats::setNames(c("all", moduleData$sub_locs$sub_location_id),
-                                                 c(tr("all", language$language), moduleData$sub_locs[, tr("sub_location_col", language$language)])),
+                       choices = stats::setNames(c("all", filteredData$sub_locs$sub_location_id),
+                                                 c(tr("all", language$language), filteredData$sub_locs[, tr("sub_location_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
         # Selectize input for depth/height
         selectizeInput(ns("z"), 
                        label = tr("z", language$language),
-                       choices = stats::setNames(c("all", moduleData$z),
-                                                 c(tr("all", language$language), moduleData$z)),
+                       choices = stats::setNames(c("all", filteredData$z),
+                                                 c(tr("all", language$language), filteredData$z)),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -244,8 +245,8 @@ contData <- function(id, language, inputs) {
         selectizeInput(ns("media"),
                        label = tr("media_type(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$media$media_id),
-                                         c(tr("all", language$language), moduleData$media[, tr("media_type_col", language$language)])),
+                         stats::setNames(c("all", filteredData$media$media_id),
+                                         c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -253,8 +254,8 @@ contData <- function(id, language, inputs) {
         selectizeInput(ns("aggregation"),
                        label = tr("aggregation_type(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$aggregation_types$aggregation_type_id),
-                                         c(tr("all", language$language), moduleData$aggregation_types[, tr("aggregation_type_col", language$language)])),
+                         stats::setNames(c("all", filteredData$aggregation_types$aggregation_type_id),
+                                         c(tr("all", language$language), filteredData$aggregation_types[, tr("aggregation_type_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -262,16 +263,16 @@ contData <- function(id, language, inputs) {
         selectizeInput(ns("rate"),
                        label = tr("nominal_rate", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$rates$seconds),
-                                         c(tr("all", language$language), moduleData$rates[, "period"])),
+                         stats::setNames(c("all", filteredData$rates$seconds),
+                                         c(tr("all", language$language), filteredData$rates[, "period"])),
                        multiple = TRUE,
                        selected = "all"
         ),
         selectizeInput(ns("params"),
                        label = tr("parameter(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$params$parameter_id),
-                                         c(tr("all", language$language), moduleData$params[, tr("param_name_col", language$language)])),
+                         stats::setNames(c("all", filteredData$params$parameter_id),
+                                         c(tr("all", language$language), filteredData$params[, tr("param_name_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -299,9 +300,21 @@ contData <- function(id, language, inputs) {
           )
         )
       ) # End of tagList
+      
+      # Store the input values in the reactiveValues object
+      input_values$date_start <- input$date_start
+      input_values$date_end <- input$date_end
+      input_values$locations <- input$locations
+      input_values$sub_locations <- input$sub_locations
+      input_values$z <- input$z
+      input_values$aggregation <- input$aggregation
+      input_values$rate <- input$rate
+      input_values$media <- input$media
+      input_values$params <- input$params
+      
+      return(tags)
     })  %>% # End of renderUI for sidebar
       bindEvent(language$language)
-    
     
     
     output$main <- renderUI({
@@ -528,7 +541,7 @@ contData <- function(id, language, inputs) {
     ### date range inputs and filter ############
     observeEvent(list(input$date_start, input$date_end), {
       req(input$date_start, input$date_end, filteredData)
-      
+
       # Flags to prevent running the observer when the date range is reset or initially rendered
       if (reset_flags$date_start) {
         reset_flags$date_start <- FALSE
