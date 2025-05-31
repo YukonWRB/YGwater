@@ -121,6 +121,8 @@ contData <- function(id, language, inputs) {
     
     # Assign the input value to a reactive right away as it's reset to NULL as soon as this module is loaded
     moduleInputs <- reactiveValues(location_id = if (!is.null(inputs$location_id)) as.numeric(inputs$location_id) else NULL)
+
+    downloadFile <- reactiveVal(NULL)
     
     # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
     if (!is.null(moduleInputs$location_id)) {
@@ -1355,7 +1357,8 @@ contData <- function(id, language, inputs) {
         textOutput(ns("num_rows")),
         selectizeInput(ns("modal_format"), label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx"),
         footer = tagList(
-          downloadButton(ns("download"), tr("dl_data", language$language), icon = icon("download")),
+          actionButton(ns("download_prep"), tr("dl_data", language$language), icon = icon("download")),
+          downloadButton(ns("download"), tr("dl_data", language$language), style = "display:none;"),
           actionButton(ns("modal_close"), tr("close", language$language))
         ),
         size = "xl"
@@ -1551,89 +1554,120 @@ contData <- function(id, language, inputs) {
       }
     }, ignoreInit = TRUE) # End of observeEvent for number of rows
     
-    
-    # Download handling #######################################################
-    output$download <- downloadHandler(
-      filename = function() {
-        paste0("continuousData_", format(Sys.time(), "%Y%m%d_%H%M%S%Z"), ".", if (input$modal_format == "csv") "zip" else input$modal_format)
-      },
-      content = function(file) {
+    download_task <- ExtendedTask$new(function(ts_ids, loc_ids, tbl, date_range, freq, fmt, lang_abbrev, config) {
+      promises::future_promise({
+        con <- AquaConnect(
+          name = config$dbName,
+          host = config$dbHost,
+          port = config$dbPort,
+          username = config$dbUser,
+          password = config$dbPass,
+          silent = TRUE
+        )
+        on.exit(DBI::dbDisconnect(con))
 
-        showNotification(tr("dl_prep", language$language), id = "download_notification", duration = NULL, type = "message")
-        
-        # Get the data together
-        selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
-        selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
-        
-        grade_expr <- if (language$abbrev == "fr") {
+        grade_expr <- if (lang_abbrev == "fr") {
           "COALESCE(gt.grade_type_description_fr, gt.grade_type_description) AS cote"
         } else {
           "gt.grade_type_description AS grade"
         }
-        approval_expr <- if (language$abbrev == "fr") {
+        approval_expr <- if (lang_abbrev == "fr") {
           "COALESCE(at.approval_type_description_fr, at.approval_type_description) AS approbation"
         } else {
           "at.approval_type_description AS approval"
         }
-        qualifier_expr <- if (language$abbrev == "fr") {
+        qualifier_expr <- if (lang_abbrev == "fr") {
           "COALESCE(qt.qualifier_type_description_fr, qt.qualifier_type_description) AS qualificateur"
         } else {
           "qt.qualifier_type_description AS qualifier"
         }
-        orgs_expr <- if (language$abbrev == "fr") {
+        orgs_expr <- if (lang_abbrev == "fr") {
           "COALESCE(orgs.name_fr, orgs.name) AS organization"
         } else {
           "orgs.name AS organization"
         }
-        start_dt_expr <- if (language$abbrev == "fr") {
+        start_dt_expr <- if (lang_abbrev == "fr") {
           "date_debut_UTC"
         } else {
           "start_datetime_UTC"
         }
-        end_dt_expr <- if (language$abbrev == "fr") {
+        end_dt_expr <- if (lang_abbrev == "fr") {
           "date_fin_UTC"
         } else {
           "end_datetime_UTC"
         }
-        
-        data <- list(location_metadata = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM ", if (language$abbrev == "fr") "location_metadata_fr" else "location_metadata_en", " WHERE location_id IN (", paste(selected_loc_ids, collapse = ", "), ");")),
-                     timeseries_metadata = table_data()[input$tbl_rows_selected, ],
-                     daily_means_stats = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM measurements_calculated_daily_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND date >= '", input$modal_date_range[1], "' AND date <= '", input$modal_date_range[2], "';")),
-                     grades = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT g.timeseries_id, ", grade_expr, ", g.start_dt AS ", start_dt_expr, ", g.end_dt AS ", end_dt_expr, " FROM grades g JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND start_dt < '", input$modal_date_range[2], "' AND end_dt > '", input$modal_date_range[1], "'ORDER BY timeseries_id, start_dt;")),
-                     approvals = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT a.timeseries_id, ", approval_expr, ", a.start_dt AS ", start_dt_expr, ", a.end_dt AS ", end_dt_expr, " FROM approvals a JOIN approval_types at ON a.approval_type_id = at.approval_type_id WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND start_dt < '", input$modal_date_range[2], "' AND end_dt > '", input$modal_date_range[1], "' ORDER BY timeseries_id, start_dt;")),
-                     qualifiers = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT q.timeseries_id, ", qualifier_expr, ", q.start_dt AS ", start_dt_expr, ", q.end_dt AS ", end_dt_expr, " FROM qualifiers q JOIN qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND start_dt < '", input$modal_date_range[2], "' AND end_dt > '", input$modal_date_range[1], "'ORDER BY timeseries_id, start_dt;")),
-                     owners = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT o.timeseries_id, ", orgs_expr, ", o.start_dt AS ", start_dt_expr, ", end_dt AS ", end_dt_expr, " FROM owners o JOIN organizations orgs ON o.organization_id = orgs.organization_id WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND start_dt < '", input$modal_date_range[2], "' AND end_dt > '", input$modal_date_range[1], "'ORDER BY timeseries_id, start_dt;"))
+
+        data <- list(
+          location_metadata = dbGetQueryDT(con, paste0("SELECT * FROM ", if (lang_abbrev == "fr") "location_metadata_fr" else "location_metadata_en", " WHERE location_id IN (", paste(loc_ids, collapse = ", "), ");")),
+          timeseries_metadata = tbl,
+          daily_means_stats = dbGetQueryDT(con, paste0("SELECT * FROM measurements_calculated_daily_corrected WHERE timeseries_id IN (", paste(ts_ids, collapse = ", "), ") AND date >= '", date_range[1], "' AND date <= '", date_range[2], "';")),
+          grades = dbGetQueryDT(con, paste0("SELECT g.timeseries_id, ", grade_expr, ", g.start_dt AS ", start_dt_expr, ", g.end_dt AS ", end_dt_expr, " FROM grades g JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE timeseries_id IN (", paste(ts_ids, collapse = ", "), ") AND start_dt < '", date_range[2], "' AND end_dt > '", date_range[1], "' ORDER BY timeseries_id, start_dt;")),
+          approvals = dbGetQueryDT(con, paste0("SELECT a.timeseries_id, ", approval_expr, ", a.start_dt AS ", start_dt_expr, ", a.end_dt AS ", end_dt_expr, " FROM approvals a JOIN approval_types at ON a.approval_type_id = at.approval_type_id WHERE timeseries_id IN (", paste(ts_ids, collapse = ", "), ") AND start_dt < '", date_range[2], "' AND end_dt > '", date_range[1], "' ORDER BY timeseries_id, start_dt;")),
+          qualifiers = dbGetQueryDT(con, paste0("SELECT q.timeseries_id, ", qualifier_expr, ", q.start_dt AS ", start_dt_expr, ", q.end_dt AS ", end_dt_expr, " FROM qualifiers q JOIN qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE timeseries_id IN (", paste(ts_ids, collapse = ", "), ") AND start_dt < '", date_range[2], "' AND end_dt > '", date_range[1], "' ORDER BY timeseries_id, start_dt;")),
+          owners = dbGetQueryDT(con, paste0("SELECT o.timeseries_id, ", orgs_expr, ", o.start_dt AS ", start_dt_expr, ", end_dt AS ", end_dt_expr, " FROM owners o JOIN organizations orgs ON o.organization_id = orgs.organization_id WHERE timeseries_id IN (", paste(ts_ids, collapse = ", "), ") AND start_dt < '", date_range[2], "' AND end_dt > '", date_range[1], "' ORDER BY timeseries_id, start_dt;"))
         )
-        
-        if (input$modal_frequency == "hourly") {
-          data$hourly_means <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM measurements_hourly_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND datetime >= '", input$modal_date_range[1], "' AND datetime <= '", input$modal_date_range[2], "';"))
-        } else if (input$modal_frequency == "max") {
-          data$max_resolution <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM measurements_continuous_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND datetime >= '", input$modal_date_range[1], "' AND datetime <= '", input$modal_date_range[2], "';"))
+
+        if (freq == "hourly") {
+          data$hourly_means <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_hourly_corrected WHERE timeseries_id IN (", paste(ts_ids, collapse = ", "), ") AND datetime >= '", date_range[1], "' AND datetime <= '", date_range[2], "';"))
+        } else if (freq == "max") {
+          data$max_resolution <- dbGetQueryDT(con, paste0("SELECT * FROM measurements_continuous_corrected WHERE timeseries_id IN (", paste(ts_ids, collapse = ", "), ") AND datetime >= '", date_range[1], "' AND datetime <= '", date_range[2], "';"))
         }
-        
-        if (input$modal_format == "xlsx") {
-          openxlsx::write.xlsx(data, file)
-        } else if (input$modal_format == "csv") {
-          # Temporary directory to store CSV files
+
+        tmp <- tempfile(fileext = if (fmt == "csv") ".zip" else paste0(".", fmt))
+
+        if (fmt == "xlsx") {
+          openxlsx::write.xlsx(data, tmp)
+        } else if (fmt == "csv") {
           temp_dir <- tempdir()
           csv_files <- lapply(names(data), function(name) {
-            file_name <- file.path(temp_dir, paste0(name, ".csv"))
-            data.table::fwrite(data[[name]], file_name)
-            return(file_name)
+            f <- file.path(temp_dir, paste0(name, ".csv"))
+            data.table::fwrite(data[[name]], f)
+            f
           })
-          # Use zip to compress the files
-          utils::zip(file, unlist(csv_files))
-        } else if (input$modal_format == "sqlite") {
-          # Create an sqlite database and write the data tables to it
-          db <- DBI::dbConnect(RSQLite::SQLite(), dbname = file)
+          utils::zip(tmp, unlist(csv_files))
+        } else if (fmt == "sqlite") {
+          db <- DBI::dbConnect(RSQLite::SQLite(), dbname = tmp)
           lapply(names(data), function(name) {
             DBI::dbWriteTable(conn = db, name = name, value = data[[name]], overwrite = TRUE)
           })
           DBI::dbDisconnect(db)
         }
-        removeNotification("download_notification")
-      } # End file content
-    ) # End of downloadHandler
+
+        return(tmp)
+      })
+    }) |> bind_task_button("download_prep")
+
+    observeEvent(input$download_prep, {
+      showNotification(tr("dl_prep", language$language), id = "download_notification", duration = NULL, type = "message")
+      download_task$invoke(
+        ts_ids = table_data()[input$tbl_rows_selected, timeseries_id],
+        loc_ids = table_data()[input$tbl_rows_selected, location_id],
+        tbl = table_data()[input$tbl_rows_selected, ],
+        date_range = input$modal_date_range,
+        freq = input$modal_frequency,
+        fmt = input$modal_format,
+        lang_abbrev = language$abbrev,
+        config = session$userData$config
+      )
+    })
+
+    observeEvent(download_task$result(), {
+      removeNotification("download_notification")
+      downloadFile(download_task$result())
+      shinyjs::click("download")
+    })
+
+    output$download <- downloadHandler(
+      filename = function() {
+        paste0("continuousData_", format(Sys.time(), "%Y%m%d_%H%M%S%Z"), ".", if (input$modal_format == "csv") "zip" else input$modal_format)
+      },
+      content = function(file) {
+        file.copy(downloadFile(), file)
+        unlink(downloadFile())
+        downloadFile(NULL)
+      }
+    )
+    
     
   }) # End moduleServer
 } # End contData function
