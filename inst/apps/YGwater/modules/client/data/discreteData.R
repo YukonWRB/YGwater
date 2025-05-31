@@ -114,6 +114,8 @@ discData <- function(id, language, inputs) {
     
     # Assign the input value to a reactive right away as it's reset to NULL as soon as this module is loaded
     moduleInputs <- reactiveValues(location_id = if (!is.null(inputs$location_id)) as.numeric(inputs$location_id) else NULL)
+
+    downloadFile <- reactiveVal(NULL)
     
     # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
     if (!is.null(moduleInputs$location_id)) {
@@ -1108,7 +1110,8 @@ discData <- function(id, language, inputs) {
         selectizeInput(ns("modal_format"), label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx"),
         footer = tagList(
           modalButton(tr("close", language$language)),
-          actionButton(ns("download"), tr("dl_data", language$language), icon = icon("download"))
+          actionButton(ns("download_prep"), tr("dl_data", language$language), icon = icon("download")),
+          downloadButton(ns("download"), tr("dl_data", language$language), style = "display:none;")
         ),
         size = "xl"
       ))
@@ -1138,72 +1141,103 @@ discData <- function(id, language, inputs) {
     
     
     # Download handling #######################################################
-    output$download <- downloadHandler(
-      filename = function() {
-        paste0("discreteData_", format(Sys.time(), "%Y%m%d_%H%M%S%Z"), ".", if (input$modal_format == "csv") "zip" else input$modal_format)
-      },
-      content = function(file) {
-        
-        showNotification(tr("dl_prep", language$language), id = "download_notification", duration = NULL, type = "message")
-        
-        # Get the data together
-        selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
-        
-        selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
-        
+    
+    download_task <- ExtendedTask$new(function(sampleids, loc_ids, tbl, fmt, lang_abbrev, config) {
+      promises::future_promise({
+        con <- AquaConnect(
+          name = config$dbName,
+          host = config$dbHost,
+          port = config$dbPort,
+          username = config$dbUser,
+          password = config$dbPass,
+          silent = TRUE
+        )
+        on.exit(DBI::dbDisconnect(con))
+
         data <- list()
-        data$location_metadata <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT * FROM ", if (language$abbrev == "fr") "location_metadata_fr" else "location_metadata_en", " WHERE location_id IN (", paste(selected_loc_ids, collapse = ", "), ");")) # Get the location metadata
-        data$samples <- table_data()
-        data$results <- dbGetQueryDT(session$userData$AquaCache, paste0(
-          "SELECT s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, p.unit_default AS units, rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
-        FROM results r
-        JOIN samples s ON r.sample_id = s.sample_id
-        JOIN parameters p ON r.parameter_id = p.parameter_id
-        JOIN result_types rt ON r.result_type = rt.result_type_id
-        LEFT JOIN sample_fractions sf ON r.sample_fraction = sf.sample_fraction_id
-        LEFT JOIN result_conditions rc ON r.result_condition = rc.result_condition_id
-        LEFT JOIN result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN result_speciations rs ON r.result_speciation = rs.result_speciation_id
-        LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
-        LEFT JOIN laboratories l ON r.laboratory = l.lab_id
-        WHERE r.sample_id IN (", paste(selected_sampleids, collapse = ","), ");"
+        data$location_metadata <- dbGetQueryDT(con, paste0(
+          "SELECT * FROM ",
+          if (lang_abbrev == "fr") "location_metadata_fr" else "location_metadata_en",
+          " WHERE location_id IN (", paste(loc_ids, collapse = ", "), ");"
         ))
-        
+        data$samples <- tbl
+        data$results <- dbGetQueryDT(con, paste0(
+          "SELECT s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, p.unit_default AS units, rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime",
+          " FROM results r",
+          " JOIN samples s ON r.sample_id = s.sample_id",
+          " JOIN parameters p ON r.parameter_id = p.parameter_id",
+          " JOIN result_types rt ON r.result_type = rt.result_type_id",
+          " LEFT JOIN sample_fractions sf ON r.sample_fraction = sf.sample_fraction_id",
+          " LEFT JOIN result_conditions rc ON r.result_condition = rc.result_condition_id",
+          " LEFT JOIN result_value_types rvt ON r.result_value_type = rvt.result_value_type_id",
+          " LEFT JOIN result_speciations rs ON r.result_speciation = rs.result_speciation_id",
+          " LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id",
+          " LEFT JOIN laboratories l ON r.laboratory = l.lab_id",
+          " WHERE r.sample_id IN (", paste(sampleids, collapse = ","), ");"
+        ))
+
         if ("grade" %in% names(data$samples)) {
-          data$grades <- dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM grade_types;")
+          data$grades <- dbGetQueryDT(con, "SELECT * FROM grade_types;")
         }
         if ("approval" %in% names(data$samples)) {
-          data$approvals <- dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM approval_types;")
+          data$approvals <- dbGetQueryDT(con, "SELECT * FROM approval_types;")
         }
         if ("qualifier" %in% names(data$samples)) {
-          data$qualifiers <- dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM qualifier_types;")
+          data$qualifiers <- dbGetQueryDT(con, "SELECT * FROM qualifier_types;")
         }
-        
-        
-        if (input$modal_format == "xlsx") {
-          openxlsx::write.xlsx(data, file)
-        } else if (input$modal_format == "csv") {
-          # Temporary directory to store CSV files
+
+        tmp <- tempfile(fileext = if (fmt == "csv") ".zip" else paste0(".", fmt))
+
+        if (fmt == "xlsx") {
+          openxlsx::write.xlsx(data, tmp)
+        } else if (fmt == "csv") {
           temp_dir <- tempdir()
           csv_files <- lapply(names(data), function(name) {
-            file_name <- file.path(temp_dir, paste0(name, ".csv"))
-            data.table::fwrite(data[[name]], file_name)
-            return(file_name)
+            f <- file.path(temp_dir, paste0(name, ".csv"))
+            data.table::fwrite(data[[name]], f)
+            f
           })
-          # Use zip to compress the files
-          utils::zip(file, unlist(csv_files))
-        } else if (input$modal_format == "sqlite") {
-          # Create an sqlite database and write the data tables to it
-          db <- DBI::dbConnect(RSQLite::SQLite(), dbname = file)
+          utils::zip(tmp, unlist(csv_files))
+        } else if (fmt == "sqlite") {
+          db <- DBI::dbConnect(RSQLite::SQLite(), dbname = tmp)
           lapply(names(data), function(name) {
             DBI::dbWriteTable(conn = db, name = name, value = data[[name]], overwrite = TRUE)
           })
           DBI::dbDisconnect(db)
         }
-        removeNotification("download_notification")
-      } # End of content function
-    ) # End of downloadHandler
-    
+
+        return(tmp)
+      })
+    }) |> bind_task_button("download_prep")
+
+    observeEvent(input$download_prep, {
+      showNotification(tr("dl_prep", language$language), id = "download_notification", duration = NULL, type = "message")
+      download_task$invoke(
+        sampleids = table_data()[input$tbl_rows_selected, sample_id],
+        loc_ids = table_data()[input$tbl_rows_selected, location_id],
+        tbl = table_data(),
+        fmt = input$modal_format,
+        lang_abbrev = language$abbrev,
+        config = session$userData$config
+      )
+    })
+
+    observeEvent(download_task$result(), {
+      removeNotification("download_notification")
+      downloadFile(download_task$result())
+      shinyjs::click("download")
+    })
+
+    output$download <- downloadHandler(
+      filename = function() {
+        paste0("discreteData_", format(Sys.time(), "%Y%m%d_%H%M%S%Z"), ".", if (input$modal_format == "csv") "zip" else input$modal_format)
+      },
+      content = function(file) {
+        file.copy(downloadFile(), file)
+        unlink(downloadFile())
+        downloadFile(NULL)
+      }
+    )
   }) # End moduleServer
 } # End discData function
 
