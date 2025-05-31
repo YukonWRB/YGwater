@@ -53,8 +53,16 @@ mapParams <- function(id, language) {
                 tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
             ),
             actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
-            htmlOutput(ns("secondary_param")),
-            actionButton(ns("edit_secondary_param"), tr("map_edit_second_param", language$language), style = "display: block; width: 100%")
+            if (!config$public) {
+              htmlOutput(ns("secondary_param"))
+            },
+            if (!config$public) {
+              actionButton(
+                ns("edit_secondary_param"),
+                tr(if (map_params$params == 2) "map_edit_second_param" else "map_add_second_param", language$language),
+                style = "display: block; width: 100%"
+              )
+            }
             # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
           )
         ),
@@ -65,7 +73,7 @@ mapParams <- function(id, language) {
     
     output$secondary_param <- renderUI({
       req(map_params$params, language)
-      if (map_params$params == 1) {
+      if (config$public || map_params$params == 1) {
         return(NULL)
       } else {
         tagList(
@@ -87,9 +95,12 @@ mapParams <- function(id, language) {
       days2 = 1,
       latest = TRUE,
       target = Sys.Date(),
-      params = 2,
-      bins = c(0, 20, 40, 60, 80, 100),
-      colors = c("#d8b365", "#FEE090", "#74ADD1", "#4575D2", "#313695",  "#A50026")
+      params = 1,
+      bins = c(-Inf, 0, 20, 40, 60, 80, 100, Inf),
+      colors = c(
+        "#8c510a", "#d8b365", "#FEE090",
+        "#74ADD1", "#4575D2", "#313695", "#A50026"
+      )
     )
     
     # Observe 'map_latest_measurements'. If TRUE, 'target' is adjusted to Sys.Date()
@@ -215,10 +226,10 @@ mapParams <- function(id, language) {
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     observeEvent(input$mapType, {
-      if (input$mapType == "abs") {
+      if (input$mapType == "abs" || config$public) {
         shinyjs::hide("secondary_param")
         shinyjs::hide("edit_secondary_param")
-        
+
       } else {
         shinyjs::show("secondary_param")
         shinyjs::show("edit_secondary_param")
@@ -253,6 +264,9 @@ mapParams <- function(id, language) {
         "SELECT timeseries_id FROM timeseries WHERE parameter_id = %s;",
         map_params$param1
       ))$timeseries_id
+      if (length(tsids1) == 0) {
+        return()
+      }
       
       if (map_params$latest) {
         # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days1 days
@@ -328,6 +342,9 @@ mapParams <- function(id, language) {
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
       if (map_params$params == 2) {
         tsids2 <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT timeseries_id FROM timeseries WHERE parameter_id = ", map_params$param2, " AND location_id NOT IN (", paste(locs_tsids1$location_id, collapse = ", "), ");"))$timeseries_id
+        if (length(tsids2) == 0) {
+          return()
+        }
         
         if (map_params$latest) {
           # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days2 days
@@ -413,15 +430,33 @@ mapParams <- function(id, language) {
         by = "timeseries_id",
         all.x = TRUE
       )
-      # Cap values at 0 and 100% (above or below use symbology of 0 or 100)
-      mapping_data[, percent_historic_range_capped := pmax(pmin(percent_historic_range, 100), 0)]
-      
-      value_palette <- leaflet::colorBin(
-        palette = map_params$colors,
-        domain = c(0, 100),
-        bins = c(0, 20, 40, 60, 80, 100),
-        na.color = "#808080"
-      )
+      mapping_data[, percent_historic_range_capped := percent_historic_range]
+
+      if (input$mapType == "abs") {
+        abs_vals <- abs(mapping_data$value)
+        abs_range <- range(abs_vals, na.rm = TRUE)
+        abs_bins <- seq(abs_range[1], abs_range[2], length.out = length(map_params$colors) + 1)
+
+        value_palette <- leaflet::colorBin(
+          palette = map_params$colors,
+          domain = abs_vals,
+          bins = abs_bins,
+          pretty = FALSE,
+          na.color = "#808080"
+        )
+        map_values <- abs_vals
+        lab_format <- leaflet::labelFormat()
+      } else {
+        value_palette <- leaflet::colorBin(
+          palette = map_params$colors,
+          domain = mapping_data$percent_historic_range_capped,
+          bins = map_params$bins,
+          pretty = FALSE,
+          na.color = "#808080"
+        )
+        map_values <- mapping_data$percent_historic_range_capped
+        lab_format <- leaflet::labelFormat(suffix = "%")
+      }
       
       leaflet::leafletProxy("map", session) %>%
         leaflet::clearMarkers() %>%
@@ -429,8 +464,8 @@ mapParams <- function(id, language) {
           data = mapping_data,
           lng = ~longitude,
           lat = ~latitude,
-          fillColor = ~value_palette(percent_historic_range_capped),
-          color = ~value_palette(percent_historic_range_capped),
+          fillColor = ~value_palette(if (input$mapType == "abs") abs(value) else percent_historic_range_capped),
+          color = ~value_palette(if (input$mapType == "abs") abs(value) else percent_historic_range_capped),
           fillOpacity = 1,
           stroke = TRUE,
           weight = 1,
@@ -449,9 +484,9 @@ mapParams <- function(id, language) {
         leaflet::addLegend(
           position = "bottomright",
           pal = value_palette,
-          values = mapping_data$percent_historic_range_capped,
+          values = map_values,
           title = NULL,
-          labFormat = leaflet::labelFormat(suffix = "%"),
+          labFormat = lab_format,
           opacity = 1
         )
     }
