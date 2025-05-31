@@ -113,7 +113,7 @@ discData <- function(id, language, inputs) {
     }
     
     # Assign the input value to a reactive right away as it's reset to NULL as soon as this module is loaded
-    moduleInputs <- reactiveValues(location_id = as.numeric(inputs$location_id))
+    moduleInputs <- reactiveValues(location_id = if (!is.null(inputs$location_id)) as.numeric(inputs$location_id) else NULL)
     
     # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
     if (!is.null(moduleInputs$location_id)) {
