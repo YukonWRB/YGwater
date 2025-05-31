@@ -53,8 +53,16 @@ mapParams <- function(id, language) {
                 tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
             ),
             actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
-            htmlOutput(ns("secondary_param")),
-            actionButton(ns("edit_secondary_param"), tr("map_edit_second_param", language$language), style = "display: block; width: 100%")
+            if (!config$public) {
+              htmlOutput(ns("secondary_param"))
+            },
+            if (!config$public) {
+              actionButton(
+                ns("edit_secondary_param"),
+                tr(if (map_params$params == 2) "map_edit_second_param" else "map_add_second_param", language$language),
+                style = "display: block; width: 100%"
+              )
+            }
             # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
           )
         ),
@@ -65,7 +73,7 @@ mapParams <- function(id, language) {
     
     output$secondary_param <- renderUI({
       req(map_params$params, language)
-      if (map_params$params == 1) {
+      if (config$public || map_params$params == 1) {
         return(NULL)
       } else {
         tagList(
@@ -87,7 +95,7 @@ mapParams <- function(id, language) {
       days2 = 1,
       latest = TRUE,
       target = Sys.Date(),
-      params = 2,
+      params = 1,
       bins = c(0, 20, 40, 60, 80, 100),
       colors = c("#d8b365", "#FEE090", "#74ADD1", "#4575D2", "#313695",  "#A50026")
     )
@@ -215,10 +223,10 @@ mapParams <- function(id, language) {
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     observeEvent(input$mapType, {
-      if (input$mapType == "abs") {
+      if (input$mapType == "abs" || config$public) {
         shinyjs::hide("secondary_param")
         shinyjs::hide("edit_secondary_param")
-        
+
       } else {
         shinyjs::show("secondary_param")
         shinyjs::show("edit_secondary_param")
@@ -413,15 +421,33 @@ mapParams <- function(id, language) {
         by = "timeseries_id",
         all.x = TRUE
       )
-      # Cap values at 0 and 100% (above or below use symbology of 0 or 100)
-      mapping_data[, percent_historic_range_capped := pmax(pmin(percent_historic_range, 100), 0)]
-      
-      value_palette <- leaflet::colorBin(
-        palette = map_params$colors,
-        domain = c(0, 100),
-        bins = c(0, 20, 40, 60, 80, 100),
-        na.color = "#808080"
-      )
+
+      if (input$mapType == "abs") {
+        value_range <- range(mapping_data$value, na.rm = TRUE)
+        bins <- pretty(value_range, n = length(map_params$colors) - 1)
+        value_palette <- leaflet::colorBin(
+          palette = map_params$colors,
+          domain = value_range,
+          bins = bins,
+          na.color = "#808080"
+        )
+        legend_values <- mapping_data$value
+        legend_format <- leaflet::labelFormat(suffix = paste0(" ", unique(mapping_data$param_unit)))
+        color_col <- mapping_data$value
+      } else {
+        # Cap values at 0 and 100% (above or below use symbology of 0 or 100)
+        mapping_data[, percent_historic_range_capped := pmax(pmin(percent_historic_range, 100), 0)]
+
+        value_palette <- leaflet::colorBin(
+          palette = map_params$colors,
+          domain = c(0, 100),
+          bins = c(0, 20, 40, 60, 80, 100),
+          na.color = "#808080"
+        )
+        legend_values <- mapping_data$percent_historic_range_capped
+        legend_format <- leaflet::labelFormat(suffix = "%")
+        color_col <- mapping_data$percent_historic_range_capped
+      }
       
       leaflet::leafletProxy("map", session) %>%
         leaflet::clearMarkers() %>%
@@ -429,8 +455,8 @@ mapParams <- function(id, language) {
           data = mapping_data,
           lng = ~longitude,
           lat = ~latitude,
-          fillColor = ~value_palette(percent_historic_range_capped),
-          color = ~value_palette(percent_historic_range_capped),
+          fillColor = ~value_palette(color_col),
+          color = ~value_palette(color_col),
           fillOpacity = 1,
           stroke = TRUE,
           weight = 1,
@@ -449,9 +475,9 @@ mapParams <- function(id, language) {
         leaflet::addLegend(
           position = "bottomright",
           pal = value_palette,
-          values = mapping_data$percent_historic_range_capped,
+          values = legend_values,
           title = NULL,
-          labFormat = leaflet::labelFormat(suffix = "%"),
+          labFormat = legend_format,
           opacity = 1
         )
     }
