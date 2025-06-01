@@ -478,8 +478,15 @@ $(document).keyup(function(event) {
       if (!ui_loaded$home) {
         output$home_ui <- renderUI(homeUI("home"))
         ui_loaded$home <- TRUE
-        home("home", language = languageSelection) # Call the server
+        moduleOutputs$home <- home("home", language = languageSelection) # Call the server
       }
+      observe({
+        if (!is.null(moduleOutputs$home$change_tab)) {
+          target <- moduleOutputs$home$change_tab
+          nav_select(session = session, "navbar", selected = target)
+          moduleOutputs$home$change_tab <- NULL
+        }
+      })
     }
     
     ### Plots nav_menu ##########################
