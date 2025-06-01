@@ -25,7 +25,6 @@ mapLocs <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     # Server setup ####
-    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click", "clicked_view_plots_discrete", "clicked_view_plots_continuous", "clicked_dl_data_discrete", "clicked_dl_data_continuous"))
     
     ns <- session$ns
     

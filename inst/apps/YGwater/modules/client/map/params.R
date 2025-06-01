@@ -10,8 +10,6 @@ mapParamsUI <- function(id) {
 mapParams <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
-    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click"))
-    
     ns <- session$ns
     
     moduleData <- reactiveValues(
