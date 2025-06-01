@@ -20,7 +20,6 @@ locs <- function(id) {
     
     ns <- session$ns
     
-    setBookmarkExclude()
     
     data <- reactiveValues(locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations"),
                            networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM networks"),

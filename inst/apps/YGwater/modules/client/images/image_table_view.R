@@ -54,7 +54,6 @@ imgTableViewUI <- function(id) {
 imgTableView <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    setBookmarkExclude(c("tbl_columns_selected", "tbl_cells_selected", "tbl_rows_current", "tbl_rows_all", "tbl_state", "tbl_search", "tbl_cell_clicked", "tbl_row_last_clicked"))
     
     # Load info about last two weeks of images. More is loaded later if the user goes back further.
     imgs <- reactiveValues(imgs = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
