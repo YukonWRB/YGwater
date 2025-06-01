@@ -17,7 +17,7 @@ mapParams <- function(id, language) {
     moduleData <- reactiveValues(
       locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
       timeseries = dbGetQueryDT(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"),
-      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;")
+      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;")
     )
     
     output$sidebar_page <- renderUI({
@@ -28,7 +28,6 @@ mapParams <- function(id, language) {
           title = NULL,
           bg = config$sidebar_bg, # Set in globals file
           tagList(
-            #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
             selectizeInput(
               ns("mapType"),
               label = tr("map_mapType", language$language),
@@ -46,12 +45,7 @@ mapParams <- function(id, language) {
                       format = "yyyy-mm-dd",
                       language = language$abbrev),
             checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = TRUE),
-            tagList(
-              h4(tr("map_primary_param", language$language)), # Text for primary parameter
-              p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
-              p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
-                tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
-            ),
+            htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
             actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
             if (!config$public) {
               htmlOutput(ns("secondary_param"))
@@ -63,16 +57,25 @@ mapParams <- function(id, language) {
                 style = "display: block; width: 100%"
               )
             }
-            # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
           )
         ),
         # Main panel (left)
         leaflet::leafletOutput(ns("map"), height = '80vh')
       )
-    })
+    }) |> bindEvent(language$language)
+    
+    output$primary_param <- renderUI({
+      req(map_params, language)
+      tagList(
+        h4(tr("map_primary_param", language$language)), # Text for primary parameter
+        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
+        p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
+          tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
+      )
+    }) |> bindEvent(map_params$param1, lanuage$language)
     
     output$secondary_param <- renderUI({
-      req(map_params$params, language)
+      req(map_params, language)
       if (config$public || map_params$params == 1) {
         return(NULL)
       } else {
@@ -83,7 +86,7 @@ mapParams <- function(id, language) {
             tr("map_date_within_selected1", language$language), map_params$days2, tr("map_date_within_selected2", language$language)) # Text for within x days
         )
       }
-    })
+    }) |> bindEvent(map_params$param2, language$language)
     
     # Create the filter inputs ############################################################################
     map_params <- reactiveValues(
@@ -188,6 +191,7 @@ mapParams <- function(id, language) {
         )
       ))
     })
+    
     observeEvent(input$save_secondary_param, {
       if (map_params$params == 1) {
         map_params$params <- 2
@@ -208,22 +212,6 @@ mapParams <- function(id, language) {
     observeEvent(input$close, {
       removeModal()
     })
-    
-    # Update the text of multiple elements based on the selected language ############################
-    # Not applicable to elements within modals as these are generated every time the modal is opened
-    observeEvent(language$language, {
-      updateSelectizeInput(session,
-                           "mapType",
-                           label = NULL,
-                           choices = stats::setNames(
-                             c("range", "abs"),
-                             c(tr("map_relative", language$language), tr("map_absolute1", language$language))
-                           )
-      )
-      updateCheckboxInput(session, "latest", label = tr("map_latest_measurements", language$language))
-      updateDateInput(session, "target", label = tr("map_target_date", language$language))
-      updateActionButton(session, "go", label = tr("render_map", language$language))
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     observeEvent(input$mapType, {
       if (input$mapType == "abs" || config$public) {
@@ -509,12 +497,10 @@ mapParams <- function(id, language) {
     # Observe the map being created and update it when the parameters change
     observe({
       req(mapCreated(), map_params, input$map_zoom)  # Ensure the map has been created before updating
-      reactiveValuesToList(map_params)  # Triggers whenever map_params changes
-      
       try({
         updateMap() 
       })
-      
     })
-  })
-}
+    
+  }) # End of moduleServer
+} # End of mapParams server function
