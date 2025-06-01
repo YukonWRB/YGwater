@@ -70,7 +70,7 @@ mapParams <- function(id, language) {
         p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
           tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
       )
-    }) |> bindEvent(map_params$param1, lanuage$language)
+    }) |> bindEvent(map_params$param1, language$language)
     
     output$secondary_param <- renderUI({
       req(map_params, language)
