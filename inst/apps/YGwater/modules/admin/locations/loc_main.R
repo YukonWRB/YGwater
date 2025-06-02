@@ -29,7 +29,7 @@ locs <- function(id) {
                            location_projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations_projects"))
     
     # Store information to pass between modules
-    subModuleOutputs <- reactiveValues() # Holds the stuff that needs to be output from the sub-modules back tot this server
+    subModuleOutputs <- reactiveValues() # Holds the stuff that needs to be output from the sub-modules back to this server
     
     # Reactive value to track if submodule has been loaded
     submodules <- reactiveValues(main = FALSE,
@@ -48,7 +48,7 @@ locs <- function(id) {
           where = "beforeEnd",
           ui = locsMainUI(ns("main"))
         )
-        subModuleOutputs <- locsMainServer("main", data)
+        subModuleOutputs$main <- locsMainServer("main", data)
       }
       
       # Metadata module
@@ -59,7 +59,7 @@ locs <- function(id) {
           where = "beforeEnd",
           ui = locsMetaUI(ns("meta"))
         )
-        locsMetaServer("meta", data)
+        subModuleOutputs$meta <- locsMetaServer("meta", data)
       }
       
       # Add new location module
@@ -70,11 +70,11 @@ locs <- function(id) {
           where = "beforeEnd",
           ui = locsNewLocUI(ns("new_loc"))
         )
-        submoduleOutputs <- locsNewLocServer("new_loc")
+        subModuleOutputs$new_loc <- locsNewLocServer("new_loc")
         
 
         observe({
-          req(submoduleOutputs$new_loc$added)
+          req(subModuleOutputs$new_loc$added)
           if (subModuleOutputs$new_loc$added) { # If a new location has been added, refresh the data
             data <- reactiveValues(locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM locations"),
                                    networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM networks"),
@@ -94,7 +94,7 @@ locs <- function(id) {
           where = "beforeEnd",
           ui = locsNewTSUI(ns("new_ts"))
         )
-        locsNewTSServer("new_ts")
+        subModuleOutputs$new_ts <- locsNewTSServer("new_ts")
 
       }
       
