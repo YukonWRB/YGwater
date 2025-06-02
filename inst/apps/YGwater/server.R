@@ -542,7 +542,7 @@ $(document).keyup(function(event) {
     if (input$navbar == "parameterValues") {
       if (!ui_loaded$mapParamValues) {
         output$mapParams_ui <- renderUI(mapParamsUI("mapParams"))
-        ui_loaded$mapParams <- TRUE
+        ui_loaded$mapParamValues <- TRUE
         mapParams("mapParams", language = languageSelection) # Call the server
       }
     }
