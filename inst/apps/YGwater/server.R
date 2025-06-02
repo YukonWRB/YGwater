@@ -68,23 +68,23 @@ app_server <- function(input, output, session) {
   }
   
   
-  # Automatically update URL every time an input changes
-  observe({
-    reactiveValuesToList(input)
-    session$doBookmark()
-  })
-  setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))
-  
-  # Update the query string
-  onBookmarked(updateQueryString)
-  
-  isRestoring <- reactiveVal(FALSE)
-  isRestoring_img <- reactiveVal(FALSE)
-  
-  onRestore(function(state) {
-    isRestoring(TRUE)
-    isRestoring_img(TRUE)
-  })
+  # # Automatically update URL every time an input changes
+  # observe({
+  #   reactiveValuesToList(input) # This will trigger the observer whenever any input changes
+  #   session$doBookmark()
+  # })
+  # 
+  # setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))
+  # # Update the query string
+  # onBookmarked(updateQueryString)
+  # 
+  # isRestoring <- reactiveVal(FALSE)
+  # isRestoring_img <- reactiveVal(FALSE)
+  # 
+  # onRestore(function(state) {
+  #   isRestoring(TRUE)
+  #   isRestoring_img(TRUE)
+  # })
   
   # Track window dimensions (used to modify plot appearance)
   windowDims <- reactive({
@@ -186,13 +186,13 @@ app_server <- function(input, output, session) {
   
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
-    if (!isRestoring()) {
+    # if (!isRestoring()) {
       shinyjs::runjs("
       var language =  window.navigator.userLanguage || window.navigator.language;
       console.log('Detected browser language: ' + language);
       Shiny.setInputValue('userLang', language, {priority: 'event'});
                      ")
-    }
+    # }
   })
   
   # Set initial language based on browser language
@@ -225,7 +225,7 @@ app_server <- function(input, output, session) {
       output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
       output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
       output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-      output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+      # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
       
       output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
       output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
@@ -478,8 +478,15 @@ $(document).keyup(function(event) {
       if (!ui_loaded$home) {
         output$home_ui <- renderUI(homeUI("home"))
         ui_loaded$home <- TRUE
-        home("home", language = languageSelection) # Call the server
+        moduleOutputs$home <- home("home", language = languageSelection) # Call the server
       }
+      observe({
+        if (!is.null(moduleOutputs$home$change_tab)) {
+          target <- moduleOutputs$home$change_tab
+          nav_select(session = session, "navbar", selected = target)
+          moduleOutputs$home$change_tab <- NULL
+        }
+      })
     }
     
     ### Plots nav_menu ##########################
@@ -487,7 +494,11 @@ $(document).keyup(function(event) {
       if (!ui_loaded$discretePlot) {
         output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
         ui_loaded$discretePlot <- TRUE
-        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs$location_id) # Call the server
+        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "continuous") { # This is reached through a nav_menu
@@ -495,6 +506,10 @@ $(document).keyup(function(event) {
         output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
         ui_loaded$continuousPlot <- TRUE
         continuousPlot("continuousPlot", language = languageSelection, windowDims) # Call the server
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "mix") { # This is reached through a nav_menu
@@ -514,16 +529,20 @@ $(document).keyup(function(event) {
       }
       observe({
         if (!is.null(moduleOutputs$mapLocs$change_tab)) {
-          print(paste("Changing tab to", moduleOutputs$mapLocs$change_tab))
-          nav_select(session = session, "navbar", selected = (moduleOutputs$mapLocs$change_tab)) # Change tabs
-          moduleOutputs$mapLocs$change_tab <- NULL # Reset to NULL
+          target <- moduleOutputs$mapLocs$change_tab
+          if (target == "discData") ui_loaded$discData <- FALSE
+          if (target == "contData") ui_loaded$contData <- FALSE
+          if (target == "discrete") ui_loaded$discretePlot <- FALSE
+          if (target == "continuous") ui_loaded$continuousPlot <- FALSE
+          nav_select(session = session, "navbar", selected = target) # Change tabs
+          moduleOutputs$mapLocs$change_tab <- NULL
         }
       })
     }
     if (input$navbar == "parameterValues") {
       if (!ui_loaded$mapParamValues) {
         output$mapParams_ui <- renderUI(mapParamsUI("mapParams"))
-        ui_loaded$mapParams <- TRUE
+        ui_loaded$mapParamValues <- TRUE
         mapParams("mapParams", language = languageSelection) # Call the server
       }
     }
@@ -541,7 +560,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$imgTableView) {
         output$imgTableView_ui <- renderUI(imgTableViewUI("imgTableView"))
         ui_loaded$imgTableView <- TRUE
-        imgTableView("imgTableView", language = languageSelection, restoring = isRestoring_img) # Call the server
+        imgTableView("imgTableView", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "imgMapView") {
@@ -585,14 +604,22 @@ $(document).keyup(function(event) {
       if (!ui_loaded$discData) {
         output$discData_ui <- renderUI(discDataUI("discData"))
         ui_loaded$discData <- TRUE
-        discData("discData", language = languageSelection) # Call the server
+        discData("discData", language = languageSelection, inputs = moduleOutputs$mapLocs) # Call the server
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "contData") {
       if (!ui_loaded$contData) {
         output$contData_ui <- renderUI(contDataUI("contData"))
         ui_loaded$contData <- TRUE
-        contData("contData", language = languageSelection) # Call the server
+        contData("contData", language = languageSelection, inputs = moduleOutputs$mapLocs) # Call the server
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     ### Info nav_menu ##########################

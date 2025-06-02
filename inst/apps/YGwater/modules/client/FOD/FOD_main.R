@@ -21,8 +21,6 @@ FOD <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     
-    setBookmarkExclude(c("FOD_go"))
-    
     ns <- session$ns  # Used for generating UI elements from server
     
     #Create containers

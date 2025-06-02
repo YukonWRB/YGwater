@@ -25,7 +25,6 @@ mapLocs <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
     # Server setup ####
-    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click", "clicked_view_plots_discrete", "clicked_view_plots_continuous", "clicked_dl_data_discrete", "clicked_dl_data_continuous"))
     
     ns <- session$ns
     
@@ -301,18 +300,64 @@ mapLocs <- function(id, language) {
       tmp[location_parameters, on = .(location_id), parameters := parameters]  # Join location_parameters
       tmp[location_networks, on = .(location_id), networks := networks]  # Join location_networks
       tmp[location_projects, on = .(location_id), projects := projects]  # Join location_projects
+
+      # Determine available data types for each location
+      loc_data_types <- moduleData$timeseries[, .(
+        has_discrete = any(data_type == "discrete"),
+        has_continuous = any(data_type == "continuous")
+      ), by = location_id]
+      tmp[loc_data_types, on = .(location_id), `:=`(
+        has_discrete = i.has_discrete,
+        has_continuous = i.has_continuous
+      )]
       
+      tmp[, popup_links := {
+        links <- character(0)
+        if (isTRUE(has_discrete)) {
+          links <- c(
+            links,
+            sprintf(
+              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"%s\"); return false;'>%s</a>",
+              location_id,
+              tr("dl_data_discrete", language$language)
+            ),
+            sprintf(
+              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"%s\"); return false;'>%s</a>",
+              location_id,
+              tr("view_plots_discrete", language$language)
+            )
+          )
+        }
+        if (isTRUE(has_continuous)) {
+          links <- c(
+            links,
+            sprintf(
+              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"%s\"); return false;'>%s</a>",
+              location_id,
+              tr("dl_data_continuous", language$language)
+            ),
+            sprintf(
+              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"%s\"); return false;'>%s</a>",
+              location_id,
+              tr("view_plots_continuous", language$language)
+            )
+          )
+        }
+        if (length(links) > 0) {
+          paste0("<br/>", paste(links, collapse = "<br/>"), "<br/>")
+        } else {
+          ""
+        }
+      }, by = location_id]
+
       tmp[, popup_html := paste0(
         "<strong>", popup_name, "</strong><br/>",
         substr(start_time, 1, 10), " ", tr("to", language$language), " ", substr(end_time, 1, 10), "<br/><br/>",
         "<strong>", tr("parameter(s)", language$language), ":</strong><br/>",
         "<div style='max-height:100px; overflow-y:auto;'><i>", parameters, "</i></div><br/>",  # Supposed to be scrollable
         "<strong>", tr("network(s)", language$language), ":</strong><br/><i>", networks, "</i><br/>",
-        "<strong>", tr("project(s)", language$language), ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i><br/>",
-        "<br/><a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"", location_id, "\"); return false;'>", tr("dl_data_discrete", language$language), "</a><br/>",
-        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"", location_id, "\"); return false;'>", tr("dl_data_continuous", language$language), "</a><br/>",
-        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"", location_id, "\"); return false;'>", tr("view_plots_discrete", language$language), "</a><br/>",
-        "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"", location_id, "\"); return false;'>", tr("view_plots_continuous", language$language), "</a><br/>"
+        "<strong>", tr("project(s)", language$language), ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i>",
+        popup_links
       )]
       
       tmp
@@ -454,7 +499,6 @@ mapLocs <- function(id, language) {
         outputs$change_tab <- "discData"
         outputs$location_id <- input$clicked_dl_data_discrete
         shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_discrete'})"))  # Reset the value to NULL to prevent an endless loop
-        shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_dl_data_continuous'})"))  # Reset the value to NULL to prevent an endless loop
       }
     })
     observeEvent(input$clicked_dl_data_continuous, {
@@ -472,7 +516,6 @@ mapLocs <- function(id, language) {
       }
     })
     observeEvent(input$clicked_view_plots_continuous, {
-      print(input$clicked_view_plots_continuous)
       if (!is.null(input$clicked_view_plots_continuous)) {
         outputs$change_tab <- "continuous"
         outputs$location_id <- input$clicked_view_plots_continuous

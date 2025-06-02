@@ -24,7 +24,7 @@ app_ui <- function(request) {
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
       tags$style(HTML("
         a.dropdown-toggle > .shiny-html-output {
-        display: inline;chat
+        display: inline;
         }
       "))
     ),
@@ -82,9 +82,9 @@ app_ui <- function(request) {
                nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discrete",
                          uiOutput("plotDiscrete_ui")),
                nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
-                         uiOutput("plotContinuous_ui")),
-               nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
-                         uiOutput("plotsMix_ui"))
+                         uiOutput("plotContinuous_ui"))
+               # nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
+                         # uiOutput("plotsMix_ui"))
       ),
       nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
                nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",

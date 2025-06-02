@@ -293,13 +293,11 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
     
     observeEvent(input$data_source, {
       req(moduleData)
-      print("data source was triggered")
-      print(inputs)
       if (input$data_source == "EQ") {
         # These updates are performed in the observeEvent for input$EQWin_source
       } else if (input$data_source == "AC") { # AC selected
         updateSelectizeInput(session, "parameters_AC", choices = stats::setNames(moduleData$AC_params$parameter_id, moduleData$AC_params$param_name), server = TRUE)
-        updateSelectizeInput(session, "locations_AC", choices = stats::setNames(moduleData$AC_locs$location_id, moduleData$AC_locs$name), selected = if (!is.null(inputs)) inputs else NULL, server = TRUE)
+        updateSelectizeInput(session, "locations_AC", choices = stats::setNames(moduleData$AC_locs$location_id, moduleData$AC_locs$name), selected = if (!is.null(inputs$location_id)) inputs$location_id else NULL, server = TRUE)
       }
     })
     

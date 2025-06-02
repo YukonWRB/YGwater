@@ -10,14 +10,12 @@ mapParamsUI <- function(id) {
 mapParams <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     
-    setBookmarkExclude(c("reset", "map_bounds", "map_center", "map_zoom", "map_marker_mouseover", "map_marker_mouseout", "map_marker_click"))
-    
     ns <- session$ns
     
     moduleData <- reactiveValues(
       locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
       timeseries = dbGetQueryDT(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"),
-      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;")
+      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;")
     )
     
     output$sidebar_page <- renderUI({
@@ -28,7 +26,6 @@ mapParams <- function(id, language) {
           title = NULL,
           bg = config$sidebar_bg, # Set in globals file
           tagList(
-            #TODO: Give users the option to plot absolute values or relative to historic range. For absolute values only one parameter is allowed. Extra controls are necessary also to give user option for 'latest measurement', possibly as a checkboxInput. If not selected, then a date selector will be shown. If selected, the date selector will be hidden. This  will also necessitate a modal to let users select their 'bins' for the map symbology (which will by default use the data's range)
             selectizeInput(
               ns("mapType"),
               label = tr("map_mapType", language$language),
@@ -46,26 +43,38 @@ mapParams <- function(id, language) {
                       format = "yyyy-mm-dd",
                       language = language$abbrev),
             checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = TRUE),
-            tagList(
-              h4(tr("map_primary_param", language$language)), # Text for primary parameter
-              p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
-              p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
-                tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
-            ),
+            htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
             actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
-            htmlOutput(ns("secondary_param")),
-            actionButton(ns("edit_secondary_param"), tr("map_edit_second_param", language$language), style = "display: block; width: 100%")
-            # actionButton(ns("go"), tr("render_map", language$language), style = "display: block; width: 100%; margin-top: 10px;")
+            if (!config$public) {
+              htmlOutput(ns("secondary_param"))
+            },
+            if (!config$public) {
+              actionButton(
+                ns("edit_secondary_param"),
+                tr(if (map_params$params == 2) "map_edit_second_param" else "map_add_second_param", language$language),
+                style = "display: block; width: 100%"
+              )
+            }
           )
         ),
         # Main panel (left)
         leaflet::leafletOutput(ns("map"), height = '80vh')
       )
-    })
+    }) |> bindEvent(language$language)
+    
+    output$primary_param <- renderUI({
+      req(map_params, language)
+      tagList(
+        h4(tr("map_primary_param", language$language)), # Text for primary parameter
+        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
+        p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
+          tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
+      )
+    }) |> bindEvent(map_params$param1, language$language)
     
     output$secondary_param <- renderUI({
-      req(map_params$params, language)
-      if (map_params$params == 1) {
+      req(map_params, language)
+      if (config$public || map_params$params == 1) {
         return(NULL)
       } else {
         tagList(
@@ -75,7 +84,7 @@ mapParams <- function(id, language) {
             tr("map_date_within_selected1", language$language), map_params$days2, tr("map_date_within_selected2", language$language)) # Text for within x days
         )
       }
-    })
+    }) |> bindEvent(map_params$param2, language$language)
     
     # Create the filter inputs ############################################################################
     map_params <- reactiveValues(
@@ -87,9 +96,12 @@ mapParams <- function(id, language) {
       days2 = 1,
       latest = TRUE,
       target = Sys.Date(),
-      params = 2,
-      bins = c(0, 20, 40, 60, 80, 100),
-      colors = c("#d8b365", "#FEE090", "#74ADD1", "#4575D2", "#313695",  "#A50026")
+      params = 1,
+      bins = c(-Inf, 0, 20, 40, 60, 80, 100, Inf),
+      colors = c(
+        "#8c510a", "#d8b365", "#FEE090",
+        "#74ADD1", "#4575D2", "#313695", "#A50026"
+      )
     )
     
     # Observe 'map_latest_measurements'. If TRUE, 'target' is adjusted to Sys.Date()
@@ -177,6 +189,7 @@ mapParams <- function(id, language) {
         )
       ))
     })
+    
     observeEvent(input$save_secondary_param, {
       if (map_params$params == 1) {
         map_params$params <- 2
@@ -198,27 +211,11 @@ mapParams <- function(id, language) {
       removeModal()
     })
     
-    # Update the text of multiple elements based on the selected language ############################
-    # Not applicable to elements within modals as these are generated every time the modal is opened
-    observeEvent(language$language, {
-      updateSelectizeInput(session,
-                           "mapType",
-                           label = NULL,
-                           choices = stats::setNames(
-                             c("range", "abs"),
-                             c(tr("map_relative", language$language), tr("map_absolute1", language$language))
-                           )
-      )
-      updateCheckboxInput(session, "latest", label = tr("map_latest_measurements", language$language))
-      updateDateInput(session, "target", label = tr("map_target_date", language$language))
-      updateActionButton(session, "go", label = tr("render_map", language$language))
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    
     observeEvent(input$mapType, {
-      if (input$mapType == "abs") {
+      if (input$mapType == "abs" || config$public) {
         shinyjs::hide("secondary_param")
         shinyjs::hide("edit_secondary_param")
-        
+
       } else {
         shinyjs::show("secondary_param")
         shinyjs::show("edit_secondary_param")
@@ -253,6 +250,9 @@ mapParams <- function(id, language) {
         "SELECT timeseries_id FROM timeseries WHERE parameter_id = %s;",
         map_params$param1
       ))$timeseries_id
+      if (length(tsids1) == 0) {
+        return()
+      }
       
       if (map_params$latest) {
         # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days1 days
@@ -328,6 +328,9 @@ mapParams <- function(id, language) {
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
       if (map_params$params == 2) {
         tsids2 <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT timeseries_id FROM timeseries WHERE parameter_id = ", map_params$param2, " AND location_id NOT IN (", paste(locs_tsids1$location_id, collapse = ", "), ");"))$timeseries_id
+        if (length(tsids2) == 0) {
+          return()
+        }
         
         if (map_params$latest) {
           # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days2 days
@@ -413,15 +416,33 @@ mapParams <- function(id, language) {
         by = "timeseries_id",
         all.x = TRUE
       )
-      # Cap values at 0 and 100% (above or below use symbology of 0 or 100)
-      mapping_data[, percent_historic_range_capped := pmax(pmin(percent_historic_range, 100), 0)]
-      
-      value_palette <- leaflet::colorBin(
-        palette = map_params$colors,
-        domain = c(0, 100),
-        bins = c(0, 20, 40, 60, 80, 100),
-        na.color = "#808080"
-      )
+      mapping_data[, percent_historic_range_capped := percent_historic_range]
+
+      if (input$mapType == "abs") {
+        abs_vals <- abs(mapping_data$value)
+        abs_range <- range(abs_vals, na.rm = TRUE)
+        abs_bins <- seq(abs_range[1], abs_range[2], length.out = length(map_params$colors) + 1)
+
+        value_palette <- leaflet::colorBin(
+          palette = map_params$colors,
+          domain = abs_vals,
+          bins = abs_bins,
+          pretty = FALSE,
+          na.color = "#808080"
+        )
+        map_values <- abs_vals
+        lab_format <- leaflet::labelFormat()
+      } else {
+        value_palette <- leaflet::colorBin(
+          palette = map_params$colors,
+          domain = mapping_data$percent_historic_range_capped,
+          bins = map_params$bins,
+          pretty = FALSE,
+          na.color = "#808080"
+        )
+        map_values <- mapping_data$percent_historic_range_capped
+        lab_format <- leaflet::labelFormat(suffix = "%")
+      }
       
       leaflet::leafletProxy("map", session) %>%
         leaflet::clearMarkers() %>%
@@ -429,8 +450,8 @@ mapParams <- function(id, language) {
           data = mapping_data,
           lng = ~longitude,
           lat = ~latitude,
-          fillColor = ~value_palette(percent_historic_range_capped),
-          color = ~value_palette(percent_historic_range_capped),
+          fillColor = ~value_palette(if (input$mapType == "abs") abs(value) else percent_historic_range_capped),
+          color = ~value_palette(if (input$mapType == "abs") abs(value) else percent_historic_range_capped),
           fillOpacity = 1,
           stroke = TRUE,
           weight = 1,
@@ -449,9 +470,9 @@ mapParams <- function(id, language) {
         leaflet::addLegend(
           position = "bottomright",
           pal = value_palette,
-          values = mapping_data$percent_historic_range_capped,
+          values = map_values,
           title = NULL,
-          labFormat = leaflet::labelFormat(suffix = "%"),
+          labFormat = lab_format,
           opacity = 1
         )
     }
@@ -474,12 +495,10 @@ mapParams <- function(id, language) {
     # Observe the map being created and update it when the parameters change
     observe({
       req(mapCreated(), map_params, input$map_zoom)  # Ensure the map has been created before updating
-      reactiveValuesToList(map_params)  # Triggers whenever map_params changes
-      
       try({
         updateMap() 
       })
-      
     })
-  })
-}
+    
+  }) # End of moduleServer
+} # End of mapParams server function
