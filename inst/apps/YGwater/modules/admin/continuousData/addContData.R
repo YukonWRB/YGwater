@@ -68,7 +68,6 @@ addContData <- function(id) {
     
     ns <- session$ns
     
-    
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,
       "SELECT has_table_privilege(current_user, 'continuous.measurements_continuous', 'INSERT') AS can_insert"

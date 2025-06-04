@@ -81,7 +81,7 @@ syncCont <- function(id) {
         )
         if (!is.null(con)) on.exit(DBI::dbDisconnect(con))
         AquaCache::synchronize_continuous(
-          con = con,
+          con = if (parallel) NULL else con,
           timeseries_id = ts_ids,
           start_datetime = start_dt,
           active = active,
