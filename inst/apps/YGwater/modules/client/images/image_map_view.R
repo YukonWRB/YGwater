@@ -103,7 +103,7 @@ imgMapView <- function(id, language) {
               class = "d-inline-block me-3 align-items-start",
               style = "vertical-align: top; display: inline-flex;",
               sliderInput(
-                ns("toy_lab"),
+                ns("tod_lab"),
                 label = "Time of day (UTC-7)",
                 min = 0,
                 max = 23,
@@ -232,7 +232,7 @@ imgMapView <- function(id, language) {
       
       # Filter by time of day
       img_hour <- as.integer(format(as.POSIXct(images$images$datetime), "%H"))
-      toy_filter <- img_hour >= input$toy_lab[1] & img_hour <= input$toy_lab[2]
+      toy_filter <- img_hour >= input$tod_lab[1] & img_hour <= input$tod_lab[2]
       
       # Filter by image type
       if (!is.null(input$img_type) && length(input$img_type) > 0) {

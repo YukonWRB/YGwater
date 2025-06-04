@@ -156,7 +156,10 @@ app_ui <- function(request) {
                            uiOutput("addContData_ui")),
                  nav_panel(title = "Discrete data",
                            value = "addDiscData",
-                           uiOutput("addDiscData_ui"))
+                           uiOutput("addDiscData_ui")),
+                 nav_panel(title = "Continuous timeseries corrections",
+                           value = "continuousCorrections",
+                           uiOutput("continuousCorrections_ui"))
         )
       },
       if (!config$public) {
