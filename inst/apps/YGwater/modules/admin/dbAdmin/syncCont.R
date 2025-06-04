@@ -51,7 +51,19 @@ syncCont <- function(id) {
                         list(targets = 1, 
                              visible = FALSE) #Hides the timeseries_id column. Column index numbers start at 0 here!!!
                       ),
-                      scrollX = TRUE
+                      scrollX = TRUE,
+                      initComplete = htmlwidgets::JS(
+                        "function(settings, json) {",
+                        "$(this.api().table().header()).css({",
+                        "  'background-color': '#079',",
+                        "  'color': '#fff',",
+                        "  'font-size': '100%',",
+                        "});",
+                        "$(this.api().table().body()).css({",
+                        "  'font-size': '90%',",
+                        "});",
+                        "}"
+                      )
                     ),
                     filter = 'top',
       )

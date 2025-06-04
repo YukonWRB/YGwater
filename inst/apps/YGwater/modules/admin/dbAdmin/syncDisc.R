@@ -54,9 +54,21 @@ syncDisc <- function(id) {
                         list(targets = 1, 
                              visible = FALSE) #Hides the sample_series_id column. Column index numbers start at 0 here!!!
                       ),
-                      scrollX = TRUE
-                    ),
-                    filter = "top")
+                      scrollX = TRUE,
+                      initComplete = htmlwidgets::JS(
+                        "function(settings, json) {",
+                        "$(this.api().table().header()).css({",
+                        "  'background-color': '#079',",
+                        "  'color': '#fff',",
+                        "  'font-size': '100%',",
+                        "});",
+                        "$(this.api().table().body()).css({",
+                        "  'font-size': '90%',",
+                        "});",
+                        "}"
+                      )
+                    )
+      )
     })
     
     task <- ExtendedTask$new(function(ss_ids, start_dt, active, del, parallel, config) {

@@ -3,7 +3,8 @@
 continuousCorrectionsUI <- function(id) {
   ns <- NS(id)
   tagList(
-    tags$style(HTML(sprintf("
+    tags$style(
+      HTML(sprintf("
      /* Add colors to the accordion. Using ns() makes it specific to each accordion */
       #%s.accordion {
         /* body background */
@@ -14,7 +15,7 @@ continuousCorrectionsUI <- function(id) {
         --bs-accordion-active-bg:   #FBE5B2;
       }
     ", ns("accordion1"))),
-               HTML(sprintf("
+      HTML(sprintf("
      /* Add colors to the accordion. Using ns() makes it specific to each accordion */
       #%s.accordion {
         /* body background */
@@ -25,7 +26,7 @@ continuousCorrectionsUI <- function(id) {
         --bs-accordion-active-bg:   #0097A9;
       }
     ", ns("accordion2"))),
-               HTML(sprintf("
+      HTML(sprintf("
      /* Add colors to the accordion. Using ns() makes it specific to each accordion */
       #%s.accordion {
         /* body background */
