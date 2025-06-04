@@ -117,7 +117,7 @@ plotOverlap <- function(location,
                         data = FALSE,
                         con = NULL)
 {
- 
+  
   # Deal with non-standard evaluations from data.table to silence check() notes
   date <- start_dt <- end_dt <- period <- NULL 
   
@@ -152,7 +152,7 @@ plotOverlap <- function(location,
       record_rate <- NULL
     }
   }
-
+  
   if (!is.null(aggregation_type)) {
     if (inherits(aggregation_type, "character")) {
       aggregation_type <- tolower(aggregation_type)
@@ -173,9 +173,9 @@ plotOverlap <- function(location,
       }
     }
   }
-
+  
   aggregation_type_id <- aggregation_type
-
+  
   if (!is.null(z)) {
     if (!is.numeric(z)) {
       stop("Your entry for the parameter 'z' is invalid. Please review the function documentation and try again.")
@@ -328,7 +328,7 @@ plotOverlap <- function(location,
     if (nrow(sub_loc_check) > 1) {
       stop("There are multiple sub-locations for this location and parameter. Please specify a sub-location.")
     }
-
+    
     if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
       if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
         exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, aggregation_type_id, z FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
@@ -364,7 +364,7 @@ plotOverlap <- function(location,
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
     }
   }
-
+  
   # Narrow down by z if necessary
   if (!is.null(z)) {
     if (is.null(z_approx)) {
@@ -373,7 +373,7 @@ plotOverlap <- function(location,
       exist_check <- exist_check[abs(exist_check$z - z) < z_approx, ]
     }
   }
-
+  
   if (nrow(exist_check) == 0) {
     if (is.null(record_rate) & is.null(aggregation_type_id) & is.null(z)) {
       stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data.")
@@ -392,7 +392,7 @@ plotOverlap <- function(location,
       if (is.null(aggregation_type_id)) {
         warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the aggregation_type as NULL, selecting the one(s) with the most frequent aggregation type.")
         agg_types <- DBI::dbGetQuery(con, "SELECT aggregation_type_id, aggregation_type FROM aggregation_types;")
-
+        
         exist_check <- exist_check[exist_check$aggregation_type_id == agg_types[agg_types$aggregation_type == 'instantaneous', 'aggregation_type_id'], ]
         if (nrow(exist_check) == 0) {
           exist_check <- exist_check[exist_check$aggregation_type_id == agg_types[agg_types$aggregation_type == 'mean', 'aggregation_type_id'], ]
@@ -411,12 +411,12 @@ plotOverlap <- function(location,
       exist_check <- temp
     }
   }
-
+  
   # If there are multiple z values after all that, select the one closest to ground
   if (nrow(exist_check) > 1) {
     exist_check <- exist_check[which.min(abs(exist_check$z)), ]
   }
-
+  
   tsid <- exist_check$timeseries_id
   
   # Find the ts units
@@ -484,7 +484,8 @@ plotOverlap <- function(location,
     }
     end_UTC <- end
     attr(end_UTC, "tzone") <- "UTC"
-    if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance (rest is populated with daily means. Gives 3 full years of data at 1 hour intervals)
+    # if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance (rest is populated with daily means. Gives 3 full years of data at 1 hour intervals)
+    if (nrow(realtime) < 100000) { # limits the number of data points to 100000
       if (rate == "max") {
         new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL ORDER BY datetime")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       } else if (rate == "hour") {
@@ -818,3 +819,4 @@ plotOverlap <- function(location,
     return(plot)
   }
 }
+
