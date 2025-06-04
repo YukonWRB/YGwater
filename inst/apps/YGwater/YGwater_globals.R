@@ -22,7 +22,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # calibration sub-modules
   source(system.file("apps/YGwater/modules/admin/equipment/calibrate.R", package = "YGwater"))
   # continuous data sub-modules
-  source(system.file("apps/YGwater/modules/admin/continuousData/addContData_main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/continuousData/addContData.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/continuousData/continuousCorrections.R", package = "YGwater"))
   # discrete data sub-modules
   source(system.file("apps/YGwater/modules/admin/discreteData/addDiscData.R", package = "YGwater"))
