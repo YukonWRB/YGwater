@@ -42,7 +42,8 @@ app_server <- function(input, output, session) {
       nav_show(id = "navbar", target = "dbAdmin") # Actually a nav_menu, and this targets the sync modules as well as timeeseries and locations add/edit modules
       nav_show(id = "navbar", target = "equip")
       nav_show(id = "navbar", target = "cal")
-      nav_show(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      nav_show(id = "navbar", target = "continuousData") # Actually a nav_menu
+      nav_show(id = "navbar", target = "discreteData") # Actually a nav_menu
       nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_show(id = "navbar", target = "visit")
     } else {
@@ -50,7 +51,8 @@ app_server <- function(input, output, session) {
       nav_hide(id = "navbar", target = "dbAdmin")
       nav_hide(id = "navbar", target = "equip")
       nav_hide(id = "navbar", target = "cal")
-      nav_hide(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      nav_hide(id = "navbar", target = "continuousData") # Actually a nav_menu
+      nav_hide(id = "navbar", target = "discreteData") # Actually a nav_menu
       nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_hide(id = "navbar", target = "visit")
       if (logout) {
@@ -118,6 +120,7 @@ app_server <- function(input, output, session) {
     cal = FALSE,
     addContData = FALSE,
     addDiscData = FALSE,
+    editDiscData = FALSE,
     continuousCorrections = FALSE,
     addDocs = FALSE,
     addImgs = FALSE,
@@ -466,7 +469,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "addDiscData", "continuousCorrections", "addDocs", "addImgs", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "addDiscData", "editDiscData", "continuousCorrections", "addDocs", "addImgs", "visit")) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -696,6 +699,13 @@ $(document).keyup(function(event) {
         output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
         ui_loaded$addDiscData <- TRUE
         addDiscData("addDiscData")  # Call the server
+      }
+    }
+    if (input$navbar == "editDiscData") {
+      if (!ui_loaded$editDiscData) {
+        output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData"))  # Render the UI
+        ui_loaded$editDiscData <- TRUE
+        editDiscData("editDiscData")  # Call the server
       }
     }
     if (input$navbar == "continuousCorrections") {

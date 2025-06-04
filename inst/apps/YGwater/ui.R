@@ -149,17 +149,25 @@ app_ui <- function(request) {
         )
       },
       if (!config$public) {
-        nav_menu(title = "Manage data", 
-                 value = "addData",
-                 nav_panel(title = "Continuous data",
+        nav_menu(title = "Continuous data", 
+                 value = "continuousData",
+                 nav_panel(title = "Add continuous data",
                            value = "addContData",
                            uiOutput("addContData_ui")),
-                 nav_panel(title = "Discrete data",
-                           value = "addDiscData",
-                           uiOutput("addDiscData_ui")),
-                 nav_panel(title = "Continuous timeseries corrections",
+                 nav_panel(title = "Add/modify timeseries corrections",
                            value = "continuousCorrections",
                            uiOutput("continuousCorrections_ui"))
+        )
+      },
+      if (!config$public) {
+        nav_menu(title = "Discrete data", 
+                 value = "discreteData",
+                 nav_panel(title = "Add discrete data",
+                           value = "addDiscData",
+                           uiOutput("addDiscData_ui")),
+                 nav_panel(title = "Edit/delete discrete data",
+                           value = "editDiscData",
+                           uiOutput("editDiscData_ui"))
         )
       },
       if (!config$public) {

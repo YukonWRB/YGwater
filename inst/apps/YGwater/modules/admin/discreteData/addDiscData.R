@@ -13,7 +13,7 @@ addDiscData <- function(id) {
     
     ns <- session$ns
     
-    output$placeholder <- renderText("Placeholder for discrete data main module")
+    output$placeholder <- renderText("Placeholder for discrete data addition module")
     
     
   }) # End of moduleServer

@@ -13,7 +13,7 @@ addContData <- function(id) {
     
     ns <- session$ns
     
-    output$placeholder <- renderText("Placeholder for continuous data main module")
+    output$placeholder <- renderText("Placeholder for continuous data adition module")
     
     
   }) # End of moduleServer
