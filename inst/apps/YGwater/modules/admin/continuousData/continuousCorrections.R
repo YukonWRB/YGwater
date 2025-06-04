@@ -4,8 +4,8 @@ continuousCorrectionsUI <- function(id) {
   ns <- NS(id)
   tagList(
     tags$style(HTML(sprintf("
-     /* Add colors to the accordion. Using ns() makes it specific to this module. */
-      #%s .accordion {
+     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+      #%s.accordion {
         /* body background */
         --bs-accordion-bg:          #FFFCF5;
         /* collapsed header */
@@ -13,18 +13,51 @@ continuousCorrectionsUI <- function(id) {
         /* expanded header */
         --bs-accordion-active-bg:   #FBE5B2;
       }
-    ", ns("accordion")))),
+    ", ns("accordion1"))),
+               HTML(sprintf("
+     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #E5F4F6;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #0097A9;
+        /* expanded header */
+        --bs-accordion-active-bg:   #0097A9;
+      }
+    ", ns("accordion2"))),
+               HTML(sprintf("
+     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #F1F4E5;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #7A9A01;
+        /* expanded header */
+        --bs-accordion-active-bg:   #7A9A01;
+      }
+    ", ns("accordion3")))),
+    
     page_fluid(
       accordion(
-        accordion_panel(title = "Timeseries selection",
+        id = ns("accordion1"),
+        open = "ts_selection_panel",
+        accordion_panel(id = ns("ts_selection_panel"),
+                        title = "Timeseries selection",
                         DT::DTOutput(ns("ts_table")))
       ),
       accordion(
-        accordion_panel(title = "Existing corrections",
-                        DT::DTOutput(ns("existing_corrections")))
+        id = ns("accordion2"),
+        open = "existing_corrections_panel",
+        accordion_panel(id = ns("existing_corrections_panel"),
+                        title = "Existing corrections",
+                        DT::DTOutput(ns("existing_corrections")),
+                        textOutput(ns("no_corrections")))
       ),
       accordion(
-        accordion_panel(title = "New correction",
+        id = ns("accordion3"),
+        open = FALSE,
+        accordion_panel(id = ns("new_correction_panel"),
+                        title = "New correction",
                         textInput(ns("start_dt"), "Start datetime (UTC)", placeholder = "YYYY-MM-DD HH:MM:SS"),
                         textInput(ns("end_dt"), "End datetime (UTC)", placeholder = "YYYY-MM-DD HH:MM:SS"),
                         selectizeInput(ns("correction_type"), "Correction type", choices = NULL, width = "100%"),
@@ -117,10 +150,22 @@ continuousCorrections <- function(id) {
                         list(targets = 0, 
                              visible = FALSE) #Hides the timeseries_id column. Column index numbers start at 0 here!!!
                       ),
-                      scrollX = TRUE
+                      scrollX = TRUE,
+                      initComplete = htmlwidgets::JS(
+                        "function(settings, json) {",
+                        "$(this.api().table().header()).css({",
+                        "  'background-color': '#079',",
+                        "  'color': '#fff',",
+                        "  'font-size': '100%',",
+                        "});",
+                        "$(this.api().table().body()).css({",
+                        "  'font-size': '90%',",
+                        "});",
+                        "}"
+                      )
                     ),
-                    rownames = FALSE,
-                    filter = 'top',
+                    rownames = FALSE
+                    # filter = 'top',
       )
     })
     
@@ -152,26 +197,47 @@ continuousCorrections <- function(id) {
     observe({
       req(existing_corrections())
       # drop cols with only NA values
-      sub <- existing_corrections()[, colSums(is.na(existing_corrections())) < nrow(existing_corrections())]
-      output$existing_corrections <- DT::renderDT({
-        DT::datatable(sub, 
-                      options = list(
-                        columnDefs = list(
-                          list(targets = 1, 
-                               visible = FALSE) #Hides the timeseries_id column. Column index numbers start at 0 here!!!
+      if (nrow(existing_corrections()) == 0) {
+        output$no_corrections <- renderText("No existing corrections for this timeseries.")
+        shinyjs::show("no_corrections")
+        accordion_panel_open(id = "accordion3", TRUE)
+      } else {
+        shinyjs::hide("no_corrections")
+        accordion_panel_close(id = "accordion3", TRUE)
+        sub <- existing_corrections()[, colSums(is.na(existing_corrections())) < nrow(existing_corrections())]
+        output$existing_corrections <- DT::renderDT({
+          DT::datatable(sub, 
+                        options = list(
+                          columnDefs = list(
+                            list(targets = 0, 
+                                 visible = FALSE) #Hides the correction_id column. Column index numbers start at 0 here!!!
+                          ),
+                          scrollX = TRUE,
+                          initComplete = htmlwidgets::JS(
+                            "function(settings, json) {",
+                            "$(this.api().table().header()).css({",
+                            "  'background-color': '#079',",
+                            "  'color': '#fff',",
+                            "  'font-size': '100%',",
+                            "});",
+                            "$(this.api().table().body()).css({",
+                            "  'font-size': '90%',",
+                            "});",
+                            "}"
+                          )
                         ),
-                        scrollX = TRUE
-                      ),
-                      rownames = FALSE,
-                      selection = 'single')
-      })
+                        rownames = FALSE,
+                        selection = 'single')
+        })
+      }
+      
       
       # TODO: Add a plot of the existing corrections
       
       
     })
     
-
+    
     
     
     # TODO: Below is problematic, not actually returning the corrected values
