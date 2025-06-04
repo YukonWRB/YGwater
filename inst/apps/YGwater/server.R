@@ -118,6 +118,7 @@ app_server <- function(input, output, session) {
     cal = FALSE,
     addContData = FALSE,
     addDiscData = FALSE,
+      dataCorrections = FALSE,
     addDocs = FALSE,
     addImgs = FALSE,
     visit = FALSE)
@@ -465,7 +466,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "addDiscData", "addDocs", "addImgs", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "addDiscData", "dataCorrections", "addDocs", "addImgs", "visit")) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -695,6 +696,13 @@ $(document).keyup(function(event) {
         output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
         ui_loaded$addDiscData <- TRUE
         addDiscData("addDiscData")  # Call the server
+      }
+    }
+    if (input$navbar == "dataCorrections") {
+      if (!ui_loaded$dataCorrections) {
+        output$dataCorrections_ui <- renderUI(correctionsUI("dataCorrections"))
+        ui_loaded$dataCorrections <- TRUE
+        corrections("dataCorrections")
       }
     }
     if (input$navbar == "addDocs") {

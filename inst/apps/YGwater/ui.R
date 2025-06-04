@@ -156,7 +156,10 @@ app_ui <- function(request) {
                            uiOutput("addContData_ui")),
                  nav_panel(title = "Discrete data",
                            value = "addDiscData",
-                           uiOutput("addDiscData_ui"))
+                           uiOutput("addDiscData_ui")),
+                 nav_panel(title = "Data corrections",
+                           value = "dataCorrections",
+                           uiOutput("dataCorrections_ui"))
         )
       },
       if (!config$public) {
