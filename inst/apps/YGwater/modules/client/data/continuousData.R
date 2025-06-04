@@ -1163,7 +1163,8 @@ contData <- function(id, language, inputs) {
                                    "}"
                                  ),
                                  columnDefs = list(
-                                   list(targets = c(0,1), visible = FALSE) #Hides the timeseries_id and location_id columns. Column index numbers start at 0 here!!!
+                                   list(targets = c(0,1), 
+                                        visible = FALSE) #Hides the timeseries_id and location_id columns. Column index numbers start at 0 here!!!
                                  ),
                                  language = list(
                                    info = tr("tbl_info", language$language),

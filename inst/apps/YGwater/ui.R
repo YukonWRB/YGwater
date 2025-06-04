@@ -84,7 +84,7 @@ app_ui <- function(request) {
                nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
                          uiOutput("plotContinuous_ui"))
                # nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
-                         # uiOutput("plotsMix_ui"))
+               # uiOutput("plotsMix_ui"))
       ),
       nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
                nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",
@@ -121,14 +121,21 @@ app_ui <- function(request) {
                          uiOutput("about_ui"))
       ),
       if (!config$public) {
-        nav_panel(title = "Manage locations",
-                  value = "locs",
-                  uiOutput("locs_ui"))
-      },
-      if (!config$public) {
-        nav_panel(title = "Manage timeseries",
-                  value = "ts",
-                  uiOutput("ts_ui"))
+        nav_menu(title = "Database tasks",
+                 value = "dbAdmin",
+                 nav_panel(title = "Sync timeseries",
+                           value = "syncCont",
+                           uiOutput("syncCont_ui")),
+                 nav_panel(title = "Sync sample series",
+                           value = "syncDisc",
+                           uiOutput("syncDisc_ui")),
+                 nav_panel(title = "Manage locations",
+                           value = "locs",
+                           uiOutput("locs_ui")),
+                 nav_panel(title = "Manage timeseries",
+                           value = "ts",
+                           uiOutput("ts_ui"))
+        )
       },
       if (!config$public) {
         nav_menu(title = "Equipment/instruments", 

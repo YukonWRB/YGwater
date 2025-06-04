@@ -3,18 +3,20 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   library(shiny)
   library(shinyjs)
   library(bslib)
-
+  library(bsicons)
+  
   # 'Admin' side modules ###
-  source(system.file("apps/YGwater/modules/admin/admin.R", package = "YGwater"))
+  # database admin modules
+  source(system.file("apps/YGwater/modules/admin/dbAdmin/loc_main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/dbAdmin/main.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/dbAdmin/meta.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/dbAdmin/new_loc.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/dbAdmin/new_ts.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/dbAdmin/syncCont.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/dbAdmin/syncDisc.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/dbAdmin/ts_main.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/admin/locations/loc_main.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/locations/main.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/locations/meta.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/locations/new_loc.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/locations/new_ts.R", package = "YGwater"))
   
-  source(system.file("apps/YGwater/modules/admin/timeseries/ts_main.R", package = "YGwater"))
-  # timeseries sub-modules
   source(system.file("apps/YGwater/modules/admin/equipment/deploy_recover.R", package = "YGwater"))
   # equipment sub-modules
   source(system.file("apps/YGwater/modules/admin/equipment/calibrate.R", package = "YGwater"))
@@ -28,8 +30,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # Files/document/image sub-modules
   source(system.file("apps/YGwater/modules/admin/documents/addDocs.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/imgupload/addImgs.R", package = "YGwater"))
-
-
+  
+  
   
   # 'client' side modules ####
   source(system.file("apps/YGwater/modules/client/plot/discretePlot.R", package = "YGwater"))
@@ -62,14 +64,14 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   
   # Load translations infrastructure to the global environment
-
+  
   translations <- openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1)
   # Build a list from the data.frame
   translation_cache <<- lapply(setdiff(names(translations[, -2]), "id"), function(lang) { # Removes the second, "description" column, builds lists for each language
     setNames(translations[[lang]], translations$id)
   })
   names(translation_cache) <<- setdiff(names(translations)[-2], "id")
-
+  
   # Make a helper function, send to global environment
   tr <<- function(key, lang) {
     # Ensure that 'key' is a value in the 'id' column of the translations data.frame
@@ -100,7 +102,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2" # Default background color for all main panels
-    )
+  )
   
   # Load the YG BS 5 theme
   app_theme <<- bslib::bs_theme(version = 5) %>%
