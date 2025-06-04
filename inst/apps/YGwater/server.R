@@ -66,24 +66,6 @@ app_server <- function(input, output, session) {
   }
   
   
-  # # Automatically update URL every time an input changes
-  # observe({
-  #   reactiveValuesToList(input) # This will trigger the observer whenever any input changes
-  #   session$doBookmark()
-  # })
-  # 
-  # setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))
-  # # Update the query string
-  # onBookmarked(updateQueryString)
-  # 
-  # isRestoring <- reactiveVal(FALSE)
-  # isRestoring_img <- reactiveVal(FALSE)
-  # 
-  # onRestore(function(state) {
-  #   isRestoring(TRUE)
-  #   isRestoring_img(TRUE)
-  # })
-  
   # Track window dimensions (used to modify plot appearance)
   windowDims <- reactive({
     req(input$window_dimensions)
@@ -465,6 +447,11 @@ $(document).keyup(function(event) {
   
   
   observeEvent(input$navbar, {
+    # Observe opening of the navbar (usually by a click through from another module) and close the navbar. Clicks by the user should have no effect as the navbar menu closes as soon as they click.
+    session$sendCustomMessage(
+      type = "toggleDropdown",
+      message = list(msg = "hide dropdown"))
+    
     # When user selects any a tab, update the last active tab for the current mode
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
       # User is in viz mode

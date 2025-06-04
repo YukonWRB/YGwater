@@ -18,6 +18,12 @@ app_ui <- function(request) {
         document.title = newTitle;
       });
     ")),
+      tags$script("Shiny.addCustomMessageHandler(
+      'toggleDropdown',
+          function toggleDropdown(msg) {
+            $('.dropdown-menu').removeClass('show')
+          });
+        "),
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc.
       tags$link(rel = "stylesheet", href = "css/YG_bs5.css"),
