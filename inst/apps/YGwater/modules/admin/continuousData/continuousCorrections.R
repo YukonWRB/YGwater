@@ -66,7 +66,8 @@ continuousCorrectionsUI <- function(id) {
                         numericInput(ns("window"), "Time window (seconds)", value = NA, width = "100%"),
                         textInput(ns("equation"), "Equation", width = "100%"),
                         actionButton(ns("preview"), "Preview"),
-                        actionButton(ns("apply"), "Apply"))
+                        actionButton(ns("apply"), "Apply"),
+                        actionButton(ns("update"), "Update"))
       ),
       br(),
       plotly::plotlyOutput(ns("preview_plot"), height = "400px")
@@ -171,6 +172,8 @@ continuousCorrections <- function(id) {
     
     # Observe clicked rows on the timeseries table
     timeseries <- reactiveVal(NULL)
+    selected_correction <- reactiveVal(NULL)
+    corrections_trigger <- reactiveVal(0)
     observeEvent(input$ts_table_rows_selected, {
       selected_row <- input$ts_table_rows_selected
       if (length(selected_row) > 0) {
@@ -185,9 +188,9 @@ continuousCorrections <- function(id) {
     
     # Pull and show existing corrections
     existing_corrections <- reactive({
-      req(timeseries())
+      req(timeseries(), corrections_trigger())
       query <- paste0(
-        "SELECT c.correction_id, c.start_dt, c.end_dt, ct.priority, ct.correction_type, c.value1, c.value2, c.timestep_window, c.equation FROM continuous.corrections c LEFT JOIN correction_types ct ON ct.correction_type_id = c.correction_type WHERE c.timeseries_id = ",
+        "SELECT c.correction_id, c.start_dt, c.end_dt, c.correction_type AS correction_type_id, ct.priority, ct.correction_type, c.value1, c.value2, EXTRACT(EPOCH FROM c.timestep_window) AS timestep_window, c.equation FROM continuous.corrections c LEFT JOIN correction_types ct ON ct.correction_type_id = c.correction_type WHERE c.timeseries_id = ",
         timeseries(), " ORDER BY start_dt")
       DBI::dbGetQuery(session$userData$AquaCache, query)
     })
@@ -230,37 +233,84 @@ continuousCorrections <- function(id) {
                         selection = 'single')
         })
       }
-      
-      
+
+
       # TODO: Add a plot of the existing corrections
-      
-      
+
+
+    })
+
+    observeEvent(input$existing_corrections_rows_selected, {
+      req(existing_corrections(), input$existing_corrections_rows_selected)
+      row <- existing_corrections()[input$existing_corrections_rows_selected, ]
+      selected_correction(row$correction_id)
+      updateTextInput(session, "start_dt", value = row$start_dt)
+      updateTextInput(session, "end_dt", value = row$end_dt)
+      updateSelectizeInput(session, "correction_type", selected = row$correction_type_id)
+      updateNumericInput(session, "value1", value = row$value1)
+      updateNumericInput(session, "value2", value = row$value2)
+      updateNumericInput(session, "window", value = ifelse(is.na(row$timestep_window), NA, as.numeric(row$timestep_window)))
+      updateTextInput(session, "equation", value = row$equation)
+      accordion_panel_open(id = "accordion3", TRUE)
     })
     
     
     
     
-    # TODO: Below is problematic, not actually returning the corrected values
+    # Return a data.frame with raw, corrected (existing) and previewed values
+    apply_temp_correction <- function(dat) {
+      type_row <- moduleData$types[moduleData$types$correction_type_id == input$correction_type, ]
+      dat$new_corrected <- dat$corrected
+      if (nrow(type_row) == 0) return(dat)
+
+      start <- as.POSIXct(input$start_dt, tz = "UTC")
+      end <- as.POSIXct(input$end_dt, tz = "UTC")
+      idx <- which(dat$datetime >= start & dat$datetime <= end)
+      if (!length(idx)) return(dat)
+
+      type <- type_row$correction_type
+      if (type == "delete") {
+        dat$new_corrected[idx] <- NA
+      } else if (type == "trim") {
+        if (!is.na(input$value1)) dat$new_corrected[idx][dat$new_corrected[idx] < input$value1] <- NA
+        if (!is.na(input$value2)) dat$new_corrected[idx][dat$new_corrected[idx] > input$value2] <- NA
+      } else if (type == "offset linear") {
+        dat$new_corrected[idx] <- dat$new_corrected[idx] + input$value1
+      } else if (type == "scale") {
+        dat$new_corrected[idx] <- dat$new_corrected[idx] * (input$value1 / 100)
+      } else if (type == "drift linear" && !is.na(input$window) && input$window > 0) {
+        time_since_start <- as.numeric(difftime(dat$datetime[idx], start, units = "secs"))
+        rate <- input$value1 / input$window
+        dat$new_corrected[idx] <- dat$new_corrected[idx] + rate * pmax(0, time_since_start)
+      }
+      dat
+    }
+
     get_preview <- function() {
       req(timeseries(), input$start_dt, input$end_dt)
       query <- paste0(
-        "SELECT datetime, value, continuous.apply_corrections(",
-        timeseries(), ", datetime, value) AS corrected FROM measurements_continuous WHERE timeseries_id = ",
+        "SELECT datetime, value_raw, value_corrected FROM continuous.measurements_continuous_corrected WHERE timeseries_id = ",
         timeseries(),
         " AND datetime BETWEEN '", input$start_dt, "' AND '", input$end_dt, "' ORDER BY datetime")
-      DBI::dbGetQuery(session$userData$AquaCache, query)
+      dat <- DBI::dbGetQuery(session$userData$AquaCache, query)
+      dat$datetime <- as.POSIXct(dat$datetime, tz = "UTC")
+      names(dat) <- c("datetime", "value_raw", "corrected")
+      dat <- apply_temp_correction(dat)
+      dat
     }
     
     render_preview <- function(dat) {
       output$preview_plot <- plotly::renderPlotly({
         req(nrow(dat) > 0)
         plotly::plot_ly(dat, x = ~datetime) %>%
-          plotly::add_lines(y = ~value, name = "Original") %>%
-          plotly::add_lines(y = ~corrected, name = "Corrected")
+          plotly::add_lines(y = ~value_raw, name = "Raw") %>%
+          plotly::add_lines(y = ~corrected, name = "Current") %>%
+          plotly::add_lines(y = ~new_corrected, name = "With New")
       })
     }
     
     observeEvent(input$preview, {
+      dat <- get_preview()
       render_preview(dat)
     })
     
@@ -281,6 +331,29 @@ continuousCorrections <- function(id) {
         )
       )
       showNotification("Correction added.", type = "message")
+      corrections_trigger(corrections_trigger() + 1)
+      dat <- get_preview()
+      render_preview(dat)
+    })
+
+    observeEvent(input$update, {
+      req(selected_correction(), timeseries(), input$start_dt, input$end_dt, input$correction_type)
+      DBI::dbExecute(
+        session$userData$AquaCache,
+        "UPDATE continuous.corrections SET start_dt=$2, end_dt=$3, correction_type=$4, value1=$5, value2=$6, timestep_window=make_interval(secs => $7), equation=$8 WHERE correction_id=$1",
+        params = list(
+          as.integer(selected_correction()),
+          input$start_dt,
+          input$end_dt,
+          as.integer(input$correction_type),
+          input$value1,
+          input$value2,
+          if (is.na(input$window)) NA else as.integer(input$window),
+          if (nzchar(input$equation)) input$equation else NA
+        )
+      )
+      showNotification("Correction updated.", type = "message")
+      corrections_trigger(corrections_trigger() + 1)
       dat <- get_preview()
       render_preview(dat)
     })
