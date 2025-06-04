@@ -51,11 +51,12 @@ syncDisc <- function(id) {
                     selection = 'multiple',
                     options = list(
                       columnDefs = list(
-                        list(targets = 0, 
+                        list(targets = 1, 
                              visible = FALSE) #Hides the sample_series_id column. Column index numbers start at 0 here!!!
                       ),
                       scrollX = TRUE
-                    ))
+                    ),
+                    filter = "top")
     })
     
     task <- ExtendedTask$new(function(ss_ids, start_dt, active, del, parallel, config) {

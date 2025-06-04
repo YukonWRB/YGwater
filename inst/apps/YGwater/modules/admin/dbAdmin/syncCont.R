@@ -40,7 +40,7 @@ syncCont <- function(id) {
     
     ts_meta <- reactive({
       dbGetQueryDT(session$userData$AquaCache,
-                   "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS nominal_record_rate, note, source_fx FROM continuous.timeseries_metadata_en")
+                   "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS nominal_record_rate, note FROM continuous.timeseries_metadata_en")
     })
     
     output$ts_table <- DT::renderDT({
@@ -48,11 +48,12 @@ syncCont <- function(id) {
                     selection = 'multiple',
                     options = list(
                       columnDefs = list(
-                        list(targets = 0, 
+                        list(targets = 1, 
                              visible = FALSE) #Hides the timeseries_id column. Column index numbers start at 0 here!!!
                       ),
                       scrollX = TRUE
-                    )
+                    ),
+                    filter = 'top',
       )
     })
     

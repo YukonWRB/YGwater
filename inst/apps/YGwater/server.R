@@ -118,7 +118,7 @@ app_server <- function(input, output, session) {
     cal = FALSE,
     addContData = FALSE,
     addDiscData = FALSE,
-      dataCorrections = FALSE,
+    continuousCorrections = FALSE,
     addDocs = FALSE,
     addImgs = FALSE,
     visit = FALSE)
@@ -186,7 +186,7 @@ app_server <- function(input, output, session) {
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
     # if (!isRestoring()) {
-      shinyjs::runjs("
+    shinyjs::runjs("
       var language =  window.navigator.userLanguage || window.navigator.language;
       console.log('Detected browser language: ' + language);
       Shiny.setInputValue('userLang', language, {priority: 'event'});
@@ -466,7 +466,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "addDiscData", "dataCorrections", "addDocs", "addImgs", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "addDiscData", "continuousCorrections", "addDocs", "addImgs", "visit")) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -698,11 +698,11 @@ $(document).keyup(function(event) {
         addDiscData("addDiscData")  # Call the server
       }
     }
-    if (input$navbar == "dataCorrections") {
-      if (!ui_loaded$dataCorrections) {
-        output$dataCorrections_ui <- renderUI(correctionsUI("dataCorrections"))
-        ui_loaded$dataCorrections <- TRUE
-        corrections("dataCorrections")
+    if (input$navbar == "continuousCorrections") {
+      if (!ui_loaded$continuousCorrections) {
+        output$continuousCorrections_ui <- renderUI(continuousCorrectionsUI("continuousCorrections"))
+        ui_loaded$continuousCorrections <- TRUE
+        continuousCorrections("continuousCorrections")
       }
     }
     if (input$navbar == "addDocs") {
