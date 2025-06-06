@@ -7,11 +7,18 @@
 
 app_server <- function(input, output, session) {
 
-  conn <- DBI::dbConnect(RSQLite::SQLite(), config$db_path)
+  conn <- AquaConnect(???)
 
   if (!DBI::dbExistsTable(conn, "feedback")) {
     DBI::dbExecute(conn, "CREATE TABLE feedback (timestamp TEXT, user TEXT, bugs TEXT, ui_comment TEXT, module_comment TEXT, got_data TEXT, missing TEXT)")
   }
+
+  observeEvent(input$???, {
+   if (input$???) {
+     shinyjs::show("missing")
+     } else {
+     shinyjs::hide("missing")
+  })
 
   observeEvent(input$submit, {
     info <- data.frame(
@@ -32,6 +39,8 @@ app_server <- function(input, output, session) {
     updateTextAreaInput(session, "module_comment", value = "")
     updateRadioButtons(session, "got_data", selected = character(0))
     updateTextAreaInput(session, "missing", value = "")
+    updateCheckboxInput(session, "???", value = TRUE)
+    shinyjs::hide("missing")
   })
 
   session$onSessionEnded(function() {
