@@ -1,4 +1,4 @@
-# UI and server code for main discrete data module
+# UI and server code for discrete data edit/delete module
 
 editDiscDataUI <- function(id) {
   ns <- NS(id)

@@ -52,10 +52,27 @@ addContDataUI <- function(id) {
           conditionalPanel(
             condition = "input.entry_mode == 'manual'",
             ns = ns,
-            actionButton(ns("add_row"), "Add row")
+            div(
+              actionButton(ns("add_row"), "Add row"),
+              actionButton(ns("delete_rows"), "Delete selected rows")
+            ),
+            tags$br()
           ),
+          # space so the buttons don't overlap the table
+          # Text to tell the user they can edit values by double clicking on the desired cell
+          tags$div("Hint: double click on a cell to edit its value."),
+          tags$br(),
           DT::DTOutput(ns("data_table")),
-          actionButton(ns("upload"), "Upload to AquaCache")
+          radioButtons(ns("no_update"), "Prevent update to new data by automatic processes?", 
+                       choices = c("Yes" = "yes", "No" = "no"), inline = TRUE, selected = "no"),
+          div(
+            actionButton(ns("upload"), "Upload to AquaCache (no overwrite)",
+                         style = "font-size: 14px;"),
+            actionButton(ns("upload_overwrite_all"), "Upload to AquaCache (replace all points in new data range)",
+                         style = "font-size: 14px;"),
+            actionButton(ns("upload_overwrite_some"), "Upload to AquaCache (overwrite conflicting points only)",
+                         style = "font-size: 14px;")
+          )
         )
       )
     )
@@ -80,6 +97,8 @@ addContData <- function(id) {
         footer = modalButton('Close')
       ))
       shinyjs::disable('upload')
+      shinyjs::disable('upload_overwrite_all')
+      shinyjs::disable('upload_overwrite_some')
     }
     
     ts_meta <- reactive({
@@ -136,8 +155,16 @@ addContData <- function(id) {
       data$df <- rbind(data$df, data.frame(datetime = Sys.time(), value = NA))
     })
     
+    observeEvent(input$delete_rows, {
+      req(input$data_table_rows_selected)
+      data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
+    })
+    
     output$data_table <- DT::renderDT({
-      DT::datatable(data$df, editable = TRUE, options = list(scrollX = TRUE))
+      DT::datatable(data$df, 
+                    editable = TRUE,
+                    selection = "multiple",
+                    options = list(scrollX = TRUE))
     }, server = FALSE)
     
     observeEvent(input$data_table_cell_edit, {
@@ -145,31 +172,96 @@ addContData <- function(id) {
       data$df[info$row, info$col] <- info$value
     })
     
-    observeEvent(input$upload, {
-      print("timeseries_id is")
-      print(timeseries())
-      print("data$df is")
-      print(data$df)
+    check_fx <- function() {
       if (is.null(timeseries())) {
         showNotification('Please select a timeseries first.', type = 'error')
-        return()
+        return(FALSE)
       }
       if (nrow(data$df) == 0) {
         showNotification('Empty data table!', type = 'error')
-        return()
+        return(FALSE)
       }
       if (any(is.na(data$df$value))) {
         showNotification('Data contains NA values. Please fill them in before uploading.', type = 'error')
-        return()
+        return(FALSE)
       }
+      return(TRUE)
+    }
+    
+    observeEvent(input$upload, {
+      check <- check_fx()
+      if (!check) return()
       tryCatch({
-        AquaCache::addNewContinuous(tsid = timeseries(), df = data$df, con = session$userData$AquaCache, target = "realtime")
+        upload_data <- data$df
+        data$no_upload <- ifelse(input$no_update == "yes", TRUE, FALSE)
+        AquaCache::addNewContinuous(tsid = timeseries(), df = upload_data, con = session$userData$AquaCache, target = "realtime", overwrite = "no")
         showNotification('Data added.', type = 'message')
         data$df <- data.frame(datetime = as.POSIXct(character()), value = numeric())
       }, error = function(e) {
         showNotification(paste('Upload failed:', e$message), type = 'error')
       }, warning = function(w) {
         showNotification(paste('Warning on upload:', w$message), type = 'warning')
+      }, message = function(m) {
+        showNotification(paste('Message on upload:', m$message), type = 'message')
+      })
+    })
+    observeEvent(input$upload_overwrite_all, {
+      check <- check_fx()
+      if (!check) return()
+      # Show a modal dialog to confirm overwritting all points in time range of new data
+      showModal(modalDialog(
+        title = 'Confirm Overwrite',
+        'This will overwrite all points in the time range of the new data, including any points that do not conflict with the new data (if any). Are you sure?',
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton('Cancel'),
+          actionButton(ns('confirm_overwrite_all'), 'Confirm Overwrite', class = 'btn-danger')
+        )
+      ))
+    })
+    observeEvent(input$confirm_overwrite_all, {
+      removeModal()  # Close the modal dialog
+      tryCatch({
+        upload_data <- data$df
+        AquaCache::addNewContinuous(tsid = timeseries(), df = upload_data, con = session$userData$AquaCache, target = "realtime", overwrite = "all")
+        showNotification('Data added with overwrite.', type = 'message')
+        data$df <- data.frame(datetime = as.POSIXct(character()), value = numeric())
+      }, error = function(e) {
+        showNotification(paste('Upload failed:', e$message), type = 'error')
+      }, warning = function(w) {
+        showNotification(paste('Warning on upload:', w$message), type = 'warning')
+      }, message = function(m) {
+        showNotification(paste('Message on upload:', m$message), type = 'message')
+      })
+    })
+    
+    observeEvent(input$upload_overwrite_some, {
+      check <- check_fx()
+      if (!check) return()
+      # Show a modal dialog to confirm overwriting conflicting points only
+      showModal(modalDialog(
+        title = 'Confirm Selective Overwrite',
+        'This will overwrite only the points in the new data that conflict with existing points in the time range of the new data. Are you sure?',
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton('Cancel'),
+          actionButton(ns('confirm_overwrite_some'), 'Confirm Selective Overwrite', class = 'btn-warning')
+        )
+      ))
+    })
+    observeEvent(input$confirm_overwrite_some, {
+      removeModal()  # Close the modal dialog
+      tryCatch({
+        upload_data <- data$df
+        AquaCache::addNewContinuous(tsid = timeseries(), df = upload_data, con = session$userData$AquaCache, target = "realtime", overwrite = "conflict")
+        showNotification('Data added with selective overwrite.', type = 'message')
+        data$df <- data.frame(datetime = as.POSIXct(character()), value = numeric())
+      }, error = function(e) {
+        showNotification(paste('Upload failed:', e$message), type = 'error')
+      }, warning = function(w) {
+        showNotification(paste('Warning on upload:', w$message), type = 'warning')
+      }, message = function(m) {
+        showNotification(paste('Message on upload:', m$message), type = 'message')
       })
     })
     

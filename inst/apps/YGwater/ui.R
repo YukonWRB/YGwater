@@ -135,23 +135,12 @@ app_ui <- function(request) {
                  nav_panel(title = "Sync sample series",
                            value = "syncDisc",
                            uiOutput("syncDisc_ui")),
-                 nav_panel(title = "Manage locations",
+                 nav_panel(title = "Add/edit locations",
                            value = "locs",
                            uiOutput("locs_ui")),
-                 nav_panel(title = "Manage timeseries",
+                 nav_panel(title = "Add/edit timeseries",
                            value = "ts",
                            uiOutput("ts_ui"))
-        )
-      },
-      if (!config$public) {
-        nav_menu(title = "Equipment/instruments", 
-                 value = "equip",
-                 nav_panel(title = "Checks + calibrations", 
-                           value = "cal",
-                           uiOutput("cal_ui")),
-                 nav_panel(title = "Deploy/Recover", 
-                           value = "deploy_recover",
-                           uiOutput("deploy_recover_ui"))
         )
       },
       if (!config$public) {
@@ -160,9 +149,18 @@ app_ui <- function(request) {
                  nav_panel(title = "Add continuous data",
                            value = "addContData",
                            uiOutput("addContData_ui")),
+                 nav_panel(title = "Edit/delete continuous data",
+                           value = "editContData",
+                           uiOutput("editDiscData_ui")),
                  nav_panel(title = "Add/modify timeseries corrections",
                            value = "continuousCorrections",
-                           uiOutput("continuousCorrections_ui"))
+                           uiOutput("continuousCorrections_ui")),
+                 nav_panel(title = "Impute missing values",
+                           value = "imputeMissing",
+                           uiOutput("imputeMissing_ui")),
+                 nav_panel(title = "Apply grades, approvals, qualifiers",
+                           value = "grades_approvals_qualifiers",
+                           uiOutput("grades_approvals_qualifiers_ui"))
         )
       },
       if (!config$public) {
@@ -191,8 +189,19 @@ app_ui <- function(request) {
         nav_panel(title = "Add/modify field visit", 
                   value = "visit",
                   uiOutput("visit_ui"))
+      }, 
+      if (!config$public) {
+        nav_menu(title = "Equipment/instruments", 
+                 value = "equip",
+                 nav_panel(title = "Checks + calibrations", 
+                           value = "cal",
+                           uiOutput("cal_ui")),
+                 nav_panel(title = "Deploy/Recover", 
+                           value = "deploy_recover",
+                           uiOutput("deploy_recover_ui"))
+        )
       }
-    ), # End navbarPage (though it's modified below)
+    ), # End page_navbar (though it's modified below)
     
     # Insert language selector into the navbar
     HTML("<script>

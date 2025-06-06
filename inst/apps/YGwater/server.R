@@ -104,6 +104,9 @@ app_server <- function(input, output, session) {
     addDiscData = FALSE,
     editDiscData = FALSE,
     continuousCorrections = FALSE,
+    imputeMissing = FALSE,
+    editContData = FALSE,
+    grades_approvals_qualifiers = FALSE,
     addDocs = FALSE,
     addImgs = FALSE,
     visit = FALSE)
@@ -456,7 +459,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "addDiscData", "editDiscData", "continuousCorrections", "addDocs", "addImgs", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "visit")) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -681,6 +684,34 @@ $(document).keyup(function(event) {
         addContData("addContData")  # Call the server
       }
     }
+    if (input$navbar == "continuousCorrections") {
+      if (!ui_loaded$continuousCorrections) {
+        output$continuousCorrections_ui <- renderUI(continuousCorrectionsUI("continuousCorrections"))
+        ui_loaded$continuousCorrections <- TRUE
+        continuousCorrections("continuousCorrections")
+      }
+    }
+    if (input$navbar == "imputeMissing") {
+      if (!ui_loaded$imputeMissing) {
+        output$imputeMissing_ui <- renderUI(imputeMissingUI("imputeMissing"))  # Render the UI
+        ui_loaded$imputeMissing <- TRUE
+        imputeMissing("imputeMissing")  # Call the server
+      }
+    }
+    if (input$navbar == "editContData") {
+      if (!ui_loaded$editContData) {
+        output$editContData_ui <- renderUI(editContDataUI("editContData"))  # Render the UI
+        ui_loaded$editContData <- TRUE
+        editContData("editContData")  # Call the server
+      }
+    }
+    if (input$navbar == "grades_approvals_qualifiers") {
+      if (!ui_loaded$grades_approvals_qualifiers) {
+        output$grades_approvals_qualifiers_ui <- renderUI(grades_approvals_qualifiersUI("grades_approvals_qualifiers"))  # Render the UI
+        ui_loaded$grades_approvals_qualifiers <- TRUE
+        grades_approvals_qualifiers("grades_approvals_qualifiers")  # Call the server
+      }
+    }
     if (input$navbar == "addDiscData") {
       if (!ui_loaded$addDiscData) {
         output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
@@ -693,13 +724,6 @@ $(document).keyup(function(event) {
         output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData"))  # Render the UI
         ui_loaded$editDiscData <- TRUE
         editDiscData("editDiscData")  # Call the server
-      }
-    }
-    if (input$navbar == "continuousCorrections") {
-      if (!ui_loaded$continuousCorrections) {
-        output$continuousCorrections_ui <- renderUI(continuousCorrectionsUI("continuousCorrections"))
-        ui_loaded$continuousCorrections <- TRUE
-        continuousCorrections("continuousCorrections")
       }
     }
     if (input$navbar == "addDocs") {

@@ -1,5 +1,4 @@
 if (!isTRUE(getOption("YGwater_pythonSetupDone", FALSE))) {
-  
   warning("tests on plotly objects use an outdated version of the 'kaleido' python package. You should try to reinstall kaleido periodically. See the 'setup.R' file in tests where this message originates.")
   
   check_miniconda_installed()

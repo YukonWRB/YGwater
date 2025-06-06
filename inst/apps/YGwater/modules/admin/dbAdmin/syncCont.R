@@ -14,7 +14,7 @@ syncContUI <- function(id) {
     input_task_button(ns("run"), "Synchronize"),
     # Small divider
     hr(),
-    verbatimTextOutput(ns("result"))
+    DT::DTOutput(ns("result"))
   )
 }
 
@@ -113,9 +113,28 @@ syncCont <- function(id) {
       task$invoke(ids, input$start, input$active, input$parallel, session$userData$config)
     }, ignoreInit = TRUE)
     
-    output$result <- renderPrint({
+    output$result <- DT::renderDT({
       req(task$result())
-      task$result()
+      DT::datatable(task$result(),
+                    rownames = FALSE,
+                    selection = "none",
+                    filter = "none",
+                    options = list(
+                      scrollx = TRUE,
+                      initComplete = htmlwidgets::JS(
+                        "function(settings, json) {",
+                        "$(this.api().table().header()).css({",
+                        "  'background-color': '#079',",
+                        "  'color': '#fff',",
+                        "  'font-size': '100%',",
+                        "});",
+                        "$(this.api().table().body()).css({",
+                        "  'font-size': '90%',",
+                        "});",
+                        "}"
+                      )
+                    )
+      )
     })
   })
 }

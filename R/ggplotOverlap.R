@@ -304,7 +304,7 @@ ggplotOverlap <- function(location,
     } else if (lang == "en" || is.na(parameter_name)) {
       parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
     }
-    instantaneous <- DBI::dbGetQuery(con, "SELECT aggrecation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';")[1,1]
+    instantaneous <- DBI::dbGetQuery(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';")[1,1]
     if (is.null(record_rate)) {
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, ";"))
     } else {
@@ -353,6 +353,9 @@ ggplotOverlap <- function(location,
         daily_end <- daily_end + 60*60*24
       }
       daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
+      if (inherits(daily$date, "character")) {
+        daily$date <- as.Date(daily$date)
+      }
     } else if (historic_range == "last") {
       if (overlaps) {
         lubridate::year(daily_end) <- last_year + 1
@@ -364,6 +367,9 @@ ggplotOverlap <- function(location,
         daily_end <- daily_end + 60*60*24
       }
       daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
+      if (inherits(daily$date, "character")) {
+        daily$date <- as.Date(daily$date)
+      }
     }
     
     #Fill in any missing days in daily with NAs
@@ -391,6 +397,9 @@ ggplotOverlap <- function(location,
       if (length(day_seq) < 90) { # 90 days at 5 minute data points is 25920 rows.
         if (nrow(realtime) < 20000) { # if plotting 70-90 days of 5 minute data will only have the greatest year with 5 minute points
           new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+          if (inherits(new_realtime$datetime, "character")) {
+            new_realtime$datetime <- as.POSIXct(new_realtime$datetime, tz = "UTC")
+          }
           if (nrow(new_realtime) > 20000) {
             new_realtime <- new_realtime[order(new_realtime$datetime) , ]
             new_realtime <- utils::tail(new_realtime, 20000) #Retain only max 20000 data points for plotting performance
