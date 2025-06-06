@@ -280,17 +280,17 @@ ggplotOverlap <- function(location,
   
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    location_id <- dbGetQueryDT(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
     #Confirm parameter and location exist in the database and that there is only one entry
     if (inherits(parameter, "character")) {
       escaped_parameter <- gsub("'", "''", parameter)
-      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+      parameter_tbl <- dbGetQueryDT(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
       parameter_code <- parameter_tbl$parameter_id[1]
       if (is.na(parameter_code)) {
         stop("The parameter you entered does not exist in the database.")
       }
     } else if (inherits(parameter, "numeric")) {
-      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ", parameter, ";"))
+      parameter_tbl <- dbGetQueryDT(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ", parameter, ";"))
       if (nrow(parameter_tbl) == 0) {
         stop("The parameter you entered does not exist in the database.")
       }
@@ -304,11 +304,11 @@ ggplotOverlap <- function(location,
     } else if (lang == "en" || is.na(parameter_name)) {
       parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
     }
-    instantaneous <- DBI::dbGetQuery(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';")[1,1]
+    instantaneous <- dbGetQueryDT(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';")[1,1]
     if (is.null(record_rate)) {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, ";"))
+      exist_check <- dbGetQueryDT(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, ";"))
     } else {
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, " AND record_rate = '", record_rate, "';"))
+      exist_check <- dbGetQueryDT(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, " AND record_rate = '", record_rate, "';"))
     }
     if (nrow(exist_check) == 0) {
       if (is.null(record_rate)) {
@@ -328,7 +328,7 @@ ggplotOverlap <- function(location,
     }
     
     # Find the ts units
-    units <- DBI::dbGetQuery(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code, ";"))
+    units <- dbGetQueryDT(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code, ";"))
     
     # Find the necessary datum (latest datum)
     if (datum) {
@@ -336,7 +336,7 @@ ggplotOverlap <- function(location,
         warning("The parameter you are plotting is not in meters. Datum will not be applied.")
         datum <- data.frame(conversion_m = 0)
       } else {
-        datum <- DBI::dbGetQuery(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+        datum <- dbGetQueryDT(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
       }
     } else {
       datum <- data.frame(conversion_m = 0)
@@ -352,10 +352,7 @@ ggplotOverlap <- function(location,
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
-      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
-      if (inherits(daily$date, "character")) {
-        daily$date <- as.Date(daily$date)
-      }
+      daily <- dbGetQueryDT(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
     } else if (historic_range == "last") {
       if (overlaps) {
         lubridate::year(daily_end) <- last_year + 1
@@ -366,10 +363,7 @@ ggplotOverlap <- function(location,
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60*60*24
       }
-      daily <- DBI::dbGetQuery(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
-      if (inherits(daily$date, "character")) {
-        daily$date <- as.Date(daily$date)
-      }
+      daily <- dbGetQueryDT(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
     }
     
     #Fill in any missing days in daily with NAs
@@ -396,10 +390,7 @@ ggplotOverlap <- function(location,
       attr(end_UTC, "tzone") <- "UTC"
       if (length(day_seq) < 90) { # 90 days at 5 minute data points is 25920 rows.
         if (nrow(realtime) < 20000) { # if plotting 70-90 days of 5 minute data will only have the greatest year with 5 minute points
-          new_realtime <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-          if (inherits(new_realtime$datetime, "character")) {
-            new_realtime$datetime <- as.POSIXct(new_realtime$datetime, tz = "UTC")
-          }
+          new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
           if (nrow(new_realtime) > 20000) {
             new_realtime <- new_realtime[order(new_realtime$datetime) , ]
             new_realtime <- utils::tail(new_realtime, 20000) #Retain only max 20000 data points for plotting performance
@@ -959,10 +950,10 @@ ggplotOverlap <- function(location,
   if (title) {
     if (is.null(custom_title)) {
       if (lang == "fr") {
-        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
+        stn_name <- dbGetQueryDT(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
       } 
       if (lang == "en" || is.na(stn_name)) {
-        stn_name <- DBI::dbGetQuery(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
+        stn_name <- dbGetQueryDT(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
       }
       stn_name <- titleCase(stn_name, lang)
       

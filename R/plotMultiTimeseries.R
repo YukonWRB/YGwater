@@ -77,37 +77,37 @@ plotMultiTimeseries <- function(type = 'traces',
                                 data = FALSE,
                                 con = NULL) {
   
-  # type <- 'traces'
-  # locations <- c(25, 31, 29)
-  # sub_locations <- NULL
-  # parameters <- c("water level", "water level", "water level")
-  # record_rates <- NULL
-  # aggregation_types <- NULL
-  # z <- NULL
-  # z_approx <- NULL
-  # start_date <- Sys.Date() - 30
-  # end_date <- Sys.Date()
-  # lead_lag <- NULL
-  # log <- FALSE
-  # invert <- NULL
-  # slider <- FALSE
-  # datum <- TRUE
-  # title <- TRUE
-  # custom_title <- NULL
-  # filter <- NULL
-  # historic_range <- NULL
-  # lang <- "en"
-  # line_scale <- 1
-  # axis_scale <- 1
-  # legend_scale <- 1
-  # gridx <- FALSE
-  # gridy <- FALSE
-  # rate <- NULL
-  # tzone <- "auto"
-  # legend_position <- 'v'
-  # shareX = TRUE
-  # shareY = TRUE
-  # unusable = FALSE
+    # type <- 'traces'
+    # locations <- c(157, 9)
+    # sub_locations <- NULL
+    # parameters <- c(1165, 1250)
+    # record_rates <- NULL
+    # aggregation_types <- NULL
+    # z <- NULL
+    # z_approx <- NULL
+    # start_date <- Sys.Date() - 30
+    # end_date <- Sys.Date()
+    # lead_lag <- c(0,0)
+    # log <- FALSE
+    # invert <- NULL
+    # slider <- FALSE
+    # datum <- TRUE
+    # title <- TRUE
+    # custom_title <- NULL
+    # filter <- NULL
+    # historic_range <- NULL
+    # lang <- "en"
+    # line_scale <- 1
+    # axis_scale <- 1
+    # legend_scale <- 1
+    # gridx <- FALSE
+    # gridy <- FALSE
+    # rate <- NULL
+    # tzone <- "auto"
+    # legend_position <- 'v'
+    # shareX = TRUE
+    # shareY = TRUE
+    # unusable = FALSE
   
   # Checks and initial work ##########################################
   
@@ -417,7 +417,7 @@ plotMultiTimeseries <- function(type = 'traces',
     
     if (is.null(sub_location)) {
       # Check if there are multiple timeseries for this parameter_code, location regardless of sub_location. If so, throw a stop
-      sub_loc_check <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+      sub_loc_check <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND sub_location_id IS NOT NULL;"))
       if (nrow(sub_loc_check) > 1) {
         warning("There are multiple entries in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Moving on to the next entry.")
         remove <- c(remove, i)
@@ -425,26 +425,26 @@ plotMultiTimeseries <- function(type = 'traces',
       }
       if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
         if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
-          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
         } else { #aggregation_type_id is not NULL but record_rate is
-          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
         }
       } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
       } else { #both record_rate and aggregation_type_id are not NULL
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
       }
     } else { # sub_location is specified
       if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
         if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
-          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, ";"))
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, ";"))
         } else { #aggregation_type_id is not NULL but record_rate is
-          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
+          exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
         }
       } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
       } else { #both record_rate and aggregation_type_id are not NULL
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
       }
     }
     
@@ -470,7 +470,6 @@ plotMultiTimeseries <- function(type = 'traces',
     } else if (nrow(exist_check) > 1) {
       if (is.null(record_rate)) {
         warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate.")
-        exist_check$record_rate <- lubridate::period(exist_check$record_rate)
         exist_check <- exist_check[order(exist_check$record_rate), ]
         exist_check <- exist_check[1, ]
       }

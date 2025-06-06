@@ -22,10 +22,11 @@ test_that("continuous level plot is as expected for full year with numeric start
   unlink(dir, recursive = TRUE)
   dir.create(dir)
   con <- RSQLite::dbConnect(RSQLite::SQLite(), system.file("tests/testthat/fixtures/aquacache_test.sqlite", package = "YGwater"))
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
   plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2020", save_path = dir,  historic_range = "last", gridx = FALSE, con = con)
   path <- list.files(dir, full.names = TRUE)
-  file.rename(path, paste0(dir, "/level1.png"))
-  expect_snapshot_file(paste0(dir, "/level1.png"))
+  file.rename(path, paste0(dir, "/level1_sqlite.png"))
+  expect_snapshot_file(paste0(dir, "/level1_sqlite.png"))
   unlink(dir, recursive = TRUE)
 })
 
@@ -44,16 +45,16 @@ test_that("continuous level plot is as expected for full year with numeric start
 })
 
 test_that("continuous level plot is as expected for full year with character startDay and endDay", {
-  skip_on_ci()
-  skip_on_cran()
-  plot <- ggplotOverlap("09EA004", "water level", startDay = "2023-01-01", endDay = "2023-12-31", years = "2022", save_path = NULL, historic_range = "last", gridx = FALSE)
+  con <- RSQLite::dbConnect(RSQLite::SQLite(), system.file("tests/testthat/fixtures/aquacache_test.sqlite", package = "YGwater"))
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+  plot <- ggplotOverlap("09EA004", "water level", startDay = "2023-01-01", endDay = "2023-12-31", years = "2020", save_path = NULL, historic_range = "last", gridx = FALSE, con = con)
   vdiffr::expect_doppelganger("full yr char start/end", plot)
 })
 
 test_that("continuous flow plot is as expected for full year with numeric startDay and endDay", {
-  skip_on_ci()
-  skip_on_cran()
-  plot <- ggplotOverlap("09EA004", "flow", startDay = 1, endDay = 365, years = "2022", save_path = NULL, historic_range = "last", gridx = FALSE)
+  con <- RSQLite::dbConnect(RSQLite::SQLite(), system.file("tests/testthat/fixtures/aquacache_test.sqlite", package = "YGwater"))
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+  plot <- ggplotOverlap("09EA004", "flow", startDay = 1, endDay = 365, years = "2020", save_path = NULL, historic_range = "last", gridx = FALSE, con = con)
   vdiffr::expect_doppelganger("full num start/end", plot)
 })
 
@@ -85,9 +86,9 @@ test_that("french labels work with overlaping years", {
 })
 
 test_that("continuous level plot is as expected for multiple years when output to console", {
-  skip_on_ci()
-  skip_on_cran()
-  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2019,2020,2021,2022), historic_range = "last", gridx = FALSE))
+  con <- RSQLite::dbConnect(RSQLite::SQLite(), system.file("tests/testthat/fixtures/aquacache_test.sqlite", package = "YGwater"))
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2019,2020), historic_range = "last", gridx = FALSE, con = con))
   vdiffr::expect_doppelganger("multi yr numeric start/end", plot)
 })
 
@@ -98,15 +99,15 @@ test_that("too big year error message happens", {
 
 #Test for historical range and return periods able to flex.
 test_that("historic range can be < requested year", {
-  skip_on_ci()
-  skip_on_cran()
-  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2018), historic_range = "all", gridx = FALSE))
+  con <- RSQLite::dbConnect(RSQLite::SQLite(), system.file("tests/testthat/fixtures/aquacache_test.sqlite", package = "YGwater"))
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2019), historic_range = "all", gridx = FALSE, con = con))
   vdiffr::expect_doppelganger("hist range > plotted year", plot)
 })
 #Test for historical range and return periods able to flex.
 test_that("returns can be for yrs > requested year", {
-  skip_on_ci()
-  skip_on_cran()
-  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2018), historic_range = "all", return_max_year = 2022, gridx = FALSE))
+  con <- RSQLite::dbConnect(RSQLite::SQLite(), system.file("tests/testthat/fixtures/aquacache_test.sqlite", package = "YGwater"))
+  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
+  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2019), historic_range = "all", return_max_year = 2022, gridx = FALSE, con = con))
   vdiffr::expect_doppelganger("returns > yr", plot)
 })
