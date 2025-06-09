@@ -2,7 +2,11 @@ syncContUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     h3("Synchronize continuous timeseries"),
+    tooltip(
     checkboxInput(ns("all_ts"), "All timeseries", FALSE),
+    "Selects all timeseries in the database. If unchecked, you can select specific timeseries from the table below.",
+    placement = "right"
+    ),
     conditionalPanel(
       condition = "input.all_ts == false",
       ns = ns,

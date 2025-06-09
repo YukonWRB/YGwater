@@ -2,12 +2,11 @@ syncDiscUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     h3("Synchronize sample series"),
-    span(
+    tooltip(
       checkboxInput(ns("all_ss"), "All sample series", FALSE),
-      bs_icon("info-circle"),
       "Selects all sample series in the database. If unchecked, you can select specific sample series from the table below.",
       placement = "right"
-    ),
+      ),
     conditionalPanel(
       condition = "input.all_ss == false",
       ns = ns,

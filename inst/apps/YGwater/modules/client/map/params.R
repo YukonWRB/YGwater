@@ -449,6 +449,16 @@ mapParams <- function(id, language) {
           }
         }
         lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
+        legend_title <- sprintf(
+          "%s (%s)",
+          titleCase(
+            moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,
+                                  get(tr("param_name_col", language$language))],
+            language$abbrev
+          ),
+          moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,
+                                "unit_default"]
+        )
       } else {
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
@@ -459,6 +469,7 @@ mapParams <- function(id, language) {
         )
         map_values <- mapping_data$percent_historic_range_capped
         lab_format <- leaflet::labelFormat(digits = 0, suffix = "%")
+        legend_title <- tr("map_relative", language$language)
       }
       
       leaflet::leafletProxy("map", session) %>%
@@ -488,7 +499,7 @@ mapParams <- function(id, language) {
           position = "bottomright",
           pal = value_palette,
           values = map_values,
-          title = NULL,
+          title = legend_title,
           labFormat = lab_format,
           opacity = 1
         )
@@ -511,10 +522,8 @@ mapParams <- function(id, language) {
     
     # Observe the map being created and update it when the parameters change
     observe({
-      req(mapCreated(), map_params, input$map_zoom)  # Ensure the map has been created before updating
-      try({
-        updateMap() 
-      })
+      req(mapCreated(), map_params, input$map_zoom, language$language)  # Ensure the map has been created before updating
+        updateMap()  # Call the updateMap function to refresh the map with the current parameters
     })
     
   }) # End of moduleServer
