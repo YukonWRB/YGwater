@@ -42,9 +42,9 @@ mapParams <- function(id, language) {
                       max = Sys.Date(),
                       format = "yyyy-mm-dd",
                       language = language$abbrev),
-            checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = TRUE),
+            checkboxInput(ns("latest"), tr("map_latest_measurements", language$language), value = FALSE),
             htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
-            actionButton(ns("edit_primary_param"), tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
+            actionButton(ns("edit_primary_param"), if (config$public) tr("map_edit_primary_param_solo", language$language) else tr("map_edit_primary_param", language$language), style = "display: block; width: 100%"),
             if (!config$public) {
               htmlOutput(ns("secondary_param"))
             },
@@ -65,7 +65,7 @@ mapParams <- function(id, language) {
     output$primary_param <- renderUI({
       req(map_params, language)
       tagList(
-        h4(tr("map_primary_param", language$language)), # Text for primary parameter
+        h4(if (config$public) tr("map_primary_param_solo", language$language) else tr("map_primary_param", language$language)), # Text for primary parameter
         p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$param1,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
         p(tr("map_min_yrs_selected1", language$language), " ", map_params$yrs1, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
           tr("map_date_within_selected1", language$language), map_params$days1, tr("map_date_within_selected2", language$language)) # Text for within x days
@@ -94,7 +94,7 @@ mapParams <- function(id, language) {
       yrs2 = 10,
       days1 = 1,
       days2 = 1,
-      latest = TRUE,
+      latest = FALSE,
       target = Sys.Date(),
       params = 1,
       bins = c(-Inf, 0, 20, 40, 60, 80, 100, Inf),
@@ -107,6 +107,12 @@ mapParams <- function(id, language) {
     # Observe 'map_latest_measurements'. If TRUE, 'target' is adjusted to Sys.Date()
     observeEvent(input$latest, {
       if (input$latest) {
+        # Show the user a modal that explains that the most recent values will be compared against daily means
+        showModal(modalDialog(
+          tr("map_latest_measurements_modal", language$language),
+          easyClose = TRUE,
+          footer = modalButton(tr("close", language$language))
+        ))
         updateDateInput(session, "target", value = Sys.Date())
         map_params$latest <- TRUE
         map_params$target <- Sys.Date()

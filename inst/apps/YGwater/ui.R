@@ -91,6 +91,7 @@ app_ui <- function(request) {
                  # nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
                  # uiOutput("plotsMix_ui"))
         ),
+        if (!config$public) {
         nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
                  nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",
                            uiOutput("snowInfo_ui")),
@@ -102,7 +103,8 @@ app_ui <- function(request) {
                    nav_panel(title = uiOutput("reportsNavSnowbullTitle"), value = "snowBulletin",
                              uiOutput("snowBulletin_ui"))
                  }
-        ), # End reports nav_menu
+        ) # End reports nav_menu
+        }, # End if !config$public
         nav_menu(title = uiOutput("imagesNavMenuTitle"), value = "images",
                  nav_panel(title = uiOutput("imagesNavTableTitle"), value = "imgTableView",
                            uiOutput("imgTableView_ui")),
