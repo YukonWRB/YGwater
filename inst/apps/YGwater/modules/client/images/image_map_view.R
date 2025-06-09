@@ -221,7 +221,10 @@ imgMapView <- function(id, language) {
     
     observe({  # This observer will run on module initialization
       # Filter by date range
-      date_filter <- images$images$datetime >= input$dates[1] & images$images$datetime <= input$dates[2]
+      # Extend the end date to include the full day so single day
+      # selections return all images for that day
+      end_date <- as.POSIXct(paste0(input$dates[2], " 23:59"))
+      date_filter <- images$images$datetime >= input$dates[1] & images$images$datetime <= end_date
       
       # Filter by months
       if (!is.null(input$months) && length(input$months) > 0) {

@@ -437,7 +437,18 @@ mapParams <- function(id, language) {
           na.color = "#808080"
         )
         map_values <- abs_vals
-        lab_format <- leaflet::labelFormat()
+        legend_digits <- function(vals) {
+          if (length(vals) == 0 || all(!is.finite(vals))) return(0)
+          max_val <- max(abs(vals), na.rm = TRUE)
+          if (max_val >= 100) {
+            return(0)
+          } else if (max_val >= 10) {
+            return(1)
+          } else {
+            return(2)
+          }
+        }
+        lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
       } else {
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
@@ -447,7 +458,7 @@ mapParams <- function(id, language) {
           na.color = "#808080"
         )
         map_values <- mapping_data$percent_historic_range_capped
-        lab_format <- leaflet::labelFormat(suffix = "%")
+        lab_format <- leaflet::labelFormat(digits = 0, suffix = "%")
       }
       
       leaflet::leafletProxy("map", session) %>%

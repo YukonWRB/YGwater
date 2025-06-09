@@ -71,9 +71,11 @@ home <- function(id, language) {
       output$map_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("map_locs"), "See a map of monitoring locations",
-                                 class = "btn btn-primary w-100")),
+                                 class = "btn btn-primary w-100",
+                                 icon = icon("map-location"))),
           column(6, actionButton(ns("map_params"), "See a map of parameter values now or at a past date",
-                                 class = "btn btn-primary w-100"))
+                                 class = "btn btn-primary w-100",
+                                 icon = icon("map-location")))
         )
       })
       output$plotButtonsTitle <- renderUI({
@@ -85,9 +87,11 @@ home <- function(id, language) {
       output$plot_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("plot_cont"), "Plot continuous data",
-                                 class = "btn btn-primary w-100")),
+                                 class = "btn btn-primary w-100",
+                                 icon = icon("chart-simple"))),
           column(6, actionButton(ns("plot_disc"), "Plot discrete data",
-                                 class = "btn btn-primary w-100"))
+                                 class = "btn btn-primary w-100",
+                                 icon = icon("chart-simple")))
         )
       })
       output$dataButtonsTitle <- renderUI({
@@ -99,9 +103,11 @@ home <- function(id, language) {
       output$data_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("dl_cont"), "Download continuous data",
-                                 class = "btn btn-primary w-100")),
+                                 class = "btn btn-primary w-100",
+                                 icon = icon("table"))),
           column(6, actionButton(ns("dl_disc"), "Download discrete data",
-                                 class = "btn btn-primary w-100"))
+                                 class = "btn btn-primary w-100",
+                                 icon = icon("table")))
         )
       })
       
