@@ -73,6 +73,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/client/info/news.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/client/info/about.R", package = "YGwater"))
   
+  
+  source(system.file("apps/YGwater/modules/feedback.R", package = "YGwater"))  # !!! delete this line when the feedback module is removed
+  
   # FOD module (only visible internally)
   source(system.file("apps/YGwater/modules/client/FOD/FOD_main.R", package = "YGwater"))
   

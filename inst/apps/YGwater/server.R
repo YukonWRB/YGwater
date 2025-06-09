@@ -93,6 +93,7 @@ app_server <- function(input, output, session) {
     contData = FALSE,
     news = FALSE,
     about = FALSE,
+    feedback = FALSE, # !!! THIs TAB TO BE DELETED ONCE TESTING IS COMPLETE
     syncCont = FALSE,
     syncDisc = FALSE,
     locs = FALSE,
@@ -456,7 +457,7 @@ $(document).keyup(function(event) {
       message = list(msg = "hide dropdown"))
     
     # When user selects any a tab, update the last active tab for the current mode
-    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
+    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
     } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "visit")) {
@@ -631,6 +632,13 @@ $(document).keyup(function(event) {
         output$news_ui <- renderUI(newsUI("news"))
         ui_loaded$news <- TRUE
         news("news", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "feedback") { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
+      if (!ui_loaded$feedback) {
+        output$feedback_ui <- renderUI(feedbackUI("feedback"))
+        ui_loaded$feedback <- TRUE
+        feedback("feedback") # Call the server
       }
     }
     
