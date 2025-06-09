@@ -45,7 +45,9 @@ imputeMissingUI <- function(id) {
         accordion_panel(
           id = ns("ts_panel"),
           title = "Timeseries selection",
-          DT::DTOutput(ns("ts_table"))
+          DT::DTOutput(ns("ts_table")),
+          input_task_button(ns("plot_ts_pre"), "Plot timeseries"),
+          plotly::plotlyOutput(ns("ts_plot_pre"))
         )
       ),
       accordion(
@@ -58,7 +60,7 @@ imputeMissingUI <- function(id) {
           textInput(ns("end"), "End datetime (UTC)", placeholder = "YYYY-MM-DD HH:MM:SS"),
           numericInput(ns("radius"), "Search radius (km)", value = 10, min = 0),
           selectInput(ns("method"), "Interpolation method",
-                      choices = c("Direct (other timeseries with calculated offset)" = "direct",
+                      choices = c("Direct (use other timeseries with calculated offset)" = "direct",
                                   "Linear (direct point to point)" = "linear",
                                   "Spline (curve fitted with surrounding data)" = "spline")),
           actionButton(ns("load"), "Load data")
@@ -114,10 +116,36 @@ imputeMissing <- function(id) {
       )
     })
     
-    selected_ts <- reactive({
-      row <- input$ts_table_rows_selected
-      if (length(row)) ts_meta()[row, "timeseries_id"] else NULL
+    selected_ts <- reactiveVal()
+    
+    observeEvent(input$ts_table_rows_selected, {
+      req(input$ts_table_rows_selected)
+      selected_ts(ts_meta()[input$ts_table_rows_selected, "timeseries_id"])
     })
+    
+    ts_plot_pre_task <- ExtendedTask$new(function(df) {
+      promises::future_promise({
+        plot <- plotly::plot_ly(data = df, x = ~datetime, y = ~value_raw, type = 'scatter', mode = 'lines', name = 'Original') %>%
+          plotly::add_lines(y = ~value_corrected, name = 'Corrected', line = list(color = 'red')) %>%
+          plotly::layout(title = NULL, xaxis = list(title = "Datetime"), yaxis = list(title = "Value"))
+        return(plot)
+      })
+    }) |> bind_task_button("plot_ts_pre")
+    
+    observeEvent(input$plot_ts_pre, {
+      req(selected_ts())
+      query <- sprintf(
+        "SELECT datetime, value_raw, value_corrected FROM continuous.measurements_continuous_corrected WHERE timeseries_id = %s ORDER BY datetime",
+        selected_ts()
+      )
+      df <- DBI::dbGetQuery(session$userData$AquaCache, query)
+      ts_plot_pre_task$invoke(df)
+    })
+    
+    output$ts_plot_pre <- plotly::renderPlotly({
+      ts_plot_pre_task$result()
+    })
+    
     
     raw_data <- reactiveVal(NULL)
     full_data <- reactiveVal(NULL)
@@ -125,6 +153,9 @@ imputeMissing <- function(id) {
     imputed_data <- reactiveVal(NULL)
     
     observeEvent(input$load, {
+      print(seleted_ts())
+      print(input$start)
+      print(input$end)
       req(selected_ts(), input$start, input$end)
       query <- sprintf(
         "SELECT datetime, value FROM continuous.measurements_continuous WHERE timeseries_id = %s AND datetime >= '%s' AND datetime <= '%s'",
