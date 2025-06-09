@@ -59,7 +59,7 @@ Imports:
 Suggests:
     AquaCache,
     bslib,
-    bsicon,
+    bsicons,
     DT,
     exifr,
     flextable,

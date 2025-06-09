@@ -21,7 +21,6 @@ mapParams <- function(id, language) {
     output$sidebar_page <- renderUI({
       req(moduleData, language)
       page_sidebar(
-        # bg = config$main_bg,  # background for the main panel
         sidebar = sidebar(
           title = NULL,
           bg = config$sidebar_bg, # Set in globals file
