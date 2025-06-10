@@ -220,6 +220,7 @@ imgMapView <- function(id, language) {
     })
     
     observe({  # This observer will run on module initialization
+      req(input$dates, images$images)
       # Filter by date range
       # Extend the end date to include the full day so single day
       # selections return all images for that day
