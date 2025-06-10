@@ -85,7 +85,7 @@ mapLocs <- function(id, language) {
               UNION
               SELECT DISTINCT parameter_id FROM discrete.results)")
       )
-    }, ttl = 60 * 60 * 24)
+    }, ttl = 60 * 60 * 24)  # Cache for 24 hours
 
     moduleData <- reactiveValues(
       locations = cached$locations,
@@ -376,7 +376,7 @@ mapLocs <- function(id, language) {
         )]
 
         tmp
-      }, ttl = 60 * 60 * 24)
+      }, ttl = 60 * 60 * 24)  # Cache for 24 hours
     })
     
     
