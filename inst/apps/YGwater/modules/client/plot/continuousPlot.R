@@ -1,15 +1,31 @@
 continuousPlotUI <- function(id) {
   ns <- NS(id)
   
-  page_sidebar(
-    sidebar = sidebar(
-      title = NULL,
-      width = 350,
-      bg = config$sidebar_bg,
-      open = list(mobile = "always-above"),
-      uiOutput(ns("sidebar"))
+  tagList(
+    tags$style(
+      HTML(sprintf("
+     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #FFFCF5;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #FBE5B2;
+        /* expanded header */
+        --bs-accordion-active-bg:   #FBE5B2;
+      }
+    ", ns("accordion1")))
     ),
-    uiOutput(ns("main"))
+    
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        width = 350,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar"))
+      ),
+      uiOutput(ns("main"))
+    )
   )
 }
 
@@ -36,7 +52,16 @@ continuousPlot <- function(id, language, windowDims) {
     output$sidebar <- renderUI({
       req(moduleData, language$language, language$abbrev)
       tagList(
-        selectizeInput(ns("type"), label = "Plot type", choices = c("Long timeseries", "Overlapping years"), selected = "Long timeseries"),
+        selectizeInput(ns("type"), 
+                       label = tooltip(
+                         trigger = list(
+                           "Plot type",
+                           bs_icon("info-circle-fill")
+                         ),
+                         "'Long timeseries' plots help visualize a change with time and allows for multiple traces or subplots, while 'Overlapping years' plots are useful for comparing data across years at one location."
+                       ),
+                       choices = c("Long timeseries", "Overlapping years"), 
+                       selected = "Long timeseries"),
         selectizeInput(ns("param"), label = "Plotting parameter", stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = values$water_level),
         selectizeInput(ns("loc_name"), "Select location", choices = NULL), # Choices are populated based on the parameter
         
@@ -115,33 +140,48 @@ continuousPlot <- function(id, language, windowDims) {
           uiOutput(ns("subplot3_ui")),
           uiOutput(ns("subplot4_ui")),
           div(
-            style = "display: flex; justify-content: flex-start;", # Use flexbox to align buttons side by side
+            style = "display: flex; justify-content: flex-start; margin-bottom: 10px", # Use flexbox to align buttons side by side
             actionButton(ns("add_trace"),
                          "Add trace",
                          style = "margin-right: 5px;"),
             actionButton(ns("add_subplot"),
-                         "Add subplot")
+                         "Add subplot",
+                         style = "margin-right: 10px;"),
+            tooltip(
+              trigger = list(
+                bsicons::bs_icon("info-circle-fill")
+              ),
+              "Click “Add trace” to overlay a new timeseries on the same plot, or “Add subplot” to create a separate panel.",
+              placement = "right"
+            )
           ),
           checkboxInput(ns("log_y"), "Log scale y-axis?"),
           uiOutput(ns("share_axes")),
           checkboxInput(ns("historic_range"), "Plot historic range?")
         ),
-        checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
-        checkboxInput(ns("plot_filter"), "Filter extreme values?"),
-        checkboxInput(ns("unusable"), "Show unusable data?"),
-        checkboxInput(ns("grades"), "Show grades?"),
-        checkboxInput(ns("approvals"), "Show approvals?"),
-        checkboxInput(ns("qualifiers"), "Show qualifiers?"),
-        
-        div(
-          actionButton(ns("extra_aes"),
-                       "Modify plot aesthetics",
-                       title = "Modify plot aesthetics such as language, line size, text size.",
-                       style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
-          input_task_button(ns("make_plot"), 
-                            label = "Create Plot", 
-                            style = "display: block; width: 100%;")
-        )
+        accordion(
+          id = ns("accordion1"),
+          open = FALSE,
+          accordion_panel(
+            id = ns("accordion1"),
+            title = "Extra options",
+            icon = bsicons::bs_icon("gear"),
+            checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
+            checkboxInput(ns("plot_filter"), "Filter extreme values?"),
+            checkboxInput(ns("unusable"), "Show unusable data?"),
+            checkboxInput(ns("grades"), "Show grades?"),
+            checkboxInput(ns("approvals"), "Show approvals?"),
+            checkboxInput(ns("qualifiers"), "Show qualifiers?"),
+            actionButton(ns("extra_aes"),
+                         "Modify plot aesthetics",
+                         title = "Modify plot aesthetics such as language, line size, text size.",
+                         style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
+          )
+        ),
+        br(),
+        input_task_button(ns("make_plot"), 
+                          label = "Create Plot", 
+                          style = "display: block; width: 100%;")
       ) # End tagList
     }) %>% # End renderUI
       bindEvent(language$language, moduleData) # Re-render the UI if the language or moduleData changes
@@ -653,12 +693,23 @@ continuousPlot <- function(id, language, windowDims) {
           output$share_axes <- renderUI({
             div(
               checkboxInput(ns("shareX"),
-                            "Share X axis between subplots (dates are aligned)",
+                            label = tooltip(
+                              trigger = list(
+                                "Share X axis between subplots (dates are aligned)",
+                                bs_icon("info-circle-fill")
+                              ),
+                              "This will align the x-axis across all subplots, making it easier to compare trends over time."
+                            ),
                             value = TRUE),
-              
               checkboxInput(ns("shareY"),
-                            "Share Y axis between subplots (values are aligned)",
-                            value = FALSE)
+                            label = tooltip(
+                              trigger = list(
+                                "Share Y axis between subplots (values are aligned)",
+                                bs_icon("info-circle-fill")
+                              ),
+                              "This will align the y-axis across all subplots, making it easier to compare values across different locations or parameters."
+                            ),
+                            value = FALSE),
             )
           })
           share_axes_run(TRUE)

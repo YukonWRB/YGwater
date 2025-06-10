@@ -103,7 +103,7 @@ imgMapView <- function(id, language) {
               class = "d-inline-block me-3 align-items-start",
               style = "vertical-align: top; display: inline-flex;",
               sliderInput(
-                ns("toy_lab"),
+                ns("tod"),
                 label = "Time of day (UTC-7)",
                 min = 0,
                 max = 23,
@@ -221,7 +221,10 @@ imgMapView <- function(id, language) {
     
     observe({  # This observer will run on module initialization
       # Filter by date range
-      date_filter <- images$images$datetime >= input$dates[1] & images$images$datetime <= input$dates[2]
+      # Extend the end date to include the full day so single day
+      # selections return all images for that day
+      end_date <- as.POSIXct(paste0(input$dates[2], " 23:59"))
+      date_filter <- images$images$datetime >= input$dates[1] & images$images$datetime <= end_date
       
       # Filter by months
       if (!is.null(input$months) && length(input$months) > 0) {
@@ -232,7 +235,7 @@ imgMapView <- function(id, language) {
       
       # Filter by time of day
       img_hour <- as.integer(format(as.POSIXct(images$images$datetime), "%H"))
-      toy_filter <- img_hour >= input$toy_lab[1] & img_hour <= input$toy_lab[2]
+      toy_filter <- img_hour >= input$tod[1] & img_hour <= input$tod[2]
       
       # Filter by image type
       if (!is.null(input$img_type) && length(input$img_type) > 0) {
