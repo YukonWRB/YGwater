@@ -8,23 +8,27 @@ homeUI <- function(id) {
     tags$div(style = "height: 60px;"),
     htmlOutput(ns("title")),
     tags$div(style = "height: 10px;"),
-    htmlOutput(ns("text")),
+    htmlOutput(ns("main_text")),
+    tags$div(style = "height: 30px;"),
+    htmlOutput(ns("discrete_continuous_title")),
+    tags$div(style = "height: 10px;"),
+    htmlOutput(ns("discrete_continuous")),
     tags$div(style = "height: 20px;"),
-    htmlOutput(ns("mapButtonsTitle")),
+    # htmlOutput(ns("mapButtonsTitle")),
     tags$div(style = "height: 10px;"),
     uiOutput(ns("map_buttons")),
     tags$div(style = "height: 20px;"),
-    htmlOutput(ns("plotButtonsTitle")),
+    # htmlOutput(ns("plotButtonsTitle")),
     tags$div(style = "height: 10px;"),
     uiOutput(ns("plot_buttons")),
     tags$div(style = "height: 20px;"),
-    htmlOutput(ns("dataButtonsTitle")),
+    # htmlOutput(ns("dataButtonsTitle")),
     tags$div(style = "height: 10px;"),
     uiOutput(ns("data_buttons")),
     tags$div(style = "height: 40px;"),
-    htmlOutput(ns("discTitle")),
-    tags$div(style = "height: 10px;"),
-    htmlOutput(ns("discBody"))
+    # htmlOutput(ns("discTitle")),
+    # tags$div(style = "height: 10px;"),
+    # htmlOutput(ns("discBody"))
   )
 }
 
@@ -55,9 +59,23 @@ home <- function(id, language) {
                     '</div>'
         ))
       })
-      output$text <- renderUI({
+      output$main_text <- renderUI({
         HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
                     tr("homeText", language$language),
+                    '</div>'
+        ))
+      })
+      
+      
+      output$discrete_continuous_title <- renderUI({
+        HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
+                    tr("home_discrete_continuous_title", language$language),
+                    '</div>'
+        ))
+      })
+      output$discrete_continuous <- renderUI({
+        HTML(paste0('<div class="montserrat" style="font-size: 16px; font-weight: 500; font-style: normal">',
+                    tr("home_discrete_continuous", language$language),
                     '</div>'
         ))
       })
@@ -70,10 +88,10 @@ home <- function(id, language) {
       })
       output$map_buttons <- renderUI({
         fluidRow(
-          column(6, actionButton(ns("map_locs"), "See a map of monitoring locations",
+          column(6, actionButton(ns("map_locs"), tr("home_map_locs_btn", language$language),
                                  class = "btn btn-primary w-100",
                                  icon = icon("map-location"))),
-          column(6, actionButton(ns("map_params"), "See a map of parameter values now or at a past date",
+          column(6, actionButton(ns("map_params"), tr("home_map_params_btn", language$language),
                                  class = "btn btn-primary w-100",
                                  icon = icon("map-location")))
         )
@@ -86,10 +104,10 @@ home <- function(id, language) {
       })
       output$plot_buttons <- renderUI({
         fluidRow(
-          column(6, actionButton(ns("plot_cont"), "Plot continuous data",
+          column(6, actionButton(ns("plot_cont"), tr("home_plot_cont_btn", language$language),
                                  class = "btn btn-primary w-100",
                                  icon = icon("chart-simple"))),
-          column(6, actionButton(ns("plot_disc"), "Plot discrete data",
+          column(6, actionButton(ns("plot_disc"), tr("home_plot_disc_btn", language$language),
                                  class = "btn btn-primary w-100",
                                  icon = icon("chart-simple")))
         )
@@ -102,10 +120,10 @@ home <- function(id, language) {
       })
       output$data_buttons <- renderUI({
         fluidRow(
-          column(6, actionButton(ns("dl_cont"), "Download continuous data",
+          column(6, actionButton(ns("dl_cont"), tr("home_dl_cont_btn", language$language),
                                  class = "btn btn-primary w-100",
                                  icon = icon("table"))),
-          column(6, actionButton(ns("dl_disc"), "Download discrete data",
+          column(6, actionButton(ns("dl_disc"), tr("home_dl_disc_btn", language$language),
                                  class = "btn btn-primary w-100",
                                  icon = icon("table")))
         )

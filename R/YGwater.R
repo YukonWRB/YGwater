@@ -32,8 +32,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   rlang::check_installed("bsicons", reason = "required to use YGwater app")
   rlang::check_installed("exifr", reason = "required to use YGwater app")
   rlang::check_installed("leaflet", reason = "required to use YGwater app")
-  # rlang::check_installed("magick", reason = "required to use YGwater app")
-  # rlang::check_installed("AquaCache", reason = "required to use YGwater app")
+  rlang::check_installed("AquaCache", reason = "required to use YGwater app")
   
   appDir <- system.file("apps/YGwater", package = "YGwater")
   
