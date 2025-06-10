@@ -134,7 +134,7 @@ locsNewTSServer <- function(id) {
     
     ns <- session$ns
     
-    
+    # HEADS UP! find the modules which depend on timeseries. These will have cached data, which will need to be cleared when a new location or timeseries is added using the clear_cached function (R/app_cache.R)
 
   }) # End of moduleServer
 }

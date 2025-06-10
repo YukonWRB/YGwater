@@ -66,21 +66,21 @@ imgTableView <- function(id, language) {
     # Update text based on language ###########################################
     observeEvent(language$language, {
       
-      auto <- titleCase(tr("img_type_auto", language$language), language$abbrev)
-      man <- titleCase(tr("img_type_man", language$language), language$abbrev)
+      auto <- tr("img_type_auto", language$language)
+      man <- tr("img_type_man", language$language)
       choices <- c("auto", "man")
       choices <- stats::setNames(choices, c(auto, man))
       
-      updateSelectizeInput(session, "type", label = titleCase(tr("img_type_lab", language$language), language$abbrev), choices = stats::setNames(c("all", imgs$imgs_types$image_type_id), c("All", imgs$imgs_types$image_type)), selected = input$type)
+      updateSelectizeInput(session, "type", label = tr("img_type_lab", language$language), choices = stats::setNames(c("all", imgs$imgs_types$image_type_id), c("All", imgs$imgs_types$image_type)), selected = input$type)
       
       output$dates <- renderUI({
         dateRangeInput(ns("dates"), label = tr("date_range_lab", language$language), start = Sys.Date() - 2, end = Sys.Date(), language = language$abbrev, separator = tr("date_sep", language$language))
       })
       
-      loc_choices <- stats::setNames(c("All", imgs$img_meta$location_id), c(tr("all", language$language), titleCase(imgs$img_meta[[tr("generic_name_col", language$language)]], language$abbrev)))
+      loc_choices <- stats::setNames(c("All", imgs$img_meta$location_id), c(tr("all", language$language), imgs$img_meta[[tr("generic_name_col", language$language)]]))
       loc_choices <- c(loc_choices[1], loc_choices[-1][order(names(loc_choices)[-1])]) # Order but keep "All" at the top
       output$loc <- renderUI({
-        selectizeInput(ns("loc"), label = titleCase(tr("loc", language$language), language$abbrev), choices = loc_choices, selected = input$loc, multiple = FALSE)
+        selectizeInput(ns("loc"), label = tr("loc", language$language), choices = loc_choices, selected = input$loc, multiple = FALSE)
       })
     })
     
