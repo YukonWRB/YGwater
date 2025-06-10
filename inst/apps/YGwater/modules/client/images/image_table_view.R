@@ -66,11 +66,6 @@ imgTableView <- function(id, language) {
     # Update text based on language ###########################################
     observeEvent(language$language, {
       
-      auto <- tr("img_type_auto", language$language)
-      man <- tr("img_type_man", language$language)
-      choices <- c("auto", "man")
-      choices <- stats::setNames(choices, c(auto, man))
-      
       updateSelectizeInput(session, "type", label = tr("img_type_lab", language$language), choices = stats::setNames(c("all", imgs$imgs_types$image_type_id), c("All", imgs$imgs_types$image_type)), selected = input$type)
       
       output$dates <- renderUI({
