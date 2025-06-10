@@ -30,60 +30,74 @@ mapLocs <- function(id, language) {
     
     outputs <- reactiveValues()  # This allows the module to pass values back to the main server
     
+    cached <- get_cached("map_module_data", function() {
+      list(
+        locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
+        timeseries = dbGetQueryDT(
+          session$userData$AquaCache,
+          "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, ts.z, 'continuous' AS data_type
+             FROM continuous.timeseries AS ts
+             LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id
+             LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
+           UNION ALL
+           SELECT MIN(r.result_id) AS timeseries_id, s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id, NULL AS aggregation_type_id,
+                  MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime, MIN(s.z) AS z, 'discrete' AS data_type
+             FROM discrete.results r
+             JOIN discrete.samples s ON r.sample_id = s.sample_id
+             LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
+             LEFT JOIN public.media_types m ON s.media_id = m.media_id
+            GROUP BY s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id"),
+        projects = dbGetQueryDT(session$userData$AquaCache, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
+        networks =  dbGetQueryDT(session$userData$AquaCache, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
+        locations_projects = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_projects;"),
+        locations_networks = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_networks;"),
+        media_types = dbGetQueryDT(
+          session$userData$AquaCache,
+          "SELECT mt.* FROM public.media_types mt WHERE mt.media_id IN (
+              SELECT DISTINCT media_id FROM continuous.timeseries
+              UNION
+              SELECT DISTINCT media_id FROM discrete.samples)"),
+        parameters = dbGetQueryDT(
+          session$userData$AquaCache,
+          "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id
+             FROM public.parameters AS p
+             LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id
+            WHERE p.parameter_id IN (
+              SELECT DISTINCT parameter_id FROM continuous.timeseries
+              UNION
+              SELECT DISTINCT parameter_id FROM discrete.results)"),
+        parameter_groups = dbGetQueryDT(
+          session$userData$AquaCache,
+          "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr
+             FROM public.parameter_groups AS pg
+             LEFT JOIN public.parameter_relationships AS pr ON pg.group_id = pr.group_id
+            WHERE pr.parameter_id IN (
+              SELECT DISTINCT parameter_id FROM continuous.timeseries
+              UNION
+              SELECT DISTINCT parameter_id FROM discrete.results)"),
+        parameter_sub_groups = dbGetQueryDT(
+          session$userData$AquaCache,
+          "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr
+             FROM public.parameter_sub_groups AS psg
+             LEFT JOIN public.parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id
+            WHERE pr.parameter_id IN (
+              SELECT DISTINCT parameter_id FROM continuous.timeseries
+              UNION
+              SELECT DISTINCT parameter_id FROM discrete.results)")
+      )
+    }, ttl = 60 * 60 * 24)
+
     moduleData <- reactiveValues(
-      locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
-      timeseries = dbGetQueryDT(
-        session$userData$AquaCache,
-        "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, ts.z, 'continuous' AS data_type
-           FROM continuous.timeseries AS ts
-           LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id
-           LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
-         UNION ALL
-         SELECT MIN(r.result_id) AS timeseries_id, s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id, NULL AS aggregation_type_id,
-                MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime, MIN(s.z) AS z, 'discrete' AS data_type
-           FROM discrete.results r
-           JOIN discrete.samples s ON r.sample_id = s.sample_id
-           LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
-           LEFT JOIN public.media_types m ON s.media_id = m.media_id
-          GROUP BY s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id"
-      ),
-      projects = dbGetQueryDT(session$userData$AquaCache, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
-      networks =  dbGetQueryDT(session$userData$AquaCache, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
-      locations_projects = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_projects;"),
-      locations_networks = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_networks;"),
-      media_types = dbGetQueryDT(
-        session$userData$AquaCache,
-        "SELECT mt.* FROM public.media_types mt WHERE mt.media_id IN (
-            SELECT DISTINCT media_id FROM continuous.timeseries
-            UNION
-            SELECT DISTINCT media_id FROM discrete.samples)") ,
-      parameters = dbGetQueryDT(
-        session$userData$AquaCache,
-        "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id
-           FROM public.parameters AS p
-           LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id
-          WHERE p.parameter_id IN (
-            SELECT DISTINCT parameter_id FROM continuous.timeseries
-            UNION
-            SELECT DISTINCT parameter_id FROM discrete.results)") ,
-      parameter_groups = dbGetQueryDT(
-        session$userData$AquaCache,
-        "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr
-           FROM public.parameter_groups AS pg
-           LEFT JOIN public.parameter_relationships AS pr ON pg.group_id = pr.group_id
-          WHERE pr.parameter_id IN (
-            SELECT DISTINCT parameter_id FROM continuous.timeseries
-            UNION
-            SELECT DISTINCT parameter_id FROM discrete.results)") ,
-      parameter_sub_groups = dbGetQueryDT(
-        session$userData$AquaCache,
-        "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr
-           FROM public.parameter_sub_groups AS psg
-           LEFT JOIN public.parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id
-          WHERE pr.parameter_id IN (
-            SELECT DISTINCT parameter_id FROM continuous.timeseries
-            UNION
-            SELECT DISTINCT parameter_id FROM discrete.results)")
+      locations = cached$locations,
+      timeseries = cached$timeseries,
+      projects = cached$projects,
+      networks = cached$networks,
+      locations_projects = cached$locations_projects,
+      locations_networks = cached$locations_networks,
+      media_types = cached$media_types,
+      parameters = cached$parameters,
+      parameter_groups = cached$parameter_groups,
+      parameter_sub_groups = cached$parameter_sub_groups
       # has_image_series = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT location_id FROM image_series;"),
       # has_documents = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
     )
@@ -264,10 +278,11 @@ mapLocs <- function(id, language) {
     
     # Update map popup based on language ###########################################
     popupData <- reactive({
-      # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
-      # Get location names
-      popup_names <- moduleData$locations[ , .(location_id, popup_name = get(tr("generic_name_col", language$language)))]
-      popup_names[, popup_name := titleCase(popup_name, language$abbrev)]
+      get_cached("map_popup_data", function() {
+        # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
+        # Get location names
+        popup_names <- moduleData$locations[ , .(location_id, popup_name = get(tr("generic_name_col", language$language)))]
+        popup_names[, popup_name := titleCase(popup_name, language$abbrev)]
       # Aggregate time range for each location
       time_range <- moduleData$timeseries[, .(
         start_time = min(start_datetime),
@@ -350,17 +365,18 @@ mapLocs <- function(id, language) {
         }
       }, by = location_id]
 
-      tmp[, popup_html := paste0(
-        "<strong>", popup_name, "</strong><br/>",
-        substr(start_time, 1, 10), " ", tr("to", language$language), " ", substr(end_time, 1, 10), "<br/><br/>",
-        "<strong>", tr("parameter(s)", language$language), ":</strong><br/>",
-        "<div style='max-height:100px; overflow-y:auto;'><i>", parameters, "</i></div><br/>",  # Supposed to be scrollable
-        "<strong>", tr("network(s)", language$language), ":</strong><br/><i>", networks, "</i><br/>",
-        "<strong>", tr("project(s)", language$language), ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i>",
-        popup_links
-      )]
-      
-      tmp
+        tmp[, popup_html := paste0(
+          "<strong>", popup_name, "</strong><br/>",
+          substr(start_time, 1, 10), " ", tr("to", language$language), " ", substr(end_time, 1, 10), "<br/><br/>",
+          "<strong>", tr("parameter(s)", language$language), ":</strong><br/>",
+          "<div style='max-height:100px; overflow-y:auto;'><i>", parameters, "</i></div><br/>",  # Supposed to be scrollable
+          "<strong>", tr("network(s)", language$language), ":</strong><br/><i>", networks, "</i><br/>",
+          "<strong>", tr("project(s)", language$language), ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i>",
+          popup_links
+        )]
+
+        tmp
+      }, ttl = 60 * 60 * 24)
     })
     
     
