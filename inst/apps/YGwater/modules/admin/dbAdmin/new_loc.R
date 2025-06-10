@@ -23,7 +23,7 @@ locsNewLocServer <- function(id) {
     
     shinyjs::hide("hydat_fill") # Hide the button right away, it's shown if applicable
     
-    # Get some data from the aquacache
+    # Get some data from aquacache
     moduleData <- reactiveValues(
       exist_locs = dbGetQueryDT(session$userData$AquaCache, "SELECT location_id, location, name, name_fr FROM locations"),
       loc_types = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM location_types"),
