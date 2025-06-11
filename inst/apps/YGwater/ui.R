@@ -151,7 +151,10 @@ app_ui <- function(request) {
                    value = "appTasks",
                    nav_panel(title = "News page content",
                              value = "manageNewsContent",
-                             uiOutput("manageNewsContent_ui"))
+                             uiOutput("manageNewsContent_ui")),
+                   nav_panel(title = "View feedback",
+                            value = "viewFeedback",
+                            uiOutput("viewFeedback_ui"))
           )
         },
         if (!config$public) {
@@ -197,14 +200,14 @@ app_ui <- function(request) {
            )
         },
         if (!config$public) {
-          nav_panel(title = "Add/modify field visit", 
+          nav_panel(title = "Add/modify field visit",
                     value = "visit",
                     uiOutput("visit_ui"))
         }, 
         if (!config$public) {
-          nav_menu(title = "Equipment/instruments", 
+          nav_menu(title = "Equipment/instruments",
                    value = "equip",
-                   nav_panel(title = "Checks + calibrations", 
+                   nav_panel(title = "Checks + calibrations",
                              value = "cal",
                              uiOutput("cal_ui")),
                    nav_panel(title = "Deploy/Recover", 

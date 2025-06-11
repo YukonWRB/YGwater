@@ -115,6 +115,7 @@ app_server <- function(input, output, session) {
     addDocs = FALSE,
     addImgs = FALSE,
     manageNewsContent = FALSE,
+    viewFeedback = FALSE,
     visit = FALSE)
   
   ## database connections ###########
@@ -465,7 +466,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -758,6 +759,13 @@ $(document).keyup(function(event) {
         output$manageNewsContent_ui <- renderUI(manageNewsContentUI("manageNewsContent"))
         ui_loaded$manageNewsContent <- TRUE
         manageNewsContent("manageNewsContent")
+      }
+    }
+    if (input$navbar == "viewFeedback") {
+      if (!ui_loaded$viewFeedback) {
+        output$viewFeedback_ui <- renderUI(viewFeedbackUI("viewFeedback"))
+        ui_loaded$viewFeedback <- TRUE
+        viewFeedback("viewFeedback")
       }
     }
     if (input$navbar == "visit") {
