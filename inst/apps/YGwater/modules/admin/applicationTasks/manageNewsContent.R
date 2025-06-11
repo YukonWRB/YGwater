@@ -1,4 +1,4 @@
-manageContentUI <- function(id) {
+manageNewsContentUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     tabsetPanel(
@@ -32,7 +32,7 @@ manageContentUI <- function(id) {
   )
 }
 
-manageContent <- function(id) {
+manageNewsContent <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 

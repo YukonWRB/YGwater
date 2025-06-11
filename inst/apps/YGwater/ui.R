@@ -147,6 +147,14 @@ app_ui <- function(request) {
           )
         },
         if (!config$public) {
+          nav_menu(title = "Application tasks",
+                   value = "appTasks",
+                   nav_panel(title = "News page content",
+                             value = "manageNewsContent",
+                             uiOutput("manageNewsContent_ui"))
+          )
+        },
+        if (!config$public) {
           nav_menu(title = "Continuous data", 
                    value = "continuousData",
                    nav_panel(title = "Add continuous data",
@@ -185,10 +193,7 @@ app_ui <- function(request) {
                              uiOutput("addDocs_ui")),
                    nav_panel(title = "Images",
                              value = "addImgs",
-                             uiOutput("addImgs_ui")),
-                   nav_panel(title = "Page content",
-                             value = "manageContent",
-                             uiOutput("manageContent_ui"))
+                             uiOutput("addImgs_ui"))
            )
         },
         if (!config$public) {
