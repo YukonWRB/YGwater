@@ -108,38 +108,47 @@ manageNewsContent <- function(id) {
     
     observeEvent(input$text_table_cell_edit, {
       info <- input$text_table_cell_edit
+      i    <- info$row
+      j    <- info$col + 1   # <- adjust for zero-based + hidden rownames
+      v    <- info$value
+      
       df <- text_df()
-      old_id <- df$id[info$row]
-      df[info$row, info$col] <- info$value
+      old_id <- df$id[i]
+      df[i, j] <- v
       text_df(df)
-      col_name <- names(df)[info$col]
+      
+      col_name <- names(df)[j]
       if (col_name == "id") {
         DBI::dbExecute(session$userData$AquaCache,
                        "UPDATE application.text SET id = $1 WHERE id = $2",
-                       params = list(info$value, old_id))
+                       params = list(v, old_id))
       } else {
         DBI::dbExecute(session$userData$AquaCache,
                        sprintf("UPDATE application.text SET %s = $1 WHERE id = $2", col_name),
-                       params = list(info$value, old_id))
+                       params = list(v, old_id))
       }
       load_texts()
     })
     
     observeEvent(input$image_table_cell_edit, {
       info <- input$image_table_cell_edit
+      i    <- info$row
+      j    <- info$col + 1   # <- adjust for zero-based + hidden rownames
+      v    <- info$value
+      
       df <- image_df()
-      old_id <- df$id[info$row]
-      df[info$row, info$col] <- info$value
+      old_id <- df$id[i]
+      df[i, j] <- v
       image_df(df)
-      col_name <- names(df)[info$col]
+      col_name <- names(df)[j]
       if (col_name == "id") {
         DBI::dbExecute(session$userData$AquaCache,
                        "UPDATE application.images SET id = $1 WHERE id = $2",
-                       params = list(info$value, old_id))
+                       params = list(v, old_id))
       } else {
         DBI::dbExecute(session$userData$AquaCache,
                        sprintf("UPDATE application.images SET %s = $1 WHERE id = $2", col_name),
-                       params = list(info$value, old_id))
+                       params = list(v, old_id))
       }
       load_images()
     })
@@ -200,7 +209,7 @@ manageNewsContent <- function(id) {
     })
     
     output$page_table <- DT::renderDT({
-      DT::datatable(preview_data(), selection = 'multiple', options = list(scrollX = TRUE))
+      DT::datatable(preview_data(), selection = 'multiple', rownames = FALSE, options = list(scrollX = TRUE))
     })
     
     output$page_preview <- renderUI({
