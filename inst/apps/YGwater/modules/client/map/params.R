@@ -27,7 +27,7 @@ mapParams <- function(id, language) {
           "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
         )
       )
-    }, ttl = 60 * 60 * 24)
+    }, ttl = 60 * 60)
     
     moduleData <- reactiveValues(
       locations = cached$locations,

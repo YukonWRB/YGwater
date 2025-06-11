@@ -138,7 +138,7 @@ contData <- function(id, language, inputs) {
         param_groups = param_groups,
         param_sub_groups = param_sub_groups
       )
-    }, ttl = 60 * 60 * 24)
+    }, ttl = 60 * 60)
     
     moduleData <- reactiveValues(
       locs = cached$locs,
