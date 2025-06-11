@@ -185,8 +185,11 @@ app_ui <- function(request) {
                              uiOutput("addDocs_ui")),
                    nav_panel(title = "Images",
                              value = "addImgs",
-                             uiOutput("addImgs_ui"))
-          )
+                             uiOutput("addImgs_ui")),
+                   nav_panel(title = "Page content",
+                             value = "manageContent",
+                             uiOutput("manageContent_ui"))
+           )
         },
         if (!config$public) {
           nav_panel(title = "Add/modify field visit", 
