@@ -3,7 +3,7 @@
 #' This function generates a report of distance between the water surface and bridges or other important infrastructure. The output is a Microsoft Word document on a Yukon Government template.
 #'
 #' @param con A connection to the database. Default uses function [AquaConnect()] with default settings.
-#' @param locations The list of locations for which you want a distance measurement, or default "all" to get every one in the database. These must be reporting radar distance in the WRB database as parameter 'distance'. Default "all" will only fetch locations where the network is listed as 'highways' in the timeseries table of the database.
+#' @param locations The list of locations for which you want a distance measurement, or default "all" to get every one in the database. These must be reporting radar distance in the WRB database as parameter 'distance'. Default "all" will only fetch locations where the network is listed as 'Highway Observation Network' in the locations_networks table of the database.
 #' @param zoom Set TRUE if you want zoomed-in plots.
 #' @param zoom_days Set the number of days on the x-axis of the zoomed in plots.
 #' @param save_path The path to the directory (folder) where the report should be saved. Default "choose" lets you select your folder, otherwise enter the path as a character string. WARNING: option 'choose' only works on Windows, and some late-build R versions have a bug that prevents it from working every time.
@@ -60,11 +60,11 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
             JOIN parameters AS p ON t.parameter_id = p.parameter_id 
             JOIN locations_networks AS ln ON t.location_id = ln.location_id 
             JOIN networks AS n ON ln.network_id = n.network_id 
-            WHERE p.param_name = 'distance' 
+            WHERE p.parameter_id = 1160
             AND n.name = 'Highway Observation Network'
         )
     ) AS l ON t.location_id = l.location_id 
-    WHERE p.param_name = 'distance' 
+    WHERE p.parameter_id = 1160
     AND n.name = 'Highway Observation Network';
 ")
   } else {
@@ -83,11 +83,11 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
             JOIN parameters AS p ON t.parameter_id = p.parameter_id 
             JOIN locations_networks AS ln ON t.location_id = ln.location_id 
             JOIN networks AS n ON ln.network_id = n.network_id 
-            WHERE p.param_name = 'distance' 
+            WHERE p.parameter_id = 1160
             AND n.name = 'Highway Observation Network'
         )
     ) AS l ON t.location_id = l.location_id 
-    WHERE p.param_name = 'distance' 
+    WHERE p.parameter_id = 1160
     AND n.name = 'Highway Observation Network'
     AND t.location IN ('", paste(locations, collapse = "', '"), "');
 ")

@@ -4,6 +4,11 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   library(shinyjs)
   library(bslib)
   library(bsicons)
+
+  # Initialize a shared cache environment available to all sessions
+  if (!exists("app_cache", envir = .GlobalEnv)) {
+    assign("app_cache", new.env(parent = emptyenv()), envir = .GlobalEnv)
+  }
   
   # 'Admin' side modules #####
   # database admin modules
@@ -40,6 +45,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/admin/documents/addDocs.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/imgupload/addImgs.R", package = "YGwater"))
   
+  source(system.file("apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/applicationTasks/viewFeedback.R", package = "YGwater"))
   
   
   # 'client' side modules #####

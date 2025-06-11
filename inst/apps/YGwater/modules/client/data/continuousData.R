@@ -22,7 +22,7 @@ contDataUI <- function(id) {
     page_sidebar(
       sidebar = sidebar(
         title = NULL,
-        width = 350,
+        width = 400,
         bg = config$sidebar_bg,
         open = list(mobile = "always-above"),
         uiOutput(ns("sidebar")) # UI is rendered in the server function below so that it can use database information as well as language selections.
@@ -54,47 +54,111 @@ contData <- function(id, language, inputs) {
     }
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
+    cached <- get_cached("cont_data_module_data", function() {
+      locs <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
+      )
+      sub_locs <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT DISTINCT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM timeseries) ORDER BY sub_location_name ASC;"
+      )
+      params <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT DISTINCT parameter_id, param_name, COALESCE(param_name_fr, param_name) AS param_name_fr, unit_default AS unit FROM parameters WHERE parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries) ORDER BY param_name ASC;"
+      )
+      media <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM timeseries AS t WHERE m.media_id = t.media_id);"
+      )
+      aggregation_types <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM aggregation_types WHERE aggregation_type_id IN (SELECT DISTINCT aggregation_type_id FROM timeseries);"
+      )
+      parameter_relationships <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM timeseries AS t WHERE p.parameter_id = t.parameter_id) ;"
+      )
+      range <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM timeseries;"
+      )
+      timeseries <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT timeseries_id, location_id, sub_location_id, media_id, parameter_id, aggregation_type_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, z, start_datetime, end_datetime FROM timeseries;"
+      )
+      
+      rates <- data.frame(seconds = unique(timeseries$record_rate)[order(unique(timeseries$record_rate))])
+      rates$period <- as.character(lubridate::seconds_to_period(rates$seconds))
+      z <- unique(timeseries$z[!is.na(timeseries$z)])
+      
+      locations_projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_projects WHERE location_id IN (", paste(locs$location_id, collapse = ", "), ");"))
+      if (nrow(locations_projects) > 0) {
+        projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM projects WHERE location_id IN (", paste(locations_projects$project_id, collapse = ", "), ");"))
+      } else {
+        locations_projects <- data.frame(location_id = numeric(), project_id = numeric())
+        projects <- data.frame(project_id = numeric(), name = character(), ame_fr = character())
+      }
+      
+      locations_networks <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_networks WHERE location_id IN (", paste(locs$location_id, collapse = ", "), ");"))
+      if (nrow(locations_networks) > 0) {
+        networks <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM networks WHERE network_id IN (", paste(locations_networks$network_id, collapse = ", "), ");"))
+      } else {
+        networks <- data.frame()
+      }
+      
+      if (any(!is.na(parameter_relationships$group_id))) {
+        groups <- parameter_relationships$group_id[!is.na(parameter_relationships$group_id)]
+        param_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_groups WHERE group_id IN (", paste(groups, collapse = ", "), ");"))
+      } else {
+        param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
+      }
+      if (any(!is.na(parameter_relationships$sub_group_id))) {
+        sub_groups <- parameter_relationships$sub_group_id[!is.na(parameter_relationships$sub_group_id)]
+        param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
+      } else {
+        param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+      }
+      
+      list(
+        locs = locs,
+        sub_locs = sub_locs,
+        params = params,
+        media = media,
+        aggregation_types = aggregation_types,
+        parameter_relationships = parameter_relationships,
+        range = range,
+        timeseries = timeseries,
+        rates = rates,
+        z = z,
+        locations_projects = locations_projects,
+        projects = projects,
+        locations_networks = locations_networks,
+        networks = networks,
+        param_groups = param_groups,
+        param_sub_groups = param_sub_groups
+      )
+    }, ttl = 60 * 60 * 24)
+    
     moduleData <- reactiveValues(
-      locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"),
-      sub_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM timeseries) ORDER BY sub_location_name ASC;"),
-      params = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameter_id, param_name, COALESCE(param_name_fr, param_name) AS param_name_fr, unit_default AS unit FROM parameters WHERE parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries) ORDER BY param_name ASC;"),
-      media = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM timeseries AS t WHERE m.media_id = t.media_id);"),
-      aggregation_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM aggregation_types WHERE aggregation_type_id IN (SELECT DISTINCT aggregation_type_id FROM timeseries);"),
-      parameter_relationships = DBI::dbGetQuery(session$userData$AquaCache, "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM timeseries AS t WHERE p.parameter_id = t.parameter_id) ;"),
-      range = DBI::dbGetQuery(session$userData$AquaCache, "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM timeseries;"),
-      timeseries = DBI::dbGetQuery(session$userData$AquaCache, "SELECT timeseries_id, location_id, sub_location_id, media_id, parameter_id, aggregation_type_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, z, start_datetime, end_datetime FROM timeseries;")
+      locs = cached$locs,
+      sub_locs = cached$sub_locs,
+      params = cached$params,
+      media = cached$media,
+      aggregation_types = cached$aggregation_types,
+      parameter_relationships = cached$parameter_relationships,
+      range = cached$range,
+      timeseries = cached$timeseries,
+      rates = cached$rates,
+      z = cached$z,
+      locations_projects = cached$locations_projects,
+      projects = cached$projects,
+      locations_networks = cached$locations_networks,
+      networks = cached$networks,
+      param_groups = cached$param_groups,
+      param_sub_groups = cached$param_sub_groups
     )
     
-    moduleData$rates <- data.frame(seconds = unique(moduleData$timeseries$record_rate)[order(unique(moduleData$timeseries$record_rate))])
-    moduleData$rates$period <- as.character(lubridate::seconds_to_period(moduleData$rates$seconds))
-    
-    moduleData$z <- unique(moduleData$timeseries$z[!is.na(moduleData$timeseries$z)])
-    
-    moduleData$locations_projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_projects WHERE location_id IN (", paste(moduleData$locs$location_id, collapse = ", "), ");"))
-    if (nrow(moduleData$locations_projects) > 0) {
-      moduleData$projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM projects WHERE location_id IN (", paste(moduleData$locations_projects$project_id, collapse = ", "), ");"))
-    } else {
-      moduleData$locations_projects <- data.frame(location_id = numeric(), project_id = numeric())
-      moduleData$projects <- data.frame(project_id = numeric(), name = character(), ame_fr = character())
-    }
-    
-    moduleData$locations_networks <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_networks WHERE location_id IN (", paste(moduleData$locs$location_id, collapse = ", "), ");"))
-    if (nrow(moduleData$locations_networks) > 0) {
-      moduleData$networks <-  DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM networks WHERE network_id IN (", paste(moduleData$locations_networks$network_id, collapse = ", "), ");"))
-    }
-    
-    if (any(!is.na(moduleData$parameter_relationships$group_id))) {
-      groups <- moduleData$parameter_relationships$group_id[!is.na(moduleData$parameter_relationships$group_id)]
-      moduleData$param_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_groups WHERE group_id IN (", paste(groups, collapse = ", "), ");"))
-    } else {
-      moduleData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
-    }
-    if (any(!is.na(moduleData$parameter_relationships$sub_group_id))) {
-      sub_groups <- moduleData$parameter_relationships$sub_group_id[!is.na(moduleData$parameter_relationships$sub_group_id)]
-      moduleData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
-    } else {
-      moduleData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
-    }
     
     # Create a function to create the filteredData reactiveValues object
     createFilteredData <- function() {
