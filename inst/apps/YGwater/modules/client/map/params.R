@@ -12,22 +12,7 @@ mapParams <- function(id, language) {
     
     ns <- session$ns
     
-    cached <- get_cached("map_params_module_data", function() {
-      list(
-        locations = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"
-        ),
-        timeseries = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"
-        ),
-        parameters = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
-        )
-      )
-    }, ttl = 60 * 60)
+    cached <- map_params_module_data(con = session$userData$AquaCache)
     
     moduleData <- reactiveValues(
       locations = cached$locations,
