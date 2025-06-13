@@ -165,7 +165,7 @@ discData <- function(id, language, inputs) {
                                    params = FALSE)
     
     output$sidebar <- renderUI({
-      req(moduleData)
+      req(filteredData, language)
       
       render_flags$date_range <- TRUE
       render_flags$locations <- TRUE
@@ -178,17 +178,18 @@ discData <- function(id, language, inputs) {
         # start and end datetime
         dateRangeInput(ns("date_range"),
                        tr("date_range_select", language$language),
-                       start = as.Date(moduleData$range$min_date),
-                       end = as.Date(moduleData$range$max_date),
-                       min = as.Date(moduleData$range$min_date),
-                       format = "yyyy-mm-dd"
+                       start = as.Date(filteredData$range$min_date),
+                       end = as.Date(filteredData$range$max_date),
+                       min = as.Date(filteredData$range$min_date),
+                       format = "yyyy-mm-dd",
+                       language = language$abbrev
         ),
         # Selectize input for locations
         selectizeInput(ns("locations"),
                        label = tr("loc(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$locs$location_id),
-                                         c(tr("all", language$language), moduleData$locs[, tr("generic_name_col", language$language)])),
+                         stats::setNames(c("all", filteredData$locs$location_id),
+                                         c(tr("all", language$language), filteredData$locs[, tr("generic_name_col", language$language)])),
                        multiple = TRUE,
                        selected = if (!is.null(moduleInputs$location_id)) moduleInputs$location_id else "all"
         ),
@@ -202,8 +203,8 @@ discData <- function(id, language, inputs) {
         selectizeInput(ns("sub_locations"),
                        label = tr("sub_loc(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$sub_locs$sub_location_id),
-                                         c(tr("all", language$language), moduleData$sub_locs[, tr("sub_location_col", language$language)])),
+                         stats::setNames(c("all", filteredData$sub_locs$sub_location_id),
+                                         c(tr("all", language$language), filteredData$sub_locs[, tr("sub_location_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -211,8 +212,8 @@ discData <- function(id, language, inputs) {
         selectizeInput(ns("media"),
                        label = tr("media_type(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$media$media_id),
-                                         c(tr("all", language$language), moduleData$media[, tr("media_type_col", language$language)])),
+                         stats::setNames(c("all", filteredData$media$media_id),
+                                         c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -220,16 +221,16 @@ discData <- function(id, language, inputs) {
         selectizeInput(ns("sample_types"),
                        label = tr("sample_type(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$sample_types$sample_type_id),
-                                         c(tr("all", language$language), moduleData$sample_types[, tr("sample_type_col", language$language)])),
+                         stats::setNames(c("all", filteredData$sample_types$sample_type_id),
+                                         c(tr("all", language$language), filteredData$sample_types[, tr("sample_type_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
         selectizeInput(ns("params"),
                        label = tr("parameter(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$params$parameter_id),
-                                         c(tr("all", language$language), moduleData$params[, tr("param_name_col", language$language)])),
+                         stats::setNames(c("all", filteredData$params$parameter_id),
+                                         c(tr("all", language$language), filteredData$params[, tr("param_name_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -326,7 +327,7 @@ discData <- function(id, language, inputs) {
                            start = as.Date(moduleData$range$min_date),
                            end = as.Date(moduleData$range$max_date),
                            min = as.Date(moduleData$range$min_date),
-                           max = as.Date(moduleData$range$max_date),
+                           max = as.Date(moduleData$range$max_date)
       )
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", moduleData$locs$location_id),
@@ -496,8 +497,11 @@ discData <- function(id, language, inputs) {
       table_data(NULL)
       
       # Filter the data based on the selected date range
-      filteredData$range$min_date <- input$date_range[1]
-      filteredData$range$max_date <- input$date_range[2]
+      if (is.na(input$date_range[1]) || is.na(input$date_range[2])) {
+        return()
+      }
+      filteredData$range$min_date <- as.POSIXct(input$date_range[1], tz = "UTC")
+      filteredData$range$max_date <- as.POSIXct(paste0(input$date_range[2], " 23:59:59"), tz = "UTC")
       
       filteredData$samples <- filteredData$samples[filteredData$samples$datetime >= input$date_range[1] & filteredData$samples$datetime <= input$date_range[2], ]
       filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% filteredData$samples$location_id, ]

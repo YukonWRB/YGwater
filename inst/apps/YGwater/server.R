@@ -505,7 +505,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$continuousPlot) {
         output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
         ui_loaded$continuousPlot <- TRUE
-        continuousPlot("continuousPlot", language = languageSelection, windowDims) # Call the server
+        continuousPlot("continuousPlot", language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL

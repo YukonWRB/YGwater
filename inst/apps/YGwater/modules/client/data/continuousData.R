@@ -100,7 +100,7 @@ contData <- function(id, language, inputs) {
       return(data)
     }
     
-    # Assign the input value to a reactive right away as it's reset to NULL as soon as this module is loaded
+    # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
     moduleInputs <- reactiveValues(location_id = if (!is.null(inputs$location_id)) as.numeric(inputs$location_id) else NULL)
     
     # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
@@ -152,8 +152,7 @@ contData <- function(id, language, inputs) {
     input_values <- reactiveValues()
     
     # flags to prevent running observers when the sidebar is first rendered
-    render_flags <- reactiveValues(date_start = FALSE,
-                                   date_end = FALSE,
+    render_flags <- reactiveValues(date_range = FALSE,
                                    locations = FALSE,
                                    sub_locations = FALSE,
                                    z = FALSE,
@@ -163,10 +162,9 @@ contData <- function(id, language, inputs) {
                                    params = FALSE)
     
     output$sidebar <- renderUI({
-      req(moduleData)
+      req(filteredData, language)
 
-      render_flags$date_start <- TRUE
-      render_flags$date_end <- TRUE
+      render_flags$date_range <- TRUE
       render_flags$locations <- TRUE
       render_flags$sub_locations <- TRUE
       render_flags$z <- TRUE
@@ -177,20 +175,13 @@ contData <- function(id, language, inputs) {
       
       tags <- tagList(
         # start and end datetime
-        dateInput(ns("date_start"),
-                  tr("date_start", language$language),
-                  value = as.Date(filteredData$range$min_date),
-                  min = as.Date(filteredData$range$min_date),
-                  max = as.Date(filteredData$range$max_date),
-                  format = "yyyy-mm-dd"
-        ),
-        # start and end datetime
-        dateInput(ns("date_end"),
-                  tr("date_end", language$language),
-                  value = as.Date(filteredData$range$max_date),
-                  min = as.Date(filteredData$range$min_date),
-                  max = as.Date(filteredData$range$max_date),
-                  format = "yyyy-mm-dd"
+        dateRangeInput(ns("date_range"),
+                       tr("date_range_select", language$language),
+                       start = as.Date(filteredData$range$min_date),
+                       end = as.Date(filteredData$range$max_date),
+                       min = as.Date(filteredData$range$min_date),
+                       format = "yyyy-mm-dd",
+                       language = language$abbrev
         ),
         # Selectize input for locations
         selectizeInput(ns("locations"),
@@ -283,8 +274,7 @@ contData <- function(id, language, inputs) {
       ) # End of tagList
       
       # Store the input values in the reactiveValues object
-      input_values$date_start <- input$date_start
-      input_values$date_end <- input$date_end
+      input_values$date_range <- input$date_range
       input_values$locations <- input$locations
       input_values$sub_locations <- input$sub_locations
       input_values$z <- input$z
@@ -295,7 +285,7 @@ contData <- function(id, language, inputs) {
       
       return(tags)
     })  %>% # End of renderUI for sidebar
-      bindEvent(language$language)
+      bindEvent(language)
     
     
     output$main <- renderUI({
@@ -327,8 +317,7 @@ contData <- function(id, language, inputs) {
     
     
     # Flags to prevent running observers unnecessarily when the 'reset' button is pressed
-    reset_flags <- reactiveValues(date_start = FALSE,
-                                  date_end = FALSE,
+    reset_flags <- reactiveValues(date_range = FALSE,
                                   locations = FALSE,
                                   sub_locations = FALSE,
                                   media = FALSE,
@@ -355,15 +344,11 @@ contData <- function(id, language, inputs) {
       DT::selectRows(proxy, NULL)
       
       # Reset the selectize inputs
-      updateDateInput(session, "date_start",
-                      value = as.Date(moduleData$range$min_date),
-                      min = as.Date(moduleData$range$min_date),
-                      max = as.Date(moduleData$range$max_date),
-      )
-      updateDateInput(session, "date_end",
-                      value = as.Date(moduleData$range$max_date),
-                      min = as.Date(moduleData$range$min_date),
-                      max = as.Date(moduleData$range$max_date),
+      updateDateRangeInput(session, "date_range",
+                           start = as.Date(moduleData$range$min_date),
+                           end = as.Date(moduleData$range$max_date),
+                           min = as.Date(moduleData$range$min_date),
+                           max = as.Date(moduleData$range$max_date)
       )
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", moduleData$locs$location_id),
@@ -394,8 +379,7 @@ contData <- function(id, language, inputs) {
                                                      c(tr("all", language$language), moduleData$params[, tr("param_name_col", language$language)])),
                            selected = "all")
       
-      reset_flags$date_start <- TRUE
-      reset_flags$date_end <- TRUE
+      reset_flags$date_range <- TRUE
       reset_flags$locations <- TRUE
       reset_flags$sub_locations <- TRUE
       reset_flags$media <- TRUE
@@ -405,8 +389,7 @@ contData <- function(id, language, inputs) {
       reset_flags$params <- TRUE
       
       # Reset the input values to their original state
-      input_values$date_start <- input$date_start
-      input_values$date_end <- input$date_end
+      input_values$date_range <- input$date_range
       input_values$locations <- input$locations
       input_values$sub_locations <- input$sub_locations
       input_values$media <- input$media
@@ -520,24 +503,16 @@ contData <- function(id, language, inputs) {
     
     ## Filters ###########
     ### date range inputs and filter ############
-    observeEvent(list(input$date_start, input$date_end), {
-      req(input$date_start, input$date_end, filteredData)
+    observeEvent(input$date_range, {
+      req(input$date_range, filteredData)
 
       # Flags to prevent running the observer when the date range is reset or initially rendered
-      if (reset_flags$date_start) {
-        reset_flags$date_start <- FALSE
+      if (reset_flags$date_range) {
+        reset_flags$date_range <- FALSE
         return()
       }
-      if (render_flags$date_start) {
-        render_flags$date_start <- FALSE
-        return()
-      }
-      if (reset_flags$date_end) {
-        reset_flags$date_end <- FALSE
-        return()
-      }
-      if (render_flags$date_end) {
-        render_flags$date_end <- FALSE
+      if (render_flags$date_range) {
+        render_flags$date_range <- FALSE
         return()
       }
       
@@ -553,10 +528,14 @@ contData <- function(id, language, inputs) {
       table_data(NULL)
       
       # Filter the data based on the selected date range
-      filteredData$range$min_date <- input$date_start
-      filteredData$range$max_date <- input$date_end
+      # guard against NA values in the date range
+      if (is.na(input$date_range[1]) || is.na(input$date_range[2])) {
+        return()
+      }
+      filteredData$range$min_date <- as.POSIXct(input$date_range[1], tz = "UTC")
+      filteredData$range$max_date <- as.POSIXct(paste0(input$date_range[2], " 23:59:59"), tz = "UTC")
       
-      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$start_datetime >= input$date_start & filteredData$timeseries$end_datetime <= input$date_end, ]
+      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$start_datetime <= filteredData$range$max_date & filteredData$timeseries$end_datetime >= filteredData$range$min_date, ]
       filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% filteredData$timeseries$location_id, ]
       filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% filteredData$locs$location_id, ]
       filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
@@ -622,8 +601,7 @@ contData <- function(id, language, inputs) {
                            selected = if (input$params %in% filteredData$params$parameter_id) input$params else "all"
       )
       
-      input_values$date_start <- input$date_start
-      input_values$date_end <- input$date_end
+      input_values$date_range <- input$date_range
     }, ignoreInit = TRUE)
     
     ### locations filter ############
@@ -653,7 +631,7 @@ contData <- function(id, language, inputs) {
         return()
       }
       
-      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$location_id %in% input$locations, ]
+      # Filter filteredData based on the selected location
       filteredData$locs <- moduleData$locs[moduleData$locs$location_id %in% input$locations, ]
       filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$location_id %in% filteredData$locs$location_id, ]
       filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
@@ -734,7 +712,7 @@ contData <- function(id, language, inputs) {
       
       # Filter the data based on the selected sub-locations
       stash <- filteredData$timeseries
-      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$sub_location_id %in% input$sub_locations, ]
+      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$sub_location_id %in% input$sub_locations, ]
       if (nrow(filteredData$timeseries) == 0) {
         # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$sub_locations to its previous value
         filteredData$timeseries <- stash
@@ -745,7 +723,6 @@ contData <- function(id, language, inputs) {
         return()
       }
       
-      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$sub_location_id %in% input$sub_locations, ]
       filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$sub_location_id %in% input$sub_locations, ]
       filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
       filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$timeseries$media_id, ]
