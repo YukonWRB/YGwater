@@ -434,14 +434,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     # Observe the plot type selection and update UI elements accordingly
     observeEvent(input$plot_type, {
-      print(input$plot_type)
-      
       # Don't run this observer if the plot type was set by the module server
       if (render_flags$plot_type) {
         render_flags$plot_type <- FALSE
         return()
       }
-      
       if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
                              label = tr("date_range_select", language$language))
@@ -453,47 +450,22 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     observeEvent(input$location, {
       req(filteredData)
-      # Update years, used for the overlapping years plot (runs regardless of plot type selected because the user could switch plot types)
-      # try({
-      #   possible_years <- seq(
-      #     as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location_id == input$location & moduleData$all_ts$parameter_id == input$param, "start_datetime"], 1, 4)),
-      #     as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location_id == input$location & moduleData$all_ts$parameter_id == input$param, "end_datetime"], 1, 4))
-      #   )
-      #   updateSelectizeInput(session, "years", choices = possible_years)
-      # })
-      # moduleData$possible_datums <- moduleData$datums[moduleData$datums$location_id == input$location & moduleData$datums$conversion_m != 0, ]
-      # if (nrow(moduleData$possible_datums) < 1) {
-      #   shinyjs::hide("apply_datum")
-      #   updateCheckboxInput(session, "apply_datum", value = FALSE)
-      # } else {
-      #   shinyjs::show("apply_datum")
-      # }
-      
+
       # Filter the data based on the selected locations
-      stash <- filteredData$timeseries
-      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$locations, ]
-      if (nrow(filteredData$timeseries) == 0) {
-        # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$locations to its previous value
-        filteredData$timeseries <- stash
-        updateSelectizeInput(session, "locations",
-                             selected = input_values$locations
-        )
-        showNotification(tr("no_ts_locs", language$language), type = "error", duration = 5)
-        return()
-      }
+      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$location, ]
       
-      filteredData$locs <- moduleData$locs[moduleData$locs$location_id == input$locations, ]
+      filteredData$locs <- moduleData$locs[moduleData$locs$location_id == input$location, ]
       filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$location_id == filteredData$locs$location_id, ]
       filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
       filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$timeseries$media_id, ]
-      filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
-      filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
+      filteredData$aggregation_types <- moduleData$aggregation_types[moduleData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
+      filteredData$rates <- moduleData$rates[moduleData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
-      filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
+      filteredData$params <- moduleData$params[moduleData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
       if (nrow(filteredData$params) > 0) {
-        filteredData$parameter_relationships <- filteredData$parameter_relationships[filteredData$parameter_relationships$parameter_id %in% filteredData$params$parameter_id, ]
+        filteredData$parameter_relationships <- moduleData$parameter_relationships[moduleData$parameter_relationships$parameter_id %in% filteredData$params$parameter_id, ]
         if (length(filteredData$parameter_relationships$group_id) > 0) {
-          filteredData$param_groups <- filteredData$param_groups[filteredData$param_groups$group_id %in% filteredData$parameter_relationships$group_id, ]
+          filteredData$param_groups <- moduleData$param_groups[moduleData$param_groups$group_id %in% filteredData$parameter_relationships$group_id, ]
         } else {
           filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
         }
@@ -505,7 +477,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         }
       }
       
-      if (nrow(filteredData$sub_locs) > 0) {
+      if (nrow(filteredData$sub_locs) > 1) {
         if (!render_flags$sub_location) {
           output$sub_loc_ui <- renderUI({
             # If there are sub-locations for the selected location, show a selectizeInput for sub-locations
@@ -518,13 +490,17 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           })
           render_flags$sub_location <- TRUE
         } else {
+          updateSelectizeInput(session, "sub_location",
+                             choices = stats::setNames(filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, "sub_location_id"],
+                                                       filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, tr("sub_location_col", language$language)]),
+                             selected = NULL)
           shinyjs::show("sub_location")
         }
       } else {
         shinyjs::hide("sub_location")
       }
       
-      if (length(filteredData$z) > 0) {
+      if (length(filteredData$z) > 1) {
         if (!render_flags$z) {
           output$z_ui <- renderUI({
             # If there are z values for the selected location, show a selectizeInput for z
@@ -536,12 +512,135 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           })
           render_flags$z <- TRUE
         } else {
+          updateSelectizeInput(session, "z",
+                               choices = filteredData$z,
+                               selected = NULL)
           shinyjs::show("z")
         }
       } else {
         shinyjs::hide("z")
       }
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData$media$media_id,
+                                     filteredData$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$media)) {
+        tmp.selected <- if (input$media %in% tmp.choices) input$media else if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+      }
+      updateSelectizeInput(session, "media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData$aggregation_types$aggregation_type_id,
+                                     filteredData$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$aggregation)) {
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+      }
+      updateSelectizeInput(session, "aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData$rates$seconds,
+                                     filteredData$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData$params$parameter_id,
+                                     filteredData$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      updateDateRangeInput(session, "date_range",
+                           start = as.Date(filteredData$range$max_date) - 365,
+                           end = as.Date(filteredData$range$max_date),
+                           min = as.Date(filteredData$range$min_date),
+                           max = as.Date(filteredData$range$max_date))
+
     }, ignoreInit = TRUE)
+
+    
+    
+    # When the user has narrowed down to a single selection for location, sub-location (if necessary), z (if necessary), media, aggregation, rate, and parameter, update the selections for 'date_range' and 'years' inputs
+    observe({
+      req(filteredData, input$location, input$media, input$aggregation, input$rate, input$param)
+      
+      out <<- filteredData
+      print("START")
+      print(paste0("location = ", input$location))
+      print(paste0("sub_location = ", input$sub_location))
+      print(paste0("z = ", input$z))
+      print(paste0("media = ", input$media))
+      print(paste0("aggregation = ", input$aggregation))
+      print(paste0("record_rate = ", input$rate))
+      print(paste0("parameter = ", input$param))
+      print("END")
+      
+      # If the user has selected a single location, sub-location (if necessary), z (if necessary), media, aggregation, rate, and parameter, update the date range and years inputs
+      if (length(input$location) == 1 && 
+          (is.null(input$sub_location) || length(input$sub_location) == 1) &&
+          (is.null(input$z) || length(input$z) == 1) &&
+          length(input$media) == 1 && 
+          length(input$aggregation) == 1 && 
+          length(input$rate) == 1 && 
+          length(input$param) == 1) {
+        
+        # Update the date range input
+        start_date <- as.Date(filteredData$timeseries[filteredData$timeseries$location_id == input$location & 
+                                                       filteredData$timeseries$parameter_id == input$param &
+                                                        filteredData$timeseries$media_id == input$media &
+                                                        filteredData$timeseries$record_rate == input$rate &
+                                                        filteredData$timeseries$aggregation_type_id == input$aggregation, "start_datetime"])
+        end_date <- as.Date(filteredData$timeseries[filteredData$timeseries$location_id == input$location & 
+                                                      filteredData$timeseries$parameter_id == input$param &
+                                                      filteredData$timeseries$media_id == input$media &
+                                                      filteredData$timeseries$record_rate == input$rate &
+                                                      filteredData$timeseries$aggregation_type_id == input$aggregation, "end_datetime"])
+        updateDateRangeInput(session, "date_range",
+                             start = end_date - 365,
+                             end = end_date,
+                             min = start_date,
+                             max = end_date)
+        
+        # Update the years input for overlapping years plot
+        possible_years <- seq(
+          as.numeric(substr(start_date, 1, 4)),
+          as.numeric(substr(end_date, 1, 4))
+        )
+        updateSelectizeInput(session, "years", choices = possible_years, selected = max(possible_years))
+        
+      } else {
+        # Reset the date range and years inputs if not narrowed down to a single selection
+        updateDateRangeInput(session, "date_range",
+                             start = as.Date(filteredData$range$max_date) - 365,
+                             end = as.Date(filteredData$range$max_date),
+                             min = as.Date(filteredData$range$min_date),
+                             max = as.Date(filteredData$range$max_date))
+        updateSelectizeInput(session, "years", choices = NULL)
+      }
+    })
+    
+    
+    
+    
+    
+    
     
     # Modal dialog for extra aesthetics ########################################################################
     # Create a list with default aesthetic values
@@ -1201,7 +1300,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     # Create ExtendedTasks to render plots ############################################################
     # Overlapping years plot
-    plot_output_overlap <- ExtendedTask$new(function(loc, param, date_start, end_date, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_overlap <- ExtendedTask$new(function(loc, param, date_start, date_end, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName,
@@ -1217,7 +1316,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                               record_rate = NULL,
                               parameter = param,
                               startDay = date_start,
-                              endDay = end_date,
+                              endDay = date_end,
                               years = yrs,
                               historic_range = historic_range,
                               datum = apply_datum,
@@ -1245,7 +1344,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     
     # Single timeseries plot
-    plot_output_timeseries <- ExtendedTask$new(function(loc, param, date_start, end_date, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_timeseries <- ExtendedTask$new(function(loc, param, date_start, date_end, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 

@@ -5,13 +5,30 @@
 #' 
 #' Placeholder function, not yet complete.
 #'
-#' @return An error message telling the user what to do instead.
+#' @param clauses Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1. If NULL, all raster data is returned.
+#' @param boundary Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector (⁠c([top], [bottom], [right], [left])⁠) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.
+#' #' @param bands The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.
+#' @param tbl_name The name of the schema and table containing the raster data. Default is "spatial.rasters".
+#' @param col_name The name of the column containing the raster data. Default is "rast".
+#' @return A terra::rast object containing the raster data.
 #' @export
 #'
 
-getRaster <- function() {
-  stop("This function isn't finished yet. Use rpostgis::pgGetRast() to extract a raster instead.")
-}
+getRaster <- function(clauses, boundary = NULL, bands = 1, tbl_name = c("spatial", "rasters"), col_name = "rast", con = NULL) {
+
+  if (is.null(con)) {
+    con <- AquaConnect(silent = TRUE)
+    on.exit(DBI::dbDisconnect(con))
+  }
+  
+  rpostgis::pgGetRast(conn = con,
+                     name = tbl_name,
+                     rast = col_name,
+                     clauses = clauses,
+                     boundary = boundary,
+                     bands = bands
+                      )
+  }
 
 #' Retrieve vector files from the database
 #' 
