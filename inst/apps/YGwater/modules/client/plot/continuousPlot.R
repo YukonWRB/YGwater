@@ -132,20 +132,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData$range <- calc_range(filteredData$timeseries)
       
       filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
-      if (nrow(filteredData$params) > 0) {
-        filteredData$parameter_relationships <- filteredData$parameter_relationships[filteredData$parameter_relationships$parameter_id %in% filteredData$params$parameter_id, ]
-        if (length(filteredData$parameter_relationships$group_id) > 0) {
-          filteredData$param_groups <- filteredData$param_groups[filteredData$param_groups$group_id %in% filteredData$parameter_relationships$group_id, ]
-        } else {
-          filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
-        }
-        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
-        if (length(sub_groups) > 0) {
-          filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
-        } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
-        }
-      }
     } else {
       filteredData <- createFilteredData()
     }
@@ -468,6 +454,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       }
     })
     
+    
+    # Filter sidebar pieces ###################
     # Create reactiveValues objects for sub_locs and z here because their observers will not run unless there is a need. This allows filtering to proceed down the line without those observers.
     filteredData_sub_locs <- reactiveValues()
     filteredData_z <- reactiveValues()
@@ -476,6 +464,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     filteredData_rate <- reactiveValues()
     filteredData_param <- reactiveValues()
     
+    ### Filter based on the selected location ##########################
     observeEvent(input$location, {
       req(filteredData)
       print("Observing location input change")
@@ -493,20 +482,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData$range <- calc_range(filteredData$timeseries)
       
       filteredData$params <- moduleData$params[moduleData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
-      if (nrow(filteredData$params) > 0) {
-        filteredData$parameter_relationships <- moduleData$parameter_relationships[moduleData$parameter_relationships$parameter_id %in% filteredData$params$parameter_id, ]
-        if (length(filteredData$parameter_relationships$group_id) > 0) {
-          filteredData$param_groups <- moduleData$param_groups[moduleData$param_groups$group_id %in% filteredData$parameter_relationships$group_id, ]
-        } else {
-          filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
-        }
-        sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
-        if (length(sub_groups) > 0) {
-          filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
-        } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
-        }
-      }
       
       if (nrow(filteredData$sub_locs) > 1) {
         if (!render_flags$sub_location) {
@@ -661,7 +636,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       
     }, ignoreInit = TRUE)
     
-    
+    ## Filter based on the sub_location ##########################
     observeEvent(input$sub_location, {
       req(filteredData)
       
@@ -792,6 +767,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     })
     
     
+    ## Filter based on the z value ##########################
     observeEvent(input$z, {
       
       print("Observing z input change")
@@ -902,7 +878,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_rate$params <- filteredData_z$params
     })
     
-    
+    ## Filter based on the media ##########################
     observeEvent(input$media, {
       print("Observing media input change")
       
@@ -995,6 +971,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_rate$params <- filteredData_media$params
     })
     
+    
+    ## Filter based on the aggregation type ##########################
     observeEvent(input$aggregation, {
       
       print("Observing aggregation input change")
@@ -1072,6 +1050,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_rate$params <- filteredData_aggregation$params
     })
     
+    
+    ## Filter based on the rate ##########################
     observeEvent(input$rate, {
       
       print("Observing rate input change")
@@ -1134,7 +1114,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       }
     })
     
-    # observing for parameter, only need to update the date range and years inputs
+    ## Filter based on the parameter ##########################
+    # only need to update the date range and years inputs
     observeEvent(input$param, {
       req(filteredData_rate)
       
@@ -1251,18 +1232,85 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     })
     
     
-    # Add/remove/modify trace buttons #######################################################################
+    
+    
+    # Add/remove/modify trace and subplots #######################################################################
+    ## Common pieces for traces and subplots ########################################################
     traces <- reactiveValues()
     traceCount <- reactiveVal(1)
+    subplots <- reactiveValues()
+    subplotCount <- reactiveVal(1)
     
-    ## Add extra trace
-    runTraceNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
+    # Function to create modals for adding new traces or subplots; one function for both, the only thing different in the produced modal is the add_new button
+    trace_subplot_modal <- function(type) {
+      showModal(modalDialog(
+        selectizeInput(ns("traceNew_location"), 
+                       label = tr("loc", language$language),
+                       choices =  stats::setNames(moduleData$locs$location_id,
+                                                  moduleData$locs[, tr("generic_name_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1),
+                       selected = if (!is.null(moduleInputs$location_id)) moduleInputs$location_id else NULL
+        ),
+        uiOutput(ns("traceNew_sub_loc_ui")), # Will be a selectizeInput for sub-locations, shows up only if needed
+        
+        uiOutput(ns("traceNew_z_ui")), # Will be a selectizeInput for depth/height, shows up only if needed
+        
+        # Selectize input for media type
+        selectizeInput(ns("traceNew_media"),
+                       label = tr("media_type", language$language),
+                       choices = stats::setNames(moduleData$media$media_id,
+                                                 moduleData$media[, tr("media_type_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        # Selectize input for aggregation types
+        selectizeInput(ns("traceNew_aggregation"),
+                       label = tr("aggregation_type", language$language),
+                       choices = stats::setNames(moduleData$aggregation_types$aggregation_type_id,
+                                                 moduleData$aggregation_types[, tr("aggregation_type_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        # Selectize input for record rate
+        selectizeInput(ns("traceNew_rate"),
+                       label = tr("nominal_rate", language$language),
+                       choices = stats::setNames(moduleData$rates$seconds,
+                                                 moduleData$rates[, "period"]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        selectizeInput(ns("traceNew_param"),
+                       label = tr("parameter", language$language), 
+                       choices = stats::setNames(moduleData$params$parameter_id,
+                                                 moduleData$params[, tr("param_name_col", language$language)]), 
+                       selected = character(0)),
+        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
+        footer = tagList(
+          actionButton(ns(paste0("add_new_", type)), tr(if (type == "trace") "add_trace" else if (type == "subplot") "add_subplot", language$language)),
+          actionButton(ns("cancel"), "Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    }
+    
+    ## Add extra trace #########
     observeEvent(input$add_trace, {
       # When the button is clicked, a modal will appear with the necessary fields to add a trace. The trace values are then displayed to the user under button 'trace_x'
-      # Make sure that there is an input$param, input$location before running the modal; give the user an informative modal if not
-      if (nchar(input$location) == 0 | nchar(input$param) == 0) {
+      # Make sure that there is a single selected input$location, input$media, input$aggregation, input$rate, input$param before running the modal; give the user an informative modal if not
+      if (is.null(input$location) || is.null(input$media) || is.null(input$aggregation) || is.null(input$rate) || is.null(input$param)) {
         showModal(modalDialog(
-          "Please select a location and parameter for the first trace before adding another.",
+          "Please select a single location, media type, aggregation type, record rate, and parameter before adding a trace.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      if (nchar(input$location) == 0 || nchar(input$media) == 0 || nchar(input$aggregation) == 0 || nchar(input$rate) == 0 || nchar(input$param) == 0) {
+        showModal(modalDialog(
+          "Please narrow selections to a single timeseries before adding another.",
           footer = tagList(
             actionButton(ns("cancel"), "Cancel")
           ),
@@ -1271,65 +1319,490 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         return()
       }
       
-      if (runTraceNew() == FALSE) {
-        showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                         selected = input$param),
-          selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                         choices = "placeholder"), # Choices are populated based on the parameter
-          numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
-          footer = tagList(
-            actionButton(ns("add_new_trace"), "Add trace"),
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-        runTraceNew(TRUE)
-      } else { # The modal has already run once, use the previously selected values
-        showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                         selected = input$traceNew_param),
-          selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                         choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "location_id"], 
-                                                   moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, tr("generic_name_col", language$language)]),
-                         selected = input$traceNew_loc_id),
-          numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
-          footer = tagList(
-            actionButton(ns("add_new_trace"), "Add trace"),
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-      }
+      # Show the modal dialog for adding a new trace
+      trace_subplot_modal(type = "trace")
     })
     observeEvent(input$cancel, {
       removeModal()
     })
     
-    # Observe the param inputs for all traces and update the location choices in the modal
-    observeEvent(input$traceNew_param, {
-      # Update the location choices
-      locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, c(tr("generic_name_col", language$language), "location_id")])
-      names(locs) <- c("name", "location_id")
+    ## Add extra subplot #########
+    observeEvent(input$add_subplot, {
+      # When the button is clicked, a modal will appear with the necessary fields to add a subplot. The subplot values are then displayed to the user under button 'subplot_x'
       
-      updateSelectizeInput(session, 
-                           "traceNew_loc_id", 
-                           choices = stats::setNames(locs$location_id, locs$name),
-                           selected = if (input$traceNew_loc_id %in% locs$location_id) input$traceNew_loc_id else character(0))
-    }, ignoreInit = TRUE)
+      # Make sure that there is a single selected input$location, input$media, input$aggregation, input$rate, input$param before running the modal; give the user an informative modal if not
+      if (is.null(input$location) || is.null(input$media) || is.null(input$aggregation) || is.null(input$rate) || is.null(input$param)) {
+        showModal(modalDialog(
+          "Please select a single location, media type, aggregation type, record rate, and parameter before adding a trace.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      if (nchar(input$location) == 0 || nchar(input$media) == 0 || nchar(input$aggregation) == 0 || nchar(input$rate) == 0 || nchar(input$param) == 0) {
+        showModal(modalDialog(
+          "Please narrow selections to a single timeseries before adding another.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      # Create the modal for adding a subplot
+      trace_subplot_modal(type = "subplot")
+    })
+    
+    # Filter modal pieces ######################################################################
+    filteredDataModal <- reactiveValues()
+    filteredDataModal_sub_locs <- reactiveValues()
+    filteredDataModal_z <- reactiveValues()
+    filteredDataModal_media <- reactiveValues()
+    filteredDataModal_aggregation <- reactiveValues()
+    filteredDataModal_rate <- reactiveValues()
+    filteredDataModal_param <- reactiveValues()
+    
+    ### Filter based on the selected location #################################################################
+    observeEvent(input$traceNew_location, {
+      req(filteredDataModal)
+      print("Observing modal traceNew_location input change")
+      
+      # Filter the data based on the selected locations
+      filteredDataModal$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$traceNew_location, ]
+      
+      filteredDataModal$locs <- moduleData$locs[moduleData$locs$location_id == input$traceNew_location, ]
+      filteredDataModal$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$location_id == filteredDataModal$locs$location_id, ]
+      filteredDataModal$z <- unique(filteredDataModal$timeseries$z[!is.na(filteredDataModal$timeseries$z)])
+      filteredDataModal$media <- moduleData$media[moduleData$media$media_id %in% filteredDataModal$timeseries$media_id, ]
+      filteredDataModal$aggregation_types <- moduleData$aggregation_types[moduleData$aggregation_types$aggregation_type_id %in% filteredDataModal$timeseries$aggregation_type_id, ]
+      filteredDataModal$rates <- moduleData$rates[moduleData$rates$seconds %in% filteredDataModal$timeseries$record_rate, ]
+      
+      filteredDataModal$params <- moduleData$params[moduleData$params$parameter_id %in% filteredDataModal$timeseries$parameter_id, ]
+      
+      if (nrow(filteredDataModal$sub_locs) > 1) {
+        output$traceNew_sub_loc_ui <- renderUI({
+          # If there are sub-locations for the selected location, show a selectizeInput for sub-locations
+          selectizeInput(ns("traceNew_sub_location"),
+                         label = tr("sub_loc", language$language),
+                         choices = stats::setNames(filteredDataModal$sub_locs[filteredDataModal$sub_locs$location_id == input$traceNew_location, "sub_location_id"],
+                                                   filteredDataModal$sub_locs[filteredDataModal$sub_locs$location_id == input$traceNew_location, tr("sub_location_col", language$language)]),
+                         multiple = TRUE,
+                         options = list(maxItems = 1))
+        })
+        render_flags$sub_location <- TRUE
+        
+      } else {
+        output$traceNew_sub_loc_ui <- NULL
+      }
+      
+      if (length(filteredDataModal$z) > 1) {
+        output$traceNew_z_ui <- renderUI({
+          # If there are z values for the selected location, show a selectizeInput for z
+          selectizeInput(ns("traceNew_z"), 
+                         label = tr("z", language$language),
+                         choices = filteredDataModal$z,
+                         multiple = TRUE,
+                         options = list(maxItems = 1))
+        })
+        render_flags$z <- TRUE
+      } else {
+        output$traceNew_z_ui <- NULL
+      }
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredDataModal.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal$media$media_id,
+                                     filteredDataModal$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$traceNew_media)) {
+        tmp.selected <- if (input$traceNew_media %in% tmp.choices) input$traceNew_media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal$aggregation_types$aggregation_type_id,
+                                     filteredDataModal$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$traceNew_aggregation)) {
+        tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) input$traceNew_aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal$rates$seconds,
+                                     filteredDataModal$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal$params$parameter_id,
+                                     filteredDataModal$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      # Unlike the sidebar inputs, the date range and years inputs are not present
+      
+      filteredDataModal_sub_locs$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_sub_locs$z <- filteredDataModal$z
+      filteredDataModal_sub_locs$media <- filteredDataModal$media
+      filteredDataModal_sub_locs$aggregation_types <- filteredDataModal$aggregation_types
+      filteredDataModal_sub_locs$rates <- filteredDataModal$rates
+      filteredDataModal_sub_locs$params <- filteredDataModal$params
+      
+      filteredDataModal_z$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_z$media <- filteredDataModal$media
+      filteredDataModal_z$aggregation_types <- filteredDataModal$aggregation_types
+      filteredDataModal_z$rates <- filteredDataModal$rates
+      filteredDataModal_z$params <- filteredDataModal$params
+      
+      filteredDataModal_media$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_media$aggregation_types <- filteredDataModal$aggregation_types
+      filteredDataModal_media$rates <- filteredDataModal$rates
+      filteredDataModal_media$params <- filteredDataModal$params
+      
+      filteredDataModal_aggregation$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_aggregation$rates <- filteredDataModal$rates
+      filteredDataModal_aggregation$params <- filteredDataModal$params
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_rate$params <- filteredDataModal$params
+    })
+    
+    ### Filter based on the selected sub-location ##############################################################
+    observeEvent(input$traceNew_sub_loc, {
+      req(filteredDataModal_sub_locs)
+      print("Observing modal traceNew_sub_loc input change")
+      
+      # Filter the data based on the selected sub-locations
+      if (is.null(input$traceNew_sub_location) || length(input$traceNew_sub_location) != 1) return()
+      
+      # Find the new timeseries rows based on the selected sub-location
+      filteredDataModal_sub_locs$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$sub_location_id == input$traceNew_sub_location, ]
+      
+      filteredDataModal_sub_locs$z <- unique(filteredDataModal_sub_locs$timeseries$z[!is.na(filteredDataModal_sub_locs$timeseries$z)])
+      filteredDataModal_sub_locs$media <- filteredDataModal$media[filteredDataModal$media$media_id %in% filteredDataModal_sub_locs$timeseries$media_id, ]
+      filteredDataModal_sub_locs$aggregation_types <- filteredDataModal$aggregation_types[filteredDataModal$aggregation_types$aggregation_type_id %in% filteredDataModal_sub_locs$timeseries$aggregation_type_id, ]
+      filteredDataModal_sub_locs$rates <- filteredDataModal$rates[filteredDataModal$rates$seconds %in% filteredDataModal_sub_locs$timeseries$record_rate, ]
+      filteredDataModal_sub_locs$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_sub_locs$timeseries$parameter_id, ]
+      
+      # Update the z selectizeInput based on the selected sub-locations
+      if (length(filteredDataModal_sub_locs$z) > 1) {
+        updateSelectizeInput(session, "z",
+                             choices = filteredDataModal_sub_locs$z,
+                             selected = character(0))
+        shinyjs::show("z")
+      } else {
+        shinyjs::hide("z")
+      }
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredDataModal_sub_locs.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_sub_locs$media$media_id,
+                                     filteredDataModal_sub_locs$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$traceNew_media)) {
+        tmp.selected <- if (input$traceNew_media %in% tmp.choices) input$traceNew_media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_sub_locs$aggregation_types$aggregation_type_id,
+                                     filteredDataModal_sub_locs$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$traceNew_aggregation)) {
+        tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) input$traceNew_aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_sub_locs$rates$seconds,
+                                     filteredDataModal_sub_locs$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_sub_locs$params$parameter_id,
+                                     filteredDataModal_sub_locs$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      filteredDataModal_z$timeseries <- filteredDataModal_sub_locs$timeseries
+      filteredDataModal_z$media <- filteredDataModal_sub_locs$media
+      filteredDataModal_z$aggregation_types <- filteredDataModal_sub_locs$aggregation_types
+      filteredDataModal_z$rates <- filteredDataModal_sub_locs$rates
+      filteredDataModal_z$params <- filteredDataModal_sub_locs$params
+      
+      filteredDataModal_media$timeseries <- filteredDataModal_sub_locs$timeseries
+      filteredDataModal_media$aggregation_types <- filteredDataModal_sub_locs$aggregation_types
+      filteredDataModal_media$rates <- filteredDataModal_sub_locs$rates
+      filteredDataModal_media$params <- filteredDataModal_sub_locs$params
+      
+      filteredDataModal_aggregation$timeseries <- filteredDataModal_sub_locs$timeseries
+      filteredDataModal_aggregation$rates <- filteredDataModal_sub_locs$rates
+      filteredDataModal_aggregation$params <- filteredDataModal_sub_locs$params
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal_sub_locs$timeseries
+      filteredDataModal_rate$params <- filteredDataModal_sub_locs$params
+    })
+    
+    ### Filter based on the selected z #################################################################
+    observeEvent(input$traceNew_z, {
+      req(filteredDataModal_z)
+      print("Observing modal traceNew_z input change")
+      
+      # Filter the data based on the selected sub-locations
+      if (is.null(input$traceNew_z) || length(input$traceNew_z) != 1) return()
+      
+      # Find the new timeseries rows based on the selected sub-location
+      filteredDataModal_z$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$sub_location_id == input$traceNew_z, ]
+      
+      filteredDataModal_z$media <- filteredDataModal$media[filteredDataModal$media$media_id %in% filteredDataModal_z$timeseries$media_id, ]
+      filteredDataModal_z$aggregation_types <- filteredDataModal$aggregation_types[filteredDataModal$aggregation_types$aggregation_type_id %in% filteredDataModal_z$timeseries$aggregation_type_id, ]
+      filteredDataModal_z$rates <- filteredDataModal$rates[filteredDataModal$rates$seconds %in% filteredDataModal_z$timeseries$record_rate, ]
+      filteredDataModal_z$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_z$timeseries$parameter_id, ]
+
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredDataModal_z.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_z$media$media_id,
+                                     filteredDataModal_z$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$traceNew_media)) {
+        tmp.selected <- if (input$traceNew_media %in% tmp.choices) input$traceNew_media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_z$aggregation_types$aggregation_type_id,
+                                     filteredDataModal_z$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$traceNew_aggregation)) {
+        tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) input$traceNew_aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_z$rates$seconds,
+                                     filteredDataModal_z$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_z$params$parameter_id,
+                                     filteredDataModal_z$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      filteredDataModal_media$timeseries <- filteredDataModal_z$timeseries
+      filteredDataModal_media$aggregation_types <- filteredDataModal_z$aggregation_types
+      filteredDataModal_media$rates <- filteredDataModal_z$rates
+      filteredDataModal_media$params <- filteredDataModal_z$params
+      
+      filteredDataModal_aggregation$timeseries <- filteredDataModal_z$timeseries
+      filteredDataModal_aggregation$rates <- filteredDataModal_z$rates
+      filteredDataModal_aggregation$params <- filteredDataModal_z$params
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal_z$timeseries
+      filteredDataModal_rate$params <- filteredDataModal_z$params
+    })
+    
+    ### Filter based on the selected media #################################################################
+    observeEvent(input$traceNew_media, {
+      req(filteredDataModal_media)
+      print("Observing modal traceNew_media input change")
+      
+      # Filter the data based on the selected media
+      if (is.null(input$traceNew_media) || length(input$traceNew_media) != 1) return()
+      
+      # Find the new timeseries rows based on the selected media
+      filteredDataModal_media$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$media_id == input$traceNew_media, ]
+      
+      filteredDataModal_media$aggregation_types <- filteredDataModal$aggregation_types[filteredDataModal$aggregation_types$aggregation_type_id %in% filteredDataModal_media$timeseries$aggregation_type_id, ]
+      filteredDataModal_media$rates <- filteredDataModal$rates[filteredDataModal$rates$seconds %in% filteredDataModal_media$timeseries$record_rate, ]
+      filteredDataModal_media$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_media$timeseries$parameter_id, ]
+      
+      # Update the aggregation, rate, and param selectizeInputs with what's left in filteredDataModal_media.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_media$aggregation_types$aggregation_type_id,
+                                     filteredDataModal_media$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$traceNew_aggregation)) {
+        tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) input$traceNew_aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_media$rates$seconds,
+                                     filteredDataModal_media$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_media$params$parameter_id,
+                                     filteredDataModal_media$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      filteredDataModal_aggregation$timeseries <- filteredDataModal_media$timeseries
+      filteredDataModal_aggregation$rates <- filteredDataModal_media$rates
+      filteredDataModal_aggregation$params <- filteredDataModal_media$params
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal_media$timeseries
+      filteredDataModal_rate$params <- filteredDataModal_media$params
+    }) # End filter based on the selected media
+      
+    ### Filter based on the selected aggregation type ##############################################################
+    observeEvent(input$raceNew_aggregation, {
+      req(filteredDataModal_aggregation)
+      print("Observing modal traceNew_aggregation input change")
+      
+      # Filter the data based on the selected aggregation type
+      if (is.null(input$traceNew_aggregation) || length(input$traceNew_aggregation) != 1) return()
+      
+      # Find the new timeseries rows based on the selected aggregation type
+      filteredDataModal_aggregation$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$aggregation_type_id == input$traceNew_aggregation, ]
+      
+      filteredDataModal_aggregation$rates <- filteredDataModal$rates[filteredDataModal$rates$seconds %in% filteredDataModal_aggregation$timeseries$record_rate, ]
+      filteredDataModal_aggregation$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_aggregation$timeseries$parameter_id, ]
+      
+      # Update the rate and param selectizeInputs with what's left in filteredDataModal_aggregation.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_aggregation$rates$seconds,
+                                     filteredDataModal_aggregation$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_aggregation$params$parameter_id,
+                                     filteredDataModal_aggregation$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal_aggregation$timeseries
+      filteredDataModal_rate$params <- filteredDataModal_aggregation$params
+    }) # End filter based on the selected aggregation type
+    
+    ### Filter based on the selected record rate ##############################################################
+    observeEvent(input$raceNew_rate, {
+      req(filteredDataModal_rate)
+      print("Observing modal traceNew_rate input change")
+      
+      # Filter the data based on the selected record rate
+      if (is.null(input$traceNew_rate) || length(input$traceNew_rate) != 1) return()
+      
+      # Find the new timeseries rows based on the selected record rate
+      filteredDataModal_rate$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$record_rate == input$traceNew_rate, ]
+      
+      filteredDataModal_rate$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_rate$timeseries$parameter_id, ]
+      
+      # Update the param selectizeInput with what's left in filteredDataModal_rate.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_rate$params$parameter_id,
+                                     filteredDataModal_rate$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+    }) # End filter based on the selected record rate
+    
+    
+    ## Add/remove/modify trace buttons #######################################################################
     
     observeEvent(input$add_new_trace, {
       shinyjs::hide("add_subplot")
       if (traceCount() == 1) {
         traces$trace1 <- list(trace = "trace1",
-                              parameter = as.numeric(input$param),
                               location_id = input$location,
+                              sub_location_id = input$sub_location,
+                              z = input$z,
+                              media = input$media,
+                              aggregation = input$aggregation,
+                              rate = input$rate,
+                              parameter = input$param,
                               lead_lag = 0)
         traces$trace2 <- list(trace = "trace2",
-                              parameter = as.numeric(input$traceNew_param),
-                              location_id = input$traceNew_loc_id,
+                              location_id = input$traceNew_location,
+                              sub_location_id = input$traceNew_sub_location,
+                              z = input$traceNew_z,
+                              media = input$traceNew_media,
+                              aggregation = input$traceNew_aggregation,
+                              rate = input$traceNew_rate,
+                              parameter = input$traceNew_param,
                               lead_lag = input$traceNew_lead_lag)
         button1Text <- HTML(paste0("<b>Trace 1</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace1$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace1$location_id, tr("generic_name_col", language$language)])))
         button2Text <- HTML(paste0("<b>Trace 2</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace2$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace2$location_id, tr("generic_name_col", language$language)]), "<br>Lead/lag ", traces$trace2$lead_lag, " hours"))
@@ -1346,8 +1819,13 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         
       } else if (traceCount() == 2) {
         traces$trace3 <- list(trace = "trace3",
-                              parameter = as.numeric(input$traceNew_param),
-                              location_id = input$traceNew_loc_id,
+                              location_id = input$traceNew_location,
+                              sub_location_id = input$traceNew_sub_location,
+                              z = input$traceNew_z,
+                              media = input$traceNew_media,
+                              aggregation = input$traceNew_aggregation,
+                              rate = input$traceNew_rate,
+                              parameter = input$traceNew_param,
                               lead_lag = input$traceNew_lead_lag)
         button3Text <- HTML(paste0("<b>Trace 3</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace3$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace3$location_id, tr("generic_name_col", language$language)]), "<br>Lead/lag ", traces$trace3$lead_lag, " hours"))
         output$trace3_ui <- renderUI({
@@ -1357,8 +1835,13 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         
       } else if (traceCount() == 3) {
         traces$trace4 <- list(trace = "trace4",
-                              parameter = as.numeric(input$traceNew_param),
-                              location_id = input$traceNew_loc_id,
+                              location_id = input$traceNew_location,
+                              sub_location_id = input$traceNew_sub_location,
+                              z = input$traceNew_z,
+                              media = input$traceNew_media,
+                              aggregation = input$traceNew_aggregation,
+                              rate = input$traceNew_rate,
+                              parameter = input$traceNew_param,
                               lead_lag = input$traceNew_lead_lag)
         button4Text <- HTML(paste0("<b>Trace 4</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace4$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace4$location_id, tr("generic_name_col", language$language)]), "<br>Lead/lag ", traces$trace4$lead_lag, " hours"))
         output$trace4_ui <- renderUI({
@@ -1374,16 +1857,44 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     # Observer for when user clicks a trace button. This should bring up a populated modal with the trace information, allowing user to edit the trace. As well, a new button to remove the trace should appear. Removal of a trace requires rejigging traceCount and elements of traces$trace_n
     clicked_trace <- reactiveVal(NULL)
-    observeEvent(input$trace1, {
+    trace_modal <- function(trace, ll) {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                       selected = traces$trace1$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = stats::setNames(
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace1$parameter, "location_id"], 
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace1$parameter, tr("generic_name_col", language$language)]),
-                       selected = traces$trace1$location_id),
+        selectizeInput(ns("traceNew_location"),
+                       label = tr("loc", language$language),
+                       choices =  stats::setNames(moduleData$locs$location_id,
+                                                  moduleData$locs[, tr("generic_name_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1),
+                       selected = traces[[trace]]$location_id),
+        uiOutput(ns("traceNew_sub_loc_ui")),
+        uiOutput(ns("traceNew_z_ui")),
+        selectizeInput(ns("traceNew_media"), 
+                       label = tr("media_type", language$language), 
+                       choices = stats::setNames(filteredDataModal_z$media$media_id,
+                                                 moduleData$filteredDataModal_z[, tr("media_type_col", language$language)]),
+                       selected = traces[[trace]]$media,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_aggregation"),
+                       label = tr("aggregation_type", language$language), 
+                       choices = stats::setNames(filteredDataModal_media$aggregation_types$aggregation_type_id,
+                                                 filteredDataModal_media$aggregation_types[, tr("aggregation_type_col", language$language)]),
+                       selected = traces[[trace]]$aggregation,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_rate"),
+                       label = tr("nominal_rate", language$language), 
+                       choices = stats::setNames(filteredDataModal_aggregation$rates$seconds,
+                                                 filteredDataModal_aggregation$rates[, "period"]),
+                       selected = traces[[trace]]$rate,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_param"), 
+                       label = tr("parameter", language$language), 
+                       choices = stats::setNames(filteredDataModal_rate$params$parameter_id,
+                                                 filteredDataModal_rate$params[, tr("param_name_col", language$language)]),
+                       selected = traces[[trace]]$parameter),
+        if (ll) numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces[[trace]]$lead_lag) else NULL,
         footer = tagList(
           actionButton(ns("modify_trace"), "Modify trace"),
           actionButton(ns("remove_trace"), "Remove trace"),
@@ -1391,67 +1902,21 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         ),
         easyClose = TRUE
       ))
+    }
+    observeEvent(input$trace1, {
+      trace_modal("trace1", FALSE)
       clicked_trace(traces$trace1$trace)
     })
     observeEvent(input$trace2, {
-      showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                       selected = traces$trace2$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = stats::setNames(
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, "location_id"], 
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, tr("generic_name_col", language$language)]),
-                       selected = traces$trace2$location_id),
-        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", 
-                     value = traces$trace2$lead_lag),
-        footer = tagList(
-          actionButton(ns("modify_trace"), "Modify trace"),
-          actionButton(ns("remove_trace"), "Remove trace"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      trace_modal("trace2", TRUE)
       clicked_trace(traces$trace2$trace)
     })
     observeEvent(input$trace3, {
-      showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                       selected = traces$trace3$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = stats::setNames(
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, "location_id"], 
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, tr("generic_name_col", language$language)]),
-                       selected = traces$trace3$location_id),
-        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace3$lead_lag),
-        footer = tagList(
-          actionButton(ns("modify_trace"), "Modify trace"),
-          actionButton(ns("remove_trace"), "Remove trace"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      trace_modal("trace3", TRUE)
       clicked_trace(traces$trace3$trace)
     })
     observeEvent(input$trace4, {
-      showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                       selected = traces$trace4$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = stats::setNames(
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, "location_id"], 
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, tr("generic_name_col", language$language)]),
-                       selected = traces$trace4$location_id),
-        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace4$lead_lag),
-        footer = tagList(
-          actionButton(ns("modify_trace"), "Modify trace"),
-          actionButton(ns("remove_trace"), "Remove trace"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      trace_modal("trace4", TRUE)
       clicked_trace(traces$trace4$trace)
     })
     
@@ -1460,13 +1925,12 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       removeModal()
     })
     
-    
-    ## modify/delete trace
+    ## modify/delete traces
     observeEvent(input$modify_trace, {
       # Update the trace values
       target_trace <- clicked_trace()
       traces[[target_trace]]$parameter <- as.numeric(input$traceNew_param)
-      traces[[target_trace]]$location_id <- input$traceNew_loc_id
+      traces[[target_trace]]$location_id <- input$traceNew_location
       traces[[target_trace]]$lead_lag <- input$traceNew_lead_lag
       
       # Update the trace button text
@@ -1541,73 +2005,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       traces$trace1$lead_lag <- 0
     })
     
-    # Add/remove/modify subplot buttons #######################################################################
-    subplots <- reactiveValues()
-    subplotCount <- reactiveVal(1)
-    
-    ## Add extra subplot
-    runSubplotNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
-    observeEvent(input$add_subplot, {
-      # When the button is clicked, a modal will appear with the necessary fields to add a subplot. The subplot values are then displayed to the user under button 'subplot_x'
-      
-      # Make sure that there is an input$param, input$location before running the modal; give the user an informative modal if not
-      if (nchar(input$location) == 0 | nchar(input$param) == 0) {
-        showModal(modalDialog(
-          "Please select a location and parameter for the first subplot before adding another.",
-          footer = tagList(
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-        return()
-      }
-      
-      if (runSubplotNew() == FALSE) {
-        showModal(modalDialog(
-          selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                         selected = input$param),
-          selectizeInput(ns("subplotNew_loc_id"), "Select location", 
-                         choices = "placeholder"), # Choices are populated based on the parameter in another observer
-          footer = tagList(
-            actionButton(ns("add_new_subplot"), "Add subplot"),
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-        runSubplotNew(TRUE)
-      } else { # The modal has already run once, use the previously selected values
-        showModal(modalDialog(
-          selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                         selected = input$subplotNew_param),
-          selectizeInput(ns("subplotNew_loc_id"), "Select location", 
-                         choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location_id"], 
-                                                   moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, tr("generic_name_col", language$language)]),
-                         selected = input$subplotNew_loc_id),
-          footer = tagList(
-            actionButton(ns("add_new_subplot"), "Add subplot"),
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-      }
-    })
-    
-    # No need for an observeEvent for the cancel button as it is handled by an observer above
-    
-    # Observe the param inputs for all traces and update the location choices in the modal
-    observeEvent(input$subplotNew_param, {
-      # Update the location choices
-      locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, c(tr("generic_name_col", language$language), "location_id")])
-      names(locs) <- c("name", "location_id")
-      
-      updateSelectizeInput(session,
-                           "subplotNew_loc_id",
-                           choices = stats::setNames(locs$location_id, locs$name),
-                           selected = if (input$subplotNew_loc_id %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location_id"]) input$subplotNew_loc_id else character(0))
-    }, ignoreInit = TRUE)
-    
+    ## Add/remove/modify subplot buttons #######################################################################
     share_axes_run <- reactiveVal(FALSE)
     observeEvent(input$add_new_subplot, {
       shinyjs::hide("add_trace")
@@ -1642,11 +2040,23 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         }
         
         subplots$subplot1 <- list(subplot = "subplot1",
-                                  parameter = as.numeric(input$param),
-                                  location_id = input$location)
+                                  location_id = input$traceNew_location,
+                                  sub_location_id = input$traceNew_sub_location,
+                                  z = input$traceNew_z,
+                                  media = input$traceNew_media,
+                                  aggregation = input$traceNew_aggregation,
+                                  rate = input$traceNew_rate,
+                                  parameter = input$traceNew_param,
+                                  lead_lag = input$traceNew_lead_lag)
         subplots$subplot2 <- list(subplot = "subplot2",
-                                  parameter = as.numeric(input$subplotNew_param),
-                                  location_id = input$subplotNew_loc_id)
+                                  location_id = input$traceNew_location,
+                                  sub_location_id = input$traceNew_sub_location,
+                                  z = input$traceNew_z,
+                                  media = input$traceNew_media,
+                                  aggregation = input$traceNew_aggregation,
+                                  rate = input$traceNew_rate,
+                                  parameter = input$traceNew_param,
+                                  lead_lag = input$traceNew_lead_lag)
         button1Text <- HTML(paste0("<b>Subplot 1</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == subplots$subplot1$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot1$location_id, tr("generic_name_col", language$language)])))
         button2Text <- HTML(paste0("<b>Subplot 2</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == subplots$subplot2$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot2$location_id, tr("generic_name_col", language$language)])))
         output$subplot1_ui <- renderUI({
@@ -1662,8 +2072,14 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         
       } else if (subplotCount() == 2) {
         subplots$subplot3 <- list(subplot = "subplot3",
-                                  parameter = as.numeric(input$subplotNew_param),
-                                  location_id = input$subplotNew_loc_id)
+                                  location_id = input$traceNew_location,
+                                  sub_location_id = input$traceNew_sub_location,
+                                  z = input$traceNew_z,
+                                  media = input$traceNew_media,
+                                  aggregation = input$traceNew_aggregation,
+                                  rate = input$traceNew_rate,
+                                  parameter = input$traceNew_param,
+                                  lead_lag = input$traceNew_lead_lag)
         button3Text <- HTML(paste0("<b>Subplot 3</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == subplots$subplot3$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot3$location_id, tr("generic_name_col", language$language)])))
         output$subplot3_ui <- renderUI({
           actionButton(ns("subplot3"), button3Text)
@@ -1672,8 +2088,14 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         
       } else if (subplotCount() == 3) {
         subplots$subplot4 <- list(subplot = "subplot4",
-                                  parameter = as.numeric(input$subplotNew_param),
-                                  location_id = input$subplotNew_loc_id)
+                                  location_id = input$traceNew_location,
+                                  sub_location_id = input$traceNew_sub_location,
+                                  z = input$traceNew_z,
+                                  media = input$traceNew_media,
+                                  aggregation = input$traceNew_aggregation,
+                                  rate = input$traceNew_rate,
+                                  parameter = input$traceNew_param,
+                                  lead_lag = input$traceNew_lead_lag)
         button4Text <- HTML(paste0("<b>Subplot 4</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == subplots$subplot4$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot4$location_id, tr("generic_name_col", language$language)])))
         output$subplot4_ui <- renderUI({
           actionButton(ns("subplot4"), button4Text)
@@ -1688,15 +2110,43 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     # Observer for when user clicks a subplot button. This should bring up a populated modal with the subplot information, allowing user to edit the subplot. As well, a new button to remove the subplot should appear. Removal of a subplot requires rejigging subplotCount and elements of subplots$subplot_n
     clicked_subplot <- reactiveVal(NULL)
-    observeEvent(input$subplot1, {
+    subplot_modal <- function(subplot) {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                       selected = subplots$subplot1$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location by name", 
-                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, "location_id"], 
-                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, tr("generic_name_col", language$language)]),
-                       selected = subplots$subplot1$location_id),
+        selectizeInput(ns("traceNew_location"),
+                       label = tr("loc", language$language),
+                       choices =  stats::setNames(moduleData$locs$location_id,
+                                                  moduleData$locs[, tr("generic_name_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1),
+                       selected = traces[[subplot]]$location_id),
+        uiOutput(ns("traceNew_sub_loc_ui")),
+        uiOutput(ns("traceNew_z_ui")),
+        selectizeInput(ns("traceNew_media"), 
+                       label = tr("media_type", language$language), 
+                       choices = stats::setNames(filteredDataModal_z$media$media_id,
+                                                 moduleData$filteredDataModal_z[, tr("media_type_col", language$language)]),
+                       selected = traces[[subplot]]$media,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_aggregation"),
+                       label = tr("aggregation_type", language$language), 
+                       choices = stats::setNames(filteredDataModal_media$aggregation_types$aggregation_type_id,
+                                                 filteredDataModal_media$aggregation_types[, tr("aggregation_type_col", language$language)]),
+                       selected = traces[[subplot]]$aggregation,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_rate"),
+                       label = tr("nominal_rate", language$language), 
+                       choices = stats::setNames(filteredDataModal_aggregation$rates$seconds,
+                                                 filteredDataModal_aggregation$rates[, "period"]),
+                       selected = traces[[subplot]]$rate,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_param"), 
+                       label = tr("parameter", language$language), 
+                       choices = stats::setNames(filteredDataModal_rate$params$parameter_id,
+                                                 filteredDataModal_rate$params[, tr("param_name_col", language$language)]),
+                       selected = traces[[subplot]]$parameter),
         footer = tagList(
           actionButton(ns("modify_subplot"), "Modify subplot"),
           actionButton(ns("remove_subplot"), "Remove subplot"),
@@ -1704,60 +2154,22 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         ),
         easyClose = TRUE
       ))
+    }
+    
+    observeEvent(input$subplot1, {
+      subplot_modal("subplot1")
       clicked_subplot(subplots$subplot1$subplot)
     })
     observeEvent(input$subplot2, {
-      showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                       selected = subplots$subplot2$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location by name", 
-                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, "location_id"], 
-                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, tr("generic_name_col", language$language)]),
-                       selected = subplots$subplot2$location_id),
-        footer = tagList(
-          actionButton(ns("modify_subplot"), "Modify subplot"),
-          actionButton(ns("remove_subplot"), "Remove subplot"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      subplot_modal("subplot2")
       clicked_subplot(subplots$subplot2$subplot)
     })
     observeEvent(input$subplot3, {
-      showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                       selected = subplots$subplot3$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location", 
-                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, "location_id"], 
-                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, tr("generic_name_col", language$language)]),
-                       selected = subplots$subplot3$location_id),
-        footer = tagList(
-          actionButton(ns("modify_subplot"), "Modify subplot"),
-          actionButton(ns("remove_subplot"), "Remove subplot"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      subplot_modal("subplot3")
       clicked_subplot(subplots$subplot3$subplot)
     })
     observeEvent(input$subplot4, {
-      showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
-                       selected = subplots$subplot4$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location", 
-                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, "location_id"], 
-                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, tr("generic_name_col", language$language)]),
-                       selected = subplots$subplot4$location_id),
-        footer = tagList(
-          actionButton(ns("modify_subplot"), "Modify subplot"),
-          actionButton(ns("remove_subplot"), "Remove subplot"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      subplot_modal("subplot4")
       clicked_subplot(subplots$subplot4$subplot)
     })
     
@@ -1769,11 +2181,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       subplots[[target_subplot]]$location_id <- input$subplotNew_loc_id
       
       # Update the subplot button text
-      if (target_subplot == "subplot1") {
-        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots[[target_subplot]]$location_id, tr("generic_name_col", language$language)])))
-      } else {
-        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots[[target_subplot]]$location_id, tr("generic_name_col", language$language)])))
-      }
+      button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(moduleData$params[moduleData$params$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots[[target_subplot]]$location_id, tr("generic_name_col", language$language)])))
       
       output[[paste0(target_subplot, "_ui")]] <- renderUI({
         actionButton(ns(paste0(target_subplot)), button_text)
