@@ -467,8 +467,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected location ##########################
     observeEvent(input$location, {
       req(filteredData)
-      print("Observing location input change")
-      
+
       # Filter the data based on the selected locations
       filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$location, ]
       
@@ -604,9 +603,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
                              start = earliest,
-                             end = as.Date(filteredData$max_date),
-                             min = as.Date(filteredData$min_date),
-                             max = as.Date(filteredData$max_date))
+                             end = as.Date(filteredData$range$max_date),
+                             min = as.Date(filteredData$range$min_date),
+                             max = as.Date(filteredData$range$max_date))
       }
       
       filteredData_sub_locs$timeseries <- filteredData$timeseries
@@ -639,8 +638,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ## Filter based on the sub_location ##########################
     observeEvent(input$sub_location, {
       req(filteredData)
-      
-      print("Observing sub_location input")
       
       # Filter the data based on the selected sub-locations
       if (is.null(input$sub_location) || length(input$sub_location) != 1) return()
@@ -754,9 +751,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
                              start = earliest,
-                             end = as.Date(filteredData_sub_locs$max_date),
-                             min = as.Date(filteredData_sub_locs$min_date),
-                             max = as.Date(filteredData_sub_locs$max_date))
+                             end = as.Date(filteredData_sub_locs$range$max_date),
+                             min = as.Date(filteredData_sub_locs$range$min_date),
+                             max = as.Date(filteredData_sub_locs$range$max_date))
       }
       
       filteredData_z$timeseries <- filteredData_sub_locs$timeseries
@@ -781,8 +778,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     ## Filter based on the z value ##########################
     observeEvent(input$z, {
-      
-      print("Observing z input change")
       
       # Filter the data based on the selected z values
       if (is.null(input$z) || length(input$z) != 1) return()
@@ -872,9 +867,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
                              start = earliest,
-                             end = as.Date(filteredData_z$max_date),
-                             min = as.Date(filteredData_z$min_date),
-                             max = as.Date(filteredData_z$max_date))
+                             end = as.Date(filteredData_z$range$max_date),
+                             min = as.Date(filteredData_z$range$min_date),
+                             max = as.Date(filteredData_z$range$max_date))
       }
       
       filteredData_media$timeseries <- filteredData_z$timeseries
@@ -892,7 +887,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     ## Filter based on the media ##########################
     observeEvent(input$media, {
-      print("Observing media input change")
       
       # Filter the data based on the selected media
       if (is.null(input$media) || length(input$media) != 1) return()
@@ -970,9 +964,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
                              start = earliest,
-                             end = as.Date(filteredData_media$max_date),
-                             min = as.Date(filteredData_media$min_date),
-                             max = as.Date(filteredData_media$max_date))
+                             end = as.Date(filteredData_media$range$max_date),
+                             min = as.Date(filteredData_media$range$min_date),
+                             max = as.Date(filteredData_media$range$max_date))
       }
       
       filteredData_aggregation$timeseries <- filteredData_media$timeseries
@@ -986,8 +980,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     ## Filter based on the aggregation type ##########################
     observeEvent(input$aggregation, {
-      
-      print("Observing aggregation input change")
       
       # Filter the data based on the selected aggregation type
       if (is.null(input$aggregation) || length(input$aggregation) != 1) return()
@@ -1053,9 +1045,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
                              start = earliest,
-                             end = as.Date(filteredData_aggregation$max_date),
-                             min = as.Date(filteredData_aggregation$min_date),
-                             max = as.Date(filteredData_aggregation$max_date))
+                             end = as.Date(filteredData_aggregation$range$max_date),
+                             min = as.Date(filteredData_aggregation$range$min_date),
+                             max = as.Date(filteredData_aggregation$range$max_date))
       }
       
       filteredData_rate$timeseries <- filteredData_aggregation$timeseries
@@ -1065,8 +1057,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     ## Filter based on the rate ##########################
     observeEvent(input$rate, {
-      
-      print("Observing rate input change")
       
       # Filter the data based on the selected rate
       if (is.null(input$rate) || length(input$rate) != 1) return()
@@ -1120,9 +1110,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
                              start = earliest,
-                             end = as.Date(filteredData_rate$max_date),
-                             min = as.Date(filteredData_rate$min_date),
-                             max = as.Date(filteredData_rate$max_date))
+                             end = as.Date(filteredData_rate$range$max_date),
+                             min = as.Date(filteredData_rate$range$min_date),
+                             max = as.Date(filteredData_rate$range$max_date))
       }
     })
     
@@ -1130,8 +1120,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     # only need to update the date range and years inputs
     observeEvent(input$param, {
       req(filteredData_rate)
-      
-      print("Observing parameter input change")
       
       # Filter the data based on the selected parameter
       if (is.null(input$param) || length(input$param) != 1) return()
@@ -1379,8 +1367,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected location #################################################################
     observeEvent(input$traceNew_location, {
       req(filteredDataModal)
-      print("Observing modal traceNew_location input change")
-      
+
       # Filter the data based on the selected locations
       filteredDataModal$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$traceNew_location, ]
       
@@ -1497,8 +1484,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected sub-location ##############################################################
     observeEvent(input$traceNew_sub_location, {
       req(filteredDataModal_sub_locs)
-      print("Observing modal traceNew_sub_location input change")
-      
+
       # Filter the data based on the selected sub-locations
       if (is.null(input$traceNew_sub_location) || length(input$traceNew_sub_location) != 1) return()
       
@@ -1593,8 +1579,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected z #################################################################
     observeEvent(input$traceNew_z, {
       req(filteredDataModal_z)
-      print("Observing modal traceNew_z input change")
-      
+
       # Filter the data based on the selected z value
       if (is.null(input$traceNew_z) || length(input$traceNew_z) != 1) return()
       
@@ -1669,8 +1654,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected media #################################################################
     observeEvent(input$traceNew_media, {
       req(filteredDataModal_media)
-      print("Observing modal traceNew_media input change")
-      
+
       # Filter the data based on the selected media
       if (is.null(input$traceNew_media) || length(input$traceNew_media) != 1) return()
       
@@ -1727,8 +1711,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected aggregation type ##############################################################
     observeEvent(input$traceNew_aggregation, {
       req(filteredDataModal_aggregation)
-      print("Observing modal traceNew_aggregation input change")
-      
+
       # Filter the data based on the selected aggregation type
       if (is.null(input$traceNew_aggregation) || length(input$traceNew_aggregation) != 1) return()
       
@@ -1769,8 +1752,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected record rate ##############################################################
     observeEvent(input$traceNew_rate, {
       req(filteredDataModal_rate)
-      print("Observing modal traceNew_rate input change")
-      
+
       # Filter the data based on the selected record rate
       if (is.null(input$traceNew_rate) || length(input$traceNew_rate) != 1) return()
       
@@ -2256,7 +2238,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       # Update the subplot values
       target_subplot <- clicked_subplot()
       subplots[[target_subplot]]$parameter <- as.numeric(input$traceNew_param)
-      subplots[[target_subplot]]$location_id <- input$traceNew_loc_id
+      subplots[[target_subplot]]$location_id <- input$traceNew_location
       
       # Update the subplot button text
       button_text <- HTML(paste0(
@@ -2568,16 +2550,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         aggregation_type <- if (nchar(input$aggregation) > 0) as.numeric(input$aggregation) else NULL
         param <- as.numeric(input$param)
         
-        
-        print(loc)
-        print(sub_loc)
-        print(z)
-        print(record_rate)
-        print(aggregation_type)
-        print(param)
-        print(input$date_range[1])
-        print(input$date_range[2])
-        
         plot_output_overlap$invoke(loc = loc,
                                    sub_loc = sub_loc,
                                    z = z,
@@ -2692,8 +2664,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           locs <- c(traces$trace1$location_id, traces$trace2$location_id, traces$trace3$location_id, traces$trace4$location_id)
           sub_locs <- c(traces$trace1$sub_location_id, traces$trace2$sub_location_id, traces$trace3$sub_location_id, traces$trace4$sub_location_id)
           z <- c(traces$trace1$z, traces$trace2$z, traces$trace3$z, traces$trace4$z)
-          record_rates <- c(traces$trace1$record_rate, traces$trace2$record_rate, traces$trace3$record_rate, traces$trace4$record_rate)
-          aggregation_types <- c(traces$trace1$aggregation_type, traces$trace2$aggregation_type, traces$trace3$aggregation_type, traces$trace4$aggregation_type)
+          record_rates <- c(traces$trace1$rate, traces$trace2$rate, traces$trace3$rate, traces$trace4$rate)
+          aggregation_types <- c(traces$trace1$aggregation, traces$trace2$aggregation, traces$trace3$aggregation, traces$trace4$aggregation)
           params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
           lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
           
