@@ -116,8 +116,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
       filteredData$range <- data.frame(
-        min_date = min(filteredData$timeseries$datetime, na.rm = TRUE),
-        max_date = max(filteredData$timeseries$datetime, na.rm = TRUE)
+        min_date = min(filteredData$timeseries$start_datetime, na.rm = TRUE),
+        max_date = max(filteredData$timeseries$end_datetime, na.rm = TRUE)
       )
       
       filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
@@ -175,7 +175,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       render_flags$media <- TRUE
       render_flags$param <- TRUE
       
-      earliest <- min(filteredData$range$min_date, filteredData$range_max_date - 365, na.rm = TRUE)
+      earliest <- min(filteredData$range$min_date, filteredData$range$max_date - 365, na.rm = TRUE)
       
       tags <- tagList(
         selectizeInput(ns("plot_type"),
@@ -455,6 +455,10 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       }
     })
     
+    # Create reactiveValues objects for sub_locs and z here because their observers will not run unless there is a need. This allows filtering to proceed down the line without those observers.
+    filteredData_sub_locs <- reactiveValues()
+    filteredData_z <- reactiveValues()
+  
     observeEvent(input$location, {
       req(filteredData)
 
@@ -469,8 +473,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData$rates <- moduleData$rates[moduleData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
       filteredData$range <- data.frame(
-        min_date = min(filteredData$timeseries$datetime, na.rm = TRUE),
-        max_date = max(filteredData$timeseries$datetime, na.rm = TRUE)
+        min_date = min(filteredData$timeseries$start_datetime, na.rm = TRUE),
+        max_date = max(filteredData$timeseries$end_datetime, na.rm = TRUE)
       )
       
       filteredData$params <- moduleData$params[moduleData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
@@ -579,17 +583,18 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            choices = tmp.choices,
                            selected = tmp.selected)
       
-      earliest <- min(filteredData$range$min_date, filteredData$range_max_date - 365, na.rm = TRUE)
+      earliest <- min(filteredData$range$min_date, filteredData$range$max_date - 365, na.rm = TRUE)
       updateDateRangeInput(session, "date_range",
                            start = earliest,
                            end = as.Date(filteredData$range$max_date),
                            min = as.Date(filteredData$range$min_date),
                            max = as.Date(filteredData$range$max_date))
-
+      
+      filteredData_sub_locs <- filteredData
+      filteredData_z <- filteredData
     }, ignoreInit = TRUE)
     
     
-    filteredData_sub_locs <- reactiveValues()
     observeEvent(input$sub_location, {
       req(filteredData)
 
@@ -606,8 +611,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_sub_locs$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData_sub_locs$timeseries$parameter_id, ]
       
       filteredData_sub_locs$range <- data.frame(
-        min_date = min(filteredData_sub_locs$timeseries$datetime, na.rm = TRUE),
-        max_date = max(filteredData_sub_locs$timeseries$datetime, na.rm = TRUE)
+        min_date = min(filteredData_sub_locs$timeseries$start_datetime, na.rm = TRUE),
+        max_date = max(filteredData_sub_locs$timeseries$end_datetime, na.rm = TRUE)
       )
       
       # Update the z selectizeInput based on the selected sub-locations
@@ -672,10 +677,10 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            end = as.Date(filteredData_sub_locs$range$max_date),
                            min = as.Date(filteredData_sub_locs$range$min_date),
                            max = as.Date(filteredData_sub_locs$range$max_date))
+      filteredData_z <- filteredData_sub_locs
     })
     
     
-    filteredData_z <- reactiveValues()
     observeEvent(input$z, {
       req(filteredData_sub_locs)
       
@@ -690,8 +695,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_z$rates <- filteredData_sub_locs$rates[filteredData_sub_locs$rates$seconds %in% filteredData_z$timeseries$record_rate, ]
       filteredData_z$params <- filteredData_sub_locs$params[filteredData_sub_locs$params$parameter_id %in% filteredData_z$timeseries$parameter_id, ]
       filteredData_z$range <- data.frame(
-        min_date = min(filteredData_z$timeseries$datetime, na.rm = TRUE),
-        max_date = max(filteredData_z$timeseries$datetime, na.rm = TRUE)
+        min_date = min(filteredData_z$timeseries$start_datetime, na.rm = TRUE),
+        max_date = max(filteredData_z$timeseries$end_datetime, na.rm = TRUE)
       )
       
       # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_z.
@@ -759,13 +764,13 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       
       # Find the new timeseries rows based on the selected media
       filteredData_media$timeseries <- filteredData_z$timeseries[filteredData_z$timeseries$media_id == input$media, ]
-      
+
       filteredData_media$aggregation_types <- filteredData_z$aggregation_types[filteredData_z$aggregation_types$aggregation_type_id %in% filteredData_media$timeseries$aggregation_type_id, ]
       filteredData_media$rates <- filteredData_z$rates[filteredData_z$rates$seconds %in% filteredData_media$timeseries$record_rate, ]
       filteredData_media$params <- filteredData_z$params[filteredData_z$params$parameter_id %in% filteredData_media$timeseries$parameter_id, ]
       filteredData_media$range <- data.frame(
-        min_date = min(filteredData_media$timeseries$datetime, na.rm = TRUE),
-        max_date = max(filteredData_media$timeseries$datetime, na.rm = TRUE)
+        min_date = min(filteredData_media$timeseries$start_datetime, na.rm = TRUE),
+        max_date = max(filteredData_media$timeseries$end_datetime, na.rm = TRUE)
       )
       
       # Update the aggregation, rate, and param selectizeInputs with what's left in filteredData_media.
@@ -812,7 +817,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     })
       
     filteredData_aggregation <- reactiveValues()
-    observeEvent(input$ggregation, {
+    observeEvent(input$aggregation, {
       req(filteredData_media)
 
       # Filter the data based on the selected aggregation type
@@ -824,8 +829,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_aggregation$rates <- filteredData_media$rates[filteredData_media$rates$seconds %in% filteredData_aggregation$timeseries$record_rate, ]
       filteredData_aggregation$params <- filteredData_media$params[filteredData_media$params$parameter_id %in% filteredData_aggregation$timeseries$parameter_id, ]
       filteredData_aggregation$range <- data.frame(
-        min_date = min(filteredData_aggregation$timeseries$datetime, na.rm = TRUE),
-        max_date = max(filteredData_aggregation$timeseries$datetime, na.rm = TRUE)
+        min_date = min(filteredData_aggregation$timeseries$start_datetime, na.rm = TRUE),
+        max_date = max(filteredData_aggregation$timeseries$end_datetime, na.rm = TRUE)
       )
       
       # Update the rate and param selectizeInputs with what's left in filteredData_aggregation.
@@ -872,8 +877,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       
       filteredData_rate$params <- filteredData_aggregation$params[filteredData_aggregation$params$parameter_id %in% filteredData_rate$timeseries$parameter_id, ]
       filteredData_rate$range <- data.frame(
-        min_date = min(filteredData_rate$timeseries$datetime, na.rm = TRUE),
-        max_date = max(filteredData_rate$timeseries$datetime, na.rm = TRUE)
+        min_date = min(filteredData_rate$timeseries$start_datetime, na.rm = TRUE),
+        max_date = max(filteredData_rate$timeseries$end_datetime, na.rm = TRUE)
       )
       
       # Update the param selectizeInput with what's left in filteredData_rate.
@@ -908,11 +913,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       tmp.timeseries <- filteredData_rate$timeseries[filteredData_rate$timeseries$parameter_id == input$param, ]
       
       tmp.range <- data.frame(
-        min_date = min(tmp.timeseries$datetime, na.rm = TRUE),
-        max_date = max(tmp.timeseries$datetime, na.rm = TRUE)
+        min_date = min(tmp.timeseries$start_datetime, na.rm = TRUE),
+        max_date = max(tmp.timeseries$end_datetime, na.rm = TRUE)
       )
       
-      earliest <- min(tmp.range$range$min_date, tmp.range$max_date - 365, na.rm = TRUE)
+      earliest <- min(tmp.range$min_date, tmp.range$max_date - 365, na.rm = TRUE)
       updateDateRangeInput(session, "date_range",
                            start = earliest,
                            end = as.Date(tmp.range$max_date),
