@@ -77,37 +77,37 @@ plotMultiTimeseries <- function(type = 'traces',
                                 data = FALSE,
                                 con = NULL) {
   
-    # type <- 'traces'
-    # locations <- c(157, 9)
-    # sub_locations <- NULL
-    # parameters <- c(1165, 1250)
-    # record_rates <- NULL
-    # aggregation_types <- NULL
-    # z <- NULL
-    # z_approx <- NULL
-    # start_date <- Sys.Date() - 30
-    # end_date <- Sys.Date()
-    # lead_lag <- c(0,0)
-    # log <- FALSE
-    # invert <- NULL
-    # slider <- FALSE
-    # datum <- TRUE
-    # title <- TRUE
-    # custom_title <- NULL
-    # filter <- NULL
-    # historic_range <- NULL
-    # lang <- "en"
-    # line_scale <- 1
-    # axis_scale <- 1
-    # legend_scale <- 1
-    # gridx <- FALSE
-    # gridy <- FALSE
-    # rate <- NULL
-    # tzone <- "auto"
-    # legend_position <- 'v'
-    # shareX = TRUE
-    # shareY = TRUE
-    # unusable = FALSE
+  # type <- 'traces'
+  # locations <- c("138", "140")
+  # sub_locations <- NULL
+  # z <- NULL
+  # parameters <- c("1165", "1250")
+  # record_rates <- c("300", "300")
+  # aggregation_types <- c("1", "1")
+  # z_approx <- NULL
+  # start_date <- Sys.Date() - 30
+  # end_date <- Sys.Date()
+  # lead_lag <- c(0,0)
+  # log <- FALSE
+  # invert <- NULL
+  # slider <- FALSE
+  # datum <- TRUE
+  # title <- TRUE
+  # custom_title <- NULL
+  # filter <- NULL
+  # historic_range <- NULL
+  # lang <- "en"
+  # line_scale <- 1
+  # axis_scale <- 1
+  # legend_scale <- 1
+  # gridx <- FALSE
+  # gridy <- FALSE
+  # rate <- NULL
+  # tzone <- "auto"
+  # legend_position <- 'v'
+  # shareX = TRUE
+  # shareY = TRUE
+  # unusable = FALSE
   
   # Checks and initial work ##########################################
   
@@ -191,13 +191,15 @@ plotMultiTimeseries <- function(type = 'traces',
     if ((length(record_rates) != N) && ((length(record_rates) != 1) | (N != 1))) {
       stop("The number of locations and record rates must be the same, one must be a vector of length 1, or record_rates must be left as the default NULL.")
     }
+    rates_char <- lubridate::as.period(NA)
     for (i in 1:length(record_rates)) {
-      record_rates[i] <- lubridate::period(record_rates[i])
-      if (!lubridate::is.period(record_rates[i])) {
+      rates_char[i] <- lubridate::period(record_rates[i])
+      if (!lubridate::is.period(rates_char[i])) {
         warning("Your entry ", i, " for parameter record_rates is invalid (is not or cannot be converted to a period). It's been reset to the default NULL.")
-        record_rates[i] <- NA
+        rates_char[i] <- NA
       }
     }
+    record_rates <- rates_char
     if (length(record_rates) == 1 & N > 1) {
       record_rates <- rep(record_rates, N)
     }
@@ -244,31 +246,59 @@ plotMultiTimeseries <- function(type = 'traces',
       aggregation_types <- rep(aggregation_types, N)
     }
     
-    # build result
-    aggregation_types <- data.frame(
-      aggregation_type = tolower(as.character(aggregation_types)),
-      aggregation_type_id = NA_integer_)
-    # look up IDs for any non-NA entries
-    for (i in seq_len(N)) {
-      at <- aggregation_types$aggregation_type[i]
-      if (!is.na(at) && nzchar(at)) {
-        # try to find the ID in the DB
-        # use parameterized query to avoid SQL injection
-        query <- "
+    to_num <- as.numeric(aggregation_types)
+    if (any(is.na(to_num))) { # Assume they refer to aggregation_type column
+      aggregation_types <- data.frame(
+        aggregation_type = tolower(as.character(aggregation_types)),
+        aggregation_type_id = NA_integer_)
+      # look up IDs for any non-NA entries
+      for (i in seq_len(N)) {
+        at <- aggregation_types$aggregation_type[i]
+        if (!is.na(at) && nzchar(at)) {
+          # try to find the ID in the DB
+          # use parameterized query to avoid SQL injection
+          query <- "
         SELECT aggregation_type_id
           FROM aggregation_types
          WHERE LOWER(aggregation_type) = ?
         LIMIT 1;"
-        res <- DBI::dbGetQuery(con, DBI::sqlInterpolate(con, query, at))
-        if (nrow(res) == 1) {
-          aggregation_types$aggregation_type_id[i] <- res$aggregation_type_id
-        } else {
-          warning("`aggregation_types[", i, "] = '", aggregation_types[i], "'` not found, setting to NULL.")
-          aggregation_types$aggregation_type[i]    <- NA
-          aggregation_types$aggregation_type_id[i] <- NA
+          res <- DBI::dbGetQuery(con, DBI::sqlInterpolate(con, query, at))
+          if (nrow(res) == 1) {
+            aggregation_types$aggregation_type_id[i] <- res$aggregation_type_id
+          } else {
+            warning("`aggregation_types[", i, "] = '", aggregation_types[i], "'` not found, setting to NULL.")
+            aggregation_types$aggregation_type[i]    <- NA
+            aggregation_types$aggregation_type_id[i] <- NA
+          }
+        }
+      }
+    } else { # Assume they refer to aggregation_type_id column
+      aggregation_types <- data.frame(
+        aggregation_type = NA_character_,
+        aggregation_type_id = to_num)
+      # look up names for any non-NA entries
+      for (i in seq_len(N)) {
+        at_id <- aggregation_types$aggregation_type_id[i]
+        if (!is.na(at_id) && at_id > 0) {
+          # try to find the name in the DB
+          # use parameterized query to avoid SQL injection
+          query <- "
+        SELECT aggregation_type
+          FROM aggregation_types
+         WHERE aggregation_type_id = ?
+        LIMIT 1;"
+          res <- DBI::dbGetQuery(con, DBI::sqlInterpolate(con, query, at_id))
+          if (nrow(res) == 1) {
+            aggregation_types$aggregation_type[i] <- res$aggregation_type
+          } else {
+            warning("`aggregation_types[", i, "] = ", at_id, "` not found, setting to NULL.")
+            aggregation_types$aggregation_type[i]    <- NA_character_
+            aggregation_types$aggregation_type_id[i] <- NA_integer_
+          }
         }
       }
     }
+
   } else {
     aggregation_types <- data.frame(aggregation_type = rep(NA_character_, N), 
                                     aggregation_type_id = rep(NA_integer_, N))

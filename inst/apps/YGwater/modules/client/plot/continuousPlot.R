@@ -2574,15 +2574,28 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else if (input$plot_type == "ts") {
         if (traceCount() == 1) { # Either a single trace or more than 1 subplot
           if (subplotCount() > 1) { # Multiple sub plots
-            locs <- c(subplots$subplot1$location_id, subplots$subplot2$location_id, subplots$subplot3$location_id, subplots$subplot4$location_id)
-            sub_locs <- c(subplots$subplot1$sub_location_id, subplots$subplot2$sub_location_id, subplots$subplot3$sub_location_id, subplots$subplot4$sub_location_id)
+            locs <- as.numeric(c(subplots$subplot1$location_id, subplots$subplot2$location_id, subplots$subplot3$location_id, subplots$subplot4$location_id))
+            sub_locs <- as.numeric(c(subplots$subplot1$sub_location_id, subplots$subplot2$sub_location_id, subplots$subplot3$sub_location_id, subplots$subplot4$sub_location_id))
             z <- c(subplots$subplot1$z, subplots$subplot2$z, subplots$subplot3$z, subplots$subplot4$z)
-            record_rates <- c(subplots$subplot1$rate, subplots$subplot2$rate, subplots$subplot3$rate, subplots$subplot4$rate)
-            aggregation_types <- c(subplots$subplot1$aggregation, subplots$subplot2$aggregation, subplots$subplot3$aggregation, subplots$subplot4$aggregation)
-            params <- c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter)
+            record_rates <- as.numeric(c(subplots$subplot1$rate, subplots$subplot2$rate, subplots$subplot3$rate, subplots$subplot4$rate))
+            aggregation_types <- as.numeric(c(subplots$subplot1$aggregation, subplots$subplot2$aggregation, subplots$subplot3$aggregation, subplots$subplot4$aggregation))
+            params <- as.numeric(c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter))
+            
+            # Make sure that each combination of locs[n], sub_locs[n], z[n], record_rates[n], aggregation_types[n], params[n] and lead_lags[n] is unique
+            combinations <- data.frame(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags)
+            unique_combinations <- unique(combinations)
+            
+            if (nrow(unique_combinations) != nrow(combinations)) {
+              showModal(modalDialog(
+                title = "Error",
+                "There are duplicate traces. Please ensure that each trace has a unique combination of location, sub-location, z, record rate, aggregation type, parameter, and lead/lag.",
+                easyClose = TRUE
+              ))
+              return()
+            }
             
             plot_output_timeseries_subplots$invoke(locs = locs,
-                                                   sub_locs = sub_locs,
+                                                   sub_locs = if (length(sub_locs) == 0) NULL else sub_locs,
                                                    z = z,
                                                    record_rates = record_rates,
                                                    aggregation_types = aggregation_types,
@@ -2661,16 +2674,29 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                           config = session$userData$config)
           }
         } else { # Multiple traces, single plot
-          locs <- c(traces$trace1$location_id, traces$trace2$location_id, traces$trace3$location_id, traces$trace4$location_id)
-          sub_locs <- c(traces$trace1$sub_location_id, traces$trace2$sub_location_id, traces$trace3$sub_location_id, traces$trace4$sub_location_id)
+          locs <- as.numeric(c(traces$trace1$location_id, traces$trace2$location_id, traces$trace3$location_id, traces$trace4$location_id))
+          sub_locs <- as.numeric(c(traces$trace1$sub_location_id, traces$trace2$sub_location_id, traces$trace3$sub_location_id, traces$trace4$sub_location_id))
           z <- c(traces$trace1$z, traces$trace2$z, traces$trace3$z, traces$trace4$z)
-          record_rates <- c(traces$trace1$rate, traces$trace2$rate, traces$trace3$rate, traces$trace4$rate)
-          aggregation_types <- c(traces$trace1$aggregation, traces$trace2$aggregation, traces$trace3$aggregation, traces$trace4$aggregation)
-          params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
+          record_rates <- as.numeric(c(traces$trace1$rate, traces$trace2$rate, traces$trace3$rate, traces$trace4$rate))
+          aggregation_types <- as.numeric(c(traces$trace1$aggregation, traces$trace2$aggregation, traces$trace3$aggregation, traces$trace4$aggregation))
+          params <- as.numeric(c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter))
           lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
           
+          # Make sure that each combination of locs[n], sub_locs[n], z[n], record_rates[n], aggregation_types[n], params[n] and lead_lags[n] is unique
+          combinations <- data.frame(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags)
+          unique_combinations <- unique(combinations)
+          
+          if (nrow(unique_combinations) != nrow(combinations)) {
+            showModal(modalDialog(
+              title = "Error",
+              "There are duplicate traces. Please ensure that each trace has a unique combination of location, sub-location, z, record rate, aggregation type, parameter, and lead/lag.",
+              easyClose = TRUE
+            ))
+            return()
+          }
+          
           plot_output_timeseries_traces$invoke(locs = locs,
-                                               sub_locs = sub_locs,
+                                               sub_locs = if (length(sub_locs) == 0) NULL else sub_locs,
                                                z = z,
                                                record_rates = record_rates,
                                                aggregation_types = aggregation_types,

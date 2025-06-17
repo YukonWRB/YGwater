@@ -6,10 +6,11 @@
 #' Placeholder function, not yet complete.
 #'
 #' @param clauses Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1. If NULL, all raster data is returned.
-#' @param boundary Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector (⁠c([top], [bottom], [right], [left])⁠) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.
-#' #' @param bands The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.
+#' @param boundary Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector c(top, bottom, right, left) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.
+#' @param bands The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.
 #' @param tbl_name The name of the schema and table containing the raster data. Default is "spatial.rasters".
 #' @param col_name The name of the column containing the raster data. Default is "rast".
+#' @param con A connection to the target database. If NULL, a new connection is created using [AquaConnect()] and automatically closed when the function exits.
 #' @return A terra::rast object containing the raster data.
 #' @export
 #'
