@@ -8,7 +8,7 @@
 #' @param location The location for which you want a plot.
 #' @param sub_location Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).
 #' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
-#' @param record_rate The recording rate for the parameter and location to plot, from column 'record_rate' of table 'timeseries'. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.
+#' @param record_rate The recording rate for the parameter and location to plot, from column 'record_rate' of table 'timeseries'. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate. Can be passed in a character string or number of seconds coercible to a period by [lubridate::period()].
 #' @param aggregation_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2'. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max'.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/aggregation_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.
@@ -131,7 +131,8 @@ plotOverlap <- function(location,
   }
   
   if (!is.null(record_rate)) {
-    if (!lubridate::is.period(lubridate::period(record_rate))) {
+    record_rate <- lubridate::period(record_rate)
+    if (!lubridate::is.period(record_rate)) {
       warning("Your entry for parameter record_rate is invalid. It's been reset to the default NULL.")
       record_rate <- NULL
     }
@@ -322,7 +323,7 @@ plotOverlap <- function(location,
     } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
     } else { #both record_rate and aggregation_type_id are not NULL
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", lubridate::period(record_rate), "' AND aggregation_type_id = ", aggregation_type_id, ";"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
     }
   } else {  #sub location was specified
     # Find the sub location_id

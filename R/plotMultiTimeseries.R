@@ -9,7 +9,7 @@
 #' @param locations The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.
 #' @param sub_locations Your desired sub-locations, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-locations (character) or the sub-location IDs (numeric). Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param parameters The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.
-#' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.
+#' @param record_rates The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one. Can be passed in a character string or number of seconds coercible to a period by [lubridate::period()].
 #' @param aggregation_types The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes (you can also specify the numeric entry from the aggregation_types AquaCache table). NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/aggregation_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
@@ -192,7 +192,8 @@ plotMultiTimeseries <- function(type = 'traces',
       stop("The number of locations and record rates must be the same, one must be a vector of length 1, or record_rates must be left as the default NULL.")
     }
     for (i in 1:length(record_rates)) {
-      if (!lubridate::is.period(lubridate::period(record_rates[i]))) {
+      record_rates[i] <- lubridate::period(record_rates[i])
+      if (!lubridate::is.period(record_rates[i])) {
         warning("Your entry ", i, " for parameter record_rates is invalid (is not or cannot be converted to a period). It's been reset to the default NULL.")
         record_rates[i] <- NA
       }
