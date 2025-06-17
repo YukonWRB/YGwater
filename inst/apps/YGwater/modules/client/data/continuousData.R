@@ -100,6 +100,20 @@ contData <- function(id, language, inputs) {
       return(data)
     }
     
+    # Safely calculate date ranges and avoid warnings when no dates are present
+    calc_range <- function(df) {
+      if (nrow(df) == 0 ||
+          all(is.na(df$start_datetime)) ||
+          all(is.na(df$end_datetime))) {
+        data.frame(min_date = as.Date(NA), max_date = as.Date(NA))
+      } else {
+        data.frame(
+          min_date = as.Date(min(df$start_datetime, na.rm = TRUE)),
+          max_date = as.Date(max(df$end_datetime, na.rm = TRUE))
+        )
+      }
+    }
+    
     # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
     moduleInputs <- reactiveValues(location_id = if (!is.null(inputs$location_id)) as.numeric(inputs$location_id) else NULL)
     

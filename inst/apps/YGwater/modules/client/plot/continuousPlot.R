@@ -93,7 +93,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       )
       return(data)
     }
-
+    
     # Safely calculate date ranges and avoid warnings when no dates are present
     calc_range <- function(df) {
       if (nrow(df) == 0 ||
@@ -102,8 +102,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         data.frame(min_date = as.Date(NA), max_date = as.Date(NA))
       } else {
         data.frame(
-          min_date = min(df$start_datetime, na.rm = TRUE),
-          max_date = max(df$end_datetime, na.rm = TRUE)
+          min_date = as.Date(min(df$start_datetime, na.rm = TRUE)),
+          max_date = as.Date(max(df$end_datetime, na.rm = TRUE))
         )
       }
     }
@@ -153,6 +153,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     values <- reactiveValues()
     # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth' - this is used to change default plot start/end dates and to show the datum checkbox if suitable
     values$water_level <- moduleData$params$parameter_id[moduleData$params$param_name == "water level"]
+    values$water_flow <- moduleData$params$parameter_id[moduleData$params$param_name == "water flow"]
     values$swe <- moduleData$params$parameter_id[moduleData$params$param_name == "snow water equivalent"]
     values$snow_depth <- moduleData$params$parameter_id[moduleData$params$param_name == "snow depth"]
     
@@ -186,7 +187,10 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       render_flags$media <- TRUE
       render_flags$param <- TRUE
       
-      earliest <- min(filteredData$range$min_date, filteredData$range$max_date - 365, na.rm = TRUE)
+      earliest <- filteredData$range$max_date - 366
+      if (earliest < filteredData$range$min_date) {
+        earliest <- filteredData$range$min_date
+      }
       
       tags <- tagList(
         selectizeInput(ns("plot_type"),
@@ -221,9 +225,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         # Selectize input for media type
         selectizeInput(ns("media"),
                        label = tr("media_type", language$language),
-                       choices = 
-                         stats::setNames(filteredData$media$media_id,
-                                         filteredData$media[, tr("media_type_col", language$language)]),
+                       choices = stats::setNames(filteredData$media$media_id,
+                                                 filteredData$media[, tr("media_type_col", language$language)]),
                        multiple = TRUE,
                        options = list(maxItems = 1)
         ),
@@ -250,7 +253,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                        multiple = TRUE,
                        options = list(maxItems = 1)
         ),
-        uiOutput(ns("param_modal_ui")), # Will be a modal button to let users filter parameters by group or sub-group, if there are more than 10 parameters
         # start and end datetime
         dateRangeInput(ns("date_range"),
                        tr("date_range_select", language$language),
@@ -469,10 +471,15 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     # Create reactiveValues objects for sub_locs and z here because their observers will not run unless there is a need. This allows filtering to proceed down the line without those observers.
     filteredData_sub_locs <- reactiveValues()
     filteredData_z <- reactiveValues()
-  
+    filteredData_media <- reactiveValues()
+    filteredData_aggregation <- reactiveValues()
+    filteredData_rate <- reactiveValues()
+    filteredData_param <- reactiveValues()
+    
     observeEvent(input$location, {
       req(filteredData)
-
+      print("Observing location input change")
+      
       # Filter the data based on the selected locations
       filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$location, ]
       
@@ -515,9 +522,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           render_flags$sub_location <- TRUE
         } else {
           updateSelectizeInput(session, "sub_location",
-                             choices = stats::setNames(filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, "sub_location_id"],
-                                                       filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, tr("sub_location_col", language$language)]),
-                             selected = character(0))
+                               choices = stats::setNames(filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, "sub_location_id"],
+                                                         filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, tr("sub_location_col", language$language)]),
+                               selected = character(0))
           shinyjs::show("sub_location")
         }
       } else {
@@ -591,27 +598,81 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            choices = tmp.choices,
                            selected = tmp.selected)
       
-      earliest <- min(filteredData$range$min_date, filteredData$range$max_date - 365, na.rm = TRUE)
-      updateDateRangeInput(session, "date_range",
-                           start = earliest,
-                           end = as.Date(filteredData$range$max_date),
-                           min = as.Date(filteredData$range$min_date),
-                           max = as.Date(filteredData$range$max_date))
+      earliest <- filteredData$range$max_date - 366
+      if (earliest < filteredData$range$min_date) {
+        earliest <- filteredData$range$min_date
+      }
       
-      filteredData_sub_locs <- filteredData
-      filteredData_z <- filteredData
+      possible_years <- seq(
+        as.numeric(substr(filteredData$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData$max_date),
+                             min = as.Date(filteredData$min_date),
+                             max = as.Date(filteredData$max_date))
+      }
+      
+      filteredData_sub_locs$timeseries <- filteredData$timeseries
+      filteredData_sub_locs$z <- filteredData$z
+      filteredData_sub_locs$media <- filteredData$media
+      filteredData_sub_locs$aggregation_types <- filteredData$aggregation_types
+      filteredData_sub_locs$rates <- filteredData$rates
+      filteredData_sub_locs$params <- filteredData$params
+      
+      filteredData_z$timeseries <- filteredData$timeseries
+      filteredData_z$media <- filteredData$media
+      filteredData_z$aggregation_types <- filteredData$aggregation_types
+      filteredData_z$rates <- filteredData$rates
+      filteredData_z$params <- filteredData$params
+      
+      filteredData_media$timeseries <- filteredData$timeseries
+      filteredData_media$aggregation_types <- filteredData$aggregation_types
+      filteredData_media$rates <- filteredData$rates
+      filteredData_media$params <- filteredData$params
+      
+      filteredData_aggregation$timeseries <- filteredData$timeseries
+      filteredData_aggregation$rates <- filteredData$rates
+      filteredData_aggregation$params <- filteredData$params
+      
+      filteredData_rate$timeseries <- filteredData$timeseries
+      filteredData_rate$params <- filteredData$params
+      
     }, ignoreInit = TRUE)
     
     
     observeEvent(input$sub_location, {
       req(filteredData)
-
+      
+      print("Observing sub_location input")
+      
       # Filter the data based on the selected sub-locations
       if (is.null(input$sub_location) || length(input$sub_location) != 1) return()
       
       # Find the new timeseries rows based on the selected sub-location
       filteredData_sub_locs$timeseries <- filteredData$timeseries[filteredData$timeseries$sub_location_id == input$sub_location, ]
-        
+      
       filteredData_sub_locs$z <- unique(filteredData_sub_locs$timeseries$z[!is.na(filteredData_sub_locs$timeseries$z)])
       filteredData_sub_locs$media <- filteredData$media[filteredData$media$media_id %in% filteredData_sub_locs$timeseries$media_id, ]
       filteredData_sub_locs$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData_sub_locs$timeseries$aggregation_type_id, ]
@@ -676,18 +737,64 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            choices = tmp.choices,
                            selected = tmp.selected)
       
-      earliest <- min(filteredData_sub_locs$range$min_date, filteredData_sub_locs$range$max_date - 365, na.rm = TRUE)
-      updateDateRangeInput(session, "date_range",
-                           start = earliest,
-                           end = as.Date(filteredData_sub_locs$range$max_date),
-                           min = as.Date(filteredData_sub_locs$range$min_date),
-                           max = as.Date(filteredData_sub_locs$range$max_date))
-      filteredData_z <- filteredData_sub_locs
+      earliest <- filteredData_sub_locs$range$max_date - 366
+      if (earliest < filteredData_sub_locs$range$min_date) {
+        earliest <- filteredData_sub_locs$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData_sub_locs$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_sub_locs$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_sub_locs$max_date),
+                             min = as.Date(filteredData_sub_locs$min_date),
+                             max = as.Date(filteredData_sub_locs$max_date))
+      }
+      
+      filteredData_z$timeseries <- filteredData_sub_locs$timeseries
+      filteredData_z$media <- filteredData_sub_locs$media
+      filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types
+      filteredData_z$rates <- filteredData_sub_locs$rates
+      filteredData_z$params <- filteredData_sub_locs$params
+      
+      filteredData_media$timeseries <- filteredData_sub_locs$timeseries
+      filteredData_media$aggregation_types <- filteredData_sub_locs$aggregation_types
+      filteredData_media$rates <- filteredData_sub_locs$rates
+      filteredData_media$params <- filteredData_sub_locs$params
+      
+      filteredData_aggregation$timeseries <- filteredData_sub_locs$timeseries
+      filteredData_aggregation$rates <- filteredData_sub_locs$rates
+      filteredData_aggregation$params <- filteredData_sub_locs$params
+      
+      filteredData_rate$timeseries <- filteredData_sub_locs$timeseries
+      filteredData_rate$params <- filteredData_sub_locs$params
     })
     
     
     observeEvent(input$z, {
-      req(filteredData_sub_locs)
+      
+      print("Observing z input change")
       
       # Filter the data based on the selected z values
       if (is.null(input$z) || length(input$z) != 1) return()
@@ -747,26 +854,64 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            choices = tmp.choices,
                            selected = tmp.selected)
       
-      earliest <- min(filteredData_z$range$min_date, filteredData_z$range$max_date - 365, na.rm = TRUE)
-      updateDateRangeInput(session, "date_range",
-                           start = earliest,
-                           end = as.Date(filteredData_z$range$max_date),
-                           min = as.Date(filteredData_z$range$min_date),
-                           max = as.Date(filteredData_z$range$max_date))
+      earliest <- filteredData_z$range$max_date - 366
+      if (earliest < filteredData_z$range$min_date) {
+        earliest <- filteredData_z$range$min_date
+      }
       
+      possible_years <- seq(
+        as.numeric(substr(filteredData_z$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_z$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_z$max_date),
+                             min = as.Date(filteredData_z$min_date),
+                             max = as.Date(filteredData_z$max_date))
+      }
+      
+      filteredData_media$timeseries <- filteredData_z$timeseries
+      filteredData_media$aggregation_types <- filteredData_z$aggregation_types
+      filteredData_media$rates <- filteredData_z$rates
+      filteredData_media$params <- filteredData_z$params
+      
+      filteredData_aggregation$timeseries <- filteredData_z$timeseries
+      filteredData_aggregation$rates <- filteredData_z$rates
+      filteredData_aggregation$params <- filteredData_z$params
+      
+      filteredData_rate$timeseries <- filteredData_z$timeseries
+      filteredData_rate$params <- filteredData_z$params
     })
     
     
-    filteredData_media <- reactiveValues()
     observeEvent(input$media, {
-      req(filteredData_z)
-
+      print("Observing media input change")
+      
       # Filter the data based on the selected media
       if (is.null(input$media) || length(input$media) != 1) return()
       
       # Find the new timeseries rows based on the selected media
       filteredData_media$timeseries <- filteredData_z$timeseries[filteredData_z$timeseries$media_id == input$media, ]
-
+      
       filteredData_media$aggregation_types <- filteredData_z$aggregation_types[filteredData_z$aggregation_types$aggregation_type_id %in% filteredData_media$timeseries$aggregation_type_id, ]
       filteredData_media$rates <- filteredData_z$rates[filteredData_z$rates$seconds %in% filteredData_media$timeseries$record_rate, ]
       filteredData_media$params <- filteredData_z$params[filteredData_z$params$parameter_id %in% filteredData_media$timeseries$parameter_id, ]
@@ -807,18 +952,53 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            choices = tmp.choices,
                            selected = tmp.selected)
       
-      earliest <- min(filteredData_media$range$min_date, filteredData_media$range$max_date - 365, na.rm = TRUE)
-      updateDateRangeInput(session, "date_range",
-                           start = earliest,
-                           end = as.Date(filteredData_media$range$max_date),
-                           min = as.Date(filteredData_media$range$min_date),
-                           max = as.Date(filteredData_media$range$max_date))
-    })
+      earliest <- filteredData_media$range$max_date - 366
+      if (earliest < filteredData_media$range$min_date) {
+        earliest <- filteredData_media$range$min_date
+      }
       
-    filteredData_aggregation <- reactiveValues()
+      possible_years <- seq(
+        as.numeric(substr(filteredData_media$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_media$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_media$max_date),
+                             min = as.Date(filteredData_media$min_date),
+                             max = as.Date(filteredData_media$max_date))
+      }
+      
+      filteredData_aggregation$timeseries <- filteredData_media$timeseries
+      filteredData_aggregation$rates <- filteredData_media$rates
+      filteredData_aggregation$params <- filteredData_media$params
+      
+      filteredData_rate$timeseries <- filteredData_media$timeseries
+      filteredData_rate$params <- filteredData_media$params
+    })
+    
     observeEvent(input$aggregation, {
-      req(filteredData_media)
-
+      
+      print("Observing aggregation input change")
+      
       # Filter the data based on the selected aggregation type
       if (is.null(input$aggregation) || length(input$aggregation) != 1) return()
       
@@ -853,18 +1033,49 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            choices = tmp.choices,
                            selected = tmp.selected)
       
-      earliest <- min(filteredData_aggregation$range$min_date, filteredData_aggregation$range$max_date - 365, na.rm = TRUE)
-      updateDateRangeInput(session, "date_range",
-                           start = earliest,
-                           end = as.Date(filteredData_aggregation$range$max_date),
-                           min = as.Date(filteredData_aggregation$range$min_date),
-                           max = as.Date(filteredData_aggregation$range$max_date))
+      earliest <- filteredData_aggregation$range$max_date - 366
+      if (earliest < filteredData_aggregation$range$min_date) {
+        earliest <- filteredData_aggregation$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData_aggregation$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_aggregation$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_aggregation$max_date),
+                             min = as.Date(filteredData_aggregation$min_date),
+                             max = as.Date(filteredData_aggregation$max_date))
+      }
+      
+      filteredData_rate$timeseries <- filteredData_aggregation$timeseries
+      filteredData_rate$params <- filteredData_aggregation$params
     })
     
-    filteredData_rate <- reactiveValues()
     observeEvent(input$rate, {
-      req(filteredData_aggregation)
-
+      
+      print("Observing rate input change")
+      
       # Filter the data based on the selected rate
       if (is.null(input$rate) || length(input$rate) != 1) return()
       
@@ -887,18 +1098,48 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            choices = tmp.choices,
                            selected = tmp.selected)
       
-      earliest <- min(filteredData_rate$range$min_date, filteredData_rate$range$max_date - 365, na.rm = TRUE)
-      updateDateRangeInput(session, "date_range",
-                           start = earliest,
-                           end = as.Date(filteredData_rate$range$max_date),
-                           min = as.Date(filteredData_rate$range$min_date),
-                           max = as.Date(filteredData_rate$range$max_date))
+      earliest <- filteredData_rate$range$max_date - 366
+      if (earliest < filteredData_rate$range$min_date) {
+        earliest <- filteredData_rate$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData_rate$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_rate$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_rate$max_date),
+                             min = as.Date(filteredData_rate$min_date),
+                             max = as.Date(filteredData_rate$max_date))
+      }
     })
     
     # observing for parameter, only need to update the date range and years inputs
     observeEvent(input$param, {
       req(filteredData_rate)
-
+      
+      print("Observing parameter input change")
+      
       # Filter the data based on the selected parameter
       if (is.null(input$param) || length(input$param) != 1) return()
       
@@ -907,12 +1148,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       
       tmp.range <- calc_range(tmp.timeseries)
       
-      earliest <- min(tmp.range$min_date, tmp.range$max_date - 365, na.rm = TRUE)
-      updateDateRangeInput(session, "date_range",
-                           start = earliest,
-                           end = as.Date(tmp.range$max_date),
-                           min = as.Date(tmp.range$min_date),
-                           max = as.Date(tmp.range$max_date))
+      earliest <- tmp.range$max_date - 366
+      if (earliest < tmp.range$min_date) {
+        earliest <- tmp.range$min_date
+      }
+      
       possible_years <- seq(
         as.numeric(substr(tmp.range$min_date, 1, 4)),
         as.numeric(substr(tmp.range$max_date, 1, 4))
@@ -920,68 +1160,29 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       updateSelectizeInput(session, "years",
                            choices = possible_years,
                            selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(tmp.range$max_date),
+                             min = as.Date(tmp.range$min_date),
+                             max = as.Date(tmp.range$max_date))
+      }
     })
-    
-    # When the user has narrowed down to a single selection for location, sub-location (if necessary), z (if necessary), media, aggregation, rate, and parameter, update the selections for 'date_range' and 'years' inputs
-    # observe({
-    #   req(filteredData, input$location, input$media, input$aggregation, input$rate, input$param)
-    #   
-    #   # If the user has selected a single location, sub-location (if necessary), z (if necessary), media, aggregation, rate, and parameter, update the date range and years inputs
-    #   if (length(input$location) == 1 && 
-    #       (is.null(input$sub_location) || length(input$sub_location) == 1) &&
-    #       (is.null(input$z) || length(input$z) == 1) &&
-    #       length(input$media) == 1 && 
-    #       length(input$aggregation) == 1 && 
-    #       length(input$rate) == 1 && 
-    #       length(input$param) == 1) {
-    #     
-    #     # Update the date range input
-    #     rows <- filteredData$timeseries$location_id == input$location &
-    #       filteredData$timeseries$parameter_id == input$param &
-    #       filteredData$timeseries$media_id == input$media &
-    #       filteredData$timeseries$record_rate == input$rate &
-    #       filteredData$timeseries$aggregation_type_id == input$aggregation
-    #     
-    #     if (any(rows)) {
-    #       start_date <- as.Date(filteredData$timeseries[rows, "start_datetime"])
-    #       end_date <- as.Date(filteredData$timeseries[rows, "end_datetime"])
-    #       updateDateRangeInput(session, "date_range",
-    #                            start = end_date - 365,
-    #                            end = end_date,
-    #                            min = start_date,
-    #                            max = end_date)
-    #       
-    #       possible_years <- seq(
-    #         as.numeric(substr(start_date, 1, 4)),
-    #         as.numeric(substr(end_date, 1, 4))
-    #       )
-    #       updateSelectizeInput(session, "years",
-    #                            choices = possible_years,
-    #                            selected = max(possible_years))
-    #     } else {
-    #       updateDateRangeInput(session, "date_range",
-    #                            start = as.Date(filteredData$range$max_date) - 365,
-    #                            end = as.Date(filteredData$range$max_date),
-    #                            min = as.Date(filteredData$range$min_date),
-    #                            max = as.Date(filteredData$range$max_date))
-    #       updateSelectizeInput(session, "years", choices = NULL)
-    #     }
-    #     
-    #   } else {
-    #     # Reset the date range and years inputs if not narrowed down to a single selection
-    #     updateDateRangeInput(session, "date_range",
-    #                          start = as.Date(filteredData$range$max_date) - 365,
-    #                          end = as.Date(filteredData$range$max_date),
-    #                          min = as.Date(filteredData$range$min_date),
-    #                          max = as.Date(filteredData$range$max_date))
-    #     updateSelectizeInput(session, "years", choices = NULL)
-    #   }
-    # })
-    
-    
-    
-    
-    
     
     
     # Modal dialog for extra aesthetics ########################################################################
@@ -1642,7 +1843,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     # Create ExtendedTasks to render plots ############################################################
     # Overlapping years plot
-    plot_output_overlap <- ExtendedTask$new(function(loc, param, date_start, date_end, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_overlap <- ExtendedTask$new(function(loc, sub_loc, record_rate, aggregation_type, z, param, date_start, date_end, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName,
@@ -1654,8 +1855,10 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           on.exit(DBI::dbDisconnect(con))
           
           plot <- plotOverlap(location = loc,
-                              sub_location = NULL,
-                              record_rate = NULL,
+                              sub_location = sub_loc,
+                              z = z,
+                              record_rate = record_rate,
+                              aggregation_type = aggregation_type,
                               parameter = param,
                               startDay = date_start,
                               endDay = date_end,
@@ -1686,7 +1889,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     
     # Single timeseries plot
-    plot_output_timeseries <- ExtendedTask$new(function(loc, param, date_start, date_end, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_timeseries <- ExtendedTask$new(function(loc, sub_loc, record_rate, aggregation_type, z, param, date_start, date_end, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -1698,7 +1901,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           on.exit(DBI::dbDisconnect(con))
           
           plot <- plotTimeseries(location = loc,
+                                 sub_location = sub_loc,
                                  parameter = param,
+                                 record_rate = record_rate,
+                                 aggregation_type = aggregation_type,
+                                 z = z,
                                  start_date = date_start,
                                  end_date = date_end,
                                  historic_range = historic_range,
@@ -1824,27 +2031,144 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           showModal(modalDialog("Please select a location.", easyClose = TRUE))
           return()
         }
+        if (is.null(input$param)) {
+          showModal(modalDialog("Please select a parameter", easyClose = TRUE))
+          return()
+        }
         if (nchar(input$param) == 0) {
           showModal(modalDialog("Please select a parameter", easyClose = TRUE))
           return()
         }
-        plot_output_overlap$invoke(loc = as.numeric(input$location), param = as.numeric(input$param), date_start = input$date_range[1], date_end = input$date_range[2], yrs = input$years, historic_range = input$historic_range_overlap, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
+        
+        loc <- as.numeric(input$location)
+        if (is.null(input$sub_location)) {
+          sub_loc <- NULL
+        } else if (nchar(input$sub_location) > 0) {
+          sub_loc <- as.numeric(input$sub_location)
+        } else {
+          sub_loc <- NULL
+        }
+        if (is.null(input$z)) {
+          z <- NULL
+        } else if (nchar(input$z) > 0) {
+          z <- as.numeric(input$z)
+        } else {
+          z <- NULL
+        }
+        record_rate <- if (nchar(input$rate) > 0) as.numeric(input$rate) else NULL
+        aggregation_type <- if (nchar(input$aggregation) > 0) as.numeric(input$aggregation) else NULL
+        param <- as.numeric(input$param)
+        
+        
+        print(loc)
+        print(sub_loc)
+        print(z)
+        print(record_rate)
+        print(aggregation_type)
+        print(param)
+        print(input$date_range[1])
+        print(input$date_range[2])
+        
+        plot_output_overlap$invoke(loc = loc,
+                                   sub_loc = sub_loc,
+                                   z = z,
+                                   record_rate = record_rate,
+                                   aggregation_type = aggregation_type,
+                                   param = param, 
+                                   date_start = input$date_range[1], 
+                                   date_end = input$date_range[2], 
+                                   yrs = input$years,
+                                   historic_range = input$historic_range_overlap, 
+                                   apply_datum = input$apply_datum, 
+                                   filter = if (input$plot_filter) 20 else NULL, 
+                                   unusable = input$unusable, 
+                                   line_scale = plot_aes$line_scale, 
+                                   axis_scale = plot_aes$axis_scale, 
+                                   legend_scale = plot_aes$legend_scale, 
+                                   legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", 
+                                   lang = plot_aes$lang, 
+                                   gridx = plot_aes$showgridx, 
+                                   gridy = plot_aes$showgridy, 
+                                   config = session$userData$config)
       } else if (input$plot_type == "ts") {
         if (traceCount() == 1) { # Either a single trace or more than 1 subplot
           if (subplotCount() > 1) { # Multiple sub plots
             locs <- c(subplots$subplot1$location_id, subplots$subplot2$location_id, subplots$subplot3$location_id, subplots$subplot4$location_id)
             params <- c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter)
-            plot_output_timeseries_subplots$invoke(locs = as.numeric(locs), params = params, date_start = input$date_range[1], date_end = input$date_range[2], historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
+            plot_output_timeseries_subplots$invoke(locs = as.numeric(locs), 
+                                                   params = params, 
+                                                   date_start = input$date_range[1], 
+                                                   date_end = input$date_range[2], 
+                                                   historic_range = input$historic_range, 
+                                                   apply_datum = input$apply_datum, 
+                                                   filter = if (input$plot_filter) 20 else NULL, 
+                                                   unusable = input$unusable, 
+                                                   line_scale = plot_aes$line_scale, 
+                                                   axis_scale = plot_aes$axis_scale, 
+                                                   legend_scale = plot_aes$legend_scale, 
+                                                   legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", 
+                                                   lang = plot_aes$lang, 
+                                                   gridx = plot_aes$showgridx, 
+                                                   gridy = plot_aes$showgridy, 
+                                                   shareX = input$shareX, 
+                                                   shareY = input$shareY, 
+                                                   config = session$userData$config)
           } else {  # Single trace
             if (nchar(input$location) == 0) {
               showModal(modalDialog("Please select a location.", easyClose = TRUE))
+              return()
+            }
+            if (is.null(input$param)) {
+              showModal(modalDialog("Please select a parameter", easyClose = TRUE))
               return()
             }
             if (nchar(input$param) == 0) {
               showModal(modalDialog("Please select a parameter", easyClose = TRUE))
               return()
             }
-            plot_output_timeseries$invoke(loc = as.numeric(input$location), param = as.numeric(input$param), date_start = input$date_range[1], date_end = input$date_range[2], historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, grades = input$grades, approvals = input$approvals, qualifiers = input$qualifiers, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
+            
+            loc <- as.numeric(input$location)
+            if (is.null(input$sub_location)) {
+              sub_loc <- NULL
+            } else if (nchar(input$sub_location) > 0) {
+              sub_loc <- as.numeric(input$sub_location)
+            } else {
+              sub_loc <- NULL
+            }
+            if (is.null(input$z)) {
+              z <- NULL
+            } else if (nchar(input$z) > 0) {
+              z <- as.numeric(input$z)
+            } else {
+              z <- NULL
+            }
+            record_rate <- if (nchar(input$rate) > 0) as.numeric(input$rate) else NULL
+            aggregation_type <- if (nchar(input$aggregation) > 0) as.numeric(input$aggregation) else NULL
+            param <- as.numeric(input$param)
+            
+            plot_output_timeseries$invoke(loc = loc, 
+                                          sub_loc = sub_loc,
+                                          z = z,
+                                          record_rate = record_rate,
+                                          aggregation_type = aggregation_type,
+                                          param = param, 
+                                          date_start = input$date_range[1], 
+                                          date_end = input$date_range[2], 
+                                          historic_range = input$historic_range, 
+                                          apply_datum = input$apply_datum, 
+                                          filter = if (input$plot_filter) 20 else NULL, 
+                                          unusable = input$unusable, 
+                                          grades = input$grades, 
+                                          approvals = input$approvals, 
+                                          qualifiers = input$qualifiers, 
+                                          line_scale = plot_aes$line_scale, 
+                                          axis_scale = plot_aes$axis_scale, 
+                                          legend_scale = plot_aes$legend_scale, 
+                                          legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", 
+                                          lang = plot_aes$lang, 
+                                          gridx = plot_aes$showgridx, 
+                                          gridy = plot_aes$showgridy, 
+                                          config = session$userData$config)
           }
         } else { # Multiple traces, single plot
           locs <- c(traces$trace1$location_id, traces$trace2$location_id, traces$trace3$location_id, traces$trace4$location_id)

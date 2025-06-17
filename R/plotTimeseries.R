@@ -532,7 +532,7 @@ plotTimeseries <- function(location,
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
   if (!is.infinite(min_trace)) {
-    trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid))
+    trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid, con = con))
     # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
     if ("period" %in% colnames(trace_data)) {
       trace_data[, period_secs := as.numeric(lubridate::period(period))]
