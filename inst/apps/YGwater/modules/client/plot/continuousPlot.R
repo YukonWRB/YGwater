@@ -115,6 +115,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
       filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
+      filteredData$range <- data.frame(
+        min_date = min(filteredData$timeseries$datetime, na.rm = TRUE),
+        max_date = max(filteredData$timeseries$datetime, na.rm = TRUE)
+      )
+      
       filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
       if (nrow(filteredData$params) > 0) {
         filteredData$parameter_relationships <- filteredData$parameter_relationships[filteredData$parameter_relationships$parameter_id %in% filteredData$params$parameter_id, ]
@@ -169,6 +174,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       render_flags$rate <- TRUE
       render_flags$media <- TRUE
       render_flags$param <- TRUE
+      
+      earliest <- min(filteredData$range$min_date, filteredData$range_max_date - 365, na.rm = TRUE)
       
       tags <- tagList(
         selectizeInput(ns("plot_type"),
@@ -236,7 +243,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         # start and end datetime
         dateRangeInput(ns("date_range"),
                        tr("date_range_select", language$language),
-                       start = as.Date(filteredData$range$min_date),
+                       start = earliest,
                        end = as.Date(filteredData$range$max_date),
                        min = as.Date(filteredData$range$min_date),
                        format = "yyyy-mm-dd",
@@ -333,8 +340,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       input_values$plot_type <- input$plot_type
       input_values$date_range <- input$date_range
       input_values$location <- input$location
-      input_values$sub_location <- NULL
-      input_values$z <- NULL
+      input_values$sub_location <- character(0)
+      input_values$z <- character(0)
       input_values$aggregation <- input$aggregation
       input_values$rate <- input$rate
       input_values$media <- input$media
@@ -405,7 +412,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       updateSelectizeInput(session, "location",
                            choices = stats::setNames(remain_locs$location_id,
                                                      remain_locs[, tr("generic_name_col", language$language)]),
-                           selected = NULL)
+                           selected = character(0))
       removeModal()
     })
     
@@ -461,6 +468,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData$aggregation_types <- moduleData$aggregation_types[moduleData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
       filteredData$rates <- moduleData$rates[moduleData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
+      filteredData$range <- data.frame(
+        min_date = min(filteredData$timeseries$datetime, na.rm = TRUE),
+        max_date = max(filteredData$timeseries$datetime, na.rm = TRUE)
+      )
+      
       filteredData$params <- moduleData$params[moduleData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
       if (nrow(filteredData$params) > 0) {
         filteredData$parameter_relationships <- moduleData$parameter_relationships[moduleData$parameter_relationships$parameter_id %in% filteredData$params$parameter_id, ]
@@ -493,7 +505,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           updateSelectizeInput(session, "sub_location",
                              choices = stats::setNames(filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, "sub_location_id"],
                                                        filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, tr("sub_location_col", language$language)]),
-                             selected = NULL)
+                             selected = character(0))
           shinyjs::show("sub_location")
         }
       } else {
@@ -514,7 +526,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         } else {
           updateSelectizeInput(session, "z",
                                choices = filteredData$z,
-                               selected = NULL)
+                               selected = character(0))
           shinyjs::show("z")
         }
       } else {
@@ -526,9 +538,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       tmp.choices <- stats::setNames(filteredData$media$media_id,
                                      filteredData$media[, tr("media_type_col", language$language)])
       if (!is.null(input$media)) {
-        tmp.selected <- if (input$media %in% tmp.choices) input$media else if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+        tmp.selected <- if (input$media %in% tmp.choices) input$media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
       } else {
-        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
       }
       updateSelectizeInput(session, "media",
                            choices = tmp.choices,
@@ -537,9 +549,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       tmp.choices <- stats::setNames(filteredData$aggregation_types$aggregation_type_id,
                                      filteredData$aggregation_types[, tr("aggregation_type_col", language$language)])
       if (!is.null(input$aggregation)) {
-        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
       } else {
-        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
       }
       updateSelectizeInput(session, "aggregation",
                            choices = tmp.choices,
@@ -548,9 +560,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       tmp.choices <- stats::setNames(filteredData$rates$seconds,
                                      filteredData$rates[, "period"])
       if (!is.null(input$rate)) {
-        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
       } else {
-        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
       }
       updateSelectizeInput(session, "rate",
                            choices = tmp.choices,
@@ -559,82 +571,417 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       tmp.choices <- stats::setNames(filteredData$params$parameter_id,
                                      filteredData$params[, tr("param_name_col", language$language)])
       if (!is.null(input$param)) {
-        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
       } else {
-        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else NULL
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
       }
       updateSelectizeInput(session, "param",
                            choices = tmp.choices,
                            selected = tmp.selected)
       
+      earliest <- min(filteredData$range$min_date, filteredData$range_max_date - 365, na.rm = TRUE)
       updateDateRangeInput(session, "date_range",
-                           start = as.Date(filteredData$range$max_date) - 365,
+                           start = earliest,
                            end = as.Date(filteredData$range$max_date),
                            min = as.Date(filteredData$range$min_date),
                            max = as.Date(filteredData$range$max_date))
 
     }, ignoreInit = TRUE)
-
     
+    
+    filteredData_sub_locs <- reactiveValues()
+    observeEvent(input$sub_location, {
+      req(filteredData)
+
+      # Filter the data based on the selected sub-locations
+      if (is.null(input$sub_location) || length(input$sub_location) != 1) return()
+      
+      # Find the new timeseries rows based on the selected sub-location
+      filteredData_sub_locs$timeseries <- filteredData$timeseries[filteredData$timeseries$sub_location_id == input$sub_location, ]
+        
+      filteredData_sub_locs$z <- unique(filteredData_sub_locs$timeseries$z[!is.na(filteredData_sub_locs$timeseries$z)])
+      filteredData_sub_locs$media <- filteredData$media[filteredData$media$media_id %in% filteredData_sub_locs$timeseries$media_id, ]
+      filteredData_sub_locs$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData_sub_locs$timeseries$aggregation_type_id, ]
+      filteredData_sub_locs$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData_sub_locs$timeseries$record_rate, ]
+      filteredData_sub_locs$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData_sub_locs$timeseries$parameter_id, ]
+      
+      filteredData_sub_locs$range <- data.frame(
+        min_date = min(filteredData_sub_locs$timeseries$datetime, na.rm = TRUE),
+        max_date = max(filteredData_sub_locs$timeseries$datetime, na.rm = TRUE)
+      )
+      
+      # Update the z selectizeInput based on the selected sub-locations
+      if (length(filteredData_sub_locs$z) > 1) {
+        updateSelectizeInput(session, "z",
+                             choices = filteredData_sub_locs$z,
+                             selected = character(0))
+        shinyjs::show("z")
+      } else {
+        shinyjs::hide("z")
+      }
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_sub_locs.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_sub_locs$media$media_id,
+                                     filteredData_sub_locs$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$media)) {
+        tmp.selected <- if (input$media %in% tmp.choices) input$media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_sub_locs$aggregation_types$aggregation_type_id,
+                                     filteredData_sub_locs$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$aggregation)) {
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_sub_locs$rates$seconds,
+                                     filteredData_sub_locs$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_sub_locs$params$parameter_id,
+                                     filteredData_sub_locs$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- min(filteredData_sub_locs$range$min_date, filteredData_sub_locs$range$max_date - 365, na.rm = TRUE)
+      updateDateRangeInput(session, "date_range",
+                           start = earliest,
+                           end = as.Date(filteredData_sub_locs$range$max_date),
+                           min = as.Date(filteredData_sub_locs$range$min_date),
+                           max = as.Date(filteredData_sub_locs$range$max_date))
+    })
+    
+    
+    filteredData_z <- reactiveValues()
+    observeEvent(input$z, {
+      req(filteredData_sub_locs)
+      
+      # Filter the data based on the selected z values
+      if (is.null(input$z) || length(input$z) != 1) return()
+      
+      # Find the new timeseries rows based on the selected z value
+      filteredData_z$timeseries <- filteredData_sub_locs$timeseries[filteredData_sub_locs$timeseries$z == input$z, ]
+      
+      filteredData_z$media <- filteredData_sub_locs$media[filteredData_sub_locs$media$media_id %in% filteredData_z$timeseries$media_id, ]
+      filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types[filteredData_sub_locs$aggregation_types$aggregation_type_id %in% filteredData_z$timeseries$aggregation_type_id, ]
+      filteredData_z$rates <- filteredData_sub_locs$rates[filteredData_sub_locs$rates$seconds %in% filteredData_z$timeseries$record_rate, ]
+      filteredData_z$params <- filteredData_sub_locs$params[filteredData_sub_locs$params$parameter_id %in% filteredData_z$timeseries$parameter_id, ]
+      filteredData_z$range <- data.frame(
+        min_date = min(filteredData_z$timeseries$datetime, na.rm = TRUE),
+        max_date = max(filteredData_z$timeseries$datetime, na.rm = TRUE)
+      )
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_z.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_z$media$media_id,
+                                     filteredData_z$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$media)) {
+        tmp.selected <- if (input$media %in% tmp.choices) input$media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_z$aggregation_types$aggregation_type_id,
+                                     filteredData_z$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$aggregation)) {
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_z$rates$seconds,
+                                     filteredData_z$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_z$params$parameter_id,
+                                     filteredData_z$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- min(filteredData_z$range$min_date, filteredData_z$range$max_date - 365, na.rm = TRUE)
+      updateDateRangeInput(session, "date_range",
+                           start = earliest,
+                           end = as.Date(filteredData_z$range$max_date),
+                           min = as.Date(filteredData_z$range$min_date),
+                           max = as.Date(filteredData_z$range$max_date))
+      
+    })
+    
+    
+    filteredData_media <- reactiveValues()
+    observeEvent(input$media, {
+      req(filteredData_z)
+
+      # Filter the data based on the selected media
+      if (is.null(input$media) || length(input$media) != 1) return()
+      
+      # Find the new timeseries rows based on the selected media
+      filteredData_media$timeseries <- filteredData_z$timeseries[filteredData_z$timeseries$media_id == input$media, ]
+      
+      filteredData_media$aggregation_types <- filteredData_z$aggregation_types[filteredData_z$aggregation_types$aggregation_type_id %in% filteredData_media$timeseries$aggregation_type_id, ]
+      filteredData_media$rates <- filteredData_z$rates[filteredData_z$rates$seconds %in% filteredData_media$timeseries$record_rate, ]
+      filteredData_media$params <- filteredData_z$params[filteredData_z$params$parameter_id %in% filteredData_media$timeseries$parameter_id, ]
+      filteredData_media$range <- data.frame(
+        min_date = min(filteredData_media$timeseries$datetime, na.rm = TRUE),
+        max_date = max(filteredData_media$timeseries$datetime, na.rm = TRUE)
+      )
+      
+      # Update the aggregation, rate, and param selectizeInputs with what's left in filteredData_media.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_media$aggregation_types$aggregation_type_id,
+                                     filteredData_media$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$aggregation)) {
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_media$rates$seconds,
+                                     filteredData_media$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_media$params$parameter_id,
+                                     filteredData_media$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- min(filteredData_media$range$min_date, filteredData_media$range$max_date - 365, na.rm = TRUE)
+      updateDateRangeInput(session, "date_range",
+                           start = earliest,
+                           end = as.Date(filteredData_media$range$max_date),
+                           min = as.Date(filteredData_media$range$min_date),
+                           max = as.Date(filteredData_media$range$max_date))
+    })
+      
+    filteredData_aggregation <- reactiveValues()
+    observeEvent(input$ggregation, {
+      req(filteredData_media)
+
+      # Filter the data based on the selected aggregation type
+      if (is.null(input$aggregation) || length(input$aggregation) != 1) return()
+      
+      # Find the new timeseries rows based on the selected aggregation type
+      filteredData_aggregation$timeseries <- filteredData_media$timeseries[filteredData_media$timeseries$aggregation_type_id == input$aggregation, ]
+      
+      filteredData_aggregation$rates <- filteredData_media$rates[filteredData_media$rates$seconds %in% filteredData_aggregation$timeseries$record_rate, ]
+      filteredData_aggregation$params <- filteredData_media$params[filteredData_media$params$parameter_id %in% filteredData_aggregation$timeseries$parameter_id, ]
+      filteredData_aggregation$range <- data.frame(
+        min_date = min(filteredData_aggregation$timeseries$datetime, na.rm = TRUE),
+        max_date = max(filteredData_aggregation$timeseries$datetime, na.rm = TRUE)
+      )
+      
+      # Update the rate and param selectizeInputs with what's left in filteredData_aggregation.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_aggregation$rates$seconds,
+                                     filteredData_aggregation$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_aggregation$params$parameter_id,
+                                     filteredData_aggregation$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- min(filteredData_aggregation$range$min_date, filteredData_aggregation$range$max_date - 365, na.rm = TRUE)
+      updateDateRangeInput(session, "date_range",
+                           start = earliest,
+                           end = as.Date(filteredData_aggregation$range$max_date),
+                           min = as.Date(filteredData_aggregation$range$min_date),
+                           max = as.Date(filteredData_aggregation$range$max_date))
+    })
+    
+    filteredData_rate <- reactiveValues()
+    observeEvent(input$rate, {
+      req(filteredData_aggregation)
+
+      # Filter the data based on the selected rate
+      if (is.null(input$rate) || length(input$rate) != 1) return()
+      
+      # Find the new timeseries rows based on the selected rate
+      filteredData_rate$timeseries <- filteredData_aggregation$timeseries[filteredData_aggregation$timeseries$record_rate == input$rate, ]
+      
+      filteredData_rate$params <- filteredData_aggregation$params[filteredData_aggregation$params$parameter_id %in% filteredData_rate$timeseries$parameter_id, ]
+      filteredData_rate$range <- data.frame(
+        min_date = min(filteredData_rate$timeseries$datetime, na.rm = TRUE),
+        max_date = max(filteredData_rate$timeseries$datetime, na.rm = TRUE)
+      )
+      
+      # Update the param selectizeInput with what's left in filteredData_rate.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_rate$params$parameter_id,
+                                     filteredData_rate$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- min(filteredData_rate$range$min_date, filteredData_rate$range$max_date - 365, na.rm = TRUE)
+      updateDateRangeInput(session, "date_range",
+                           start = earliest,
+                           end = as.Date(filteredData_rate$range$max_date),
+                           min = as.Date(filteredData_rate$range$min_date),
+                           max = as.Date(filteredData_rate$range$max_date))
+    })
+    
+    # observing for parameter, only need to update the date range and years inputs
+    observeEvent(input$param, {
+      req(filteredData_rate)
+
+      # Filter the data based on the selected parameter
+      if (is.null(input$param) || length(input$param) != 1) return()
+      
+      # Find the single timeseries rows based on the selected parameter
+      tmp.timeseries <- filteredData_rate$timeseries[filteredData_rate$timeseries$parameter_id == input$param, ]
+      
+      tmp.range <- data.frame(
+        min_date = min(tmp.timeseries$datetime, na.rm = TRUE),
+        max_date = max(tmp.timeseries$datetime, na.rm = TRUE)
+      )
+      
+      earliest <- min(tmp.range$range$min_date, tmp.range$max_date - 365, na.rm = TRUE)
+      updateDateRangeInput(session, "date_range",
+                           start = earliest,
+                           end = as.Date(tmp.range$max_date),
+                           min = as.Date(tmp.range$min_date),
+                           max = as.Date(tmp.range$max_date))
+      possible_years <- seq(
+        as.numeric(substr(tmp.range$min_date, 1, 4)),
+        as.numeric(substr(tmp.range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+    })
     
     # When the user has narrowed down to a single selection for location, sub-location (if necessary), z (if necessary), media, aggregation, rate, and parameter, update the selections for 'date_range' and 'years' inputs
-    observe({
-      req(filteredData, input$location, input$media, input$aggregation, input$rate, input$param)
-      
-      out <<- filteredData
-      print("START")
-      print(paste0("location = ", input$location))
-      print(paste0("sub_location = ", input$sub_location))
-      print(paste0("z = ", input$z))
-      print(paste0("media = ", input$media))
-      print(paste0("aggregation = ", input$aggregation))
-      print(paste0("record_rate = ", input$rate))
-      print(paste0("parameter = ", input$param))
-      print("END")
-      
-      # If the user has selected a single location, sub-location (if necessary), z (if necessary), media, aggregation, rate, and parameter, update the date range and years inputs
-      if (length(input$location) == 1 && 
-          (is.null(input$sub_location) || length(input$sub_location) == 1) &&
-          (is.null(input$z) || length(input$z) == 1) &&
-          length(input$media) == 1 && 
-          length(input$aggregation) == 1 && 
-          length(input$rate) == 1 && 
-          length(input$param) == 1) {
-        
-        # Update the date range input
-        start_date <- as.Date(filteredData$timeseries[filteredData$timeseries$location_id == input$location & 
-                                                       filteredData$timeseries$parameter_id == input$param &
-                                                        filteredData$timeseries$media_id == input$media &
-                                                        filteredData$timeseries$record_rate == input$rate &
-                                                        filteredData$timeseries$aggregation_type_id == input$aggregation, "start_datetime"])
-        end_date <- as.Date(filteredData$timeseries[filteredData$timeseries$location_id == input$location & 
-                                                      filteredData$timeseries$parameter_id == input$param &
-                                                      filteredData$timeseries$media_id == input$media &
-                                                      filteredData$timeseries$record_rate == input$rate &
-                                                      filteredData$timeseries$aggregation_type_id == input$aggregation, "end_datetime"])
-        updateDateRangeInput(session, "date_range",
-                             start = end_date - 365,
-                             end = end_date,
-                             min = start_date,
-                             max = end_date)
-        
-        # Update the years input for overlapping years plot
-        possible_years <- seq(
-          as.numeric(substr(start_date, 1, 4)),
-          as.numeric(substr(end_date, 1, 4))
-        )
-        updateSelectizeInput(session, "years", choices = possible_years, selected = max(possible_years))
-        
-      } else {
-        # Reset the date range and years inputs if not narrowed down to a single selection
-        updateDateRangeInput(session, "date_range",
-                             start = as.Date(filteredData$range$max_date) - 365,
-                             end = as.Date(filteredData$range$max_date),
-                             min = as.Date(filteredData$range$min_date),
-                             max = as.Date(filteredData$range$max_date))
-        updateSelectizeInput(session, "years", choices = NULL)
-      }
-    })
+    # observe({
+    #   req(filteredData, input$location, input$media, input$aggregation, input$rate, input$param)
+    #   
+    #   # If the user has selected a single location, sub-location (if necessary), z (if necessary), media, aggregation, rate, and parameter, update the date range and years inputs
+    #   if (length(input$location) == 1 && 
+    #       (is.null(input$sub_location) || length(input$sub_location) == 1) &&
+    #       (is.null(input$z) || length(input$z) == 1) &&
+    #       length(input$media) == 1 && 
+    #       length(input$aggregation) == 1 && 
+    #       length(input$rate) == 1 && 
+    #       length(input$param) == 1) {
+    #     
+    #     # Update the date range input
+    #     rows <- filteredData$timeseries$location_id == input$location &
+    #       filteredData$timeseries$parameter_id == input$param &
+    #       filteredData$timeseries$media_id == input$media &
+    #       filteredData$timeseries$record_rate == input$rate &
+    #       filteredData$timeseries$aggregation_type_id == input$aggregation
+    #     
+    #     if (any(rows)) {
+    #       start_date <- as.Date(filteredData$timeseries[rows, "start_datetime"])
+    #       end_date <- as.Date(filteredData$timeseries[rows, "end_datetime"])
+    #       updateDateRangeInput(session, "date_range",
+    #                            start = end_date - 365,
+    #                            end = end_date,
+    #                            min = start_date,
+    #                            max = end_date)
+    #       
+    #       possible_years <- seq(
+    #         as.numeric(substr(start_date, 1, 4)),
+    #         as.numeric(substr(end_date, 1, 4))
+    #       )
+    #       updateSelectizeInput(session, "years",
+    #                            choices = possible_years,
+    #                            selected = max(possible_years))
+    #     } else {
+    #       updateDateRangeInput(session, "date_range",
+    #                            start = as.Date(filteredData$range$max_date) - 365,
+    #                            end = as.Date(filteredData$range$max_date),
+    #                            min = as.Date(filteredData$range$min_date),
+    #                            max = as.Date(filteredData$range$max_date))
+    #       updateSelectizeInput(session, "years", choices = NULL)
+    #     }
+    #     
+    #   } else {
+    #     # Reset the date range and years inputs if not narrowed down to a single selection
+    #     updateDateRangeInput(session, "date_range",
+    #                          start = as.Date(filteredData$range$max_date) - 365,
+    #                          end = as.Date(filteredData$range$max_date),
+    #                          min = as.Date(filteredData$range$min_date),
+    #                          max = as.Date(filteredData$range$max_date))
+    #     updateSelectizeInput(session, "years", choices = NULL)
+    #   }
+    # })
     
     
     
