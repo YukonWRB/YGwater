@@ -93,6 +93,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       )
       return(data)
     }
+
+    # Safely calculate date ranges and avoid warnings when no dates are present
+    calc_range <- function(df) {
+      if (nrow(df) == 0 ||
+          all(is.na(df$start_datetime)) ||
+          all(is.na(df$end_datetime))) {
+        data.frame(min_date = as.Date(NA), max_date = as.Date(NA))
+      } else {
+        data.frame(
+          min_date = min(df$start_datetime, na.rm = TRUE),
+          max_date = max(df$end_datetime, na.rm = TRUE)
+        )
+      }
+    }
     
     # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
     moduleInputs <- reactiveValues(location_id = if (!is.null(inputs$location_id)) as.numeric(inputs$location_id) else NULL)
@@ -115,10 +129,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
       filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
-      filteredData$range <- data.frame(
-        min_date = min(filteredData$timeseries$start_datetime, na.rm = TRUE),
-        max_date = max(filteredData$timeseries$end_datetime, na.rm = TRUE)
-      )
+      filteredData$range <- calc_range(filteredData$timeseries)
       
       filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
       if (nrow(filteredData$params) > 0) {
@@ -472,10 +483,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData$aggregation_types <- moduleData$aggregation_types[moduleData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
       filteredData$rates <- moduleData$rates[moduleData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
-      filteredData$range <- data.frame(
-        min_date = min(filteredData$timeseries$start_datetime, na.rm = TRUE),
-        max_date = max(filteredData$timeseries$end_datetime, na.rm = TRUE)
-      )
+      filteredData$range <- calc_range(filteredData$timeseries)
       
       filteredData$params <- moduleData$params[moduleData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
       if (nrow(filteredData$params) > 0) {
@@ -610,10 +618,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_sub_locs$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData_sub_locs$timeseries$record_rate, ]
       filteredData_sub_locs$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData_sub_locs$timeseries$parameter_id, ]
       
-      filteredData_sub_locs$range <- data.frame(
-        min_date = min(filteredData_sub_locs$timeseries$start_datetime, na.rm = TRUE),
-        max_date = max(filteredData_sub_locs$timeseries$end_datetime, na.rm = TRUE)
-      )
+      filteredData_sub_locs$range <- calc_range(filteredData_sub_locs$timeseries)
       
       # Update the z selectizeInput based on the selected sub-locations
       if (length(filteredData_sub_locs$z) > 1) {
@@ -694,10 +699,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types[filteredData_sub_locs$aggregation_types$aggregation_type_id %in% filteredData_z$timeseries$aggregation_type_id, ]
       filteredData_z$rates <- filteredData_sub_locs$rates[filteredData_sub_locs$rates$seconds %in% filteredData_z$timeseries$record_rate, ]
       filteredData_z$params <- filteredData_sub_locs$params[filteredData_sub_locs$params$parameter_id %in% filteredData_z$timeseries$parameter_id, ]
-      filteredData_z$range <- data.frame(
-        min_date = min(filteredData_z$timeseries$start_datetime, na.rm = TRUE),
-        max_date = max(filteredData_z$timeseries$end_datetime, na.rm = TRUE)
-      )
+      filteredData_z$range <- calc_range(filteredData_z$timeseries)
       
       # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_z.
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
@@ -768,10 +770,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_media$aggregation_types <- filteredData_z$aggregation_types[filteredData_z$aggregation_types$aggregation_type_id %in% filteredData_media$timeseries$aggregation_type_id, ]
       filteredData_media$rates <- filteredData_z$rates[filteredData_z$rates$seconds %in% filteredData_media$timeseries$record_rate, ]
       filteredData_media$params <- filteredData_z$params[filteredData_z$params$parameter_id %in% filteredData_media$timeseries$parameter_id, ]
-      filteredData_media$range <- data.frame(
-        min_date = min(filteredData_media$timeseries$start_datetime, na.rm = TRUE),
-        max_date = max(filteredData_media$timeseries$end_datetime, na.rm = TRUE)
-      )
+      filteredData_media$range <- calc_range(filteredData_media$timeseries)
       
       # Update the aggregation, rate, and param selectizeInputs with what's left in filteredData_media.
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
@@ -828,10 +827,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       
       filteredData_aggregation$rates <- filteredData_media$rates[filteredData_media$rates$seconds %in% filteredData_aggregation$timeseries$record_rate, ]
       filteredData_aggregation$params <- filteredData_media$params[filteredData_media$params$parameter_id %in% filteredData_aggregation$timeseries$parameter_id, ]
-      filteredData_aggregation$range <- data.frame(
-        min_date = min(filteredData_aggregation$timeseries$start_datetime, na.rm = TRUE),
-        max_date = max(filteredData_aggregation$timeseries$end_datetime, na.rm = TRUE)
-      )
+      filteredData_aggregation$range <- calc_range(filteredData_aggregation$timeseries)
       
       # Update the rate and param selectizeInputs with what's left in filteredData_aggregation.
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
@@ -876,10 +872,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       filteredData_rate$timeseries <- filteredData_aggregation$timeseries[filteredData_aggregation$timeseries$record_rate == input$rate, ]
       
       filteredData_rate$params <- filteredData_aggregation$params[filteredData_aggregation$params$parameter_id %in% filteredData_rate$timeseries$parameter_id, ]
-      filteredData_rate$range <- data.frame(
-        min_date = min(filteredData_rate$timeseries$start_datetime, na.rm = TRUE),
-        max_date = max(filteredData_rate$timeseries$end_datetime, na.rm = TRUE)
-      )
+      filteredData_rate$range <- calc_range(filteredData_rate$timeseries)
       
       # Update the param selectizeInput with what's left in filteredData_rate.
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
@@ -912,10 +905,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       # Find the single timeseries rows based on the selected parameter
       tmp.timeseries <- filteredData_rate$timeseries[filteredData_rate$timeseries$parameter_id == input$param, ]
       
-      tmp.range <- data.frame(
-        min_date = min(tmp.timeseries$start_datetime, na.rm = TRUE),
-        max_date = max(tmp.timeseries$end_datetime, na.rm = TRUE)
-      )
+      tmp.range <- calc_range(tmp.timeseries)
       
       earliest <- min(tmp.range$min_date, tmp.range$max_date - 365, na.rm = TRUE)
       updateDateRangeInput(session, "date_range",
