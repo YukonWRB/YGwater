@@ -4,10 +4,12 @@
 \alias{clear_cached}
 \title{Remove a value from the cache}
 \usage{
-clear_cached(key)
+clear_cached(key, env = .GlobalEnv)
 }
 \arguments{
 \item{key}{The cached key to remove.}
+
+\item{env}{The environment from which to remove the cached key. Defaults to \code{.GlobalEnv}.}
 }
 \description{
 Remove a value from the cache

@@ -1,9 +1,10 @@
 # Get the data to populate drop-downs. Runs every time this module is loaded.
 
 # continuous plot and data modules ######
-cont_data.plot_module_data <- function(con) {
+cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
   get_cached("cont_data.plot_module_data",
-             function() {
+             env = env,
+             fetch_fun = function() {
                locs <- DBI::dbGetQuery(
                  con,
                  "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
@@ -93,9 +94,10 @@ cont_data.plot_module_data <- function(con) {
 
 
 # discrete data module #####
-disc_data_module_data <- function(con) {
+disc_data_module_data <- function(con, env = .GlobalEnv) {
   get_cached("disc_data_module_data",
-             function() {
+             env = env,
+             fetch_fun = function() {
                locs <- DBI::dbGetQuery(
                  con,
                  "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
@@ -179,9 +181,10 @@ disc_data_module_data <- function(con) {
 
 
 # parameter map module #########
-map_params_module_data <- function(con) {
+map_params_module_data <- function(con, env = .GlobalEnv) {
   get_cached("map_params_module_data",
-             function() {
+             env = env,
+             fetch_fun = function() {
                list(
                  locations = dbGetQueryDT(
                    con,
@@ -202,9 +205,10 @@ map_params_module_data <- function(con) {
 
 
 # locations map module #########
-map_location_module_data <- function(con) {
+map_location_module_data <- function(con, env = .GlobalEnv) {
   get_cached("map_location_module_data",
-             function() {
+             env = .GlobalEnv,
+             fetch_fun = function() {
                list(
                  locations = dbGetQueryDT(con, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
                  timeseries = dbGetQueryDT(

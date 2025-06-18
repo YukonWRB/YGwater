@@ -4,7 +4,7 @@
 \alias{get_cached}
 \title{In-memory cache for Shiny app data}
 \usage{
-get_cached(key, fetch_fun, ttl = 3600)
+get_cached(key, fetch_fun, ttl = 3600, env = .GlobalEnv)
 }
 \arguments{
 \item{key}{A unique character string identifying the cached data.}
@@ -12,6 +12,8 @@ get_cached(key, fetch_fun, ttl = 3600)
 \item{fetch_fun}{A function that returns the value to cache when the current cache entry is missing or expired.}
 
 \item{ttl}{Time-to-live for the cached value in seconds. Defaults to 3600 seconds (1 hour).}
+
+\item{env}{The environment in which to store the cache. Defaults to \code{.GlobalEnv}, but can be set to a different environment if needed, such as session$userData in a Shiny app so that the cache is specific to that session.}
 }
 \value{
 The cached value for \code{key}.

@@ -54,7 +54,11 @@ discData <- function(id, language, inputs) {
     }
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
-    cached <- disc_data_module_data(con = session$userData$AquaCache)
+    if (session$userData$user_logged_in) {  # If logged in, get or create data that lives only with this session,
+      cached <- disc_data_module_data(con = session$userData$AquaCache, env = session$userData)
+    } else {
+      cached <- disc_data_module_data(con = session$userData$AquaCache)
+    }
     
     moduleData <- reactiveValues(
       locs = cached$locs,

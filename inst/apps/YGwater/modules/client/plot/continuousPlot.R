@@ -52,8 +52,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     # Initial setup and data loading ########################################################################
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     # !important!!! shares a cache with the data module
-    cached <- cont_data.plot_module_data(con = session$userData$AquaCache)
-    
+    if (session$userData$user_logged_in) {  # If logged in, get or create data that lives only with this session,
+      cached <- cont_data.plot_module_data(con = session$userData$AquaCache, env = session$userData)
+    } else {
+      cached <- cont_data.plot_module_data(con = session$userData$AquaCache)
+    }    
     moduleData <- reactiveValues(
       locs = cached$locs,
       sub_locs = cached$sub_locs,
@@ -449,8 +452,37 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         updateDateRangeInput(session, "date_range",
                              label = tr("date_range_select", language$language))
       } else if (input$plot_type == "over") {
-        updateDateRangeInput(session, "date_range",
-                             label = tr("date_range_select_doy", language$language))
+        
+        if (!is.null(input$param)) {
+          if (nchar(input$param) > 0) {
+            if (input$param %in% c(values$swe, values$snow_depth)) {
+              updateDateRangeInput(session, "date_range",
+                                   min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                                   max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                   start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                                   end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+            } else {
+              updateDateRangeInput(session, "date_range",
+                                   min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                   max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                   start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                   end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+            }          
+          } else {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+          }
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+        
       }
     })
     
@@ -467,7 +499,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected location ##########################
     observeEvent(input$location, {
       req(filteredData)
-
+      
       # Filter the data based on the selected locations
       filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$location, ]
       
@@ -1367,7 +1399,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected location #################################################################
     observeEvent(input$traceNew_location, {
       req(filteredDataModal)
-
+      
       # Filter the data based on the selected locations
       filteredDataModal$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$traceNew_location, ]
       
@@ -1484,7 +1516,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected sub-location ##############################################################
     observeEvent(input$traceNew_sub_location, {
       req(filteredDataModal_sub_locs)
-
+      
       # Filter the data based on the selected sub-locations
       if (is.null(input$traceNew_sub_location) || length(input$traceNew_sub_location) != 1) return()
       
@@ -1579,7 +1611,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected z #################################################################
     observeEvent(input$traceNew_z, {
       req(filteredDataModal_z)
-
+      
       # Filter the data based on the selected z value
       if (is.null(input$traceNew_z) || length(input$traceNew_z) != 1) return()
       
@@ -1654,7 +1686,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected media #################################################################
     observeEvent(input$traceNew_media, {
       req(filteredDataModal_media)
-
+      
       # Filter the data based on the selected media
       if (is.null(input$traceNew_media) || length(input$traceNew_media) != 1) return()
       
@@ -1711,7 +1743,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected aggregation type ##############################################################
     observeEvent(input$traceNew_aggregation, {
       req(filteredDataModal_aggregation)
-
+      
       # Filter the data based on the selected aggregation type
       if (is.null(input$traceNew_aggregation) || length(input$traceNew_aggregation) != 1) return()
       
@@ -1752,7 +1784,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ### Filter based on the selected record rate ##############################################################
     observeEvent(input$traceNew_rate, {
       req(filteredDataModal_rate)
-
+      
       # Filter the data based on the selected record rate
       if (is.null(input$traceNew_rate) || length(input$traceNew_rate) != 1) return()
       

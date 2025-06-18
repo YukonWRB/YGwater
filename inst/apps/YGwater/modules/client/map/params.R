@@ -12,7 +12,11 @@ mapParams <- function(id, language) {
     
     ns <- session$ns
     
-    cached <- map_params_module_data(con = session$userData$AquaCache)
+    if (session$userData$user_logged_in) {
+      cached <- map_params_module_data(con = session$userData$AquaCache, env = session$userData)
+    } else {
+      cached <- map_params_module_data(con = session$userData$AquaCache)
+    }
     
     moduleData <- reactiveValues(
       locations = cached$locations,
@@ -222,7 +226,7 @@ mapParams <- function(id, language) {
       if (input$mapType == "abs" || config$public) {
         shinyjs::hide("secondary_param")
         shinyjs::hide("edit_secondary_param")
-
+        
       } else {
         shinyjs::show("secondary_param")
         shinyjs::show("edit_secondary_param")
@@ -424,12 +428,12 @@ mapParams <- function(id, language) {
         all.x = TRUE
       )
       mapping_data[, percent_historic_range_capped := percent_historic_range]
-
+      
       if (input$mapType == "abs") {
         abs_vals <- abs(mapping_data$value)
         abs_range <- range(abs_vals, na.rm = TRUE)
         abs_bins <- seq(abs_range[1], abs_range[2], length.out = length(map_params$colors) + 1)
-
+        
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
           domain = abs_vals,
@@ -524,7 +528,7 @@ mapParams <- function(id, language) {
     # Observe the map being created and update it when the parameters change
     observe({
       req(mapCreated(), map_params, input$map_zoom, language$language)  # Ensure the map has been created before updating
-        updateMap()  # Call the updateMap function to refresh the map with the current parameters
+      updateMap()  # Call the updateMap function to refresh the map with the current parameters
     })
     
   }) # End of moduleServer
