@@ -460,6 +460,7 @@ $(document).keyup(function(event) {
   
   
   observeEvent(input$navbar, {
+    req(languageSelection) # Ensure language is set before proceeding
     # Observe opening of the navbar (usually by a click through from another module) and close the navbar. Clicks by the user should have no effect as the navbar menu closes as soon as they click.
     session$sendCustomMessage(
       type = "toggleDropdown",

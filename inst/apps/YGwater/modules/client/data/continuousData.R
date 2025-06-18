@@ -156,7 +156,7 @@ contData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
     } else {
@@ -578,7 +578,7 @@ contData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -674,7 +674,7 @@ contData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -761,7 +761,7 @@ contData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -843,7 +843,7 @@ contData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -921,7 +921,7 @@ contData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -992,7 +992,7 @@ contData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -1056,7 +1056,7 @@ contData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- filteredData$param_sub_groups[filteredData$param_sub_groups$sub_group_id %in% sub_groups, ]
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       

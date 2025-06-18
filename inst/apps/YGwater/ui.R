@@ -165,7 +165,7 @@ app_ui <- function(request) {
                              uiOutput("addContData_ui")),
                    nav_panel(title = "Edit/delete continuous data",
                              value = "editContData",
-                             uiOutput("editDiscData_ui")),
+                             uiOutput("editContcData_ui")),
                    nav_panel(title = "Add/modify timeseries corrections",
                              value = "continuousCorrections",
                              uiOutput("continuousCorrections_ui")),

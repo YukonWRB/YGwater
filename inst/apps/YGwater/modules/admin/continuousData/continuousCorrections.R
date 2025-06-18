@@ -262,7 +262,8 @@ continuousCorrections <- function(id) {
     }
     
     observeEvent(input$preview, {
-      req(dat)
+      dat <- get_preview()
+      req(nrow(dat) > 0)
       render_preview(dat)
     })
     

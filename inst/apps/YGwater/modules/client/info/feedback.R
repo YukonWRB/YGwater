@@ -53,7 +53,7 @@ feedback <- function(id) {
       ui_comment = if (nchar(input$ui_comment) > 0) input$ui_comment else NA,
       module_comment = if (nchar(input$module_comment) > 0) input$module_comment else NA,
       got_data = if (input$got_data == "Yes") TRUE else FALSE,
-      missing = if (nchar(input$missing > 0)) input$missing else NA,
+      missing = if (nchar(input$missing) > 0) input$missing else NA,
       stringsAsFactors = FALSE
     )
     DBI::dbWriteTable(session$userData$AquaCache, "feedback", info, append = TRUE)
@@ -62,9 +62,8 @@ feedback <- function(id) {
     updateTextAreaInput(session, "bugs", value = "")
     updateTextAreaInput(session, "ui_comment", value = "")
     updateTextAreaInput(session, "module_comment", value = "")
-    updateRadioButtons(session, "got_data", selected = character(0))
+    updateRadioButtons(session, "got_data", selected = "Yes")
     updateTextAreaInput(session, "missing", value = "")
-    updateCheckboxInput(session, "got_data", value = "Yes")
     shinyjs::hide("missing")
   })
   

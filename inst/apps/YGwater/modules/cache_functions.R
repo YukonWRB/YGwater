@@ -67,7 +67,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
                  sub_groups <- parameter_relationships$sub_group_id[!is.na(parameter_relationships$sub_group_id)]
                  param_sub_groups <- DBI::dbGetQuery(con, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
                } else {
-                 param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+                 param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
                }
                
                list(
@@ -156,7 +156,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
                  sub_groups <- parameter_relationships$sub_group_id[!is.na(parameter_relationships$sub_group_id)]
                  param_sub_groups <- DBI::dbGetQuery(con, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
                } else {
-                 param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+                 param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
                }
                
                list(
