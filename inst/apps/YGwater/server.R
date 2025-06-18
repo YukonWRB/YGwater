@@ -324,28 +324,26 @@ $(document).keyup(function(event) {
         session$userData$config$dbPass <- input$password
         
         session$userData$user_logged_in <- TRUE
+        
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
-        # Check if the user has admin privileges. Inspect the 'timeseries' table to see if they have write privileges (checks are also performed in each writing/editing module).
-        result <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT has_table_privilege('timeseries', 'UPDATE') AS can_write;"))
-        if (result$can_write) {
-          session$userData$config$admin <- TRUE
-          
-        } else {
-          session$userData$config$admin <- FALSE
-        }
         # Create the new element for the 'admin' mode
+        # Other tabs are created if/when the user clicks on the 'admin' tab
         nav_insert("navbar",
                    nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
                    target = "home", position = "before")
         
-        # Send the user back to the 'home' tab
-        updateTabsetPanel(session, "navbar", selected = "home")
+        # Initialize a fresh cache environment for the session
+        session$userData$app_cache <- new.env(parent = emptyenv())
         # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
         reset_ui_loaded()
+        # Send the user back to the 'home' tab if they were elsewhere
+        updateTabsetPanel(session, "navbar", selected = "home")
         
-        # Other tabs are created if/when the user clicks on the 'admin' tab
+        # Select the last tab the user was on in viz mode. This will reload the module since the tab was previously set to 'home'.
+        updateTabsetPanel(session, "navbar", selected = last_viz_tab())
+        
         return()
       } else {
         removeModal()
@@ -402,22 +400,18 @@ $(document).keyup(function(event) {
     session$userData$config$dbUser <- config$dbUser
     session$userData$config$dbPass <- config$dbPass
     
-    # Redirect to last 'viz' tab
-    updateTabsetPanel(session, "navbar", selected = last_viz_tab())
-    
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
-    
-    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode
-    admin_vis_flag("viz")
-    shinyjs::click("admin")
-    
-    # Send the user back to the 'home' tab
-    updateTabsetPanel(session, "navbar", selected = "home")
-    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
-    reset_ui_loaded()
     
     # Clear the app_cache environment
     session$userData$app_cache <- new.env(parent = emptyenv())
+    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+    reset_ui_loaded()
+    # Send the user back to the 'home' tab if they were elsewhere
+    updateTabsetPanel(session, "navbar", selected = "home")
+    
+    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode and on the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
+    admin_vis_flag("viz")
+    shinyjs::click("admin")
   })
   
   # Load modules based on input$navbar ################################
@@ -428,10 +422,8 @@ $(document).keyup(function(event) {
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
   last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
   
-  
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
-  
   observeEvent(input$admin, {
     if (admin_vis_flag() == "viz") {
       # Set the flag before changing the tab programmatically
@@ -463,11 +455,6 @@ $(document).keyup(function(event) {
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
       
       admin_vis_flag("viz")
-      
-      shinyjs::runjs("
-  document.querySelectorAll('#navbar a[data-value=\"equip\"] b.caret')
-    .forEach(el => el.remove());
-")
     }
   })
   
