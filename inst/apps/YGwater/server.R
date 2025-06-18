@@ -77,46 +77,50 @@ app_server <- function(input, output, session) {
   })
   
   # Initialize reactive flags to track whether each UI has been loaded
-  ui_loaded <- reactiveValues(
-    viz = FALSE,
-    admin = FALSE,
-    home = FALSE,
-    discretePlot = FALSE,
-    continuousPlot = FALSE,
-    mixPlot = FALSE,
-    mapParamValues = FALSE,
-    mapMonitoringLocations = FALSE,
-    FOD = FALSE,
-    imgTableView = FALSE,
-    imgMapView = FALSE,
-    snowInfo = FALSE,
-    waterInfo = FALSE,
-    WQReport = FALSE,
-    snowBulletin = FALSE,
-    discData = FALSE,
-    contData = FALSE,
-    news = FALSE,
-    about = FALSE,
-    feedback = FALSE, # !!! THIs TAB TO BE DELETED ONCE TESTING IS COMPLETE
-    syncCont = FALSE,
-    syncDisc = FALSE,
-    locs = FALSE,
-    ts = FALSE,
-    equip = FALSE,
-    deploy_recover = FALSE,
-    cal = FALSE,
-    addContData = FALSE,
-    addDiscData = FALSE,
-    editDiscData = FALSE,
-    continuousCorrections = FALSE,
-    imputeMissing = FALSE,
-    editContData = FALSE,
-    grades_approvals_qualifiers = FALSE,
-    addDocs = FALSE,
-    addImgs = FALSE,
-    manageNewsContent = FALSE,
-    viewFeedback = FALSE,
-    visit = FALSE)
+  reset_ui_loaded <- function() {
+    ui_loaded$viz <- FALSE
+    ui_loaded$admin <- FALSE
+    ui_loaded$home <- FALSE
+    ui_loaded$discretePlot <- FALSE
+    ui_loaded$continuousPlot <- FALSE
+    ui_loaded$mixPlot <- FALSE
+    ui_loaded$mapParamValues <- FALSE
+    ui_loaded$mapMonitoringLocations <- FALSE
+    ui_loaded$FOD <- FALSE
+    ui_loaded$imgTableView <- FALSE
+    ui_loaded$imgMapView <- FALSE
+    ui_loaded$snowInfo <- FALSE
+    ui_loaded$waterInfo <- FALSE
+    ui_loaded$WQReport <- FALSE
+    ui_loaded$snowBulletin <- FALSE
+    ui_loaded$discData <- FALSE
+    ui_loaded$contData <- FALSE
+    ui_loaded$news <- FALSE
+    ui_loaded$about <- FALSE
+    ui_loaded$feedback <- FALSE # !!! THIs TAB TO BE DELETED ONCE TESTING IS COMPLETE
+    ui_loaded$syncCont <- FALSE
+    ui_loaded$syncDisc <- FALSE
+    ui_loaded$locs <- FALSE
+    ui_loaded$ts <- FALSE
+    ui_loaded$equip <- FALSE
+    ui_loaded$deploy_recover <- FALSE
+    ui_loaded$cal <- FALSE
+    ui_loaded$addContData <- FALSE
+    ui_loaded$addDiscData <- FALSE
+    ui_loaded$editDiscData <- FALSE
+    ui_loaded$continuousCorrections <- FALSE
+    ui_loaded$imputeMissing <- FALSE
+    ui_loaded$editContData <- FALSE
+    ui_loaded$grades_approvals_qualifiers <- FALSE
+    ui_loaded$addDocs <- FALSE
+    ui_loaded$addImgs <- FALSE
+    ui_loaded$manageNewsContent <- FALSE
+    ui_loaded$viewFeedback <- FALSE 
+    ui_loaded$visit <- FALSE
+  }
+  
+  ui_loaded <- reactiveValues()
+  reset_ui_loaded() # Initialize the ui_loaded reactive values
   
   ## database connections ###########
   # Look for .mdb files in the AccessPath directories
@@ -320,23 +324,26 @@ $(document).keyup(function(event) {
         session$userData$config$dbPass <- input$password
         
         session$userData$user_logged_in <- TRUE
+        
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
-        # Check if the user has admin privileges. Inspect the 'timeseries' table to see if they have write privileges (checks are also performed in each writing/editing module).
-        result <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT has_table_privilege('timeseries', 'UPDATE') AS can_write;"))
-        if (result$can_write) {
-          session$userData$config$admin <- TRUE
-          
-        } else {
-          session$userData$config$admin <- FALSE
-        }
         # Create the new element for the 'admin' mode
+        # Other tabs are created if/when the user clicks on the 'admin' tab
         nav_insert("navbar",
                    nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
                    target = "home", position = "before")
         
-        # Other tabs are created if/when the user clicks on the 'admin' tab
+        # Initialize a fresh cache environment for the session
+        session$userData$app_cache <- new.env(parent = emptyenv())
+        # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+        reset_ui_loaded()
+        # Send the user back to the 'home' tab if they were elsewhere
+        updateTabsetPanel(session, "navbar", selected = "home")
+        
+        # Select the last tab the user was on in viz mode. This will reload the module since the tab was previously set to 'home'.
+        updateTabsetPanel(session, "navbar", selected = last_viz_tab())
+        
         return()
       } else {
         removeModal()
@@ -393,13 +400,16 @@ $(document).keyup(function(event) {
     session$userData$config$dbUser <- config$dbUser
     session$userData$config$dbPass <- config$dbPass
     
-    # Redirect to last 'viz' tab
-    updateTabsetPanel(session, "navbar", selected = last_viz_tab())
-    
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     
+    # Clear the app_cache environment
+    session$userData$app_cache <- new.env(parent = emptyenv())
+    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+    reset_ui_loaded()
+    # Send the user back to the 'home' tab if they were elsewhere
+    updateTabsetPanel(session, "navbar", selected = "home")
     
-    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode
+    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode and on the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
     admin_vis_flag("viz")
     shinyjs::click("admin")
   })
@@ -412,10 +422,8 @@ $(document).keyup(function(event) {
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
   last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
   
-  
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
-  
   observeEvent(input$admin, {
     if (admin_vis_flag() == "viz") {
       # Set the flag before changing the tab programmatically
@@ -447,11 +455,6 @@ $(document).keyup(function(event) {
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
       
       admin_vis_flag("viz")
-      
-      shinyjs::runjs("
-  document.querySelectorAll('#navbar a[data-value=\"equip\"] b.caret')
-    .forEach(el => el.remove());
-")
     }
   })
   
@@ -505,7 +508,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$continuousPlot) {
         output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
         ui_loaded$continuousPlot <- TRUE
-        continuousPlot("continuousPlot", language = languageSelection, windowDims) # Call the server
+        continuousPlot("continuousPlot", language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL

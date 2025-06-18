@@ -67,7 +67,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                                         "Select a location group",
                                         choices = NULL,
                                         multiple = TRUE,
-                                        options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values,
+                                        options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values
                          
                          # Toggle button for parameters or parameter groups (only show if data source == EQWin)
                          radioButtons(ns("params_groups"),

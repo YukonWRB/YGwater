@@ -8,7 +8,7 @@
 #' @param location The location for which you want a plot.
 #' @param sub_location Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).
 #' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
-#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.
+#' @param record_rate The recording rate for the parameter and location to plot, from column 'record_rate' of table 'timeseries'. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate. Can be passed in a character string or number of seconds coercible to a period by [lubridate::period()].
 #' @param aggregation_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2'. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max'.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/aggregation_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.
@@ -41,10 +41,12 @@
 #' @export
 
 # 
-# location <- "09AB004"
+# location <- 9
 # sub_location <- NULL
-# parameter <- 1165
-# record_rate = NULL
+# z <- NULL
+# parameter <- 1250
+# record_rate = 86400
+# aggregation_type <- 1
 # startDay <- 1
 # endDay <- 365
 # tzone <- "MST"
@@ -65,25 +67,7 @@
 # unusable = FALSE
 # hover = FALSE
 # custom_title = NULL
-
-
-# location <- "29AB-M3"
-# sub_location <- NULL
-# parameter <- "snow water equivalent"
-# record_rate = NULL
-# startDay <- "2023-09-01"
-# endDay <- "2024-06-01"
-# tzone <- "MST"
-# years <- c("2024", "2023", "2022")
-# datum <- FALSE
-# title <- TRUE
-# filter <- NULL
-# plot_scale <- 1
-# con <- NULL
-# lang <- "en"
-# gridx = FALSE
-# gridy = FALSE
-# legend_position = "v"
+# rate = "max"
 
 
 plotOverlap <- function(location,
@@ -147,7 +131,8 @@ plotOverlap <- function(location,
   }
   
   if (!is.null(record_rate)) {
-    if (!lubridate::is.period(lubridate::period(record_rate))) {
+    record_rate <- lubridate::period(record_rate)
+    if (!lubridate::is.period(record_rate)) {
       warning("Your entry for parameter record_rate is invalid. It's been reset to the default NULL.")
       record_rate <- NULL
     }
@@ -504,22 +489,25 @@ plotOverlap <- function(location,
       #   dates <- c(dates, new_dates)
       # }
       if (nrow(new_realtime) > 0) {
-        # Fill in any missing hours in realtime with NAs
+        # Fill in any missing data points in realtime with NAs
         # Must use calculate_period to get the correct number of hours in the period as it can change.
-        new_realtime <- calculate_period(new_realtime)
-        new_realtime$period <- as.numeric(lubridate::period(new_realtime$period))
-        
-        # Create groups for consecutive rows with the same period
-        new_realtime[, grp := data.table::rleidv(period)]
-        df_full <- new_realtime[, .(datetime = seq(min(datetime), max(datetime), by = as.difftime(as.numeric(period[1]), units = "secs"))), by = grp]
-        
-        # Drop columns 'grp' and 'period' from realtime
-        new_realtime[, c("grp", "period") := NULL]
-        
-        # Merge the complete sequence with the original data (inserting NA where missing) if necessary
-        if (nrow(df_full) > nrow(new_realtime)) {
-          new_realtime <- merge(df_full[,list(datetime)], new_realtime, by = "datetime", all.x = TRUE) # Drop unnecessary columns
-          data.table::setorder(new_realtime, datetime)
+        new_realtime <- suppressWarnings(calculate_period(new_realtime, timeseries_id = tsid, con = con))
+        # if calculate_period didn't return a column for new_realtime, it couldn't be done. No need to continue
+        if ("period" %in% colnames(new_realtime)) {
+          new_realtime[, period_secs := as.numeric(lubridate::period(period))]
+          # Shift datetime and add period_secs to compute the 'expected' next datetime
+          new_realtime[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+          # Create 'gap_exists' column to identify where gaps are
+          new_realtime[, gap_exists := datetime < expected & !is.na(expected)]
+          # Find indices where gaps exist
+          gap_indices <- which(new_realtime$gap_exists)
+          # Create a data.table of NA rows to be inserted
+          na_rows <- data.table::data.table(datetime = new_realtime[gap_indices, datetime]  + 1,  # Add 1 second to place it at the start of the gap
+                                            value = NA)
+          # Combine with NA rows
+          new_realtime <- data.table::rbindlist(list(new_realtime[, c("datetime", "value")], na_rows), use.names = TRUE)
+          # order by datetime
+          data.table::setorder(new_realtime, datetime) 
         }
         
         realtime <- data.table::rbindlist(list(realtime, new_realtime))

@@ -10,6 +10,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     assign("app_cache", new.env(parent = emptyenv()), envir = .GlobalEnv)
   }
   
+  # Load the cache functions (in a file so they can be used across a few modules)
+  source(system.file("apps/YGwater/modules/cache_functions.R", package = "YGwater"))
+  
   # 'Admin' side modules #####
   # database admin modules
   source(system.file("apps/YGwater/modules/admin/dbAdmin/loc_main.R", package = "YGwater"))

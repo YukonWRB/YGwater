@@ -54,85 +54,11 @@ discData <- function(id, language, inputs) {
     }
     
     # Get the data to populate drop-downs. Runs every time this module is loaded.
-    cached <- get_cached("disc_data_module_data", function() {
-      locs <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
-      )
-      sub_locs <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT DISTINCT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM samples) ORDER BY sub_location_name ASC;"
-      )
-      params <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT DISTINCT parameter_id, param_name, COALESCE(param_name_fr, param_name) AS param_name_fr, unit_default AS unit FROM parameters WHERE parameter_id IN (SELECT DISTINCT parameter_id FROM results) ORDER BY param_name ASC;"
-      )
-      media <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT DISTINCT m.* FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"
-      )
-      parameter_relationships <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"
-      )
-      range <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM samples;"
-      )
-      sample_types <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM sample_types AS st WHERE EXISTS (SELECT 1 FROM samples AS s WHERE st.sample_type_id = s.sample_type);"
-      )
-      samples <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type FROM samples;"
-      )
-      
-      locations_projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_projects WHERE location_id IN (", paste(locs$location_id, collapse = ", "), ");"))
-      if (nrow(locations_projects) > 0) {
-        projects <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM projects WHERE location_id IN (", paste(locations_projects$project_id, collapse = ", "), ");"))
-      } else {
-        locations_projects <- data.frame(location_id = numeric(), project_id = numeric())
-        projects <- data.frame(project_id = numeric(), name = character(), name_fr = character())
-      }
-      
-      locations_networks <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM locations_networks WHERE location_id IN (", paste(locs$location_id, collapse = ", "), ");"))
-      if (nrow(locations_networks) > 0) {
-        networks <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT DISTINCT * FROM networks WHERE network_id IN (", paste(locations_networks$network_id, collapse = ", "), ");"))
-      } else {
-        networks <- data.frame()
-      }
-      
-      if (any(!is.na(parameter_relationships$group_id))) {
-        groups <- parameter_relationships$group_id[!is.na(parameter_relationships$group_id)]
-        param_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_groups WHERE group_id IN (", paste(groups, collapse = ", "), ");"))
-      } else {
-        param_groups <- data.frame(group_id = numeric(), group_name = character(), group_name_fr = character(), description = character(), description_fr = character())
-      }
-      if (any(!is.na(parameter_relationships$sub_group_id))) {
-        sub_groups <- parameter_relationships$sub_group_id[!is.na(parameter_relationships$sub_group_id)]
-        param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
-      } else {
-        param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
-      }
-      
-      list(
-        locs = locs,
-        sub_locs = sub_locs,
-        params = params,
-        media = media,
-        parameter_relationships = parameter_relationships,
-        range = range,
-        sample_types = sample_types,
-        samples = samples,
-        locations_projects = locations_projects,
-        projects = projects,
-        locations_networks = locations_networks,
-        networks = networks,
-        param_groups = param_groups,
-        param_sub_groups = param_sub_groups
-      )
-    }, ttl = 60 * 60 * 24)
+    if (session$userData$user_logged_in) {  # If logged in, get or create data that lives only with this session,
+      cached <- disc_data_module_data(con = session$userData$AquaCache, env = session$userData$app_cache)
+    } else {
+      cached <- disc_data_module_data(con = session$userData$AquaCache)
+    }
     
     moduleData <- reactiveValues(
       locs = cached$locs,
@@ -243,7 +169,7 @@ discData <- function(id, language, inputs) {
                                    params = FALSE)
     
     output$sidebar <- renderUI({
-      req(moduleData)
+      req(filteredData, language)
       
       render_flags$date_range <- TRUE
       render_flags$locations <- TRUE
@@ -256,17 +182,18 @@ discData <- function(id, language, inputs) {
         # start and end datetime
         dateRangeInput(ns("date_range"),
                        tr("date_range_select", language$language),
-                       start = as.Date(moduleData$range$min_date),
-                       end = as.Date(moduleData$range$max_date),
-                       min = as.Date(moduleData$range$min_date),
-                       format = "yyyy-mm-dd"
+                       start = as.Date(filteredData$range$min_date),
+                       end = as.Date(filteredData$range$max_date),
+                       min = as.Date(filteredData$range$min_date),
+                       format = "yyyy-mm-dd",
+                       language = language$abbrev
         ),
         # Selectize input for locations
         selectizeInput(ns("locations"),
                        label = tr("loc(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$locs$location_id),
-                                         c(tr("all", language$language), moduleData$locs[, tr("generic_name_col", language$language)])),
+                         stats::setNames(c("all", filteredData$locs$location_id),
+                                         c(tr("all", language$language), filteredData$locs[, tr("generic_name_col", language$language)])),
                        multiple = TRUE,
                        selected = if (!is.null(moduleInputs$location_id)) moduleInputs$location_id else "all"
         ),
@@ -280,8 +207,8 @@ discData <- function(id, language, inputs) {
         selectizeInput(ns("sub_locations"),
                        label = tr("sub_loc(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$sub_locs$sub_location_id),
-                                         c(tr("all", language$language), moduleData$sub_locs[, tr("sub_location_col", language$language)])),
+                         stats::setNames(c("all", filteredData$sub_locs$sub_location_id),
+                                         c(tr("all", language$language), filteredData$sub_locs[, tr("sub_location_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -289,8 +216,8 @@ discData <- function(id, language, inputs) {
         selectizeInput(ns("media"),
                        label = tr("media_type(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$media$media_id),
-                                         c(tr("all", language$language), moduleData$media[, tr("media_type_col", language$language)])),
+                         stats::setNames(c("all", filteredData$media$media_id),
+                                         c(tr("all", language$language), filteredData$media[, tr("media_type_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -298,16 +225,16 @@ discData <- function(id, language, inputs) {
         selectizeInput(ns("sample_types"),
                        label = tr("sample_type(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$sample_types$sample_type_id),
-                                         c(tr("all", language$language), moduleData$sample_types[, tr("sample_type_col", language$language)])),
+                         stats::setNames(c("all", filteredData$sample_types$sample_type_id),
+                                         c(tr("all", language$language), filteredData$sample_types[, tr("sample_type_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
         selectizeInput(ns("params"),
                        label = tr("parameter(s)", language$language),
                        choices = 
-                         stats::setNames(c("all", moduleData$params$parameter_id),
-                                         c(tr("all", language$language), moduleData$params[, tr("param_name_col", language$language)])),
+                         stats::setNames(c("all", filteredData$params$parameter_id),
+                                         c(tr("all", language$language), filteredData$params[, tr("param_name_col", language$language)])),
                        multiple = TRUE,
                        selected = "all"
         ),
@@ -404,7 +331,7 @@ discData <- function(id, language, inputs) {
                            start = as.Date(moduleData$range$min_date),
                            end = as.Date(moduleData$range$max_date),
                            min = as.Date(moduleData$range$min_date),
-                           max = as.Date(moduleData$range$max_date),
+                           max = as.Date(moduleData$range$max_date)
       )
       updateSelectizeInput(session, "locations",
                            choices = stats::setNames(c("all", moduleData$locs$location_id),
@@ -574,8 +501,11 @@ discData <- function(id, language, inputs) {
       table_data(NULL)
       
       # Filter the data based on the selected date range
-      filteredData$range$min_date <- input$date_range[1]
-      filteredData$range$max_date <- input$date_range[2]
+      if (is.na(input$date_range[1]) || is.na(input$date_range[2])) {
+        return()
+      }
+      filteredData$range$min_date <- as.POSIXct(input$date_range[1], tz = "UTC")
+      filteredData$range$max_date <- as.POSIXct(paste0(input$date_range[2], " 23:59:59"), tz = "UTC")
       
       filteredData$samples <- filteredData$samples[filteredData$samples$datetime >= input$date_range[1] & filteredData$samples$datetime <= input$date_range[2], ]
       filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% filteredData$samples$location_id, ]

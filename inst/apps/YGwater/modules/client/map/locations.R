@@ -30,63 +30,12 @@ mapLocs <- function(id, language) {
     
     outputs <- reactiveValues()  # This allows the module to pass values back to the main server
     
-    cached <- get_cached("map_module_data", function() {
-      list(
-        locations = dbGetQueryDT(session$userData$AquaCache, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
-        timeseries = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, ts.z, 'continuous' AS data_type
-             FROM continuous.timeseries AS ts
-             LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id
-             LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
-           UNION ALL
-           SELECT MIN(r.result_id) AS timeseries_id, s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id, NULL AS aggregation_type_id,
-                  MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime, MIN(s.z) AS z, 'discrete' AS data_type
-             FROM discrete.results r
-             JOIN discrete.samples s ON r.sample_id = s.sample_id
-             LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
-             LEFT JOIN public.media_types m ON s.media_id = m.media_id
-            GROUP BY s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id"),
-        projects = dbGetQueryDT(session$userData$AquaCache, "SELECT p.* FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"),
-        networks =  dbGetQueryDT(session$userData$AquaCache, "SELECT n.* FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"),
-        locations_projects = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_projects;"),
-        locations_networks = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM locations_networks;"),
-        media_types = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT mt.* FROM public.media_types mt WHERE mt.media_id IN (
-              SELECT DISTINCT media_id FROM continuous.timeseries
-              UNION
-              SELECT DISTINCT media_id FROM discrete.samples)"),
-        parameters = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id
-             FROM public.parameters AS p
-             LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id
-            WHERE p.parameter_id IN (
-              SELECT DISTINCT parameter_id FROM continuous.timeseries
-              UNION
-              SELECT DISTINCT parameter_id FROM discrete.results)"),
-        parameter_groups = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr
-             FROM public.parameter_groups AS pg
-             LEFT JOIN public.parameter_relationships AS pr ON pg.group_id = pr.group_id
-            WHERE pr.parameter_id IN (
-              SELECT DISTINCT parameter_id FROM continuous.timeseries
-              UNION
-              SELECT DISTINCT parameter_id FROM discrete.results)"),
-        parameter_sub_groups = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr
-             FROM public.parameter_sub_groups AS psg
-             LEFT JOIN public.parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id
-            WHERE pr.parameter_id IN (
-              SELECT DISTINCT parameter_id FROM continuous.timeseries
-              UNION
-              SELECT DISTINCT parameter_id FROM discrete.results)")
-      )
-    }, ttl = 60 * 60 * 24)  # Cache for 24 hours
-
+    if (session$userData$user_logged_in) {
+      cached <- map_location_module_data(con = session$userData$AquaCache, env = session$userData$app_cache)
+    } else {
+      cached <- map_location_module_data(con = session$userData$AquaCache)
+    }
+    
     moduleData <- reactiveValues(
       locations = cached$locations,
       timeseries = cached$timeseries,
@@ -278,93 +227,95 @@ mapLocs <- function(id, language) {
     
     # Update map popup based on language ###########################################
     popupData <- reactive({
-      get_cached("map_popup_data", function() {
+      get_cached("map_popup_data", 
+                 env = if (session$userData$user_logged_in) session$userData$app_cache else .GlobalEnv,
+                 fetch_fun = function() {
         # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
         # Get location names
         popup_names <- moduleData$locations[ , .(location_id, popup_name = get(tr("generic_name_col", language$language)))]
         popup_names[, popup_name := titleCase(popup_name, language$abbrev)]
-      # Aggregate time range for each location
-      time_range <- moduleData$timeseries[, .(
-        start_time = min(start_datetime),
-        end_time = max(end_datetime)
-      ), by = location_id]
-      # Get parameters per location
-      param_name_col <- tr("param_name_col", language$language)
-      to_text <- tr("to", language$language)
-      tmp <- moduleData$timeseries
-      tmp[, formatted_param := paste(titleCase(get(param_name_col), language$abbrev), " (", 
-                                     format(as.Date(start_datetime), "%Y-%m-%d"), 
-                                     " ", to_text, " ", 
-                                     format(as.Date(end_datetime), "%Y-%m-%d"), ")", sep = "")]
-      location_parameters <- tmp[, .(parameters = paste(formatted_param, collapse = "<br/>")), by = location_id]
-      # Get networks per location
-      network_col <- tr("generic_name_col", language$language)
-      tmp <- moduleData$locations_networks[moduleData$networks, on = "network_id", allow.cartesian = TRUE]
-      tmp[, formatted_network := titleCase(get(network_col), language$abbrev)]
-      location_networks <- tmp[, .(networks = paste(formatted_network, collapse = "<br/>")), by = location_id]
-      # Get projects per location
-      projects_col <- tr("generic_name_col", language$language)
-      tmp <- moduleData$locations_projects[moduleData$projects, on = "project_id", allow.cartesian = TRUE]
-      tmp[, formatted_project := titleCase(get(projects_col), language$abbrev)]
-      location_projects <- tmp[, .(projects = paste(formatted_project, collapse = "<br/>")), by = location_id]
-      
-      # Combine all the data
-      tmp <- data.table::copy(moduleData$locations)[, "location_id"]  # Use copy to avoid modifying the original data table
-      tmp[popup_names, on = .(location_id), popup_name := popup_name]  # Join popup_name
-      tmp[time_range, on = .(location_id), c("start_time", "end_time") := .(start_time, end_time)]  # Join time_range
-      tmp[location_parameters, on = .(location_id), parameters := parameters]  # Join location_parameters
-      tmp[location_networks, on = .(location_id), networks := networks]  # Join location_networks
-      tmp[location_projects, on = .(location_id), projects := projects]  # Join location_projects
-
-      # Determine available data types for each location
-      loc_data_types <- moduleData$timeseries[, .(
-        has_discrete = any(data_type == "discrete"),
-        has_continuous = any(data_type == "continuous")
-      ), by = location_id]
-      tmp[loc_data_types, on = .(location_id), `:=`(
-        has_discrete = i.has_discrete,
-        has_continuous = i.has_continuous
-      )]
-      
-      tmp[, popup_links := {
-        links <- character(0)
-        if (isTRUE(has_discrete)) {
-          links <- c(
-            links,
-            sprintf(
-              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"%s\"); return false;'>%s</a>",
-              location_id,
-              tr("dl_data_discrete", language$language)
-            ),
-            sprintf(
-              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"%s\"); return false;'>%s</a>",
-              location_id,
-              tr("view_plots_discrete", language$language)
+        # Aggregate time range for each location
+        time_range <- moduleData$timeseries[, .(
+          start_time = min(start_datetime),
+          end_time = max(end_datetime)
+        ), by = location_id]
+        # Get parameters per location
+        param_name_col <- tr("param_name_col", language$language)
+        to_text <- tr("to", language$language)
+        tmp <- moduleData$timeseries
+        tmp[, formatted_param := paste(titleCase(get(param_name_col), language$abbrev), " (", 
+                                       format(as.Date(start_datetime), "%Y-%m-%d"), 
+                                       " ", to_text, " ", 
+                                       format(as.Date(end_datetime), "%Y-%m-%d"), ")", sep = "")]
+        location_parameters <- tmp[, .(parameters = paste(formatted_param, collapse = "<br/>")), by = location_id]
+        # Get networks per location
+        network_col <- tr("generic_name_col", language$language)
+        tmp <- moduleData$locations_networks[moduleData$networks, on = "network_id", allow.cartesian = TRUE]
+        tmp[, formatted_network := titleCase(get(network_col), language$abbrev)]
+        location_networks <- tmp[, .(networks = paste(formatted_network, collapse = "<br/>")), by = location_id]
+        # Get projects per location
+        projects_col <- tr("generic_name_col", language$language)
+        tmp <- moduleData$locations_projects[moduleData$projects, on = "project_id", allow.cartesian = TRUE]
+        tmp[, formatted_project := titleCase(get(projects_col), language$abbrev)]
+        location_projects <- tmp[, .(projects = paste(formatted_project, collapse = "<br/>")), by = location_id]
+        
+        # Combine all the data
+        tmp <- data.table::copy(moduleData$locations)[, "location_id"]  # Use copy to avoid modifying the original data table
+        tmp[popup_names, on = .(location_id), popup_name := popup_name]  # Join popup_name
+        tmp[time_range, on = .(location_id), c("start_time", "end_time") := .(start_time, end_time)]  # Join time_range
+        tmp[location_parameters, on = .(location_id), parameters := parameters]  # Join location_parameters
+        tmp[location_networks, on = .(location_id), networks := networks]  # Join location_networks
+        tmp[location_projects, on = .(location_id), projects := projects]  # Join location_projects
+        
+        # Determine available data types for each location
+        loc_data_types <- moduleData$timeseries[, .(
+          has_discrete = any(data_type == "discrete"),
+          has_continuous = any(data_type == "continuous")
+        ), by = location_id]
+        tmp[loc_data_types, on = .(location_id), `:=`(
+          has_discrete = i.has_discrete,
+          has_continuous = i.has_continuous
+        )]
+        
+        tmp[, popup_links := {
+          links <- character(0)
+          if (isTRUE(has_discrete)) {
+            links <- c(
+              links,
+              sprintf(
+                "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"%s\"); return false;'>%s</a>",
+                location_id,
+                tr("dl_data_discrete", language$language)
+              ),
+              sprintf(
+                "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"%s\"); return false;'>%s</a>",
+                location_id,
+                tr("view_plots_discrete", language$language)
+              )
             )
-          )
-        }
-        if (isTRUE(has_continuous)) {
-          links <- c(
-            links,
-            sprintf(
-              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"%s\"); return false;'>%s</a>",
-              location_id,
-              tr("dl_data_continuous", language$language)
-            ),
-            sprintf(
-              "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"%s\"); return false;'>%s</a>",
-              location_id,
-              tr("view_plots_continuous", language$language)
+          }
+          if (isTRUE(has_continuous)) {
+            links <- c(
+              links,
+              sprintf(
+                "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"%s\"); return false;'>%s</a>",
+                location_id,
+                tr("dl_data_continuous", language$language)
+              ),
+              sprintf(
+                "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"%s\"); return false;'>%s</a>",
+                location_id,
+                tr("view_plots_continuous", language$language)
+              )
             )
-          )
-        }
-        if (length(links) > 0) {
-          paste0("<br/>", paste(links, collapse = "<br/>"), "<br/>")
-        } else {
-          ""
-        }
-      }, by = location_id]
-
+          }
+          if (length(links) > 0) {
+            paste0("<br/>", paste(links, collapse = "<br/>"), "<br/>")
+          } else {
+            ""
+          }
+        }, by = location_id]
+        
         tmp[, popup_html := paste0(
           "<strong>", popup_name, "</strong><br/>",
           substr(start_time, 1, 10), " ", tr("to", language$language), " ", substr(end_time, 1, 10), "<br/><br/>",
@@ -374,9 +325,9 @@ mapLocs <- function(id, language) {
           "<strong>", tr("project(s)", language$language), ":</strong><br/><i>", ifelse(is.na(projects), "N/A", paste(projects, collapse = "<br/>")), "</i>",
           popup_links
         )]
-
+        
         tmp
-      }, ttl = 60 * 60 * 24)  # Cache for 24 hours
+      }, ttl = 60 * 60)  # Cache for 1 hours
     })
     
     

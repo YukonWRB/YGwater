@@ -12,22 +12,11 @@ mapParams <- function(id, language) {
     
     ns <- session$ns
     
-    cached <- get_cached("map_params_module_data", function() {
-      list(
-        locations = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"
-        ),
-        timeseries = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"
-        ),
-        parameters = dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
-        )
-      )
-    }, ttl = 60 * 60 * 24)
+    if (session$userData$user_logged_in) {
+      cached <- map_params_module_data(con = session$userData$AquaCache, env = session$userData$app_cache)
+    } else {
+      cached <- map_params_module_data(con = session$userData$AquaCache)
+    }
     
     moduleData <- reactiveValues(
       locations = cached$locations,
@@ -237,7 +226,7 @@ mapParams <- function(id, language) {
       if (input$mapType == "abs" || config$public) {
         shinyjs::hide("secondary_param")
         shinyjs::hide("edit_secondary_param")
-
+        
       } else {
         shinyjs::show("secondary_param")
         shinyjs::show("edit_secondary_param")
@@ -439,12 +428,12 @@ mapParams <- function(id, language) {
         all.x = TRUE
       )
       mapping_data[, percent_historic_range_capped := percent_historic_range]
-
+      
       if (input$mapType == "abs") {
         abs_vals <- abs(mapping_data$value)
         abs_range <- range(abs_vals, na.rm = TRUE)
         abs_bins <- seq(abs_range[1], abs_range[2], length.out = length(map_params$colors) + 1)
-
+        
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
           domain = abs_vals,
@@ -539,7 +528,7 @@ mapParams <- function(id, language) {
     # Observe the map being created and update it when the parameters change
     observe({
       req(mapCreated(), map_params, input$map_zoom, language$language)  # Ensure the map has been created before updating
-        updateMap()  # Call the updateMap function to refresh the map with the current parameters
+      updateMap()  # Call the updateMap function to refresh the map with the current parameters
     })
     
   }) # End of moduleServer

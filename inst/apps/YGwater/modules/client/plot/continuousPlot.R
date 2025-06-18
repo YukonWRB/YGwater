@@ -29,71 +29,233 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlot <- function(id, language, windowDims) {
+continuousPlot <- function(id, language, windowDims, inputs) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns # Used to create UI elements within server
     
+    # Adjust multiple selection based on if 'all' is selected
+    observeFilterInput <- function(inputId) {
+      observeEvent(input[[inputId]], {
+        # Check if 'all' is selected and adjust accordingly
+        if (length(input[[inputId]]) > 1) { # If 'all' was selected last, remove all other selections
+          if (input[[inputId]][length(input[[inputId]])] == "all") {
+            updateSelectizeInput(session, inputId, selected = "all")
+          } else if ("all" %in% input[[inputId]]) { # If 'all' is already selected and another option is selected, remove 'all'
+            updateSelectizeInput(session, inputId, selected = input[[inputId]][length(input[[inputId]])])
+          }
+        }
+      })
+    }
+    
     # Initial setup and data loading ########################################################################
-    moduleData <- reactiveValues(all_ts = DBI::dbGetQuery(session$userData$AquaCache, "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ts.media_id, ts.start_datetime, ts.end_datetime, loc.name, loc.name_fr FROM timeseries AS ts INNER JOIN locations AS loc ON ts.location_id = loc.location_id AND ts.location = loc.location ORDER BY loc.name;"),
-                                 parameters = DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT parameters.parameter_id, parameters.param_name FROM timeseries INNER JOIN parameters ON timeseries.parameter_id = parameters.parameter_id ORDER BY parameters.param_name;"),
-                                 datums = DBI::dbGetQuery(session$userData$AquaCache, "SELECT l.location_id, dc.conversion_m FROM datum_conversions dc INNER JOIN locations l ON dc.location_id = l.location_id INNER JOIN datum_list dl ON dc.datum_id_to = dl.datum_id;")
+    # Get the data to populate drop-downs. Runs every time this module is loaded.
+    # !important!!! shares a cache with the data module
+    if (session$userData$user_logged_in) {  # If logged in, get or create data that lives only with this session,
+      cached <- cont_data.plot_module_data(con = session$userData$AquaCache, env = session$userData$app_cache)
+    } else {
+      cached <- cont_data.plot_module_data(con = session$userData$AquaCache)
+    }    
+    moduleData <- reactiveValues(
+      locs = cached$locs,
+      sub_locs = cached$sub_locs,
+      params = cached$params,
+      media = cached$media,
+      aggregation_types = cached$aggregation_types,
+      parameter_relationships = cached$parameter_relationships,
+      range = cached$range,
+      timeseries = cached$timeseries,
+      rates = cached$rates,
+      z = cached$z,
+      locations_projects = cached$locations_projects,
+      projects = cached$projects,
+      locations_networks = cached$locations_networks,
+      networks = cached$networks,
+      param_groups = cached$param_groups,
+      param_sub_groups = cached$param_sub_groups
     )
     
-    values <- reactiveValues()
-    # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth' - this is used to change default plot start/end dates and to show the datum checkbox
-    values$water_level <- moduleData$parameters$parameter_id[moduleData$parameters$param_name == "water level"]
-    values$swe <- moduleData$parameters$parameter_id[moduleData$parameters$param_name == "snow water equivalent"]
-    values$snow_depth <- moduleData$parameters$parameter_id[moduleData$parameters$param_name == "snow depth"]
+    # Create a function to create the filteredData reactiveValues object
+    createFilteredData <- function() {
+      data <-  reactiveValues(
+        locs = isolate(moduleData$locs),
+        sub_locs = isolate(moduleData$sub_locs),
+        z = isolate(moduleData$z),
+        params = isolate(moduleData$params),
+        media = isolate(moduleData$media),
+        rates = isolate(moduleData$rates),
+        aggregation_types = isolate(moduleData$aggregation_types),
+        parameter_relationships = isolate(moduleData$parameter_relationships),
+        range = isolate(moduleData$range),
+        timeseries = isolate(moduleData$timeseries),
+        locations_networks = isolate(moduleData$locations_networks),
+        locations_projects = isolate(moduleData$locations_projects),
+        param_groups = isolate(moduleData$param_groups),
+        param_sub_groups = isolate(moduleData$param_sub_groups)
+      )
+      return(data)
+    }
     
-    # Create the UI for the sidebar and main panel #########################################################
-    # Render the sidebar UI
+    # Safely calculate date ranges and avoid warnings when no dates are present
+    calc_range <- function(df) {
+      if (nrow(df) == 0 ||
+          all(is.na(df$start_datetime)) ||
+          all(is.na(df$end_datetime))) {
+        data.frame(min_date = as.Date(NA), max_date = as.Date(NA))
+      } else {
+        data.frame(
+          min_date = as.Date(min(df$start_datetime, na.rm = TRUE)),
+          max_date = as.Date(max(df$end_datetime, na.rm = TRUE))
+        )
+      }
+    }
+    
+    # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
+    moduleInputs <- reactiveValues(location_id = if (!is.null(inputs$location_id)) as.numeric(inputs$location_id) else NULL)
+    
+    # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
+    if (!is.null(moduleInputs$location_id)) {
+      filteredData <- createFilteredData()
+      # If the location_id is not in the filteredData$locs, return early
+      if (!moduleInputs$location_id %in% filteredData$locs$location_id) {
+        moduleInputs$location_id <- NULL
+        return()
+      }
+      
+      loc_id <- moduleInputs$location_id
+      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$location_id %in% loc_id, ]
+      filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% loc_id, ]
+      filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% loc_id, ]
+      filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$timeseries$media_id, ]
+      filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
+      filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
+      
+      filteredData$range <- calc_range(filteredData$timeseries)
+      
+      filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
+    } else {
+      filteredData <- createFilteredData()
+    }
+    
+    values <- reactiveValues()
+    # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth' - this is used to change default plot start/end dates and to show the datum checkbox if suitable
+    values$water_level <- moduleData$params$parameter_id[moduleData$params$param_name == "water level"]
+    values$water_flow <- moduleData$params$parameter_id[moduleData$params$param_name == "water flow"]
+    values$swe <- moduleData$params$parameter_id[moduleData$params$param_name == "snow water equivalent"]
+    values$snow_depth <- moduleData$params$parameter_id[moduleData$params$param_name == "snow depth"]
+    
+    # Create UI elements and necessary helpers ################
+    # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
+    
+    # Reactive values to store the input values so that inputs can be reset if the user ends up narrowing their selections to 0 samples
+    input_values <- reactiveValues()
+    
+    # flags to prevent running observers when the sidebar is first rendered
+    render_flags <- reactiveValues(
+      plot_type = FALSE,
+      date_range = FALSE,
+      location = FALSE,
+      sub_location = FALSE, # Only shown if needed
+      z = FALSE, # Only shown if needed
+      aggregation = FALSE,
+      rate = FALSE,
+      media = FALSE,
+      param = FALSE
+    )
+    
     output$sidebar <- renderUI({
-      req(moduleData, language$language, language$abbrev)
-      tagList(
-        selectizeInput(ns("type"), 
+      req(moduleData, language$language)
+      
+      render_flags$plot_type <- TRUE
+      render_flags$date_range <- TRUE
+      render_flags$location <- TRUE
+      render_flags$aggregation <- TRUE
+      render_flags$rate <- TRUE
+      render_flags$media <- TRUE
+      render_flags$param <- TRUE
+      
+      earliest <- filteredData$range$max_date - 366
+      if (earliest < filteredData$range$min_date) {
+        earliest <- filteredData$range$min_date
+      }
+      
+      tags <- tagList(
+        selectizeInput(ns("plot_type"),
                        label = tooltip(
                          trigger = list(
                            "Plot type",
                            bs_icon("info-circle-fill")
                          ),
-                         "'Long timeseries' plots help visualize a change with time and allows for multiple traces or subplots, while 'Overlapping years' plots are useful for comparing data across years at one location."
+                         "Long timeseries plots help visualize a change with time and allows for multiple traces or subplots, while overlapping years plots are useful for comparing data across years at one location."
                        ),
-                       choices = c("Long timeseries", "Overlapping years"), 
-                       selected = "Long timeseries"),
-        selectizeInput(ns("param"), label = "Plotting parameter", stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), selected = values$water_level),
-        selectizeInput(ns("loc_name"), "Select location", choices = NULL), # Choices are populated based on the parameter
+                       choices = stats::setNames(c("ts", "over"), c("Long timeseries", "Overlapping years")), 
+                       selected = "ts"),
+        
+        selectizeInput(ns("location"),
+                       label = tr("loc", language$language),
+                       choices =  stats::setNames(filteredData$locs$location_id,
+                                                  filteredData$locs[, tr("generic_name_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1),
+                       selected = if (!is.null(moduleInputs$location_id)) moduleInputs$location_id else NULL
+        ),
+        # Button for modal to let users filter locations by network or project
+        actionButton(ns("loc_modal"),
+                     label = tr("loc_modal", language$language),
+                     width = "100%",
+                     style = "font-size: 14px; margin-top: 5px;"
+        ),
+        uiOutput(ns("sub_loc_ui")), # Will be a selectizeInput for sub-locations, shows up only if needed
+        
+        uiOutput(ns("z_ui")), # Will be a selectizeInput for depth/height, shows up only if needed
+        
+        # Selectize input for media type
+        selectizeInput(ns("media"),
+                       label = tr("media_type", language$language),
+                       choices = stats::setNames(filteredData$media$media_id,
+                                                 filteredData$media[, tr("media_type_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        # Selectize input for aggregation types
+        selectizeInput(ns("aggregation"),
+                       label = tr("aggregation_type", language$language),
+                       choices = stats::setNames(filteredData$aggregation_types$aggregation_type_id,
+                                                 filteredData$aggregation_types[, tr("aggregation_type_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        # Selectize input for record rate
+        selectizeInput(ns("rate"),
+                       label = tr("nominal_rate", language$language),
+                       choices = stats::setNames(filteredData$rates$seconds,
+                                                 filteredData$rates[, "period"]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        selectizeInput(ns("param"),
+                       label = tr("parameter", language$language),
+                       choices = stats::setNames(filteredData$params$parameter_id,
+                                                 filteredData$params[, tr("param_name_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        # start and end datetime
+        dateRangeInput(ns("date_range"),
+                       tr("date_range_select", language$language),
+                       start = earliest,
+                       end = as.Date(filteredData$range$max_date),
+                       min = as.Date(filteredData$range$min_date),
+                       format = "yyyy-mm-dd",
+                       language = language$abbrev
+        ),
         
         # Now make a conditional panel depending on the selected plot type
         conditionalPanel(
           ns = ns,
-          condition = "input.type == 'Overlapping years'",
-          
-          div(
-            dateInput(ns("start_doy"), "Start day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
-            style = "display: flex; align-items: center;",
-            span(
-              id = ns("log_info_start_doy"),
-              `data-bs-toggle` = "tooltip",
-              `data-placement` = "right",
-              `data-trigger` = "click hover",
-              title = "The year is ignored; only the day-of-year is used.",
-              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-            )
-          ),
-          div(
-            dateInput(ns("end_doy"), "End day-of-year", value = paste0(lubridate::year(Sys.Date()), "-01-01")),
-            style = "display: flex; align-items: center;",
-            span(
-              id = ns("log_info_end_doy"),
-              `data-bs-toggle` = "tooltip",
-              `data-placement` = "right",
-              `data-trigger` = "click hover",
-              title = "The year is ignored; only the day-of-year is used.",
-              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-            )
-          ),
+          condition = "input.plot_type == 'over'",
           div(
             selectizeInput(ns("years"), label = "Select years to plot", choices = NULL, multiple = TRUE), #Choices are populated based on the location and parameter
             style = "display: flex; align-items: center;",
@@ -119,18 +281,10 @@ continuousPlot <- function(id, language, windowDims) {
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )
           )
-          # lines below were used with the ggplot overlaping years plot, these params have yet to be included in the plotly plot
-          # selectizeInput(ns("return_periods"), "Plot return periods?", choices = stats::setNames(c("none", "auto", "calculate", "table"), c("none", "auto select", "calculate", "from table")), selected = "auto select"),
-          # selectizeInput(ns("return_type"), "Select return type", choices = c("Min", "Max"), selected = "Max"),
-          # numericInput(ns("return_yrs"), "Last year for return calculations", value = lubridate::year(Sys.Date()), 1900, 2100, 1),
-          # textInput(ns("return_months"), "Months for return calculation (comma delimited)", value = "5,6,7,8,9"),
         ),
-        
         conditionalPanel(
           ns = ns,
-          condition = "input.type == 'Long timeseries'",
-          dateInput(ns("start_date"), "Start date", value = Sys.Date() - 365, max = Sys.Date() - 1),
-          dateInput(ns("end_date"), "End date", value = Sys.Date(), max = Sys.Date()),
+          condition = "input.plot_type == 'ts'",
           uiOutput(ns("trace1_ui")), # Will be a button with the trace values. Upon click, user can edit or remove the trace.
           uiOutput(ns("trace2_ui")),
           uiOutput(ns("trace3_ui")),
@@ -140,7 +294,7 @@ continuousPlot <- function(id, language, windowDims) {
           uiOutput(ns("subplot3_ui")),
           uiOutput(ns("subplot4_ui")),
           div(
-            style = "display: flex; justify-content: flex-start; margin-bottom: 10px", # Use flexbox to align buttons side by side
+            style = "display: flex; justify-content: flex-start; margin-bottom: 10px; margin-top: 10px;", # Use flexbox to align buttons side by side
             actionButton(ns("add_trace"),
                          "Add trace",
                          style = "margin-right: 5px;"),
@@ -183,84 +337,866 @@ continuousPlot <- function(id, language, windowDims) {
                           label = "Create Plot", 
                           style = "display: block; width: 100%;")
       ) # End tagList
-    }) %>% # End renderUI
-      bindEvent(language$language, moduleData) # Re-render the UI if the language or moduleData changes
+      
+      # Store the input values in the reactiveValues object
+      input_values$plot_type <- input$plot_type
+      input_values$date_range <- input$date_range
+      input_values$location <- input$location
+      input_values$sub_location <- character(0)
+      input_values$z <- character(0)
+      input_values$aggregation <- input$aggregation
+      input_values$rate <- input$rate
+      input_values$media <- input$media
+      input_values$param <- input$param
+      
+      return(tags)
+    }) %>% # End renderUI for sidebar
+      bindEvent(language$language) # Re-render the UI if the language or moduleData changes
     
     output$main <- renderUI({
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
         uiOutput(ns("full_screen_ui"))
       ) # End tagList
-    }) %>% # End renderUI
-      bindEvent(language$language) # Re-render the UI if the language or moduleData changes
+    }) # End renderUI for main panel
     
-    # Show/hide the approvals, grades, qualifiers checkboxes based on the selected plot type
+    ## Run observeFilterInput for each selectize input where 'all' is an option ##### 
+    observeFilterInput("networks")
+    observeFilterInput("projects")
+    
+    
+    ## Modals to narrow selections ################
+    # Observer for a modal that allows for location filtering based on projects and networks
+    observeEvent(input$loc_modal, {
+      showModal(modalDialog(
+        title = tr("loc_modal", language$language),
+        selectizeInput(ns("networks"),
+                       label = tr("network(s)", language$language),
+                       choices = stats::setNames(c("all", moduleData$networks$network_id),
+                                                 c(tr("all", language$language), moduleData$networks[, tr("generic_name_col", language$language)])),
+                       multiple = TRUE,
+                       selected = "all"
+        ),
+        selectizeInput(ns("projects"),
+                       label = tr("project(s)", language$language),
+                       choices = stats::setNames(c("all", moduleData$projects$project_id),
+                                                 c(tr("all", language$language), moduleData$projects[, tr("generic_name_col", language$language)])),
+                       multiple = TRUE,
+                       selected = "all"
+        ),
+        footer = tagList(
+          actionButton(ns("loc_modal_filter"), tr("filter", language$language)),
+          modalButton(tr("close", language$language))
+        )
+      ))
+    })
+    
+    # Observer for the locations modal filter button
+    observeEvent(input$loc_modal_filter, {
+      # Filter the locations based on the selected projects and networks, update the locations selectizeInput
+      req(input$projects, input$networks, filteredData$locations_projects, filteredData$locations_networks)
+      
+      remain_locs <- filteredData$locs
+      
+      if (!("all" %in% input$networks)) {
+        net_ids <- filteredData$locations_networks$location_id[
+          filteredData$locations_networks$network_id %in% input$networks
+        ]
+        remain_locs <- remain_locs[remain_locs$location_id %in% net_ids, ]
+      }
+      
+      if (!("all" %in% input$projects)) {
+        proj_ids <- filteredData$locations_projects$location_id[
+          filteredData$locations_projects$project_id %in% input$projects
+        ]
+        remain_locs <- remain_locs[remain_locs$location_id %in% proj_ids, ]
+      }
+      updateSelectizeInput(session, "location",
+                           choices = stats::setNames(remain_locs$location_id,
+                                                     remain_locs[, tr("generic_name_col", language$language)]),
+                           selected = character(0))
+      removeModal()
+    })
+    
+    
+    ## Show/hide the approvals, grades, qualifiers checkboxes based on the selected plot type and traces/subplots ##########################
     observe({
-      req(input$type, traceCount(), subplotCount())
-      if (input$type == "Long timeseries" && traceCount() == 1 && subplotCount() == 1) {
+      req(input$plot_type, traceCount(), subplotCount())
+      if (input$plot_type == "ts" && traceCount() == 1 && subplotCount() == 1) {
         shinyjs::show("grades")
         shinyjs::show("approvals")
         shinyjs::show("qualifiers")
-      } else if (input$type == "Long timeseries" && (traceCount() > 1 || subplotCount() > 1)) {
+      } else if (input$plot_type == "ts" && (traceCount() > 1 || subplotCount() > 1)) {
         shinyjs::hide("grades")
         shinyjs::hide("approvals")
         shinyjs::hide("qualifiers")
-        shinyjs::hide("loc_name") # Could have been shown again by selecting overlapping years
+        shinyjs::hide("location") # Could have been shown again by selecting overlapping years
         shinyjs::hide("param") # Could have been shown again by selecting overlapping years
-      } else if (input$type == "Overlapping years") {
+      } else if (input$plot_type == "over") {
         shinyjs::hide("grades")
         shinyjs::hide("approvals")
         shinyjs::hide("qualifiers")
-        shinyjs::show("loc_name") # Would be hidden if multiple subplots or traces are still selected
+        shinyjs::show("location") # Would be hidden if multiple subplots or traces are still selected
         shinyjs::show("param") # Would be hidden if multiple subplots or traces are still selected
       }
     })
     
-    # Update the location choices based on the selected parameter ##########################################
-    observeEvent(input$param, {
-      # Update the location choices
-      locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, c(tr("generic_name_col", language$language), "location_id")])
-      names(locs) <- c("name", "location_id")
-      updateSelectizeInput(session, 
-                           "loc_name", 
-                           choices = stats::setNames(locs$location_id, locs$name), 
-                           selected = if (input$loc_name %in% locs$name) input$loc_name else character(0)) # already ordered by the query
-      if (input$param %in% c(values$swe, values$snow_depth)) {
-        updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"))
-        updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-06-01"))
-        # updateTextInput(session, "return_months", value = "3,4,5")
-      } else {
-        updateDateInput(session, "start_doy", value = paste0(lubridate::year(Sys.Date()), "-01-01"))
-        updateDateInput(session, "end_doy", value = paste0(lubridate::year(Sys.Date()), "-12-31"))
-        # updateTextInput(session, "return_months", value = "5,6,7,8,9")
+    # Observe the plot type selection and update UI elements accordingly
+    observeEvent(input$plot_type, {
+      # Don't run this observer if the plot type was set by the module server
+      if (render_flags$plot_type) {
+        render_flags$plot_type <- FALSE
+        return()
       }
-      if (input$param == values$water_level) {
-        shinyjs::show("apply_datum")
-      } else {
-        shinyjs::hide("apply_datum")
-        updateCheckboxInput(session, "apply_datum", value = FALSE)
+      if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             label = tr("date_range_select", language$language))
+      } else if (input$plot_type == "over") {
+        
+        if (!is.null(input$param)) {
+          if (nchar(input$param) > 0) {
+            if (input$param %in% c(values$swe, values$snow_depth)) {
+              updateDateRangeInput(session, "date_range",
+                                   min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                                   max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                   start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                                   end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+            } else {
+              updateDateRangeInput(session, "date_range",
+                                   min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                   max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                   start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                   end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+            }          
+          } else {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+          }
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+        
       }
-    }, ignoreNULL = TRUE)
+    })
     
-    observeEvent(input$loc_name, {
-      req(input$loc_name, input$param)
-      # Update years, used for the overlapping years plot (runs regardless of plot type selected because the user could switch plot types)
-      try({
-        possible_years <- seq(
-          as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location_id == input$loc_name & moduleData$all_ts$parameter_id == input$param, "start_datetime"], 1, 4)),
-          as.numeric(substr(moduleData$all_ts[moduleData$all_ts$location_id == input$loc_name & moduleData$all_ts$parameter_id == input$param, "end_datetime"], 1, 4))
-        )
-        updateSelectizeInput(session, "years", choices = possible_years)
-      })
-      moduleData$possible_datums <- moduleData$datums[moduleData$datums$location_id == input$loc_name & moduleData$datums$conversion_m != 0, ]
-      if (nrow(moduleData$possible_datums) < 1) {
-        shinyjs::hide("apply_datum")
-        updateCheckboxInput(session, "apply_datum", value = FALSE)
+    
+    # Filter sidebar pieces ###################
+    # Create reactiveValues objects for sub_locs and z here because their observers will not run unless there is a need. This allows filtering to proceed down the line without those observers.
+    filteredData_sub_locs <- reactiveValues()
+    filteredData_z <- reactiveValues()
+    filteredData_media <- reactiveValues()
+    filteredData_aggregation <- reactiveValues()
+    filteredData_rate <- reactiveValues()
+    filteredData_param <- reactiveValues()
+    
+    ### Filter based on the selected location ##########################
+    observeEvent(input$location, {
+      req(filteredData)
+      
+      # Filter the data based on the selected locations
+      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$location, ]
+      
+      filteredData$locs <- moduleData$locs[moduleData$locs$location_id == input$location, ]
+      filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$location_id == filteredData$locs$location_id, ]
+      filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
+      filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$timeseries$media_id, ]
+      filteredData$aggregation_types <- moduleData$aggregation_types[moduleData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
+      filteredData$rates <- moduleData$rates[moduleData$rates$seconds %in% filteredData$timeseries$record_rate, ]
+      
+      filteredData$range <- calc_range(filteredData$timeseries)
+      
+      filteredData$params <- moduleData$params[moduleData$params$parameter_id %in% filteredData$timeseries$parameter_id, ]
+      
+      if (nrow(filteredData$sub_locs) > 1) {
+        if (!render_flags$sub_location) {
+          output$sub_loc_ui <- renderUI({
+            # If there are sub-locations for the selected location, show a selectizeInput for sub-locations
+            selectizeInput(ns("sub_location"),
+                           label = tr("sub_loc", language$language),
+                           choices = stats::setNames(filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, "sub_location_id"],
+                                                     filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, tr("sub_location_col", language$language)]),
+                           multiple = TRUE,
+                           options = list(maxItems = 1))
+          })
+          render_flags$sub_location <- TRUE
+        } else {
+          updateSelectizeInput(session, "sub_location",
+                               choices = stats::setNames(filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, "sub_location_id"],
+                                                         filteredData$sub_locs[filteredData$sub_locs$location_id == input$location, tr("sub_location_col", language$language)]),
+                               selected = character(0))
+          shinyjs::show("sub_location")
+        }
       } else {
-        shinyjs::show("apply_datum")
+        shinyjs::hide("sub_location")
       }
       
+      if (length(filteredData$z) > 1) {
+        if (!render_flags$z) {
+          output$z_ui <- renderUI({
+            # If there are z values for the selected location, show a selectizeInput for z
+            selectizeInput(ns("z"), 
+                           label = tr("z", language$language),
+                           choices = filteredData$z,
+                           multiple = TRUE,
+                           options = list(maxItems = 1))
+          })
+          render_flags$z <- TRUE
+        } else {
+          updateSelectizeInput(session, "z",
+                               choices = filteredData$z,
+                               selected = character(0))
+          shinyjs::show("z")
+        }
+      } else {
+        shinyjs::hide("z")
+      }
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData$media$media_id,
+                                     filteredData$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$media)) {
+        tmp.selected <- if (input$media %in% tmp.choices) input$media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData$aggregation_types$aggregation_type_id,
+                                     filteredData$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$aggregation)) {
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData$rates$seconds,
+                                     filteredData$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData$params$parameter_id,
+                                     filteredData$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- filteredData$range$max_date - 366
+      if (earliest < filteredData$range$min_date) {
+        earliest <- filteredData$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData$range$max_date),
+                             min = as.Date(filteredData$range$min_date),
+                             max = as.Date(filteredData$range$max_date))
+      }
+      
+      filteredData_sub_locs$timeseries <- filteredData$timeseries
+      filteredData_sub_locs$z <- filteredData$z
+      filteredData_sub_locs$media <- filteredData$media
+      filteredData_sub_locs$aggregation_types <- filteredData$aggregation_types
+      filteredData_sub_locs$rates <- filteredData$rates
+      filteredData_sub_locs$params <- filteredData$params
+      
+      filteredData_z$timeseries <- filteredData$timeseries
+      filteredData_z$media <- filteredData$media
+      filteredData_z$aggregation_types <- filteredData$aggregation_types
+      filteredData_z$rates <- filteredData$rates
+      filteredData_z$params <- filteredData$params
+      
+      filteredData_media$timeseries <- filteredData$timeseries
+      filteredData_media$aggregation_types <- filteredData$aggregation_types
+      filteredData_media$rates <- filteredData$rates
+      filteredData_media$params <- filteredData$params
+      
+      filteredData_aggregation$timeseries <- filteredData$timeseries
+      filteredData_aggregation$rates <- filteredData$rates
+      filteredData_aggregation$params <- filteredData$params
+      
+      filteredData_rate$timeseries <- filteredData$timeseries
+      filteredData_rate$params <- filteredData$params
+      
     }, ignoreInit = TRUE)
+    
+    ## Filter based on the sub_location ##########################
+    observeEvent(input$sub_location, {
+      req(filteredData)
+      
+      # Filter the data based on the selected sub-locations
+      if (is.null(input$sub_location) || length(input$sub_location) != 1) return()
+      
+      # Find the new timeseries rows based on the selected sub-location
+      filteredData_sub_locs$timeseries <- filteredData$timeseries[filteredData$timeseries$sub_location_id == input$sub_location, ]
+      
+      filteredData_sub_locs$z <- unique(filteredData_sub_locs$timeseries$z[!is.na(filteredData_sub_locs$timeseries$z)])
+      filteredData_sub_locs$media <- filteredData$media[filteredData$media$media_id %in% filteredData_sub_locs$timeseries$media_id, ]
+      filteredData_sub_locs$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData_sub_locs$timeseries$aggregation_type_id, ]
+      filteredData_sub_locs$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData_sub_locs$timeseries$record_rate, ]
+      filteredData_sub_locs$params <- filteredData$params[filteredData$params$parameter_id %in% filteredData_sub_locs$timeseries$parameter_id, ]
+      
+      filteredData_sub_locs$range <- calc_range(filteredData_sub_locs$timeseries)
+      
+      # Update the z selectizeInput based on the selected sub-locations
+      if (length(filteredData_sub_locs$z) > 1) {
+        if (!render_flags$z) {
+          output$z_ui <- renderUI({
+            # If there are z values for the selected location, show a selectizeInput for z
+            selectizeInput(ns("z"), 
+                           label = tr("z", language$language),
+                           choices = filteredData_sub_locs$z,
+                           multiple = TRUE,
+                           options = list(maxItems = 1))
+          })
+          render_flags$z <- TRUE
+        } else {
+          updateSelectizeInput(session, "z",
+                               choices = filteredData_sub_locs$z,
+                               selected = character(0))
+          shinyjs::show("z")
+        }
+      } else {
+        shinyjs::hide("z")
+      }
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_sub_locs.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_sub_locs$media$media_id,
+                                     filteredData_sub_locs$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$media)) {
+        tmp.selected <- if (input$media %in% tmp.choices) input$media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_sub_locs$aggregation_types$aggregation_type_id,
+                                     filteredData_sub_locs$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$aggregation)) {
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_sub_locs$rates$seconds,
+                                     filteredData_sub_locs$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_sub_locs$params$parameter_id,
+                                     filteredData_sub_locs$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- filteredData_sub_locs$range$max_date - 366
+      if (earliest < filteredData_sub_locs$range$min_date) {
+        earliest <- filteredData_sub_locs$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData_sub_locs$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_sub_locs$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_sub_locs$range$max_date),
+                             min = as.Date(filteredData_sub_locs$range$min_date),
+                             max = as.Date(filteredData_sub_locs$range$max_date))
+      }
+      
+      filteredData_z$timeseries <- filteredData_sub_locs$timeseries
+      filteredData_z$media <- filteredData_sub_locs$media
+      filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types
+      filteredData_z$rates <- filteredData_sub_locs$rates
+      filteredData_z$params <- filteredData_sub_locs$params
+      
+      filteredData_media$timeseries <- filteredData_sub_locs$timeseries
+      filteredData_media$aggregation_types <- filteredData_sub_locs$aggregation_types
+      filteredData_media$rates <- filteredData_sub_locs$rates
+      filteredData_media$params <- filteredData_sub_locs$params
+      
+      filteredData_aggregation$timeseries <- filteredData_sub_locs$timeseries
+      filteredData_aggregation$rates <- filteredData_sub_locs$rates
+      filteredData_aggregation$params <- filteredData_sub_locs$params
+      
+      filteredData_rate$timeseries <- filteredData_sub_locs$timeseries
+      filteredData_rate$params <- filteredData_sub_locs$params
+    })
+    
+    
+    ## Filter based on the z value ##########################
+    observeEvent(input$z, {
+      
+      # Filter the data based on the selected z values
+      if (is.null(input$z) || length(input$z) != 1) return()
+      
+      # Find the new timeseries rows based on the selected z value
+      filteredData_z$timeseries <- filteredData_sub_locs$timeseries[filteredData_sub_locs$timeseries$z == input$z, ]
+      
+      filteredData_z$media <- filteredData_sub_locs$media[filteredData_sub_locs$media$media_id %in% filteredData_z$timeseries$media_id, ]
+      filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types[filteredData_sub_locs$aggregation_types$aggregation_type_id %in% filteredData_z$timeseries$aggregation_type_id, ]
+      filteredData_z$rates <- filteredData_sub_locs$rates[filteredData_sub_locs$rates$seconds %in% filteredData_z$timeseries$record_rate, ]
+      filteredData_z$params <- filteredData_sub_locs$params[filteredData_sub_locs$params$parameter_id %in% filteredData_z$timeseries$parameter_id, ]
+      filteredData_z$range <- calc_range(filteredData_z$timeseries)
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_z.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_z$media$media_id,
+                                     filteredData_z$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$media)) {
+        tmp.selected <- if (input$media %in% tmp.choices) input$media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_z$aggregation_types$aggregation_type_id,
+                                     filteredData_z$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$aggregation)) {
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_z$rates$seconds,
+                                     filteredData_z$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_z$params$parameter_id,
+                                     filteredData_z$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- filteredData_z$range$max_date - 366
+      if (earliest < filteredData_z$range$min_date) {
+        earliest <- filteredData_z$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData_z$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_z$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_z$range$max_date),
+                             min = as.Date(filteredData_z$range$min_date),
+                             max = as.Date(filteredData_z$range$max_date))
+      }
+      
+      filteredData_media$timeseries <- filteredData_z$timeseries
+      filteredData_media$aggregation_types <- filteredData_z$aggregation_types
+      filteredData_media$rates <- filteredData_z$rates
+      filteredData_media$params <- filteredData_z$params
+      
+      filteredData_aggregation$timeseries <- filteredData_z$timeseries
+      filteredData_aggregation$rates <- filteredData_z$rates
+      filteredData_aggregation$params <- filteredData_z$params
+      
+      filteredData_rate$timeseries <- filteredData_z$timeseries
+      filteredData_rate$params <- filteredData_z$params
+    })
+    
+    ## Filter based on the media ##########################
+    observeEvent(input$media, {
+      
+      # Filter the data based on the selected media
+      if (is.null(input$media) || length(input$media) != 1) return()
+      
+      # Find the new timeseries rows based on the selected media
+      filteredData_media$timeseries <- filteredData_z$timeseries[filteredData_z$timeseries$media_id == input$media, ]
+      
+      filteredData_media$aggregation_types <- filteredData_z$aggregation_types[filteredData_z$aggregation_types$aggregation_type_id %in% filteredData_media$timeseries$aggregation_type_id, ]
+      filteredData_media$rates <- filteredData_z$rates[filteredData_z$rates$seconds %in% filteredData_media$timeseries$record_rate, ]
+      filteredData_media$params <- filteredData_z$params[filteredData_z$params$parameter_id %in% filteredData_media$timeseries$parameter_id, ]
+      filteredData_media$range <- calc_range(filteredData_media$timeseries)
+      
+      # Update the aggregation, rate, and param selectizeInputs with what's left in filteredData_media.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_media$aggregation_types$aggregation_type_id,
+                                     filteredData_media$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$aggregation)) {
+        tmp.selected <- if (input$aggregation %in% tmp.choices) input$aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_media$rates$seconds,
+                                     filteredData_media$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_media$params$parameter_id,
+                                     filteredData_media$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- filteredData_media$range$max_date - 366
+      if (earliest < filteredData_media$range$min_date) {
+        earliest <- filteredData_media$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData_media$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_media$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_media$range$max_date),
+                             min = as.Date(filteredData_media$range$min_date),
+                             max = as.Date(filteredData_media$range$max_date))
+      }
+      
+      filteredData_aggregation$timeseries <- filteredData_media$timeseries
+      filteredData_aggregation$rates <- filteredData_media$rates
+      filteredData_aggregation$params <- filteredData_media$params
+      
+      filteredData_rate$timeseries <- filteredData_media$timeseries
+      filteredData_rate$params <- filteredData_media$params
+    })
+    
+    
+    ## Filter based on the aggregation type ##########################
+    observeEvent(input$aggregation, {
+      
+      # Filter the data based on the selected aggregation type
+      if (is.null(input$aggregation) || length(input$aggregation) != 1) return()
+      
+      # Find the new timeseries rows based on the selected aggregation type
+      filteredData_aggregation$timeseries <- filteredData_media$timeseries[filteredData_media$timeseries$aggregation_type_id == input$aggregation, ]
+      
+      filteredData_aggregation$rates <- filteredData_media$rates[filteredData_media$rates$seconds %in% filteredData_aggregation$timeseries$record_rate, ]
+      filteredData_aggregation$params <- filteredData_media$params[filteredData_media$params$parameter_id %in% filteredData_aggregation$timeseries$parameter_id, ]
+      filteredData_aggregation$range <- calc_range(filteredData_aggregation$timeseries)
+      
+      # Update the rate and param selectizeInputs with what's left in filteredData_aggregation.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_aggregation$rates$seconds,
+                                     filteredData_aggregation$rates[, "period"])
+      if (!is.null(input$rate)) {
+        tmp.selected <- if (input$rate %in% tmp.choices) input$rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredData_aggregation$params$parameter_id,
+                                     filteredData_aggregation$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- filteredData_aggregation$range$max_date - 366
+      if (earliest < filteredData_aggregation$range$min_date) {
+        earliest <- filteredData_aggregation$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData_aggregation$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_aggregation$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_aggregation$range$max_date),
+                             min = as.Date(filteredData_aggregation$range$min_date),
+                             max = as.Date(filteredData_aggregation$range$max_date))
+      }
+      
+      filteredData_rate$timeseries <- filteredData_aggregation$timeseries
+      filteredData_rate$params <- filteredData_aggregation$params
+    })
+    
+    
+    ## Filter based on the rate ##########################
+    observeEvent(input$rate, {
+      
+      # Filter the data based on the selected rate
+      if (is.null(input$rate) || length(input$rate) != 1) return()
+      
+      # Find the new timeseries rows based on the selected rate
+      filteredData_rate$timeseries <- filteredData_aggregation$timeseries[filteredData_aggregation$timeseries$record_rate == input$rate, ]
+      
+      filteredData_rate$params <- filteredData_aggregation$params[filteredData_aggregation$params$parameter_id %in% filteredData_rate$timeseries$parameter_id, ]
+      filteredData_rate$range <- calc_range(filteredData_rate$timeseries)
+      
+      # Update the param selectizeInput with what's left in filteredData_rate.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredData_rate$params$parameter_id,
+                                     filteredData_rate$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$param)) {
+        tmp.selected <- if (input$param %in% tmp.choices) input$param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      earliest <- filteredData_rate$range$max_date - 366
+      if (earliest < filteredData_rate$range$min_date) {
+        earliest <- filteredData_rate$range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(filteredData_rate$range$min_date, 1, 4)),
+        as.numeric(substr(filteredData_rate$range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(filteredData_rate$range$max_date),
+                             min = as.Date(filteredData_rate$range$min_date),
+                             max = as.Date(filteredData_rate$range$max_date))
+      }
+    })
+    
+    ## Filter based on the parameter ##########################
+    # only need to update the date range and years inputs
+    observeEvent(input$param, {
+      req(filteredData_rate)
+      
+      # Filter the data based on the selected parameter
+      if (is.null(input$param) || length(input$param) != 1) return()
+      
+      # Find the single timeseries rows based on the selected parameter
+      tmp.timeseries <- filteredData_rate$timeseries[filteredData_rate$timeseries$parameter_id == input$param, ]
+      
+      tmp.range <- calc_range(tmp.timeseries)
+      
+      earliest <- tmp.range$max_date - 366
+      if (earliest < tmp.range$min_date) {
+        earliest <- tmp.range$min_date
+      }
+      
+      possible_years <- seq(
+        as.numeric(substr(tmp.range$min_date, 1, 4)),
+        as.numeric(substr(tmp.range$max_date, 1, 4))
+      )
+      updateSelectizeInput(session, "years",
+                           choices = possible_years,
+                           selected = max(possible_years))
+      
+      if (input$plot_type == "over") {
+        if (input$param %in% c(values$swe, values$snow_depth)) {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        } else {
+          updateDateRangeInput(session, "date_range",
+                               min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                               start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                               end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+        }
+      } else if (input$plot_type == "ts") {
+        updateDateRangeInput(session, "date_range",
+                             start = earliest,
+                             end = as.Date(tmp.range$max_date),
+                             min = as.Date(tmp.range$min_date),
+                             max = as.Date(tmp.range$max_date))
+      }
+    })
+    
     
     # Modal dialog for extra aesthetics ########################################################################
     # Create a list with default aesthetic values
@@ -328,18 +1264,85 @@ continuousPlot <- function(id, language, windowDims) {
     })
     
     
-    # Add/remove/modify trace buttons #######################################################################
+    
+    
+    # Add/remove/modify trace and subplots #######################################################################
+    ## Common pieces for traces and subplots ########################################################
     traces <- reactiveValues()
     traceCount <- reactiveVal(1)
+    subplots <- reactiveValues()
+    subplotCount <- reactiveVal(1)
     
-    ## Add extra trace
-    runTraceNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
+    # Function to create modals for adding new traces or subplots; one function for both, the only thing different in the produced modal is the add_new button
+    trace_subplot_modal <- function(type) {
+      showModal(modalDialog(
+        selectizeInput(ns("traceNew_location"), 
+                       label = tr("loc", language$language),
+                       choices =  stats::setNames(moduleData$locs$location_id,
+                                                  moduleData$locs[, tr("generic_name_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1),
+                       selected = if (!is.null(moduleInputs$location_id)) moduleInputs$location_id else NULL
+        ),
+        uiOutput(ns("traceNew_sub_loc_ui")), # Will be a selectizeInput for sub-locations, shows up only if needed
+        
+        uiOutput(ns("traceNew_z_ui")), # Will be a selectizeInput for depth/height, shows up only if needed
+        
+        # Selectize input for media type
+        selectizeInput(ns("traceNew_media"),
+                       label = tr("media_type", language$language),
+                       choices = stats::setNames(moduleData$media$media_id,
+                                                 moduleData$media[, tr("media_type_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        # Selectize input for aggregation types
+        selectizeInput(ns("traceNew_aggregation"),
+                       label = tr("aggregation_type", language$language),
+                       choices = stats::setNames(moduleData$aggregation_types$aggregation_type_id,
+                                                 moduleData$aggregation_types[, tr("aggregation_type_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        # Selectize input for record rate
+        selectizeInput(ns("traceNew_rate"),
+                       label = tr("nominal_rate", language$language),
+                       choices = stats::setNames(moduleData$rates$seconds,
+                                                 moduleData$rates[, "period"]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1)
+        ),
+        selectizeInput(ns("traceNew_param"),
+                       label = tr("parameter", language$language), 
+                       choices = stats::setNames(moduleData$params$parameter_id,
+                                                 moduleData$params[, tr("param_name_col", language$language)]), 
+                       selected = character(0)),
+        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
+        footer = tagList(
+          actionButton(ns(paste0("add_new_", type)), tr(if (type == "trace") "add_trace" else if (type == "subplot") "add_subplot", language$language)),
+          actionButton(ns("cancel"), "Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    }
+    
+    ## Add extra trace #########
     observeEvent(input$add_trace, {
       # When the button is clicked, a modal will appear with the necessary fields to add a trace. The trace values are then displayed to the user under button 'trace_x'
-      # Make sure that there is an input$param, input$loc_name before running the modal; give the user an informative modal if not
-      if (nchar(input$loc_name) == 0 | nchar(input$param) == 0) {
+      # Make sure that there is a single selected input$location, input$media, input$aggregation, input$rate, input$param before running the modal; give the user an informative modal if not
+      if (is.null(input$location) || is.null(input$media) || is.null(input$aggregation) || is.null(input$rate) || is.null(input$param)) {
         showModal(modalDialog(
-          "Please select a location and parameter for the first trace before adding another.",
+          "Please select a single location, media type, aggregation type, record rate, and parameter before adding a trace.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      if (nchar(input$location) == 0 || nchar(input$media) == 0 || nchar(input$aggregation) == 0 || nchar(input$rate) == 0 || nchar(input$param) == 0) {
+        showModal(modalDialog(
+          "Please narrow selections to a single timeseries before adding another.",
           footer = tagList(
             actionButton(ns("cancel"), "Cancel")
           ),
@@ -348,68 +1351,499 @@ continuousPlot <- function(id, language, windowDims) {
         return()
       }
       
-      if (runTraceNew() == FALSE) {
-        showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                         selected = input$param),
-          selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                         choices = "placeholder"), # Choices are populated based on the parameter
-          numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
-          footer = tagList(
-            actionButton(ns("add_new_trace"), "Add trace"),
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-        runTraceNew(TRUE)
-      } else { # The modal has already run once, use the previously selected values
-        showModal(modalDialog(
-          selectizeInput(ns("traceNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                         selected = input$traceNew_param),
-          selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                         choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, "location_id"], 
-                                                   moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, tr("generic_name_col", language$language)]),
-                         selected = input$traceNew_loc_id),
-          numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
-          footer = tagList(
-            actionButton(ns("add_new_trace"), "Add trace"),
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-      }
+      # Show the modal dialog for adding a new trace
+      trace_subplot_modal(type = "trace")
     })
     observeEvent(input$cancel, {
       removeModal()
     })
     
-    # Observe the param inputs for all traces and update the location choices in the modal
-    observeEvent(input$traceNew_param, {
-      # Update the location choices
-      locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$traceNew_param, c(tr("generic_name_col", language$language), "location_id")])
-      names(locs) <- c("name", "location_id")
+    ## Add extra subplot #########
+    observeEvent(input$add_subplot, {
+      # When the button is clicked, a modal will appear with the necessary fields to add a subplot. The subplot values are then displayed to the user under button 'subplot_x'
       
-      updateSelectizeInput(session, 
-                           "traceNew_loc_id", 
-                           choices = stats::setNames(locs$location_id, locs$name),
-                           selected = if (input$traceNew_loc_id %in% locs$location_id) input$traceNew_loc_id else character(0))
-    }, ignoreInit = TRUE)
+      # Make sure that there is a single selected input$location, input$media, input$aggregation, input$rate, input$param before running the modal; give the user an informative modal if not
+      if (is.null(input$location) || is.null(input$media) || is.null(input$aggregation) || is.null(input$rate) || is.null(input$param)) {
+        showModal(modalDialog(
+          "Please select a single location, media type, aggregation type, record rate, and parameter before adding a trace.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      if (nchar(input$location) == 0 || nchar(input$media) == 0 || nchar(input$aggregation) == 0 || nchar(input$rate) == 0 || nchar(input$param) == 0) {
+        showModal(modalDialog(
+          "Please narrow selections to a single timeseries before adding another.",
+          footer = tagList(
+            actionButton(ns("cancel"), "Cancel")
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+      # Create the modal for adding a subplot
+      trace_subplot_modal(type = "subplot")
+    })
+    
+    # Filter modal pieces ######################################################################
+    filteredDataModal <- reactiveValues()
+    filteredDataModal_sub_locs <- reactiveValues()
+    filteredDataModal_z <- reactiveValues()
+    filteredDataModal_media <- reactiveValues()
+    filteredDataModal_aggregation <- reactiveValues()
+    filteredDataModal_rate <- reactiveValues()
+    filteredDataModal_param <- reactiveValues()
+    
+    ### Filter based on the selected location #################################################################
+    observeEvent(input$traceNew_location, {
+      req(filteredDataModal)
+      
+      # Filter the data based on the selected locations
+      filteredDataModal$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$traceNew_location, ]
+      
+      filteredDataModal$locs <- moduleData$locs[moduleData$locs$location_id == input$traceNew_location, ]
+      filteredDataModal$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$location_id == filteredDataModal$locs$location_id, ]
+      filteredDataModal$z <- unique(filteredDataModal$timeseries$z[!is.na(filteredDataModal$timeseries$z)])
+      filteredDataModal$media <- moduleData$media[moduleData$media$media_id %in% filteredDataModal$timeseries$media_id, ]
+      filteredDataModal$aggregation_types <- moduleData$aggregation_types[moduleData$aggregation_types$aggregation_type_id %in% filteredDataModal$timeseries$aggregation_type_id, ]
+      filteredDataModal$rates <- moduleData$rates[moduleData$rates$seconds %in% filteredDataModal$timeseries$record_rate, ]
+      
+      filteredDataModal$params <- moduleData$params[moduleData$params$parameter_id %in% filteredDataModal$timeseries$parameter_id, ]
+      
+      if (nrow(filteredDataModal$sub_locs) > 1) {
+        output$traceNew_sub_loc_ui <- renderUI({
+          # If there are sub-locations for the selected location, show a selectizeInput for sub-locations
+          selectizeInput(ns("traceNew_sub_location"),
+                         label = tr("sub_loc", language$language),
+                         choices = stats::setNames(filteredDataModal$sub_locs[filteredDataModal$sub_locs$location_id == input$traceNew_location, "sub_location_id"],
+                                                   filteredDataModal$sub_locs[filteredDataModal$sub_locs$location_id == input$traceNew_location, tr("sub_location_col", language$language)]),
+                         multiple = TRUE,
+                         options = list(maxItems = 1))
+        })
+      } else {
+        output$traceNew_sub_loc_ui <- NULL
+      }
+      
+      if (length(filteredDataModal$z) > 1) {
+        output$traceNew_z_ui <- renderUI({
+          # If there are z values for the selected location, show a selectizeInput for z
+          selectizeInput(ns("traceNew_z"), 
+                         label = tr("z", language$language),
+                         choices = filteredDataModal$z,
+                         multiple = TRUE,
+                         options = list(maxItems = 1))
+        })
+      } else {
+        output$traceNew_z_ui <- NULL
+      }
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredDataModal.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal$media$media_id,
+                                     filteredDataModal$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$traceNew_media)) {
+        tmp.selected <- if (input$traceNew_media %in% tmp.choices) input$traceNew_media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal$aggregation_types$aggregation_type_id,
+                                     filteredDataModal$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$traceNew_aggregation)) {
+        tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) input$traceNew_aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal$rates$seconds,
+                                     filteredDataModal$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal$params$parameter_id,
+                                     filteredDataModal$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      # Unlike the sidebar inputs, the date range and years inputs are not present
+      
+      filteredDataModal_sub_locs$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_sub_locs$z <- filteredDataModal$z
+      filteredDataModal_sub_locs$media <- filteredDataModal$media
+      filteredDataModal_sub_locs$aggregation_types <- filteredDataModal$aggregation_types
+      filteredDataModal_sub_locs$rates <- filteredDataModal$rates
+      filteredDataModal_sub_locs$params <- filteredDataModal$params
+      
+      filteredDataModal_z$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_z$media <- filteredDataModal$media
+      filteredDataModal_z$aggregation_types <- filteredDataModal$aggregation_types
+      filteredDataModal_z$rates <- filteredDataModal$rates
+      filteredDataModal_z$params <- filteredDataModal$params
+      
+      filteredDataModal_media$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_media$aggregation_types <- filteredDataModal$aggregation_types
+      filteredDataModal_media$rates <- filteredDataModal$rates
+      filteredDataModal_media$params <- filteredDataModal$params
+      
+      filteredDataModal_aggregation$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_aggregation$rates <- filteredDataModal$rates
+      filteredDataModal_aggregation$params <- filteredDataModal$params
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal$timeseries
+      filteredDataModal_rate$params <- filteredDataModal$params
+    })
+    
+    ### Filter based on the selected sub-location ##############################################################
+    observeEvent(input$traceNew_sub_location, {
+      req(filteredDataModal_sub_locs)
+      
+      # Filter the data based on the selected sub-locations
+      if (is.null(input$traceNew_sub_location) || length(input$traceNew_sub_location) != 1) return()
+      
+      # Find the new timeseries rows based on the selected sub-location
+      filteredDataModal_sub_locs$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$sub_location_id == input$traceNew_sub_location, ]
+      
+      filteredDataModal_sub_locs$z <- unique(filteredDataModal_sub_locs$timeseries$z[!is.na(filteredDataModal_sub_locs$timeseries$z)])
+      filteredDataModal_sub_locs$media <- filteredDataModal$media[filteredDataModal$media$media_id %in% filteredDataModal_sub_locs$timeseries$media_id, ]
+      filteredDataModal_sub_locs$aggregation_types <- filteredDataModal$aggregation_types[filteredDataModal$aggregation_types$aggregation_type_id %in% filteredDataModal_sub_locs$timeseries$aggregation_type_id, ]
+      filteredDataModal_sub_locs$rates <- filteredDataModal$rates[filteredDataModal$rates$seconds %in% filteredDataModal_sub_locs$timeseries$record_rate, ]
+      filteredDataModal_sub_locs$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_sub_locs$timeseries$parameter_id, ]
+      
+      # Update the z selectizeInput based on the selected sub-locations
+      if (length(filteredDataModal_sub_locs$z) > 1) {
+        output$traceNew_z_ui <- renderUI({
+          # If there are z values for the selected location, show a selectizeInput for z
+          selectizeInput(ns("traceNew_z"), 
+                         label = tr("z", language$language),
+                         choices = filteredDataModal_sub_locs$z,
+                         multiple = TRUE,
+                         options = list(maxItems = 1))
+        })
+      } else {
+        output$traceNew_z_ui <- NULL
+      }
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredDataModal_sub_locs.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_sub_locs$media$media_id,
+                                     filteredDataModal_sub_locs$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$traceNew_media)) {
+        tmp.selected <- if (input$traceNew_media %in% tmp.choices) input$traceNew_media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_sub_locs$aggregation_types$aggregation_type_id,
+                                     filteredDataModal_sub_locs$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$traceNew_aggregation)) {
+        tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) input$traceNew_aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_sub_locs$rates$seconds,
+                                     filteredDataModal_sub_locs$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_sub_locs$params$parameter_id,
+                                     filteredDataModal_sub_locs$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      filteredDataModal_z$timeseries <- filteredDataModal_sub_locs$timeseries
+      filteredDataModal_z$media <- filteredDataModal_sub_locs$media
+      filteredDataModal_z$aggregation_types <- filteredDataModal_sub_locs$aggregation_types
+      filteredDataModal_z$rates <- filteredDataModal_sub_locs$rates
+      filteredDataModal_z$params <- filteredDataModal_sub_locs$params
+      
+      filteredDataModal_media$timeseries <- filteredDataModal_sub_locs$timeseries
+      filteredDataModal_media$aggregation_types <- filteredDataModal_sub_locs$aggregation_types
+      filteredDataModal_media$rates <- filteredDataModal_sub_locs$rates
+      filteredDataModal_media$params <- filteredDataModal_sub_locs$params
+      
+      filteredDataModal_aggregation$timeseries <- filteredDataModal_sub_locs$timeseries
+      filteredDataModal_aggregation$rates <- filteredDataModal_sub_locs$rates
+      filteredDataModal_aggregation$params <- filteredDataModal_sub_locs$params
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal_sub_locs$timeseries
+      filteredDataModal_rate$params <- filteredDataModal_sub_locs$params
+    })
+    
+    ### Filter based on the selected z #################################################################
+    observeEvent(input$traceNew_z, {
+      req(filteredDataModal_z)
+      
+      # Filter the data based on the selected z value
+      if (is.null(input$traceNew_z) || length(input$traceNew_z) != 1) return()
+      
+      # Find the new timeseries rows based on the selected sub-location
+      filteredDataModal_z$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$z == input$traceNew_z, ]
+      
+      filteredDataModal_z$media <- filteredDataModal$media[filteredDataModal$media$media_id %in% filteredDataModal_z$timeseries$media_id, ]
+      filteredDataModal_z$aggregation_types <- filteredDataModal$aggregation_types[filteredDataModal$aggregation_types$aggregation_type_id %in% filteredDataModal_z$timeseries$aggregation_type_id, ]
+      filteredDataModal_z$rates <- filteredDataModal$rates[filteredDataModal$rates$seconds %in% filteredDataModal_z$timeseries$record_rate, ]
+      filteredDataModal_z$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_z$timeseries$parameter_id, ]
+      
+      
+      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredDataModal_z.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_z$media$media_id,
+                                     filteredDataModal_z$media[, tr("media_type_col", language$language)])
+      if (!is.null(input$traceNew_media)) {
+        tmp.selected <- if (input$traceNew_media %in% tmp.choices) input$traceNew_media else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_media",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_z$aggregation_types$aggregation_type_id,
+                                     filteredDataModal_z$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$traceNew_aggregation)) {
+        tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) input$traceNew_aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_z$rates$seconds,
+                                     filteredDataModal_z$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_z$params$parameter_id,
+                                     filteredDataModal_z$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      filteredDataModal_media$timeseries <- filteredDataModal_z$timeseries
+      filteredDataModal_media$aggregation_types <- filteredDataModal_z$aggregation_types
+      filteredDataModal_media$rates <- filteredDataModal_z$rates
+      filteredDataModal_media$params <- filteredDataModal_z$params
+      
+      filteredDataModal_aggregation$timeseries <- filteredDataModal_z$timeseries
+      filteredDataModal_aggregation$rates <- filteredDataModal_z$rates
+      filteredDataModal_aggregation$params <- filteredDataModal_z$params
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal_z$timeseries
+      filteredDataModal_rate$params <- filteredDataModal_z$params
+    })
+    
+    ### Filter based on the selected media #################################################################
+    observeEvent(input$traceNew_media, {
+      req(filteredDataModal_media)
+      
+      # Filter the data based on the selected media
+      if (is.null(input$traceNew_media) || length(input$traceNew_media) != 1) return()
+      
+      # Find the new timeseries rows based on the selected media
+      filteredDataModal_media$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$media_id == input$traceNew_media, ]
+      
+      filteredDataModal_media$aggregation_types <- filteredDataModal$aggregation_types[filteredDataModal$aggregation_types$aggregation_type_id %in% filteredDataModal_media$timeseries$aggregation_type_id, ]
+      filteredDataModal_media$rates <- filteredDataModal$rates[filteredDataModal$rates$seconds %in% filteredDataModal_media$timeseries$record_rate, ]
+      filteredDataModal_media$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_media$timeseries$parameter_id, ]
+      
+      # Update the aggregation, rate, and param selectizeInputs with what's left in filteredDataModal_media.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_media$aggregation_types$aggregation_type_id,
+                                     filteredDataModal_media$aggregation_types[, tr("aggregation_type_col", language$language)])
+      if (!is.null(input$traceNew_aggregation)) {
+        tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) input$traceNew_aggregation else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_aggregation",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_media$rates$seconds,
+                                     filteredDataModal_media$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_media$params$parameter_id,
+                                     filteredDataModal_media$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      filteredDataModal_aggregation$timeseries <- filteredDataModal_media$timeseries
+      filteredDataModal_aggregation$rates <- filteredDataModal_media$rates
+      filteredDataModal_aggregation$params <- filteredDataModal_media$params
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal_media$timeseries
+      filteredDataModal_rate$params <- filteredDataModal_media$params
+    }) # End filter based on the selected media
+    
+    ### Filter based on the selected aggregation type ##############################################################
+    observeEvent(input$traceNew_aggregation, {
+      req(filteredDataModal_aggregation)
+      
+      # Filter the data based on the selected aggregation type
+      if (is.null(input$traceNew_aggregation) || length(input$traceNew_aggregation) != 1) return()
+      
+      # Find the new timeseries rows based on the selected aggregation type
+      filteredDataModal_aggregation$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$aggregation_type_id == input$traceNew_aggregation, ]
+      
+      filteredDataModal_aggregation$rates <- filteredDataModal$rates[filteredDataModal$rates$seconds %in% filteredDataModal_aggregation$timeseries$record_rate, ]
+      filteredDataModal_aggregation$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_aggregation$timeseries$parameter_id, ]
+      
+      # Update the rate and param selectizeInputs with what's left in filteredDataModal_aggregation.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_aggregation$rates$seconds,
+                                     filteredDataModal_aggregation$rates[, "period"])
+      if (!is.null(input$traceNew_rate)) {
+        tmp.selected <- if (input$traceNew_rate %in% tmp.choices) input$traceNew_rate else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_rate",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      tmp.choices <- stats::setNames(filteredDataModal_aggregation$params$parameter_id,
+                                     filteredDataModal_aggregation$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+      
+      filteredDataModal_rate$timeseries <- filteredDataModal_aggregation$timeseries
+      filteredDataModal_rate$params <- filteredDataModal_aggregation$params
+    }) # End filter based on the selected aggregation type
+    
+    ### Filter based on the selected record rate ##############################################################
+    observeEvent(input$traceNew_rate, {
+      req(filteredDataModal_rate)
+      
+      # Filter the data based on the selected record rate
+      if (is.null(input$traceNew_rate) || length(input$traceNew_rate) != 1) return()
+      
+      # Find the new timeseries rows based on the selected record rate
+      filteredDataModal_rate$timeseries <- filteredDataModal$timeseries[filteredDataModal$timeseries$record_rate == input$traceNew_rate, ]
+      
+      filteredDataModal_rate$params <- filteredDataModal$params[filteredDataModal$params$parameter_id %in% filteredDataModal_rate$timeseries$parameter_id, ]
+      
+      # Update the param selectizeInput with what's left in filteredDataModal_rate.
+      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+      tmp.choices <- stats::setNames(filteredDataModal_rate$params$parameter_id,
+                                     filteredDataModal_rate$params[, tr("param_name_col", language$language)])
+      if (!is.null(input$traceNew_param)) {
+        tmp.selected <- if (input$traceNew_param %in% tmp.choices) input$traceNew_param else if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      } else {
+        tmp.selected <- if (length(tmp.choices) == 1) tmp.choices[1] else character(0)
+      }
+      updateSelectizeInput(session, "traceNew_param",
+                           choices = tmp.choices,
+                           selected = tmp.selected)
+    }) # End filter based on the selected record rate
+    
+    
+    ## Add/remove/modify trace buttons #######################################################################
     
     observeEvent(input$add_new_trace, {
       shinyjs::hide("add_subplot")
       if (traceCount() == 1) {
         traces$trace1 <- list(trace = "trace1",
-                              parameter = as.numeric(input$param),
-                              location_id = input$loc_name,
+                              location_id = input$location,
+                              sub_location_id = input$sub_location,
+                              z = input$z,
+                              media = input$media,
+                              aggregation = input$aggregation,
+                              rate = input$rate,
+                              parameter = input$param,
                               lead_lag = 0)
         traces$trace2 <- list(trace = "trace2",
-                              parameter = as.numeric(input$traceNew_param),
-                              location_id = input$traceNew_loc_id,
+                              location_id = input$traceNew_location,
+                              sub_location_id = input$traceNew_sub_location,
+                              z = input$traceNew_z,
+                              media = input$traceNew_media,
+                              aggregation = input$traceNew_aggregation,
+                              rate = input$traceNew_rate,
+                              parameter = input$traceNew_param,
                               lead_lag = input$traceNew_lead_lag)
-        button1Text <- HTML(paste0("<b>Trace 1</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces$trace1$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace1$location_id, tr("generic_name_col", language$language)])))
-        button2Text <- HTML(paste0("<b>Trace 2</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces$trace2$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace2$location_id, tr("generic_name_col", language$language)]), "<br>Lead/lag ", traces$trace2$lead_lag, " hours"))
+        button1Text <- HTML(paste0(
+          "<b>Trace 1</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace1$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == traces$trace1$location_id, tr("generic_name_col", language$language)]
+        ))
+        button2Text <- HTML(paste0(
+          "<b>Trace 2</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace2$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == traces$trace2$location_id, tr("generic_name_col", language$language)],
+          "<br>Lead/lag ", traces$trace2$lead_lag, " hours"
+        ))
         output$trace1_ui <- renderUI({
           actionButton(ns("trace1"), button1Text)
         })
@@ -419,14 +1853,25 @@ continuousPlot <- function(id, language, windowDims) {
         })
         traceCount(2)
         shinyjs::hide("param")
-        shinyjs::hide("loc_name")
+        shinyjs::hide("location")
         
       } else if (traceCount() == 2) {
         traces$trace3 <- list(trace = "trace3",
-                              parameter = as.numeric(input$traceNew_param),
-                              location_id = input$traceNew_loc_id,
+                              location_id = input$traceNew_location,
+                              sub_location_id = input$traceNew_sub_location,
+                              z = input$traceNew_z,
+                              media = input$traceNew_media,
+                              aggregation = input$traceNew_aggregation,
+                              rate = input$traceNew_rate,
+                              parameter = input$traceNew_param,
                               lead_lag = input$traceNew_lead_lag)
-        button3Text <- HTML(paste0("<b>Trace 3</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces$trace3$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace3$location_id, tr("generic_name_col", language$language)]), "<br>Lead/lag ", traces$trace3$lead_lag, " hours"))
+        button3Text <- HTML(paste0(
+          "<b>Trace 3</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace3$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == traces$trace3$location_id, tr("generic_name_col", language$language)],
+          "<br>Lead/lag ", traces$trace3$lead_lag, " hours"
+        ))
         output$trace3_ui <- renderUI({
           actionButton(ns("trace3"), button3Text)
         })
@@ -434,10 +1879,21 @@ continuousPlot <- function(id, language, windowDims) {
         
       } else if (traceCount() == 3) {
         traces$trace4 <- list(trace = "trace4",
-                              parameter = as.numeric(input$traceNew_param),
-                              location_id = input$traceNew_loc_id,
+                              location_id = input$traceNew_location,
+                              sub_location_id = input$traceNew_sub_location,
+                              z = input$traceNew_z,
+                              media = input$traceNew_media,
+                              aggregation = input$traceNew_aggregation,
+                              rate = input$traceNew_rate,
+                              parameter = input$traceNew_param,
                               lead_lag = input$traceNew_lead_lag)
-        button4Text <- HTML(paste0("<b>Trace 4</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces$trace4$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces$trace4$location_id, tr("generic_name_col", language$language)]), "<br>Lead/lag ", traces$trace4$lead_lag, " hours"))
+        button4Text <- HTML(paste0(
+          "<b>Trace 4</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace4$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == traces$trace4$location_id, tr("generic_name_col", language$language)],
+          "<br>Lead/lag ", traces$trace4$lead_lag, " hours"
+        ))
         output$trace4_ui <- renderUI({
           actionButton(ns("trace4"), button4Text)
         })
@@ -451,84 +1907,66 @@ continuousPlot <- function(id, language, windowDims) {
     
     # Observer for when user clicks a trace button. This should bring up a populated modal with the trace information, allowing user to edit the trace. As well, a new button to remove the trace should appear. Removal of a trace requires rejigging traceCount and elements of traces$trace_n
     clicked_trace <- reactiveVal(NULL)
-    observeEvent(input$trace1, {
+    trace_modal <- function(trace, ll) {
       showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                       selected = traces$trace1$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = stats::setNames(
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace1$parameter, "location_id"], 
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace1$parameter, tr("generic_name_col", language$language)]),
-                       selected = traces$trace1$location_id),
+        selectizeInput(ns("traceNew_location"),
+                       label = tr("loc", language$language),
+                       choices =  stats::setNames(moduleData$locs$location_id,
+                                                  moduleData$locs[, tr("generic_name_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1),
+                       selected = traces[[trace]]$location_id),
+        uiOutput(ns("traceNew_sub_loc_ui")),
+        uiOutput(ns("traceNew_z_ui")),
+        selectizeInput(ns("traceNew_media"),
+                       label = tr("media_type", language$language),
+                       choices = stats::setNames(filteredDataModal_z$media$media_id,
+                                                 filteredDataModal_z$media[, tr("media_type_col", language$language)]),
+                       selected = traces[[trace]]$media,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_aggregation"),
+                       label = tr("aggregation_type", language$language), 
+                       choices = stats::setNames(filteredDataModal_media$aggregation_types$aggregation_type_id,
+                                                 filteredDataModal_media$aggregation_types[, tr("aggregation_type_col", language$language)]),
+                       selected = traces[[trace]]$aggregation,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_rate"),
+                       label = tr("nominal_rate", language$language), 
+                       choices = stats::setNames(filteredDataModal_aggregation$rates$seconds,
+                                                 filteredDataModal_aggregation$rates[, "period"]),
+                       selected = traces[[trace]]$rate,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_param"), 
+                       label = tr("parameter", language$language), 
+                       choices = stats::setNames(filteredDataModal_rate$params$parameter_id,
+                                                 filteredDataModal_rate$params[, tr("param_name_col", language$language)]),
+                       selected = traces[[trace]]$parameter),
+        if (ll) numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces[[trace]]$lead_lag) else NULL,
         footer = tagList(
-          actionButton(ns("modify_trace"), "Modify trace"),
-          actionButton(ns("remove_trace"), "Remove trace"),
-          actionButton(ns("cancel_modify"), "Cancel")
+          actionButton(ns("modify_trace"), tr("modify_trace", language$language)),
+          actionButton(ns("remove_trace"), tr("remove_trace", language$language)),
+          actionButton(ns("cancel_modify"), tr("cancel", language$language))
         ),
         easyClose = TRUE
       ))
+    }
+    observeEvent(input$trace1, {
+      trace_modal("trace1", FALSE)
       clicked_trace(traces$trace1$trace)
     })
     observeEvent(input$trace2, {
-      showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                       selected = traces$trace2$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = stats::setNames(
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, "location_id"], 
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace2$parameter, tr("generic_name_col", language$language)]),
-                       selected = traces$trace2$location_id),
-        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", 
-                     value = traces$trace2$lead_lag),
-        footer = tagList(
-          actionButton(ns("modify_trace"), "Modify trace"),
-          actionButton(ns("remove_trace"), "Remove trace"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      trace_modal("trace2", TRUE)
       clicked_trace(traces$trace2$trace)
     })
     observeEvent(input$trace3, {
-      showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                       selected = traces$trace3$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = stats::setNames(
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, "location_id"], 
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace3$parameter, tr("generic_name_col", language$language)]),
-                       selected = traces$trace3$location_id),
-        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace3$lead_lag),
-        footer = tagList(
-          actionButton(ns("modify_trace"), "Modify trace"),
-          actionButton(ns("remove_trace"), "Remove trace"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      trace_modal("trace3", TRUE)
       clicked_trace(traces$trace3$trace)
     })
     observeEvent(input$trace4, {
-      showModal(modalDialog(
-        selectizeInput(ns("traceNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                       selected = traces$trace4$parameter),
-        selectizeInput(ns("traceNew_loc_id"), "Select location", 
-                       choices = stats::setNames(
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, "location_id"], 
-                         moduleData$all_ts[moduleData$all_ts$parameter_id == traces$trace4$parameter, tr("generic_name_col", language$language)]),
-                       selected = traces$trace4$location_id),
-        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = traces$trace4$lead_lag),
-        footer = tagList(
-          actionButton(ns("modify_trace"), "Modify trace"),
-          actionButton(ns("remove_trace"), "Remove trace"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      trace_modal("trace4", TRUE)
       clicked_trace(traces$trace4$trace)
     })
     
@@ -537,20 +1975,30 @@ continuousPlot <- function(id, language, windowDims) {
       removeModal()
     })
     
-    
-    ## modify/delete trace
+    ## modify/delete traces
     observeEvent(input$modify_trace, {
       # Update the trace values
       target_trace <- clicked_trace()
       traces[[target_trace]]$parameter <- as.numeric(input$traceNew_param)
-      traces[[target_trace]]$location_id <- input$traceNew_loc_id
+      traces[[target_trace]]$location_id <- input$traceNew_location
       traces[[target_trace]]$lead_lag <- input$traceNew_lead_lag
       
       # Update the trace button text
       if (target_trace == "trace1") {
-        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces[[target_trace]]$location_id, tr("generic_name_col", language$language)])))
+        button_text <- HTML(paste0(
+          "<b>Trace ", target_trace, "</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces[[target_trace]]$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == traces[[target_trace]]$location_id, tr("generic_name_col", language$language)]
+        ))
       } else {
-        button_text <- HTML(paste0("<b>Trace ", target_trace, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces[[target_trace]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces[[target_trace]]$location_id, tr("generic_name_col", language$language)]), "<br>Lead/lag ", traces[[target_trace]]$lead_lag, " hours"))
+        button_text <- HTML(paste0(
+          "<b>Trace ", target_trace, "</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces[[target_trace]]$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == traces[[target_trace]]$location_id, tr("generic_name_col", language$language)],
+          "<br>Lead/lag ", traces[[target_trace]]$lead_lag, " hours"
+        ))
       }
       
       output[[paste0(target_trace, "_ui")]] <- renderUI({
@@ -587,9 +2035,20 @@ continuousPlot <- function(id, language, windowDims) {
       # Re-render text for all buttons
       for (i in 1:traceCount()) {
         if (i == 1) {
-          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces[[paste0("trace", i)]]$location_id, tr("generic_name_col", language$language)])))
+          button_text <- HTML(paste0(
+            "<b>Trace ", i, "</b><br>",
+            titleCase(moduleData$params[moduleData$params$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]),
+            "<br>",
+            moduleData$locs[moduleData$locs$location_id == traces[[paste0("trace", i)]]$location_id, tr("generic_name_col", language$language)]
+          ))
         } else {
-          button_text <- HTML(paste0("<b>Trace ", i, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == traces[[paste0("trace", i)]]$location_id, tr("generic_name_col", language$language)]), "<br>Lead/lag ", traces[[paste0("trace", i)]]$lead_lag, " hours"))
+          button_text <- HTML(paste0(
+            "<b>Trace ", i, "</b><br>",
+            titleCase(moduleData$params[moduleData$params$parameter_id == traces[[paste0("trace", i)]]$parameter, "param_name"]),
+            "<br>",
+            moduleData$locs[moduleData$locs$location_id == traces[[paste0("trace", i)]]$location_id, tr("generic_name_col", language$language)],
+            "<br>Lead/lag ", traces[[paste0("trace", i)]]$lead_lag, " hours"
+          ))
         }
         updateActionButton(session, paste0("trace", i), label = button_text)
       }
@@ -598,17 +2057,17 @@ continuousPlot <- function(id, language, windowDims) {
         # Remove the remaining trace button and show the param and location selectors
         shinyjs::hide("trace1_ui")
         shinyjs::show("param")
-        shinyjs::show("loc_name")
+        shinyjs::show("location")
         shinyjs::show("add_subplot")
         updateSelectizeInput(session, "param", 
-                             choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                             choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
                              selected = traces$trace1$parameter)
         
         # Update the location choices
-        locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, c(tr("generic_name_col", language$language), "location_id")])
-        names(locs) <- c("name", "location_id")
-        updateSelectizeInput(session, "loc_name", 
-                             choices = stats::setNames(locs$location_id, locs$name), 
+        loc_ids <- unique(moduleData$timeseries$location_id[moduleData$timeseries$parameter_id == input$param])
+        locs <- moduleData$locs[moduleData$locs$location_id %in% loc_ids, c("location_id", tr("generic_name_col", language$language))]
+        updateSelectizeInput(session, "location",
+                             choices = stats::setNames(locs$location_id, locs[[tr("generic_name_col", language$language)]]), 
                              selected = traces$trace1$location_id)
       } else {
         shinyjs::show("trace1_ui")
@@ -618,73 +2077,7 @@ continuousPlot <- function(id, language, windowDims) {
       traces$trace1$lead_lag <- 0
     })
     
-    # Add/remove/modify subplot buttons #######################################################################
-    subplots <- reactiveValues()
-    subplotCount <- reactiveVal(1)
-    
-    ## Add extra subplot
-    runSubplotNew <- reactiveVal(FALSE) # Used to determine if the modal has run before so that previously selected values can be used
-    observeEvent(input$add_subplot, {
-      # When the button is clicked, a modal will appear with the necessary fields to add a subplot. The subplot values are then displayed to the user under button 'subplot_x'
-      
-      # Make sure that there is an input$param, input$loc_name before running the modal; give the user an informative modal if not
-      if (nchar(input$loc_name) == 0 | nchar(input$param) == 0) {
-        showModal(modalDialog(
-          "Please select a location and parameter for the first subplot before adding another.",
-          footer = tagList(
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-        return()
-      }
-      
-      if (runSubplotNew() == FALSE) {
-        showModal(modalDialog(
-          selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                         selected = input$param),
-          selectizeInput(ns("subplotNew_loc_id"), "Select location", 
-                         choices = "placeholder"), # Choices are populated based on the parameter in another observer
-          footer = tagList(
-            actionButton(ns("add_new_subplot"), "Add subplot"),
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-        runSubplotNew(TRUE)
-      } else { # The modal has already run once, use the previously selected values
-        showModal(modalDialog(
-          selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                         choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                         selected = input$subplotNew_param),
-          selectizeInput(ns("subplotNew_loc_id"), "Select location", 
-                         choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location_id"], 
-                                                   moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, tr("generic_name_col", language$language)]),
-                         selected = input$subplotNew_loc_id),
-          footer = tagList(
-            actionButton(ns("add_new_subplot"), "Add subplot"),
-            actionButton(ns("cancel"), "Cancel")
-          ),
-          easyClose = TRUE
-        ))
-      }
-    })
-    
-    # No need for an observeEvent for the cancel button as it is handled by an observer above
-    
-    # Observe the param inputs for all traces and update the location choices in the modal
-    observeEvent(input$subplotNew_param, {
-      # Update the location choices
-      locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, c(tr("generic_name_col", language$language), "location_id")])
-      names(locs) <- c("name", "location_id")
-      
-      updateSelectizeInput(session,
-                           "subplotNew_loc_id",
-                           choices = stats::setNames(locs$location_id, locs$name),
-                           selected = if (input$subplotNew_loc_id %in% moduleData$all_ts[moduleData$all_ts$parameter_id == input$subplotNew_param, "location_id"]) input$subplotNew_loc_id else character(0))
-    }, ignoreInit = TRUE)
-    
+    ## Add/remove/modify subplot buttons #######################################################################
     share_axes_run <- reactiveVal(FALSE)
     observeEvent(input$add_new_subplot, {
       shinyjs::hide("add_trace")
@@ -719,13 +2112,35 @@ continuousPlot <- function(id, language, windowDims) {
         }
         
         subplots$subplot1 <- list(subplot = "subplot1",
-                                  parameter = as.numeric(input$param),
-                                  location_id = input$loc_name)
+                                  location_id = input$traceNew_location,
+                                  sub_location_id = input$traceNew_sub_location,
+                                  z = input$traceNew_z,
+                                  media = input$traceNew_media,
+                                  aggregation = input$traceNew_aggregation,
+                                  rate = input$traceNew_rate,
+                                  parameter = input$traceNew_param,
+                                  lead_lag = input$traceNew_lead_lag)
         subplots$subplot2 <- list(subplot = "subplot2",
-                                  parameter = as.numeric(input$subplotNew_param),
-                                  location_id = input$subplotNew_loc_id)
-        button1Text <- HTML(paste0("<b>Subplot 1</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots$subplot1$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot1$location_id, tr("generic_name_col", language$language)])))
-        button2Text <- HTML(paste0("<b>Subplot 2</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots$subplot2$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot2$location_id, tr("generic_name_col", language$language)])))
+                                  location_id = input$traceNew_location,
+                                  sub_location_id = input$traceNew_sub_location,
+                                  z = input$traceNew_z,
+                                  media = input$traceNew_media,
+                                  aggregation = input$traceNew_aggregation,
+                                  rate = input$traceNew_rate,
+                                  parameter = input$traceNew_param,
+                                  lead_lag = input$traceNew_lead_lag)
+        button1Text <- HTML(paste0(
+          "<b>Subplot 1</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == subplots$subplot1$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == subplots$subplot1$location_id, tr("generic_name_col", language$language)]
+        ))
+        button2Text <- HTML(paste0(
+          "<b>Subplot 2</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == subplots$subplot2$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == subplots$subplot2$location_id, tr("generic_name_col", language$language)]
+        ))
         output$subplot1_ui <- renderUI({
           actionButton(ns("subplot1"), button1Text)
         })
@@ -735,13 +2150,24 @@ continuousPlot <- function(id, language, windowDims) {
         })
         subplotCount(2)
         shinyjs::hide("param")
-        shinyjs::hide("loc_name")
+        shinyjs::hide("location")
         
       } else if (subplotCount() == 2) {
         subplots$subplot3 <- list(subplot = "subplot3",
-                                  parameter = as.numeric(input$subplotNew_param),
-                                  location_id = input$subplotNew_loc_id)
-        button3Text <- HTML(paste0("<b>Subplot 3</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots$subplot3$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot3$location_id, tr("generic_name_col", language$language)])))
+                                  location_id = input$traceNew_location,
+                                  sub_location_id = input$traceNew_sub_location,
+                                  z = input$traceNew_z,
+                                  media = input$traceNew_media,
+                                  aggregation = input$traceNew_aggregation,
+                                  rate = input$traceNew_rate,
+                                  parameter = input$traceNew_param,
+                                  lead_lag = input$traceNew_lead_lag)
+        button3Text <- HTML(paste0(
+          "<b>Subplot 3</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == subplots$subplot3$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == subplots$subplot3$location_id, tr("generic_name_col", language$language)]
+        ))
         output$subplot3_ui <- renderUI({
           actionButton(ns("subplot3"), button3Text)
         })
@@ -749,9 +2175,20 @@ continuousPlot <- function(id, language, windowDims) {
         
       } else if (subplotCount() == 3) {
         subplots$subplot4 <- list(subplot = "subplot4",
-                                  parameter = as.numeric(input$subplotNew_param),
-                                  location_id = input$subplotNew_loc_id)
-        button4Text <- HTML(paste0("<b>Subplot 4</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots$subplot4$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots$subplot4$location_id, tr("generic_name_col", language$language)])))
+                                  location_id = input$traceNew_location,
+                                  sub_location_id = input$traceNew_sub_location,
+                                  z = input$traceNew_z,
+                                  media = input$traceNew_media,
+                                  aggregation = input$traceNew_aggregation,
+                                  rate = input$traceNew_rate,
+                                  parameter = input$traceNew_param,
+                                  lead_lag = input$traceNew_lead_lag)
+        button4Text <- HTML(paste0(
+          "<b>Subplot 4</b><br>",
+          titleCase(moduleData$params[moduleData$params$parameter_id == subplots$subplot4$parameter, "param_name"]),
+          "<br>",
+          moduleData$locs[moduleData$locs$location_id == subplots$subplot4$location_id, tr("generic_name_col", language$language)]
+        ))
         output$subplot4_ui <- renderUI({
           actionButton(ns("subplot4"), button4Text)
         })
@@ -765,76 +2202,66 @@ continuousPlot <- function(id, language, windowDims) {
     
     # Observer for when user clicks a subplot button. This should bring up a populated modal with the subplot information, allowing user to edit the subplot. As well, a new button to remove the subplot should appear. Removal of a subplot requires rejigging subplotCount and elements of subplots$subplot_n
     clicked_subplot <- reactiveVal(NULL)
-    observeEvent(input$subplot1, {
+    subplot_modal <- function(subplot) {
       showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                       selected = subplots$subplot1$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location by name", 
-                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, "location_id"], 
-                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot1$parameter, tr("generic_name_col", language$language)]),
-                       selected = subplots$subplot1$location_id),
+        selectizeInput(ns("traceNew_location"),
+                       label = tr("loc", language$language),
+                       choices =  stats::setNames(moduleData$locs$location_id,
+                                                  moduleData$locs[, tr("generic_name_col", language$language)]),
+                       multiple = TRUE,
+                       options = list(maxItems = 1),
+                       selected = subplots[[subplot]]$location_id),
+        uiOutput(ns("traceNew_sub_loc_ui")),
+        uiOutput(ns("traceNew_z_ui")),
+        selectizeInput(ns("traceNew_media"),
+                       label = tr("media_type", language$language),
+                       choices = stats::setNames(filteredDataModal_z$media$media_id,
+                                                 filteredDataModal_z$media[, tr("media_type_col", language$language)]),
+                       selected = subplots[[subplot]]$media,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_aggregation"),
+                       label = tr("aggregation_type", language$language),
+                       choices = stats::setNames(filteredDataModal_media$aggregation_types$aggregation_type_id,
+                                                 filteredDataModal_media$aggregation_types[, tr("aggregation_type_col", language$language)]),
+                       selected = subplots[[subplot]]$aggregation,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_rate"),
+                       label = tr("nominal_rate", language$language),
+                       choices = stats::setNames(filteredDataModal_aggregation$rates$seconds,
+                                                 filteredDataModal_aggregation$rates[, "period"]),
+                       selected = subplots[[subplot]]$rate,
+                       multiple = TRUE,
+                       options = list(maxItems = 1)),
+        selectizeInput(ns("traceNew_param"),
+                       label = tr("parameter", language$language),
+                       choices = stats::setNames(filteredDataModal_rate$params$parameter_id,
+                                                 filteredDataModal_rate$params[, tr("param_name_col", language$language)]),
+                       selected = subplots[[subplot]]$parameter),
         footer = tagList(
-          actionButton(ns("modify_subplot"), "Modify subplot"),
-          actionButton(ns("remove_subplot"), "Remove subplot"),
-          actionButton(ns("cancel_modify"), "Cancel")
+          actionButton(ns("modify_subplot"), tr("modify_subplot", language$language)),
+          actionButton(ns("remove_subplot"), tr("remove_subplot", language$language)),
+          actionButton(ns("cancel_modify"), tr("cancel", language$language))
         ),
         easyClose = TRUE
       ))
+    }
+    
+    observeEvent(input$subplot1, {
+      subplot_modal("subplot1")
       clicked_subplot(subplots$subplot1$subplot)
     })
     observeEvent(input$subplot2, {
-      showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                       selected = subplots$subplot2$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location by name", 
-                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, "location_id"], 
-                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot2$parameter, tr("generic_name_col", language$language)]),
-                       selected = subplots$subplot2$location_id),
-        footer = tagList(
-          actionButton(ns("modify_subplot"), "Modify subplot"),
-          actionButton(ns("remove_subplot"), "Remove subplot"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      subplot_modal("subplot2")
       clicked_subplot(subplots$subplot2$subplot)
     })
     observeEvent(input$subplot3, {
-      showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                       selected = subplots$subplot3$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location", 
-                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, "location_id"], 
-                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot3$parameter, tr("generic_name_col", language$language)]),
-                       selected = subplots$subplot3$location_id),
-        footer = tagList(
-          actionButton(ns("modify_subplot"), "Modify subplot"),
-          actionButton(ns("remove_subplot"), "Remove subplot"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      subplot_modal("subplot3")
       clicked_subplot(subplots$subplot3$subplot)
     })
     observeEvent(input$subplot4, {
-      showModal(modalDialog(
-        selectizeInput(ns("subplotNew_param"), "Select parameter", 
-                       choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
-                       selected = subplots$subplot4$parameter),
-        selectizeInput(ns("subplotNew_loc_id"), "Select location", 
-                       choices = stats::setNames(moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, "location_id"], 
-                                                 moduleData$all_ts[moduleData$all_ts$parameter_id == subplots$subplot4$parameter, tr("generic_name_col", language$language)]),
-                       selected = subplots$subplot4$location_id),
-        footer = tagList(
-          actionButton(ns("modify_subplot"), "Modify subplot"),
-          actionButton(ns("remove_subplot"), "Remove subplot"),
-          actionButton(ns("cancel_modify"), "Cancel")
-        ),
-        easyClose = TRUE
-      ))
+      subplot_modal("subplot4")
       clicked_subplot(subplots$subplot4$subplot)
     })
     
@@ -842,15 +2269,16 @@ continuousPlot <- function(id, language, windowDims) {
     observeEvent(input$modify_subplot, {
       # Update the subplot values
       target_subplot <- clicked_subplot()
-      subplots[[target_subplot]]$parameter <- as.numeric(input$subplotNew_param)
-      subplots[[target_subplot]]$location_id <- input$subplotNew_loc_id
+      subplots[[target_subplot]]$parameter <- as.numeric(input$traceNew_param)
+      subplots[[target_subplot]]$location_id <- input$traceNew_location
       
       # Update the subplot button text
-      if (target_subplot == "subplot1") {
-        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots[[target_subplot]]$location_id, tr("generic_name_col", language$language)])))
-      } else {
-        button_text <- HTML(paste0("<b>Subplot ", target_subplot, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots[[target_subplot]]$location_id, tr("generic_name_col", language$language)])))
-      }
+      button_text <- HTML(paste0(
+        "<b>Subplot ", target_subplot, "</b><br>",
+        titleCase(moduleData$params[moduleData$params$parameter_id == subplots[[target_subplot]]$parameter, "param_name"]),
+        "<br>",
+        moduleData$locs[moduleData$locs$location_id == subplots[[target_subplot]]$location_id, tr("generic_name_col", language$language)]
+      ))
       
       output[[paste0(target_subplot, "_ui")]] <- renderUI({
         actionButton(ns(paste0(target_subplot)), button_text)
@@ -886,9 +2314,19 @@ continuousPlot <- function(id, language, windowDims) {
       # Re-render text for all buttons
       for (i in 1:subplotCount()) {
         if (i == 1) {
-          button_text <- HTML(paste0("<b>Subplot ", i, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots[[paste0("subplot", i)]]$location_id, tr("generic_name_col", language$language)])))
+          button_text <- HTML(paste0(
+            "<b>Subplot ", i, "</b><br>",
+            titleCase(moduleData$params[moduleData$params$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]),
+            "<br>",
+            moduleData$locs[moduleData$locs$location_id == subplots[[paste0("subplot", i)]]$location_id, tr("generic_name_col", language$language)]
+          ))
         } else {
-          button_text <- HTML(paste0("<b>Subplot ", i, "</b><br>", titleCase(moduleData$parameters[moduleData$parameters$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]), "<br>", unique(moduleData$all_ts[moduleData$all_ts$location_id == subplots[[paste0("subplot", i)]]$location_id, tr("generic_name_col", language$language)])))
+          button_text <- HTML(paste0(
+            "<b>Subplot ", i, "</b><br>",
+            titleCase(moduleData$params[moduleData$params$parameter_id == subplots[[paste0("subplot", i)]]$parameter, "param_name"]),
+            "<br>",
+            moduleData$locs[moduleData$locs$location_id == subplots[[paste0("subplot", i)]]$location_id, tr("generic_name_col", language$language)]
+          ))
         }
         updateActionButton(session, paste0("subplot", i), label = button_text)
       }
@@ -899,17 +2337,17 @@ continuousPlot <- function(id, language, windowDims) {
         shinyjs::hide("shareX")
         shinyjs::hide("shareY")
         shinyjs::show("param")
-        shinyjs::show("loc_name")
+        shinyjs::show("location")
         shinyjs::show("add_trace")
         updateSelectizeInput(session, "param", 
-                             choices = stats::setNames(moduleData$parameters$parameter_id, titleCase(moduleData$parameters$param_name)), 
+                             choices = stats::setNames(moduleData$params$parameter_id, titleCase(moduleData$params$param_name)), 
                              selected = subplots$subplot1$parameter)
         
         # Update the location choices
-        locs <- unique(moduleData$all_ts[moduleData$all_ts$parameter_id == input$param, c(tr("generic_name_col", language$language), "location_id")])
-        names(locs) <- c("name", "location_id")
-        updateSelectizeInput(session, "loc_name", 
-                             choices = stats::setNames(locs$location_id, locs$name), 
+        loc_ids <- unique(moduleData$timeseries$location_id[moduleData$timeseries$parameter_id == input$param])
+        locs <- moduleData$locs[moduleData$locs$location_id %in% loc_ids, c("location_id", tr("generic_name_col", language$language))]
+        updateSelectizeInput(session, "location",
+                             choices = stats::setNames(locs$location_id, locs[[tr("generic_name_col", language$language)]]),
                              selected = subplots$subplot1$location_id)
       } else {
         shinyjs::show("subplot1_ui")
@@ -920,7 +2358,7 @@ continuousPlot <- function(id, language, windowDims) {
     
     # Create ExtendedTasks to render plots ############################################################
     # Overlapping years plot
-    plot_output_overlap <- ExtendedTask$new(function(loc, param, start_doy, end_doy, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_overlap <- ExtendedTask$new(function(loc, sub_loc, record_rate, aggregation_type, z, param, date_start, date_end, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName,
@@ -932,11 +2370,13 @@ continuousPlot <- function(id, language, windowDims) {
           on.exit(DBI::dbDisconnect(con))
           
           plot <- plotOverlap(location = loc,
-                              sub_location = NULL,
-                              record_rate = NULL,
+                              sub_location = sub_loc,
+                              z = z,
+                              record_rate = record_rate,
+                              aggregation_type = aggregation_type,
                               parameter = param,
-                              startDay = start_doy,
-                              endDay = end_doy,
+                              startDay = date_start,
+                              endDay = date_end,
                               years = yrs,
                               historic_range = historic_range,
                               datum = apply_datum,
@@ -964,7 +2404,7 @@ continuousPlot <- function(id, language, windowDims) {
     
     
     # Single timeseries plot
-    plot_output_timeseries <- ExtendedTask$new(function(loc, param, start_date, end_date, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_timeseries <- ExtendedTask$new(function(loc, sub_loc, record_rate, aggregation_type, z, param, date_start, date_end, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -976,9 +2416,13 @@ continuousPlot <- function(id, language, windowDims) {
           on.exit(DBI::dbDisconnect(con))
           
           plot <- plotTimeseries(location = loc,
+                                 sub_location = sub_loc,
                                  parameter = param,
-                                 start_date = start_date,
-                                 end_date = end_date,
+                                 record_rate = record_rate,
+                                 aggregation_type = aggregation_type,
+                                 z = z,
+                                 start_date = date_start,
+                                 end_date = date_end,
                                  historic_range = historic_range,
                                  datum = apply_datum,
                                  filter = filter,
@@ -1006,7 +2450,7 @@ continuousPlot <- function(id, language, windowDims) {
     ) |> bind_task_button("make_plot")
     
     # Multiple traces plot
-    plot_output_timeseries_traces <- ExtendedTask$new(function(locs, params, lead_lags, start_date, end_date, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
+    plot_output_timeseries_traces <- ExtendedTask$new(function(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags, date_start, date_end, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -1019,10 +2463,14 @@ continuousPlot <- function(id, language, windowDims) {
           
           plot <- plotMultiTimeseries(type = "traces",
                                       locations = locs,
+                                      sub_locations = sub_locs,
+                                      z = z,
+                                      record_rates = record_rates,
+                                      aggregation_types = aggregation_types,
                                       parameters = params,
                                       lead_lag = lead_lags,
-                                      start_date = start_date,
-                                      end_date = end_date,
+                                      start_date = date_start,
+                                      end_date = date_end,
                                       historic_range = historic_range,
                                       datum = apply_datum,
                                       filter = filter,
@@ -1048,7 +2496,7 @@ continuousPlot <- function(id, language, windowDims) {
     ) |> bind_task_button("make_plot")
     
     # Multiple subplots plot
-    plot_output_timeseries_subplots <- ExtendedTask$new(function(locs, params, start_date, end_date, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
+    plot_output_timeseries_subplots <- ExtendedTask$new(function(locs, sub_locs, z, record_rates, aggregation_types, params, date_start, date_end, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -1061,9 +2509,13 @@ continuousPlot <- function(id, language, windowDims) {
           
           plot <- plotMultiTimeseries(type = "subplots",
                                       locations = locs,
+                                      sub_locations = sub_locs,
+                                      z = z,
+                                      record_rates = record_rates,
+                                      aggregation_types = aggregation_types,
                                       parameters = params,
-                                      start_date = start_date,
-                                      end_date = end_date,
+                                      start_date = date_start,
+                                      end_date = date_end,
                                       historic_range = historic_range,
                                       datum = apply_datum,
                                       filter = filter,
@@ -1097,39 +2549,207 @@ continuousPlot <- function(id, language, windowDims) {
         shinyjs::hide("full_screen_ui")
       }
       
-      if (input$type == "Overlapping years") {
-        if (nchar(input$loc_name) == 0) {
+      if (input$plot_type == "over") {
+        if (nchar(input$location) == 0) {
           showModal(modalDialog("Please select a location.", easyClose = TRUE))
+          return()
+        }
+        if (is.null(input$param)) {
+          showModal(modalDialog("Please select a parameter", easyClose = TRUE))
           return()
         }
         if (nchar(input$param) == 0) {
           showModal(modalDialog("Please select a parameter", easyClose = TRUE))
           return()
         }
-        plot_output_overlap$invoke(loc = as.numeric(input$loc_name), param = as.numeric(input$param), start_doy = input$start_doy, end_doy = input$end_doy, yrs = input$years, historic_range = input$historic_range_overlap, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
-      } else if (input$type == "Long timeseries") {
+        
+        loc <- as.numeric(input$location)
+        if (is.null(input$sub_location)) {
+          sub_loc <- NULL
+        } else if (nchar(input$sub_location) > 0) {
+          sub_loc <- as.numeric(input$sub_location)
+        } else {
+          sub_loc <- NULL
+        }
+        if (is.null(input$z)) {
+          z <- NULL
+        } else if (nchar(input$z) > 0) {
+          z <- as.numeric(input$z)
+        } else {
+          z <- NULL
+        }
+        record_rate <- if (nchar(input$rate) > 0) as.numeric(input$rate) else NULL
+        aggregation_type <- if (nchar(input$aggregation) > 0) as.numeric(input$aggregation) else NULL
+        param <- as.numeric(input$param)
+        
+        plot_output_overlap$invoke(loc = loc,
+                                   sub_loc = sub_loc,
+                                   z = z,
+                                   record_rate = record_rate,
+                                   aggregation_type = aggregation_type,
+                                   param = param, 
+                                   date_start = input$date_range[1], 
+                                   date_end = input$date_range[2], 
+                                   yrs = input$years,
+                                   historic_range = input$historic_range_overlap, 
+                                   apply_datum = input$apply_datum, 
+                                   filter = if (input$plot_filter) 20 else NULL, 
+                                   unusable = input$unusable, 
+                                   line_scale = plot_aes$line_scale, 
+                                   axis_scale = plot_aes$axis_scale, 
+                                   legend_scale = plot_aes$legend_scale, 
+                                   legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", 
+                                   lang = plot_aes$lang, 
+                                   gridx = plot_aes$showgridx, 
+                                   gridy = plot_aes$showgridy, 
+                                   config = session$userData$config)
+      } else if (input$plot_type == "ts") {
         if (traceCount() == 1) { # Either a single trace or more than 1 subplot
           if (subplotCount() > 1) { # Multiple sub plots
-            locs <- c(subplots$subplot1$location_id, subplots$subplot2$location_id, subplots$subplot3$location_id, subplots$subplot4$location_id)
-            params <- c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter)
-            plot_output_timeseries_subplots$invoke(locs = as.numeric(locs), params = params, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
+            locs <- as.numeric(c(subplots$subplot1$location_id, subplots$subplot2$location_id, subplots$subplot3$location_id, subplots$subplot4$location_id))
+            sub_locs <- as.numeric(c(subplots$subplot1$sub_location_id, subplots$subplot2$sub_location_id, subplots$subplot3$sub_location_id, subplots$subplot4$sub_location_id))
+            z <- c(subplots$subplot1$z, subplots$subplot2$z, subplots$subplot3$z, subplots$subplot4$z)
+            record_rates <- as.numeric(c(subplots$subplot1$rate, subplots$subplot2$rate, subplots$subplot3$rate, subplots$subplot4$rate))
+            aggregation_types <- as.numeric(c(subplots$subplot1$aggregation, subplots$subplot2$aggregation, subplots$subplot3$aggregation, subplots$subplot4$aggregation))
+            params <- as.numeric(c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter))
+            
+            # Make sure that each combination of locs[n], sub_locs[n], z[n], record_rates[n], aggregation_types[n], params[n] and lead_lags[n] is unique
+            combinations <- data.frame(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags)
+            unique_combinations <- unique(combinations)
+            
+            if (nrow(unique_combinations) != nrow(combinations)) {
+              showModal(modalDialog(
+                title = "Error",
+                "There are duplicate traces. Please ensure that each trace has a unique combination of location, sub-location, z, record rate, aggregation type, parameter, and lead/lag.",
+                easyClose = TRUE
+              ))
+              return()
+            }
+            
+            plot_output_timeseries_subplots$invoke(locs = locs,
+                                                   sub_locs = if (length(sub_locs) == 0) NULL else sub_locs,
+                                                   z = z,
+                                                   record_rates = record_rates,
+                                                   aggregation_types = aggregation_types,
+                                                   params = params, 
+                                                   date_start = input$date_range[1], 
+                                                   date_end = input$date_range[2], 
+                                                   historic_range = input$historic_range, 
+                                                   apply_datum = input$apply_datum, 
+                                                   filter = if (input$plot_filter) 20 else NULL, 
+                                                   unusable = input$unusable, 
+                                                   line_scale = plot_aes$line_scale, 
+                                                   axis_scale = plot_aes$axis_scale, 
+                                                   legend_scale = plot_aes$legend_scale, 
+                                                   legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", 
+                                                   lang = plot_aes$lang, 
+                                                   gridx = plot_aes$showgridx, 
+                                                   gridy = plot_aes$showgridy, 
+                                                   shareX = input$shareX, 
+                                                   shareY = input$shareY, 
+                                                   config = session$userData$config)
           } else {  # Single trace
-            if (nchar(input$loc_name) == 0) {
+            if (nchar(input$location) == 0) {
               showModal(modalDialog("Please select a location.", easyClose = TRUE))
+              return()
+            }
+            if (is.null(input$param)) {
+              showModal(modalDialog("Please select a parameter", easyClose = TRUE))
               return()
             }
             if (nchar(input$param) == 0) {
               showModal(modalDialog("Please select a parameter", easyClose = TRUE))
               return()
             }
-            plot_output_timeseries$invoke(loc = as.numeric(input$loc_name), param = as.numeric(input$param), start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, grades = input$grades, approvals = input$approvals, qualifiers = input$qualifiers, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, config = session$userData$config)
+            
+            loc <- as.numeric(input$location)
+            if (is.null(input$sub_location)) {
+              sub_loc <- NULL
+            } else if (nchar(input$sub_location) > 0) {
+              sub_loc <- as.numeric(input$sub_location)
+            } else {
+              sub_loc <- NULL
+            }
+            if (is.null(input$z)) {
+              z <- NULL
+            } else if (nchar(input$z) > 0) {
+              z <- as.numeric(input$z)
+            } else {
+              z <- NULL
+            }
+            record_rate <- if (nchar(input$rate) > 0) as.numeric(input$rate) else NULL
+            aggregation_type <- if (nchar(input$aggregation) > 0) as.numeric(input$aggregation) else NULL
+            param <- as.numeric(input$param)
+            
+            plot_output_timeseries$invoke(loc = loc, 
+                                          sub_loc = sub_loc,
+                                          z = z,
+                                          record_rate = record_rate,
+                                          aggregation_type = aggregation_type,
+                                          param = param, 
+                                          date_start = input$date_range[1], 
+                                          date_end = input$date_range[2], 
+                                          historic_range = input$historic_range, 
+                                          apply_datum = input$apply_datum, 
+                                          filter = if (input$plot_filter) 20 else NULL, 
+                                          unusable = input$unusable, 
+                                          grades = input$grades, 
+                                          approvals = input$approvals, 
+                                          qualifiers = input$qualifiers, 
+                                          line_scale = plot_aes$line_scale, 
+                                          axis_scale = plot_aes$axis_scale, 
+                                          legend_scale = plot_aes$legend_scale, 
+                                          legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", 
+                                          lang = plot_aes$lang, 
+                                          gridx = plot_aes$showgridx, 
+                                          gridy = plot_aes$showgridy, 
+                                          config = session$userData$config)
           }
         } else { # Multiple traces, single plot
-          locs <- c(traces$trace1$location_id, traces$trace2$location_id, traces$trace3$location_id, traces$trace4$location_id)
-          params <- c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter)
+          locs <- as.numeric(c(traces$trace1$location_id, traces$trace2$location_id, traces$trace3$location_id, traces$trace4$location_id))
+          sub_locs <- as.numeric(c(traces$trace1$sub_location_id, traces$trace2$sub_location_id, traces$trace3$sub_location_id, traces$trace4$sub_location_id))
+          z <- c(traces$trace1$z, traces$trace2$z, traces$trace3$z, traces$trace4$z)
+          record_rates <- as.numeric(c(traces$trace1$rate, traces$trace2$rate, traces$trace3$rate, traces$trace4$rate))
+          aggregation_types <- as.numeric(c(traces$trace1$aggregation, traces$trace2$aggregation, traces$trace3$aggregation, traces$trace4$aggregation))
+          params <- as.numeric(c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter))
           lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
           
-          plot_output_timeseries_traces$invoke(locs = as.numeric(locs), params = params, lead_lags = lead_lags, start_date = input$start_date, end_date = input$end_date, historic_range = input$historic_range, apply_datum = input$apply_datum, filter = if (input$plot_filter) 20 else NULL, unusable = input$unusable, line_scale = plot_aes$line_scale, axis_scale = plot_aes$axis_scale, legend_scale = plot_aes$legend_scale, legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", lang = plot_aes$lang, gridx = plot_aes$showgridx, gridy = plot_aes$showgridy, shareX = input$shareX, shareY = input$shareY, config = session$userData$config)
+          # Make sure that each combination of locs[n], sub_locs[n], z[n], record_rates[n], aggregation_types[n], params[n] and lead_lags[n] is unique
+          combinations <- data.frame(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags)
+          unique_combinations <- unique(combinations)
+          
+          if (nrow(unique_combinations) != nrow(combinations)) {
+            showModal(modalDialog(
+              title = "Error",
+              "There are duplicate traces. Please ensure that each trace has a unique combination of location, sub-location, z, record rate, aggregation type, parameter, and lead/lag.",
+              easyClose = TRUE
+            ))
+            return()
+          }
+          
+          plot_output_timeseries_traces$invoke(locs = locs,
+                                               sub_locs = if (length(sub_locs) == 0) NULL else sub_locs,
+                                               z = z,
+                                               record_rates = record_rates,
+                                               aggregation_types = aggregation_types,
+                                               params = params, 
+                                               lead_lags = lead_lags, 
+                                               date_start = input$date_range[1], 
+                                               date_end = input$date_range[2], 
+                                               historic_range = input$historic_range, 
+                                               apply_datum = input$apply_datum, 
+                                               filter = if (input$plot_filter) 20 else NULL, 
+                                               unusable = input$unusable, 
+                                               line_scale = plot_aes$line_scale, 
+                                               axis_scale = plot_aes$axis_scale, 
+                                               legend_scale = plot_aes$legend_scale, 
+                                               legend_position = if (windowDims()$width > 1.3 * windowDims()$height) "v" else "h", 
+                                               lang = plot_aes$lang, 
+                                               gridx = plot_aes$showgridx, 
+                                               gridy = plot_aes$showgridy, 
+                                               shareX = input$shareX, 
+                                               shareY = input$shareY, 
+                                               config = session$userData$config)
         }
       }
       
@@ -1241,10 +2861,10 @@ continuousPlot <- function(id, language, windowDims) {
         paste0("continuous_plot_data_", gsub("-", "", gsub(" ", "_", gsub(":", "", substr(time, 0, 16)))), "_UTC.xlsx")
       },
       content = function(file) {
-        if (input$type == "Overlapping years") {
+        if (input$plot_type == "over") {
           openxlsx::write.xlsx(plot_output_overlap$result()$data, file)
           
-        } else if (input$type == "Long timeseries") {
+        } else if (input$plot_type == "ts") {
           if (traceCount() == 1) { # Either a single trace or more than 1 subplot
             if (subplotCount() > 1) { # Multiple sub plots
               openxlsx::write.xlsx(plot_output_timeseries_subplots$result()$data, file)
