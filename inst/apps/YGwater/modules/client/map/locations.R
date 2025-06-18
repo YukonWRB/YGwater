@@ -31,7 +31,7 @@ mapLocs <- function(id, language) {
     outputs <- reactiveValues()  # This allows the module to pass values back to the main server
     
     if (session$userData$user_logged_in) {
-      cached <- map_location_module_data(con = session$userData$AquaCache, env = session$userData)
+      cached <- map_location_module_data(con = session$userData$AquaCache, env = session$userData$app_cache)
     } else {
       cached <- map_location_module_data(con = session$userData$AquaCache)
     }

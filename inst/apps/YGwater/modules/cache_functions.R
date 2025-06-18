@@ -207,7 +207,7 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
 # locations map module #########
 map_location_module_data <- function(con, env = .GlobalEnv) {
   get_cached("map_location_module_data",
-             env = .GlobalEnv,
+             env = env,
              fetch_fun = function() {
                list(
                  locations = dbGetQueryDT(con, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),

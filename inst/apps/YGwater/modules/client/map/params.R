@@ -13,7 +13,7 @@ mapParams <- function(id, language) {
     ns <- session$ns
     
     if (session$userData$user_logged_in) {
-      cached <- map_params_module_data(con = session$userData$AquaCache, env = session$userData)
+      cached <- map_params_module_data(con = session$userData$AquaCache, env = session$userData$app_cache)
     } else {
       cached <- map_params_module_data(con = session$userData$AquaCache)
     }

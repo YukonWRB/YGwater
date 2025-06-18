@@ -77,46 +77,50 @@ app_server <- function(input, output, session) {
   })
   
   # Initialize reactive flags to track whether each UI has been loaded
-  ui_loaded <- reactiveValues(
-    viz = FALSE,
-    admin = FALSE,
-    home = FALSE,
-    discretePlot = FALSE,
-    continuousPlot = FALSE,
-    mixPlot = FALSE,
-    mapParamValues = FALSE,
-    mapMonitoringLocations = FALSE,
-    FOD = FALSE,
-    imgTableView = FALSE,
-    imgMapView = FALSE,
-    snowInfo = FALSE,
-    waterInfo = FALSE,
-    WQReport = FALSE,
-    snowBulletin = FALSE,
-    discData = FALSE,
-    contData = FALSE,
-    news = FALSE,
-    about = FALSE,
-    feedback = FALSE, # !!! THIs TAB TO BE DELETED ONCE TESTING IS COMPLETE
-    syncCont = FALSE,
-    syncDisc = FALSE,
-    locs = FALSE,
-    ts = FALSE,
-    equip = FALSE,
-    deploy_recover = FALSE,
-    cal = FALSE,
-    addContData = FALSE,
-    addDiscData = FALSE,
-    editDiscData = FALSE,
-    continuousCorrections = FALSE,
-    imputeMissing = FALSE,
-    editContData = FALSE,
-    grades_approvals_qualifiers = FALSE,
-    addDocs = FALSE,
-    addImgs = FALSE,
-    manageNewsContent = FALSE,
-    viewFeedback = FALSE,
-    visit = FALSE)
+  reset_ui_loaded <- function() {
+    ui_loaded$viz <- FALSE
+    ui_loaded$admin <- FALSE
+    ui_loaded$home <- FALSE
+    ui_loaded$discretePlot <- FALSE
+    ui_loaded$continuousPlot <- FALSE
+    ui_loaded$mixPlot <- FALSE
+    ui_loaded$mapParamValues <- FALSE
+    ui_loaded$mapMonitoringLocations <- FALSE
+    ui_loaded$FOD <- FALSE
+    ui_loaded$imgTableView <- FALSE
+    ui_loaded$imgMapView <- FALSE
+    ui_loaded$snowInfo <- FALSE
+    ui_loaded$waterInfo <- FALSE
+    ui_loaded$WQReport <- FALSE
+    ui_loaded$snowBulletin <- FALSE
+    ui_loaded$discData <- FALSE
+    ui_loaded$contData <- FALSE
+    ui_loaded$news <- FALSE
+    ui_loaded$about <- FALSE
+    ui_loaded$feedback <- FALSE # !!! THIs TAB TO BE DELETED ONCE TESTING IS COMPLETE
+    ui_loaded$syncCont <- FALSE
+    ui_loaded$syncDisc <- FALSE
+    ui_loaded$locs <- FALSE
+    ui_loaded$ts <- FALSE
+    ui_loaded$equip <- FALSE
+    ui_loaded$deploy_recover <- FALSE
+    ui_loaded$cal <- FALSE
+    ui_loaded$addContData <- FALSE
+    ui_loaded$addDiscData <- FALSE
+    ui_loaded$editDiscData <- FALSE
+    ui_loaded$continuousCorrections <- FALSE
+    ui_loaded$imputeMissing <- FALSE
+    ui_loaded$editContData <- FALSE
+    ui_loaded$grades_approvals_qualifiers <- FALSE
+    ui_loaded$addDocs <- FALSE
+    ui_loaded$addImgs <- FALSE
+    ui_loaded$manageNewsContent <- FALSE
+    ui_loaded$viewFeedback <- FALSE 
+    ui_loaded$visit <- FALSE
+  }
+  
+  ui_loaded <- reactiveValues()
+  reset_ui_loaded() # Initialize the ui_loaded reactive values
   
   ## database connections ###########
   # Look for .mdb files in the AccessPath directories
@@ -336,6 +340,11 @@ $(document).keyup(function(event) {
                    nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
                    target = "home", position = "before")
         
+        # Send the user back to the 'home' tab
+        updateTabsetPanel(session, "navbar", selected = "home")
+        # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+        reset_ui_loaded()
+        
         # Other tabs are created if/when the user clicks on the 'admin' tab
         return()
       } else {
@@ -398,10 +407,17 @@ $(document).keyup(function(event) {
     
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     
-    
     # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode
     admin_vis_flag("viz")
     shinyjs::click("admin")
+    
+    # Send the user back to the 'home' tab
+    updateTabsetPanel(session, "navbar", selected = "home")
+    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+    reset_ui_loaded()
+    
+    # Clear the app_cache environment
+    session$userData$app_cache <- new.env(parent = emptyenv())
   })
   
   # Load modules based on input$navbar ################################

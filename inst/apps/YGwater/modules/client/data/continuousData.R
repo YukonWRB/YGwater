@@ -56,7 +56,7 @@ contData <- function(id, language, inputs) {
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     # !important!!! shares a cache with the plot module.
     if (session$userData$user_logged_in) {  # If logged in, get or create data that lives only with this session,
-      cached <- cont_data.plot_module_data(con = session$userData$AquaCache, env = session$userData)
+      cached <- cont_data.plot_module_data(con = session$userData$AquaCache, env = session$userData$app_cache)
     } else {
       cached <- cont_data.plot_module_data(con = session$userData$AquaCache)
     }
