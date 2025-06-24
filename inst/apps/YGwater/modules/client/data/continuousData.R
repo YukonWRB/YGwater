@@ -534,6 +534,27 @@ contData <- function(id, language, inputs) {
         return()
       }
       
+      if (is.null(input$date_range)) {
+        return()  # If the date range is not set, do nothing
+      } else if (length(input$date_range) != 2) {
+        return()  # If the date range is not set correctly, do nothing
+      } else if (is.null(input$date_range[1]) || is.null(input$date_range[2])) {
+        return()  # If either date is NULL, do nothing
+      } else if (is.na(input$date_range[1]) || is.na(input$date_range[2])) {
+        return()  # If either date is NA, do nothing
+      }
+      
+      # If date_range[1] is after date_range[2], reset date_range[2] back to input_values$date_range[2] and return
+      if (input$date_range[1] > input$date_range[2]) {
+        updateDateRangeInput(session, "date_range",
+                             start = input_values$date_range[1],
+                             end = input_values$date_range[2],
+                             min = as.Date(filteredData$range$min_date),
+                             max = as.Date(filteredData$range$max_date)
+        )
+        return()
+      }
+      
       # Since this is the top-level filter, we reset the data.
       # There's no need to check for 0 timeseries here, because the date range is always valid.
       newData <- createFilteredData()
@@ -637,23 +658,25 @@ contData <- function(id, language, inputs) {
       }
       
       # Filter the data based on the selected locations
-      stash <- filteredData$timeseries
-      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$location_id %in% input$locations, ]
-      if (nrow(filteredData$timeseries) == 0) {
-        # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$locations to its previous value
-        filteredData$timeseries <- stash
-        updateSelectizeInput(session, "locations",
-                             selected = input_values$locations
-        )
-        showNotification(tr("no_ts_locs", language$language), type = "error", duration = 5)
-        return()
+      if (input$locations[1] != "all") {
+        stash <- filteredData$timeseries
+        filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$location_id %in% input$locations, ]
+        if (nrow(filteredData$timeseries) == 0) {
+          # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$locations to its previous value
+          filteredData$timeseries <- stash
+          updateSelectizeInput(session, "locations",
+                               selected = input_values$locations
+          )
+          showNotification(tr("no_ts_locs", language$language), type = "error", duration = 5)
+          return()
+        }
       }
-      
+
       # Filter filteredData based on the selected location
-      filteredData$locs <- moduleData$locs[moduleData$locs$location_id %in% input$locations, ]
-      filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$location_id %in% filteredData$locs$location_id, ]
+      filteredData$locs <- filteredData$locs[filteredData$locs$location_id %in% input$locations, ]
+      filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% filteredData$locs$location_id, ]
       filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
-      filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$timeseries$media_id, ]
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$timeseries$media_id, ]
       filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
       filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
@@ -729,21 +752,24 @@ contData <- function(id, language, inputs) {
       }
       
       # Filter the data based on the selected sub-locations
-      stash <- filteredData$timeseries
-      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$sub_location_id %in% input$sub_locations, ]
-      if (nrow(filteredData$timeseries) == 0) {
-        # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$sub_locations to its previous value
-        filteredData$timeseries <- stash
-        updateSelectizeInput(session, "sub_locations",
-                             selected = input_values$sub_locations
-        )
-        showNotification(tr("no_ts_sub_locs", language$language), type = "error", duration = 5)
-        return()
+      if (input$sub_locations[1] != "all") {
+        # If 'all' is not selected, filter the timeseries data
+        stash <- filteredData$timeseries
+        filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$sub_location_id %in% input$sub_locations, ]
+        if (nrow(filteredData$timeseries) == 0) {
+          # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$sub_locations to its previous value
+          filteredData$timeseries <- stash
+          updateSelectizeInput(session, "sub_locations",
+                               selected = input_values$sub_locations
+          )
+          showNotification(tr("no_ts_sub_locs", language$language), type = "error", duration = 5)
+          return()
+        }
       }
       
-      filteredData$sub_locs <- moduleData$sub_locs[moduleData$sub_locs$sub_location_id %in% input$sub_locations, ]
+      filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$sub_location_id %in% input$sub_locations, ]
       filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
-      filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$timeseries$media_id, ]
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$timeseries$media_id, ]
       filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
       filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
@@ -811,21 +837,24 @@ contData <- function(id, language, inputs) {
       }
       
       # Filter the data based on the selected z values
-      stash <- filteredData$timeseries
-      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$z %in% input$z, ]
-      if (nrow(filteredData$timeseries) == 0) {
-        # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$z to its previous value
-        filteredData$timeseries <- stash
-        updateSelectizeInput(session, "z",
-                             selected = input_values$z
-        )
-        showNotification(tr("no_ts_z", language$language), type = "error", duration = 5)
-        return()
+      if (input$z[1] != "all") {
+        # If 'all' is not selected, filter the timeseries data
+        stash <- filteredData$timeseries
+        filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$z %in% input$z, ]
+        if (nrow(filteredData$timeseries) == 0) {
+          # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$z to its previous value
+          filteredData$timeseries <- stash
+          updateSelectizeInput(session, "z",
+                               selected = input_values$z
+          )
+          showNotification(tr("no_ts_z", language$language), type = "error", duration = 5)
+          return()
+        }
       }
       
       filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$z %in% input$z, ]
       filteredData$z <- unique(filteredData$timeseries$z[!is.na(filteredData$timeseries$z)])
-      filteredData$media <- moduleData$media[moduleData$media$media_id %in% filteredData$timeseries$media_id, ]
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$timeseries$media_id, ]
       filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
       filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
@@ -889,20 +918,23 @@ contData <- function(id, language, inputs) {
       }
       
       # Filter the data based on the selected media types
-      stash <- filteredData$timeseries
-      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$media_id %in% input$media, ]
-      if (nrow(filteredData$timeseries) == 0) {
-        # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$media to its previous value
-        filteredData$timeseries <- stash
-        updateSelectizeInput(session, "media",
-                             selected = input_values$media
-        )
-        showNotification(tr("no_ts_medias", language$language), type = "error", duration = 5)
-        return()
+      if (input$media[1] != "all") {
+        # If 'all' is not selected, filter the timeseries data
+        stash <- filteredData$timeseries
+        filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$media_id %in% input$media, ]
+        if (nrow(filteredData$timeseries) == 0) {
+          # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$media to its previous value
+          filteredData$timeseries <- stash
+          updateSelectizeInput(session, "media",
+                               selected = input_values$media
+          )
+          showNotification(tr("no_ts_medias", language$language), type = "error", duration = 5)
+          return()
+        }
       }
       
       filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$media_id %in% input$media, ]
-      filteredData$media <- moduleData$media[moduleData$media$media_id %in% input$media, ]
+      filteredData$media <- filteredData$media[filteredData$media$media_id %in% input$media, ]
       filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% filteredData$timeseries$aggregation_type_id, ]
       filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
@@ -961,20 +993,23 @@ contData <- function(id, language, inputs) {
       }
       
       # Filter the data based on the selected aggregation types
-      stash <- filteredData$timeseries
-      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$sample_type %in% input$aggregation, ]
-      if (nrow(filteredData$timeseries) == 0) {
-        # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$aggregation to its previous value
-        filteredData$timeseries <- stash
-        updateSelectizeInput(session, "aggregation",
-                             selected = input_values$aggregation
-        )
-        showNotification(tr("no_ts_agg", language$language), type = "error", duration = 5)
-        return()
+      if (input$aggregation[1] != "all") {
+        # If 'all' is not selected, filter the timeseries data
+        stash <- filteredData$timeseries
+        filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$aggregation_type_id %in% input$aggregation, ]
+        if (nrow(filteredData$timeseries) == 0) {
+          # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$aggregation to its previous value
+          filteredData$timeseries <- stash
+          updateSelectizeInput(session, "aggregation",
+                               selected = input_values$aggregation
+          )
+          showNotification(tr("no_ts_agg", language$language), type = "error", duration = 5)
+          return()
+        }
       }
       
       filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$aggregation_type_id %in% input$aggregation, ]
-      filteredData$aggregation_types <- moduleData$aggregation_types[moduleData$aggregation_types$aggregation_type_id %in% input$aggregation, ]
+      filteredData$aggregation_types <- filteredData$aggregation_types[filteredData$aggregation_types$aggregation_type_id %in% input$aggregation, ]
       filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% filteredData$timeseries$record_rate, ]
       
       
@@ -1027,20 +1062,23 @@ contData <- function(id, language, inputs) {
       }
       
       # Filter the data based on the selected rates
-      stash <- filteredData$timeseries
-      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$record_rate %in% input$rate, ]
-      if (nrow(filteredData$timeseries) == 0) {
-        # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$rate to its previous value
-        filteredData$timeseries <- stash
-        updateSelectizeInput(session, "rate",
-                             selected = input_values$rate
-        )
-        showNotification(tr("no_ts_rates", language$language), type = "error", duration = 5)
-        return()
+      if (input$rate[1] != "all") {
+        # If 'all' is not selected, filter the timeseries data
+        stash <- filteredData$timeseries
+        filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$record_rate %in% input$rate, ]
+        if (nrow(filteredData$timeseries) == 0) {
+          # If no timeseries are found, reset the timeseries to the original data, show a notification, and reset input$rate to its previous value
+          filteredData$timeseries <- stash
+          updateSelectizeInput(session, "rate",
+                               selected = input_values$rate
+          )
+          showNotification(tr("no_ts_rate", language$language), type = "error", duration = 5)
+          return()
+        }
       }
       
       filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$record_rate %in% input$rate, ]
-      filteredData$rates <- moduleData$rates[moduleData$rates$seconds %in% input$rate, ]
+      filteredData$rates <- filteredData$rates[filteredData$rates$seconds %in% input$rate, ]
       
       # No impact on projects or networks as we're no longer narrowing locations
       
@@ -1086,7 +1124,7 @@ contData <- function(id, language, inputs) {
       }
       
       # Filter the data based on the selected params
-      filteredData$timeseries <- moduleData$timeseries[moduleData$timeseries$parameter_id %in% input$params, ]
+      filteredData$timeseries <- filteredData$timeseries[filteredData$timeseries$parameter_id %in% input$params, ]
       filteredData$params <- filteredData$params[filteredData$params$parameter_id %in% input$params, ]
       
       # No impact on projects or networks as we're no longer narrowing locations
@@ -1363,7 +1401,8 @@ contData <- function(id, language, inputs) {
         selected_tsids <- table_data()[input$tbl_rows_selected, timeseries_id]
         
         if (input$modal_frequency == "daily") {
-          rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM measurements_calculated_daily_corrected", " WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND date > '", input$modal_date_range[1], "' AND date", " < '", input$modal_date_range[2], "';"))[[1]]
+          rows <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT COUNT(*) FROM measurements_calculated_daily_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ") AND date > '", input$modal_date_range[1], "' AND date < '", input$modal_date_range[2], "';"))[[1]]
+
           
         #   query <- paste0("WITH extremes AS (
         #   SELECT
