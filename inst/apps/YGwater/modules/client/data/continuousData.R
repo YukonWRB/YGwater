@@ -534,6 +534,7 @@ contData <- function(id, language, inputs) {
         return()
       }
       
+      # Guard against invalid date ranges
       if (is.null(input$date_range)) {
         return()  # If the date range is not set, do nothing
       } else if (length(input$date_range) != 2) {
@@ -567,10 +568,6 @@ contData <- function(id, language, inputs) {
       table_data(NULL)
       
       # Filter the data based on the selected date range
-      # guard against NA values in the date range
-      if (is.na(input$date_range[1]) || is.na(input$date_range[2])) {
-        return()
-      }
       filteredData$range$min_date <- as.POSIXct(input$date_range[1], tz = "UTC")
       filteredData$range$max_date <- as.POSIXct(paste0(input$date_range[2], " 23:59:59"), tz = "UTC")
       

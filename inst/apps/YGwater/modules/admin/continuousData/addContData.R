@@ -5,7 +5,7 @@ addContDataUI <- function(id) {
   tagList(
     tags$style(
       HTML(sprintf("
-     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
       #%s.accordion {
         /* body background */
         --bs-accordion-bg:          #FFFCF5;
@@ -16,7 +16,7 @@ addContDataUI <- function(id) {
       }
     ", ns("accordion1"))),
       HTML(sprintf("
-     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
       #%s.accordion {
         /* body background */
         --bs-accordion-bg:          #E5F4F6;

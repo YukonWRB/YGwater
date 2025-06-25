@@ -1,12 +1,31 @@
 # UI and server code for adding discrete measurements
-
 addDiscDataUI <- function(id) {
   ns <- NS(id)
   tagList(
     tags$style(
-      HTML(sprintf("#%s.accordion {--bs-accordion-bg:#FFFCF5;--bs-accordion-btn-bg:#FBE5B2;--bs-accordion-active-bg:#FBE5B2;}", ns("accordion1"))),
-      HTML(sprintf("#%s.accordion {--bs-accordion-bg:#E5F4F6;--bs-accordion-btn-bg:#0097A9;--bs-accordion-active-bg:#0097A9;}", ns("accordion2")))
-    ),
+      HTML(sprintf("
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #FFFCF5;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #FBE5B2;
+        /* expanded header */
+        --bs-accordion-active-bg:   #FBE5B2;
+      }
+    ", ns("accordion1"))),
+      HTML(sprintf("
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #E5F4F6;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #0097A9;
+        /* expanded header */
+        --bs-accordion-active-bg:   #0097A9;
+      }
+    ", ns("accordion2")))),
+    
     page_fluid(
       accordion(
         id = ns("accordion1"),
@@ -29,6 +48,18 @@ addDiscDataUI <- function(id) {
             condition = "input.entry_mode == 'file'",
             ns = ns,
             fileInput(ns("file"), "Upload .csv or Excel", accept = c(".csv", ".xls", ".xlsx")),
+            radioButtons(ns("file_format"), "File format", choices = c(Wide = "wide", Long = "long"), inline = TRUE),
+            conditionalPanel(
+              condition = "input.file_format == 'wide'",
+              ns = ns,
+              numericInput(ns("param_row"), "Row with parameters", value = 1, min = 1),
+              numericInput(ns("unit_row"), "Row with units", value = 2, min = 1)
+            ),
+            conditionalPanel(
+              condition = "input.file_format == 'long'",
+              ns = ns,
+              uiOutput(ns("long_format_cols"))
+            ),
             selectInput(ns("mapping_select"), "Column mapping", choices = NULL),
             textInput(ns("mapping_name"), "New mapping name"),
             uiOutput(ns("mapping_ui")),
@@ -51,6 +82,25 @@ addDiscDataUI <- function(id) {
 addDiscData <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    
+    check_results <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT has_table_privilege(current_user, 'discrete.results', 'INSERT') AS can_insert"
+    )
+    check_samples <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT has_table_privilege(current_user, 'discrete.samples', 'INSERT') AS can_insert"
+    )
+    if (!check_results$can_insert || !check_samples$can_insert) {
+      showModal(modalDialog(
+        title = "Insufficient Privileges",
+        "You do not have write privileges to add samples or results to the database. Please contact your database administrator.",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      shinyjs::disable("upload")
+    }
+    
 
     loadMappings <- function(con) {
       if (!DBI::dbExistsTable(con, DBI::Id(schema = "application", table = "discrete_mappings"))) {
@@ -79,20 +129,21 @@ addDiscData <- function(id) {
     observe({
       updateSelectInput(session, "mapping_select", choices = c("", names(mappings())))
     })
-
-    check <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT has_table_privilege(current_user, 'discrete.results', 'INSERT') AS can_insert"
-    )
-    if (!check$can_insert) {
-      showModal(modalDialog(
-        title = 'Insufficient Privileges',
-        'You do not have write privileges to add measurements.',
-        easyClose = TRUE,
-        footer = modalButton('Close')
-      ))
-      shinyjs::disable('upload')
-    }
+    
+    observeEvent(input$mapping_select, {
+      m <- mappings()[[input$mapping_select]]
+      if (!is.null(m)) {
+        updateRadioButtons(session, "file_format", selected = m$format)
+        if (identical(m$format, "long")) {
+          updateSelectInput(session, "long_param_col", selected = m$param_col)
+          updateSelectInput(session, "long_unit_col", selected = m$unit_col)
+          updateSelectInput(session, "long_value_col", selected = m$value_col)
+        } else {
+          updateNumericInput(session, "param_row", value = m$param_row)
+          updateNumericInput(session, "unit_row", value = m$unit_row)
+        }
+      }
+    }, ignoreInit = TRUE)
 
     params <- reactive({
       dbGetQueryDT(session$userData$AquaCache,
@@ -114,36 +165,96 @@ addDiscData <- function(id) {
     observeEvent(input$file, {
       req(input$file)
       ext <- tools::file_ext(input$file$name)
-      df <- if (ext %in% c('xls', 'xlsx')) {
+      df <- if (ext %in% c("xls", "xlsx")) {
         openxlsx::read.xlsx(input$file$datapath)
       } else {
-        readr::read_csv(input$file$datapath, show_col_types = FALSE)
+        utils::read_csv(input$file$datapath)
       }
       file_data(df)
     })
 
+    output$long_format_cols <- renderUI({
+      req(file_data())
+      df <- file_data()
+      current <- mappings()[[input$mapping_select]]
+      tagList(
+        selectInput(ns("long_param_col"), "Parameter column", choices = names(df), selected = current$param_col),
+        selectInput(ns("long_unit_col"), "Unit column", choices = c("", names(df)), selected = current$unit_col),
+        selectInput(ns("long_value_col"), "Value column", choices = names(df), selected = current$value_col)
+      )
+    })
+    
     output$mapping_ui <- renderUI({
       req(file_data())
       df <- file_data()
       current <- mappings()[[input$mapping_select]]
-      if (is.null(current)) current <- list(datetime = NULL, params = list())
-      tagList(
-        selectInput(ns("map_datetime"), "Datetime column", choices = names(df), selected = current$datetime),
-        lapply(names(df), function(col) {
-          if (!is.null(current$datetime) && identical(col, current$datetime)) return(NULL)
-          selectInput(ns(paste0("param_", col)), sprintf("Parameter for column '%s'", col),
-                      choices = stats::setNames(params()$parameter_id, params()$param_name),
-                      selected = current$params[[col]])
-        })
-      )
+      if (is.null(current)) current <- list(format = input$file_format, datetime = NULL, params = list())
+      if (is.null(current$format)) current$format <- input$file_format
+      if (identical(current$format, "long")) {
+        req(input$long_param_col, input$long_value_col)
+        param_names <- unique(df[[input$long_param_col]])
+        tagList(
+          selectInput(ns("map_datetime"), "Datetime column", choices = names(df), selected = current$datetime),
+          lapply(param_names, function(p) {
+            key <- gsub("[^A-Za-z0-9]", "_", as.character(p))
+            par_sel <- if (!is.null(current$params[[as.character(p)]])) current$params[[as.character(p)]]$id else NULL
+            conv_sel <- if (!is.null(current$params[[as.character(p)]])) current$params[[as.character(p)]]$conv else 1
+            fluidRow(
+              column(8,
+                     selectInput(ns(paste0("param_", key)), sprintf("Map '%s'", p),
+                                 choices = stats::setNames(params()$parameter_id, params()$param_name),
+                                 selected = par_sel)),
+              column(4, numericInput(ns(paste0("conv_", key)), "Conversion", value = conv_sel))
+            )
+          })
+        )
+      } else {
+        cols <- names(df)
+        tagList(
+          selectInput(ns("map_datetime"), "Datetime column", choices = cols, selected = current$datetime),
+          lapply(cols, function(col) {
+            if (!is.null(current$datetime) && identical(col, current$datetime)) return(NULL)
+            par_sel <- if (!is.null(current$params[[col]])) current$params[[col]]$id else NULL
+            conv_sel <- if (!is.null(current$params[[col]])) current$params[[col]]$conv else 1
+            fluidRow(
+              column(8,
+                     selectInput(ns(paste0("param_", col)), sprintf("Parameter for column '%s'", col),
+                                 choices = stats::setNames(params()$parameter_id, params()$param_name),
+                                 selected = par_sel)),
+              column(4, numericInput(ns(paste0("conv_", col)), "Conversion", value = conv_sel))
+            )
+          })
+        )
+      }
     })
 
     observeEvent(input$save_mapping, {
       req(input$mapping_name, file_data())
       df <- file_data()
-      param_cols <- setdiff(names(df), input$map_datetime)
-      map_list <- list(datetime = input$map_datetime,
-                       params = setNames(lapply(param_cols, function(col) input[[paste0('param_', col)]]), param_cols))
+      if (input$file_format == "long") {
+        req(input$long_param_col, input$long_value_col)
+        pnames <- unique(df[[input$long_param_col]])
+        param_list <- setNames(lapply(pnames, function(p) {
+          key <- gsub("[^A-Za-z0-9]", "_", as.character(p))
+          list(id = input[[paste0("param_", key)]], conv = input[[paste0("conv_", key)]])
+        }), pnames)
+        map_list <- list(format = "long",
+                         datetime = input$map_datetime,
+                         param_col = input$long_param_col,
+                         unit_col = input$long_unit_col,
+                         value_col = input$long_value_col,
+                         params = param_list)
+      } else {
+        cols <- setdiff(names(df), input$map_datetime)
+        param_list <- setNames(lapply(cols, function(col) {
+          list(id = input[[paste0("param_", col)]], conv = input[[paste0("conv_", col)]])
+        }), cols)
+        map_list <- list(format = "wide",
+                         datetime = input$map_datetime,
+                         param_row = input$param_row,
+                         unit_row = input$unit_row,
+                         params = param_list)
+      }
       m <- mappings()
       m[[input$mapping_name]] <- map_list
       mappings(m)
@@ -158,20 +269,35 @@ addDiscData <- function(id) {
       data$df <- rbind(data$df, data.frame(sample = next_sample, datetime = Sys.time(), parameter_id = NA_integer_, value = NA_real_))
     })
 
-    observeEvent({input$map_datetime; input$save_mapping; input$mapping_select; file_data()}, {
+    observeEvent(list(input$map_datetime, input$save_mapping, input$mapping_select, file_data()), {
       req(file_data())
-      if (is.null(input$map_datetime)) return()
       df <- file_data()
       mapping <- if (nzchar(input$mapping_select)) mappings()[[input$mapping_select]] else NULL
       if (!is.null(mapping)) {
-        param_cols <- names(mapping$params)
-        df$row_id <- seq_len(nrow(df))
-        long <- tidyr::pivot_longer(df, cols = tidyselect::all_of(param_cols), names_to = "pcol", values_to = "value")
-        long$parameter_id <- unlist(mapping$params[long$pcol])
-        data$df <- data.frame(sample = long$row_id,
-                              datetime = as.POSIXct(long[[mapping$datetime]]),
-                              parameter_id = long$parameter_id,
-                              value = long$value)
+        if (identical(mapping$format, "long")) {
+          param_col <- mapping$param_col
+          val_col <- mapping$value_col
+          dt_col <- mapping$datetime
+          df$row_id <- seq_len(nrow(df))
+          df$parameter_id <- vapply(as.character(df[[param_col]]), function(p) mapping$params[[p]]$id, numeric(1))
+          conv <- vapply(as.character(df[[param_col]]), function(p) mapping$params[[p]]$conv, numeric(1))
+          data$df <- data.frame(sample = df$row_id,
+                                datetime = as.POSIXct(df[[dt_col]]),
+                                parameter_id = df$parameter_id,
+                                value = as.numeric(df[[val_col]]) * conv)
+        } else {
+          start_row <- max(mapping$param_row, mapping$unit_row, na.rm = TRUE) + 1
+          param_cols <- names(mapping$params)
+          sub <- df[start_row:nrow(df), c(mapping$datetime, param_cols)]
+          sub$row_id <- seq_len(nrow(sub))
+          long <- tidyr::pivot_longer(sub, cols = tidyselect::all_of(param_cols), names_to = "pcol", values_to = "value")
+          long$parameter_id <- vapply(long$pcol, function(pc) mapping$params[[pc]]$id, numeric(1))
+          conv <- vapply(long$pcol, function(pc) mapping$params[[pc]]$conv, numeric(1))
+          data$df <- data.frame(sample = long$row_id,
+                                datetime = as.POSIXct(long[[mapping$datetime]]),
+                                parameter_id = long$parameter_id,
+                                value = as.numeric(long$value) * conv)
+        }
       }
     }, ignoreInit = TRUE)
 
@@ -189,17 +315,17 @@ addDiscData <- function(id) {
       ext <- tools::file_ext(file$name)
       id <- DBI::dbGetQuery(session$userData$AquaCache,
                             "INSERT INTO files.documents (name, type, description, format, document) VALUES ($1, 1, $2, $3, $4) RETURNING document_id",
-                            params = list(file$name, paste('Uploaded', file$name), ext, list(bin)))$document_id
+                            params = list(file$name, paste("Uploaded", file$name), ext, list(bin)))$document_id
       return(id)
     }
 
     observeEvent(input$upload, {
       if (is.null(input$location)) {
-        showNotification('Please select a location.', type = 'error')
+        showNotification("Please select a location.", type = "error")
         return()
       }
       if (nrow(data$df) == 0) {
-        showNotification('Empty data table!', type = 'error')
+        showNotification("Empty data table!", type = "error")
         return()
       }
       tryCatch({
@@ -213,9 +339,9 @@ addDiscData <- function(id) {
             doc_ids <- c(doc_ids, insertDoc(list(name = input$attach_docs$name[ii], datapath = input$attach_docs$datapath[ii])))
           }
         }
-        doc_array <- if (length(doc_ids) > 0) paste0('{', paste(doc_ids, collapse=','), '}') else NA_character_
+        doc_array <- if (length(doc_ids) > 0) paste0("{", paste(doc_ids, collapse = ','), "}") else NA_character_
 
-        samples <- unique(data$df[, c('sample', 'datetime')])
+        samples <- unique(data$df[, c("sample", "datetime")])
         for (i in seq_len(nrow(samples))) {
           q <- "INSERT INTO discrete.samples (location_id, sub_location_id, media_id, datetime, collection_method, sample_type, owner, documents) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::integer[]) RETURNING sample_id"
           sid <- DBI::dbGetQuery(con, q,
@@ -232,10 +358,10 @@ addDiscData <- function(id) {
           }
         }
 
-        showNotification('Data added.', type = 'message')
+        showNotification("Data added.", type = "message")
         data$df <- data.frame(sample = integer(), datetime = as.POSIXct(character()), parameter_id = integer(), value = numeric())
       }, error = function(e) {
-        showNotification(paste('Upload failed:', e$message), type = 'error')
+        showNotification(paste("Upload failed:", e$message), type = "error")
       })
     })
   })
