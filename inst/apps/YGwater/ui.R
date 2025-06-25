@@ -34,8 +34,10 @@ app_ui <- function(request) {
         }
       "))
     ),
-    # Make the container for the top bar
+    # page_fluid is the main container for the app, which contains the top bar, nav bar, and content
     page_fluid(
+      # Make the container for the top bar, which sits above the nav bar
+      
       div(
         class = "top-bar-container d-none d-md-block",
         fluidRow(
@@ -75,8 +77,6 @@ app_ui <- function(request) {
         gap = "10px",
         nav_panel(title = uiOutput("homeNavTitle"), value = "home",
                   uiOutput("home_ui")),
-        # nav_panel(title = uiOutput("mapsNavMenuTitle"), value = "map",
-        #           uiOutput("map_ui")),
         nav_menu(title = uiOutput("mapsNavMenuTitle"), value = "maps",
                  nav_panel(title = uiOutput("mapsNavLocsTitle"), value = "monitoringLocations",
                            uiOutput("mapLocs_ui")),
