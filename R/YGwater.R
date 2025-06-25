@@ -32,7 +32,13 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   rlang::check_installed("bsicons", reason = "required to use YGwater app")
   rlang::check_installed("exifr", reason = "required to use YGwater app")
   rlang::check_installed("leaflet", reason = "required to use YGwater app")
-  rlang::check_installed("AquaCache", reason = "required to use YGwater app")
+  if (!rlang::is_installed("remotes")) {
+    rlang::check_installed("AquaCache", reason = "required to use YGwater app", action = \(pkg, ...) remotes::install_github("YukonWRB/AquaCache"))
+  } else {
+    rlang::check_installed("remotes", reason = "required to install AquaCache from GitHub")
+    rlang::check_installed("AquaCache", reason = "required to use YGwater app", action = \(pkg, ...) remotes::install_github("YukonWRB/AquaCache"))
+  }
+  
   
   appDir <- system.file("apps/YGwater", package = "YGwater")
   
@@ -83,9 +89,9 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   DBI::dbDisconnect(con)
   
   
-  shiny::enableBookmarking(store = "url")  # Enable bookmarking
+  # shiny::enableBookmarking(store = "url")  # Enable bookmarking
   
-  # Set up for ExcendedTasks or promises
+  # Set up for ExtendedTasks or promises
   # If on Windows OR running interactively, use multisession, else use multicore
   if (Sys.info()["sysname"] == "Windows" | interactive()) {
     future::plan("multisession")
