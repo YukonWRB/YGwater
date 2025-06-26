@@ -157,8 +157,9 @@ addDiscData <- function(id) {
 
     updateSelectInput(session, "location",
                       choices = stats::setNames(locations$location_id, locations$name))
-    updateSelectInput(session, "sublocation",
-                      choices = c("" = "", stats::setNames(sub_locations$sub_location_id, sub_locations$sub_location_name)))
+    sub_choices <- c("", sub_locations$sub_location_id)
+    names(sub_choices) <- c("", sub_locations$sub_location_name)
+    updateSelectInput(session, "sublocation", choices = sub_choices)
 
     file_data <- reactiveVal(NULL)
 

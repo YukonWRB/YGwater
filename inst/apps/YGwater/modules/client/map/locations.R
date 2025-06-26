@@ -227,7 +227,7 @@ mapLocs <- function(id, language) {
     
     # Update map popup based on language ###########################################
     popupData <- reactive({
-      get_cached("map_popup_data", 
+      get_cached(if (language$abbrev == "fr") "map_popup_data_fr" else "map_popup_data_en", 
                  env = if (session$userData$user_logged_in) session$userData$app_cache else .GlobalEnv,
                  fetch_fun = function() {
         # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
