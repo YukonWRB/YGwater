@@ -97,23 +97,27 @@ app_server <- function(input, output, session) {
     ui_loaded$contData <- FALSE
     ui_loaded$news <- FALSE
     ui_loaded$about <- FALSE
-    ui_loaded$feedback <- FALSE # !!! THIs TAB TO BE DELETED ONCE TESTING IS COMPLETE
-    ui_loaded$syncCont <- FALSE
-    ui_loaded$syncDisc <- FALSE
-    ui_loaded$locs <- FALSE
-    ui_loaded$ts <- FALSE
+    ui_loaded$feedback <- FALSE # !!! THIS TAB TO BE DELETED ONCE TESTING IS COMPLETE
+    ui_loaded$addLocation <- FALSE
     ui_loaded$equip <- FALSE
     ui_loaded$deploy_recover <- FALSE
     ui_loaded$cal <- FALSE
+    
     ui_loaded$addContData <- FALSE
-    ui_loaded$addDiscData <- FALSE
-    ui_loaded$editDiscData <- FALSE
     ui_loaded$continuousCorrections <- FALSE
     ui_loaded$imputeMissing <- FALSE
     ui_loaded$editContData <- FALSE
     ui_loaded$grades_approvals_qualifiers <- FALSE
+    ui_loaded$syncCont <- FALSE
+    ui_loaded$ts <- FALSE
+    
+    ui_loaded$addDiscData <- FALSE
+    ui_loaded$editDiscData <- FALSE
+    ui_loaded$syncDisc <- FALSE
+    
     ui_loaded$addDocs <- FALSE
     ui_loaded$addImgs <- FALSE
+    
     ui_loaded$manageNewsContent <- FALSE
     ui_loaded$viewFeedback <- FALSE 
     ui_loaded$visit <- FALSE
@@ -420,7 +424,7 @@ $(document).keyup(function(event) {
   
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
-  last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
+  last_admin_tab <- reactiveVal("manageNewsContent")      # Default tab for admin mode
   
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
@@ -470,7 +474,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "ts", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -667,11 +671,11 @@ $(document).keyup(function(event) {
         syncDisc("syncDisc") # Call the server
       }
     }
-    if (input$navbar == "locs") {
-      if (!ui_loaded$locs) {
-        output$locs_ui <- renderUI(locsUI("locs"))
-        ui_loaded$locs <- TRUE
-        locs("locs") # Call the server
+    if (input$navbar == "addLocation") {
+      if (!ui_loaded$addLocation) {
+        output$addLocation_ui <- renderUI(addLocationUI("addLocation"))
+        ui_loaded$addLocation <- TRUE
+        addLocation("addLocation") # Call the server
       }
     }
     if (input$navbar == "ts") {

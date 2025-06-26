@@ -73,6 +73,8 @@ mapLocs <- function(id, language) {
     observeFilterInput("net")
     
     # Create UI elements #####
+    
+
     output$sidebar_page <- renderUI({
       req(moduleData, language)
       page_sidebar(
@@ -349,6 +351,7 @@ mapLocs <- function(id, language) {
     
     # Filter the map data based on user's selection and add points to map ############################
     observe({
+      req(input$map_zoom, popupData())
       popup_data <- popupData()
       if (!is.null(input$type)) {
         if (length(input$type) > 1) {
@@ -454,8 +457,9 @@ mapLocs <- function(id, language) {
                             lng = ~longitude,
                             lat = ~latitude,
                             popup = ~popup_html,
-                            clusterOptions = leaflet::markerClusterOptions())
-      
+                            clusterOptions = leaflet::markerClusterOptions()
+                            )
+
     }) # End of observe for map filters and rendering location points
     
     

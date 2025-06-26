@@ -133,23 +133,6 @@ app_ui <- function(request) {
         nav_panel(title = "Feedback", value = "feedback",
                   uiOutput("feedback_ui")),
         if (!config$public) {
-          nav_menu(title = "Database tasks",
-                   value = "dbAdmin",
-                   nav_panel(title = "Sync timeseries",
-                             value = "syncCont",
-                             uiOutput("syncCont_ui")),
-                   nav_panel(title = "Sync sample series",
-                             value = "syncDisc",
-                             uiOutput("syncDisc_ui")),
-                   nav_panel(title = "Add/edit locations",
-                             value = "locs",
-                             uiOutput("locs_ui")),
-                   nav_panel(title = "Add/edit timeseries",
-                             value = "ts",
-                             uiOutput("ts_ui"))
-          )
-        },
-        if (!config$public) {
           nav_menu(title = "Application tasks",
                    value = "appTasks",
                    nav_panel(title = "News page content",
@@ -177,7 +160,13 @@ app_ui <- function(request) {
                              uiOutput("imputeMissing_ui")),
                    nav_panel(title = "Apply grades, approvals, qualifiers",
                              value = "grades_approvals_qualifiers",
-                             uiOutput("grades_approvals_qualifiers_ui"))
+                             uiOutput("grades_approvals_qualifiers_ui")),
+                   nav_panel(title = "Sync timeseries",
+                             value = "syncCont",
+                             uiOutput("syncCont_ui")),
+                   nav_panel(title = "Add/edit timeseries",
+                             value = "ts",
+                             uiOutput("ts_ui"))
           )
         },
         if (!config$public) {
@@ -188,7 +177,19 @@ app_ui <- function(request) {
                              uiOutput("addDiscData_ui")),
                    nav_panel(title = "Edit/delete discrete data",
                              value = "editDiscData",
-                             uiOutput("editDiscData_ui"))
+                             uiOutput("editDiscData_ui")),
+                   nav_panel(title = "Sync sample series",
+                             value = "syncDisc",
+                             uiOutput("syncDisc_ui"))
+          )
+        },
+        if (!config$public) {
+          nav_menu(title = "Location tasks",
+                   value = "dbAdmin",
+                   nav_panel(title = "Add new location",
+                             value = "addLocation",
+                             uiOutput("addLocation_ui")
+                   )
           )
         },
         if (!config$public) {

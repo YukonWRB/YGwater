@@ -1,23 +1,44 @@
 # UI and server code for add new location module
 
-locsNewLocUI <- function(id) {
+addLocationUI <- function(id) {
   ns <- NS(id)
-  page_fluid(
-    fluidRow(
-      # On larger screens, a 6-column width centered with offset
-      # On smaller screens, it naturally adjusts to full width
-      column(width = 6,
-             uiOutput(ns("new_locUI"))
-      ) 
+  
+  tagList(
+    ## this CSS will apply to *any* input container you tag with class "invalid"
+    tags$style(HTML(
+      ".shiny-input-container.invalid .form-control {
+        background-color: #fdd !important;
+      }"
+    )),
+    page_fluid(
+      fluidRow(
+        # On larger screens, a 6-column width centered with offset
+        # On smaller screens, it naturally adjusts to full width
+        column(width = 6,
+               uiOutput(ns("new_locUI"))
+        ) 
+      )
     )
   )
 }
 
-locsNewLocServer <- function(id) {
+
+addLocation <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
+    
+    ## helper to add/remove the invalid class on *any* input
+    toggleInvalid <- function(inputId, isValid) {
+      inputId <- ns(inputId)
+      if (!isValid)   {
+        shinyjs::addClass(inputId, "invalid", asis = TRUE)
+      } else {
+        shinyjs::removeClass(inputId, "invalid", asis = TRUE)
+      }
+    }
+    
     
     outputs <- reactiveValues(added = FALSE)  # This allows the module to pass values back to the main server
     
@@ -44,7 +65,7 @@ locsNewLocServer <- function(id) {
     
     output$new_locUI <- renderUI({
       tagList(
-        textOutput(ns("hydat_note")
+        htmlOutput(ns("hydat_note")
         ),
         textInput(ns("loc_code"), 
                   "Location code (must not exist already)",
@@ -164,7 +185,7 @@ locsNewLocServer <- function(id) {
     
     ## Hydat fill ###############################################################
     # Detect if the user's location code is present in hydat. If so, show a button to enable them to auto-populate fields with hydat info
-    hydat_note <- renderText("Entering a WSC code will allow you to auto-populate fields with HYDAT information.")
+    output$hydat_note <- renderUI({HTML("<b>Entering a WSC code will allow you to auto-populate fields with HYDAT information.</b><br>")})
     hydat <- reactiveValues(exists = FALSE,
                             stns = NULL)
     if ((file.exists(tidyhydat::hy_downloaded_db()))) {
@@ -183,6 +204,13 @@ locsNewLocServer <- function(id) {
       } else {
         shinyjs::hide("hydat_fill")
       }
+      
+      # Check if the location code already exists in the database. If yes, make the selectizeInput red.
+      if (input$loc_code %in% moduleData$exist_locs$location_id) {
+        toggleInvalid("loc_code", FALSE)
+      } else {
+        toggleInvalid("loc_code", TRUE)
+      }
     }, ignoreInit = TRUE)
     
     observeEvent(input$hydat_fill, {
@@ -197,7 +225,7 @@ locsNewLocServer <- function(id) {
       datum$DATUM_FROM_ID <- datum_list$DATUM_ID[match(datum$DATUM_FROM, datum_list$DATUM_EN)]
       # Replace DATUM_TO with DATUM_ID
       datum$DATUM_TO_ID <- datum_list$DATUM_ID[match(datum$DATUM_TO, datum_list$DATUM_EN)]
-
+      
       # Drop original DATUM_FROM and DATUM_TO columns
       datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
       
@@ -219,6 +247,7 @@ locsNewLocServer <- function(id) {
       
       updateSelectizeInput(session, "loc_owner", selected = moduleData$organizations[moduleData$organizations$name == "Water Survey of Canada", "organization_id"])
       updateTextInput(session, "loc_note", value = paste0("Station metadata from HYDAT version ", substr(tidyhydat::hy_version()$Date[1], 1, 10)))
+      updateSelectizeInput(session, "network", selected = moduleData$networks[moduleData$networks$name == "Canada Yukon Hydrometric Network", "network_id"])
     }, ignoreInit = TRUE)
     
     
@@ -529,7 +558,7 @@ locsNewLocServer <- function(id) {
                        current = TRUE,
                        network = if (isTruthy(input$network)) as.numeric(input$network) else NA,
                        project = if (isTruthy(input$project)) as.numeric(input$project) else NA)                
-
+      
       tryCatch( {
         AquaCache::addACLocation(con = session$userData$AquaCache,
                                  df = df)
@@ -571,6 +600,6 @@ locsNewLocServer <- function(id) {
     
     
     return(outputs)
-
+    
   }) # End of moduleServer
 }
