@@ -4,20 +4,8 @@ addLocationUI <- function(id) {
   ns <- NS(id)
   
   tagList(
-    ## this CSS will apply to *any* input container you tag with class "invalid"
-    tags$style(HTML(
-      ".shiny-input-container.invalid .form-control {
-        background-color: #fdd !important;
-      }"
-    )),
     page_fluid(
-      fluidRow(
-        # On larger screens, a 6-column width centered with offset
-        # On smaller screens, it naturally adjusts to full width
-        column(width = 6,
-               uiOutput(ns("new_locUI"))
-        ) 
-      )
+      uiOutput(ns("new_locUI"))
     )
   )
 }
@@ -28,17 +16,6 @@ addLocation <- function(id) {
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
-    
-    ## helper to add/remove the invalid class on *any* input
-    toggleInvalid <- function(inputId, isValid) {
-      inputId <- ns(inputId)
-      if (!isValid)   {
-        shinyjs::addClass(inputId, "invalid", asis = TRUE)
-      } else {
-        shinyjs::removeClass(inputId, "invalid", asis = TRUE)
-      }
-    }
-    
     
     outputs <- reactiveValues(added = FALSE)  # This allows the module to pass values back to the main server
     
@@ -156,6 +133,7 @@ addLocation <- function(id) {
                      value = NULL,
                      width = "100%"
         ),
+        uiOutput(ns("elev_warning")),
         selectizeInput(ns("network"), 
                        "Network (type your own if not in list)", 
                        choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name),
@@ -171,6 +149,24 @@ addLocation <- function(id) {
                        options = list(create = TRUE, 
                                       placeholder = "Optional"),  # With a choice to allow users to add a project
                        width = "100%"
+        ),
+        checkboxInput(ns("loc_jursdictional_relevance"), 
+                      "Check if this location is publicly relevant to your jurisdiction (i.e. should be seen by the public)", 
+                      value = TRUE
+        ),
+        checkboxInput(ns("loc_anthropogenic_influence"), 
+                      "Check if this location is influenced by human activity (dams, upstream mining, etc.)", 
+                      value = FALSE
+        ),
+        textInput(ns("loc_install_purpose"), 
+                  "Installation or establishment purpose (optional)",
+                  placeholder = "Optional",
+                  width = "100%"
+        ),
+        textInput(ns("loc_current_purpose"), 
+                  "Current purpose (optional)",
+                  placeholder = "Optional",
+                  width = "100%"
         ),
         textInput(ns("loc_note"), 
                   "Location note",
@@ -196,24 +192,46 @@ addLocation <- function(id) {
     }
     
     observeEvent(input$loc_code, {# Observe loc_code inputs and, if possible, show the button to auto-populate fields
-      if (!hydat$exists) {  # obviously can't do anything here...
-        return()
-      }
-      if (input$loc_code %in% hydat$stns) {
-        shinyjs::show("hydat_fill")
+      req(input$loc_code, hydat$exists)
+      if (hydat$exists) {
+        if (input$loc_code %in% hydat$stns) {
+          shinyjs::show("hydat_fill")
+        } else {
+          shinyjs::hide("hydat_fill")
+        }
       } else {
-        shinyjs::hide("hydat_fill")
+        shinyjs::hide("hydat_fill")  # If HYDAT is not available, hide the button
       }
       
-      # Check if the location code already exists in the database. If yes, make the selectizeInput red.
-      if (input$loc_code %in% moduleData$exist_locs$location_id) {
-        toggleInvalid("loc_code", FALSE)
+      # Check if the location code already exists in the database. If yes, make the selectizeInput pink
+      if (input$loc_code %in% moduleData$exist_locs$location) {
+        shinyjs::js$backgroundCol(ns("loc_code"), "#fdd")
       } else {
-        toggleInvalid("loc_code", TRUE)
+        shinyjs::js$backgroundCol(ns("loc_code"), "#fff")
+      }
+    }, ignoreInit = TRUE)
+    
+    ## Validation helpers for other inputs -----------------------------------
+    observeEvent(input$loc_name, {
+      req(input$loc_name)
+      if (input$loc_name %in% moduleData$exist_locs$name) {
+        shinyjs::js$backgroundCol(ns("loc_name"), "#fdd")
+      } else {
+        shinyjs::js$backgroundCol(ns("loc_name"), "#fff")
+      }
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$loc_name_fr, {
+      req(input$loc_name_fr)
+      if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
+        shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fdd")
+      } else {
+        shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fff")
       }
     }, ignoreInit = TRUE)
     
     observeEvent(input$hydat_fill, {
+      req(input$loc_code)
       # Get the station info from hydat
       stn <- tidyhydat::hy_stations(input$loc_code)
       if (nrow(stn) == 0) {
@@ -253,30 +271,37 @@ addLocation <- function(id) {
     
     ## Make messages for lat/lon warnings #########################################
     # Reactive values to track warnings
-    warnings <- reactiveValues(lat = NULL, lon = NULL)
+    warnings <- reactiveValues(lat = NULL, 
+                               lon = NULL,
+                               elev = NULL)
     
     # Update reactive values for latitude warning
     observe({
       req(input$lat)
       if (input$lat < 0) {
-        warnings$lat <- "Warning: Latitude is negative. Are you sure you're in the southern hemisphere?"
-      } else if (input$lat > 90) {
-        warnings$lat <- "Error: Latitude cannot exceed 90 degrees."
-      } else if (input$lat < -90) {
-        warnings$lat <- "Error: Latitude cannot be less than -90 degrees."
+        warnings$lat <- "Warning: Latitude is negative. Are you sure your location is in the southern hemisphere?"
+        shinyjs::js$backgroundCol(ns("lat"), "#fdd")
+      } else if (input$lat > 90 || input$lat < -90) {
+        warnings$lat <- "Error: Latitude cannot exceed + or - 90 degrees."
+        shinyjs::js$backgroundCol(ns("lat"), "#fdd")
       } else {
         warnings$lat <- NULL
+        shinyjs::js$backgroundCol(ns("lat"), "#fff")
       }
     })
     # Update reactive values for longitude warning
+    
     observe({
       req(input$lon)
       if (input$lon < -180 || input$lon > 180) {
         warnings$lon <- "Error: Longitude must be between -180 and 180 degrees."
+        shinyjs::js$backgroundCol(ns("lon"), "#fdd")
       } else if (input$lon > 0) {
-        warnings$lon <- "Warning: Longitude is positive. Are you sure you're in the eastern hemisphere?"
+        warnings$lon <- "Warning: Longitude is positive. Are you sure your location is east of the prime meridian?"
+        shinyjs::js$backgroundCol(ns("lon"), "#fdd")
       } else {
         warnings$lon <- NULL
+        shinyjs::js$backgroundCol(ns("lon"), "#fff")
       }
     })
     
@@ -290,6 +315,26 @@ addLocation <- function(id) {
       }
     })
     
+    observe({
+      req(input$datum_id_from, input$datum_id_to, input$elev)
+      if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
+        shinyjs::js$backgroundCol(ns("elev"), "#fdd")
+        warnings$elev <- "Warning: Elevation conversion is set to a non-zero value but the from/to datums are the same. Are you sure you want to do this?"
+      } else {
+        shinyjs::js$backgroundCol(ns("elev"), "#fff")
+        warnings$elev <- NULL
+      }
+    })
+    
+    output$elev_warning <- renderUI({
+      if (!is.null(warnings$elev)) {
+        div(
+          style = "color: red; font-size: 12px; margin-top: -10; margin-bottom: 10px;",
+          warnings$elev
+        )
+      }
+    })
+    
     output$lon_warning <- renderUI({
       if (!is.null(warnings$lon)) {
         div(
@@ -299,7 +344,7 @@ addLocation <- function(id) {
       }
     })
     
-    ## Allow users to add a few things to the DB ###################################
+    ## Allow users to add a few things to the DB besides locations ###################################
     ## If user types in their own network/project/owner/share_with, bring up a modal to add it to the database. This requires updating moduleData and the selectizeInput choices
     
     ### Observe the network selectizeInput for new networks #######################
@@ -318,11 +363,14 @@ addLocation <- function(id) {
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     observeEvent(input$add_network, {
+      # Close the modal dialog
       # Check that mandatory fields are filled in
       if (!isTruthy(input$network_name)) {
+        shinyjs::js$backgroundCol(ns("network_name"), "#fdd")
         return()
       }
       if (!isTruthy(input$network_description)) {
+        shinyjs::js$backgroundCol(ns("network_description"), "#fdd")
         return()
       }
       # Add the network to the database
@@ -332,12 +380,15 @@ addLocation <- function(id) {
                        description_fr = if (isTruthy(input$network_description_fr)) input$network_description_fr else NA,
                        type = input$network_type)
       DBI::dbAppendTable(session$userData$AquaCache, "networks", df, append = TRUE)
+      
       # Update the moduleData reactiveValues
       moduleData$networks <- dbGetQueryDT(session$userData$AquaCache, "SELECT network_id, name FROM networks")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "network", choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name), selected = moduleData$networks[moduleData$networks$name == df$name, "network_id"])
+      removeModal()
       showModal(modalDialog(
-        "New network added."
+        "New network added.",
+        easyClose = TRUE
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
@@ -360,13 +411,11 @@ addLocation <- function(id) {
     observeEvent(input$add_project, {
       # Check that mandatory fields are filled in
       if (!isTruthy(input$project_name)) {
-        
+        shinyjs::js$backgroundCol(ns("project_name"), "#fdd")
         return()
       }
       if (!isTruthy(input$project_description)) {
-        showModal(modalDialog(
-          "Project description is mandatory"
-        ))
+        shinyjs::js$backgroundCol(ns("project_description"), "#fdd")
         return()
       }
       # Add the project to the database
@@ -376,12 +425,15 @@ addLocation <- function(id) {
                        description_fr = if (isTruthy(input$project_description_fr)) input$project_description_fr else NA,
                        type = input$project_type)
       DBI::dbAppendTable(session$userData$AquaCache, "projects", df, append = TRUE)
+      
       # Update the moduleData reactiveValues
       moduleData$projects <- dbGetQueryDT(session$userData$AquaCache, "SELECT project_id, name FROM projects")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "project", choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), selected = moduleData$projects[moduleData$projects$name == df$name, "project_id"])
+      removeModal()
       showModal(modalDialog(
-        "New project added."
+        "New project added.",
+        easyClose = TRUE
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
@@ -403,6 +455,7 @@ addLocation <- function(id) {
     observeEvent(input$add_owner, {
       # Check that mandatory fields are filled in
       if (!isTruthy(input$owner_name)) {
+        shinyjs::js$backgroundCol(ns("owner_name"), "#fdd")
         return()
       }
       # Add the owner to the database
@@ -413,12 +466,15 @@ addLocation <- function(id) {
                        email = if (isTruthy(input$contact_email)) input$contact_email else NA,
                        note = if (isTruthy(input$contact_note)) input$contact_note else NA)
       DBI::dbAppendTable(session$userData$AquaCache, "organizations", df, append = TRUE)
+      
       # Update the moduleData reactiveValues
       moduleData$organizations <- dbGetQueryDT(session$userData$AquaCache, "SELECT organization_id, name FROM organizations")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "loc_owner", choices = stats::setNames(moduleData$organizations$organization_id, moduleData$organizations$name), selected = moduleData$organizations[moduleData$organizations$name == df$name, "organization_id"])
+      removeModal()
       showModal(modalDialog(
-        "New owner added."
+        "New owner added.",
+        easyClose = TRUE
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
@@ -426,7 +482,8 @@ addLocation <- function(id) {
     observeEvent(input$share_with, {
       if (length(input$share_with) > 1 & 'public_reader' %in% input$share_with) {
         showModal(modalDialog(
-          "If public_reader is selected it must be the only group selected."
+          "If public_reader is selected it must be the only group selected.",
+          easyClose = TRUE
         ))
         updateSelectizeInput(session, "share_with", selected = "public_reader")
       }
@@ -435,34 +492,9 @@ addLocation <- function(id) {
         return()
       }
       showModal(modalDialog(
-        "Ask a database admin to create a new user"
+        "Ask a database admin to create a new user or user group"
       ))
-      # showModal(modalDialog(
-      #   textInput(ns("group_name"), "Group name"),
-      #   textInput(ns("group_description"), "Group description"),
-      #   actionButton(ns("add_group"), "Add group")
-      # ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    # observeEvent(input$add_group, {
-    #   # Check that mandatory fields are filled in
-    #   if (!isTruthy(input$group_name)) {
-    #     return()
-    #   }
-    #   if (!isTruthy(input$group_description)) {
-    #     return()
-    #   }
-    #   # Add the group to the database
-    #   df <- data.frame(group_name = input$group_name,
-    #                    group_description = input$group_description)
-    #   DBI::dbAppendTable(session$userData$AquaCache, "user_groups", df, append = TRUE)
-    #   # Update the moduleData reactiveValues
-    #   moduleData$user_groups <- dbGetQueryDT(session$userData$AquaCache, "SELECT group_id, group_name, group_description FROM user_groups")
-    #   # Update the selectizeInput to the new value
-    #   updateSelectizeInput(session, "share_with", choices = stats::setNames(moduleData$user_groups$group_id, paste0(moduleData$user_groups$group_name, " (", moduleData$user_groups$group_description, ")")), selected = c(input$share_with, moduleData$user_groups[moduleData$user_groups$group_name == df$group_name, "group_id"]))
-    #   showModal(modalDialog(
-    #     "New group added."
-    #   ))
-    # }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     
     ## Observe the add_location click #################
@@ -472,46 +504,53 @@ addLocation <- function(id) {
       
       if (!isTruthy(input$loc_code)) {
         showModal(modalDialog(
-          "Location code is mandatory"
+          "Location code is mandatory",
+          easyClose = TRUE
         ))
         return()
       } else {
         if (input$loc_code %in% moduleData$exist_locs$location_id) {
           showModal(modalDialog(
-            "Location code already exists"
+            "Location code already exists",
+            easyClose = TRUE
           ))
           return()
         }
       }
       if (!isTruthy(input$loc_name)) {
         showModal(modalDialog(
-          "Location name is mandatory"
+          "Location name is mandatory",
+          easyClose = TRUE
         ))
         return()
       } else {
         if (input$loc_name %in% moduleData$exist_locs$name) {
           showModal(modalDialog(
-            "Location name already exists"
+            "Location name already exists",
+            easyClose = TRUE
           ))
           return()
         }
       }
       if (!isTruthy(input$loc_name_fr)) {
         showModal(modalDialog(
-          "Location name (French) is mandatory"
+          "Location name (French) is mandatory",
+          easyClose = TRUE
         ))
         return()
       } else {
         if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
           showModal(modalDialog(
-            "Location name (French) already exists"
+            "Location name (French) already exists",
+            easyClose = TRUE
           ))
           return()
         }
       }
       if (!isTruthy(input$loc_type)) {
         showModal(modalDialog(
-          "Location type is mandatory"
+          "Location type is mandatory",
+          easyClose = TRUE
         ))
         return()
       }
@@ -519,13 +558,15 @@ addLocation <- function(id) {
       # Check that lat and lon are within bounds. For lat, -90 to 90. For lon, -180 to 180
       if (input$lat < -90 || input$lat > 90) {
         showModal(modalDialog(
-          "Latitude must be between -90 and 90 degrees"
+          "Latitude must be between -90 and 90 degrees",
+          easyClose = TRUE
         ))
         return()
       }
       if (input$lon < -180 || input$lon > 180) {
         showModal(modalDialog(
-          "Longitude must be between -180 and 180 degrees"
+          "Longitude must be between -180 and 180 degrees",
+          easyClose = TRUE
         ))
         return()
       }
@@ -533,7 +574,8 @@ addLocation <- function(id) {
       # If datums are both the same make sure elevation is 0
       if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
         showModal(modalDialog(
-          "Elevation conversion must be 0 if the datums are the same"
+          "Elevation conversion must be 0 if the datums are the same",
+          easyClose = TRUE
         ))
         return()
       }
@@ -557,9 +599,13 @@ addLocation <- function(id) {
                        conversion_m = input$elev,
                        current = TRUE,
                        network = if (isTruthy(input$network)) as.numeric(input$network) else NA,
-                       project = if (isTruthy(input$project)) as.numeric(input$project) else NA)                
+                       project = if (isTruthy(input$project)) as.numeric(input$project) else NA,
+                       jurisdictional_relevance = if (isTruthy(input$loc_jurisdictional_relevance)) input$loc_jurisdictional_relevance else NA,
+                       anthropogenic_relevance = if (isTruthy(input$loc_anthropogenic_relevance)) input$loc_anthropogenic_relevance else NA,
+                       install_purpose = if (isTruthy(input$loc_install_purpose)) input$loc_install_purpose else NA,
+                       current_purpose = if (isTruthy(input$loc_current_purpose)) input$loc_current_purpose else NA)
       
-      tryCatch( {
+      tryCatch({
         AquaCache::addACLocation(con = session$userData$AquaCache,
                                  df = df)
         # Update the moduleData reactiveValues
@@ -567,7 +613,8 @@ addLocation <- function(id) {
         
         # Show a modal to the user that the location was added
         showModal(modalDialog(
-          "Location added successfully"
+          "Location added successfully",
+          easyClose = TRUE
         ))
         
         # Reset all fields
@@ -597,7 +644,6 @@ addLocation <- function(id) {
         ))
       })
     })
-    
     
     return(outputs)
     

@@ -12,6 +12,19 @@ app_ui <- function(request) {
   
   tagList(
     shinyjs::useShinyjs(),
+    # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
+    # Uses two parameters: 'id' for the element ID and 'col' for the color. Color can be R-recognized color name or hex code.
+    shinyjs::extendShinyjs(
+      text = 'shinyjs.backgroundCol = function(params) {
+      var defaultParams = {
+        id : null,
+        col : "red"
+      };
+      params = shinyjs.getParams(params, defaultParams);
+
+      var el = $("#" + params.id);
+                         el.css("background-color", params.col);
+}', functions = c("backgroundCol")),
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # JS to handle full screen button
       tags$script(src = "js/window_resize.js"),  # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
