@@ -208,6 +208,7 @@ addDiscData <- function(id) {
     observeEvent(input$goto_add_subloc, {
       removeModal()
       outputs$change_tab <- "addSubLocation"
+      output$sub_location <- input$sublocation
     })
     
     file_data <- reactiveVal(NULL)

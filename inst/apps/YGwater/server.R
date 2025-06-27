@@ -692,7 +692,7 @@ $(document).keyup(function(event) {
     #       moduleOutputs$addDiscData$change_tab <- NULL
     #     }
     #   }
-    }
+    # }
     if (input$navbar == "addTimeseries") {
       if (!ui_loaded$addTimeseries) {
         output$ts_ui <- renderUI(addTimeseriesUI("addTimeseries"))

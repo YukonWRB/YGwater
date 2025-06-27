@@ -5,7 +5,7 @@ addLocationUI <- function(id) {
   
   tagList(
     page_fluid(
-      uiOutput(ns("new_locUI"))
+      uiOutput(ns("ui"))
     )
   )
 }
@@ -17,34 +17,39 @@ addLocation <- function(id, inputs) {
     
     ns <- session$ns
     
-    outputs <- reactiveValues(added = FALSE)  # This allows the module to pass values back to the main server
-    
     # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
     moduleInputs <- reactiveValues(location = if (!is.null(inputs$location)) inputs$location else NULL)
     
     shinyjs::hide("hydat_fill") # Hide the button right away, it's shown if applicable
     
     # Get some data from aquacache
-    moduleData <- reactiveValues(
-      exist_locs = dbGetQueryDT(session$userData$AquaCache, "SELECT location_id, location, name, name_fr FROM locations"),
-      loc_types = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM location_types"),
-      organizations = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM organizations"),
-      # limit documents to those that are data sharing agreements, which requires a join on table document_types
-      agreements = dbGetQueryDT(session$userData$AquaCache, "SELECT document_id, name, description FROM documents WHERE type = (SELECT document_type_id FROM document_types WHERE document_type_en = 'data sharing agreement')"),
-      # parameters are linked to parameter_groups and parameter_sub_groups via parameter_relationships (to allow a many to many relationships)
-      parameters = dbGetQueryDT(session$userData$AquaCache, "SELECT parameter_id, param_name FROM parameters"),
-      parameter_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT group_id, group_name, description FROM parameter_groups"),
-      parameter_sub_groups = dbGetQueryDT(session$userData$AquaCache, "SELECT sub_group_id, sub_group_name, description FROM parameter_sub_groups"),
-      parameter_relationships = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM parameter_relationships"),
-      media = dbGetQueryDT(session$userData$AquaCache, "SELECT media_id, media_type FROM media_types"),
-      datums = dbGetQueryDT(session$userData$AquaCache, "SELECT datum_id, datum_name_en FROM datum_list"),
-      networks = dbGetQueryDT(session$userData$AquaCache, "SELECT network_id, name FROM networks"),
-      projects = dbGetQueryDT(session$userData$AquaCache, "SELECT project_id, name FROM projects"),
-      users = dbGetQueryDT(session$userData$AquaCache, "SELECT * FROM get_roles_with_select_on_locations();")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all users with 
-    )
+    moduleData <- reactiveValues()
     
-    output$new_locUI <- renderUI({
+    getModuleData <- function() {
+      moduleData$exist_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, visibility_public, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations")
+      moduleData$loc_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM location_types")
+      moduleData$organizations = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM organizations")
+      # limit documents to those that are data sharing agreements, which requires a join on table document_types
+      moduleData$agreements = DBI::dbGetQuery(session$userData$AquaCache, "SELECT document_id, name, description FROM documents WHERE type = (SELECT document_type_id FROM document_types WHERE document_type_en = 'data sharing agreement')")
+      moduleData$datums = DBI::dbGetQuery(session$userData$AquaCache, "SELECT datum_id, datum_name_en FROM datum_list")
+      moduleData$datum_conversions = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM datum_conversions WHERE current IS TRUE")
+      moduleData$networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT network_id, name FROM networks")
+      moduleData$projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT project_id, name FROM projects")
+      moduleData$users = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM get_roles_with_select_on_locations();")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all users with select privileges on locations table
+    }
+    
+    getModuleData()
+    
+    output$ui <- renderUI({
       tagList(
+        radioButtons(ns("mode"), NULL,
+                     choices = c("Add new" = "add", "Modify existing" = "modify"),
+                     inline = TRUE),
+        conditionalPanel(
+          condition = "input.mode == 'modify'",
+          ns = ns,
+          DT::DTOutput(ns("loc_table"))
+        ),
         htmlOutput(ns("hydat_note")
         ),
         textInput(ns("loc_code"), 
@@ -73,13 +78,13 @@ addLocation <- function(id, inputs) {
         ),
         numericInput(ns("lat"), 
                      "Latitude (decimal degrees)", 
-                     value = NULL,
+                     value = NA,
                      width = "100%"
         ),
         uiOutput(ns("lat_warning")),
         numericInput(ns("lon"), 
                      "Longitude (decimal degrees)", 
-                     value = NULL,
+                     value = NA,
                      width = "100%"
         ),
         uiOutput(ns("lon_warning")),
@@ -134,7 +139,7 @@ addLocation <- function(id, inputs) {
         ), 
         numericInput(ns("elev"), 
                      "Elevation conversion (meters, use 0 if not converting)", 
-                     value = NULL,
+                     value = NA,
                      width = "100%"
         ),
         uiOutput(ns("elev_warning")),
@@ -148,13 +153,13 @@ addLocation <- function(id, inputs) {
                        width = "100%"
         ),
         selectizeInput(ns("project"), 
-                       "Project (type your own if not in list)", 
+                       "Project(s) (type your own if not in list)", 
                        choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), 
                        options = list(create = TRUE, 
                                       placeholder = "Optional"),  # With a choice to allow users to add a project
                        width = "100%"
         ),
-        checkboxInput(ns("loc_jursdictional_relevance"), 
+        checkboxInput(ns("loc_jurisdictional_relevance"), 
                       "Check if this location is publicly relevant to your jurisdiction (i.e. should be seen by the public)", 
                       value = TRUE
         ),
@@ -183,6 +188,86 @@ addLocation <- function(id, inputs) {
       )
     })
     
+    ## Observers to modify existing entry ##########################################
+    selected_loc <- reactiveVal(NULL)
+    
+    output$loc_table <- DT::renderDT({
+      DT::datatable(moduleData$exist_locs,
+                    selection = "single",
+                    options = list(
+                      columnDefs = list(list(targets = 0, visible = FALSE)),
+                      scrollX = TRUE,
+                      initComplete = htmlwidgets::JS(
+                        "function(settings, json) {",
+                        "$(this.api().table().header()).css({",
+                        "  'background-color': '#079',",
+                        "  'color': '#fff',",
+                        "  'font-size': '100%',",
+                        "});",
+                        "$(this.api().table().body()).css({",
+                        "  'font-size': '90%',",
+                        "});",
+                        "}"
+                      )
+                    ),
+                    rownames = FALSE)
+    }) |> bindEvent(moduleData$exist_locs)
+    
+    observeEvent(input$loc_table_rows_selected, {
+      sel <- input$loc_table_rows_selected
+      if (length(sel) > 0) {
+        loc_id <- moduleData$exist_locs[sel, "location_id"]
+        selected_loc(loc_id)
+        details <- moduleData$exist_locs[moduleData$exist_locs$location_id == loc_id, ]
+        datum_details <- moduleData$datum_conversions[moduleData$datum_conversions$location_id == loc_id, ]
+        
+        if (nrow(details) > 0) {
+          updateTextInput(session, "loc_code", value = details$location)
+          updateTextInput(session, "loc_name", value = details$name)
+          updateTextInput(session, "loc_name_fr", value = details$name_fr)
+          updateSelectizeInput(session, "loc_type", selected = details$location_type)
+          updateNumericInput(session, "lat", value = details$latitude)
+          updateNumericInput(session, "lon", value = details$longitude)
+          updateSelectizeInput(session, "viz", selected = details$visibility_public)
+          updateSelectizeInput(session, "share_with", selected = details$share_with)
+          updateSelectizeInput(session, "loc_owner", selected = details$owner)
+          updateTextInput(session, "loc_contact", value = details$contact)
+          updateSelectizeInput(session, "data_sharing_agreement", selected = details$data_sharing_agreement_id)
+          updateSelectizeInput(session, "datum_id_from", selected = datum_details$datum_id_from)
+          updateSelectizeInput(session, "datum_id_to", selected = datum_details$datum_id_to)
+          updateNumericInput(session, "elev", value = datum_details$conversion_m)
+          nids <- DBI::dbGetQuery(session$userData$AquaCache,
+                                  sprintf("SELECT network_id FROM locations_networks WHERE location_id = %d", loc_id))
+          updateSelectizeInput(session, "network", selected = nids$network_id)
+          pids <- DBI::dbGetQuery(session$userData$AquaCache,
+                                  sprintf("SELECT project_id FROM locations_projects WHERE location_id = %d", loc_id))
+          updateSelectizeInput(session, "project", selected = pids$project_id)
+          updateCheckboxInput(session, "loc_jurisdictional_relevance", value = details$jurisdictional_relevance)
+          updateCheckboxInput(session, "loc_anthropogenic_influence", value = details$anthropogenic_influence)
+          updateTextInput(session, "loc_install_purpose", value = details$install_purpose)
+          updateTextInput(session, "loc_current_purpose", value = details$current_purpose)
+          updateTextInput(session, "loc_note", value = details$note)
+        }
+      } else {
+        selected_loc(NULL)
+      }
+    })
+    
+    observeEvent(input$mode, {
+      if (input$mode == "modify") {
+        updateActionButton(session, "add_loc", label = "Update location")
+        updateTextInput(session, "loc_code", label = "Location code")
+        updateTextInput(session, "loc_name", label = "Location name")
+        updateTextInput(session, "loc_name_fr", label = "French location name")
+      } else {
+        updateActionButton(session, "add_loc", label = "Add location")
+        updateTextInput(session, "loc_code", label = "Location code (must not exist already)")
+        updateTextInput(session, "loc_name", label = "Location name (must not exist already)")
+        updateTextInput(session, "loc_name_fr", label = "French location name (must not exist already)")
+      }
+    })
+    
+    
     ## Hydat fill ###############################################################
     # Detect if the user's location code is present in hydat. If so, show a button to enable them to auto-populate fields with hydat info
     output$hydat_note <- renderUI({HTML("<b>Entering a WSC code will allow you to auto-populate fields with HYDAT information.</b><br>")})
@@ -192,7 +277,7 @@ addLocation <- function(id, inputs) {
       hydat$exists <- TRUE
       hydat$stns <- tidyhydat::hy_stations()$STATION_NUMBER
     } else {
-      shinyjs::hide(hydat_note)
+      shinyjs::hide("hydat_note")
     }
     
     observeEvent(input$loc_code, {# Observe loc_code inputs and, if possible, show the button to auto-populate fields
@@ -208,29 +293,42 @@ addLocation <- function(id, inputs) {
       }
       
       # Check if the location code already exists in the database. If yes, make the selectizeInput pink
-      if (input$loc_code %in% moduleData$exist_locs$location) {
-        shinyjs::js$backgroundCol(ns("loc_code"), "#fdd")
-      } else {
+      print(input$mode)
+      if (input$mode == "modify") {
         shinyjs::js$backgroundCol(ns("loc_code"), "#fff")
+      } else {
+        if (input$loc_code %in% moduleData$exist_locs$location) {
+          shinyjs::js$backgroundCol(ns("loc_code"), "#fdd")
+        } else {
+          shinyjs::js$backgroundCol(ns("loc_code"), "#fff")
+        }
       }
     }, ignoreInit = TRUE)
     
     ## Validation helpers for other inputs -----------------------------------
     observeEvent(input$loc_name, {
       req(input$loc_name)
-      if (input$loc_name %in% moduleData$exist_locs$name) {
-        shinyjs::js$backgroundCol(ns("loc_name"), "#fdd")
-      } else {
+      if (input$mode == "modify") {
         shinyjs::js$backgroundCol(ns("loc_name"), "#fff")
+      } else {
+        if (input$loc_name %in% moduleData$exist_locs$name) {
+          shinyjs::js$backgroundCol(ns("loc_name"), "#fdd")
+        } else {
+          shinyjs::js$backgroundCol(ns("loc_name"), "#fff")
+        }
       }
     }, ignoreInit = TRUE)
     
     observeEvent(input$loc_name_fr, {
       req(input$loc_name_fr)
-      if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
-        shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fdd")
-      } else {
+      if (input$mode == "modify") {
         shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fff")
+      } else {
+        if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
+          shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fdd")
+        } else {
+          shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fff")
+        }
       }
     }, ignoreInit = TRUE)
     
@@ -313,7 +411,7 @@ addLocation <- function(id, inputs) {
     output$lat_warning <- renderUI({
       if (!is.null(warnings$lat)) {
         div(
-          style = "color: red; font-size: 12px; margin-top: -10; margin-bottom: 10px",
+          style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px",
           warnings$lat
         )
       }
@@ -333,7 +431,7 @@ addLocation <- function(id, inputs) {
     output$elev_warning <- renderUI({
       if (!is.null(warnings$elev)) {
         div(
-          style = "color: red; font-size: 12px; margin-top: -10; margin-bottom: 10px;",
+          style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px;",
           warnings$elev
         )
       }
@@ -342,7 +440,7 @@ addLocation <- function(id, inputs) {
     output$lon_warning <- renderUI({
       if (!is.null(warnings$lon)) {
         div(
-          style = "color: red; font-size: 12px; margin-top: -10; margin-bottom: 10px;",
+          style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px;",
           warnings$lon
         )
       }
@@ -356,7 +454,7 @@ addLocation <- function(id, inputs) {
       if (input$network %in% moduleData$networks$network_id || nchar(input$network) == 0) {
         return()
       }
-      net_types <- dbGetQueryDT(session$userData$AquaCache, "SELECT id, name FROM network_project_types")
+      net_types <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT id, name FROM network_project_types")
       showModal(modalDialog(
         textInput(ns("network_name"), "Network name", value = input$loc_name),
         textInput(ns("network_name_fr"), "Network name French (optional)"),
@@ -386,7 +484,7 @@ addLocation <- function(id, inputs) {
       DBI::dbAppendTable(session$userData$AquaCache, "networks", df, append = TRUE)
       
       # Update the moduleData reactiveValues
-      moduleData$networks <- dbGetQueryDT(session$userData$AquaCache, "SELECT network_id, name FROM networks")
+      moduleData$networks <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT network_id, name FROM networks")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "network", choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name), selected = moduleData$networks[moduleData$networks$name == df$name, "network_id"])
       removeModal()
@@ -401,7 +499,7 @@ addLocation <- function(id, inputs) {
       if (input$project %in% moduleData$projects$project_id || nchar(input$project) == 0) {
         return()
       }
-      proj_types <- dbGetQueryDT(session$userData$AquaCache, "SELECT id, name FROM network_project_types")
+      proj_types <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT id, name FROM network_project_types")
       
       showModal(modalDialog(
         textInput(ns("project_name"), "Project name", value = input$loc_name),
@@ -431,7 +529,7 @@ addLocation <- function(id, inputs) {
       DBI::dbAppendTable(session$userData$AquaCache, "projects", df, append = TRUE)
       
       # Update the moduleData reactiveValues
-      moduleData$projects <- dbGetQueryDT(session$userData$AquaCache, "SELECT project_id, name FROM projects")
+      moduleData$projects <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT project_id, name FROM projects")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "project", choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), selected = moduleData$projects[moduleData$projects$name == df$name, "project_id"])
       removeModal()
@@ -447,7 +545,7 @@ addLocation <- function(id, inputs) {
         return()
       }
       showModal(modalDialog(
-        textInput(ns("owner_name"), "Owner name"), value = input$loc_owner,
+        textInput(ns("owner_name"), "Owner name", value = input$loc_owner),
         textInput(ns("owner_name_fr"), "Owner name French (optional)"),
         textInput(ns("contact_name"), "Contact name (optional)"),
         textInput(ns("contact_phone"), "Contact phone (optional)"),
@@ -472,7 +570,7 @@ addLocation <- function(id, inputs) {
       DBI::dbAppendTable(session$userData$AquaCache, "organizations", df, append = TRUE)
       
       # Update the moduleData reactiveValues
-      moduleData$organizations <- dbGetQueryDT(session$userData$AquaCache, "SELECT organization_id, name FROM organizations")
+      moduleData$organizations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT organization_id, name FROM organizations")
       # Update the selectizeInput to the new value
       updateSelectizeInput(session, "loc_owner", choices = stats::setNames(moduleData$organizations$organization_id, moduleData$organizations$name), selected = moduleData$organizations[moduleData$organizations$name == df$name, "organization_id"])
       removeModal()
@@ -502,9 +600,267 @@ addLocation <- function(id, inputs) {
     
     
     ## Observe the add_location click #################
-    # Run checks, if everything passes call AquaCache::addACLocation
+    # Run checks, if everything passes call AquaCache::addACLocation or update the location details
     observeEvent(input$add_loc, {
-      outputs$added <- FALSE
+      
+      # Ensure lat + lon are truthy
+      if (!isTruthy(input$lat) || !isTruthy(input$lon)) {
+        showModal(modalDialog(
+          "Latitude and longitude are mandatory",
+          easyClose = TRUE
+        ))
+        return()
+      }
+      # Check that lat and lon are within bounds. For lat, -90 to 90. For lon, -180 to 180
+      if (input$lat < -90 || input$lat > 90) {
+        showModal(modalDialog(
+          "Latitude must be between -90 and 90 degrees",
+          easyClose = TRUE
+        ))
+        return()
+      }
+      if (input$lon < -180 || input$lon > 180) {
+        showModal(modalDialog(
+          "Longitude must be between -180 and 180 degrees",
+          easyClose = TRUE
+        ))
+        return()
+      }
+      
+      # Ensure that datum_id_from and datum_id_to are truthy
+      if (!isTruthy(input$datum_id_from) || !isTruthy(input$datum_id_to)) {
+        showModal(modalDialog(
+          "Datum ID from and to are mandatory (use assumed datum for both if there is no conversion to apply)",
+          easyClose = TRUE
+        ))
+        return()
+      }
+      
+      # If datums are both the same make sure elevation is 0
+      if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
+        showModal(modalDialog(
+          "Elevation conversion must be 0 if the datums are the same",
+          easyClose = TRUE
+        ))
+        return()
+      }
+      
+      
+      if (input$mode == "modify") {
+        req(selected_loc())
+        
+        # Start a transaction
+        DBI::dbBegin(session$userData$AquaCache)
+        tryCatch({
+          # Check each field to see if it's been modified; if so, update the DB entry by targeting the location_id and appropriate column name
+          # Changes to the location code
+          if (input$loc_code != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "location"]) {
+            DBI::dbExecute(session$userData$AquaCache,  paste0("UPDATE locations SET location = '", input$loc_code, "' WHERE location_id = ", selected_loc(), ";"))
+            # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', should match on 'feature_name' = input$loc_code
+            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE vectors SET feature_name = '", input$loc_code,"' WHERE layer_name = 'Locations' AND feature_name = '", moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "location"], "';"))
+          }
+          
+          # Changes to the location english name
+          if (input$loc_name != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "name"]) {
+            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE locations SET name = '", input$loc_name, "' WHERE location_id = ", selected_loc(), ";"))
+            # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', should match on 'feature_name' = input$loc_code
+            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE vectors SET description = '", input$loc_name, "' WHERE layer_name = 'Locations' AND feature_name = '", input$loc_code, "';"))
+          }
+          
+          # Changes to the location french name
+          if (input$loc_name_fr != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "name_fr"]) {
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE locations SET name_fr = '%s' WHERE location_id = %d", input$loc_name_fr, selected_loc()))
+          }
+          
+          # Changes to the location type
+          if (input$loc_type != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "location_type"]) {
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE locations SET location_type = %s WHERE location_id = %d", input$loc_type, selected_loc()))
+          }
+          
+          # Changes to coordinates
+          updated_coords <- FALSE
+          if (input$lat != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "latitude"]) {
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE locations SET latitude = %f WHERE location_id = %d", input$lat, selected_loc()))
+            updated_coords <- TRUE
+          }
+          if (input$lon != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "longitude"]) {
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE locations SET longitude = %f WHERE location_id = %d", input$lon, selected_loc()))
+            updated_coords <- TRUE
+          }
+          if (updated_coords) {
+            # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', match it on 'feature_name' = input$loc_code. the 'geom' field (geometry data type) will be updated with the new coordinates
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE vectors SET geom = ST_SetSRID(ST_MakePoint(%f, %f), 4269) WHERE layer_name = 'Locations' AND feature_name = '%s'", input$lon, input$lat, input$loc_code))
+          }
+          
+          # Changes to visibility
+          if (input$viz != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "visibility_public"]) {
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE locations SET visibility_public = '%s' WHERE location_id = %d", input$viz, selected_loc()))
+          }
+          
+          # Changes to share_with
+          # if (!all(input$share_with %in% moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"])) {
+          #   # Remove all existing share_with entries for this location
+          #   DBI::dbExecute(session$userData$AquaCache, 
+          #                  sprintf("DELETE FROM locations_users WHERE location_id = %d", selected_loc()))
+          #   # Add the new share_with entries
+          #   for (group in input$share_with) {
+          #     DBI::dbExecute(session$userData$AquaCache, 
+          #                    sprintf("INSERT INTO locations_users (location_id, role_name) VALUES (%d, '%s')", selected_loc(), group))
+          #   }
+          # }
+          
+          # Changes to owner
+          
+          # TODO: this needs to touch the location_metadata_owner table, not the locations table
+          # if (isTruthy(input$loc_owner)) {
+          #   if (input$loc_owner != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "owner"]) {
+          #     DBI::dbExecute(session$userData$AquaCache, 
+          #                    sprintf("UPDATE locations SET owner = %d WHERE location_id = %d", as.numeric(input$loc_owner), selected_loc()))
+          #   }
+          # }
+          
+          # Changes to contact
+          if (isTruthy(input$loc_contact)) {
+            if (!is.na(moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "contact"])) {
+              # If the contact is not empty, update it
+              if (input$loc_contact != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "contact"]) {
+                DBI::dbExecute(session$userData$AquaCache, 
+                               sprintf("UPDATE locations SET contact = '%s' WHERE location_id = %d", input$loc_contact, selected_loc()))
+              }
+            } else {
+              # If the contact is empty, insert it
+              DBI::dbExecute(session$userData$AquaCache, 
+                             sprintf("UPDATE locations SET contact = '%s' WHERE location_id = %d", input$loc_contact, selected_loc()))
+            }
+          }
+          
+          # Changes to data sharing agreement
+          if (isTruthy(input$data_sharing_agreement)) {
+            if (input$data_sharing_agreement != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "data_sharing_agreement_id"]) {
+              DBI::dbExecute(session$userData$AquaCache, 
+                             sprintf("UPDATE locations SET data_sharing_agreement_id = %d WHERE location_id = %d", as.numeric(input$data_sharing_agreement), selected_loc()))
+            }
+          }
+          
+          # datum and elevation changes
+          if (input$datum_id_from != moduleData$datum_conversions[which(moduleData$datum_conversions$location_id == selected_loc()), "datum_id_from"]) {
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE datum_conversions SET datum_id_from = %d WHERE location_id = %d", as.numeric(input$datum_id_from), selected_loc()))
+          }
+          if (input$datum_id_to != moduleData$datum_conversions[which(moduleData$datum_conversions$location_id == selected_loc()), "datum_id_to"]) {
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE datum_conversions SET datum_id_to = %d WHERE location_id = %d", as.numeric(input$datum_id_to), selected_loc()))
+          }
+          if (input$elev != moduleData$datum_conversions[which(moduleData$datum_conversions$location_id == selected_loc()), "conversion_m"]) {
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("UPDATE datum_conversions SET conversion_m = %f WHERE location_id = %d", input$elev, selected_loc()))
+          }
+          
+          # Changes to network
+          if (isTruthy(input$network)) {
+            # Remove all existing networks for this location
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("DELETE FROM locations_networks WHERE location_id = %d", selected_loc()))
+            # Add the new network
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("INSERT INTO locations_networks (location_id, network_id) VALUES (%d, %d)", selected_loc(), as.numeric(input$network)))
+          }
+          
+          # Changes to project
+          if (isTruthy(input$project)) {
+            # Remove all existing projects for this location
+            DBI::dbExecute(session$userData$AquaCache, 
+                           sprintf("DELETE FROM locations_projects WHERE location_id = %d", selected_loc()))
+            # Add the new project. Build a df because more than one project can be associated with a location
+            df <- data.frame(location_id = selected_loc(),
+                             project_id = as.numeric(input$project))
+            DBI::dbAppendTable(session$userData$AquaCache, "locations_projects", df, append = TRUE)
+          }
+          
+          # Changes to jurisdictional relevance
+          if (isTruthy(input$loc_jurisdictional_relevance)) {
+            if (input$loc_jurisdictional_relevance != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "jurisdictional_relevance"]) {
+              DBI::dbExecute(session$userData$AquaCache, 
+                             sprintf("UPDATE locations SET jurisdictional_relevance = %s WHERE location_id = %d", input$loc_jurisdictional_relevance, selected_loc()))
+            }
+          }
+          
+          # Changes to anthropogenic influence
+          if (isTruthy(input$loc_anthropogenic_influence)) {
+            if (input$loc_anthropogenic_influence != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "anthropogenic_influence"]) {
+              DBI::dbExecute(session$userData$AquaCache, 
+                             sprintf("UPDATE locations SET anthropogenic_influence = %s WHERE location_id = %d", input$loc_anthropogenic_influence, selected_loc()))
+            }
+          }
+          
+          # Changes to install purpose
+          if (isTruthy(input$loc_install_purpose)) {
+            # If the current install_purpose is not NA, check if it has changed
+            if (!is.na(moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "install_purpose"])) {
+              if (input$loc_install_purpose != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "install_purpose"]) {
+                DBI::dbExecute(session$userData$AquaCache, 
+                               sprintf("UPDATE locations SET install_purpose = '%s' WHERE location_id = %d", input$loc_install_purpose, selected_loc()))
+              } 
+            } else {
+              # If the install_purpose was NA, just set it
+              DBI::dbExecute(session$userData$AquaCache, 
+                             sprintf("UPDATE locations SET install_purpose = '%s' WHERE location_id = %d", input$loc_install_purpose, selected_loc()))
+            }
+          }
+          
+          # Changes to current purpose
+          if (isTruthy(input$loc_current_purpose)) {
+            # If the current purpose is not NA, check if it has changed
+            if (!is.na(moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "current_purpose"])) {
+              if (input$loc_current_purpose != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "current_purpose"]) {
+                DBI::dbExecute(session$userData$AquaCache, 
+                               sprintf("UPDATE locations SET current_purpose = '%s' WHERE location_id = %d", input$loc_current_purpose, selected_loc()))
+              }
+            } else {
+              # If the current purpose was NA, just set it
+              DBI::dbExecute(session$userData$AquaCache, 
+                             sprintf("UPDATE locations SET current_purpose = '%s' WHERE location_id = %d", input$loc_current_purpose, selected_loc()))
+            }
+          }
+          
+          # Changes to note
+          if (isTruthy(input$loc_note)) {
+            if (!is.na(moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "note"])) { # There might not be a note already
+              if (input$loc_note != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "note"]) {
+                DBI::dbExecute(session$userData$AquaCache, 
+                               sprintf("UPDATE locations SET note = '%s' WHERE location_id = %d", input$loc_note, selected_loc()))
+              }
+            } else {
+              DBI::dbExecute(session$userData$AquaCache, 
+                             sprintf("UPDATE locations SET note = '%s' WHERE location_id = %d", input$loc_note, selected_loc()))
+            }
+          }
+          
+          # Show a notification that the location was updated
+          showNotification("Location updated successfully", type = "message")
+          # Commit the transaction
+          DBI::dbCommit(session$userData$AquaCache)
+          
+          # Update the moduleData reactiveValues
+          getModuleData() # This should trigger an update to the table
+          
+        }, error = function(e) {
+          # If there was an error, rollback the transaction
+          DBI::dbRollback(session$userData$AquaCache)
+          showModal(modalDialog(
+            "Error updating location: ", e$message
+          ))
+        })
+        
+        return()
+      }
+      
       
       if (!isTruthy(input$loc_code)) {
         showModal(modalDialog(
@@ -513,7 +869,7 @@ addLocation <- function(id, inputs) {
         ))
         return()
       } else {
-        if (input$loc_code %in% moduleData$exist_locs$location_id) {
+        if (input$loc_code %in% moduleData$exist_locs[moduleData$exist_locs$location != input$loc_code, "location"]) {
           showModal(modalDialog(
             "Location code already exists",
             easyClose = TRUE
@@ -559,32 +915,7 @@ addLocation <- function(id, inputs) {
         return()
       }
       
-      # Check that lat and lon are within bounds. For lat, -90 to 90. For lon, -180 to 180
-      if (input$lat < -90 || input$lat > 90) {
-        showModal(modalDialog(
-          "Latitude must be between -90 and 90 degrees",
-          easyClose = TRUE
-        ))
-        return()
-      }
-      if (input$lon < -180 || input$lon > 180) {
-        showModal(modalDialog(
-          "Longitude must be between -180 and 180 degrees",
-          easyClose = TRUE
-        ))
-        return()
-      }
-      
-      # If datums are both the same make sure elevation is 0
-      if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
-        showModal(modalDialog(
-          "Elevation conversion must be 0 if the datums are the same",
-          easyClose = TRUE
-        ))
-        return()
-      }
-      
-      
+      # If we are here, we are adding a new location
       # Make a data.frame to pass to addACLocation
       df <- data.frame(location = input$loc_code,
                        name = input$loc_name,
@@ -605,15 +936,19 @@ addLocation <- function(id, inputs) {
                        network = if (isTruthy(input$network)) as.numeric(input$network) else NA,
                        project = if (isTruthy(input$project)) as.numeric(input$project) else NA,
                        jurisdictional_relevance = if (isTruthy(input$loc_jurisdictional_relevance)) input$loc_jurisdictional_relevance else NA,
-                       anthropogenic_relevance = if (isTruthy(input$loc_anthropogenic_relevance)) input$loc_anthropogenic_relevance else NA,
+                       anthropogenic_influence = if (isTruthy(input$loc_anthropogenic_influence)) input$loc_anthropogenic_influence else NA,
                        install_purpose = if (isTruthy(input$loc_install_purpose)) input$loc_install_purpose else NA,
                        current_purpose = if (isTruthy(input$loc_current_purpose)) input$loc_current_purpose else NA)
       
       tryCatch({
+        # Start a transaction
+        DBI::dbBegin(session$userData$AquaCache)
+        
         AquaCache::addACLocation(con = session$userData$AquaCache,
                                  df = df)
-        # Update the moduleData reactiveValues
-        moduleData$exist_locs <- dbGetQueryDT(session$userData$AquaCache, "SELECT location_id, location, name, name_fr FROM locations")
+        
+        # Close transaction
+        DBI::dbCommit(session$userData$AquaCache)
         
         # Show a modal to the user that the location was added
         showModal(modalDialog(
@@ -621,35 +956,36 @@ addLocation <- function(id, inputs) {
           easyClose = TRUE
         ))
         
+        # Update the moduleData reactiveValues
+        getModuleData() # This should trigger an update to the table
+        
         # Reset all fields
         updateTextInput(session, "loc_code", value = NULL)
         updateTextInput(session, "loc_name", value = NULL)
         updateTextInput(session, "loc_name_fr", value = NULL)
         updateSelectizeInput(session, "loc_type", selected = NULL)
-        updateNumericInput(session, "lat", value = NULL)
-        updateNumericInput(session, "lon", value = NULL)
+        updateNumericInput(session, "lat", value = NA)
+        updateNumericInput(session, "lon", value = NA)
         updateSelectizeInput(session, "viz", selected = "exact")
-        updateSelectizeInput(session, "share_with", selected = 1)
+        updateSelectizeInput(session, "share_with", selected = "public_reader")
         updateSelectizeInput(session, "loc_owner", selected = NULL)
         updateTextInput(session, "loc_contact", value = NULL)
         updateSelectizeInput(session, "data_sharing_agreement", selected = NULL)
         updateSelectizeInput(session, "datum_id_from", selected = 10)
-        updateSelectizeInput(session, "datum_id_to", selected = NULL)
-        updateNumericInput(session, "elev", value = NULL)
+        updateSelectizeInput(session, "datum_id_to", selected = 10)
+        updateNumericInput(session, "elev", value = 0)
         updateSelectizeInput(session, "network", selected = NULL)
         updateSelectizeInput(session, "project", selected = NULL)
         updateTextInput(session, "loc_note", value = NULL)
         
-        outputs$added <- TRUE # Sends a signal to the main 'locations' module so that data gets updates with the new location
-        
       }, error = function(e) {
+        # Rollback the transaction if there was an error
+        DBI::dbRollback(session$userData$AquaCache)
         showModal(modalDialog(
           "Error adding location: ", e$message
         ))
       })
     })
-    
-    return(outputs)
     
   }) # End of moduleServer
 }
