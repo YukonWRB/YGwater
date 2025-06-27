@@ -60,15 +60,35 @@ addLocation <- function(id, inputs) {
         actionButton(ns("hydat_fill"), "Auto-fill from HYDAT",
                      width = "100%"
         ),
-        textInput(ns("loc_name"), 
-                  "Location name (must not exist already)",
-                  if (isTruthy(moduleInputs$location)) moduleInputs$location else NULL,
-                  width = "100%"
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          textInput(ns("loc_name"), 
+                    "Location name (must not exist already)",
+                    if (isTruthy(moduleInputs$location)) moduleInputs$location else NULL,
+                    width = "100%"
+          ),
+          textInput(ns("loc_name_fr"), 
+                    "French location name (must not exist already)",
+                    width = "100%"
+          )
         ),
-        textInput(ns("loc_name_fr"), 
-                  "French location name (must not exist already)",
-                  width = "100%"
+        
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          numericInput(ns("lat"), 
+                       "Latitude (decimal degrees)", 
+                       value = NA,
+                       width = "100%"
+          ),
+          numericInput(ns("lon"), 
+                       "Longitude (decimal degrees)", 
+                       value = NA,
+                       width = "100%"
+          )
         ),
+        uiOutput(ns("lat_warning")),
+        uiOutput(ns("lon_warning")),
+        
         selectizeInput(ns("loc_type"), 
                        "Location type",
                        choices = stats::setNames(moduleData$loc_types$type_id, moduleData$loc_types$type),
@@ -76,45 +96,44 @@ addLocation <- function(id, inputs) {
                        options = list(maxItems = 1),
                        width = "100%"
         ),
-        numericInput(ns("lat"), 
-                     "Latitude (decimal degrees)", 
-                     value = NA,
-                     width = "100%"
+        
+        splitLayout(
+          cellWidths = c("0%", "50%", "50%"),
+          tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}"))),
+          selectizeInput(ns("viz"), 
+                         "Public visibility", 
+                         choices = stats::setNames(c("exact", "region", "jitter"), 
+                                                   c("Exact", "Within general region", "At random within a 5 km radius of true location")),
+                         width = "100%"
+          ),
+          selectizeInput(ns("share_with"), 
+                         "Share with groups (1 or more, type your own if not in list)", 
+                         choices = moduleData$users$role_name,
+                         selected = "public_reader",
+                         multiple = TRUE,
+                         options = list(create = TRUE),
+                         width = "100%"
+          )
         ),
-        uiOutput(ns("lat_warning")),
-        numericInput(ns("lon"), 
-                     "Longitude (decimal degrees)", 
-                     value = NA,
-                     width = "100%"
+        
+        splitLayout(
+          cellWidths = c("0%", "50%", "50%"),
+          tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}"))),
+          selectizeInput(ns("loc_owner"), 
+                         "Owner (type your own if not in list)", 
+                         choices = stats::setNames(moduleData$organizations$organization_id, 
+                                                   moduleData$organizations$name),
+                         multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+                         options = list(maxItems = 1,
+                                        create = TRUE),
+                         width = "100%"
+          ),
+          textInput(ns("loc_contact"),
+                    "Contact details if different than owner default (optional)",
+                    width = "100%"
+          )
         ),
-        uiOutput(ns("lon_warning")),
-        selectizeInput(ns("viz"), 
-                       "Public visibility", 
-                       choices = stats::setNames(c("exact", "region", "jitter"), 
-                                                 c("Exact", "Within general region", "At random within a 5 km radius of true location")),
-                       width = "100%"
-        ),
-        selectizeInput(ns("share_with"), 
-                       "Share with groups (1 or more, type your own if not in list)", 
-                       choices = moduleData$users$role_name,
-                       selected = "public_reader",
-                       multiple = TRUE,
-                       options = list(create = TRUE),
-                       width = "100%"
-        ),
-        selectizeInput(ns("loc_owner"), 
-                       "Owner (type your own if not in list)", 
-                       choices = stats::setNames(moduleData$organizations$organization_id, 
-                                                 moduleData$organizations$name),
-                       multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-                       options = list(maxItems = 1,
-                                      create = TRUE),
-                       width = "100%"
-        ),
-        textInput(ns("loc_contact"),
-                  "Contact details if different than owner default (optional)",
-                  width = "100%"
-        ),
+        
         selectizeInput(ns("data_sharing_agreement"), 
                        "Data sharing agreement", 
                        choices = stats::setNames(moduleData$agreements$document_id, 
@@ -122,51 +141,67 @@ addLocation <- function(id, inputs) {
                        options = list(placeholder = "Optional - add the document first if needed"),
                        width = "100%"
         ),
-        selectizeInput(ns("datum_id_from"), 
-                       "Datum ID from (Assumed datum is station 0)", 
-                       choices = stats::setNames(moduleData$datums$datum_id, 
-                                                 titleCase(moduleData$datums$datum_name_en, "en")), 
-                       selected = 10,
+        
+        splitLayout(
+          cellWidths = c("0%", "33.3%", "33.3%", "33.3%"),
+          tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}"))),
+          selectizeInput(ns("datum_id_from"), 
+                         "Datum ID from (Assumed datum is station 0)", 
+                         choices = stats::setNames(moduleData$datums$datum_id, 
+                                                   titleCase(moduleData$datums$datum_name_en, "en")), 
+                         selected = 10,
+                         width = "100%"
+          ),
+          selectizeInput(ns("datum_id_to"), 
+                         "Datum ID to (Use assumed datum if no conversion to apply)",
+                         multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+                         choices = stats::setNames(moduleData$datums$datum_id, 
+                                                   titleCase(moduleData$datums$datum_name_en, "en")),
+                         options = list(maxItems = 1), # Overrides multiple selection
+                         width = "100%"
+          ), 
+          numericInput(ns("elev"), 
+                       "Elevation conversion (meters, use 0 if not converting)", 
+                       value = NA,
                        width = "100%"
-        ),
-        selectizeInput(ns("datum_id_to"), 
-                       "Datum ID to (Use assumed datum if no conversion to apply)",
-                       multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-                       choices = stats::setNames(moduleData$datums$datum_id, 
-                                                 titleCase(moduleData$datums$datum_name_en, "en")),
-                       options = list(maxItems = 1), # Overrides multiple selection
-                       width = "100%"
-        ), 
-        numericInput(ns("elev"), 
-                     "Elevation conversion (meters, use 0 if not converting)", 
-                     value = NA,
-                     width = "100%"
+          )
         ),
         uiOutput(ns("elev_warning")),
-        selectizeInput(ns("network"), 
-                       "Network (type your own if not in list)", 
-                       choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name),
-                       multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-                       options = list(create = TRUE, 
-                                      placeholder = "Optional but recommended",
-                                      maxItems = 1),  # With a choice to allow users to add a network
-                       width = "100%"
+        
+        splitLayout(
+          cellWidths = c("0%", "50%", "50%"),
+          tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}"))),
+          selectizeInput(ns("network"), 
+                         "Network (type your own if not in list)", 
+                         choices = stats::setNames(moduleData$networks$network_id, moduleData$networks$name),
+                         multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+                         options = list(create = TRUE, 
+                                        placeholder = "Optional but recommended",
+                                        maxItems = 1),  # With a choice to allow users to add a network
+                         width = "100%"
+          ),
+          selectizeInput(ns("project"), 
+                         "Project(s) (type your own if not in list)", 
+                         choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), 
+                         options = list(create = TRUE, 
+                                        placeholder = "Optional"),  # With a choice to allow users to add a project
+                         width = "100%"
+          )
         ),
-        selectizeInput(ns("project"), 
-                       "Project(s) (type your own if not in list)", 
-                       choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), 
-                       options = list(create = TRUE, 
-                                      placeholder = "Optional"),  # With a choice to allow users to add a project
-                       width = "100%"
+        
+        splitLayout(
+          cellWidths = c("0%", "50%", "50%"),
+          tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}"))),
+          checkboxInput(ns("loc_jurisdictional_relevance"), 
+                        "Check if this location is publicly relevant to your jurisdiction (i.e. should be seen by the public)", 
+                        value = TRUE
+          ),
+          checkboxInput(ns("loc_anthropogenic_influence"), 
+                        "Check if this location is influenced by human activity (dams, upstream mining, etc.)", 
+                        value = FALSE
+          )
         ),
-        checkboxInput(ns("loc_jurisdictional_relevance"), 
-                      "Check if this location is publicly relevant to your jurisdiction (i.e. should be seen by the public)", 
-                      value = TRUE
-        ),
-        checkboxInput(ns("loc_anthropogenic_influence"), 
-                      "Check if this location is influenced by human activity (dams, upstream mining, etc.)", 
-                      value = FALSE
-        ),
+        
         textInput(ns("loc_install_purpose"), 
                   "Installation or establishment purpose (optional)",
                   placeholder = "Optional",
@@ -704,16 +739,9 @@ addLocation <- function(id, inputs) {
           }
           
           # Changes to share_with
-          # if (!all(input$share_with %in% moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"])) {
-          #   # Remove all existing share_with entries for this location
-          #   DBI::dbExecute(session$userData$AquaCache, 
-          #                  sprintf("DELETE FROM locations_users WHERE location_id = %d", selected_loc()))
-          #   # Add the new share_with entries
-          #   for (group in input$share_with) {
-          #     DBI::dbExecute(session$userData$AquaCache, 
-          #                    sprintf("INSERT INTO locations_users (location_id, role_name) VALUES (%d, '%s')", selected_loc(), group))
-          #   }
-          # }
+          if (!all(input$share_with %in% moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"])) {
+            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE locations SET share_with = {", paste(input$share_with, collapse = ", "), "} WHERE location_id = ", selected_loc(), ";"))
+          }
           
           # Changes to owner
           

@@ -34,6 +34,7 @@ addContDataUI <- function(id) {
         accordion_panel(
           id = ns("ts_panel"),
           title = "Timeseries selection",
+          actionButton(ns("addNewTS"), "Click here to add a new timeseries"),
           DT::DTOutput(ns("ts_table"))
         )
       ),
@@ -63,6 +64,7 @@ addContDataUI <- function(id) {
           tags$div("Hint: double click on a cell to edit its value."),
           tags$br(),
           DT::DTOutput(ns("data_table")),
+          selectizeInput(ns("UTC_offset"), "UTC offset (in hours)", choices = seq(-12, 12, by = 1), selected = 0, multiple = FALSE),
           radioButtons(ns("no_update"), "Prevent update to new data by automatic processes?", 
                        choices = c("Yes" = "yes", "No" = "no"), inline = TRUE, selected = "no"),
           div(
@@ -85,6 +87,8 @@ addContData <- function(id) {
     
     ns <- session$ns
     
+    outputs <- reactiveValues() # Used to pass the user on to adding a timeseries directly
+    
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,
       "SELECT has_table_privilege(current_user, 'continuous.measurements_continuous', 'INSERT') AS can_insert"
@@ -104,6 +108,10 @@ addContData <- function(id) {
     ts_meta <- reactive({
       dbGetQueryDT(session$userData$AquaCache,
                    "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS nominal_record_rate, note FROM continuous.timeseries_metadata_en")
+    })
+    
+    observeEvent(input$addNewTS, {
+      outputs$change_tab <- "addTimeseries"
     })
     
     output$ts_table <- DT::renderDT({
@@ -152,7 +160,7 @@ addContData <- function(id) {
     })
     
     observeEvent(input$add_row, {
-      data$df <- rbind(data$df, data.frame(datetime = Sys.time(), value = NA))
+      data$df <- rbind(data$df, data.frame(datetime = .POSIXct(Sys.time(), tz = "UTC"), value = NA))
     })
     
     observeEvent(input$delete_rows, {
@@ -185,6 +193,15 @@ addContData <- function(id) {
         showNotification('Data contains NA values. Please fill them in before uploading.', type = 'error')
         return(FALSE)
       }
+      # Make sure datetime is in POSIXct format or can be converted to it
+      if (!inherits(data$df$datetime, "POSIXct")) {
+        tryCatch({
+          data$df$datetime <- as.POSIXct(data$df$datetime, tz = "UTC")
+        }, error = function(e) {
+          showNotification('Datetime column is not in the correct format. Please check your data: it should be of form YYYY-MM-DD HH:MM.', type = 'error')
+          return(FALSE)
+        })
+      }
       return(TRUE)
     }
     
@@ -193,7 +210,8 @@ addContData <- function(id) {
       if (!check) return()
       tryCatch({
         upload_data <- data$df
-        data$no_upload <- ifelse(input$no_update == "yes", TRUE, FALSE)
+        upload_data$datetime <- upload_data$datetime - (as.numeric(input$UTC_offset) * 3600)  # Adjust datetime to UTC 0
+        data$no_update <- ifelse(input$no_update == "yes", TRUE, FALSE)
         AquaCache::addNewContinuous(tsid = timeseries(), df = upload_data, con = session$userData$AquaCache, target = "realtime", overwrite = "no")
         showNotification('Data added.', type = 'message')
         data$df <- data.frame(datetime = as.POSIXct(character()), value = numeric())
@@ -223,6 +241,8 @@ addContData <- function(id) {
       removeModal()  # Close the modal dialog
       tryCatch({
         upload_data <- data$df
+        upload_data$datetime <- upload_data$datetime - (as.numeric(input$UTC_offset) * 3600)  # Adjust datetime to UTC
+        data$no_update <- ifelse(input$no_update == "yes", TRUE, FALSE)        
         AquaCache::addNewContinuous(tsid = timeseries(), df = upload_data, con = session$userData$AquaCache, target = "realtime", overwrite = "all")
         showNotification('Data added with overwrite.', type = 'message')
         data$df <- data.frame(datetime = as.POSIXct(character()), value = numeric())
@@ -253,6 +273,8 @@ addContData <- function(id) {
       removeModal()  # Close the modal dialog
       tryCatch({
         upload_data <- data$df
+        upload_data$datetime <- upload_data$datetime - (as.numeric(input$UTC_offset) * 3600)  # Adjust datetime to UTC
+        data$no_update <- ifelse(input$no_update == "yes", TRUE, FALSE)
         AquaCache::addNewContinuous(tsid = timeseries(), df = upload_data, con = session$userData$AquaCache, target = "realtime", overwrite = "conflict")
         showNotification('Data added with selective overwrite.', type = 'message')
         data$df <- data.frame(datetime = as.POSIXct(character()), value = numeric())
@@ -265,5 +287,6 @@ addContData <- function(id) {
       })
     })
     
+    return(outputs)
   }) # End of moduleServer
 }

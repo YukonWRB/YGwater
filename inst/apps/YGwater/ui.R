@@ -199,9 +199,13 @@ app_ui <- function(request) {
         if (!config$public) {
           nav_menu(title = "Location tasks",
                    value = "dbAdmin",
-                   nav_panel(title = "Add new location",
+                   nav_panel(title = "Add/modify locations",
                              value = "addLocation",
                              uiOutput("addLocation_ui")
+                   ),
+                   nav_panel(title = "Add/modify sub-locations",
+                             value = "addSubLocation",
+                             uiOutput("addSubLocation_ui")
                    )
           )
         },

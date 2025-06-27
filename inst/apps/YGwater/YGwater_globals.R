@@ -17,6 +17,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # database admin modules
   source(system.file("apps/YGwater/modules/admin/locations/locationMetadata.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/locations/addLocation.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/locations/addSubLocation.R", package = "YGwater"))
   
   # equipment sub-modules
   source(system.file("apps/YGwater/modules/admin/equipment/deploy_recover.R", package = "YGwater"))
