@@ -178,8 +178,8 @@ app_ui <- function(request) {
                              value = "syncCont",
                              uiOutput("syncCont_ui")),
                    nav_panel(title = "Add/edit timeseries",
-                             value = "ts",
-                             uiOutput("ts_ui"))
+                             value = "addTimeseries",
+                             uiOutput("addTimeseries_ui"))
           )
         },
         if (!config$public) {

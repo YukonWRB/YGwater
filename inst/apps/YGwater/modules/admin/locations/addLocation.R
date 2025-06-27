@@ -11,13 +11,16 @@ addLocationUI <- function(id) {
 }
 
 
-addLocation <- function(id) {
+addLocation <- function(id, inputs) {
   
   moduleServer(id, function(input, output, session) {
     
     ns <- session$ns
     
     outputs <- reactiveValues(added = FALSE)  # This allows the module to pass values back to the main server
+    
+    # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
+    moduleInputs <- reactiveValues(location = if (!is.null(inputs$location)) inputs$location else NULL)
     
     shinyjs::hide("hydat_fill") # Hide the button right away, it's shown if applicable
     
@@ -54,6 +57,7 @@ addLocation <- function(id) {
         ),
         textInput(ns("loc_name"), 
                   "Location name (must not exist already)",
+                  if (isTruthy(moduleInputs$location)) moduleInputs$location else NULL,
                   width = "100%"
         ),
         textInput(ns("loc_name_fr"), 
@@ -354,7 +358,7 @@ addLocation <- function(id) {
       }
       net_types <- dbGetQueryDT(session$userData$AquaCache, "SELECT id, name FROM network_project_types")
       showModal(modalDialog(
-        textInput(ns("network_name"), "Network name"),
+        textInput(ns("network_name"), "Network name", value = input$loc_name),
         textInput(ns("network_name_fr"), "Network name French (optional)"),
         textInput(ns("network_description"), "Network description"),
         textInput(ns("network_description_fr"), "Network description French (optional)"),
@@ -400,7 +404,7 @@ addLocation <- function(id) {
       proj_types <- dbGetQueryDT(session$userData$AquaCache, "SELECT id, name FROM network_project_types")
       
       showModal(modalDialog(
-        textInput(ns("project_name"), "Project name"),
+        textInput(ns("project_name"), "Project name", value = input$loc_name),
         textInput(ns("project_name_fr"), "Project name French (optional)"),
         textInput(ns("project_description"), "Project description"),
         textInput(ns("project_description_fr"), "Project description French (optional)"),

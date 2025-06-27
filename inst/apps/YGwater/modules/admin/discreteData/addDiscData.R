@@ -33,8 +33,18 @@ addDiscDataUI <- function(id) {
         accordion_panel(
           id = ns("loc_panel"),
           title = "Location",
-          selectInput(ns("location"), "Location", choices = NULL),
-          selectInput(ns("sublocation"), "Sub-location", choices = NULL)
+          selectizeInput(ns("location"), "Location", 
+                         multiple = TRUE,
+                         choices = "placeholder",
+                         options = list(create = TRUE,
+                                      placeholder = "Select a location",
+                                      maxItems = 1)),
+          selectizeInput(ns("sublocation"), "Sub-location", 
+                         multiple = TRUE,
+                         choices = "placeholder",
+                         options = list(create = TRUE,
+                                      placeholder = "Select a sub-location (if exist)",
+                                      maxItems = 1)),
         )
       ),
       accordion(
@@ -60,7 +70,7 @@ addDiscDataUI <- function(id) {
               ns = ns,
               uiOutput(ns("long_format_cols"))
             ),
-            selectInput(ns("mapping_select"), "Column mapping", choices = NULL),
+            selectizeInput(ns("mapping_select"), "Column mapping", choices = NULL),
             textInput(ns("mapping_name"), "New mapping name"),
             uiOutput(ns("mapping_ui")),
             actionButton(ns("save_mapping"), "Save mapping")
@@ -82,6 +92,8 @@ addDiscDataUI <- function(id) {
 addDiscData <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    
+    outputs <- reactiveValues()
     
     check_results <- DBI::dbGetQuery(
       session$userData$AquaCache,
@@ -127,7 +139,7 @@ addDiscData <- function(id) {
     mappings <- reactiveVal(loadMappings(session$userData$AquaCache))
 
     observe({
-      updateSelectInput(session, "mapping_select", choices = c("", names(mappings())))
+      updateSelectizeInput(session, "mapping_select", choices = c("", names(mappings())))
     })
     
     observeEvent(input$mapping_select, {
@@ -135,9 +147,9 @@ addDiscData <- function(id) {
       if (!is.null(m)) {
         updateRadioButtons(session, "file_format", selected = m$format)
         if (identical(m$format, "long")) {
-          updateSelectInput(session, "long_param_col", selected = m$param_col)
-          updateSelectInput(session, "long_unit_col", selected = m$unit_col)
-          updateSelectInput(session, "long_value_col", selected = m$value_col)
+          updateSelectizeInput(session, "long_param_col", selected = m$param_col)
+          updateSelectizeInput(session, "long_unit_col", selected = m$unit_col)
+          updateSelectizeInput(session, "long_value_col", selected = m$value_col)
         } else {
           updateNumericInput(session, "param_row", value = m$param_row)
           updateNumericInput(session, "unit_row", value = m$unit_row)
@@ -155,12 +167,49 @@ addDiscData <- function(id) {
     sub_locations <- DBI::dbGetQuery(session$userData$AquaCache,
                                      "SELECT sub_location_id, sub_location_name FROM public.sub_locations ORDER BY sub_location_name")
 
-    updateSelectInput(session, "location",
+    updateSelectizeInput(session, "location",
                       choices = stats::setNames(locations$location_id, locations$name))
-    sub_choices <- c("", sub_locations$sub_location_id)
-    names(sub_choices) <- c("", sub_locations$sub_location_name)
-    updateSelectInput(session, "sublocation", choices = sub_choices)
-
+    updateSelectizeInput(session, "sublocation", 
+                         choices = stats:::setNames(sub_locations$sub_location_id, sub_locations$sub_location_name))
+    
+    
+    observeEvent(input$location, {
+      if (input$location %in% locations$location_id || nchar(input$location) == 0) {
+        return()
+      }
+      showModal(modalDialog(
+        sprintf("Add location '%s'?", input$location),
+        footer = tagList(
+          modalButton("No"),
+          actionButton(ns("goto_add_loc"), "Yes")
+        )
+      ))
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$goto_add_loc, {
+      removeModal()
+      outputs$change_tab <- "addLocation"
+      outputs$location <- input$location
+    })
+    
+    observeEvent(input$sublocation, {
+      if (input$sublocation %in% sub_locations$sub_location_id || nchar(input$sublocation) == 0) {
+        return()
+      }
+      showModal(modalDialog(
+        sprintf("Add sub-location '%s'?", input$sublocation),
+        footer = tagList(
+          modalButton("No"),
+          actionButton(ns("goto_add_subloc"), "Yes")
+        )
+      ))
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$goto_add_subloc, {
+      removeModal()
+      outputs$change_tab <- "addSubLocation"
+    })
+    
     file_data <- reactiveVal(NULL)
 
     observeEvent(input$file, {
@@ -179,9 +228,9 @@ addDiscData <- function(id) {
       df <- file_data()
       current <- mappings()[[input$mapping_select]]
       tagList(
-        selectInput(ns("long_param_col"), "Parameter column", choices = names(df), selected = current$param_col),
-        selectInput(ns("long_unit_col"), "Unit column", choices = c("", names(df)), selected = current$unit_col),
-        selectInput(ns("long_value_col"), "Value column", choices = names(df), selected = current$value_col)
+        selectizeInput(ns("long_param_col"), "Parameter column", choices = names(df), selected = current$param_col),
+        selectizeInput(ns("long_unit_col"), "Unit column", choices = c("", names(df)), selected = current$unit_col),
+        selectizeInput(ns("long_value_col"), "Value column", choices = names(df), selected = current$value_col)
       )
     })
     
@@ -195,14 +244,14 @@ addDiscData <- function(id) {
         req(input$long_param_col, input$long_value_col)
         param_names <- unique(df[[input$long_param_col]])
         tagList(
-          selectInput(ns("map_datetime"), "Datetime column", choices = names(df), selected = current$datetime),
+          selectizeInput(ns("map_datetime"), "Datetime column", choices = names(df), selected = current$datetime),
           lapply(param_names, function(p) {
             key <- gsub("[^A-Za-z0-9]", "_", as.character(p))
             par_sel <- if (!is.null(current$params[[as.character(p)]])) current$params[[as.character(p)]]$id else NULL
             conv_sel <- if (!is.null(current$params[[as.character(p)]])) current$params[[as.character(p)]]$conv else 1
             fluidRow(
               column(8,
-                     selectInput(ns(paste0("param_", key)), sprintf("Map '%s'", p),
+                     selectizeInput(ns(paste0("param_", key)), sprintf("Map '%s'", p),
                                  choices = stats::setNames(params()$parameter_id, params()$param_name),
                                  selected = par_sel)),
               column(4, numericInput(ns(paste0("conv_", key)), "Conversion", value = conv_sel))
@@ -212,14 +261,14 @@ addDiscData <- function(id) {
       } else {
         cols <- names(df)
         tagList(
-          selectInput(ns("map_datetime"), "Datetime column", choices = cols, selected = current$datetime),
+          selectizeInput(ns("map_datetime"), "Datetime column", choices = cols, selected = current$datetime),
           lapply(cols, function(col) {
             if (!is.null(current$datetime) && identical(col, current$datetime)) return(NULL)
             par_sel <- if (!is.null(current$params[[col]])) current$params[[col]]$id else NULL
             conv_sel <- if (!is.null(current$params[[col]])) current$params[[col]]$conv else 1
             fluidRow(
               column(8,
-                     selectInput(ns(paste0("param_", col)), sprintf("Parameter for column '%s'", col),
+                     selectizeInput(ns(paste0("param_", col)), sprintf("Parameter for column '%s'", col),
                                  choices = stats::setNames(params()$parameter_id, params()$param_name),
                                  selected = par_sel)),
               column(4, numericInput(ns(paste0("conv_", col)), "Conversion", value = conv_sel))
@@ -260,7 +309,7 @@ addDiscData <- function(id) {
       m[[input$mapping_name]] <- map_list
       mappings(m)
       saveMappingDB(session$userData$AquaCache, input$mapping_name, map_list)
-      updateSelectInput(session, "mapping_select", choices = c("", names(mappings())), selected = input$mapping_name)
+      updateSelectizeInput(session, "mapping_select", choices = c("", names(mappings())), selected = input$mapping_name)
     })
 
     data <- reactiveValues(df = data.frame(sample = integer(), datetime = as.POSIXct(character()), parameter_id = integer(), value = numeric()))
@@ -365,5 +414,7 @@ addDiscData <- function(id) {
         showNotification(paste("Upload failed:", e$message), type = "error")
       })
     })
+    
+    return(outputs)
   })
 }

@@ -30,7 +30,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/admin/continuousData/imputeMissing.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/continuousData/editContData.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/continuousData/grades_approvals_qualifiers.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/continuousData/new_ts.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/continuousData/addTimeseries.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/continuousData/syncCont.R", package = "YGwater"))
   
   # discrete data sub-modules

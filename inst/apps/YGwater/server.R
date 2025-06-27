@@ -109,7 +109,7 @@ app_server <- function(input, output, session) {
     ui_loaded$editContData <- FALSE
     ui_loaded$grades_approvals_qualifiers <- FALSE
     ui_loaded$syncCont <- FALSE
-    ui_loaded$ts <- FALSE
+    ui_loaded$addTimeseries <- FALSE
     
     ui_loaded$addDiscData <- FALSE
     ui_loaded$editDiscData <- FALSE
@@ -474,7 +474,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "ts", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -675,14 +675,29 @@ $(document).keyup(function(event) {
       if (!ui_loaded$addLocation) {
         output$addLocation_ui <- renderUI(addLocationUI("addLocation"))
         ui_loaded$addLocation <- TRUE
-        addLocation("addLocation") # Call the server
+        addLocation("addLocation", inputs = moduleOutputs$addDiscData) # Call the server
+        if (!is.null(moduleOutputs$addDiscData)) {
+          moduleOutputs$addDiscData$location <- NULL
+          moduleOutputs$addDiscData$change_tab <- NULL
+        }
       }
     }
-    if (input$navbar == "ts") {
-      if (!ui_loaded$ts) {
-        output$ts_ui <- renderUI(tsUI("ts"))
-        ui_loaded$ts <- TRUE
-        ts("ts") # Call the server
+    # if (input$navbar == "addSubLocation") {
+    #   if (!ui_loaded$addSubLocation) {
+    #     output$addSubLocation_ui <- renderUI(addSubLocationUI("addSubLocation"))
+    #     ui_loaded$addSubLocation <- TRUE
+    #     addSubLocation("addSubLocation", inputs = moduleOutputs$addDiscData) # Call the server
+    #     if (!is.null(moduleOutputs$addDiscData)) {
+    #       moduleOutputs$addDiscData$location <- NULL
+    #       moduleOutputs$addDiscData$change_tab <- NULL
+    #     }
+    #   }
+    }
+    if (input$navbar == "addTimeseries") {
+      if (!ui_loaded$addTimeseries) {
+        output$ts_ui <- renderUI(addTimeseriesUI("addTimeseries"))
+        ui_loaded$addTimeseries <- TRUE
+        addTimeseries("addTimeseries") # Call the server
       }
     }
     if (input$navbar == "deploy_recover") {
@@ -738,8 +753,15 @@ $(document).keyup(function(event) {
       if (!ui_loaded$addDiscData) {
         output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
         ui_loaded$addDiscData <- TRUE
-        addDiscData("addDiscData")  # Call the server
+        moduleOutputs$addDiscData <- addDiscData("addDiscData")  # Call the server
       }
+      # Observe the change_tab output from the addDiscData module
+      observe({
+        if (!is.null(moduleOutputs$addDiscData$change_tab)) {
+          nav_select(session = session, "navbar", selected = moduleOutputs$addDiscData$change_tab)
+          moduleOutputs$addDiscData$change_tab <- NULL
+        }
+      })
     }
     if (input$navbar == "editDiscData") {
       if (!ui_loaded$editDiscData) {
