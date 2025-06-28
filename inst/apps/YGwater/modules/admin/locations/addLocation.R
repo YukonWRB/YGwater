@@ -38,7 +38,7 @@ addLocation <- function(id, inputs) {
       moduleData$users = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM get_roles_with_select_on_locations();")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all users with select privileges on locations table
     }
     
-    getModuleData()
+    getModuleData() # Initial data load
     
     output$ui <- renderUI({
       tagList(
@@ -248,6 +248,7 @@ addLocation <- function(id, inputs) {
                     rownames = FALSE)
     }) |> bindEvent(moduleData$exist_locs)
     
+    # Observe row selection and update inputs accordingly
     observeEvent(input$loc_table_rows_selected, {
       sel <- input$loc_table_rows_selected
       if (length(sel) > 0) {
