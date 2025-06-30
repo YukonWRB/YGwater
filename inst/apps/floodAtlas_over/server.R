@@ -157,56 +157,86 @@ app_server <- function(input, output, session) {
   })
   
   # Define the ExtendedTask to generate the plot
-  plot_output <- ExtendedTask$new(
-    function(loc, param, yrs, lang, webgl, config) {
-
-    promises::future_promise({
-      
-      con <- AquaConnect(name = config$dbName,
-                         host = config$dbHost,
-                         port = config$dbPort,
-                         username = config$dbUser,
-                         password = config$dbPass,
-                         silent = TRUE)
-      
-      loc_name <- DBI::dbGetQuery(con, paste0("SELECT ", if (lang == "en") "name" else "name_fr", " FROM locations WHERE location = '", loc, "';"))[1,1]
-      if (nchar(loc_name) > 30) {
-        loc_name <- paste0(substr(loc_name, 1, 25), "...")
-      }
-      
-      p <- plotOverlap(location = loc,
-                  sub_location = NULL,
-                  parameter = param,
-                  startDay = 1,
-                  endDay = 365,
-                  years = yrs,
-                  rate = "day",
-                  datum = TRUE,
-                  # filter = 20,
-                  lang = lang,
-                  line_scale = 1,
-                  axis_scale = 1,
-                  legend_scale = 1,
-                  title = TRUE,
-                  custom_title = loc_name,
-                  gridx = FALSE,
-                  gridy = FALSE,
-                  slider = FALSE,
-                  webgl = webgl,
-                  hover = FALSE,
-                  tzone = "MST",
-                  con = con)
-      DBI::dbDisconnect(con)
-      
-      # Remove the plotly logo and other buttons from the top right of the plot
-      p <- plotly::config(p, displayModeBar = FALSE)
-      
-      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
-    })
-  }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
+  # plot_output <- ExtendedTask$new(
+  #   function(loc, param, yrs, lang, webgl, config) {
+  # 
+  #   promises::future_promise({
+  #     
+  #     con <- AquaConnect(name = config$dbName,
+  #                        host = config$dbHost,
+  #                        port = config$dbPort,
+  #                        username = config$dbUser,
+  #                        password = config$dbPass,
+  #                        silent = TRUE)
+  #     
+  #     loc_name <- DBI::dbGetQuery(con, paste0("SELECT ", if (lang == "en") "name" else "name_fr", " FROM locations WHERE location = '", loc, "';"))[1,1]
+  #     if (nchar(loc_name) > 30) {
+  #       loc_name <- paste0(substr(loc_name, 1, 25), "...")
+  #     }
+  #     
+  #     p <- plotOverlap(location = loc,
+  #                 sub_location = NULL,
+  #                 parameter = param,
+  #                 startDay = 1,
+  #                 endDay = 365,
+  #                 years = yrs,
+  #                 rate = "day",
+  #                 datum = TRUE,
+  #                 # filter = 20,
+  #                 lang = lang,
+  #                 line_scale = 1,
+  #                 axis_scale = 1,
+  #                 legend_scale = 1,
+  #                 title = TRUE,
+  #                 custom_title = loc_name,
+  #                 gridx = FALSE,
+  #                 gridy = FALSE,
+  #                 slider = FALSE,
+  #                 webgl = webgl,
+  #                 hover = FALSE,
+  #                 tzone = "MST",
+  #                 con = con)
+  #     DBI::dbDisconnect(con)
+  #     
+  #     # Remove the plotly logo and other buttons from the top right of the plot
+  #     p <- plotly::config(p, displayModeBar = FALSE)
+  #     
+  #     return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
+  #   })
+  # }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
   
   observeEvent(params$render, {
-    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, session$userData$use_webgl, config)
+    # plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, session$userData$use_webgl, config)
+    
+    
+    loc_name <- DBI::dbGetQuery(session$userData$con, paste0("SELECT ", if (lang == "en") "name" else "name_fr", " FROM locations WHERE location = '", loc, "';"))[1,1]
+    if (nchar(loc_name) > 30) {
+      loc_name <- paste0(substr(loc_name, 1, 25), "...")
+    }
+    
+    p <- plotOverlap(location = params$loc_code,
+                     sub_location = NULL,
+                     parameter = params$param_code,
+                     startDay = 1,
+                     endDay = 365,
+                     years = params$yrs,
+                     rate = "day",
+                     datum = TRUE,
+                     # filter = 20,
+                     lang = lang,
+                     line_scale = 1,
+                     axis_scale = 1,
+                     legend_scale = 1,
+                     title = TRUE,
+                     custom_title = loc_name,
+                     gridx = FALSE,
+                     gridy = FALSE,
+                     slider = FALSE,
+                     webgl = session$userData$use_webgl,
+                     hover = FALSE,
+                     tzone = "MST",
+                     con = session$userData$con)
+    
   })
   
   output$plot <- plotly::renderPlotly({
