@@ -60,7 +60,7 @@ app_ui <- function(request) {
         fluidRow(
           column(3,
                  div(class = "logo",
-                     htmltools::img(src = "imgs/Yukon_logo.png", .noWS = "outside", alt = "Yukon Government logo")
+                     htmltools::img(src = "imgs/Yukon_logo-min.png", .noWS = "outside", alt = "Yukon Government logo")
                      
                  ),
                  class = "logo-container"),
