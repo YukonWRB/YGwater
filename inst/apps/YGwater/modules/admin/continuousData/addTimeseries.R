@@ -428,6 +428,7 @@ addTimeseries <- function(id) {
       tryCatch({
         AquaCache::addACTimeseries(start_datetime = "1800-01-01 00:00",
                                    location = input$location,
+                                   sub_location = input$sub_location,
                                    z = if (input$z_specify) input$z else NA,
                                    parameter = input$parameter,
                                    media = input$media,
@@ -441,13 +442,6 @@ addTimeseries <- function(id) {
                                    note = input$note,
                                    con = session$userData$AquaCache
        )
-        if (!is.na(input$sub_location) && input$sub_location != "") {
-          new_id <- DBI::dbGetQuery(session$userData$AquaCache,
-                                    "SELECT currval(pg_get_serial_sequence('timeseries','timeseries_id'))")[1,1]
-          DBI::dbExecute(session$userData$AquaCache,
-                         paste0("UPDATE timeseries SET sub_location_id = '", input$sub_location,
-                                "' WHERE timeseries_id = ", new_id))
-        }
         DBI::dbCommit(session$userData$AquaCache)
         showNotification("Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.", type = "message")
         getModuleData()
