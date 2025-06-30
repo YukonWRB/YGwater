@@ -153,17 +153,15 @@ app_server <- function(input, output, session) {
       p <- plotly::config(p, displayModeBar = FALSE)
       
       DBI::dbDisconnect(con)
-      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
+      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (which used to be DBI::dbDisconnect(con))
     })
   })
-  
-  
   
   # Trigger the plot creation when the render changes
   observeEvent(input$user_speed, {
     req(params$loc_code, params$param_code, params$lang)
     rate <- if (input$user_speed < 0.0003) "day" else if (input$user_speed < 0.002) "hour" else "max"
-    plot_output$invoke(params$loc_code, params$param_code, params$lang, session$userData$use_webgl, config, rate)
+    plot_output$invoke(params$loc_code, params$param_code, params$lang, FALSE, config, rate)
   })
   
   output$plot <- plotly::renderPlotly({

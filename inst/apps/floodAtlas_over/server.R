@@ -201,7 +201,7 @@ app_server <- function(input, output, session) {
       # Remove the plotly logo and other buttons from the top right of the plot
       p <- plotly::config(p, displayModeBar = FALSE)
 
-      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
+      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (which use to be DBI::dbDisconnect(con))
     })
   }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
   
