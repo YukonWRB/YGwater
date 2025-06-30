@@ -9,6 +9,9 @@ app_server <- function(input, output, session) {
   
   # Initial setup #############################################################
   
+  # Allow reconnection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
+  session$allowReconnect(TRUE)
+  
   # Hide all 'admin' side tabs if they were generated
   
   # Show relevant tabs for viz mode
