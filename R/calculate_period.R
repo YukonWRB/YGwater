@@ -10,15 +10,21 @@
 #' @return A data.frame or data.table with calculated periods as ISO8601 formatted strings in a column named 'period'.
 #' @export
 
-calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NULL, con = AquaConnect(silent = TRUE))
-{
+calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NULL, con = AquaConnect(silent = TRUE)) {
+  
+  as_dt <- data.table::is.data.table(data)
+  if (!as_dt) {
+    data <- data.table::as.data.table(data)
+  }
+  
   names <- names(data)
-  data <- data[!is.na(data[[datetime_col]]),] #Remove rows with missing datetime values
-  data <- data[order(data[[datetime_col]]) ,] #Sort ascending
+  data <- data[!is.na(data[[datetime_col]]), ]  # Remove rows with missing datetime values
+  data <- data[order(data[[datetime_col]])] # Sort data by datetime
   diffs <- as.numeric(diff(data[[datetime_col]]), units = "hours")
   smoothed_diffs <- zoo::rollmedian(diffs, k = 3, fill = NA, align = "center")
+  
   changes <- data.frame()
-
+  
   if (!all(is.na(smoothed_diffs)) && length(smoothed_diffs) > 0) {
     diff_dt <- data.table::data.table(idx = seq_along(smoothed_diffs), diff = smoothed_diffs)
     diff_dt[, run := data.table::rleid(diff)]
@@ -31,7 +37,7 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
       )
     }
   }
-
+  
   
   # Calculate the duration in days, hours, minutes, and seconds and assign to the right location in data
   if (nrow(changes) > 0) {
@@ -40,11 +46,10 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
       remaining_hours <- x %% 24
       minutes <- floor((remaining_hours - floor(remaining_hours)) * 60)
       seconds <- round(((remaining_hours - floor(remaining_hours)) * 60 - minutes) * 60)
-      paste0("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S")
-    }
-    data$period <- NA
-    data[match(changes$datetime, data[[datetime_col]]), "period"] <- iso_period(changes$period)
-    data$period <- zoo::na.locf(zoo::na.locf(data$period, na.rm = FALSE), fromLast = TRUE)
+      paste0("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S")    }
+    data[, period := NA_character_]
+    data[match(changes$datetime, data[[datetime_col]]), period := iso_period(changes$period)]
+    data[, period := zoo::na.locf(zoo::na.locf(period, na.rm = FALSE), fromLast = TRUE)]
     
   } else { #In this case there were too few measurements to conclusively determine a period so pull a few from the DB and redo the calculation
     if (is.null(timeseries_id)) {
@@ -71,7 +76,7 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
     diffs <- as.numeric(diff(data[[datetime_col]]), units = "hours")
     smoothed_diffs <- zoo::rollmedian(diffs, k = 3, fill = NA, align = "center")
     changes <- data.frame()
-
+    
     if (length(smoothed_diffs) > 0) {
       diff_dt <- data.table::data.table(idx = seq_along(smoothed_diffs), diff = smoothed_diffs)
       diff_dt[, run := data.table::rleid(diff)]
@@ -84,22 +89,21 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
         )
       }
     }
-
     if (nrow(changes) > 0) {
       iso_period <- function(x) {
         days <- floor(x / 24)
         remaining_hours <- x %% 24
         minutes <- floor((remaining_hours - floor(remaining_hours)) * 60)
         seconds <- round(((remaining_hours - floor(remaining_hours)) * 60 - minutes) * 60)
-        paste0("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S")
-      }
-      data$period <- NA
-      data[match(changes$datetime, data[[datetime_col]]), "period"] <- iso_period(changes$period)
-      data$period <- zoo::na.locf(zoo::na.locf(data$period, na.rm = FALSE), fromLast = TRUE)
+        paste0("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S")      }
+      data[, period := NA_character_]
+      data[match(changes$datetime, data[[datetime_col]]), period := iso_period(changes$period)]
+      data[, period := zoo::na.locf(zoo::na.locf(period, na.rm = FALSE), fromLast = TRUE)]
     } else {
-      data$period <- NULL
+      data[, period := NULL]
       warning("There are too few measurements to conclusively determine a period.")
     }
   }
-  return(data)
+  result <- if (as_dt) data else as.data.frame(data)
+  return(result)
 } # End of function
