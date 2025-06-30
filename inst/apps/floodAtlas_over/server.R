@@ -22,6 +22,8 @@ app_server <- function(input, output, session) {
                                       username = config$dbUser,
                                       password = config$dbPass,
                                       silent = TRUE)
+
+  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
   
 
   session$onUnhandledError(function() {
@@ -156,7 +158,7 @@ app_server <- function(input, output, session) {
   
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
-    function(loc, param, yrs, lang, config) {
+    function(loc, param, yrs, lang, webgl, config) {
 
     promises::future_promise({
       
@@ -190,6 +192,7 @@ app_server <- function(input, output, session) {
                   gridx = FALSE,
                   gridy = FALSE,
                   slider = FALSE,
+                  webgl = webgl,
                   hover = FALSE,
                   tzone = "MST",
                   con = con)
@@ -203,7 +206,7 @@ app_server <- function(input, output, session) {
   }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
   
   observeEvent(params$render, {
-    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, config)
+    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, session$userData$use_webgl, config)
   })
   
   output$plot <- plotly::renderPlotly({

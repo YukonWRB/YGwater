@@ -9,11 +9,16 @@ app_server <- function(input, output, session) {
 
   # Initial setup #############################################################
 
+  # Heatbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
   output$keep_alive <- renderText({
     invalidateLater(5000, session)
     Sys.time()
   })
+  
+  # Allow reconnection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
+  session$allowReconnect(TRUE)
 
+  
   # Hide all 'admin' side tabs if they were generated
   
   # Show relevant tabs for viz mode
@@ -173,6 +178,8 @@ app_server <- function(input, output, session) {
                                             silent = TRUE)
   
   print("Connected to AquaCache")
+
+  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
   
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$AquaCache)

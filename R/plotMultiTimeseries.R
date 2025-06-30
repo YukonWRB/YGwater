@@ -34,6 +34,8 @@
 #' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
+#' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set
+#'   to FALSE to force standard scatter traces.
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
@@ -72,6 +74,7 @@ plotMultiTimeseries <- function(type = 'traces',
                                 legend_position = 'v',
                                 gridx = FALSE,
                                 gridy = FALSE,
+                                webgl = TRUE,
                                 rate = NULL,
                                 tzone = "auto",
                                 data = FALSE,
@@ -636,21 +639,23 @@ plotMultiTimeseries <- function(type = 'traces',
     # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
     min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
     if (!is.infinite(min_trace)) {
-      trace_data <- calculate_period(trace_data, timeseries_id = tsid)
-      trace_data[, period_secs := as.numeric(lubridate::period(period))]
-      # Shift datetime and add period_secs to compute the 'expected' next datetime
-      trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
-      # Create 'gap_exists' column to identify where gaps are
-      trace_data[, gap_exists := datetime < expected & !is.na(expected)]
-      # Find indices where gaps exist
-      gap_indices <- which(trace_data$gap_exists)
-      # Create a data.table of NA rows to be inserted
-      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime] + 1,  # Add 1 second to place it at the start of the gap
-                                        value = NA)
-      # Combine with NA rows
-      trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
-      # order by datetime
-      data.table::setorder(trace_data, datetime) 
+      trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid, con = con))
+      if ("period" %in% colnames(trace_data)) {
+        trace_data[, period_secs := as.numeric(lubridate::period(period))]
+        # Shift datetime and add period_secs to compute the 'expected' next datetime
+        trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+        # Create 'gap_exists' column to identify where gaps are
+        trace_data[, gap_exists := datetime < expected & !is.na(expected)]
+        # Find indices where gaps exist
+        gap_indices <- which(trace_data$gap_exists)
+        # Create a data.table of NA rows to be inserted
+        na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime] + 1,  # Add 1 second to place it at the start of the gap
+                                          value = NA)
+        # Combine with NA rows
+        trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
+        # order by datetime
+        data.table::setorder(trace_data, datetime)
+      }
       
       # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
       if (min_trace > sub.start_date) {
@@ -876,7 +881,7 @@ plotMultiTimeseries <- function(type = 'traces',
           data = data.sub, 
           x = ~datetime, 
           y = ~value, 
-          type = "scattergl", 
+          type = if (webgl) "scattergl" else "scatter", 
           mode = "lines",
           line = list(width = 2.5 * line_scale),
           name = timeseries[i, "trace_title"], 
@@ -992,7 +997,7 @@ plotMultiTimeseries <- function(type = 'traces',
         plotly::add_trace(data = data[[i]]$trace_data, 
                           x = ~datetime, 
                           y = ~value, 
-                          type = "scattergl", 
+                          type = if (webgl) "scattergl" else "scatter", 
                           mode = "lines",
                           line = list(width = 2.5 * line_scale),
                           name = parameter_name, 
