@@ -32,6 +32,7 @@ plotOverlap(
   hover = TRUE,
   gridx = FALSE,
   gridy = TRUE,
+  webgl = TRUE,
   lang = "en",
   data = FALSE,
   con = NULL
@@ -91,6 +92,9 @@ plotOverlap(
 \item{gridx}{Should grid lines be drawn on the x-axis? Default is FALSE}
 
 \item{gridy}{Should grid lines be drawn on the y-axis? Default is FALSE}
+
+\item{webgl}{Use WebGL ("scattergl") for faster rendering when possible. Set
+to FALSE to force standard scatter traces.}
 
 \item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
 

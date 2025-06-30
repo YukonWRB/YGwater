@@ -33,6 +33,7 @@ plotTimeseries(
   hover = TRUE,
   gridx = FALSE,
   gridy = FALSE,
+  webgl = TRUE,
   rate = NULL,
   tzone = "auto",
   data = FALSE,
@@ -95,6 +96,9 @@ plotTimeseries(
 \item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
 
 \item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
+
+\item{webgl}{Use WebGL ("scattergl") for faster rendering when possible. Set
+to FALSE to force standard scatter traces.}
 
 \item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 

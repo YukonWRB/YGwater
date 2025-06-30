@@ -452,29 +452,23 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         updateDateRangeInput(session, "date_range",
                              label = tr("date_range_select", language$language))
       } else if (input$plot_type == "over") {
+        print(input$param)
         
-        if (!is.null(input$param)) {
-          if (nchar(input$param) > 0) {
-            if (input$param %in% c(values$swe, values$snow_depth)) {
-              updateDateRangeInput(session, "date_range",
-                                   min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-                                   max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-                                   start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-                                   end = paste0(lubridate::year(Sys.Date()), "-06-01"))
-            } else {
-              updateDateRangeInput(session, "date_range",
-                                   min = paste0(lubridate::year(Sys.Date()), "-01-01"),
-                                   max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-                                   start = paste0(lubridate::year(Sys.Date()), "-01-01"),
-                                   end = paste0(lubridate::year(Sys.Date()), "-12-31"))
-            }          
+        if (!is.null(input$param) && length(input$param) == 1) {
+          print("WTF")
+          if (input$param %in% c(values$swe, values$snow_depth)) {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-06-01"))
           } else {
             updateDateRangeInput(session, "date_range",
                                  min = paste0(lubridate::year(Sys.Date()), "-01-01"),
                                  max = paste0(lubridate::year(Sys.Date()), "-12-31"),
                                  start = paste0(lubridate::year(Sys.Date()), "-01-01"),
                                  end = paste0(lubridate::year(Sys.Date()), "-12-31"))
-          }
+          }          
         } else {
           updateDateRangeInput(session, "date_range",
                                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
@@ -482,7 +476,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                start = paste0(lubridate::year(Sys.Date()), "-01-01"),
                                end = paste0(lubridate::year(Sys.Date()), "-12-31"))
         }
-        
       }
     })
     
@@ -619,7 +612,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       
       
       if (input$plot_type == "over") {
-        if (!is.null(input$param)) {
+        if (!is.null(input$param) && length(input$param) == 1) {
           if (input$param %in% c(values$swe, values$snow_depth)) {
             updateDateRangeInput(session, "date_range",
                                  min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
@@ -775,12 +768,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            selected = max(possible_years))
       
       if (input$plot_type == "over") {
-        if (input$param %in% c(values$swe, values$snow_depth)) {
-          updateDateRangeInput(session, "date_range",
-                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        if (!is.null(input$param) && length(input$param) == 1) {
+          if (input$param %in% c(values$swe, values$snow_depth)) {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+          } else {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+          }
         } else {
           updateDateRangeInput(session, "date_range",
                                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
@@ -988,12 +989,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            selected = max(possible_years))
       
       if (input$plot_type == "over") {
-        if (input$param %in% c(values$swe, values$snow_depth)) {
-          updateDateRangeInput(session, "date_range",
-                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        if (!is.null(input$param) && length(input$param) == 1) {
+          if (input$param %in% c(values$swe, values$snow_depth)) {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+          } else {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+          }
         } else {
           updateDateRangeInput(session, "date_range",
                                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
@@ -1069,12 +1078,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            selected = max(possible_years))
       
       if (input$plot_type == "over") {
-        if (input$param %in% c(values$swe, values$snow_depth)) {
-          updateDateRangeInput(session, "date_range",
-                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        if (!is.null(input$param) && length(input$param) == 1) {
+          if (input$param %in% c(values$swe, values$snow_depth)) {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+          } else {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+          }
         } else {
           updateDateRangeInput(session, "date_range",
                                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
@@ -1134,12 +1151,17 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            selected = max(possible_years))
       
       if (input$plot_type == "over") {
-        if (input$param %in% c(values$swe, values$snow_depth)) {
-          updateDateRangeInput(session, "date_range",
-                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        print(input$param)
+        if (!is.null(input$param) && length(input$param) == 1) {
+          if (input$param %in% c(values$swe, values$snow_depth)) {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+          } else {
+            
+          }
         } else {
           updateDateRangeInput(session, "date_range",
                                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
@@ -1147,6 +1169,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                start = paste0(lubridate::year(Sys.Date()), "-01-01"),
                                end = paste0(lubridate::year(Sys.Date()), "-12-31"))
         }
+        
       } else if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
                              start = earliest,
@@ -1183,12 +1206,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            selected = max(possible_years))
       
       if (input$plot_type == "over") {
-        if (input$param %in% c(values$swe, values$snow_depth)) {
-          updateDateRangeInput(session, "date_range",
-                               min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-                               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-                               start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-                               end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+        if (!is.null(input$param) && length(input$param) == 1) {
+          if (input$param %in% c(values$swe, values$snow_depth)) {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-06-01"))
+          } else {
+            updateDateRangeInput(session, "date_range",
+                                 min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                                 start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                                 end = paste0(lubridate::year(Sys.Date()), "-12-31"))
+          }
         } else {
           updateDateRangeInput(session, "date_range",
                                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
@@ -2378,7 +2409,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           on.exit(DBI::dbDisconnect(con))
           
           plot <- plotOverlap(location = loc,
-                                                            sub_location = sub_loc,
+                              sub_location = sub_loc,
                               z = z,
                               record_rate = record_rate,
                               aggregation_type = aggregation_type,
@@ -2395,7 +2426,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                               axis_scale = axis_scale,
                               legend_scale = legend_scale,
                               legend_position = legend_position,
-                                      webgl = webgl,
+                              webgl = webgl,
                               slider = FALSE,
                               gridx = gridx,
                               gridy = gridy,
@@ -2443,7 +2474,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                  axis_scale = axis_scale,
                                  legend_scale = legend_scale,
                                  legend_position = legend_position,
-                                   webgl = webgl,
+                                 webgl = webgl,
                                  slider = FALSE,
                                  gridx = gridx,
                                  gridy = gridy,
@@ -2489,7 +2520,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                       axis_scale = axis_scale,
                                       legend_scale = legend_scale,
                                       legend_position = legend_position,
-                                        webgl = webgl,
+                                      webgl = webgl,
                                       gridx = gridx,
                                       gridy = gridy,
                                       shareX = shareX,
@@ -2535,7 +2566,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                       axis_scale = axis_scale,
                                       legend_scale = legend_scale,
                                       legend_position = legend_position,
-                                        webgl = webgl,
+                                      webgl = webgl,
                                       gridx = gridx,
                                       gridy = gridy,
                                       shareX = shareX,
@@ -2657,7 +2688,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                                    lang = plot_aes$lang, 
                                                    gridx = plot_aes$showgridx, 
                                                    gridy = plot_aes$showgridy, 
-                                   webgl = session$userData$use_webgl,
+                                                   webgl = session$userData$use_webgl,
                                                    shareX = input$shareX, 
                                                    shareY = input$shareY, 
                                                    config = session$userData$config)
@@ -2716,7 +2747,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                           lang = plot_aes$lang, 
                                           gridx = plot_aes$showgridx, 
                                           gridy = plot_aes$showgridy, 
-                                   webgl = session$userData$use_webgl,
+                                          webgl = session$userData$use_webgl,
                                           config = session$userData$config)
           }
         } else { # Multiple traces, single plot
@@ -2761,7 +2792,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                                lang = plot_aes$lang, 
                                                gridx = plot_aes$showgridx, 
                                                gridy = plot_aes$showgridy, 
-                                   webgl = session$userData$use_webgl,
+                                               webgl = session$userData$use_webgl,
                                                shareX = input$shareX, 
                                                shareY = input$shareY, 
                                                config = session$userData$config)
