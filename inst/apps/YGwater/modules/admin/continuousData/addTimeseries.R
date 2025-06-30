@@ -244,12 +244,13 @@ addTimeseries <- function(id) {
       
       if (input$mode == "modify") {
         # If we are modifying an existing timeseries, we need to check if it exists
-        selected_row <- input$loc_table_rows_selected
+        selected_row <- input$ts_table_rows_selected
         if (is.null(selected_row) || length(selected_row) != 1) {
           shiny::showNotification("Please select a single timeseries to modify.", type = "error")
           return()
         }
-        selected_timeseries <- moduleData$timeseries[selected_row, ]
+        tsid <- moduleData$timeseries_display[selected_row, "timeseries_id"]
+        selected_timeseries <- moduleData$timeseries[moduleData$timeseries$timeseries_id == tsid, ]
         # Check if the timeseries already exists
         existing_timeseries <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM timeseries WHERE timeseries_id = ", selected_timeseries$timeseries_id))
         if (nrow(existing_timeseries) == 0) {
@@ -342,7 +343,7 @@ addTimeseries <- function(id) {
           
           
           if (!is.na(selected_timeseries$source_fx_args)) {
-            if (nchar(input$source_fx_args == 0)) {
+            if (nchar(input$source_fx_args) == 0) {
               DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE timeseries SET source_fx_args = NULL WHERE timeseries_id = ", selected_timeseries$timeseries_id))
               return()
             }
@@ -410,7 +411,7 @@ addTimeseries <- function(id) {
             DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE timeseries SET note = '", input$note, "' WHERE timeseries_id = ", selected_timeseries$timeseries_id))
           }
           
-          DBI::dbCommit(sesion$userData$AquaCache)
+          DBI::dbCommit(session$userData$AquaCache)
           showNotification("Timeseries updated successfully!", type = "message")
           getModuleData()
         }, error = function(e) {
@@ -427,7 +428,6 @@ addTimeseries <- function(id) {
       tryCatch({
         AquaCache::addACTimeseries(start_datetime = "1800-01-01 00:00",
                                    location = input$location,
-                                   sub_location = input$sub_location,
                                    z = if (input$z_specify) input$z else NA,
                                    parameter = input$parameter,
                                    media = input$media,
@@ -440,12 +440,19 @@ addTimeseries <- function(id) {
                                    source_fx_args = input$source_fx_args,
                                    note = input$note,
                                    con = session$userData$AquaCache
-        )
+       )
+        if (!is.na(input$sub_location) && input$sub_location != "") {
+          new_id <- DBI::dbGetQuery(session$userData$AquaCache,
+                                    "SELECT currval(pg_get_serial_sequence('timeseries','timeseries_id'))")[1,1]
+          DBI::dbExecute(session$userData$AquaCache,
+                         paste0("UPDATE timeseries SET sub_location_id = '", input$sub_location,
+                                "' WHERE timeseries_id = ", new_id))
+        }
         DBI::dbCommit(session$userData$AquaCache)
         showNotification("Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.", type = "message")
         getModuleData()
       }, error = function(e) {
-        DBI::dbRollback(session$userData$AquaCAche)
+        DBI::dbRollback(session$userData$AquaCache)
       })
       
       # Reset all fields
@@ -459,6 +466,7 @@ addTimeseries <- function(id) {
       updateTextInput(session, "record_rate", value = "")
       updateSelectizeInput(session, "sensor_priority", selected = 1)
       updateSelectizeInput(session, "default_owner", selected = NULL)
+      updateSelectizeInput(session, "share_with", selected = "public_reader")
       updateSelectizeInput(session, "source_fx", selected = NULL)
       updateTextInput(session, "source_fx_args", value = "")
       updateTextAreaInput(session, "note", value = "")
