@@ -137,7 +137,7 @@ addSubLocation <- function(id, inputs) {
           updateNumericInput(session, "lat", value = details$latitude)
           updateNumericInput(session, "lon", value = details$longitude)
           updateSelectizeInput(session, "share_with", selected = details$share_with)
-          updateTextInput(session, "loc_note", value = details$note)
+          updateTextInput(session, "sub_loc_note", value = details$note)
         }
       } else {
         selected_sub_loc(NULL)
@@ -299,23 +299,23 @@ addSubLocation <- function(id, inputs) {
           # Check each field to see if it's been modified; if so, update the DB entry by targeting the location_id and appropriate column name
           # Changes to the location english sub_location_name
           if (input$subloc_name != moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "sub_location_name"]) {
-            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE sub_locations SET sub_location_name = '", input$subloc_name, "' WHERE location_id = ", selected_sub_loc(), ";"))
+            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE sub_locations SET sub_location_name = '", input$subloc_name, "' WHERE sub_location_id = ", selected_sub_loc(), ";"))
           }
           
           # Changes to the location french sub_location_name
           if (input$subloc_name_fr != moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "sub_location_name_fr"]) {
             DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE sub_locations SET sub_location_name_fr = '%s' WHERE location_id = %d", input$subloc_name_fr, selected_sub_loc()))
+                           sprintf("UPDATE sub_locations SET sub_location_name_fr = '%s' WHERE sub_location_id = %d", input$subloc_name_fr, selected_sub_loc()))
           }
           
           # Changes to coordinates
           if (input$lat != moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "latitude"]) {
             DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE sub_locations SET latitude = %f WHERE location_id = %d", input$lat, selected_sub_loc()))
+                           sprintf("UPDATE sub_locations SET latitude = %f WHERE sub_location_id = %d", input$lat, selected_sub_loc()))
           }
           if (input$lon != moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "longitude"]) {
             DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE sub_locations SET longitude = %f WHERE location_id = %d", input$lon, selected_sub_loc()))
+                           sprintf("UPDATE sub_locations SET longitude = %f WHERE sub_location_id = %d", input$lon, selected_sub_loc()))
           }
           
           # Changes to share_with
@@ -331,15 +331,15 @@ addSubLocation <- function(id, inputs) {
           # }
           
           # Changes to note
-          if (isTruthy(input$loc_note)) {
+          if (isTruthy(input$subloc_note)) {
             if (!is.na(moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "note"])) { # There might not be a note already
-              if (input$loc_note != moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "note"]) {
+              if (input$subloc_note != moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "note"]) {
                 DBI::dbExecute(session$userData$AquaCache, 
-                               sprintf("UPDATE sub_locations SET note = '%s' WHERE location_id = %d", input$loc_note, selected_sub_loc()))
+                               sprintf("UPDATE sub_locations SET note = '%s' WHERE sub_location_id = %d", input$subloc_note, selected_sub_loc()))
               }
             } else {
               DBI::dbExecute(session$userData$AquaCache, 
-                             sprintf("UPDATE sub_locations SET note = '%s' WHERE location_id = %d", input$loc_note, selected_sub_loc()))
+                             sprintf("UPDATE sub_locations SET note = '%s' WHERE sub_location_id = %d", input$subloc_note, selected_sub_loc()))
             }
           }
           
@@ -404,7 +404,7 @@ addSubLocation <- function(id, inputs) {
                          latitude = input$lat,
                          longitude = input$lon,
                          share_with = paste0("{", paste(input$share_with, collapse = ", "), "}"),
-                         note = if (isTruthy(input$loc_note)) input$loc_note else NA)
+                         note = if (isTruthy(input$subloc_note)) input$subloc_note else NA)
         
         DBI::dbAppendTable(session$userData$AquaCache, "sub_locations", df)
         
@@ -423,7 +423,7 @@ addSubLocation <- function(id, inputs) {
         updateNumericInput(session, "lat", value = NA)
         updateNumericInput(session, "lon", value = NA)
         updateSelectizeInput(session, "share_with", selected = "public_reader")
-        updateTextInput(session, "loc_note", value = NULL)
+        updateTextInput(session, "subloc_note", value = NULL)
         
       }, error = function(e) {
         showModal(modalDialog(
