@@ -7,8 +7,13 @@
 
 
 app_server <- function(input, output, session) {
-  
+
   # Initial setup #############################################################
+
+  output$keep_alive <- renderText({
+    invalidateLater(5000, session)
+    Sys.time()
+  })
   
   # Connection to DB
   session$userData$con <- AquaConnect(name = config$dbName,

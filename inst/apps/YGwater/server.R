@@ -6,9 +6,14 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-  
+
   # Initial setup #############################################################
-  
+
+  output$keep_alive <- renderText({
+    invalidateLater(5000, session)
+    Sys.time()
+  })
+
   # Hide all 'admin' side tabs if they were generated
   
   # Show relevant tabs for viz mode

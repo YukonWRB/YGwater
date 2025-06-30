@@ -6,8 +6,13 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-  
+
   # Initial setup #############################################################
+
+  output$keep_alive <- renderText({
+    invalidateLater(5000, session)
+    Sys.time()
+  })
   
   # Remove irrelevant bookmarks
   setBookmarkExclude(c("plot", "error", "info", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))

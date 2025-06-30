@@ -12,6 +12,7 @@ app_ui <- function(request) {
   
   tagList(
     shinyjs::useShinyjs(),
+    div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")),
     # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
     # Uses two parameters: 'id' for the element ID and 'col' for the color. Color can be R-recognized color name or hex code.
     shinyjs::extendShinyjs(

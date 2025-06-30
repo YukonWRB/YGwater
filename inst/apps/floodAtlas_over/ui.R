@@ -9,6 +9,7 @@ app_ui <- function(request) {
   
   fluidPage(
     shinyjs::useShinyjs(),
+    div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")),
 
     tags$head(
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # YG fonts (the CSS refers to files in the www/fonts folder so there is no external dependency)
