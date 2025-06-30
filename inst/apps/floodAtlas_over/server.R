@@ -10,6 +10,10 @@ app_server <- function(input, output, session) {
 
   # Initial setup #############################################################
 
+  
+  # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)  # This does not work with Shiny Server open source
+  session$userData$use_webgl <- FALSE
+  
   output$keep_alive <- renderText({
     invalidateLater(5000, session)
     Sys.time()
@@ -23,8 +27,6 @@ app_server <- function(input, output, session) {
                                       password = config$dbPass,
                                       silent = TRUE)
 
-  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
-  
 
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$con)
@@ -206,7 +208,7 @@ app_server <- function(input, output, session) {
   }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
   
   observeEvent(params$render, {
-    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, FALSE, config)
+    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, session$userData$use_webgl, config)
   })
   
   output$plot <- plotly::renderPlotly({
