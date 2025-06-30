@@ -168,6 +168,8 @@ app_server <- function(input, output, session) {
                                             silent = TRUE)
   
   print("Connected to AquaCache")
+
+  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
   
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$AquaCache)
