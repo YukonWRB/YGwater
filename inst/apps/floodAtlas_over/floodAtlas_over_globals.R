@@ -3,7 +3,10 @@ floodAtlas_over_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = db
   library(shiny)
   library(shinyjs)
   
-  options(bslib.sass.cache = tools::R_user_dir("YGwater", "cache"))
+  # Use a user-writable cache directory for sass
+  cache_dir <- tools::R_user_dir("YGwater", "cache")
+  dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+  options(bslib.sass.cache = cache_dir)
   
   config <<- list(
     dbName = dbName,
