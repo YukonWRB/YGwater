@@ -2,6 +2,8 @@ floodAtlas_ts_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUs
   
   library(shiny)
   library(shinyjs)
+  
+  options(bslib.sass.cache = tools::R_user_dir("YGwater", "cache"))
 
   config <<- list(
     dbName = dbName,
