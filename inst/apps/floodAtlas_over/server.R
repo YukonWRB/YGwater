@@ -206,7 +206,7 @@ app_server <- function(input, output, session) {
   }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
   
   observeEvent(params$render, {
-    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, session$userData$use_webgl, config)
+    plot_output$invoke(params$loc_code, params$param_code, params$yrs, params$lang, FALSE, config)
   })
   
   output$plot <- plotly::renderPlotly({
