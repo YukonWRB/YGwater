@@ -65,7 +65,7 @@ app_ui <- function(request) {
                  class = "logo-container"),
           column(9,
                  div(class = "aurora",
-                     htmltools::img(src = "imgs/YG_Aurora_resized_flipped.png", .noWS = "outside", alt = "Aurora")
+                     htmltools::img(src = "imgs/YG_Aurora_resized_flipped-min.png", .noWS = "outside", alt = "Aurora")
                  ),
                  div(class = "login-container",
                      if (!config$public) { # 'public' is a global variable established in the globals file
