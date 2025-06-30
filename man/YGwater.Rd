@@ -2,7 +2,7 @@
 % Please edit documentation in R/YGwater.R
 \name{YGwater}
 \alias{YGwater}
-\title{Shiny application for internal WRB use}
+\title{Launch the YGwater Shiny application}
 \usage{
 YGwater(
   host = getOption("shiny.host", "127.0.0.1"),
@@ -34,19 +34,19 @@ YGwater(
 
 \item{dbPass}{Password for the aquacache database. Default is pulled from the .Renviron file.}
 
-\item{accessPath1}{Path to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.}
+\item{accessPath1}{to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.}
 
 \item{accessPath2}{Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.}
 
 \item{server}{Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.}
 
-\item{public}{TRUE restricts or doesn't create some UI elements that are not intended for public use. Default is TRUE.}
+\item{public}{TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.}
 }
 \value{
 Opens a Shiny application.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-This application is designed for use by WRB or other YG staff, and is designed to allow greater flexibility and tune ability of plots and outputs than the public facing app (Streamline). In addition, certain portions of the application interface with databases other than aquacache such as EQWin or the snow database, and may allow for edit privileges to these databases. This app is also used to roll out new, experimental features before they are added to public applications
+Launches a Shiny application to visualize the WRB's water-related data in maps and plots, and to download data from the WRB's hydrometric database. The application is designed to work with the WRB's aquacache database, which contains hydrometric data, and optionally with EQWin databases for water quality data.
 }

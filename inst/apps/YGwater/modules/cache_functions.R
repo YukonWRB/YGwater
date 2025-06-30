@@ -67,7 +67,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
                  sub_groups <- parameter_relationships$sub_group_id[!is.na(parameter_relationships$sub_group_id)]
                  param_sub_groups <- DBI::dbGetQuery(con, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
                } else {
-                 param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+                 param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
                }
                
                list(
@@ -89,7 +89,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
                  param_sub_groups = param_sub_groups
                )
              },
-             ttl = 60 * 60) # Cache the data for 1 hour
+             ttl = 60 * 60 * 2) # Cache the data for 2 hours
 }
 
 
@@ -156,7 +156,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
                  sub_groups <- parameter_relationships$sub_group_id[!is.na(parameter_relationships$sub_group_id)]
                  param_sub_groups <- DBI::dbGetQuery(con, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
                } else {
-                 param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+                 param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
                }
                
                list(
@@ -176,7 +176,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
                  param_sub_groups = param_sub_groups
                )
              },
-             ttl = 60 * 60)
+             ttl = 60 * 60 * 2) # Cache the data for 2 hours
 }
 
 
@@ -200,7 +200,7 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
                  )
                )
              }, 
-             ttl = 60 * 60)
+             ttl = 60 * 60 * 2)  # Cache for 2 hours
 }
 
 
@@ -264,5 +264,5 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
               SELECT DISTINCT parameter_id FROM discrete.results)")
                )
              },
-             ttl = 60 * 60)  # Cache for 1 hours
+             ttl = 60 * 60 * 2)  # Cache for 2 hours
 }

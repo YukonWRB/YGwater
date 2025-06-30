@@ -15,15 +15,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   # 'Admin' side modules #####
   # database admin modules
-  source(system.file("apps/YGwater/modules/admin/dbAdmin/loc_main.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/dbAdmin/main.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/dbAdmin/meta.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/dbAdmin/new_loc.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/dbAdmin/new_ts.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/dbAdmin/syncCont.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/dbAdmin/syncDisc.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/dbAdmin/ts_main.R", package = "YGwater"))
-  
+  source(system.file("apps/YGwater/modules/admin/locations/locationMetadata.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/locations/addLocation.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/locations/addSubLocation.R", package = "YGwater"))
   
   # equipment sub-modules
   source(system.file("apps/YGwater/modules/admin/equipment/deploy_recover.R", package = "YGwater"))
@@ -37,10 +31,14 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/admin/continuousData/imputeMissing.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/continuousData/editContData.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/continuousData/grades_approvals_qualifiers.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/continuousData/addTimeseries.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/continuousData/syncCont.R", package = "YGwater"))
   
   # discrete data sub-modules
   source(system.file("apps/YGwater/modules/admin/discreteData/addDiscData.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/admin/discreteData/editDiscData.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/admin/discreteData/syncDisc.R", package = "YGwater"))
+  
   
   source(system.file("apps/YGwater/modules/admin/field/field_main.R", package = "YGwater"))
   

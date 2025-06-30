@@ -73,12 +73,15 @@ mapLocs <- function(id, language) {
     observeFilterInput("net")
     
     # Create UI elements #####
+    
+
     output$sidebar_page <- renderUI({
       req(moduleData, language)
       page_sidebar(
         sidebar = sidebar(
           title = NULL,
           bg = config$sidebar_bg, # Set in globals file'
+          open = list(mobile = "always-above"),
           tagList(
             selectizeInput(
               ns("type"),
@@ -227,7 +230,7 @@ mapLocs <- function(id, language) {
     
     # Update map popup based on language ###########################################
     popupData <- reactive({
-      get_cached("map_popup_data", 
+      get_cached(if (language$abbrev == "fr") "map_popup_data_fr" else "map_popup_data_en", 
                  env = if (session$userData$user_logged_in) session$userData$app_cache else .GlobalEnv,
                  fetch_fun = function() {
         # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
@@ -349,6 +352,7 @@ mapLocs <- function(id, language) {
     
     # Filter the map data based on user's selection and add points to map ############################
     observe({
+      req(input$map_zoom, popupData())
       popup_data <- popupData()
       if (!is.null(input$type)) {
         if (length(input$type) > 1) {
@@ -454,8 +458,9 @@ mapLocs <- function(id, language) {
                             lng = ~longitude,
                             lat = ~latitude,
                             popup = ~popup_html,
-                            clusterOptions = leaflet::markerClusterOptions())
-      
+                            clusterOptions = leaflet::markerClusterOptions()
+                            )
+
     }) # End of observe for map filters and rendering location points
     
     

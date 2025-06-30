@@ -6,8 +6,18 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-  
+
   # Initial setup #############################################################
+
+  # Heatbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
+  output$keep_alive <- renderText({
+    invalidateLater(5000, session)
+    Sys.time()
+  })
+  
+  # Allow reconnection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
+  session$allowReconnect(TRUE)
+
   
   # Hide all 'admin' side tabs if they were generated
   
@@ -97,23 +107,28 @@ app_server <- function(input, output, session) {
     ui_loaded$contData <- FALSE
     ui_loaded$news <- FALSE
     ui_loaded$about <- FALSE
-    ui_loaded$feedback <- FALSE # !!! THIs TAB TO BE DELETED ONCE TESTING IS COMPLETE
-    ui_loaded$syncCont <- FALSE
-    ui_loaded$syncDisc <- FALSE
-    ui_loaded$locs <- FALSE
-    ui_loaded$ts <- FALSE
+    ui_loaded$feedback <- FALSE # !!! THIS TAB TO BE DELETED ONCE TESTING IS COMPLETE
+    ui_loaded$addLocation <- FALSE
+    ui_loaded$addSubLocation <- FALSE
     ui_loaded$equip <- FALSE
     ui_loaded$deploy_recover <- FALSE
     ui_loaded$cal <- FALSE
+    
     ui_loaded$addContData <- FALSE
-    ui_loaded$addDiscData <- FALSE
-    ui_loaded$editDiscData <- FALSE
     ui_loaded$continuousCorrections <- FALSE
     ui_loaded$imputeMissing <- FALSE
     ui_loaded$editContData <- FALSE
     ui_loaded$grades_approvals_qualifiers <- FALSE
+    ui_loaded$syncCont <- FALSE
+    ui_loaded$addTimeseries <- FALSE
+    
+    ui_loaded$addDiscData <- FALSE
+    ui_loaded$editDiscData <- FALSE
+    ui_loaded$syncDisc <- FALSE
+    
     ui_loaded$addDocs <- FALSE
     ui_loaded$addImgs <- FALSE
+    
     ui_loaded$manageNewsContent <- FALSE
     ui_loaded$viewFeedback <- FALSE 
     ui_loaded$visit <- FALSE
@@ -163,6 +178,8 @@ app_server <- function(input, output, session) {
                                             silent = TRUE)
   
   print("Connected to AquaCache")
+
+  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
   
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$AquaCache)
@@ -420,7 +437,7 @@ $(document).keyup(function(event) {
   
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
-  last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
+  last_admin_tab <- reactiveVal("manageNewsContent")      # Default tab for admin mode
   
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
@@ -460,6 +477,7 @@ $(document).keyup(function(event) {
   
   
   observeEvent(input$navbar, {
+    req(languageSelection) # Ensure language is set before proceeding
     # Observe opening of the navbar (usually by a click through from another module) and close the navbar. Clicks by the user should have no effect as the navbar menu closes as soon as they click.
     session$sendCustomMessage(
       type = "toggleDropdown",
@@ -469,7 +487,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "locs", "ts", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -666,18 +684,36 @@ $(document).keyup(function(event) {
         syncDisc("syncDisc") # Call the server
       }
     }
-    if (input$navbar == "locs") {
-      if (!ui_loaded$locs) {
-        output$locs_ui <- renderUI(locsUI("locs"))
-        ui_loaded$locs <- TRUE
-        locs("locs") # Call the server
+    if (input$navbar == "addLocation") {
+      if (!ui_loaded$addLocation) {
+        output$addLocation_ui <- renderUI(addLocationUI("addLocation"))
+        ui_loaded$addLocation <- TRUE
+        addLocation("addLocation", inputs = moduleOutputs$addDiscData) # Call the server
+        if (!is.null(moduleOutputs$addDiscData)) {
+          moduleOutputs$addDiscData$location <- NULL
+          moduleOutputs$addDiscData$change_tab <- NULL
+        }
       }
     }
-    if (input$navbar == "ts") {
-      if (!ui_loaded$ts) {
-        output$ts_ui <- renderUI(tsUI("ts"))
-        ui_loaded$ts <- TRUE
-        ts("ts") # Call the server
+    if (input$navbar == "addSubLocation") {
+      if (!ui_loaded$addSubLocation) {
+        output$addSubLocation_ui <- renderUI(addSubLocationUI("addSubLocation"))
+        ui_loaded$addSubLocation <- TRUE
+        addSubLocation("addSubLocation", inputs = moduleOutputs$addDiscData) # Call the server
+        if (!is.null(moduleOutputs$addDiscData)) {
+          moduleOutputs$addDiscData$sublocation <- NULL
+          moduleOutputs$addDiscData$change_tab <- NULL
+        }
+      }
+    }
+    if (input$navbar == "addTimeseries") {
+      if (!ui_loaded$addTimeseries) {
+        output$addTimeseries_ui <- renderUI(addTimeseriesUI("addTimeseries"))
+        ui_loaded$addTimeseries <- TRUE
+        addTimeseries("addTimeseries") # Call the server
+        if (!is.null(moduleOutputs$addContData)) {
+          moduleOutputs$addContData$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "deploy_recover") {
@@ -698,8 +734,15 @@ $(document).keyup(function(event) {
       if (!ui_loaded$addContData) {
         output$addContData_ui <- renderUI(addContDataUI("addContData"))  # Render the UI
         ui_loaded$addContData <- TRUE
-        addContData("addContData")  # Call the server
+        moduleOutputs$addContData <- addContData("addContData")  # Call the server
       }
+      # Observe the change_tab output from the addContData module
+      observe({
+        if (!is.null(moduleOutputs$addContData$change_tab)) {
+          nav_select(session = session, "navbar", selected = moduleOutputs$addContData$change_tab)
+          moduleOutputs$addContData$change_tab <- NULL
+        }
+      })
     }
     if (input$navbar == "continuousCorrections") {
       if (!ui_loaded$continuousCorrections) {
@@ -733,8 +776,15 @@ $(document).keyup(function(event) {
       if (!ui_loaded$addDiscData) {
         output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
         ui_loaded$addDiscData <- TRUE
-        addDiscData("addDiscData")  # Call the server
+        moduleOutputs$addDiscData <- addDiscData("addDiscData")  # Call the server
       }
+      # Observe the change_tab output from the addDiscData module
+      observe({
+        if (!is.null(moduleOutputs$addDiscData$change_tab)) {
+          nav_select(session = session, "navbar", selected = moduleOutputs$addDiscData$change_tab)
+          moduleOutputs$addDiscData$change_tab <- NULL
+        }
+      })
     }
     if (input$navbar == "editDiscData") {
       if (!ui_loaded$editDiscData) {

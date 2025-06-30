@@ -30,6 +30,7 @@ mapParams <- function(id, language) {
         sidebar = sidebar(
           title = NULL,
           bg = config$sidebar_bg, # Set in globals file
+          open = list(mobile = "always-above"),
           tagList(
             selectizeInput(
               ns("mapType"),

@@ -19,4 +19,4 @@ You'll also find a host of other interesting R functions, some more hydrology/cl
 
 -   Plotting functions, which are mostly designed to work directly with our internal database. That said, some have ways of bypassing the database connection by passing a data.frame as an argument.
 
-Other functions are more specific to our work here at the Water Resources Branch and will mostly not work without direct access to our network and database. That said, you can access the same information using the Shiny application described above!
+Other functions are more specific to our work here at the Water Resources Branch, but may still be useful to other governments, academia, or the private sector with similar needs. If this describes you or your organization, please reach out to use and we can discuss how we can help you get set up with the AquaCache database back-end necessary for these functions to work.

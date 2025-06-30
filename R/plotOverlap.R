@@ -32,6 +32,8 @@
 #' @param hover Should hover text be included? Default is TRUE.
 #' @param gridx Should grid lines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should grid lines be drawn on the y-axis? Default is FALSE
+#' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set
+#'   to FALSE to force standard scatter traces.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
@@ -97,6 +99,7 @@ plotOverlap <- function(location,
                         hover = TRUE,
                         gridx = FALSE,
                         gridy = TRUE,
+                        webgl = TRUE,
                         lang = "en",
                         data = FALSE,
                         con = NULL)
@@ -730,7 +733,7 @@ plotOverlap <- function(location,
                               x = ~plot_datetime,
                               y = ~value,
                               # type = "scatter",
-                              type = "scattergl",
+                              type = if (webgl) "scattergl" else "scatter",
                               mode = "lines",
                               line = list(width = 2.5 * line_scale),
                               name = i,

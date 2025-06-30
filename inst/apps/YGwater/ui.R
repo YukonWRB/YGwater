@@ -1,4 +1,7 @@
-#' The YGwater User-Interface
+#' YGwater user interface
+#'
+#' Constructs the navigation bar and main UI containers used by the
+#' application. Called internally by [YGwater()].
 #'
 #' @param request Internal parameter for `{shiny}`.
 #'     DO NOT REMOVE.
@@ -9,6 +12,20 @@ app_ui <- function(request) {
   
   tagList(
     shinyjs::useShinyjs(),
+    div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")),
+    # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
+    # Uses two parameters: 'id' for the element ID and 'col' for the color. Color can be R-recognized color name or hex code.
+    shinyjs::extendShinyjs(
+      text = 'shinyjs.backgroundCol = function(params) {
+      var defaultParams = {
+        id : null,
+        col : "red"
+      };
+      params = shinyjs.getParams(params, defaultParams);
+
+      var el = $("#" + params.id);
+                         el.css("background-color", params.col);
+}', functions = c("backgroundCol")),
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # JS to handle full screen button
       tags$script(src = "js/window_resize.js"),  # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
@@ -34,8 +51,10 @@ app_ui <- function(request) {
         }
       "))
     ),
-    # Make the container for the top bar
+    # page_fluid is the main container for the app, which contains the top bar, nav bar, and content
     page_fluid(
+      # Make the container for the top bar, which sits above the nav bar
+      
       div(
         class = "top-bar-container d-none d-md-block",
         fluidRow(
@@ -47,7 +66,7 @@ app_ui <- function(request) {
                  class = "logo-container"),
           column(9,
                  div(class = "aurora",
-                     htmltools::img(src = "imgs/YG_Aurora_resized_flipped.png", .noWS = "outside", alt = "Aurora")
+                     htmltools::img(src = "imgs/YG_Aurora_resized_flipped-min.png", .noWS = "outside", alt = "Aurora")
                  ),
                  div(class = "login-container",
                      if (!config$public) { # 'public' is a global variable established in the globals file
@@ -75,8 +94,6 @@ app_ui <- function(request) {
         gap = "10px",
         nav_panel(title = uiOutput("homeNavTitle"), value = "home",
                   uiOutput("home_ui")),
-        # nav_panel(title = uiOutput("mapsNavMenuTitle"), value = "map",
-        #           uiOutput("map_ui")),
         nav_menu(title = uiOutput("mapsNavMenuTitle"), value = "maps",
                  nav_panel(title = uiOutput("mapsNavLocsTitle"), value = "monitoringLocations",
                            uiOutput("mapLocs_ui")),
@@ -130,23 +147,6 @@ app_ui <- function(request) {
         nav_panel(title = "Feedback", value = "feedback",
                   uiOutput("feedback_ui")),
         if (!config$public) {
-          nav_menu(title = "Database tasks",
-                   value = "dbAdmin",
-                   nav_panel(title = "Sync timeseries",
-                             value = "syncCont",
-                             uiOutput("syncCont_ui")),
-                   nav_panel(title = "Sync sample series",
-                             value = "syncDisc",
-                             uiOutput("syncDisc_ui")),
-                   nav_panel(title = "Add/edit locations",
-                             value = "locs",
-                             uiOutput("locs_ui")),
-                   nav_panel(title = "Add/edit timeseries",
-                             value = "ts",
-                             uiOutput("ts_ui"))
-          )
-        },
-        if (!config$public) {
           nav_menu(title = "Application tasks",
                    value = "appTasks",
                    nav_panel(title = "News page content",
@@ -165,7 +165,7 @@ app_ui <- function(request) {
                              uiOutput("addContData_ui")),
                    nav_panel(title = "Edit/delete continuous data",
                              value = "editContData",
-                             uiOutput("editDiscData_ui")),
+                             uiOutput("editContcData_ui")),
                    nav_panel(title = "Add/modify timeseries corrections",
                              value = "continuousCorrections",
                              uiOutput("continuousCorrections_ui")),
@@ -174,7 +174,13 @@ app_ui <- function(request) {
                              uiOutput("imputeMissing_ui")),
                    nav_panel(title = "Apply grades, approvals, qualifiers",
                              value = "grades_approvals_qualifiers",
-                             uiOutput("grades_approvals_qualifiers_ui"))
+                             uiOutput("grades_approvals_qualifiers_ui")),
+                   nav_panel(title = "Sync timeseries",
+                             value = "syncCont",
+                             uiOutput("syncCont_ui")),
+                   nav_panel(title = "Add/edit timeseries",
+                             value = "addTimeseries",
+                             uiOutput("addTimeseries_ui"))
           )
         },
         if (!config$public) {
@@ -185,7 +191,23 @@ app_ui <- function(request) {
                              uiOutput("addDiscData_ui")),
                    nav_panel(title = "Edit/delete discrete data",
                              value = "editDiscData",
-                             uiOutput("editDiscData_ui"))
+                             uiOutput("editDiscData_ui")),
+                   nav_panel(title = "Sync sample series",
+                             value = "syncDisc",
+                             uiOutput("syncDisc_ui"))
+          )
+        },
+        if (!config$public) {
+          nav_menu(title = "Location tasks",
+                   value = "dbAdmin",
+                   nav_panel(title = "Add/modify locations",
+                             value = "addLocation",
+                             uiOutput("addLocation_ui")
+                   ),
+                   nav_panel(title = "Add/modify sub-locations",
+                             value = "addSubLocation",
+                             uiOutput("addSubLocation_ui")
+                   )
           )
         },
         if (!config$public) {
