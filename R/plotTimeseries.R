@@ -33,6 +33,8 @@
 #' @param hover Should hover text be included? Default is TRUE.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
+#' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set
+#'   to FALSE to force standard scatter traces.
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
@@ -70,6 +72,7 @@ plotTimeseries <- function(location,
                            hover = TRUE,
                            gridx = FALSE,
                            gridy = FALSE,
+                           webgl = TRUE,
                            rate = NULL,
                            tzone = "auto",
                            data = FALSE,
@@ -640,7 +643,7 @@ plotTimeseries <- function(location,
     plotly::add_trace(data = trace_data, 
                       x = ~datetime, 
                       y = ~value, 
-                      type = "scattergl", 
+                      type = if (webgl) "scattergl" else "scatter", 
                       mode = "lines",
                       line = list(width = 2.5 * line_scale),
                       name = parameter_name, 

@@ -2366,7 +2366,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     # Create ExtendedTasks to render plots ############################################################
     # Overlapping years plot
-    plot_output_overlap <- ExtendedTask$new(function(loc, sub_loc, record_rate, aggregation_type, z, param, date_start, date_end, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_overlap <- ExtendedTask$new(function(loc, sub_loc, record_rate, aggregation_type, z, param, date_start, date_end, yrs, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, webgl, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName,
@@ -2378,7 +2378,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           on.exit(DBI::dbDisconnect(con))
           
           plot <- plotOverlap(location = loc,
-                              sub_location = sub_loc,
+                                                            sub_location = sub_loc,
                               z = z,
                               record_rate = record_rate,
                               aggregation_type = aggregation_type,
@@ -2395,8 +2395,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                               axis_scale = axis_scale,
                               legend_scale = legend_scale,
                               legend_position = legend_position,
+                                      webgl = webgl,
                               slider = FALSE,
-                              lang = lang,
                               gridx = gridx,
                               gridy = gridy,
                               con = con,
@@ -2412,7 +2412,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     
     # Single timeseries plot
-    plot_output_timeseries <- ExtendedTask$new(function(loc, sub_loc, record_rate, aggregation_type, z, param, date_start, date_end, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, config) {
+    plot_output_timeseries <- ExtendedTask$new(function(loc, sub_loc, record_rate, aggregation_type, z, param, date_start, date_end, historic_range, apply_datum, filter, unusable, grades, approvals, qualifiers, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, webgl, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -2443,6 +2443,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                  axis_scale = axis_scale,
                                  legend_scale = legend_scale,
                                  legend_position = legend_position,
+                                   webgl = webgl,
                                  slider = FALSE,
                                  gridx = gridx,
                                  gridy = gridy,
@@ -2458,7 +2459,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ) |> bind_task_button("make_plot")
     
     # Multiple traces plot
-    plot_output_timeseries_traces <- ExtendedTask$new(function(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags, date_start, date_end, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
+    plot_output_timeseries_traces <- ExtendedTask$new(function(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags, date_start, date_end, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, webgl, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -2488,6 +2489,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                       axis_scale = axis_scale,
                                       legend_scale = legend_scale,
                                       legend_position = legend_position,
+                                        webgl = webgl,
                                       gridx = gridx,
                                       gridy = gridy,
                                       shareX = shareX,
@@ -2504,7 +2506,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     ) |> bind_task_button("make_plot")
     
     # Multiple subplots plot
-    plot_output_timeseries_subplots <- ExtendedTask$new(function(locs, sub_locs, z, record_rates, aggregation_types, params, date_start, date_end, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, config) {
+    plot_output_timeseries_subplots <- ExtendedTask$new(function(locs, sub_locs, z, record_rates, aggregation_types, params, date_start, date_end, historic_range, apply_datum, filter, unusable, line_scale, axis_scale, legend_scale, legend_position, lang, gridx, gridy, shareX, shareY, webgl, config) {
       promises::future_promise({
         tryCatch({
           con <- AquaConnect(name = config$dbName, 
@@ -2533,6 +2535,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                       axis_scale = axis_scale,
                                       legend_scale = legend_scale,
                                       legend_position = legend_position,
+                                        webgl = webgl,
                                       gridx = gridx,
                                       gridy = gridy,
                                       shareX = shareX,
@@ -2610,6 +2613,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                    lang = plot_aes$lang, 
                                    gridx = plot_aes$showgridx, 
                                    gridy = plot_aes$showgridy, 
+                                   webgl = session$userData$use_webgl,
                                    config = session$userData$config)
       } else if (input$plot_type == "ts") {
         if (traceCount() == 1) { # Either a single trace or more than 1 subplot
@@ -2653,6 +2657,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                                    lang = plot_aes$lang, 
                                                    gridx = plot_aes$showgridx, 
                                                    gridy = plot_aes$showgridy, 
+                                   webgl = session$userData$use_webgl,
                                                    shareX = input$shareX, 
                                                    shareY = input$shareY, 
                                                    config = session$userData$config)
@@ -2711,6 +2716,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                           lang = plot_aes$lang, 
                                           gridx = plot_aes$showgridx, 
                                           gridy = plot_aes$showgridy, 
+                                   webgl = session$userData$use_webgl,
                                           config = session$userData$config)
           }
         } else { # Multiple traces, single plot
@@ -2755,6 +2761,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                                lang = plot_aes$lang, 
                                                gridx = plot_aes$showgridx, 
                                                gridy = plot_aes$showgridy, 
+                                   webgl = session$userData$use_webgl,
                                                shareX = input$shareX, 
                                                shareY = input$shareY, 
                                                config = session$userData$config)
