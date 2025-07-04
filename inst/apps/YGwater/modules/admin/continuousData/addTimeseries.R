@@ -331,7 +331,7 @@ addTimeseries <- function(id) {
           
           # Get the new timeseries_id
           new_timeseries_id <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", df$location_id, 
-                                                           " AND sub_location_id ", ifelse(is.na(df$sub_location), "IS NULL", paste0("= ", df$sub_location)), 
+                                                           " AND sub_location_id ", ifelse(is.na(df$sub_location_id), "IS NULL", paste0("= ", df$sub_location_id)), 
                                                            " AND z ", ifelse(is.na(df$z), "IS NULL", paste0("= ", df$z)), 
                                                            " AND parameter_id = ", df$parameter_id, 
                                                            " AND media_id = ", df$media_id, 
@@ -407,7 +407,7 @@ addTimeseries <- function(id) {
         source_fx_args = input$source_fx_args,
         data = moduleData
       )
-    }) |> bslib::bind_task_button("add_timeseries")
+    }, ignoreInit = TRUE) |> bslib::bind_task_button("add_timeseries")
     
     # Observe the result of the ExtendedTask
     observeEvent(addNewTimeseries$result(), {
@@ -439,7 +439,7 @@ addTimeseries <- function(id) {
         updateTextInput(session, "source_fx_args", value = "")
         updateTextAreaInput(session, "note", value = "")
       }
-    })
+    }, ignoreInit = TRUE)
     
     
     
