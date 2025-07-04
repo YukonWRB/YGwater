@@ -138,8 +138,10 @@ addLocation <- function(id, inputs) {
                        "Data sharing agreement", 
                        choices = stats::setNames(moduleData$agreements$document_id, 
                                                  moduleData$agreements$name),
-                       options = list(placeholder = "Optional - add the document first if needed"),
-                       width = "100%"
+                       options = list(placeholder = "Optional - add the document first if needed",
+                                      maxItems = 1),
+                       width = "100%",
+                       multiple = TRUE # This is to force a default of nothing selected - overridden with options
         ),
         
         splitLayout(
@@ -182,9 +184,11 @@ addLocation <- function(id, inputs) {
           ),
           selectizeInput(ns("project"), 
                          "Project(s) (type your own if not in list)", 
-                         choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name), 
+                         choices = stats::setNames(moduleData$projects$project_id, moduleData$projects$name),
+                         multiple = TRUE,
                          options = list(create = TRUE, 
-                                        placeholder = "Optional"),  # With a choice to allow users to add a project
+                                        placeholder = "Optional",
+                                        maxItems = 1),  # With a choice to allow users to add a project
                          width = "100%"
           )
         ),
@@ -329,7 +333,6 @@ addLocation <- function(id, inputs) {
       }
       
       # Check if the location code already exists in the database. If yes, make the selectizeInput pink
-      print(input$mode)
       if (input$mode == "modify") {
         shinyjs::js$backgroundCol(ns("loc_code"), "#fff")
       } else {
@@ -989,23 +992,23 @@ addLocation <- function(id, inputs) {
         getModuleData() # This should trigger an update to the table
         
         # Reset all fields
-        updateTextInput(session, "loc_code", value = NULL)
-        updateTextInput(session, "loc_name", value = NULL)
-        updateTextInput(session, "loc_name_fr", value = NULL)
-        updateSelectizeInput(session, "loc_type", selected = NULL)
+        updateTextInput(session, "loc_code", value = character(0))
+        updateTextInput(session, "loc_name", value = character(0))
+        updateTextInput(session, "loc_name_fr", value = character(0))
+        updateSelectizeInput(session, "loc_type", selected = character(0))
         updateNumericInput(session, "lat", value = NA)
         updateNumericInput(session, "lon", value = NA)
         updateSelectizeInput(session, "viz", selected = "exact")
         updateSelectizeInput(session, "share_with", selected = "public_reader")
-        updateSelectizeInput(session, "loc_owner", selected = NULL)
-        updateTextInput(session, "loc_contact", value = NULL)
-        updateSelectizeInput(session, "data_sharing_agreement", selected = NULL)
+        updateSelectizeInput(session, "loc_owner", selected = character(0))
+        updateTextInput(session, "loc_contact", value = character(0))
+        updateSelectizeInput(session, "data_sharing_agreement", selected = character(0))
         updateSelectizeInput(session, "datum_id_from", selected = 10)
         updateSelectizeInput(session, "datum_id_to", selected = 10)
         updateNumericInput(session, "elev", value = 0)
-        updateSelectizeInput(session, "network", selected = NULL)
-        updateSelectizeInput(session, "project", selected = NULL)
-        updateTextInput(session, "loc_note", value = NULL)
+        updateSelectizeInput(session, "network", selected = character(0))
+        updateSelectizeInput(session, "project", selected = character(0))
+        updateTextInput(session, "loc_note", value = character(0))
         
       }, error = function(e) {
         # Rollback the transaction if there was an error
