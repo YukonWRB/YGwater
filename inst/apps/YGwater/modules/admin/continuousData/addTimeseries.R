@@ -215,7 +215,6 @@ addTimeseries <- function(id) {
     })
     
     
-    ## Observers to modify existing entry ##########################################
     selected_tsid <- reactiveVal(NULL)
     
     # Observe row selection and update inputs accordingly
@@ -250,7 +249,7 @@ addTimeseries <- function(id) {
     })
     
     
-    
+    # Add a new timeseries #############
     # Create an extendedTask to add a new timeseries
     addNewTimeseries <- ExtendedTask$new(function(con, loc, sub_loc, z, z_specify, parameter, media, priority, agg_type, rate, owner, note, source_fx, source_fx_args, data) {
       promises::future_promise({
@@ -370,7 +369,8 @@ addTimeseries <- function(id) {
           return(paste("Error adding timeseries:", w$message))
         })
       })
-    }) # end of ExtendedTask$new
+    } # end of ExtendedTask$new
+    ) |> bslib::bind_task_button("add_timeseries")
     
     observeEvent(input$add_timeseries, {
       # validate inputs
@@ -407,7 +407,7 @@ addTimeseries <- function(id) {
         source_fx_args = input$source_fx_args,
         data = moduleData
       )
-    }, ignoreInit = TRUE) |> bslib::bind_task_button("add_timeseries")
+    }, ignoreInit = TRUE)
     
     # Observe the result of the ExtendedTask
     observeEvent(addNewTimeseries$result(), {
@@ -442,7 +442,7 @@ addTimeseries <- function(id) {
     }, ignoreInit = TRUE)
     
     
-    
+    # Modify existing timeseries ###############
     observeEvent(input$modify_timeseries, {
       if (input$mode != "modify") {
         # This is an error: show the user a notification to select 'modify' mode
