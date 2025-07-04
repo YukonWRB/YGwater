@@ -8,7 +8,7 @@
 #' @param location The location for which you want a plot.
 #' @param sub_location Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).
 #' @param parameter The parameter name (text) or code (numeric) that you wish to plot. The location:sublocation:parameter combo must be in the local database.
-#' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.
+#' @param record_rate The recording rate for the parameter and location to plot, from column 'record_rate' of table 'timeseries'. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate. Can be passed in a character string or number of seconds coercible to a period by [lubridate::period()].
 #' @param aggregation_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max'.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/aggregation_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.
@@ -33,6 +33,8 @@
 #' @param hover Should hover text be included? Default is TRUE.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
+#' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set
+#'   to FALSE to force standard scatter traces.
 #' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
@@ -70,6 +72,7 @@ plotTimeseries <- function(location,
                            hover = TRUE,
                            gridx = FALSE,
                            gridy = FALSE,
+                           webgl = TRUE,
                            rate = NULL,
                            tzone = "auto",
                            data = FALSE,
@@ -170,7 +173,8 @@ plotTimeseries <- function(location,
   }
   
   if (!is.null(record_rate)) {
-    if (!lubridate::is.period(lubridate::period(record_rate))) {
+    record_rate <- lubridate::period(record_rate)
+    if (!lubridate::is.period(record_rate)) {
       warning("Your entry for parameter record_rate is invalid. It's been reset to the default NULL.")
       record_rate <- NULL
     }
@@ -263,14 +267,14 @@ plotTimeseries <- function(location,
     
     if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
       if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, ";"))
       } else { #aggregation_type_id is not NULL but record_rate is
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
       }
     } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
     } else { #both record_rate and aggregation_type_id are not NULL
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
     }
   } else {  #sub location was specified
     # Find the sub location_id
@@ -286,14 +290,14 @@ plotTimeseries <- function(location,
     }
     if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
       if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, ";"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, ";"))
       } else { #aggregation_type_id is not NULL but record_rate is
-        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, record_rate, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
+        exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", aggregation_type_id, ";"))
       }
     } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
     } else { #both record_rate and aggregation_type_id are not NULL
-      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
+      exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND sub_location_id = ", sub_location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
     }
   }
   
@@ -315,7 +319,6 @@ plotTimeseries <- function(location,
   } else if (nrow(exist_check) > 1) {
     if (is.null(record_rate)) {
       warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate.")
-      exist_check$record_rate <- lubridate::period(exist_check$record_rate)
       exist_check <- exist_check[order(exist_check$record_rate), ]
       temp <- exist_check[1, ]
     }
@@ -533,7 +536,7 @@ plotTimeseries <- function(location,
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
   if (!is.infinite(min_trace)) {
-    trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid))
+    trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid, con = con))
     # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
     if ("period" %in% colnames(trace_data)) {
       trace_data[, period_secs := as.numeric(lubridate::period(period))]
@@ -640,7 +643,7 @@ plotTimeseries <- function(location,
     plotly::add_trace(data = trace_data, 
                       x = ~datetime, 
                       y = ~value, 
-                      type = "scattergl", 
+                      type = if (webgl) "scattergl" else "scatter", 
                       mode = "lines",
                       line = list(width = 2.5 * line_scale),
                       name = parameter_name, 
@@ -649,109 +652,79 @@ plotTimeseries <- function(location,
                       text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")"))
   
   # Add the grades, approvals, qualifiers as ribbons below the plotting area
-  # make a function to add the bands, used for all three
   if (any(grades, approvals, qualifiers)) {
     slider <- FALSE
-    buildBandPlot <- function(df, category_col) {
-      #For each row, add a horizontal segment or filled area
-      p <- plotly::plot_ly()
-      
-      for (i in seq_len(nrow(df))) {
-        start_x <- df$start_dt[i]
-        end_x <- df$end_dt[i]
-        p <- p %>%
-          plotly::add_polygons(
-            x = c(start_x, start_x, end_x, end_x),
-            y = c(0, 1, 1, 0),
-            fill = "toself",
-            fillcolor = "lightblue",
-            line = list(width = 1, color = "black"),
-            hoverinfo = "text",
-            hoveron = "fills",
-            text = paste(category_col, ":", df[[category_col]][i]),
-            showlegend = FALSE
-          )
-      }
-      p <- p %>% plotly::layout(
-        yaxis = list(showticklabels = FALSE, showgrid = FALSE, range = c(0, 2), zeroline = FALSE),
-        xaxis = list(showgrid = FALSE)
-      )
-      return(p)
-    }
-    
     bands_subplot <- plotly::plot_ly()
-    
-    # extract the start of the trace_data
+
     mindt <- trace_data[, min(datetime)]
     maxdt <- trace_data[, max(datetime)]
-    
+
+    poly_list <- list()
+
     if (approvals) {
       approvals_y_set <- if (grades & qualifiers) c(2.2, 3.2, 3.2, 2.2) else if (grades) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
-      # Adjust start_dt occurrences which are before the start of the trace_data
-      approvals_dt[start_dt < mindt, "start_dt" := mindt]
-      # Adjust end_dt occurrences which are after the end of the trace_data
-      approvals_dt[end_dt > maxdt, "end_dt" := maxdt]
-      for (i in seq_len(nrow(approvals_dt))) {
-        start_x <- approvals_dt$start_dt[i]
-        end_x <- approvals_dt$end_dt[i]
-        color <- approvals_dt$color_code[i]
-        bands_subplot <- bands_subplot %>%
-          plotly::add_polygons(
-            x = c(start_x, start_x, end_x, end_x),
-            y = approvals_y_set,
-            fill = "toself",
-            fillcolor = color,
-            line = list(width = 1, color = "black"),
-            hoverinfo = "text",
-            hoveron = "fills",
-            text = if (lang == "en") paste("Approval:", approvals_dt$approval_type_description[i]) else paste0("Approbation:", approvals_dt$approval_type_description_fr[i]),
-            showlegend = FALSE
-          )
+      approvals_dt[start_dt < mindt, start_dt := mindt]
+      approvals_dt[end_dt > maxdt, end_dt := maxdt]
+      if (nrow(approvals_dt) > 0) {
+        approvals_dt[, id := paste0("approval_", .I)]
+        poly_list[[length(poly_list) + 1]] <- approvals_dt[, .(
+          datetime = c(start_dt, start_dt, end_dt, end_dt),
+          y = approvals_y_set,
+          color = color_code,
+          text = if (lang == "en") paste0("Approval: ", approval_type_description) else paste0("Approbation:", approval_type_description_fr),
+          id = id
+        ), by = id]
       }
     }
+
     if (grades) {
-      grades_y_set <- if (qualifiers)  c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
-      grades_dt[start_dt < mindt, "start_dt" := mindt]
-      grades_dt[end_dt > maxdt, "end_dt" := maxdt]
-      for (i in seq_len(nrow(grades_dt))) {
-        start_x <- grades_dt$start_dt[i]
-        end_x <- grades_dt$end_dt[i]
-        color <- grades_dt$color_code[i]
-        bands_subplot <- bands_subplot %>%
-          plotly::add_polygons(
-            x = c(start_x, start_x, end_x, end_x),
-            y = grades_y_set,
-            fill = "toself",
-            fillcolor = color,
-            line = list(width = 1, color = "black"),
-            hoverinfo = "text",
-            hoveron = "fills",
-            text = if (lang == "en") paste("Grade:", grades_dt$grade_type_description[i]) else paste0("Cote:", grades_dt$grade_type_description_fr[i]),
-            showlegend = FALSE
-          )
+      grades_y_set <- if (qualifiers) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
+      grades_dt[start_dt < mindt, start_dt := mindt]
+      grades_dt[end_dt > maxdt, end_dt := maxdt]
+      if (nrow(grades_dt) > 0) {
+        grades_dt[, id := paste0("grade_", .I)]
+        poly_list[[length(poly_list) + 1]] <- grades_dt[, .(
+          datetime = c(start_dt, start_dt, end_dt, end_dt),
+          y = grades_y_set,
+          color = color_code,
+          text = if (lang == "en") paste0("Grade: ", grade_type_description) else paste0("Cote:", grade_type_description_fr),
+          id = id
+        ), by = id]
       }
     }
+
     if (qualifiers) {
       qualifiers_y_set <- c(0, 1, 1, 0)
-      qualifiers_dt[start_dt < mindt, "start_dt" := mindt]
-      qualifiers_dt[end_dt > maxdt, "end_dt" := maxdt]
-      for (i in seq_len(nrow(qualifiers_dt))) {
-        start_x <- qualifiers_dt$start_dt[i]
-        end_x <- qualifiers_dt$end_dt[i]
-        color <- qualifiers_dt$color_code[i]
-        bands_subplot <- bands_subplot %>%
-          plotly::add_polygons(
-            x = c(start_x, start_x, end_x, end_x),
-            y = qualifiers_y_set,
-            fill = "toself",
-            fillcolor = color,
-            line = list(width = 1, color = "black"),
-            hoverinfo = "text",
-            hoveron = "fills",
-            text = if (lang == "en") paste("Qualifier:", qualifiers_dt$qualifier_type_description[i]) else paste0("Qualificatif:", qualifiers_dt$qualifier_type_description_fr[i]),
-            showlegend = FALSE
-          )
+      qualifiers_dt[start_dt < mindt, start_dt := mindt]
+      qualifiers_dt[end_dt > maxdt, end_dt := maxdt]
+      if (nrow(qualifiers_dt) > 0) {
+        qualifiers_dt[, id := paste0("qualifier_", .I)]
+        poly_list[[length(poly_list) + 1]] <- qualifiers_dt[, .(
+          datetime = c(start_dt, start_dt, end_dt, end_dt),
+          y = qualifiers_y_set,
+          color = color_code,
+          text = if (lang == "en") paste0("Qualifier: ", qualifier_type_description) else paste0("Qualificatif:", qualifier_type_description_fr),
+          id = id
+        ), by = id]
       }
+    }
+
+    if (length(poly_list) > 0) {
+      polygons_df <- data.table::rbindlist(poly_list, use.names = TRUE)
+      bands_subplot <- bands_subplot %>%
+        plotly::add_polygons(
+          data = polygons_df,
+          x = ~datetime,
+          y = ~y,
+          split = ~id,
+          fill = "toself",
+          fillcolor = ~color,
+          line = list(width = 1, color = "black"),
+          hoverinfo = "text",
+          hoveron = "fills",
+          text = ~text,
+          showlegend = FALSE
+        )
     }
     
     # Hide the y axis labels and replace with annotations

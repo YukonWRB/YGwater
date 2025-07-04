@@ -9,6 +9,9 @@ plotOverlap(
   sub_location = NULL,
   parameter,
   record_rate = NULL,
+  aggregation_type = NULL,
+  z = NULL,
+  z_approx = NULL,
   startDay = 1,
   endDay = 365,
   tzone = "MST",
@@ -29,6 +32,7 @@ plotOverlap(
   hover = TRUE,
   gridx = FALSE,
   gridy = TRUE,
+  webgl = TRUE,
   lang = "en",
   data = FALSE,
   con = NULL
@@ -41,7 +45,13 @@ plotOverlap(
 
 \item{parameter}{The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.}
 
-\item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.}
+\item{record_rate}{The recording rate for the parameter and location to plot, from column 'record_rate' of table 'timeseries'. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate. Can be passed in a character string or number of seconds coercible to a period by \code{\link[lubridate:period]{lubridate::period()}}.}
+
+\item{aggregation_type}{The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2'. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max'.}
+
+\item{z}{Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/aggregation_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.}
+
+\item{z_approx}{Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.}
 
 \item{startDay}{The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter \code{years}.}
 
@@ -82,6 +92,9 @@ plotOverlap(
 \item{gridx}{Should grid lines be drawn on the x-axis? Default is FALSE}
 
 \item{gridy}{Should grid lines be drawn on the y-axis? Default is FALSE}
+
+\item{webgl}{Use WebGL ("scattergl") for faster rendering when possible. Set
+to FALSE to force standard scatter traces.}
 
 \item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
 

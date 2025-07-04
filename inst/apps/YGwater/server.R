@@ -6,8 +6,18 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-  
+
   # Initial setup #############################################################
+
+  # Heatbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
+  output$keep_alive <- renderText({
+    invalidateLater(5000, session)
+    Sys.time()
+  })
+  
+  # Allow reconnection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
+  session$allowReconnect(TRUE)
+
   
   # Hide all 'admin' side tabs if they were generated
   
@@ -16,47 +26,49 @@ app_server <- function(input, output, session) {
     if (show) {
       nav_show(id = "navbar", target = "home")
       nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
-      nav_show(id = "navbar", target = "map")
+      nav_show(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible
         nav_show(id = "navbar", target = "FOD")
       }
       nav_show(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
-      nav_show(id = "navbar", target = "imgTableView")
-      nav_show(id = "navbar", target = "imgMapView")
+      nav_show(id = "navbar", target = "images") # Actually a nav_menu, and this targets the tabs 'imgTableView' and 'imgMapView' as well
       nav_show(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
       nav_show(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
+      nav_show(id = "navbar", target = "feedback")
     } else {
       nav_hide(id = "navbar", target = "home")
       nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
-      nav_hide(id = "navbar", target = "map")
+      nav_hide(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible
         nav_hide(id = "navbar", target = "FOD")
       }
       nav_hide(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
-      nav_hide(id = "navbar", target = "imgTableView")
-      nav_hide(id = "navbar", target = "imgMapView")
+      nav_hide(id = "navbar", target = "images") # Actually a nav_menu, and this targets the tabs 'imgTableView' and 'imgMapView' as well
       nav_hide(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
       nav_hide(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
+      nav_hide(id = "navbar", target = "feedback")
     }
   }
   showAdmin <- function(show = TRUE, logout = FALSE) {
     if (show) {
-      nav_show(id = "navbar", target = "locs")
-      nav_show(id = "navbar", target = "ts")
+      nav_show(id = "navbar", target = "dbAdmin") # Actually a nav_menu, and this targets the sync modules as well as timeeseries and locations add/edit modules
       nav_show(id = "navbar", target = "equip")
       nav_show(id = "navbar", target = "cal")
-      nav_show(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      nav_show(id = "navbar", target = "continuousData") # Actually a nav_menu
+      nav_show(id = "navbar", target = "discreteData") # Actually a nav_menu
       nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_show(id = "navbar", target = "visit")
+      nav_show(id = "navbar", target = "appTasks")
     } else {
       # Hide irrelevant tabs for viz mode
-      nav_hide(id = "navbar", target = "locs")
-      nav_hide(id = "navbar", target = "ts")
+      nav_hide(id = "navbar", target = "dbAdmin")
       nav_hide(id = "navbar", target = "equip")
       nav_hide(id = "navbar", target = "cal")
-      nav_hide(id = "navbar", target = "addData") # Actually a nav_menu, and this targets the tabs 'addContData' and 'addDiscData' as well
+      nav_hide(id = "navbar", target = "continuousData") # Actually a nav_menu
+      nav_hide(id = "navbar", target = "discreteData") # Actually a nav_menu
       nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_hide(id = "navbar", target = "visit")
+      nav_hide(id = "navbar", target = "appTasks")
       if (logout) {
         shinyjs::hide("admin")
       }
@@ -68,24 +80,6 @@ app_server <- function(input, output, session) {
   }
   
   
-  # Automatically update URL every time an input changes
-  observe({
-    reactiveValuesToList(input)
-    session$doBookmark()
-  })
-  setBookmarkExclude(c("userLang", "loginBtn", "logoutBtn", "window_dimensions"))
-  
-  # Update the query string
-  onBookmarked(updateQueryString)
-  
-  isRestoring <- reactiveVal(FALSE)
-  isRestoring_img <- reactiveVal(FALSE)
-  
-  onRestore(function(state) {
-    isRestoring(TRUE)
-    isRestoring_img(TRUE)
-  })
-  
   # Track window dimensions (used to modify plot appearance)
   windowDims <- reactive({
     req(input$window_dimensions)
@@ -93,36 +87,55 @@ app_server <- function(input, output, session) {
   })
   
   # Initialize reactive flags to track whether each UI has been loaded
-  ui_loaded <- reactiveValues(
-    viz = FALSE,
-    admin = FALSE,
-    home = FALSE,
-    discretePlot = FALSE,
-    continuousPlot = FALSE,
-    mixPlot = FALSE,
-    mapParamValues = FALSE,
-    mapMonitoringLocations = FALSE,
-    FOD = FALSE,
-    imgTableView = FALSE,
-    imgMapView = FALSE,
-    snowInfo = FALSE,
-    waterInfo = FALSE,
-    WQReport = FALSE,
-    snowBulletin = FALSE,
-    discData = FALSE,
-    contData = FALSE,
-    news = FALSE,
-    about = FALSE,
-    locs = FALSE,
-    ts = FALSE,
-    equip = FALSE,
-    deploy_recover = FALSE,
-    cal = FALSE,
-    addContData = FALSE,
-    addDiscData = FALSE,
-    addDocs = FALSE,
-    addImgs = FALSE,
-    visit = FALSE)
+  reset_ui_loaded <- function() {
+    ui_loaded$viz <- FALSE
+    ui_loaded$admin <- FALSE
+    ui_loaded$home <- FALSE
+    ui_loaded$discretePlot <- FALSE
+    ui_loaded$continuousPlot <- FALSE
+    ui_loaded$mixPlot <- FALSE
+    ui_loaded$mapParamValues <- FALSE
+    ui_loaded$mapMonitoringLocations <- FALSE
+    ui_loaded$FOD <- FALSE
+    ui_loaded$imgTableView <- FALSE
+    ui_loaded$imgMapView <- FALSE
+    ui_loaded$snowInfo <- FALSE
+    ui_loaded$waterInfo <- FALSE
+    ui_loaded$WQReport <- FALSE
+    ui_loaded$snowBulletin <- FALSE
+    ui_loaded$discData <- FALSE
+    ui_loaded$contData <- FALSE
+    ui_loaded$news <- FALSE
+    ui_loaded$about <- FALSE
+    ui_loaded$feedback <- FALSE # !!! THIS TAB TO BE DELETED ONCE TESTING IS COMPLETE
+    ui_loaded$addLocation <- FALSE
+    ui_loaded$addSubLocation <- FALSE
+    ui_loaded$equip <- FALSE
+    ui_loaded$deploy_recover <- FALSE
+    ui_loaded$cal <- FALSE
+    
+    ui_loaded$addContData <- FALSE
+    ui_loaded$continuousCorrections <- FALSE
+    ui_loaded$imputeMissing <- FALSE
+    ui_loaded$editContData <- FALSE
+    ui_loaded$grades_approvals_qualifiers <- FALSE
+    ui_loaded$syncCont <- FALSE
+    ui_loaded$addTimeseries <- FALSE
+    
+    ui_loaded$addDiscData <- FALSE
+    ui_loaded$editDiscData <- FALSE
+    ui_loaded$syncDisc <- FALSE
+    
+    ui_loaded$addDocs <- FALSE
+    ui_loaded$addImgs <- FALSE
+    
+    ui_loaded$manageNewsContent <- FALSE
+    ui_loaded$viewFeedback <- FALSE 
+    ui_loaded$visit <- FALSE
+  }
+  
+  ui_loaded <- reactiveValues()
+  reset_ui_loaded() # Initialize the ui_loaded reactive values
   
   ## database connections ###########
   # Look for .mdb files in the AccessPath directories
@@ -165,6 +178,8 @@ app_server <- function(input, output, session) {
                                             silent = TRUE)
   
   print("Connected to AquaCache")
+
+  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
   
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$AquaCache)
@@ -186,13 +201,13 @@ app_server <- function(input, output, session) {
   
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
-    if (!isRestoring()) {
-      shinyjs::runjs("
+    # if (!isRestoring()) {
+    shinyjs::runjs("
       var language =  window.navigator.userLanguage || window.navigator.language;
       console.log('Detected browser language: ' + language);
       Shiny.setInputValue('userLang', language, {priority: 'event'});
                      ")
-    }
+    # }
   })
   
   # Set initial language based on browser language
@@ -225,7 +240,7 @@ app_server <- function(input, output, session) {
       output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
       output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
       output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-      output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+      # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
       
       output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
       output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
@@ -256,6 +271,7 @@ app_server <- function(input, output, session) {
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
   observeEvent(input$loginBtn, {
+    req(languageSelection$language) # Ensure language is set before proceeding
     if (log_attempts() > 5) {
       showModal(modalDialog(
         title = tr("login_fail", languageSelection$language),
@@ -325,23 +341,26 @@ $(document).keyup(function(event) {
         session$userData$config$dbPass <- input$password
         
         session$userData$user_logged_in <- TRUE
+        
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
-        # Check if the user has admin privileges. Inspect the 'timeseries' table to see if they have write privileges (checks are also performed in each writing/editing module).
-        result <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT has_table_privilege('timeseries', 'UPDATE') AS can_write;"))
-        if (result$can_write) {
-          session$userData$config$admin <- TRUE
-          
-        } else {
-          session$userData$config$admin <- FALSE
-        }
         # Create the new element for the 'admin' mode
+        # Other tabs are created if/when the user clicks on the 'admin' tab
         nav_insert("navbar",
                    nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
                    target = "home", position = "before")
         
-        # Other tabs are created if/when the user clicks on the 'admin' tab
+        # Initialize a fresh cache environment for the session
+        session$userData$app_cache <- new.env(parent = emptyenv())
+        # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+        reset_ui_loaded()
+        # Send the user back to the 'home' tab if they were elsewhere
+        updateTabsetPanel(session, "navbar", selected = "home")
+        
+        # Select the last tab the user was on in viz mode. This will reload the module since the tab was previously set to 'home'.
+        updateTabsetPanel(session, "navbar", selected = last_viz_tab())
+        
         return()
       } else {
         removeModal()
@@ -398,13 +417,16 @@ $(document).keyup(function(event) {
     session$userData$config$dbUser <- config$dbUser
     session$userData$config$dbPass <- config$dbPass
     
-    # Redirect to last 'viz' tab
-    updateTabsetPanel(session, "navbar", selected = last_viz_tab())
-    
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     
+    # Clear the app_cache environment
+    session$userData$app_cache <- new.env(parent = emptyenv())
+    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+    reset_ui_loaded()
+    # Send the user back to the 'home' tab if they were elsewhere
+    updateTabsetPanel(session, "navbar", selected = "home")
     
-    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode
+    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode and on the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
     admin_vis_flag("viz")
     shinyjs::click("admin")
   })
@@ -415,12 +437,10 @@ $(document).keyup(function(event) {
   
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home")      # Default tab for viz mode
-  last_admin_tab <- reactiveVal("locs")      # Default tab for admin mode
-  
+  last_admin_tab <- reactiveVal("manageNewsContent")      # Default tab for admin mode
   
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
-  
   observeEvent(input$admin, {
     if (admin_vis_flag() == "viz") {
       # Set the flag before changing the tab programmatically
@@ -452,23 +472,24 @@ $(document).keyup(function(event) {
       updateTabsetPanel(session, "navbar", selected = last_admin_tab())
       
       admin_vis_flag("viz")
-      
-      shinyjs::runjs("
-  document.querySelectorAll('#navbar a[data-value=\"equip\"] b.caret')
-    .forEach(el => el.remove());
-")
     }
   })
   
   
   observeEvent(input$navbar, {
+    req(languageSelection) # Ensure language is set before proceeding
+    # Observe opening of the navbar (usually by a click through from another module) and close the navbar. Clicks by the user should have no effect as the navbar menu closes as soon as they click.
+    session$sendCustomMessage(
+      type = "toggleDropdown",
+      message = list(msg = "hide dropdown"))
+    
     # When user selects any a tab, update the last active tab for the current mode
-    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData")) {
+    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("locs", "ts", "equip", "cal", "addContData", "addDiscData", "addDocs", "addImgs", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
       # User is in admin mode
-      last_admin_tab(input$navbar) 
+      last_admin_tab(input$navbar)
     }
     
     # Load modules when the corresponding tabs are selected
@@ -478,8 +499,15 @@ $(document).keyup(function(event) {
       if (!ui_loaded$home) {
         output$home_ui <- renderUI(homeUI("home"))
         ui_loaded$home <- TRUE
-        home("home", language = languageSelection) # Call the server
+        moduleOutputs$home <- home("home", language = languageSelection) # Call the server
       }
+      observe({
+        if (!is.null(moduleOutputs$home$change_tab)) {
+          target <- moduleOutputs$home$change_tab
+          nav_select(session = session, "navbar", selected = target)
+          moduleOutputs$home$change_tab <- NULL
+        }
+      })
     }
     
     ### Plots nav_menu ##########################
@@ -487,14 +515,22 @@ $(document).keyup(function(event) {
       if (!ui_loaded$discretePlot) {
         output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
         ui_loaded$discretePlot <- TRUE
-        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs$location_id) # Call the server
+        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "continuous") { # This is reached through a nav_menu
       if (!ui_loaded$continuousPlot) {
         output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
         ui_loaded$continuousPlot <- TRUE
-        continuousPlot("continuousPlot", language = languageSelection, windowDims) # Call the server
+        continuousPlot("continuousPlot", language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "mix") { # This is reached through a nav_menu
@@ -514,16 +550,20 @@ $(document).keyup(function(event) {
       }
       observe({
         if (!is.null(moduleOutputs$mapLocs$change_tab)) {
-          print(paste("Changing tab to", moduleOutputs$mapLocs$change_tab))
-          nav_select(session = session, "navbar", selected = (moduleOutputs$mapLocs$change_tab)) # Change tabs
-          moduleOutputs$mapLocs$change_tab <- NULL # Reset to NULL
+          target <- moduleOutputs$mapLocs$change_tab
+          if (target == "discData") ui_loaded$discData <- FALSE
+          if (target == "contData") ui_loaded$contData <- FALSE
+          if (target == "discrete") ui_loaded$discretePlot <- FALSE
+          if (target == "continuous") ui_loaded$continuousPlot <- FALSE
+          nav_select(session = session, "navbar", selected = target) # Change tabs
+          moduleOutputs$mapLocs$change_tab <- NULL
         }
       })
     }
     if (input$navbar == "parameterValues") {
       if (!ui_loaded$mapParamValues) {
         output$mapParams_ui <- renderUI(mapParamsUI("mapParams"))
-        ui_loaded$mapParams <- TRUE
+        ui_loaded$mapParamValues <- TRUE
         mapParams("mapParams", language = languageSelection) # Call the server
       }
     }
@@ -541,7 +581,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$imgTableView) {
         output$imgTableView_ui <- renderUI(imgTableViewUI("imgTableView"))
         ui_loaded$imgTableView <- TRUE
-        imgTableView("imgTableView", language = languageSelection, restoring = isRestoring_img) # Call the server
+        imgTableView("imgTableView", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "imgMapView") {
@@ -551,6 +591,7 @@ $(document).keyup(function(event) {
         imgMapView("imgMapView", language = languageSelection) # Call the server
       }
     }
+    
     ### Reports nav_menu ##########################
     if (input$navbar == "snowInfo") {
       if (!ui_loaded$snowInfo) {
@@ -580,21 +621,31 @@ $(document).keyup(function(event) {
         snowBulletinMod("snowBulletin", language = languageSelection) # Call the server
       }
     }
+    
     ### Data download nav_menu ##########################
     if (input$navbar == "discData") {
       if (!ui_loaded$discData) {
         output$discData_ui <- renderUI(discDataUI("discData"))
         ui_loaded$discData <- TRUE
-        discData("discData", language = languageSelection) # Call the server
+        discData("discData", language = languageSelection, inputs = moduleOutputs$mapLocs) # Call the server
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "contData") {
       if (!ui_loaded$contData) {
         output$contData_ui <- renderUI(contDataUI("contData"))
         ui_loaded$contData <- TRUE
-        contData("contData", language = languageSelection) # Call the server
+        contData("contData", language = languageSelection, inputs = moduleOutputs$mapLocs) # Call the server
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
       }
     }
+    
     ### Info nav_menu ##########################
     if (input$navbar == "about") {
       if (!ui_loaded$about) {
@@ -610,20 +661,59 @@ $(document).keyup(function(event) {
         news("news", language = languageSelection) # Call the server
       }
     }
-    
-    ## Admin mode tabs ##########################
-    if (input$navbar == "locs") {
-      if (!ui_loaded$locs) {
-        output$locs_ui <- renderUI(locsUI("locs"))
-        ui_loaded$locs <- TRUE
-        locs("locs") # Call the server
+    if (input$navbar == "feedback") { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
+      if (!ui_loaded$feedback) {
+        output$feedback_ui <- renderUI(feedbackUI("feedback"))
+        ui_loaded$feedback <- TRUE
+        feedback("feedback") # Call the server
       }
     }
-    if (input$navbar == "ts") {
-      if (!ui_loaded$ts) {
-        output$ts_ui <- renderUI(tsUI("ts"))
-        ui_loaded$ts <- TRUE
-        ts("ts") # Call the server
+    
+    ## Admin mode tabs ##########################
+    if (input$navbar == "syncCont") {
+      if (!ui_loaded$syncCont) {
+        output$syncCont_ui <- renderUI(syncContUI("syncCont"))
+        ui_loaded$syncCont <- TRUE
+        syncCont("syncCont") # Call the server
+      }
+    }
+    if (input$navbar == "syncDisc") {
+      if (!ui_loaded$syncDisc) {
+        output$syncDisc_ui <- renderUI(syncDiscUI("syncDisc"))
+        ui_loaded$syncDisc <- TRUE
+        syncDisc("syncDisc") # Call the server
+      }
+    }
+    if (input$navbar == "addLocation") {
+      if (!ui_loaded$addLocation) {
+        output$addLocation_ui <- renderUI(addLocationUI("addLocation"))
+        ui_loaded$addLocation <- TRUE
+        addLocation("addLocation", inputs = moduleOutputs$addDiscData) # Call the server
+        if (!is.null(moduleOutputs$addDiscData)) {
+          moduleOutputs$addDiscData$location <- NULL
+          moduleOutputs$addDiscData$change_tab <- NULL
+        }
+      }
+    }
+    if (input$navbar == "addSubLocation") {
+      if (!ui_loaded$addSubLocation) {
+        output$addSubLocation_ui <- renderUI(addSubLocationUI("addSubLocation"))
+        ui_loaded$addSubLocation <- TRUE
+        addSubLocation("addSubLocation", inputs = moduleOutputs$addDiscData) # Call the server
+        if (!is.null(moduleOutputs$addDiscData)) {
+          moduleOutputs$addDiscData$sublocation <- NULL
+          moduleOutputs$addDiscData$change_tab <- NULL
+        }
+      }
+    }
+    if (input$navbar == "addTimeseries") {
+      if (!ui_loaded$addTimeseries) {
+        output$addTimeseries_ui <- renderUI(addTimeseriesUI("addTimeseries"))
+        ui_loaded$addTimeseries <- TRUE
+        addTimeseries("addTimeseries") # Call the server
+        if (!is.null(moduleOutputs$addContData)) {
+          moduleOutputs$addContData$change_tab <- NULL
+        }
       }
     }
     if (input$navbar == "deploy_recover") {
@@ -644,14 +734,63 @@ $(document).keyup(function(event) {
       if (!ui_loaded$addContData) {
         output$addContData_ui <- renderUI(addContDataUI("addContData"))  # Render the UI
         ui_loaded$addContData <- TRUE
-        addContData("addContData")  # Call the server
+        moduleOutputs$addContData <- addContData("addContData")  # Call the server
+      }
+      # Observe the change_tab output from the addContData module
+      observe({
+        if (!is.null(moduleOutputs$addContData$change_tab)) {
+          nav_select(session = session, "navbar", selected = moduleOutputs$addContData$change_tab)
+          moduleOutputs$addContData$change_tab <- NULL
+        }
+      })
+    }
+    if (input$navbar == "continuousCorrections") {
+      if (!ui_loaded$continuousCorrections) {
+        output$continuousCorrections_ui <- renderUI(continuousCorrectionsUI("continuousCorrections"))
+        ui_loaded$continuousCorrections <- TRUE
+        continuousCorrections("continuousCorrections")
+      }
+    }
+    if (input$navbar == "imputeMissing") {
+      if (!ui_loaded$imputeMissing) {
+        output$imputeMissing_ui <- renderUI(imputeMissingUI("imputeMissing"))  # Render the UI
+        ui_loaded$imputeMissing <- TRUE
+        imputeMissing("imputeMissing")  # Call the server
+      }
+    }
+    if (input$navbar == "editContData") {
+      if (!ui_loaded$editContData) {
+        output$editContData_ui <- renderUI(editContDataUI("editContData"))  # Render the UI
+        ui_loaded$editContData <- TRUE
+        editContData("editContData")  # Call the server
+      }
+    }
+    if (input$navbar == "grades_approvals_qualifiers") {
+      if (!ui_loaded$grades_approvals_qualifiers) {
+        output$grades_approvals_qualifiers_ui <- renderUI(grades_approvals_qualifiersUI("grades_approvals_qualifiers"))  # Render the UI
+        ui_loaded$grades_approvals_qualifiers <- TRUE
+        grades_approvals_qualifiers("grades_approvals_qualifiers")  # Call the server
       }
     }
     if (input$navbar == "addDiscData") {
       if (!ui_loaded$addDiscData) {
         output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData"))  # Render the UI
         ui_loaded$addDiscData <- TRUE
-        addDiscData("addDiscData")  # Call the server
+        moduleOutputs$addDiscData <- addDiscData("addDiscData")  # Call the server
+      }
+      # Observe the change_tab output from the addDiscData module
+      observe({
+        if (!is.null(moduleOutputs$addDiscData$change_tab)) {
+          nav_select(session = session, "navbar", selected = moduleOutputs$addDiscData$change_tab)
+          moduleOutputs$addDiscData$change_tab <- NULL
+        }
+      })
+    }
+    if (input$navbar == "editDiscData") {
+      if (!ui_loaded$editDiscData) {
+        output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData"))  # Render the UI
+        ui_loaded$editDiscData <- TRUE
+        editDiscData("editDiscData")  # Call the server
       }
     }
     if (input$navbar == "addDocs") {
@@ -666,6 +805,20 @@ $(document).keyup(function(event) {
         output$addImgs_ui <- renderUI(addImgsUI("addImgs"))  # Render the UI
         ui_loaded$addImgs <- TRUE
         addImgs("addImgs")  # Call the server
+      }
+    }
+    if (input$navbar == "manageNewsContent") {
+      if (!ui_loaded$manageNewsContent) {
+        output$manageNewsContent_ui <- renderUI(manageNewsContentUI("manageNewsContent"))
+        ui_loaded$manageNewsContent <- TRUE
+        manageNewsContent("manageNewsContent")
+      }
+    }
+    if (input$navbar == "viewFeedback") {
+      if (!ui_loaded$viewFeedback) {
+        output$viewFeedback_ui <- renderUI(viewFeedbackUI("viewFeedback"))
+        ui_loaded$viewFeedback <- TRUE
+        viewFeedback("viewFeedback")
       }
     }
     if (input$navbar == "visit") {

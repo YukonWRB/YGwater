@@ -34,6 +34,7 @@ plotMultiTimeseries(
   legend_position = "v",
   gridx = FALSE,
   gridy = FALSE,
+  webgl = TRUE,
   rate = NULL,
   tzone = "auto",
   data = FALSE,
@@ -49,7 +50,7 @@ plotMultiTimeseries(
 
 \item{parameters}{The parameter or parameters you wish to plot. You can specify parameter names (text) or id (numeric) from table 'parameters'. If specifying multiple parameters matched to the locations and record_rates 1:1. The location:parameter combos must be in the local database.}
 
-\item{record_rates}{The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one.}
+\item{record_rates}{The recording rate for the parameters and locations. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate, or you can set this as one of '< 1 day', '1 day', '1 week', '4 weeks', '1 month', 'year'. Matched one to one to the locations and parameters or recycled if specified as length one. Can be passed in a character string or number of seconds coercible to a period by \code{\link[lubridate:period]{lubridate::period()}}.}
 
 \item{aggregation_types}{The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes (you can also specify the numeric entry from the aggregation_types AquaCache table). NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.}
 
@@ -98,6 +99,9 @@ plotMultiTimeseries(
 \item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
 
 \item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
+
+\item{webgl}{Use WebGL ("scattergl") for faster rendering when possible. Set
+to FALSE to force standard scatter traces.}
 
 \item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 

@@ -682,7 +682,7 @@ data <- function(id, con, language, restoring, data, inputs) {
           subset <- data.table::rbindlist(subset_list)
           subset[, datetime := substr(as.character(datetime), 1, 16)]
           subset[, value := round(value, 2)]
-        } 
+        }
         output$modal_subset <- DT::renderDataTable({ # Create datatable for the measurements
           DT::datatable(subset,
                         rownames = FALSE,

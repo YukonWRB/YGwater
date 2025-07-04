@@ -23,9 +23,9 @@ BEGIN
         H := (2.497*Ca_D+4.118 *Mg_D);
     ELSIF (Hard_D IS NOT NULL) AND (Hard_D > 0) THEN
         H := Hard_D;
-    ELSEIF (Ca_T IS NOT NULL AND Mg_T IS NOT NULL) AND (Ca_T * Mg_T > 0) THEN
+    ELSIF (Ca_T IS NOT NULL AND Mg_T IS NOT NULL) AND (Ca_T * Mg_T > 0) THEN
         H := (2.497*Ca_T+4.118 *Mg_T);
-    ELSEIF (Hard_T IS NOT NULL) AND (Hard_T > 0) THEN
+    ELSIF (Hard_T IS NOT NULL) AND (Hard_T > 0) THEN
         H := Hard_T;
     ELSE
         H := 0.001; -- default value (mg/L)
@@ -66,9 +66,9 @@ BEGIN
         H := (2.497*Ca_D+4.118 *Mg_D);
     ELSIF (Hard_D IS NOT NULL) AND (Hard_D > 0) THEN
         H := Hard_D;
-    ELSEIF (Ca_T IS NOT NULL AND Mg_T IS NOT NULL) AND (Ca_T * Mg_T > 0) THEN
+    ELSIF (Ca_T IS NOT NULL AND Mg_T IS NOT NULL) AND (Ca_T * Mg_T > 0) THEN
         H := (2.497*Ca_T+4.118 *Mg_T);
-    ELSEIF (Hard_T IS NOT NULL) AND (Hard_T > 0) THEN
+    ELSIF (Hard_T IS NOT NULL) AND (Hard_T > 0) THEN
         H := Hard_T;
     ELSE
         H := 0.001; -- default value (mg/L)

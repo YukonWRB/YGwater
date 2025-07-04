@@ -1,6 +1,6 @@
 discretePlotUI <- function(id) {
   ns <- NS(id)
-
+  
   page_sidebar(
     sidebar = sidebar(
       title = NULL,
@@ -67,7 +67,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                                         "Select a location group",
                                         choices = NULL,
                                         multiple = TRUE,
-                                        options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values,
+                                        options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values
                          
                          # Toggle button for parameters or parameter groups (only show if data source == EQWin)
                          radioButtons(ns("params_groups"),
@@ -122,70 +122,42 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                                         choices = NULL,
                                         multiple = TRUE)
         ),
-        
-        # Below inputs are not conditional on data source
-        div(
-          style = "display: flex; align-items: center;",
-          tags$label(
-            "Facet on", 
-            class = "form-label",
-            style = "margin-right: 5px;"
-          ),
-          span(
-            id = ns("facet_info"),
-            `data-bs-toggle` = "tooltip",
-            `data-bs-placement` = "right",
-            `data-bs-trigger` = "click hover",
-            title = "Multiple plots are built where each plot represents a different location or parameter, with the other variable represented as different traces.",
-            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-          )
-        ),
-        
         radioButtons(ns("facet_on"),
-                     NULL,
+                     label = tooltip(
+                       trigger = list(
+                         "Facet on",
+                         bs_icon("info-circle-fill")
+                       ),
+                       "Multiple plots are built where each plot represents a different location or parameter, with the other variable represented as different traces or points."
+                     ),
                      choices = stats::setNames(c("locs", "params"), c("Locations", "Parameters")),
                      selected = "locs"),
-        
-        div(
-          checkboxInput(ns("log_scale"),
-                        NULL),
-          style = "display: flex; align-items: center;",
-          tags$label(
-            "Use log scale", 
-            class = "form-label",
-            style = "margin-right: 5px;"
-          ),
-          span(
-            id = ns("log_info"),
-            `data-bs-toggle` = "tooltip",
-            `data-bs-placement` = "right",
-            `data-bs-trigger` = "click hover",
-            title = "Warning: negative values will be removed for log transformation.",
-            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-          )
-        ),
-        div(
-          checkboxInput(ns("shareX"),
-                        NULL,
-                        value = TRUE),
-          style = "display: flex; align-items: center;",
-          tags$label(
-            "Share X axis between subplots (dates are aligned)", 
-            class = "form-label",
-            style = "margin-right: 5px;"
-          )
-        ),
-        div(
-          checkboxInput(ns("shareY"),
-                        NULL,
-                        value = FALSE),
-          style = "display: flex; align-items: center;",
-          tags$label(
-            "Share Y axis between subplots (values are aligned)", 
-            class = "form-label",
-            style = "margin-right: 5px;"
-          )
-        ),
+        checkboxInput(ns("log_scale"),
+                      label = tooltip(
+                        trigger = list(
+                          "Use log scale",
+                          bs_icon("info-circle-fill")
+                        ),
+                        "Warning: negative values will be removed for log transformation.",
+                      )),
+        checkboxInput(ns("shareX"),
+                      label = tooltip(
+                        trigger = list(
+                          "Share X axis between subplots (dates are aligned)",
+                          bs_icon("info-circle-fill")
+                        ),
+                        "This will align the x-axis across all subplots, making it easier to compare trends over time."
+                      ),
+                      value = TRUE),
+        checkboxInput(ns("shareY"),
+                      label = tooltip(
+                        trigger = list(
+                          "Share Y axis between subplots (values are aligned)",
+                          bs_icon("info-circle-fill")
+                        ),
+                        "This will align the y-axis across all subplots, making it easier to compare values across different locations or parameters."
+                      ),
+                      value = FALSE),
         div(
           selectizeInput(ns("loc_code"),
                          label = "Choose how to display location codes/names",
@@ -197,25 +169,16 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
           style = "display: flex; align-items: center;"
         ),
         
-        div(
-          checkboxInput(ns("target_datetime"),
-                        label = NULL),
-          style = "display: flex; align-items: center;",
-          tags$label(
-            "Use target instead of actual datetime", 
-            class = "form-label",
-            style = "margin-right: 5px;"
-          ),
-          span(
-            id = ns("target_datetime_info"),
-            `data-bs-toggle` = "tooltip",
-            `data-bs-placement` = "right",
-            `data-bs-trigger` = "click hover",
-            title = "Some measurements have a 'fake' datetime to line up repeated measurements with a certain date. An example are snow survey measurements: these can be taken with a few days of the 1st of the month but visualize nicely when lined up with the 1st.",
-            icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
-          )
+        # div(
+        checkboxInput(ns("target_datetime"),
+                      label = tooltip(
+                        trigger = list(
+                          "Use target datetime",
+                          bs_icon("info-circle-fill")
+                        ),
+                        "Some measurements have a 'fake' datetime to line up repeated measurements with a certain date. An example are snow survey measurements: these can be taken withing a few days of the 1st of the month but visualize nicely when lined up with the 1st."
+                      )
         ),
-        
         div(
           actionButton(ns("extra_aes"),
                        "Modify plot aesthetics",
@@ -293,13 +256,11 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
     
     observeEvent(input$data_source, {
       req(moduleData)
-      print("data source was triggered")
-      print(inputs)
       if (input$data_source == "EQ") {
         # These updates are performed in the observeEvent for input$EQWin_source
       } else if (input$data_source == "AC") { # AC selected
         updateSelectizeInput(session, "parameters_AC", choices = stats::setNames(moduleData$AC_params$parameter_id, moduleData$AC_params$param_name), server = TRUE)
-        updateSelectizeInput(session, "locations_AC", choices = stats::setNames(moduleData$AC_locs$location_id, moduleData$AC_locs$name), selected = if (!is.null(inputs)) inputs else NULL, server = TRUE)
+        updateSelectizeInput(session, "locations_AC", choices = stats::setNames(moduleData$AC_locs$location_id, moduleData$AC_locs$name), selected = if (!is.null(inputs$location_id)) inputs$location_id else NULL, server = TRUE)
       }
     })
     

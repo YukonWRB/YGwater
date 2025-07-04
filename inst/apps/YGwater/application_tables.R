@@ -20,7 +20,7 @@ DBI::dbExecute(con, "ALTER DEFAULT PRIVILEGES IN SCHEMA application GRANT SELECT
 
 
 # Create table to hold text for the application
-DBI::dbExecute(con, "CREATE TABLE application.text (
+DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS application.text (
                 id TEXT NOT NULL PRIMARY KEY,
                 text_en TEXT NOT NULL,
                 text_fr TEXT,
@@ -33,7 +33,7 @@ DBI::dbExecute(con, "COMMENT ON COLUMN application.text.id IS 'Unique identifier
 DBI::dbExecute(con, "CREATE TRIGGER update_text_modified BEFORE UPDATE ON application.text FOR EACH ROW EXECUTE FUNCTION public.update_modified()")
 
 # Create table to hold images for the application
-DBI::dbExecute(con, "CREATE TABLE application.images (
+DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS application.images (
                 id TEXT NOT NULL PRIMARY KEY,
                 image BYTEA NOT NULL,
                 format TEXT NOT NULL,
@@ -44,7 +44,7 @@ DBI::dbExecute(con, "CREATE TABLE application.images (
 DBI::dbExecute(con, "create trigger update_image_modified before update on application.images for each row execute function public.update_modified()")
 
 # Create a table to order the images and text for each page
-DBI::dbExecute(con, "CREATE TABLE application.page_content (
+DBI::dbExecute(con, "CREATE TABLE IF NOT EXISTS application.page_content (
                 page TEXT NOT NULL,
                 position INTEGER NOT NULL,
                 content_type TEXT NOT NULL CHECK (content_type IN ('text', 'image')),

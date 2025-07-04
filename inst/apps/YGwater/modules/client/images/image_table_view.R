@@ -26,35 +26,19 @@ imgTableViewUI <- function(id) {
   ns <- NS(id)
   tagList(
     tags$style(HTML("
-    .dataTables_wrapper table.dataTable td.focus, 
+    .dataTables_wrapper table.dataTable td.focus,
     .dataTables_wrapper table.dataTable th.focus {
       outline: none !important;
       box-shadow: none !important;
     }
-  "))
-  )
-  layout_sidebar(
-    sidebar = sidebar(
-      width = "30%",
-      bg = config$sidebar_bg,
-      position = "left",
-      open = TRUE,
-      fillable = TRUE,
-      fillable_mobile = TRUE,
-      selectizeInput(ns("type"), "Image Type", choices = c("placeholder")),
-      uiOutput(ns("dates")), # This is rendered in the server to allow updating language
-      uiOutput(ns("loc")), # This is rendered in the server to enable resetting from URL because the default value set here would conflict with the one passed via URL
-      DT::dataTableOutput(ns("tbl")) # Table of images. Clicking on a row will display the image in the main panel.
-    ),
-    imageOutput(ns("img"), fill = TRUE),
-    height = "1000px"
+  ")),
+    uiOutput(ns("page"))
   )
 }
 
-imgTableView <- function(id, language, restoring) {
+imgTableView <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    setBookmarkExclude(c("tbl_columns_selected", "tbl_cells_selected", "tbl_rows_current", "tbl_rows_all", "tbl_state", "tbl_search", "tbl_cell_clicked", "tbl_row_last_clicked"))
     
     # Load info about last two weeks of images. More is loaded later if the user goes back further.
     imgs <- reactiveValues(imgs = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
@@ -63,27 +47,50 @@ imgTableView <- function(id, language, restoring) {
                            imgs_types = dbGetQueryDT(session$userData$AquaCache, "SELECT image_type_id, image_type, description FROM image_types;"))
     
     tables <- reactiveValues()
-    
-    # Update text based on language ###########################################
-    observeEvent(language$language, {
-      
-      auto <- titleCase(tr("img_type_auto", language$language), language$abbrev)
-      man <- titleCase(tr("img_type_man", language$language), language$abbrev)
-      choices <- c("auto", "man")
-      choices <- stats::setNames(choices, c(auto, man))
-      
-      updateSelectizeInput(session, "type", label = titleCase(tr("img_type_lab", language$language), language$abbrev), choices = stats::setNames(c("all", imgs$imgs_types$image_type_id), c("All", imgs$imgs_types$image_type)), selected = input$type)
-      
-      output$dates <- renderUI({
-        dateRangeInput(ns("dates"), label = tr("date_range_lab", language$language), start = if (restoring()) input$dates[1] else Sys.Date() - 2, end = if (restoring()) input$dates[2] else Sys.Date(), language = language$abbrev, separator = tr("date_sep", language$language))
-      })
-      
-      loc_choices <- stats::setNames(c("All", imgs$img_meta$location_id), c(tr("all", language$language), titleCase(imgs$img_meta[[tr("generic_name_col", language$language)]], language$abbrev)))
-      loc_choices <- c(loc_choices[1], loc_choices[-1][order(names(loc_choices)[-1])]) # Order but keep "All" at the top
-      output$loc <- renderUI({
-        selectizeInput(ns("loc"), label = titleCase(tr("loc", language$language), language$abbrev), choices = loc_choices, selected = input$loc, multiple = FALSE)
-      })
-    })
+
+    # Render the page (sidebar + main image) ------------------------------
+    output$page <- renderUI({
+      loc_choices <- stats::setNames(
+        c("All", imgs$img_meta$location_id),
+        c(tr("all", language$language), imgs$img_meta[[tr("generic_name_col", language$language)]]))
+      loc_choices <- c(loc_choices[1], loc_choices[-1][order(names(loc_choices)[-1])])
+
+      layout_sidebar(
+        sidebar = sidebar(
+          width = "30%",
+          bg = config$sidebar_bg,
+          position = "left",
+          open = TRUE,
+          fillable = TRUE,
+          fillable_mobile = TRUE,
+          selectizeInput(ns("type"), label = tr("img_type_lab", language$language), choices = NULL),
+          dateRangeInput(ns("dates"), label = tr("date_range_lab", language$language), start = Sys.Date() - 2, end = Sys.Date(), language = language$abbrev, separator = tr("date_sep", language$language)),
+          selectizeInput(ns("loc"), label = tr("loc", language$language), choices = loc_choices, multiple = FALSE),
+          DT::dataTableOutput(ns("tbl"))
+        ),
+        imageOutput(ns("img"), fill = TRUE),
+        height = "1000px"
+      )
+    }) %>% bindEvent(language$language)
+
+    # Update image type choices based on selected date range and language
+    update_type_choices <- function() {
+      req(input$dates)
+      range_imgs <- imgs$imgs[datetime >= input$dates[1] &
+                                datetime <= as.POSIXct(paste0(input$dates[2], " 23:59"))]
+      types_present <- unique(range_imgs$image_type)
+      df <- imgs$imgs_types[imgs$imgs_types$image_type_id %in% types_present, ]
+      choices <- stats::setNames(c("all", df$image_type_id),
+                                 c(tr("all", language$language), df$image_type))
+      selected <- if (!is.null(input$type) && input$type %in% df$image_type_id) input$type else "all"
+      updateSelectizeInput(session, "type",
+                           choices = choices,
+                           selected = selected,
+                           label = tr("img_type_lab", language$language))
+    }
+
+    observe(update_type_choices()) %>%
+      bindEvent(language$language, input$dates, imgs$imgs)
     
     # Get images further back in time if the date range is changed to something beyond 2 weeks ago ############################
     observeEvent(input$dates, {
@@ -98,6 +105,7 @@ imgTableView <- function(id, language, restoring) {
         }
         data.table::setorder(imgs$imgs, -datetime)
       }
+      update_type_choices()
     }, ignoreInit = TRUE)
     
     

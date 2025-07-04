@@ -6,8 +6,13 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-  
+
   # Initial setup #############################################################
+
+  output$keep_alive <- renderText({
+    invalidateLater(5000, session)
+    Sys.time()
+  })
   
   # Remove irrelevant bookmarks
   setBookmarkExclude(c("plot", "error", "info", ".clientValue-default-plotlyCrosstalkOpts", "plotly_afterplot-A", "plotly_hover-A", "plotly_relayout-A", "plotly_doubleclick-A"))
@@ -30,6 +35,7 @@ app_server <- function(input, output, session) {
 
   # Parse URL query parameters on app load from URL and trigger plot creation
   params <- reactiveValues()
+  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
   observeEvent(session, {
     query <- parseQueryString(session$clientData$url_search)
     
@@ -105,7 +111,7 @@ app_server <- function(input, output, session) {
   
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
-    function(loc, param, lang, config, rate) {
+    function(loc, param, lang, webgl, config, rate) {
 
     promises::future_promise({
       
@@ -136,6 +142,7 @@ app_server <- function(input, output, session) {
                   gridx = FALSE,
                   gridy = FALSE,
                   slider = FALSE,
+                  webgl = webgl,
                   title = TRUE,
                   hover = FALSE,
                   tzone = "MST",
@@ -156,7 +163,7 @@ app_server <- function(input, output, session) {
   observeEvent(input$user_speed, {
     req(params$loc_code, params$param_code, params$lang)
     rate <- if (input$user_speed < 0.0003) "day" else if (input$user_speed < 0.002) "hour" else "max"
-    plot_output$invoke(params$loc_code, params$param_code, params$lang, config, rate)
+    plot_output$invoke(params$loc_code, params$param_code, params$lang, session$userData$use_webgl, config, rate)
   })
   
   output$plot <- plotly::renderPlotly({
