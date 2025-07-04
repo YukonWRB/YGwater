@@ -12,6 +12,7 @@ app_ui <- function(request) {
   
   tagList(
     shinyjs::useShinyjs(),
+    useBusyIndicators(),
     div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")),
     # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
     # Uses two parameters: 'id' for the element ID and 'col' for the color. Color can be R-recognized color name or hex code.
@@ -49,7 +50,10 @@ app_ui <- function(request) {
         a.dropdown-toggle > .shiny-html-output {
         display: inline;
         }
-      "))
+      ")),
+      tags$style(HTML("
+    .alert { white-space: normal !important; }
+  "))
     ),
     # page_fluid is the main container for the app, which contains the top bar, nav bar, and content
     page_fluid(
@@ -60,7 +64,7 @@ app_ui <- function(request) {
         fluidRow(
           column(3,
                  div(class = "logo",
-                     htmltools::img(src = "imgs/Yukon_logo.png", .noWS = "outside", alt = "Yukon Government logo")
+                     htmltools::img(src = "imgs/Yukon_logo-min.png", .noWS = "outside", alt = "Yukon Government logo")
                      
                  ),
                  class = "logo-container"),
@@ -109,18 +113,18 @@ app_ui <- function(request) {
                  # uiOutput("plotsMix_ui"))
         ),
         if (!config$public) {
-        nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
-                 nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",
-                           uiOutput("snowInfo_ui")),
-                 nav_panel(title = uiOutput("reportsNavWaterTitle"), value = "waterInfo",
-                           uiOutput("waterInfo_ui")),
-                 nav_panel(title = uiOutput("reportsNavWQTitle"), value = "WQReport",
-                           uiOutput("WQReport_ui")),
-                 if (!config$public) {
-                   nav_panel(title = uiOutput("reportsNavSnowbullTitle"), value = "snowBulletin",
-                             uiOutput("snowBulletin_ui"))
-                 }
-        ) # End reports nav_menu
+          nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
+                   nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",
+                             uiOutput("snowInfo_ui")),
+                   nav_panel(title = uiOutput("reportsNavWaterTitle"), value = "waterInfo",
+                             uiOutput("waterInfo_ui")),
+                   nav_panel(title = uiOutput("reportsNavWQTitle"), value = "WQReport",
+                             uiOutput("WQReport_ui")),
+                   if (!config$public) {
+                     nav_panel(title = uiOutput("reportsNavSnowbullTitle"), value = "snowBulletin",
+                               uiOutput("snowBulletin_ui"))
+                   }
+          ) # End reports nav_menu
         }, # End if !config$public
         nav_menu(title = uiOutput("imagesNavMenuTitle"), value = "images",
                  nav_panel(title = uiOutput("imagesNavTableTitle"), value = "imgTableView",
@@ -153,8 +157,8 @@ app_ui <- function(request) {
                              value = "manageNewsContent",
                              uiOutput("manageNewsContent_ui")),
                    nav_panel(title = "View feedback",
-                            value = "viewFeedback",
-                            uiOutput("viewFeedback_ui"))
+                             value = "viewFeedback",
+                             uiOutput("viewFeedback_ui"))
           )
         },
         if (!config$public) {
@@ -219,7 +223,7 @@ app_ui <- function(request) {
                    nav_panel(title = "Images",
                              value = "addImgs",
                              uiOutput("addImgs_ui"))
-           )
+          )
         },
         if (!config$public) {
           nav_panel(title = "Add/modify field visit",

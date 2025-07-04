@@ -9,6 +9,9 @@ app_server <- function(input, output, session) {
 
   # Initial setup #############################################################
 
+  # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)  # This does not work with Shiny Server open source
+  session$userData$use_webgl <- FALSE
+  
   output$keep_alive <- renderText({
     invalidateLater(5000, session)
     Sys.time()
@@ -35,7 +38,7 @@ app_server <- function(input, output, session) {
 
   # Parse URL query parameters on app load from URL and trigger plot creation
   params <- reactiveValues()
-  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
+  
   observeEvent(session, {
     query <- parseQueryString(session$clientData$url_search)
     
@@ -153,11 +156,9 @@ app_server <- function(input, output, session) {
       p <- plotly::config(p, displayModeBar = FALSE)
       
       DBI::dbDisconnect(con)
-      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
+      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (which used to be DBI::dbDisconnect(con))
     })
   })
-  
-  
   
   # Trigger the plot creation when the render changes
   observeEvent(input$user_speed, {
