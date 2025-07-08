@@ -98,7 +98,9 @@ app_ui <- function(request) {
                  nav_panel(title = uiOutput("mapsNavLocsTitle"), value = "monitoringLocations",
                            uiOutput("mapLocs_ui")),
                  nav_panel(title = uiOutput("mapsNavParamsTitle"), value = "parameterValues",
-                           uiOutput("mapParams_ui"))
+                           uiOutput("mapParams_ui")),
+                 nav_panel(title = uiOutput("mapsNavRasterTitle"), value = "rasterValues",
+                           uiOutput("mapRaster_ui"))
         ),
         nav_menu(title = uiOutput("plotsNavMenuTitle"), value = "plot",
                  nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discrete",

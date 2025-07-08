@@ -94,10 +94,10 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
         aq <- NULL
     }
     get_band <- function(band) {
-        info <- dbGetQuery(conn, paste0("select\n            st_xmax(st_envelope(rast)) as xmax,\n            st_xmin(st_envelope(rast)) as xmin,\n            st_ymax(st_envelope(rast)) as ymax,\n            st_ymin(st_envelope(rast)) as ymin,\n            st_width(rast) as cols,\n            st_height(rast) as rows\n            from\n            (select st_union(", 
+        info <- DBI::dbGetQuery(conn, paste0("select\n            st_xmax(st_envelope(rast)) as xmax,\n            st_xmin(st_envelope(rast)) as xmin,\n            st_ymax(st_envelope(rast)) as ymax,\n            st_ymin(st_envelope(rast)) as ymin,\n            st_width(rast) as cols,\n            st_height(rast) as rows\n            from\n            (select st_union(", 
             aq[1], rastque, ",", aq[2], aq[3], band, ") rast from ", 
             nameque, " ", clauses, ") as a;"))
-        vals <- dbGetQuery(conn, paste0("select\n          unnest(st_dumpvalues(rast, 1)) as vals\n          from\n          (select st_union(", 
+        vals <- DBI::dbGetQuery(conn, paste0("select\n          unnest(st_dumpvalues(rast, 1)) as vals\n          from\n          (select st_union(", 
             aq[1], rastque, ",", aq[2], aq[3], band, ") rast from ", 
             nameque, " ", clauses, ") as a;"))$vals
         rout <- terra::rast(nrows = info$rows, ncols = info$cols, 
@@ -106,7 +106,7 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
         return(rout)
     }
     get_band_boundary <- function(band) {
-        info <- dbGetQuery(conn, paste0("select\n            st_xmax(st_envelope(rast)) as xmx,\n            st_xmin(st_envelope(rast)) as xmn,\n            st_ymax(st_envelope(rast)) as ymx,\n            st_ymin(st_envelope(rast)) as ymn,\n            st_width(rast) as cols,\n            st_height(rast) as rows\n            from\n            (select st_union(", 
+        info <- DBI::dbGetQuery(conn, paste0("select\n            st_xmax(st_envelope(rast)) as xmx,\n            st_xmin(st_envelope(rast)) as xmn,\n            st_ymax(st_envelope(rast)) as ymx,\n            st_ymin(st_envelope(rast)) as ymn,\n            st_width(rast) as cols,\n            st_height(rast) as rows\n            from\n            (select st_union(", 
             aq[1], rastque, ",", aq[2], aq[3], band, ") rast from ", 
             nameque, "\n\n            WHERE ST_Intersects(", 
             rastque, ",ST_SetSRID(ST_GeomFromText('POLYGON((", 
@@ -118,7 +118,7 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
         if (is.na(info$cols) & is.na(info$rows)) {
             stop("No data found within geographic subset defined by 'boundary'.")
         }
-        vals <- dbGetQuery(conn, paste0("select\n          unnest(st_dumpvalues(rast, 1)) as vals\n          from\n          (select st_union(", 
+        vals <- DBI::dbGetQuery(conn, paste0("select\n          unnest(st_dumpvalues(rast, 1)) as vals\n          from\n          (select st_union(", 
             aq[1], rastque, ",", aq[2], aq[3], band, ") rast from ", 
             nameque, "\n\n            WHERE ST_Intersects(", 
             rastque, ",ST_SetSRID(ST_GeomFromText('POLYGON((", 
@@ -174,26 +174,6 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
                 ct <- ct + 1
             }
         })
-    }
-    if (!is.null(boundary)) {
-        rb_final <- terra::crop(rb, extclip)
-    }
-    else {
-        rb_final <- rb
-    }
-    if (returnclass == "terra") {
-        return(rb_final)
-    }
-    else if (returnclass == "raster") {
-        if (terra::nlyr(rb_final) == 1) {
-            return(raster::raster(rb_final))
-        }
-        else {
-            return(raster::stack(rb_final))
-        }
-    }
-    else {
-        cli::cli_abort("returnclass must be one of 'terra' or 'raster'")
     }
 }
 
