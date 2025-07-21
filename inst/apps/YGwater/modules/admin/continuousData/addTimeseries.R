@@ -374,18 +374,18 @@ addTimeseries <- function(id) {
     
     observeEvent(input$add_timeseries, {
       # validate inputs
-      shiny::validate(
-        shiny::need(input$location, "Please select a location."),
-        shiny::need(input$parameter, "Please select a parameter."),
-        shiny::need(input$media, "Please select a media type."),
-        shiny::need(input$aggregation_type, "Please select an aggregation type."),
-        shiny::need(input$default_owner, "Please select a default owner."),
-        shiny::need(input$sensor_priority, "Please select a sensor priority.")
+      validate(
+        need(input$location, "Please select a location."),
+        need(input$parameter, "Please select a parameter."),
+        need(input$media, "Please select a media type."),
+        need(input$aggregation_type, "Please select an aggregation type."),
+        need(input$default_owner, "Please select a default owner."),
+        need(input$sensor_priority, "Please select a sensor priority.")
       )
       
       if (input$mode != "add") {
         # This is an error: show the user a notification to select 'add' mode
-        shiny::showNotification("Please select 'Add new' mode to add a timeseries.", type = "error")
+        showNotification("Please select 'Add new' mode to add a timeseries.", type = "error")
         return()
       }
       
@@ -415,11 +415,11 @@ addTimeseries <- function(id) {
         return()  # No result yet, do nothing
       } else if (addNewTimeseries$result() != "success") {
         # If the result is not "success", show an error notification
-        shiny::showNotification(addNewTimeseries$result(), type = "error")
+        showNotification(addNewTimeseries$result(), type = "error")
         return()
       } else {
         # If the result is "success", show a success notification
-        shiny::showNotification("Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.", type = "message")
+        showNotification("Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.", type = "message")
         
         getModuleData()
         
@@ -446,13 +446,13 @@ addTimeseries <- function(id) {
     observeEvent(input$modify_timeseries, {
       if (input$mode != "modify") {
         # This is an error: show the user a notification to select 'modify' mode
-        shiny::showNotification("Please select 'Modify existing' mode to modify a timeseries.", type = "error")
+        showNotification("Please select 'Modify existing' mode to modify a timeseries.", type = "error")
         return()
       }
       # If we are modifying an existing timeseries, we need to check if it exists
       selected_row <- input$ts_table_rows_selected
       if (is.null(selected_row) || length(selected_row) != 1) {
-        shiny::showNotification("Please select a single timeseries to modify.", type = "error")
+        showNotification("Please select a single timeseries to modify.", type = "error")
         return()
       }
       tsid <- moduleData$timeseries_display[selected_row, "timeseries_id"]
@@ -460,7 +460,7 @@ addTimeseries <- function(id) {
       # Check if the timeseries already exists
       existing_timeseries <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM timeseries WHERE timeseries_id = ", selected_timeseries$timeseries_id))
       if (nrow(existing_timeseries) == 0) {
-        shiny::showNotification("Selected timeseries does not exist in the database.", type = "error")
+        showNotification("Selected timeseries does not exist in the database.", type = "error")
         return()
       }
       
