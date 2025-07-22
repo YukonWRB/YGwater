@@ -6,10 +6,10 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-
+  
   # Initial setup #############################################################
-
-  # Heatbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
+  
+  # Heartbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
   output$keep_alive <- renderText({
     invalidateLater(5000, session)
     Sys.time()
@@ -17,7 +17,7 @@ app_server <- function(input, output, session) {
   
   # Allow reconnection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
   session$allowReconnect(TRUE)
-
+  
   
   # Hide all 'admin' side tabs if they were generated
   
@@ -178,7 +178,7 @@ app_server <- function(input, output, session) {
                                             silent = TRUE)
   
   print("Connected to AquaCache")
-
+  
   # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE) # This does not work with Shiny Server open source
   session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues from Shiny Server
   
@@ -202,13 +202,11 @@ app_server <- function(input, output, session) {
   
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
-    # if (!isRestoring()) {
     shinyjs::runjs("
       var language =  window.navigator.userLanguage || window.navigator.language;
       console.log('Detected browser language: ' + language);
       Shiny.setInputValue('userLang', language, {priority: 'event'});
                      ")
-    # }
   })
   
   # Set initial language based on browser language
@@ -262,6 +260,89 @@ app_server <- function(input, output, session) {
       output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
       
       session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
+      
+      # Render the footer based on the language
+      output$footer_ui <- renderUI({
+        div(
+          span("Was this page helpful?",
+               # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
+               actionButton(
+                 "thumbs_up",
+                 label = bsicons::bs_icon("hand-thumbs-up", 
+                                          size = "2em", 
+                                          fill = "white"),
+                 class = "btn btn-link",
+                 width = "50px"),
+               actionButton(
+                 "thumbs_down",
+                 label = bsicons::bs_icon("hand-thumbs-down", 
+                                          size = "2em", 
+                                          fill = "white"),
+                 class = "btn btn-link",
+                 width = "50px"),
+               style = "color: white;"
+          ),
+          # Set background color of div
+          style = "background-color: #244C5A; color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
+          # Make a placehold
+          uiOutput("feedback_ui")
+        )
+      })
+    }
+  })
+  
+  # ObserveEvents for thumbs up/down buttons
+  # add a textAreaInput to allow the user to write something, and a 'submit feedback' button
+  feedback_open <- reactiveVal(FALSE)
+  feedback_rendered <- reactiveVal(FALSE)
+  observeEvent(input$thumbs_up, {
+    if (feedback_open()) { # If TRUE, user is asking to close feedback
+      # No need to check if already rendered at this point
+      shinyjs::hide("feedback_ui")
+      feedback_open(FALSE)
+    } else {
+      if (feedback_rendered()) { #if already rendered just show the element
+        shinyjs::show("feedback_ui")
+        feedback_open(TRUE)
+      } else { # Render the element and set flags
+        output$feedback_ui <- renderUI({
+          div(
+            textAreaInput("feedback_text", 
+                          label = NULL, 
+                          placeholder = "placeholder", 
+                          rows = 3, 
+                          width = "100%"),
+            actionButton("submit_feedback", "Submit feedback")
+          )
+        })
+        feedback_rendered(TRUE)
+        feedback_open(TRUE)
+      }
+    }
+  })
+  observeEvent(input$thumbs_down, {
+    if (feedback_open()) { # If TRUE, user is asking to close feedback
+      # No need to check if already rendered at this point
+      shinyjs::hide("feedback_ui")
+      feedback_open(FALSE)
+    } else {
+      if (feedback_rendered()) { #if already rendered just show the element
+        shinyjs::show("feedback_ui")
+        feedback_open(TRUE)
+      } else { # Render the element and set flags
+        output$feedback_ui <- renderUI({
+          div(
+            textAreaInput("feedback_text", 
+                          label = NULL, 
+                          placeholder = "placeholder", 
+                          rows = 3, 
+                          width = "100%"),
+            actionButton("submit_feedback", "Submit feedback")
+          )
+        })
+        feedback_rendered(TRUE)
+        feedback_open(TRUE)
+      }
     }
   })
   

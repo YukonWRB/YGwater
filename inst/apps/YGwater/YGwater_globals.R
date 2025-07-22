@@ -3,8 +3,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   library(shiny)
   library(shinyjs)
   library(bslib)
-  library(bsicons)
-  
+
   # Use a user-writable cache directory for sass
   cache_dir <- tools::R_user_dir("YGwater", "cache")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)

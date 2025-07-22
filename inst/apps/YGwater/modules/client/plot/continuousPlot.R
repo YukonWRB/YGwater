@@ -186,7 +186,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                        label = tooltip(
                          trigger = list(
                            "Plot type",
-                           bs_icon("info-circle-fill")
+                           bsicons::bs_icon("info-circle-fill")
                          ),
                          "Long timeseries plots help visualize a change with time and allows for multiple traces or subplots, while overlapping years plots are useful for comparing data across years at one location."
                        ),
@@ -2128,7 +2128,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                             label = tooltip(
                               trigger = list(
                                 "Share X axis between subplots (dates are aligned)",
-                                bs_icon("info-circle-fill")
+                                bsicons::bs_icon("info-circle-fill")
                               ),
                               "This will align the x-axis across all subplots, making it easier to compare trends over time."
                             ),
@@ -2137,7 +2137,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                             label = tooltip(
                               trigger = list(
                                 "Share Y axis between subplots (values are aligned)",
-                                bs_icon("info-circle-fill")
+                                bsicons::bs_icon("info-circle-fill")
                               ),
                               "This will align the y-axis across all subplots, making it easier to compare values across different locations or parameters."
                             ),

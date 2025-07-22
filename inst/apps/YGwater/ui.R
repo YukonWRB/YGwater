@@ -12,8 +12,8 @@ app_ui <- function(request) {
   
   tagList(
     shinyjs::useShinyjs(),
-    useBusyIndicators(),
-    div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")),
+    div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")), # Used for a heartbeat every 5 seconds to keep app alive, which occasionally gives issues on mobile devices.
+    
     # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
     # Uses two parameters: 'id' for the element ID and 'col' for the color. Color can be R-recognized color name or hex code.
     shinyjs::extendShinyjs(
@@ -23,10 +23,10 @@ app_ui <- function(request) {
         col : "red"
       };
       params = shinyjs.getParams(params, defaultParams);
-
       var el = $("#" + params.id);
                          el.css("background-color", params.col);
 }', functions = c("backgroundCol")),
+    
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # JS to handle full screen button
       tags$script(src = "js/window_resize.js"),  # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
@@ -44,7 +44,7 @@ app_ui <- function(request) {
         "),
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc.
-      tags$link(rel = "stylesheet", href = "css/YG_bs5.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
       tags$style(HTML("
         a.dropdown-toggle > .shiny-html-output {
@@ -55,10 +55,9 @@ app_ui <- function(request) {
     .alert { white-space: normal !important; }
   "))
     ),
-    # page_fluid is the main container for the app, which contains the top bar, nav bar, and content
+    # page_fluid is the main container for the app, which contains the top bar, nav bar, content, and footer.
     page_fluid(
       # Make the container for the top bar, which sits above the nav bar
-      
       div(
         class = "top-bar-container d-none d-md-block",
         fluidRow(
@@ -82,6 +81,7 @@ app_ui <- function(request) {
                  class = "aurora-login-container")
         )
       ),
+      # And now the navbar itself
       page_navbar(
         title = tags$a(
           class = "d-md-none",
@@ -241,7 +241,12 @@ app_ui <- function(request) {
                              uiOutput("deploy_recover_ui"))
           )
         }
-      ) # End page_navbar (though it's modified below)
+      ), # End page_navbar (though it's modified below to add a language selector)
+      
+      # Now a footer, rendered in the server for language support
+      div(
+        uiOutput("footer_ui"),
+      )
     ), # End of page_fluid
     
     # Insert language selector into the navbar
