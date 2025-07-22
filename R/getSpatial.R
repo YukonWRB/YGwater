@@ -49,9 +49,11 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
     }
     else if (!all(bands %in% nbs)) {
         cli::cli_abort("Selected band(s) do not exist in PostGIS raster: choose band numbers between {min(nbs)} and {max(nbs)}.")
-    }
+          }
+          # Add WHERE clause to restrict to non-null rasters
     tmp.query <- paste0("SELECT DISTINCT(ST_SRID(", rastque, 
-        ")) FROM ", nameque, " WHERE ", rastque, " IS NOT NULL;")
+      ")) FROM ", nameque, " WHERE ", rastque, " IS NOT NULL", if (!is.null(clauses2)) paste0(" ", clauses2) else "", ";")
+
     srid <- DBI::dbGetQuery(conn, tmp.query)
 
 
@@ -132,6 +134,9 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
             ymax = info$ymx, crs = p4s, vals = vals)
         return(rout)
     }
+
+
+    
     cli::cli_alert_info("Reading {length(bands)} band{?s}...")
     download_pb <- cli::cli_progress_bar("Read bands", total = length(bands), 
         type = "tasks", format_done = "{.alert-success Read completed {.timestamp {cli::pb_elapsed}}}", 
@@ -162,7 +167,9 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
         }
         rb <- terra::rast(rout)
     }
+
     cli::cli_process_done(id = download_pb)
+
     if ("band_names" %in% rpostgis:::dbTableInfo(conn, name)$column_name) {
         try({
             ct <- 1
@@ -175,8 +182,10 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
             }
         })
     }
-}
 
+  return(rb)
+
+}
 
 
 

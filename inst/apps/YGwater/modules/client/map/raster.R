@@ -43,7 +43,7 @@ mapRaster <- function(id, language) {
                 moduleData$parameters$parameter_id,
                 titleCase(moduleData$parameters[[tr("param_name_col", language$language)]], language$abbrev)
               ),
-              selected = map_params$point,
+              selected = map_params$point_id,
               multiple = FALSE
             ),
 
@@ -110,20 +110,24 @@ mapRaster <- function(id, language) {
       req(map_params, language)
       tagList(
         h4(if (config$public) tr("map_primary_param_solo", language$language) else tr("map_primary_param", language$language)), # Text for primary parameter
-        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$point,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
+        p(titleCase(moduleData$parameters[moduleData$parameters$parameter_id == map_params$point_id,  get(tr("param_name_col", language$language))], language$abbrev)), # Name of primary parameter
         p(
           tr("map_min_yrs_selected1", language$language), " ", map_params$yrs, " ", tr("map_min_yrs_selected2", language$language), # Text for min years selected
           tr("map_date_within_selected1", language$language), map_params$days, tr("map_date_within_selected2", language$language) # Text for within x days
         )
       )
-    }) |> bindEvent(map_params$point, language$language)
+    }) |> bindEvent(map_params$point_id, language$language)
 
     # PLACEHOLDER OUTPUT RASTER
 
     # Create the filter inputs ############################################################################
     map_params <- reactiveValues(
-      point = 1150,  # Water flow
-      raster = 12,
+      point_id = 1150,  # Water flow
+      point_name = 'Flow',
+      point_units = 'm3/s',
+      raster_id = NULL,
+      raster_name = '',
+      raster_units = '',
       yrs = 10,
       days = 1,
       latest = FALSE,
@@ -137,11 +141,43 @@ mapRaster <- function(id, language) {
     )
 
     observeEvent(input$param, {
-      map_params$point <- input$param
+      map_params$point_id <- input$param
+      
+      map_params$point_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$point_id, get(tr("param_name_col", language$language))]
+      
+      
+      map_params$point_units <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$point_id,"unit_default"]
+
     })
 
     observeEvent(input$targetParam, {
-      map_params$raster <- input$targetParam
+      map_params$raster_id <- input$targetParam
+
+      if (!is.null(map_params$raster_id) && nzchar(map_params$raster_id)) {
+        map_params$raster_name <- dbGetQueryDT(
+          session$userData$AquaCache,
+          sprintf(
+        "SELECT parameter FROM spatial.raster_series_index WHERE raster_series_id = %s LIMIT 1",
+        as.character(map_params$raster_id)
+          )
+        )
+
+        units <- dbGetQueryDT(
+          session$userData$AquaCache,
+          sprintf(
+        "SELECT units FROM spatial.rasters_reference WHERE raster_series_id = %s LIMIT 1",
+        as.character(map_params$raster_id)
+          )
+        )
+        if (nrow(units) > 0) {
+          map_params$raster_units <- units$units[1]
+        } else {
+          map_params$raster_units <- ""
+        }
+      } else {
+        map_params$raster_name <- ""
+        map_params$raster_units <- ""
+      }
     })
 
     # Observe 'map_latest_measurements'. If TRUE, 'target' is adjusted to Sys.Date()
@@ -194,37 +230,39 @@ mapRaster <- function(id, language) {
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
 
+
+      leaflet::leafletProxy("map", session) %>% leaflet::clearControls()
+
+
       # integrity checks
       if (is.na(map_params$yrs) || is.na(map_params$days)) {
         return()
       }
 
       # Stop if the parameter does not exist; it's possible that the user typed something in themselves
-      if (!map_params$point %in% moduleData$parameters$parameter_id) {
+      if (!map_params$point_id %in% moduleData$parameters$parameter_id) {
         return()
       }
 
       # Deal with parameter 1
       tsids1 <- dbGetQueryDT(session$userData$AquaCache, sprintf(
         "SELECT timeseries_id FROM timeseries WHERE parameter_id = %s;",
-        map_params$point
+        map_params$point_id
       ))$timeseries_id
       if (length(tsids1) == 0) {
         return()
       }
 
       # Deal with raster
-      print(paste0("Selected raster series ID: ", map_params$raster))
+      print(paste0("Selected raster series ID: ", map_params$raster_id))
       
-
-
       # Query valid_from, valid_to, and reference_id for the selected raster series
-      if (!is.null(map_params$raster) && nzchar(map_params$raster)) {
+      if (!is.null(map_params$raster_id) && nzchar(map_params$raster_id)) {
         raster_dates <- dbGetQueryDT(
           session$userData$AquaCache,
           paste0(
         "SELECT valid_from, valid_to, reference_id FROM spatial.rasters_reference WHERE raster_series_id = ",
-        as.character(map_params$raster)
+        as.character(map_params$raster_id)
           )
         )
         # Convert valid_from and valid_to to POSIXct datetime array (if not already)
@@ -257,31 +295,31 @@ mapRaster <- function(id, language) {
           bands = 1
         )
 
-        print(r_db)
         if (!is.null(r_db)) {
-          print('ok')
-          leaflet::leafletxProxy("map", session) %>%
+          legend_title <- paste0(map_params$raster_name, " (", map_params$raster_units, ")")
+
+          leaflet::leafletProxy("map", session) %>%
             leaflet::clearImages() %>%
             leaflet::addRasterImage(
               r_db,
-              colors = colorNumeric(
+              colors = leaflet::colorNumeric(
                 palette = "viridis",
                 domain = raster::values(r_db),
                 na.color = "#808080"
               ),
-              opacity = 0.7,
+              opacity = 0.9,
               project = TRUE,
               layerId = "rasterLayer"
             ) %>%
             leaflet::addLegend(
               position = "bottomleft",
-              pal = colorNumeric(
+              pal = leaflet::colorNumeric(
                 palette = "viridis",
                 domain = raster::values(r_db),
                 na.color = "#808080"
               ),
               values = raster::values(r_db),
-              title = "Raster values"
+              title = legend_title
             )
         }
         # You can add further processing of r_db here if needed
@@ -289,17 +327,6 @@ mapRaster <- function(id, language) {
 
 
       }
-
-
-
-
-
-
-
-
-
-
-
 
 
       if (map_params$latest) {
@@ -385,8 +412,8 @@ mapRaster <- function(id, language) {
         by = "location_id"
       )
       print(moduleData$parameters$parameter_id)
-      locs_tsids1$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$point,  get(tr("param_name_col", language$language))]
-      locs_tsids1$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$point,  "unit_default"]
+      locs_tsids1$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$point_id,  get(tr("param_name_col", language$language))]
+      locs_tsids1$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$point_id,  "unit_default"]
 
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
 
@@ -433,16 +460,10 @@ mapRaster <- function(id, language) {
         lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
         legend_title <- sprintf(
           "%s (%s)",
-          titleCase(
-            moduleData$parameters[moduleData$parameters$parameter_id == map_params$point,
-              get(tr("param_name_col", language$language))],
-            language$abbrev
-          ),
-          moduleData$parameters[moduleData$parameters$parameter_id == map_params$point,
-            "unit_default"]
+          titleCase(map_params$point_name, language$abbrev),
+          map_params$point_units
         )
       
-
       leaflet::leafletProxy("map", session) %>%
         leaflet::clearMarkers() %>%
         leaflet::addCircleMarkers(
@@ -465,7 +486,6 @@ mapRaster <- function(id, language) {
             tr("map_actual_yrs", language$language), ": ", doy_count
           )
         ) %>%
-        leaflet::clearControls() %>%  # Clear existing legends
         leaflet::addLegend(
           position = "bottomright",
           pal = value_palette,
@@ -487,7 +507,7 @@ mapRaster <- function(id, language) {
         leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
         leaflet::addLayersControl(baseGroups = c("Topographic", "Satellite")) %>%
         leaflet::addScaleBar(
-          position = "bottomleft",
+          position = "topleft",
           options = leaflet::scaleBarOptions(imperial = FALSE)
         ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
@@ -495,7 +515,7 @@ mapRaster <- function(id, language) {
 
     # Observe the map being created and update it when the parameters change
     observe({
-      req(mapCreated(), map_params, input$map_zoom, language$language)  # Ensure the map has been created before updating
+      req(mapCreated(), map_params, language$language)  # Ensure the map has been created before updating
       updateMap()  # Call the updateMap function to refresh the map with the current parameters
     })
   }) # End of moduleServer

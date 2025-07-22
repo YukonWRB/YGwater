@@ -1,0 +1,29 @@
+name: ygwater
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - geopandas
+  - shapely
+  - ipyleaflet
+  - ipywidgets
+  - xarray
+  - rasterio
+  - matplotlib
+  - jupyter
+  - birdy
+  - intake
+  - fsspec
+  - s3fs
+  - clisops
+  - netcdf4
+  - sqlalchemy
+  - pip
+  - pip:
+    - ravenpy
+
+variables:
+  PYTHONPATH: ${CONDA_PREFIX}/lib/python3.11/site-packages
