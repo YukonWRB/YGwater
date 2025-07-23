@@ -36,7 +36,8 @@ imputeMissingUI <- function(id) {
         /* expanded header */
         --bs-accordion-active-bg:   #7A9A01;
       }
-    ", ns("accordion3")))),
+    ", ns("accordion3")))
+      ),
     
     page_fluid(
       accordion(

@@ -335,7 +335,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         br(),
         input_task_button(ns("make_plot"), 
                           label = "Create Plot", 
-                          style = "display: block; width: 100%;")
+                          style = "display: block; width: 100%;",
+                          class = "btn btn-primary")
       ) # End tagList
       
       # Store the input values in the reactiveValues object
@@ -2816,8 +2817,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         output$full_screen_ui <- renderUI({
           # Side-by-side buttons
           page_fluid(
-            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen")),
-            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"))
+            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), class = "btn btn-primary"),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), class = "btn btn-primary")
           )
         })
       } else {

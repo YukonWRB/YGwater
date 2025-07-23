@@ -186,7 +186,8 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                        style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
           input_task_button(ns("make_plot"),
                             "Create Plot",
-                            style = "display: block; width: 100%;") # Ensure block display and full width
+                            style = "display: block; width: 100%;", # Ensure block display and full width
+                            class = "btn btn-primary")
         )
       ) # End of tagList
     })  %>% # End of renderUI for sidebar
@@ -197,8 +198,8 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
         page_fluid(
-          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;")),
-          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;"))
+          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;", class = "btn btn-primary")),
+          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;", class = "btn btn-primary"))
         )
       ) # End of tagList
     }) %>% # End renderUI
