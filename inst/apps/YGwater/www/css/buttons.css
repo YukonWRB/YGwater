@@ -1,0 +1,23 @@
+/* base “bar” style */
+.btn-bar {
+  background: transparent !important;
+  border: 1 !important;
+  border-radius: 2 !important;
+  box-shadow: none !important;
+  transition: box-shadow 0.1s ease;
+  color: #244C5A !important;
+}
+
+/* hover shadow */
+.btn-bar:hover {
+  color: #244C5A !important; /* ensure text remains visible */
+  box-shadow: 4px 4px 4px rgba(0,0,0,0.15) !important;
+}
+
+/* individual colours */
+.btn-bar-locs    { color: #0097A9; border-bottom: 5px solid #0097A9 !important; }
+.btn-bar-params  { color: #F2A900; border-bottom: 5px solid #F2A900 !important; }
+.btn-bar-plot-c  { color: #DC4405; border-bottom: 5px solid #DC4405 !important; }
+.btn-bar-plot-d  { color: #244C5A; border-bottom: 5px solid #244C5A !important; }
+.btn-bar-dl-c    { color: #512A44; border-bottom: 5px solid #512A44 !important; }
+.btn-bar-dl-d    { color: #7A9A01; border-bottom: 5px solid #7A9A01 !important; }

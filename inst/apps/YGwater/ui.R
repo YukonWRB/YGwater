@@ -45,6 +45,7 @@ app_ui <- function(request) {
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc.
       tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/buttons.css"), # styling for hover effects on buttons with YG colors
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
       tags$style(HTML("
         a.dropdown-toggle > .shiny-html-output {
@@ -245,6 +246,7 @@ app_ui <- function(request) {
       
       # Now a footer, rendered in the server for language support
       div(
+        hr(),
         uiOutput("footer_ui"),
       )
     ), # End of page_fluid

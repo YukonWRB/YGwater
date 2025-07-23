@@ -1,6 +1,7 @@
 
 homeUI <- function(id) {
   ns <- NS(id)
+  tagList()
   verticalLayout(
     htmlOutput(ns("betaTitle")),
     tags$div(style = "height: 10px;"),
@@ -9,26 +10,21 @@ homeUI <- function(id) {
     htmlOutput(ns("title")),
     tags$div(style = "height: 10px;"),
     htmlOutput(ns("main_text")),
+    hr(),
     tags$div(style = "height: 30px;"),
     htmlOutput(ns("discrete_continuous_title")),
     tags$div(style = "height: 10px;"),
     htmlOutput(ns("discrete_continuous")),
     tags$div(style = "height: 20px;"),
-    # htmlOutput(ns("mapButtonsTitle")),
     tags$div(style = "height: 10px;"),
     uiOutput(ns("map_buttons")),
     tags$div(style = "height: 20px;"),
-    # htmlOutput(ns("plotButtonsTitle")),
     tags$div(style = "height: 10px;"),
     uiOutput(ns("plot_buttons")),
     tags$div(style = "height: 20px;"),
-    # htmlOutput(ns("dataButtonsTitle")),
     tags$div(style = "height: 10px;"),
     uiOutput(ns("data_buttons")),
     tags$div(style = "height: 40px;"),
-    # htmlOutput(ns("discTitle")),
-    # tags$div(style = "height: 10px;"),
-    # htmlOutput(ns("discBody"))
   )
 }
 
@@ -89,10 +85,10 @@ home <- function(id, language) {
       output$map_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("map_locs"), tr("home_map_locs_btn", language$language),
-                                 class = "btn btn-primary w-100",
+                                 class = "btn-bar w-100 btn-bar-locs",
                                  icon = icon("map-location"))),
           column(6, actionButton(ns("map_params"), tr("home_map_params_btn", language$language),
-                                 class = "btn btn-primary w-100",
+                                 class = "btn-bar w-100 btn-bar-params",
                                  icon = icon("map-location")))
         )
       })
@@ -105,10 +101,10 @@ home <- function(id, language) {
       output$plot_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("plot_cont"), tr("home_plot_cont_btn", language$language),
-                                 class = "btn btn-primary w-100",
+                                 class = "btn-bar w-100 btn-bar-plot-c",
                                  icon = icon("chart-simple"))),
           column(6, actionButton(ns("plot_disc"), tr("home_plot_disc_btn", language$language),
-                                 class = "btn btn-primary w-100",
+                                 class = "btn-bar w-100 btn-bar-plot-d",
                                  icon = icon("chart-simple")))
         )
       })
@@ -121,10 +117,10 @@ home <- function(id, language) {
       output$data_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("dl_cont"), tr("home_dl_cont_btn", language$language),
-                                 class = "btn btn-primary w-100",
+                                 class = "btn-bar w-100 btn-bar-dl-c",
                                  icon = icon("table"))),
           column(6, actionButton(ns("dl_disc"), tr("home_dl_disc_btn", language$language),
-                                 class = "btn btn-primary w-100",
+                                 class = "btn-bar w-100 btn-bar-dl-d",
                                  icon = icon("table")))
         )
       })

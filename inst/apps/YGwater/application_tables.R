@@ -1,4 +1,4 @@
-# This script is intended to set up the AquaCache database for use with teh YGwater application. It creates a new schema, 'application', containing tables that store text and images for application content, and will likely be expanded to include other application-related data in the future. The script also modifies the search path to include the new schema, and grants usage and select privileges to the public role.
+# This script is intended to set up the AquaCache database for use with the YGwater application. It creates a new schema, 'application', containing tables that store text and images for application content, and will likely be expanded to include other application-related data in the future. The script also modifies the search path to include the new schema, and grants usage and select privileges to the public role.
 
 # IMPORTANT: You must have the necessary privileges to create tables and modify the search path in the database. If you do not have these privileges, you will need to ask your database administrator to run this script for you.
 
