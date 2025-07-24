@@ -251,11 +251,21 @@ addTimeseries <- function(id) {
     
     # Add a new timeseries #############
     # Create an extendedTask to add a new timeseries
-    addNewTimeseries <- ExtendedTask$new(function(con, loc, sub_loc, z, z_specify, parameter, media, priority, agg_type, rate, owner, note, source_fx, source_fx_args, data) {
+    addNewTimeseries <- ExtendedTask$new(function(config, loc, sub_loc, z, z_specify, parameter, media, priority, agg_type, rate, owner, note, source_fx, source_fx_args, data) {
       promises::future_promise({
-        # start a transaction
-        DBI::dbBegin(con)
         tryCatch({
+          # Make a connection
+          con <- AquaConnect(name = config$dbName, 
+                             host = config$dbHost,
+                             port = config$dbPort,
+                             username = config$dbUser,
+                             password = config$dbPass,
+                             silent = TRUE)
+          on.exit(DBI::dbDisconnect(con)) # Disconnect when done
+          
+          # start a transaction
+          DBI::dbBegin(con)
+          
           if (is.null(sub_loc)) {
             sub_loc <- NA
           } else if (nchar(sub_loc) > 0) {
@@ -323,10 +333,8 @@ addTimeseries <- function(id) {
                            source_fx_args = args,
                            note = if (nchar(note) > 0) note else NA,
                            end_datetime = end_datetime)
-          DBI::dbAppendTable(con, "timeseries", df)
           
-          print("df out")
-          df <<- df
+          DBI::dbAppendTable(con, "timeseries", df)
           
           # Get the new timeseries_id
           new_timeseries_id <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", df$location_id, 
@@ -359,18 +367,23 @@ addTimeseries <- function(id) {
           if (lubridate::period(df$record_rate) <= lubridate::period("1 day")) {
             AquaCache::calculate_stats(timeseries_id = new_timeseries_id, con = con, start_recalc = NULL)
           }
+          
           DBI::dbCommit(con)
           return("success")
+          
         }, error = function(e) {
           DBI::dbRollback(con)
+          DBI::dbDisconnect(con)
           return(paste("Error adding timeseries:", e$message))
         }, warning = function(w) {
           DBI::dbRollback(con)
+          DBI::dbDisconnect(con)
           return(paste("Error adding timeseries:", w$message))
         })
       })
     } # end of ExtendedTask$new
     ) |> bslib::bind_task_button("add_timeseries")
+    # End of ExtendedTask$new
     
     observeEvent(input$add_timeseries, {
       # validate inputs
@@ -380,7 +393,8 @@ addTimeseries <- function(id) {
         need(input$media, "Please select a media type."),
         need(input$aggregation_type, "Please select an aggregation type."),
         need(input$default_owner, "Please select a default owner."),
-        need(input$sensor_priority, "Please select a sensor priority.")
+        need(input$sensor_priority, "Please select a sensor priority."),
+        need(input$record_rate, "Please specify a record rate."),
       )
       
       if (input$mode != "add") {
@@ -391,7 +405,7 @@ addTimeseries <- function(id) {
       
       # Call the extendedTask to add a new timeseries
       addNewTimeseries$invoke(
-        con = session$userData$AquaCache,
+        config = session$userData$config,
         loc = input$location,
         sub_loc = input$sub_location,
         z = input$z,
@@ -405,7 +419,7 @@ addTimeseries <- function(id) {
         note = input$note,
         source_fx = input$source_fx,
         source_fx_args = input$source_fx_args,
-        data = moduleData
+        data = reactiveValuesToList(moduleData)
       )
     }, ignoreInit = TRUE)
     
