@@ -25,8 +25,8 @@ if (!isTRUE(getOption("YGwater_pythonSetupDone", FALSE))) {
   
   # If on CI, set environment variables which would otherwise be found in the user's .Renviron file
   if (Sys.getenv("CI") == "true") {
-    Sys.setenv(aquacacheName = "testdb"
-      aquacacheHost = "localhost",
+    Sys.setenv(aquacacheName = "testdb",
+               aquacacheHost = "localhost",
                aquacachePort = "5432",
                aquacacheUser = "runner",
                aquacachePass = "runner",
