@@ -51,7 +51,13 @@ jobs:
         password: running
         database: testdb
         
-      name: Decompress CI see database
+      name: Decompress CI seed database
+      run: |
+        tar -xO -z -f tests/testthat/fixtures/test_db.sql.gz > test_db.sql
+        
+      -name: Load test database
+      env:
+        PGPASSWORD: runner
       run: |
         psql -h 127.0.0.1 -U runner -d testdb -f test_db.sql
 
