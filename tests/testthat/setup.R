@@ -21,4 +21,16 @@ if (!isTRUE(getOption("YGwater_pythonSetupDone", FALSE))) {
   
   # Mark the setup as done for this session.
   options(YGwater_pythonSetupDone = TRUE)
+  
+  
+  # If on CI, set environment variables which would otherwise be found in the user's .Renviron file
+  if (Sys.getenv("CI") == "true") {
+    Sys.setenv(aquacacheHost = "localhost",
+               aquacachePort = "5432",
+               aquacacheUser = "runner",
+               aquacachePass = "runner",
+               aquacacheAdminUser = "runner",
+               aquacacheAdminPass = "runner")
+    message("Running on CI, setting environment variables for aquacache connection to a test database instance.")
+  }
 }
