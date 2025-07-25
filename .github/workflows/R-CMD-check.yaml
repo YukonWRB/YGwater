@@ -43,7 +43,7 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
           
-      name: Set up PostgreSQL 17
+      - name: Set up PostgreSQL 17
       uses: ikalnytskyi/action-setup-postgres@v7
       with:
         postgres-version: '17'
@@ -51,7 +51,7 @@ jobs:
         password: running
         database: testdb
         
-      name: Decompress CI seed database
+      - name: Decompress CI seed database
       run: |
         tar -xO -z -f tests/testthat/fixtures/test_db.sql.gz > test_db.sql
         
