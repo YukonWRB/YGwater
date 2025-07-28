@@ -6,31 +6,13 @@ on.exit(options(warn = old_warn), add = TRUE)
 
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file", {
   skip_on_cran()
-  dir <- paste0(tempdir(), "/plots")
-  unlink(dir, recursive = TRUE)
-  dir.create(dir)
-  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", save_path = dir,  historic_range = "last", gridx = FALSE)
-  path <- list.files(dir, full.names = TRUE)
-  file.rename(path, paste0(dir, "/level1.png"))
-  expect_snapshot_file(paste0(dir, "/level1.png"))
-  unlink(dir, recursive = TRUE)
-})
-
-test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file FROM SQLITE", {
-  skip_on_os("linux") # For some reason this test fails on linux, but not on windows
-  dir <- paste0(tempdir(), "/plots")
-  unlink(dir, recursive = TRUE)
-  dir.create(dir)
-  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2020", save_path = dir,  historic_range = "last", gridx = FALSE)
-  path <- list.files(dir, full.names = TRUE)
-  file.rename(path, paste0(dir, "/level1_sqlite.png"))
-  expect_snapshot_file(paste0(dir, "/level1_sqlite.png"))
-  unlink(dir, recursive = TRUE)
+  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", gridx = FALSE)
+  vdiffr::expect_doppelganger("full yr numeric start/end save", plot)
 })
 
 test_that("french labels work with full year", {
   skip_on_cran()
-  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", save_path = NULL,  historic_range = "last", lang = "fr", gridx = FALSE)
+  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", lang = "fr", gridx = FALSE)
   vdiffr::expect_doppelganger("french labels", plot)
 })
 

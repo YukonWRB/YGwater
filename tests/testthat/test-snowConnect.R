@@ -7,8 +7,8 @@ test_that("Snow DB connection works", {
   DBI::dbDisconnect(con)
 })
 
-test_that("Snow DB has 12 tables/views", {
+test_that("Snow DB has 13 tables/views", {
   con <- snowConnect(silent = TRUE)
-  expect_length(DBI::dbListTables(con), 12)
+  expect_length(DBI::dbListTables(con), 13)
   DBI::dbDisconnect(con)
 })

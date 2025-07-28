@@ -2,8 +2,11 @@
 skip_on_ci()
 skip_on_cran()
 
-#For this test to work the testing machine must have Aquarius credentials loaded into the .Renviron file. Refer to function documentation for more info.
-#These tests may never complete if Aquarius is being slow. Comment them all and run tests again if necessary to skip.
+# skip if the .renviron username is the read-only user
+skip_if(Sys.getenv("AQUSER") == "AQ_APIReadWrite")
+
+# For this test to work the testing machine must have Aquarius credentials loaded into the .Renviron file. Refer to function documentation for more info.
+# These tests may never complete if Aquarius is being slow. Comment them all and run tests again if necessary to skip.
 test_that("aquarius upload works without overwrite", {
   sequence <- seq.POSIXt(as.POSIXct("2022-01-01"), as.POSIXct("2022-01-15"), by = "hour")
   data <- data.frame(Time = sequence,

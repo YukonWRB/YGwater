@@ -8,11 +8,11 @@ test_that("output has correct tables", {
 })
 
 test_that("locations table has correct names", {
-  expect_named(res$locations, c('location_ID', 'location_name', 'latitude', 'longitude', 'elevation', 'last_survey'))
+  expect_named(res$locations, c('location_code', 'location_name', 'latitude', 'longitude', 'elevation_m', 'last_survey'))
 })
 
 test_that("measurements table has correct names", { #NOTE: names for this one are taken straight from the DB. If the test fails, check for changes to the DB first.
-  expect_named(res$measurements, c('timeseries_id', 'target_datetime', 'value', 'year', 'month', 'location_id', 'end_datetime', 'param_name', 'location'))
+  expect_named(res$measurements, c('location_code', "location_name", "parameter", "sample_id", "target_date", "year", "month", "result"))
 })
 
 rm(res)

@@ -1,5 +1,4 @@
 # Tests depend on parameters on the machine so can't be run on CRAN or CI
-skip_on_ci()
 skip_on_cran()
 
 dl <- aq_download(loc_id = "YOWN-0804",
@@ -27,19 +26,19 @@ test_that("timeseries has no NA values", {
   expect_equal(nrow(dl$timeseries[rowSums(is.na(dl$timeseries)) > 0,]), 0)
 })
 
-test_that ("grades has 4 columns", {
+test_that("grades has 4 columns", {
   expect_equal(ncol(dl$grades), 4)
 })
 
-test_that ("grades has no NA values",{
+test_that("grades has no NA values",{
   expect_equal(nrow(dl$grades[rowSums(is.na(dl$grades)) > 0,]), 0)
 })
 
-test_that ("approvals has 7 columns", {
+test_that("approvals has 7 columns", {
   expect_equal(ncol(dl$approvals), 7)
 })
 
-test_that ("approvals has no NA values", {
+test_that("approvals has no NA values", {
   expect_equal(nrow(dl$approvals[rowSums(is.na(dl$approvals)) > 0,]), 0)
 })
 
