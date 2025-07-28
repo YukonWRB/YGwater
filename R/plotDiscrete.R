@@ -657,7 +657,7 @@ AND s.datetime > '", start, "' AND s.datetime < '", end, "';
     if (lang == "en") {
       samples$name <- ifelse(is.na(samples$sub_location_name), samples$name, paste0(samples$name, " - ", samples$sub_location_name))
     } else {
-      samples$name <- ifelse(is.na(samples$sub_location_name_fr), samples$name, paste0(samples$name, " - ", samples$sub_location_name_fr))
+      samples$name <- ifelse(is.na(samples$sub_location_name_fr), samples$name_fr, paste0(samples$name_fr, " - ", samples$sub_location_name_fr))
     }
 
     # Get the measurements from table results
@@ -849,7 +849,8 @@ AND s.datetime > '", start, "' AND s.datetime < '", end, "';
                                     showline = TRUE,
                                     showgrid = gridx,
                                     tickfont = list(size = axis_scale * 14)),
-                       legend = list(font = list(size = legend_scale * 14)
+                       legend = list(font = list(size = legend_scale * 14),
+                                     orientation = legend_position
                                      )
                        )
       

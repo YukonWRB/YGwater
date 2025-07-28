@@ -1,24 +1,60 @@
-# Tests depend on snapshots so can't be inspected on CRAN or CI
+# Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 skip_on_cran()
 
 test_that("plotOverlap with all defaults", {
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test1.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotOverlap(location = "09EA004", parameter = "water level", years = 2020)
-  vdiffr::expect_doppelganger("plotOverlap_default", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("plotOverlap with minimal elements", {
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test2.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotOverlap(location = "09EA004", parameter = "water level", years = 2020, hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE)
-  vdiffr::expect_doppelganger("plotOverlap_minimal_elements", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("plotOverlap with multiple years and 'last' historic range", {
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test3.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotOverlap(location = "09AB004", parameter = "water level", years = c(1990, 1991), hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE, historic_range = "last")
-  vdiffr::expect_doppelganger("plotOverlap_last_years", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("plotOverlap with multiple years and 'last' historic range", {
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test4.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotOverlap(location = "09AB004", parameter = "water level", years = c(1990, 1991), hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE, historic_range = "all")
-  vdiffr::expect_doppelganger("plotOverlap_all_years", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("returned plot data is as expected", {

@@ -2,49 +2,118 @@
 
 test_that("timeseries plot is as expected for one year with no historic range or slider", {
   skip_on_cran()
+  
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test1.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", historic_range = FALSE, slider = FALSE)
-  vdiffr::expect_doppelganger("plot_no_hist_range_no_slider", print(plot))
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("timeseries plot is as expected for one year with no historic range", {
   skip_on_cran()
+  
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test2.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", historic_range = FALSE)
-  vdiffr::expect_doppelganger("plot_no_hist_range", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("timeseries plot is as expected for one year with historic range", {
   skip_on_cran()
+  
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test3.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01")
-  vdiffr::expect_doppelganger("plot_w_hist_range", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("French timeseries plot is as expected for one year with historic range and slider", {
   skip_on_cran()
+  
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test4.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr")
-  vdiffr::expect_doppelganger("fr_plot_w_hist_rnge_and_slider", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("French timeseries plot is as expected for one year with historic range and no slider", {
   skip_on_cran()
+  
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test5.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE)
-  vdiffr::expect_doppelganger("fr_plot_w_hist_rng_no_slider", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("grades, approvals, qualifiers are displayed", {
   skip_on_cran()
+  
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test6.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, grades = TRUE, qualifiers = TRUE, approvals = TRUE)
-  vdiffr::expect_doppelganger("plot_w_grades_approvals_qualifiers", plot)
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("one of grades, approvals, qualifiers is displayed", {
-  # skip_on_ci()
   skip_on_cran()
+  
+  dir <- paste0(tempdir(), "\\plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir)
+  path <- paste0(dir, "\\test7.png")
+  path <- gsub("\\\\", "/", path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, grades = TRUE)
-  vdiffr::expect_doppelganger("timeseries_plot_with_grades", plot)
-})
+  plotly::save_image(plot, file = path, width = 500, height = 500)
+  
+  expect_snapshot_file(path)})
 
 test_that("returned plot data is as expected", {
-  skip_on_ci()
+  skip_on_cran()
+  
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, data = TRUE)$data
   expect_type(plot, "list")
   expect_named(plot, c("trace_data", "range_data"))

@@ -1,5 +1,4 @@
-# Tests depend on db connection so can't be run on CRAN or CI
-skip_on_ci()
+# Tests depend on db connection and internet access
 skip_on_cran()
 skip_if_offline()
 

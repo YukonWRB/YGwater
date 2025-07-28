@@ -1,4 +1,4 @@
-# Tests depend on DB connection and create snapshots so can't be run on CRAN or CI
+# Tests depend on DB connection and create snapshots
 
 old_warn <- getOption("warn")
 options(warn = -1)
