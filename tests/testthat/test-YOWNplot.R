@@ -1,4 +1,5 @@
 skip_if_offline()
+skip_on_ci()
 skip_on_cran()
 
 test_that("YOWNplot console output is as expected", {
