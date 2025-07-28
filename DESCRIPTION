@@ -62,6 +62,7 @@ Suggests:
     AquaCache,
     bslib,
     bsicons,
+    curl,
     DT,
     exifr,
     flextable,

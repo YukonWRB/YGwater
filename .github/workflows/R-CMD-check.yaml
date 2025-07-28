@@ -43,24 +43,23 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
-      - name: Set up PostgreSQL 17
+      - name: Set up PostgreSQL 17
         uses: ikalnytskyi/action-setup-postgres@v7
         with:
           postgres-version: '17'
           username: runner
           password: runner             # was “running”
           database: testdb
-
-      - name: Decompress CI seed database
+          
+      - name: Decompress CI seed database (Uses R for cross-platform functionality)
         run: |
-          # portable on Windows/Linux:
-          gunzip -c tests/testthat/fixtures/test_db.sql.gz > test_db.sql
+          Rscript -e "R.utils::gunzip('tests/testthat/fixtures/test_db.sql.gz')"
 
       - name: Load test database
         env:
           PGPASSWORD: runner
         run: |
-          psql -h 127.0.0.1 -U runner -d testdb -f test_db.sql
+          psql -h 127.0.0.1 -U runner -d testdb -f tests/testthat/fixtures/test_db.sql
 
       - uses: r-lib/actions/check-r-package@v2
         with:
