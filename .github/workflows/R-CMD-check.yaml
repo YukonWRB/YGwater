@@ -48,7 +48,7 @@ jobs:
         with:
           postgres-version: '17'
           username: runner
-          password: runner             # was “running”
+          password: runner
           database: testdb
           
       - name: Decompress CI seed database (Uses R for cross-platform functionality)

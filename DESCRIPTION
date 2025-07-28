@@ -73,6 +73,7 @@ Suggests:
     glue,
     digest,
     leaflet,
+    magick,
     odbc,
     officer,
     officedown,
