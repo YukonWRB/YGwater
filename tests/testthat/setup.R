@@ -33,10 +33,5 @@ if (!isTRUE(getOption("YGwater_pythonSetupDone", FALSE))) {
                aquacacheAdminUser = "runner",
                aquacacheAdminPass = "runner")
     message("Running on CI, setting environment variables for aquacache connection to a test database instance.")
-
-    # Connect to the test DB and set the search_path
-    con <- AquaConnect()
-    DBI::dbExecute(con, "ALTER DATABASE testdb SET search_path TO public, continuous, discrete, spatial, files, instruments, information;")
-    DBI::dbDisconnect(con)
   }
 }
