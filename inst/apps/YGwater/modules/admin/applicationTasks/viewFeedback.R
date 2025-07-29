@@ -11,7 +11,7 @@ viewFeedback <- function(id) {
     
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,
-      "SELECT has_table_privilege(current_user, 'application.feedback', 'SELECT') AS can_select"
+      "SELECT has_table_privilege(current_user, 'application.feedback_temp', 'SELECT') AS can_select"
     )
     
     if (!check$can_select) {
@@ -26,7 +26,7 @@ viewFeedback <- function(id) {
     
     feedback_data <- reactiveVal(DBI::dbGetQuery(
       session$userData$AquaCache,
-      "SELECT * FROM application.feedback ORDER BY timestamp DESC"
+      "SELECT * FROM application.feedback_temp ORDER BY timestamp DESC"
     ))
     
     output$feedback_table <- DT::renderDT({

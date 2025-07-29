@@ -186,7 +186,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                        label = tooltip(
                          trigger = list(
                            "Plot type",
-                           bs_icon("info-circle-fill")
+                           bsicons::bs_icon("info-circle-fill")
                          ),
                          "Long timeseries plots help visualize a change with time and allows for multiple traces or subplots, while overlapping years plots are useful for comparing data across years at one location."
                        ),
@@ -335,7 +335,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         br(),
         input_task_button(ns("make_plot"), 
                           label = "Create Plot", 
-                          style = "display: block; width: 100%;")
+                          style = "display: block; width: 100%;",
+                          class = "btn btn-primary")
       ) # End tagList
       
       # Store the input values in the reactiveValues object
@@ -2128,7 +2129,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                             label = tooltip(
                               trigger = list(
                                 "Share X axis between subplots (dates are aligned)",
-                                bs_icon("info-circle-fill")
+                                bsicons::bs_icon("info-circle-fill")
                               ),
                               "This will align the x-axis across all subplots, making it easier to compare trends over time."
                             ),
@@ -2137,7 +2138,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                             label = tooltip(
                               trigger = list(
                                 "Share Y axis between subplots (values are aligned)",
-                                bs_icon("info-circle-fill")
+                                bsicons::bs_icon("info-circle-fill")
                               ),
                               "This will align the y-axis across all subplots, making it easier to compare values across different locations or parameters."
                             ),
@@ -2651,13 +2652,19 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           if (subplotCount() > 1) { # Multiple sub plots
             locs <- as.numeric(c(subplots$subplot1$location_id, subplots$subplot2$location_id, subplots$subplot3$location_id, subplots$subplot4$location_id))
             sub_locs <- as.numeric(c(subplots$subplot1$sub_location_id, subplots$subplot2$sub_location_id, subplots$subplot3$sub_location_id, subplots$subplot4$sub_location_id))
-            z <- c(subplots$subplot1$z, subplots$subplot2$z, subplots$subplot3$z, subplots$subplot4$z)
+            z <- as.numeric(c(subplots$subplot1$z, subplots$subplot2$z, subplots$subplot3$z, subplots$subplot4$z))
             record_rates <- as.numeric(c(subplots$subplot1$rate, subplots$subplot2$rate, subplots$subplot3$rate, subplots$subplot4$rate))
             aggregation_types <- as.numeric(c(subplots$subplot1$aggregation, subplots$subplot2$aggregation, subplots$subplot3$aggregation, subplots$subplot4$aggregation))
             params <- as.numeric(c(subplots$subplot1$parameter, subplots$subplot2$parameter, subplots$subplot3$parameter, subplots$subplot4$parameter))
             
             # Make sure that each combination of locs[n], sub_locs[n], z[n], record_rates[n], aggregation_types[n], params[n] and lead_lags[n] is unique
-            combinations <- data.frame(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags)
+            combinations <- data.frame(locs, record_rates, aggregation_types, params, lead_lags)
+            if (length(sub_locs) > 0) {
+              combinations$sub_locs <- sub_locs
+            }
+            if (length(z) > 0) {
+              combinations$z <- z
+            }
             unique_combinations <- unique(combinations)
             
             if (nrow(unique_combinations) != nrow(combinations)) {
@@ -2671,7 +2678,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
             
             plot_output_timeseries_subplots$invoke(locs = locs,
                                                    sub_locs = if (length(sub_locs) == 0) NULL else sub_locs,
-                                                   z = z,
+                                                   z = if (length(z) == 0) NULL else z,
                                                    record_rates = record_rates,
                                                    aggregation_types = aggregation_types,
                                                    params = params, 
@@ -2753,14 +2760,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         } else { # Multiple traces, single plot
           locs <- as.numeric(c(traces$trace1$location_id, traces$trace2$location_id, traces$trace3$location_id, traces$trace4$location_id))
           sub_locs <- as.numeric(c(traces$trace1$sub_location_id, traces$trace2$sub_location_id, traces$trace3$sub_location_id, traces$trace4$sub_location_id))
-          z <- c(traces$trace1$z, traces$trace2$z, traces$trace3$z, traces$trace4$z)
+          z <- as.numeric(c(traces$trace1$z, traces$trace2$z, traces$trace3$z, traces$trace4$z))
           record_rates <- as.numeric(c(traces$trace1$rate, traces$trace2$rate, traces$trace3$rate, traces$trace4$rate))
           aggregation_types <- as.numeric(c(traces$trace1$aggregation, traces$trace2$aggregation, traces$trace3$aggregation, traces$trace4$aggregation))
           params <- as.numeric(c(traces$trace1$parameter, traces$trace2$parameter, traces$trace3$parameter, traces$trace4$parameter))
           lead_lags <- c(traces$trace1$lead_lag, traces$trace2$lead_lag, traces$trace3$lead_lag, traces$trace4$lead_lag)
           
           # Make sure that each combination of locs[n], sub_locs[n], z[n], record_rates[n], aggregation_types[n], params[n] and lead_lags[n] is unique
-          combinations <- data.frame(locs, sub_locs, z, record_rates, aggregation_types, params, lead_lags)
+          combinations <- data.frame(locs, record_rates, aggregation_types, params, lead_lags)
+          if (length(sub_locs) > 0) {
+            combinations$sub_locs <- sub_locs
+          }
+          if (length(z) > 0) {
+            combinations$z <- z
+          }
           unique_combinations <- unique(combinations)
           
           if (nrow(unique_combinations) != nrow(combinations)) {
@@ -2774,7 +2787,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           
           plot_output_timeseries_traces$invoke(locs = locs,
                                                sub_locs = if (length(sub_locs) == 0) NULL else sub_locs,
-                                               z = z,
+                                               z = if (length(z) == 0) NULL else z,
                                                record_rates = record_rates,
                                                aggregation_types = aggregation_types,
                                                params = params, 
@@ -2804,8 +2817,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         output$full_screen_ui <- renderUI({
           # Side-by-side buttons
           page_fluid(
-            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen")),
-            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"))
+            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), class = "btn btn-primary"),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), class = "btn btn-primary")
           )
         })
       } else {

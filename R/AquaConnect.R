@@ -9,7 +9,7 @@
 #' @details
 #' An attribute is added to the connection object to track if a transaction is active. This can be used by functions to determine if a transaction is already open, in which case functions can forgo opening a new transaction and instead use the existing one.
 #'
-#' @param name Database name.
+#' @param name Database name. By default searches the .Renviron file for parameter=value pair of form aquacacheName="name". If you want to connect to a different database, pass the name of that database here.
 #' @param host Database host address. By default searches the .Renviron file for parameter:value pair of form aquacacheHost="hostname".
 #' @param port Connection port. By default searches the .Renviron file for parameter=value pair of form aquacachePort="1234".
 #' @param username Username. By default searches the .Renviron file for parameter=value pair of form aquacacheUser="username". Refrain from using username with write privileges unless you absolutely know what you're doing.
@@ -21,7 +21,7 @@
 #' @export
 #'
 
-AquaConnect <- function(name = "aquacache", host = Sys.getenv("aquacacheHost"), port = Sys.getenv("aquacachePort"), username = Sys.getenv("aquacacheUser"), password = Sys.getenv("aquacachePass"), silent = FALSE){
+AquaConnect <- function(name = Sys.getenv("aquacacheName"), host = Sys.getenv("aquacacheHost"), port = Sys.getenv("aquacachePort"), username = Sys.getenv("aquacacheUser"), password = Sys.getenv("aquacachePass"), silent = FALSE){
 
   tryCatch({
     con <- DBI::dbConnect(drv = RPostgres::Postgres(),

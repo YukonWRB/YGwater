@@ -56,7 +56,7 @@ feedback <- function(id) {
       missing = if (nchar(input$missing) > 0) input$missing else NA,
       stringsAsFactors = FALSE
     )
-    DBI::dbWriteTable(session$userData$AquaCache, "feedback", info, append = TRUE)
+    DBI::dbAppendTable(session$userData$AquaCache, "feedback_temp", info)
     output$thanks <- renderText("Thank you for your feedback!")
     updateTextInput(session, "user", value = "")
     updateTextAreaInput(session, "bugs", value = "")

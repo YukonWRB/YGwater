@@ -1,4 +1,5 @@
-# Tests depend on DB connection and create snapshots so can't be run on CRAN or CI
+# Tests depend on DB connection and create snapshots
+skip_on_cran()
 
 old_warn <- getOption("warn")
 options(warn = -1)
@@ -6,109 +7,188 @@ on.exit(options(warn = old_warn), add = TRUE)
 
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file", {
   skip_on_ci()
-  skip_on_cran()
-  dir <- paste0(tempdir(), "/plots")
-  unlink(dir, recursive = TRUE)
-  dir.create(dir)
-  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", save_path = dir,  historic_range = "last", gridx = FALSE)
-  path <- list.files(dir, full.names = TRUE)
-  file.rename(path, paste0(dir, "/level1.png"))
-  expect_snapshot_file(paste0(dir, "/level1.png"))
-  unlink(dir, recursive = TRUE)
-})
-
-test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file FROM SQLITE", {
-  skip_on_os("linux") # For some reason this test fails on linux, but not on windows
-  dir <- paste0(tempdir(), "/plots")
-  unlink(dir, recursive = TRUE)
-  dir.create(dir)
-  con <- RSQLite::dbConnect(RSQLite::SQLite(), test_path("fixtures", "aquacache_test.sqlite"))
-  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
-  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2020", save_path = dir,  historic_range = "last", gridx = FALSE, con = con)
-  path <- list.files(dir, full.names = TRUE)
-  file.rename(path, paste0(dir, "/level1_sqlite.png"))
-  expect_snapshot_file(paste0(dir, "/level1_sqlite.png"))
-  unlink(dir, recursive = TRUE)
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test1.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
+  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", gridx = FALSE)
+  # Save the plot as png
+  suppressMessages(ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png))
+  
+  expect_snapshot_file(path)
 })
 
 test_that("french labels work with full year", {
   skip_on_ci()
-  skip_on_cran()
-  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", save_path = NULL,  historic_range = "last", lang = "fr", gridx = FALSE)
-  vdiffr::expect_doppelganger("french labels", plot)
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test2.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
+  plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", lang = "fr", gridx = FALSE)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when output to console", {
   skip_on_ci()
-  skip_on_cran()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test3.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", gridx = TRUE, gridy = TRUE))
-  vdiffr::expect_doppelganger("full yr numeric start/end", plot)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("continuous level plot is as expected for full year with character startDay and endDay", {
-  con <- RSQLite::dbConnect(RSQLite::SQLite(), test_path("fixtures", "aquacache_test.sqlite"))
-  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
-  plot <- ggplotOverlap("09EA004", "water level", startDay = "2023-01-01", endDay = "2023-12-31", years = "2020", save_path = NULL, historic_range = "last", gridx = FALSE, con = con)
-  vdiffr::expect_doppelganger("full yr char start/end", plot)
+  skip_on_ci()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test4.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
+  plot <- ggplotOverlap("09EA004", "water level", startDay = "2023-01-01", endDay = "2023-12-31", years = "2021", save_path = NULL, historic_range = "last", gridx = FALSE)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("continuous flow plot is as expected for full year with numeric startDay and endDay", {
-  con <- RSQLite::dbConnect(RSQLite::SQLite(), test_path("fixtures", "aquacache_test.sqlite"))
-  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
-  plot <- ggplotOverlap("09EA004", "flow", startDay = 1, endDay = 365, years = "2020", save_path = NULL, historic_range = "last", gridx = FALSE, con = con)
-  vdiffr::expect_doppelganger("full num start/end", plot)
+  skip_on_ci()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test5.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
+  plot <- ggplotOverlap("09EA004", "flow", startDay = 1, endDay = 365, years = "2020", save_path = NULL, historic_range = "last", gridx = FALSE)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("overlaping year plot throws no error when years is NULL", {
-  skip_on_ci()
-  skip_on_cran()
+  skip_on_ci() # The latest year is not in the test database
+  
   expect_no_error(suppressWarnings(ggplotOverlap("09AA-M1", "snow water equivalent", startDay = "2023-09-01", endDay = "2023-05-31", return_months = c(4,5), historic_range = "last", gridx = FALSE)))
 })
 
 test_that("SWE plot works when overlaping new year, dates as character", {
   skip_on_ci()
-  skip_on_cran()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test6.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- ggplotOverlap("09AA-M1", "snow water equivalent", startDay = "2023-09-01", endDay = "2023-05-31", years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", datum = FALSE, gridx = FALSE)
-  vdiffr::expect_doppelganger("swe overlaping new year chr dates", plot)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("depth plot works when overlaping new year, dates as numeric", {
   skip_on_ci()
-  skip_on_cran()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test7.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- ggplotOverlap("09AA-M1", "snow depth", startDay = 250, endDay = 150, years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", datum = FALSE, gridx = FALSE)
-  vdiffr::expect_doppelganger("depth overlaping new year num dates", plot)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("french labels work with overlaping years", {
   skip_on_ci()
-  skip_on_cran()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test8.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
   plot <- ggplotOverlap("09AA-M1", "snow depth", startDay = 250, endDay = 150, years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", lang = "fr", gridx = FALSE)
-  vdiffr::expect_doppelganger("french labels overlaping years", plot)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("continuous level plot is as expected for multiple years when output to console", {
-  con <- RSQLite::dbConnect(RSQLite::SQLite(), test_path("fixtures", "aquacache_test.sqlite"))
-  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
-  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2019,2020), historic_range = "last", gridx = FALSE, con = con))
-  vdiffr::expect_doppelganger("multi yr numeric start/end", plot)
+  skip_on_ci()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test9.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
+  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2021,2022), historic_range = "last", gridx = FALSE))
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 
 test_that("too big year error message happens", {
-  con <- RSQLite::dbConnect(RSQLite::SQLite(), test_path("fixtures", "aquacache_test.sqlite"))
   expect_error(suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = lubridate::year(Sys.Date()) + 2, gridx = FALSE)))
 })
 
 #Test for historical range and return periods able to flex.
 test_that("historic range can be < requested year", {
-  con <- RSQLite::dbConnect(RSQLite::SQLite(), test_path("fixtures", "aquacache_test.sqlite"))
-  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
-  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2019), historic_range = "all", gridx = FALSE, con = con))
-  vdiffr::expect_doppelganger("hist range > plotted year", plot)
+  skip_on_ci()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test10.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
+  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2022), historic_range = "all", gridx = FALSE))
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })
 #Test for historical range and return periods able to flex.
 test_that("returns can be for yrs > requested year", {
-  con <- RSQLite::dbConnect(RSQLite::SQLite(), test_path("fixtures", "aquacache_test.sqlite"))
-  on.exit(RSQLite::dbDisconnect(con), add = TRUE)
-  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2019), historic_range = "all", return_max_year = 2022, gridx = FALSE, con = con))
-  vdiffr::expect_doppelganger("returns > yr", plot)
+  skip_on_ci()
+  
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test11.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+  
+  plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2021), historic_range = "all", return_max_year = 2022, gridx = FALSE))
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
+  
+  expect_snapshot_file(path)
 })

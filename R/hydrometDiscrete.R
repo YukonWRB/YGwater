@@ -270,12 +270,13 @@ hydrometDiscrete <- function(location = NULL,
     } else {
       stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
     }
+    day_seq <- seq(min(stats_discrete$fake_date), max(stats_discrete$fake_date), by = "1 day")
+  } else {
+    day_seq <- seq(min(all_discrete$fake_date), max(all_discrete$fake_date), by = "1 day")
   }
     
     
     # x axis settings
-    
-    day_seq <- seq(min(stats_discrete$fake_date), max(stats_discrete$fake_date), by = "1 day")
     if  (length(day_seq) > 200) {
       date_breaks = "2 months"
       if (lang == "fr") {

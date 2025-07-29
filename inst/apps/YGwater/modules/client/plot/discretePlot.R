@@ -126,7 +126,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                      label = tooltip(
                        trigger = list(
                          "Facet on",
-                         bs_icon("info-circle-fill")
+                         bsicons::bs_icon("info-circle-fill")
                        ),
                        "Multiple plots are built where each plot represents a different location or parameter, with the other variable represented as different traces or points."
                      ),
@@ -136,7 +136,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                       label = tooltip(
                         trigger = list(
                           "Use log scale",
-                          bs_icon("info-circle-fill")
+                          bsicons::bs_icon("info-circle-fill")
                         ),
                         "Warning: negative values will be removed for log transformation.",
                       )),
@@ -144,7 +144,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                       label = tooltip(
                         trigger = list(
                           "Share X axis between subplots (dates are aligned)",
-                          bs_icon("info-circle-fill")
+                          bsicons::bs_icon("info-circle-fill")
                         ),
                         "This will align the x-axis across all subplots, making it easier to compare trends over time."
                       ),
@@ -153,7 +153,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                       label = tooltip(
                         trigger = list(
                           "Share Y axis between subplots (values are aligned)",
-                          bs_icon("info-circle-fill")
+                          bsicons::bs_icon("info-circle-fill")
                         ),
                         "This will align the y-axis across all subplots, making it easier to compare values across different locations or parameters."
                       ),
@@ -174,7 +174,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                       label = tooltip(
                         trigger = list(
                           "Use target datetime",
-                          bs_icon("info-circle-fill")
+                          bsicons::bs_icon("info-circle-fill")
                         ),
                         "Some measurements have a 'fake' datetime to line up repeated measurements with a certain date. An example are snow survey measurements: these can be taken withing a few days of the 1st of the month but visualize nicely when lined up with the 1st."
                       )
@@ -186,7 +186,8 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                        style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
           input_task_button(ns("make_plot"),
                             "Create Plot",
-                            style = "display: block; width: 100%;") # Ensure block display and full width
+                            style = "display: block; width: 100%;", # Ensure block display and full width
+                            class = "btn btn-primary")
         )
       ) # End of tagList
     })  %>% # End of renderUI for sidebar
@@ -197,8 +198,8 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
         page_fluid(
-          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;")),
-          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;"))
+          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;", class = "btn btn-primary")),
+          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;", class = "btn btn-primary"))
         )
       ) # End of tagList
     }) %>% # End renderUI

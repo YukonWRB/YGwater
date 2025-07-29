@@ -170,7 +170,7 @@ mapLocs <- function(id, language) {
               step = 1,
               sep = ""
             ),
-            actionButton(ns("reset"), tr("reset", language$language))
+            actionButton(ns("reset"), tr("reset", language$language), class = "btn btn-primary")
           ) # End sidebar tagList
         ),
         leaflet::leafletOutput(ns("map"), height = '80vh'),

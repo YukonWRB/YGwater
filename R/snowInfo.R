@@ -34,9 +34,9 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   # quiet <- FALSE
   # con <- NULL
   
-  rlang::check_installed("trend", reason = "necessary to calculate trends.")
+  rlang::check_installed("trend", reason = " to calculate trends.")
   if (plots) {
-    rlang::check_installed("gridExtra", reason = "necessary to create plots.")
+    rlang::check_installed("gridExtra", reason = " to create plots.")
   }
   
   if (!is.null(save_path)) {

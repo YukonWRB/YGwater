@@ -6,18 +6,18 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-
+  
   # Initial setup #############################################################
-
-  # Heatbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
+  
+  # Heartbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
   output$keep_alive <- renderText({
     invalidateLater(5000, session)
     Sys.time()
   })
   
-  # Allow reconnection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
+  # Allow re connection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
   session$allowReconnect(TRUE)
-
+  
   
   # Hide all 'admin' side tabs if they were generated
   
@@ -27,7 +27,7 @@ app_server <- function(input, output, session) {
       nav_show(id = "navbar", target = "home")
       nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
       nav_show(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
-      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
+      if (!config$public & config$g_drive) { # If not public AND g drive access is possible. This will be removed once the FOD reports are integrated in the DB.
         nav_show(id = "navbar", target = "FOD")
       }
       nav_show(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
@@ -39,7 +39,7 @@ app_server <- function(input, output, session) {
       nav_hide(id = "navbar", target = "home")
       nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
       nav_hide(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
-      if (!config$public & config$g_drive) { # If not public AND g drive access is possible
+      if (!config$public & config$g_drive) { # If not public AND g drive access is possible This will be removed once the FOD reports are integrated in the DB.
         nav_hide(id = "navbar", target = "FOD")
       }
       nav_hide(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
@@ -75,7 +75,7 @@ app_server <- function(input, output, session) {
     }
   }
   
-  if (!config$public) {
+  if (!config$public) { # Immediately run the showAdmin function to hide the admin tabs, they're only shown upon login
     showAdmin(show = FALSE)
   }
   
@@ -170,7 +170,6 @@ app_server <- function(input, output, session) {
   session$userData$config <- config
   
   # Initial database connections without edit privileges
-  
   session$userData$AquaCache <- AquaConnect(name = config$dbName,
                                             host = config$dbHost,
                                             port = config$dbPort,
@@ -179,7 +178,7 @@ app_server <- function(input, output, session) {
                                             silent = TRUE)
   
   print("Connected to AquaCache")
-
+  
   # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE) # This does not work with Shiny Server open source
   session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues from Shiny Server
   
@@ -203,13 +202,11 @@ app_server <- function(input, output, session) {
   
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
-    # if (!isRestoring()) {
     shinyjs::runjs("
       var language =  window.navigator.userLanguage || window.navigator.language;
       console.log('Detected browser language: ' + language);
       Shiny.setInputValue('userLang', language, {priority: 'event'});
                      ")
-    # }
   })
   
   # Set initial language based on browser language
@@ -264,17 +261,143 @@ app_server <- function(input, output, session) {
       output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
       
       session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
+      
+      # Render the footer based on the language
+      output$footer_ui <- renderUI({
+        div(
+          span("Was this page helpful?",
+               # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
+               actionButton(
+                 "thumbs_up",
+                 label = bsicons::bs_icon("hand-thumbs-up", 
+                                          size = "2em", 
+                                          fill = "#244C5A"),
+                 class = "btn btn-link",
+                 width = "50px"),
+               actionButton(
+                 "thumbs_down",
+                 label = bsicons::bs_icon("hand-thumbs-down", 
+                                          size = "2em", 
+                                          fill = "#244C5A"),
+                 class = "btn btn-link",
+                 width = "50px")
+          ),
+          # Set background color of div
+          style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
+          # Make a placeholder for feedback text and submit button
+          uiOutput("feedback_ui")
+        )
+      }) 
     }
+  })  # No need for a bindEvent as this rendering is trigered by a language change
+  
+  # ObserveEvents for thumbs up/down buttons
+  # add a textAreaInput to allow the user to write something, and a 'submit feedback' button
+  feedback <- reactiveValues(type = NULL)
+  
+  observeEvent(input$thumbs_up, {
+    if (!is.null(feedback$type)) {
+      if (feedback$type) { # Means we're clicking on it again, needs to close
+        shinyjs::hide("feedback_text")
+        shinyjs::hide("submit_feedback")
+        feedback$type <- NULL
+      } else { # Means we're clicking on thumbs up after thumbs down, so update the placeholder text
+        output$feedback_ui <- renderUI({
+          div(
+            textAreaInput("feedback_text",
+                          label = NULL,
+                          placeholder = "Optional: tell us what you liked",
+                          rows = 3,
+                          width = "100%"),
+            actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
+          )
+        })
+        feedback$type <- TRUE
+      }
+    } else {
+      output$feedback_ui <- renderUI({
+        div(
+          textAreaInput("feedback_text",
+                        label = NULL,
+                        placeholder = "Optional: tell us what you liked",
+                        rows = 3,
+                        width = "100%"),
+          actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
+        )
+      })
+      feedback$type <- TRUE
+    }
+    # scroll down to the feedback text area
+    session$onFlushed(function() {
+      runjs("document.getElementById('feedback_text')
+              .scrollIntoView({behavior:'smooth', block:'center'});")
+    }, once = TRUE)
   })
   
-  # Log in/out for edits ##########################################
-  log_attempts <- reactiveVal(0) # counter for login attempts
+  observeEvent(input$thumbs_down, {
+    if (!is.null(feedback$type)) {
+      if (!feedback$type) { # Means we're clicking on it again, needs to close
+        shinyjs::hide("feedback_text")
+        shinyjs::hide("submit_feedback")
+        feedback$type <- NULL
+      } else { # Means we're clicking on thumbs up after thumbs down, so update the placeholder text
+        output$feedback_ui <- renderUI({
+          div(
+            textAreaInput("feedback_text",
+                          label = NULL,
+                          placeholder = "Optional: tell us how we can improve",
+                          rows = 3,
+                          width = "100%"),
+            actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
+          )
+        })
+        feedback$type <- FALSE
+      }
+    } else {
+      output$feedback_ui <- renderUI({
+        div(
+          textAreaInput("feedback_text",
+                        label = NULL,
+                        placeholder = "Optional: tell us how we can improve",
+                        rows = 3,
+                        width = "100%"),
+          actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
+        )
+      })
+      feedback$type <- FALSE
+    }
+    # scroll down to the feedback text area
+    session$onFlushed(function() {
+      runjs("document.getElementById('feedback_text')
+              .scrollIntoView({behavior:'smooth', block:'center'});")
+    }, once = TRUE)
+  })
+  
+  # Handle feedback submission
+  observeEvent(input$submit_feedback, {
+    # Save feedback to the database
+    
+    df <- data.frame(sentiment = feedback$type,
+                     comment = input$feedback_text,
+                     page = input$navbar,
+                     app_state = jsonlite::toJSON(reactiveValuesToList(input), auto_unbox = TRUE))
+    
+    DBI::dbAppendTable(session$userData$AquaCache, "feedback", df)
+    
+    # Reset feedback
+    shinyjs::hide("feedback_text")
+    shinyjs::hide("submit_feedback")
+    feedback$type <- NULL
+  })
+  
+  # Log in/out ##########################################
+  log_attempts <- reactiveVal(0) # counter for login attempts - prevent brute force attacks
   session$userData$user_logged_in <- FALSE # value to track login status
   
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
   observeEvent(input$loginBtn, {
-    req(languageSelection$language) # Ensure language is set before proceeding
+    req(languageSelection$language) # Ensure language is set before proceeding (might not be yet if the app is still loading)
     if (log_attempts() > 5) {
       showModal(modalDialog(
         title = tr("login_fail", languageSelection$language),
@@ -285,6 +408,7 @@ app_server <- function(input, output, session) {
       return()
     } else {
       showModal(modalDialog(
+        # html below allows the user to press 'Enter' to submit the login form
         tags$script(HTML('
 $(document).keyup(function(event) {
   if ($("#password").is(":focus") && (event.keyCode == 13)) {
@@ -349,7 +473,7 @@ $(document).keyup(function(event) {
         shinyjs::show("logoutBtn")
         
         # Create the new element for the 'admin' mode
-        # Other tabs are created if/when the user clicks on the 'admin' tab
+        # Other tabs are created if/when the user clicks on the 'admin' actionButton
         nav_insert("navbar",
                    nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
                    target = "home", position = "before")

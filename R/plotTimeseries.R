@@ -779,7 +779,8 @@ plotTimeseries <- function(location,
       plotly::layout(
         yaxis = list(showticklabels = FALSE, showgrid = FALSE, zeroline = FALSE),
         xaxis = list(showgrid = FALSE),
-        annotations = annotation_list
+        annotations = annotation_list,
+        font = list(family = "DejaVu Sans")
       )
     
     
@@ -795,11 +796,11 @@ plotTimeseries <- function(location,
   
   plot <- plot %>%
     plotly::layout(
-      title = if (title) list(text = stn_name, 
-                              x = 0.05, 
+      title = if (title) list(text = stn_name,
+                              x = 0.05,
                               xref = "container",
                               font = list(size = axis_scale * 18))
-      else NULL, 
+      else NULL,
       xaxis = list(title = list(standoff = 0), 
                    showgrid = gridx, 
                    showline = TRUE, 
@@ -829,7 +830,8 @@ plotTimeseries <- function(location,
                     l = 50 * axis_scale), 
       hovermode = if (hover) "x unified" else ("none"),
       legend = list(font = list(size = legend_scale * 12),
-                    orientation = legend_position)
+                    orientation = legend_position),
+      font = list(family = "DejaVu Sans")
     ) %>%
     plotly::config(locale = lang)
   
