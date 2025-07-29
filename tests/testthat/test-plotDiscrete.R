@@ -10,11 +10,10 @@ skip_on_cran()
 # })
 
 test_that("two location, two parameter facet on parameter", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test1.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test1.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotDiscrete(start = "2020-01-01", end = "2023-07-01", locations = c(46, 44), parameters = c("snow water equivalent", "snow depth"), dbSource = "AC", facet_on = "params")
@@ -24,11 +23,10 @@ test_that("two location, two parameter facet on parameter", {
 })
 
 test_that("two location, two parameter facet on location", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test2.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test2.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotDiscrete(start = "2020-01-01", end = "2023-07-01", locations = c(46, 44), parameters = c("snow water equivalent", "snow depth"), dbSource = "AC", facet_on = "locs")
@@ -38,11 +36,10 @@ test_that("two location, two parameter facet on location", {
 })
 
 test_that("log scale", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test3.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test3.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotDiscrete(start = "2020-01-01", end = "2023-07-01", locations = c(46), parameters = c("snow water equivalent", "snow depth"), dbSource = "AC", facet_on = "locs", log = TRUE)
@@ -52,11 +49,10 @@ test_that("log scale", {
 })
 
 test_that("scale arguments", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test4.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test4.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotDiscrete(start = "2020-01-01", end = "2023-07-01", locations = c(46), parameters = c("snow water equivalent", "snow depth"), dbSource = "AC", facet_on = "locs", point_scale = 2, axis_scale = 2, legend_scale = 2)
@@ -66,11 +62,10 @@ test_that("scale arguments", {
 })
 
 test_that("legend horizontal", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test5.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test5.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotDiscrete(start = "2020-01-01", end = "2023-07-01", locations = c(46), parameters = c("snow water equivalent", "snow depth"), dbSource = "AC", facet_on = "locs", legend_position = "h")
@@ -80,11 +75,10 @@ test_that("legend horizontal", {
 })
 
 test_that("xy grids", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test6.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test6.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotDiscrete(start = "2020-01-01", end = "2023-07-01", locations = c(46), parameters = c("snow water equivalent", "snow depth"), dbSource = "AC", facet_on = "locs", gridy = TRUE, gridx = TRUE)
@@ -94,11 +88,10 @@ test_that("xy grids", {
 })
 
 test_that("french text", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test7.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test7.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotDiscrete(start = "2020-01-01", end = "2023-07-01", locations = c(46), parameters = c("snow water equivalent", "snow depth"), dbSource = "AC", facet_on = "locs", lang = "fr")
