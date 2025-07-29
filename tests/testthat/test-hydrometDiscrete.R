@@ -1,5 +1,6 @@
-# Tests depend on snapshots so can't be run on CRAN or CI
+# Tests depend on snapshots so can't be run on CRAN
 skip_on_cran()
+skip_on_ci()
 
 #NOTE: as of June 2023 hydrometDiscrete does not accept start/end dates other than 1 and 365. This explained in the help file.
 

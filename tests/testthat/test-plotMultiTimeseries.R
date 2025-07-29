@@ -5,6 +5,8 @@ skip_on_cran()
 # Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 
 test_that("plotMultiTimeseries with all defaults is as expected", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)

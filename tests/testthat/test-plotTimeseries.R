@@ -2,6 +2,7 @@
 
 test_that("timeseries plot is as expected for one year with no historic range or slider", {
   skip_on_cran()
+  skip_on_ci()
   
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
@@ -18,6 +19,7 @@ test_that("timeseries plot is as expected for one year with no historic range or
 
 test_that("timeseries plot is as expected for one year with no historic range", {
   skip_on_cran()
+  skip_on_ci()
   
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
@@ -34,6 +36,7 @@ test_that("timeseries plot is as expected for one year with no historic range", 
 
 test_that("timeseries plot is as expected for one year with historic range", {
   skip_on_cran()
+  skip_on_ci()
   
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
@@ -50,6 +53,7 @@ test_that("timeseries plot is as expected for one year with historic range", {
 
 test_that("French timeseries plot is as expected for one year with historic range and slider", {
   skip_on_cran()
+  skip_on_ci()
   
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
@@ -66,6 +70,7 @@ test_that("French timeseries plot is as expected for one year with historic rang
 
 test_that("French timeseries plot is as expected for one year with historic range and no slider", {
   skip_on_cran()
+  skip_on_ci()
   
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
@@ -82,6 +87,7 @@ test_that("French timeseries plot is as expected for one year with historic rang
 
 test_that("grades, approvals, qualifiers are displayed", {
   skip_on_cran()
+  skip_on_ci()
   
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
@@ -98,6 +104,7 @@ test_that("grades, approvals, qualifiers are displayed", {
 
 test_that("one of grades, approvals, qualifiers is displayed", {
   skip_on_cran()
+  skip_on_ci()
   
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)

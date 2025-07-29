@@ -2,6 +2,8 @@
 skip_on_cran()
 
 test_that("plotOverlap with all defaults", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -16,6 +18,8 @@ test_that("plotOverlap with all defaults", {
 })
 
 test_that("plotOverlap with minimal elements", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -30,6 +34,8 @@ test_that("plotOverlap with minimal elements", {
 })
 
 test_that("plotOverlap with multiple years and 'last' historic range", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -44,6 +50,8 @@ test_that("plotOverlap with multiple years and 'last' historic range", {
 })
 
 test_that("plotOverlap with multiple years and 'last' historic range", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)

@@ -6,6 +6,8 @@ options(warn = -1)
 on.exit(options(warn = old_warn), add = TRUE)
 
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -21,6 +23,8 @@ test_that("continuous level plot is as expected for full year with numeric start
 })
 
 test_that("french labels work with full year", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -35,6 +39,8 @@ test_that("french labels work with full year", {
 })
 
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when output to console", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -49,6 +55,8 @@ test_that("continuous level plot is as expected for full year with numeric start
 })
 
 test_that("continuous level plot is as expected for full year with character startDay and endDay", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -63,6 +71,8 @@ test_that("continuous level plot is as expected for full year with character sta
 })
 
 test_that("continuous flow plot is as expected for full year with numeric startDay and endDay", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -81,6 +91,8 @@ test_that("overlaping year plot throws no error when years is NULL", {
 })
 
 test_that("SWE plot works when overlaping new year, dates as character", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -95,6 +107,8 @@ test_that("SWE plot works when overlaping new year, dates as character", {
 })
 
 test_that("depth plot works when overlaping new year, dates as numeric", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -109,6 +123,8 @@ test_that("depth plot works when overlaping new year, dates as numeric", {
 })
 
 test_that("french labels work with overlaping years", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -123,6 +139,8 @@ test_that("french labels work with overlaping years", {
 })
 
 test_that("continuous level plot is as expected for multiple years when output to console", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -142,6 +160,8 @@ test_that("too big year error message happens", {
 
 #Test for historical range and return periods able to flex.
 test_that("historic range can be < requested year", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -156,6 +176,8 @@ test_that("historic range can be < requested year", {
 })
 #Test for historical range and return periods able to flex.
 test_that("returns can be for yrs > requested year", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)

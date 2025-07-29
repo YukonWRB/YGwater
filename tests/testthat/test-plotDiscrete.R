@@ -10,6 +10,8 @@ skip_on_cran()
 # })
 
 test_that("two location, two parameter facet on parameter", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -24,6 +26,8 @@ test_that("two location, two parameter facet on parameter", {
 })
 
 test_that("two location, two parameter facet on location", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -38,6 +42,8 @@ test_that("two location, two parameter facet on location", {
 })
 
 test_that("log scale", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -52,6 +58,8 @@ test_that("log scale", {
 })
 
 test_that("scale arguments", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -66,6 +74,8 @@ test_that("scale arguments", {
 })
 
 test_that("legend horizontal", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -80,6 +90,8 @@ test_that("legend horizontal", {
 })
 
 test_that("xy grids", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -94,6 +106,8 @@ test_that("xy grids", {
 })
 
 test_that("french text", {
+  skip_on_ci()
+  
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
