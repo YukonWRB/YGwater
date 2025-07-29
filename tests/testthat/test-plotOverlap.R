@@ -2,11 +2,10 @@
 skip_on_cran()
 
 test_that("plotOverlap with all defaults", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test1.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test1.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotOverlap(location = "09EA004", parameter = "water level", years = 2020)
@@ -16,11 +15,10 @@ test_that("plotOverlap with all defaults", {
 })
 
 test_that("plotOverlap with minimal elements", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test2.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test2.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotOverlap(location = "09EA004", parameter = "water level", years = 2020, hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE)
@@ -30,11 +28,10 @@ test_that("plotOverlap with minimal elements", {
 })
 
 test_that("plotOverlap with multiple years and 'last' historic range", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test3.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test3.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotOverlap(location = "09AB004", parameter = "water level", years = c(2022,2023), hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE, historic_range = "last")
@@ -44,11 +41,10 @@ test_that("plotOverlap with multiple years and 'last' historic range", {
 })
 
 test_that("plotOverlap with multiple years and 'last' historic range", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test4.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test4.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotOverlap(location = "09AB004", parameter = "water level", years = c(2022,2023), hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE, historic_range = "all")
