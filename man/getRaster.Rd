@@ -5,25 +5,24 @@
 \title{Retrieve raster files from the database}
 \usage{
 getRaster(
-  conn,
-  name = c("spatial", "rasters"),
-  rast = "rast",
-  bands = 1,
-  boundary = NULL,
   clauses = NULL,
-  progress = TRUE
+  boundary = NULL,
+  tbl_name = c("spatial", "rasters"),
+  col_name = "rast",
+  bands = 1,
+  con = NULL
 )
 }
 \arguments{
-\item{bands}{The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.}
+\item{clauses}{Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1'. If NULL, all raster data is returned.}
 
 \item{boundary}{Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector c(top, bottom, right, left) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.}
 
-\item{clauses}{Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1. If NULL, all raster data is returned.}
-
-\item{tbl_name}{The name of the schema and table containing the raster data. Default is "spatial.rasters".}
+\item{tbl_name}{The name of the schema and table containing the raster data. Default is c("spatial", "rasters").}
 
 \item{col_name}{The name of the column containing the raster data. Default is "rast".}
+
+\item{bands}{The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.}
 
 \item{con}{A connection to the target database. If NULL, a new connection is created using \code{\link[=AquaConnect]{AquaConnect()}} and automatically closed when the function exits.}
 }
@@ -32,6 +31,4 @@ A terra::rast object containing the raster data.
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
-Placeholder function, not yet complete.
 }
