@@ -66,7 +66,6 @@ Suggests:
     DT,
     exifr,
     flextable,
-    fuzzyjoin,
     future,
     imager,
     knitr,
