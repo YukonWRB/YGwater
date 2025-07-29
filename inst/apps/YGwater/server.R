@@ -95,6 +95,7 @@ app_server <- function(input, output, session) {
     ui_loaded$continuousPlot <- FALSE
     ui_loaded$mixPlot <- FALSE
     ui_loaded$mapParamValues <- FALSE
+    ui_loaded$mapRasterValues <- FALSE
     ui_loaded$mapMonitoringLocations <- FALSE
     ui_loaded$FOD <- FALSE
     ui_loaded$imgTableView <- FALSE
@@ -236,6 +237,7 @@ app_server <- function(input, output, session) {
       output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
       output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
       output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
+      output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
       output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
       
       output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
@@ -566,6 +568,14 @@ $(document).keyup(function(event) {
         output$mapParams_ui <- renderUI(mapParamsUI("mapParams"))
         ui_loaded$mapParamValues <- TRUE
         mapParams("mapParams", language = languageSelection) # Call the server
+      }
+    }
+
+      if (input$navbar == "rasterValues") {
+      if (!ui_loaded$mapRasterValues) {
+        output$mapRaster_ui <- renderUI(mapRasterUI("mapRaster"))
+        ui_loaded$mapRasterValues <- TRUE
+        mapRaster("mapRaster", language = languageSelection) # Call the server
       }
     }
     

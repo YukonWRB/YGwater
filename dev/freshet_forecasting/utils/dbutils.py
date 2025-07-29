@@ -4,7 +4,7 @@ import pandas as pd
 
 TABLE_NAMES = ['freeze_up', 'snow_free', 'table_stations', 'dc_constants']
 
-def get_drought_codes_table(table_name, db_path='data/drought_codes.sqlite'):
+def get_drought_codes_table(table_name, db_path='.data/drought_codes.sqlite'):
 
     if table_name not in TABLE_NAMES:
         raise ValueError(f"Table name {table_name} not found in database")

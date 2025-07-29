@@ -170,7 +170,7 @@ addDiscData <- function(id) {
     updateSelectizeInput(session, "location",
                       choices = stats::setNames(locations$location_id, locations$name))
     updateSelectizeInput(session, "sublocation", 
-                         choices = stats:::setNames(sub_locations$sub_location_id, sub_locations$sub_location_name))
+                         choices = stats::setNames(sub_locations$sub_location_id, sub_locations$sub_location_name))
     
     
     observeEvent(input$location, {

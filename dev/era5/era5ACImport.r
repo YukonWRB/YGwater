@@ -4,6 +4,7 @@ library(ecmwfr)
 
 wf_set_key(key = "5815cfa9-2642-46bd-9a7f-9ac2099b32f4")
 
+
 data_dir = "dev/era5/.data/rraw"
 
 downloadERA5 <- function(
@@ -21,6 +22,10 @@ downloadERA5 <- function(
         stop("Frequency must be a factor of 24 (e.g. 24 will download 00:00, 6 will download 00:00, 06:00, 12:00, 18:00)")
     }
 
+    # Convert start_date to POSIXct if it's not already
+    if (!inherits(start_date, "POSIXct")) {
+        start_date <- as.POSIXct(start_date, tz = "UTC")
+    }
 
     # default end date as current date minus latency days
     if (is.na(end_date)) {
@@ -36,20 +41,22 @@ downloadERA5 <- function(
         #stop("end_date must be at least 5 days prior to today's date.")
     }
 
+    # Ensure start_date is before end_date
+    if (as.POSIXct(start_date, tz = "UTC") > as.POSIXct(end_date, tz = "UTC")) {
+        stop("start_date must be before end_date.")
+    }
 
-    if (is.na(num_days) & is.na(start_date)) {
+    if (is.na(num_days) && is.na(start_date)) {
         stop("Either num_days or start_date must be provided.")
-    } else if (!is.na(num_days) & is.na(start_date)) {
+    } else if (!is.na(num_days) && is.na(start_date)) {
         start_date = end_date - as.difftime(num_days, units = "days")
-
+    }
 
     datetime_array <- seq(
         from = as.POSIXct(start_date, tz = "UTC"),
         to = as.POSIXct(end_date, tz = "UTC"),
         by = paste(frequency, "hours")
     )
-
-
 
     files = list()
     
@@ -59,7 +66,7 @@ downloadERA5 <- function(
         month <- sprintf("%02d", as.numeric(format(datetime, "%m")))
         day <- sprintf("%02d", as.numeric(format(datetime, "%d")))
         hour <- sprintf("%02d", as.numeric(format(datetime, "%H")))
-        name <- paste0("ERA5_swe_", year, month, day, hour, ".nc")
+        name <- paste0("ERA5_swe_", year, month, day, hour)
         # Create the request for the ERA5 data
 
         request <- list(
@@ -78,17 +85,24 @@ downloadERA5 <- function(
         # Download the data using the Copernicus API
         # Note: You need to have the Copernicus API credentials set up in your .Renviron file
         # or use the `wfr::set_key()` function to set them in your R session
-        wf_request(
+        zip_file <- file.path(data_dir, paste0(name, ".zip"))
+        
+        if (!file.exists(zip_file)) {
+            wf_request(
             request = request,  # the request
             transfer = TRUE,
             path = data_dir,
-            user = "everett.snieder@gmail.com"
-        )
+            user = "everett.snieder@gmail.com",
+            verbose = TRUE
+            )
+        } else {
+            message(paste("File already exists, skipping download:", zip_file))
+        }
 
-        # Construct the full path for the zip file
-        zip_file <- file.path(data_dir, name)
+        ## Construct the full path for the zip file
         unzip(zip_file, exdir = data_dir)
-        file.rename(paste0(data_dir, "/data_0.nc"), paste(data_dir, "/", basename(zip_file), ".nc", sep = ""))
+        base_filename <- sub("\\.zip$", "", zip_file)
+        file.rename(paste0(data_dir, "/data_0.nc"), paste(data_dir, "/", basename(base_filename), ".nc", sep = ""))
         
         # Delete the zip file after processing
         file.remove(zip_file)
@@ -96,11 +110,10 @@ downloadERA5 <- function(
 
     } # end datetime iteration
 }
-}
-    
 
-start_date <- "2025-04-01 00:00"
-download_era5(data_dir = data_dir, start_date, frequency = 6, latency = 5)
+
+start_date <- "2025-05-15 00:00"
+downloadERA5(data_dir = data_dir, start_date, frequency = 24, latency = 5)
 
 
 # Unzip all files in "dev/era5/.data/rraw" to "dev/era5/.data/runzip"
@@ -118,6 +131,7 @@ zip_files <- list.files(raw_dir, pattern = "\\.zip$", full.names = TRUE)
 # Unzip each file into the unzip directory
 for (zip_file in zip_files) {
     unzip(zip_file, exdir = unzip_dir)
+    zip_file <- sub("\\.zip$", "", zip_file)
     file.rename(paste0(unzip_dir, "/data_0.nc"), paste(unzip_dir, "/", basename(zip_file), ".nc", sep = ""))
 }
 

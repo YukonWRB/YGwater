@@ -432,6 +432,12 @@ mapParams <- function(id, language) {
       
       if (input$mapType == "abs") {
         abs_vals <- abs(mapping_data$value)
+
+        if (length(abs_vals) == 0) {
+          leaflet::leafletProxy("map", session) %>%leaflet::clearMarkers()
+          return()
+        }
+        
         abs_range <- range(abs_vals, na.rm = TRUE)
         abs_bins <- seq(abs_range[1], abs_range[2], length.out = length(map_params$colors) + 1)
         
