@@ -5,11 +5,10 @@ skip_on_cran()
 # Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 
 test_that("plotMultiTimeseries with all defaults is as expected", {
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test1.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test1.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <-  plotMultiTimeseries(locations = c("09EA004", "09EA004"), parameters = c(1165, 1150), start_date = "2021-01-01", end_date = "2022-01-01")
