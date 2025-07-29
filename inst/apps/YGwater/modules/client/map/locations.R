@@ -180,6 +180,7 @@ mapLocs <- function(id, language) {
     
     # Reset all filters when reset button pressed ##################################
     observeEvent(input$reset, {
+      req(moduleData)
       updateSelectizeInput(session, 
                            "type",
                            choices = stats::setNames(c("all", "discrete", "continuous"),
