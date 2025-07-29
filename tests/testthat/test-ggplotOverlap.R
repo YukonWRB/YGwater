@@ -153,7 +153,7 @@ test_that("returns can be for yrs > requested year", {
   on.exit(unlink(path), add = TRUE)
   
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2021), historic_range = "all", return_max_year = 2022, gridx = FALSE))
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
