@@ -763,11 +763,11 @@ plotOverlap <- function(location,
   
   plot <- plot %>%
     plotly::layout(
-      title = if (title) list(text = stn_name, 
-                              x = 0.05, 
+      title = if (title) list(text = stn_name,
+                              x = 0.05,
                               xref = "container",
                               font = list(size = axis_scale * 18))
-      else NULL, 
+      else NULL,
       xaxis = list(title = list(standoff = 0), 
                    showgrid = gridx, 
                    showline = TRUE, 
@@ -796,7 +796,8 @@ plotOverlap <- function(location,
                     t = 40 * axis_scale,
                     l = 50 * axis_scale), 
       hovermode = if (hover) "x unified" else ("none"),
-      legend = list(font = list(size = legend_scale * 12))
+      legend = list(font = list(size = legend_scale * 12)),
+      font = list(family = "DejaVu Sans")
     ) %>%
     plotly::config(locale = lang)
   

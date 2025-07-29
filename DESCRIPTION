@@ -91,6 +91,7 @@ Suggests:
     tibble,
     vdiffr,
     weathercan,
+    ragg,
     withr,
     zipR
 Remotes:
