@@ -42,3 +42,11 @@ if (Sys.getenv("CI") == "true") {
 }
 
 set.seed(123) # Set seed for reproducibility in tests
+
+# Ensure ragg is available for deterministic PNG output
+if (!requireNamespace("ragg", quietly = TRUE)) {
+  install.packages("ragg")
+}
+
+# Use a stable base font across platforms
+ggplot2::theme_set(ggplot2::theme_gray(base_family = "DejaVu Sans"))

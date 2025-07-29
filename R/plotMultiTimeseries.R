@@ -902,8 +902,8 @@ plotMultiTimeseries <- function(type = 'traces',
     
     # Add other layout parameters
     layout_params <- list(
-      title = list(text = title, 
-                   x = 0.05, 
+      title = list(text = title,
+                   x = 0.05,
                    xref = "container",
                    font = list(size = 18 * axis_scale)),
       margin = list(
@@ -923,7 +923,8 @@ plotMultiTimeseries <- function(type = 'traces',
       ),
       hovermode = "closest",
       legend = list(font = list(size = legend_scale * 12),
-                    orientation = legend_position)
+                    orientation = legend_position),
+      font = list(family = "DejaVu Sans")
     )
     
     # Combine axis layouts with other layout settings
@@ -1029,7 +1030,8 @@ plotMultiTimeseries <- function(type = 'traces',
                         l = 50 * axis_scale), 
           hovermode = "x unified",
           legend = list(font = list(size = legend_scale * 12),
-                        orientation = legend_position)
+                        orientation = legend_position),
+          font = list(family = "DejaVu Sans")
         ) %>%
         plotly::config(locale = lang)
       
@@ -1055,14 +1057,15 @@ plotMultiTimeseries <- function(type = 'traces',
         font = list(size = 16 * axis_scale)
       )
     }
-    plot <- plotly::subplot(subplots, 
-                            nrows = nrows, 
-                            shareX = FALSE, 
-                            shareY = FALSE, 
-                            titleX = FALSE, 
-                            titleY = TRUE, 
+    plot <- plotly::subplot(subplots,
+                            nrows = nrows,
+                            shareX = FALSE,
+                            shareY = FALSE,
+                            titleX = FALSE,
+                            titleY = TRUE,
                             margin = c(0, (0.07 * axis_scale), 0, (0.07 * axis_scale))) %>%
-      plotly::layout(annotations = subtitles)
+      plotly::layout(annotations = subtitles,
+                     font = list(family = "DejaVu Sans"))
     
     # Link axes if desired
     if (shareX || shareY) {

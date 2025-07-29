@@ -14,7 +14,7 @@ test_that("continuous level plot is as expected for full year with numeric start
   
   plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", gridx = FALSE)
   # Save the plot as png
-  suppressMessages(ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300))
+  suppressMessages(ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png))
   
   expect_snapshot_file(path)
 })
@@ -27,7 +27,7 @@ test_that("french labels work with full year", {
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", lang = "fr", gridx = FALSE)
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
@@ -40,7 +40,7 @@ test_that("continuous level plot is as expected for full year with numeric start
   on.exit(unlink(path), add = TRUE)
   
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", gridx = TRUE, gridy = TRUE))
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
@@ -53,7 +53,7 @@ test_that("continuous level plot is as expected for full year with character sta
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09EA004", "water level", startDay = "2023-01-01", endDay = "2023-12-31", years = "2021", save_path = NULL, historic_range = "last", gridx = FALSE)
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
@@ -66,7 +66,7 @@ test_that("continuous flow plot is as expected for full year with numeric startD
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09EA004", "flow", startDay = 1, endDay = 365, years = "2020", save_path = NULL, historic_range = "last", gridx = FALSE)
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
@@ -83,7 +83,7 @@ test_that("SWE plot works when overlaping new year, dates as character", {
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09AA-M1", "snow water equivalent", startDay = "2023-09-01", endDay = "2023-05-31", years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", datum = FALSE, gridx = FALSE)
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
@@ -96,7 +96,7 @@ test_that("depth plot works when overlaping new year, dates as numeric", {
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09AA-M1", "snow depth", startDay = 250, endDay = 150, years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", datum = FALSE, gridx = FALSE)
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
@@ -109,7 +109,7 @@ test_that("french labels work with overlaping years", {
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09AA-M1", "snow depth", startDay = 250, endDay = 150, years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", lang = "fr", gridx = FALSE)
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
@@ -122,7 +122,7 @@ test_that("continuous level plot is as expected for multiple years when output t
   on.exit(unlink(path), add = TRUE)
   
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2021,2022), historic_range = "last", gridx = FALSE))
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
@@ -140,7 +140,7 @@ test_that("historic range can be < requested year", {
   on.exit(unlink(path), add = TRUE)
   
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2022), historic_range = "all", gridx = FALSE))
-  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300)
+  ggplot2::ggsave(filename = path, plot = plot, width = 10, height = 6, dpi = 300, device = ragg::agg_png)
   
   expect_snapshot_file(path)
 })
