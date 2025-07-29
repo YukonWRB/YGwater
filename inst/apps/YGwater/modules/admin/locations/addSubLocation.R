@@ -418,12 +418,12 @@ addSubLocation <- function(id, inputs) {
         getModuleData() # This should trigger an update to the table
         
         # Reset all fields
-        updateTextInput(session, "subloc_name", value = NULL)
-        updateTextInput(session, "subloc_name_fr", value = NULL)
+        updateTextInput(session, "subloc_name", value = character(0))
+        updateTextInput(session, "subloc_name_fr", value = character(0))
         updateNumericInput(session, "lat", value = NA)
         updateNumericInput(session, "lon", value = NA)
         updateSelectizeInput(session, "share_with", selected = "public_reader")
-        updateTextInput(session, "subloc_note", value = NULL)
+        updateTextInput(session, "subloc_note", value = character(0))
         
       }, error = function(e) {
         showModal(modalDialog(

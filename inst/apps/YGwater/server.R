@@ -180,7 +180,8 @@ app_server <- function(input, output, session) {
   
   print("Connected to AquaCache")
 
-  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
+  # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE) # This does not work with Shiny Server open source
+  session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues from Shiny Server
   
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$AquaCache)

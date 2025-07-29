@@ -10,6 +10,10 @@ app_server <- function(input, output, session) {
 
   # Initial setup #############################################################
 
+  
+  # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)  # This does not work with Shiny Server open source
+  session$userData$use_webgl <- FALSE
+  
   output$keep_alive <- renderText({
     invalidateLater(5000, session)
     Sys.time()
@@ -23,8 +27,6 @@ app_server <- function(input, output, session) {
                                       password = config$dbPass,
                                       silent = TRUE)
 
-  session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)
-  
 
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$con)
@@ -161,19 +163,19 @@ app_server <- function(input, output, session) {
     function(loc, param, yrs, lang, webgl, config) {
 
     promises::future_promise({
-      
+
       con <- AquaConnect(name = config$dbName,
                          host = config$dbHost,
                          port = config$dbPort,
                          username = config$dbUser,
                          password = config$dbPass,
                          silent = TRUE)
-      
+
       loc_name <- DBI::dbGetQuery(con, paste0("SELECT ", if (lang == "en") "name" else "name_fr", " FROM locations WHERE location = '", loc, "';"))[1,1]
       if (nchar(loc_name) > 30) {
         loc_name <- paste0(substr(loc_name, 1, 25), "...")
       }
-      
+
       p <- plotOverlap(location = loc,
                   sub_location = NULL,
                   parameter = param,
@@ -197,11 +199,11 @@ app_server <- function(input, output, session) {
                   tzone = "MST",
                   con = con)
       DBI::dbDisconnect(con)
-      
+
       # Remove the plotly logo and other buttons from the top right of the plot
       p <- plotly::config(p, displayModeBar = FALSE)
-      
-      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (DBI::dbDisconnect(con))
+
+      return(p)  # have to explicitly tell it to return the plot, otherwise it returns the result of the last line (which use to be DBI::dbDisconnect(con))
     })
   }) |> bslib::bind_task_button("go") # Changes the look of the task button and disables it while the task is running
   
