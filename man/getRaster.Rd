@@ -5,20 +5,21 @@
 \title{Retrieve raster files from the database}
 \usage{
 getRaster(
-  clauses,
-  boundary = NULL,
+  conn,
+  name = c("spatial", "rasters"),
+  rast = "rast",
   bands = 1,
-  tbl_name = c("spatial", "rasters"),
-  col_name = "rast",
-  con = NULL
+  boundary = NULL,
+  clauses = NULL,
+  progress = TRUE
 )
 }
 \arguments{
-\item{clauses}{Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1. If NULL, all raster data is returned.}
+\item{bands}{The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.}
 
 \item{boundary}{Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector c(top, bottom, right, left) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.}
 
-\item{bands}{The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.}
+\item{clauses}{Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1. If NULL, all raster data is returned.}
 
 \item{tbl_name}{The name of the schema and table containing the raster data. Default is "spatial.rasters".}
 

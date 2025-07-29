@@ -22,11 +22,11 @@ getRaster <- function (conn, name = c("spatial", "rasters"), rast = "rast", band
     clauses = NULL, progress = TRUE) 
 {
     #warn_deprecated_rc(returnclass, "pgGetRast(returnclass = 'should be a `terra` object')")
-    rpostgis:::dbConnCheck(conn)
+    rpostgis::dbConnCheck(conn)
     if (!suppressMessages(rpostgis::pgPostGIS(conn))) {
         cli::cli_abort("PostGIS is not enabled on this database.")
     }
-    name1 <- rpostgis:::dbTableNameFix(conn, name)
+    name1 <- rpostgis::dbTableNameFix(conn, name)
     nameque <- paste(name1, collapse = ".")
     namechar <- gsub("'", "''", paste(gsub("^\"|\"$", "", name1), 
         collapse = "."))
