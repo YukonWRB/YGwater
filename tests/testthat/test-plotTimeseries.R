@@ -3,11 +3,10 @@
 test_that("timeseries plot is as expected for one year with no historic range or slider", {
   skip_on_cran()
   
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test1.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test1.png")
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", historic_range = FALSE, slider = FALSE)
@@ -19,14 +18,13 @@ test_that("timeseries plot is as expected for one year with no historic range or
 test_that("timeseries plot is as expected for one year with no historic range", {
   skip_on_cran()
   
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test2.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test2.png")
   on.exit(unlink(path), add = TRUE)
   
-  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", historic_range = FALSE)
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", historic_range = FALSE)
   plotly::save_image(plot, file = path, width = 500, height = 500)
   
   expect_snapshot_file(path)
@@ -35,14 +33,13 @@ test_that("timeseries plot is as expected for one year with no historic range", 
 test_that("timeseries plot is as expected for one year with historic range", {
   skip_on_cran()
   
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test3.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test3.png")
   on.exit(unlink(path), add = TRUE)
   
-  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01")
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01")
   plotly::save_image(plot, file = path, width = 500, height = 500)
   
   expect_snapshot_file(path)
@@ -51,14 +48,13 @@ test_that("timeseries plot is as expected for one year with historic range", {
 test_that("French timeseries plot is as expected for one year with historic range and slider", {
   skip_on_cran()
   
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test4.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test4.png")
   on.exit(unlink(path), add = TRUE)
   
-  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr")
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr")
   plotly::save_image(plot, file = path, width = 500, height = 500)
   
   expect_snapshot_file(path)
@@ -67,14 +63,13 @@ test_that("French timeseries plot is as expected for one year with historic rang
 test_that("French timeseries plot is as expected for one year with historic range and no slider", {
   skip_on_cran()
   
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test5.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test5.png")
   on.exit(unlink(path), add = TRUE)
   
-  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE)
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr", slider = FALSE)
   plotly::save_image(plot, file = path, width = 500, height = 500)
   
   expect_snapshot_file(path)
@@ -83,14 +78,13 @@ test_that("French timeseries plot is as expected for one year with historic rang
 test_that("grades, approvals, qualifiers are displayed", {
   skip_on_cran()
   
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test6.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test6.png")
   on.exit(unlink(path), add = TRUE)
   
-  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, grades = TRUE, qualifiers = TRUE, approvals = TRUE)
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr", slider = FALSE, grades = TRUE, qualifiers = TRUE, approvals = TRUE)
   plotly::save_image(plot, file = path, width = 500, height = 500)
   
   expect_snapshot_file(path)
@@ -99,14 +93,13 @@ test_that("grades, approvals, qualifiers are displayed", {
 test_that("one of grades, approvals, qualifiers is displayed", {
   skip_on_cran()
   
-  dir <- paste0(tempdir(), "\\plotly_tests")
+  dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir)
-  path <- paste0(dir, "\\test7.png")
-  path <- gsub("\\\\", "/", path)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test7.png")
   on.exit(unlink(path), add = TRUE)
   
-  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, grades = TRUE)
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr", slider = FALSE, grades = TRUE)
   plotly::save_image(plot, file = path, width = 500, height = 500)
   
   expect_snapshot_file(path)})
@@ -114,7 +107,7 @@ test_that("one of grades, approvals, qualifiers is displayed", {
 test_that("returned plot data is as expected", {
   skip_on_cran()
   
-  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", lang = "fr", slider = FALSE, data = TRUE)$data
+  plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr", slider = FALSE, data = TRUE)$data
   expect_type(plot, "list")
   expect_named(plot, c("trace_data", "range_data"))
   expect_named(plot$trace_data, c("datetime", "value"))
