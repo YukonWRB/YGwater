@@ -7,6 +7,7 @@ test_that("timeseries plot is as expected for one year with no historic range or
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test1.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2016-01-01", end_date = "2017-01-01", historic_range = FALSE, slider = FALSE)
@@ -22,6 +23,7 @@ test_that("timeseries plot is as expected for one year with no historic range", 
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test2.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", historic_range = FALSE)
@@ -37,6 +39,7 @@ test_that("timeseries plot is as expected for one year with historic range", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test3.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01")
@@ -52,6 +55,7 @@ test_that("French timeseries plot is as expected for one year with historic rang
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test4.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr")
@@ -67,6 +71,7 @@ test_that("French timeseries plot is as expected for one year with historic rang
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test5.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr", slider = FALSE)
@@ -82,6 +87,7 @@ test_that("grades, approvals, qualifiers are displayed", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test6.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr", slider = FALSE, grades = TRUE, qualifiers = TRUE, approvals = TRUE)
@@ -97,6 +103,7 @@ test_that("one of grades, approvals, qualifiers is displayed", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test7.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotTimeseries(location = "09EA004", parameter = "water level", start_date = "2022-01-01", end_date = "2023-01-01", lang = "fr", slider = FALSE, grades = TRUE)

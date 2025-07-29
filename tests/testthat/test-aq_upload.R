@@ -1,8 +1,8 @@
-# Tests depend on parameters on the machine socan't be run on CRAN or CI
+# Tests depend on login credentials so can't be run on CRAN or CI
 skip_on_ci()
 skip_on_cran()
 
-# skip if the .renviron username is the read-only user
+# skip if the .renviron username is the read-only user or can't be found
 skip_if(Sys.getenv("AQUSER") == "AQ_APIReadWrite")
 
 # For this test to work the testing machine must have Aquarius credentials loaded into the .Renviron file. Refer to function documentation for more info.

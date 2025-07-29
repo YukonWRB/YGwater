@@ -7,6 +7,6 @@ test_that("dbGetQueryDT converts SQLite date columns", {
   expect_s3_class(res$date, "Date")
   expect_s3_class(res$datetime, "POSIXct")
   expect_s3_class(res$start_dt, "POSIXct")
+  expect_s3_class(res, "data.table")
   DBI::dbDisconnect(con)
 })
-

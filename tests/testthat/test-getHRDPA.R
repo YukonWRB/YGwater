@@ -7,7 +7,7 @@ test_url <- paste0("https://dd.weather.gc.ca/", gsub("-", "", Sys.Date() - 1), "
 # Check if the test URL can be downloaded
 curl::curl_download(test_url, destfile = tempfile(fileext = ".grib2"), quiet = TRUE)
 if (!file.exists(tempfile(fileext = ".grib2"))) {
-  skip("Test URL for basinPrecip is not available, skipping tests.")
+  skip("Test URL for getHRDPA is not available, skipping tests.")
 }
 # Delete the file
 unlink(tempfile(fileext = ".grib2"))

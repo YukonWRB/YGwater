@@ -38,7 +38,7 @@ if (Sys.getenv("CI") == "true") {
              AQUSER = "AQ_APIReadWrite",
              AQPASS = "h@_4bmXW",
              AQSERVER = "https://yukon.aquaticinformatics.net/AQUARIUS")
-  message("Running on CI, setting environment variables for aquacache connection to a test database instance.")
+  message("Running on CI, setting environment accordingly.")
 }
 
 set.seed(123) # Set seed for reproducibility in tests
@@ -50,3 +50,9 @@ if (!requireNamespace("ragg", quietly = TRUE)) {
 
 # Use a stable base font across platforms
 ggplot2::theme_set(ggplot2::theme_gray(base_family = "DejaVu Sans"))
+
+# Function to clean paths that mix \\ with /. On Windows, this poses problems for plotly::save_image.
+pathPrep <- function(path) {
+  x <- chartr("\\", "/", path)
+  return(x)
+}

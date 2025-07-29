@@ -9,6 +9,7 @@ test_that("plotMultiTimeseries with all defaults is as expected", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test1.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <-  plotMultiTimeseries(locations = c("09EA004", "09EA004"), parameters = c(1165, 1150), start_date = "2021-01-01", end_date = "2022-01-01")

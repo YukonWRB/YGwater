@@ -6,6 +6,7 @@ test_that("plotOverlap with all defaults", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test1.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotOverlap(location = "09EA004", parameter = "water level", years = 2020)
@@ -19,6 +20,7 @@ test_that("plotOverlap with minimal elements", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test2.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotOverlap(location = "09EA004", parameter = "water level", years = 2020, hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE)
@@ -32,6 +34,7 @@ test_that("plotOverlap with multiple years and 'last' historic range", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test3.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotOverlap(location = "09AB004", parameter = "water level", years = c(2022,2023), hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE, historic_range = "last")
@@ -45,6 +48,7 @@ test_that("plotOverlap with multiple years and 'last' historic range", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test4.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- plotOverlap(location = "09AB004", parameter = "water level", years = c(2022,2023), hover = FALSE, slider = FALSE, gridx = FALSE, gridy = FALSE, historic_range = "all")

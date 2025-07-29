@@ -10,6 +10,7 @@ test_that("continuous level plot is as expected for full year with numeric start
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test1.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", gridx = FALSE)
@@ -24,6 +25,7 @@ test_that("french labels work with full year", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test2.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", lang = "fr", gridx = FALSE)
@@ -37,6 +39,7 @@ test_that("continuous level plot is as expected for full year with numeric start
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test3.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = "2022", historic_range = "last", gridx = TRUE, gridy = TRUE))
@@ -50,6 +53,7 @@ test_that("continuous level plot is as expected for full year with character sta
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test4.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09EA004", "water level", startDay = "2023-01-01", endDay = "2023-12-31", years = "2021", save_path = NULL, historic_range = "last", gridx = FALSE)
@@ -63,6 +67,7 @@ test_that("continuous flow plot is as expected for full year with numeric startD
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test5.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09EA004", "flow", startDay = 1, endDay = 365, years = "2020", save_path = NULL, historic_range = "last", gridx = FALSE)
@@ -80,6 +85,7 @@ test_that("SWE plot works when overlaping new year, dates as character", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test6.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09AA-M1", "snow water equivalent", startDay = "2023-09-01", endDay = "2023-05-31", years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", datum = FALSE, gridx = FALSE)
@@ -93,6 +99,7 @@ test_that("depth plot works when overlaping new year, dates as numeric", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test7.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09AA-M1", "snow depth", startDay = 250, endDay = 150, years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", datum = FALSE, gridx = FALSE)
@@ -106,6 +113,7 @@ test_that("french labels work with overlaping years", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test8.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- ggplotOverlap("09AA-M1", "snow depth", startDay = 250, endDay = 150, years = "2022", save_path = NULL, return_months = c(4,5), historic_range = "last", lang = "fr", gridx = FALSE)
@@ -119,6 +127,7 @@ test_that("continuous level plot is as expected for multiple years when output t
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test9.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2021,2022), historic_range = "last", gridx = FALSE))
@@ -137,6 +146,7 @@ test_that("historic range can be < requested year", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test10.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2022), historic_range = "all", gridx = FALSE))
@@ -150,6 +160,7 @@ test_that("returns can be for yrs > requested year", {
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
   path <- file.path(dir, "test11.png")
+  path <- pathPrep(path)
   on.exit(unlink(path), add = TRUE)
   
   plot <- suppressWarnings(ggplotOverlap("09EA004", "water level", startDay = 1, endDay = 365, years = c(2021), historic_range = "all", return_max_year = 2022, gridx = FALSE))
