@@ -20,6 +20,7 @@ BugReports: https://github.com/YukonWRB/YGWater/issues
 Depends: 
     R (>= 4.1)
 Imports:
+    cli,
     cowplot,
     crayon,
     DBI,

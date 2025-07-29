@@ -11,13 +11,26 @@ from netCDF4 import num2date
 import rasterio as rio
 import geopandas as gpd
 import zipfile
+from datetime import datetime
+import requests
+
 
 warnings.filterwarnings("ignore")
 
 
 data_dir = Path(".data")
 
-from metadata import param_md
+#from metadata import param_md
+
+def scrape_era5_land_metadata(url="https://confluence.ecmwf.int/display/CKB/ERA5-Land%3A+data+documentation"):
+    response = requests.get(url)
+    tables = pd.read_html(response.text)
+    tables_dict = {f"table{i+1}": table for i, table in enumerate(tables)}
+    tables_dict = pd.concat(tables_dict.values(), ignore_index=True, sort=False)
+    return tables_dict
+
+# Merge all tables in tables_dict into a single DataFrame (ignore index, align columns where possible)
+
 
 def download_from_cds(
         years = range(2000,2024),
@@ -71,6 +84,7 @@ def download_from_cds(
 
 
 def concatenate_to_xda(data_dir, param, freq=None, resampling_function="mean"):
+    param_md = scrape_era5_land_metadata()
     RESAMPLING_FUNCTIONS = ["mean", "sum", "max", "min", "median"]
     if resampling_function not in RESAMPLING_FUNCTIONS:
         raise ValueError(f"Resampling function {resampling_function} not supported. Supported functions are: {RESAMPLING_FUNCTIONS}")
