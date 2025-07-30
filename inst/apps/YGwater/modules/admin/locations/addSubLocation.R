@@ -265,6 +265,10 @@ addSubLocation <- function(id, inputs) {
     # Run checks, if everything passes call AquaCache::addACLocation or update the location details
     observeEvent(input$add_subloc, {
       
+      # Disable and re-enable the button to prevent multiple clicks
+      shinyjs::disable("add_subloc")
+      on.exit(shinyjs::enable("add_subloc"), add = TRUE)
+      
       # Ensure lat + lon are truthy
       if (!isTruthy(input$lat) || !isTruthy(input$lon)) {
         showModal(modalDialog(
