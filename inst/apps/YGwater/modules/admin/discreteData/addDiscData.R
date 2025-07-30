@@ -316,7 +316,7 @@ addDiscData <- function(id) {
     data <- reactiveValues(df = data.frame(sample = integer(), datetime = as.POSIXct(character()), parameter_id = integer(), value = numeric()))
 
     observeEvent(input$add_row, {
-      next_sample <- ifelse(nrow(data$df) == 0, 1, max(data$df$sample) + 1)
+      next_sample <- ifelse(nrow(data$df) == 0, 1, max(data$df$sample, na.rm = TRUE) + 1)
       data$df <- rbind(data$df, data.frame(sample = next_sample, datetime = Sys.time(), parameter_id = NA_integer_, value = NA_real_))
     })
 

@@ -164,9 +164,9 @@ mapLocs <- function(id, language) {
             sliderInput(
               ns("yrs"),
               label = tr("year_filter", language$language),
-              min = lubridate::year(min(moduleData$timeseries$start_datetime)),
-              max = lubridate::year(max(moduleData$timeseries$end_datetime)),
-              value = lubridate::year(c(min(moduleData$timeseries$start_datetime), max(moduleData$timeseries$end_datetime))),
+              min = lubridate::year(min(moduleData$timeseries$start_datetime, na.rm = TRUE)),
+              max = lubridate::year(max(moduleData$timeseries$end_datetime, na.rm = TRUE)),
+              value = lubridate::year(c(min(moduleData$timeseries$start_datetime, na.rm = TRUE), max(moduleData$timeseries$end_datetime, na.rm = TRUE))),
               step = 1,
               sep = ""
             ),
@@ -223,9 +223,9 @@ mapLocs <- function(id, language) {
       )
       updateSliderInput(session,
                         "yrs",
-                        min = lubridate::year(min(moduleData$timeseries$start_datetime)),
-                        max = lubridate::year(max(moduleData$timeseries$end_datetime)),
-                        value = lubridate::year(c(min(moduleData$timeseries$start_datetime), max(moduleData$timeseries$end_datetime)))
+                        min = lubridate::year(min(moduleData$timeseries$start_datetime, na.rm = TRUE)),
+                        max = lubridate::year(max(moduleData$timeseries$end_datetime, na.rm = TRUE)),
+                        value = lubridate::year(c(min(moduleData$timeseries$start_datetime, na.rm = TRUE), max(moduleData$timeseries$end_datetime, na.rm = TRUE)))
       )
     }) # End of observeEvent for reset filters button
     

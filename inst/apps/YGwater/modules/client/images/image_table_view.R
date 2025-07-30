@@ -97,10 +97,10 @@ imgTableView <- function(id, language) {
       if (input$dates[1] < imgs$img_min) {
         if (nrow(imgs$imgs) == 0) {
           imgs$imgs <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "';"))
-          imgs$img_min <- min(imgs$imgs$datetime)
+          imgs$img_min <- min(imgs$imgs$datetime, na.rm = TRUE)
         } else {
-          extra <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime), "';"))
-          imgs$img_min <- min(extra$datetime)
+          extra <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime, na.rm = TRUE), "';"))
+          imgs$img_min <- min(extra$datetime, na.rm = TRUE)
           imgs$imgs <- rbind(imgs$imgs, extra)
         }
         data.table::setorder(imgs$imgs, -datetime)
