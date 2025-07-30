@@ -7,6 +7,7 @@
 #'
 #' @param con A connection object as returned by a [DBI::dbConnect()] call or, in the context of this package, a [AquaConnect()], or [RWISConnect()], or [snowConnect()] call.
 #' @param statement A SQL statement to be passed to the database.
+#' @param params A list of parameters to be passed to the SQL statement. This is optional and can be used to parameterize the SQL query.
 #' @param ... Other parameters passed to the ... parameter of [DBI::dbGetQuery()].
 #'
 #' @return A data.table object.
@@ -15,7 +16,7 @@
 #' @import data.table
 #'
 
-dbGetQueryDT <- function(con, statement, ...) {
+dbGetQueryDT <- function(con, statement, params = NULL, ...) {
   .datatable.aware <- TRUE
   
   df <- DBI::dbGetQuery(con, statement, ...)

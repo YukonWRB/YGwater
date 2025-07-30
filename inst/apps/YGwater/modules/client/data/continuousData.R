@@ -1160,13 +1160,9 @@ contData <- function(id, language, inputs) {
     observeEvent(input$filter, {
       req(filteredData, language$language)
       if (language$language == "Français") {
-        timeseries <- dbGetQueryDT(session$userData$AquaCache, 
-                                   paste0("SELECT * FROM timeseries_metadata_fr
-                                   WHERE timeseries_id IN (", paste(filteredData$timeseries$timeseries, collapse = ", "), ");"))
+        timeseries <- dbGetQueryDT(con, "SELECT * FROM timeseries_metadata_fr WHERE timeseries_id IN ($1);", list(filteredData$timeseries$timeseries))
       } else {
-        timeseries <- dbGetQueryDT(session$userData$AquaCache,
-                                   paste0("SELECT * FROM timeseries_metadata_en
-                                   WHERE timeseries_id IN (", paste(filteredData$timeseries$timeseries, collapse = ", "), ");"))
+        timeseries <- dbGetQueryDT(con, "SELECT * FROM timeseries_metadata_en WHERE timeseries_id IN ($1);", list(filteredData$timeseries$timeseries))
       }
       table_data(timeseries)
     })
@@ -1289,6 +1285,8 @@ contData <- function(id, language, inputs) {
         ")
       
       subset <- dbGetQueryDT(session$userData$AquaCache, query)
+      
+      
       subset[, c(3:12) := lapply(.SD, round, 2), .SDcols = c(3:12)]
       
       output$modal_timeseries_subset <- DT::renderDT({  # Create datatable for the measurements
