@@ -52,7 +52,7 @@ mapParams <- function(id, language) {
             htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
             actionButton(ns("edit_primary_param"), 
                          if (config$public) tr("map_edit_primary_param_solo", language$language) else tr("map_edit_primary_param", language$language), 
-                         style = "display: block; width: 100%;", class = "btn btn-primary"),
+                         style = "display: block; width: 100%;", class = "btn btn-secondary"),
             if (!config$public) {
               htmlOutput(ns("secondary_param"))
             },
@@ -60,7 +60,7 @@ mapParams <- function(id, language) {
               actionButton(
                 ns("edit_secondary_param"),
                 tr(if (map_params$params == 2) "map_edit_second_param" else "map_add_second_param", language$language),
-                style = "display: block; width: 100%", class = "btn btn-primary"
+                style = "display: block; width: 100%", class = "btn btn-secondary"
               )
             }
           )

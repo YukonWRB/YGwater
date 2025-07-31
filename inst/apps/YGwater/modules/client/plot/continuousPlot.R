@@ -2811,20 +2811,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                                config = session$userData$config)
         }
       }
-      
-      # Create a full screen button if necessary
-      if (!plot_created()) {
-        output$full_screen_ui <- renderUI({
-          # Side-by-side buttons
-          page_fluid(
-            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), class = "btn btn-secondary"),
-            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), class = "btn btn-secondary")
-          )
-        })
-      } else {
-        shinyjs::show("full_screen_ui")
-      }
-      plot_created(TRUE)
     }, ignoreInit = TRUE)
     
     
@@ -2842,6 +2828,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_overlap$result()$plot)
       })
+      
+      # Create a full screen button if necessary
+      if (!plot_created()) {
+        output$full_screen_ui <- renderUI({
+          # Side-by-side buttons
+          page_fluid(
+            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), style = "display: none;"),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), style = "display: none;")
+          )
+        })
+      } else {
+        shinyjs::show("full_screen_ui")
+      }
+      plot_created(TRUE)
     })
     
     observeEvent(plot_output_timeseries$result(), {
@@ -2856,6 +2856,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries$result()$plot)
       })
+      
+      # Create a full screen button if necessary
+      if (!plot_created()) {
+        output$full_screen_ui <- renderUI({
+          # Side-by-side buttons
+          page_fluid(
+            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), style = "display: none;"),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), style = "display: none;")
+          )
+        })
+      } else {
+        shinyjs::show("full_screen_ui")
+      }
+      plot_created(TRUE)
     })
     
     observeEvent(plot_output_timeseries_traces$result(), {
@@ -2870,6 +2884,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries_traces$result()$plot)
       })
+      
+      # Create a full screen button if necessary
+      if (!plot_created()) {
+        output$full_screen_ui <- renderUI({
+          # Side-by-side buttons
+          page_fluid(
+            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), style = "display: none;"),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), style = "display: none;")
+          )
+        })
+      } else {
+        shinyjs::show("full_screen_ui")
+      }
+      plot_created(TRUE)
     })
     
     observeEvent(plot_output_timeseries_subplots$result(), {
@@ -2884,6 +2912,20 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       output$plot <- plotly::renderPlotly({
         isolate(plot_output_timeseries_subplots$result()$plot)
       })
+      
+      # Create a full screen button if necessary
+      if (!plot_created()) {
+        output$full_screen_ui <- renderUI({
+          # Side-by-side buttons
+          page_fluid(
+            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), style = "display: none;"),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), style = "display: none;")
+          )
+        })
+      } else {
+        shinyjs::show("full_screen_ui")
+      }
+      plot_created(TRUE)
     })
     
     # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy

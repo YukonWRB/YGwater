@@ -198,8 +198,8 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
         page_fluid(
-          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;", class = "btn btn-secondary")),
-          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;", class = "btn btn-secondary"))
+          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;")),
+          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;"))
         )
       ) # End of tagList
     }) %>% # End renderUI
