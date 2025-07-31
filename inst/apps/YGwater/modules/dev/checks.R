@@ -41,13 +41,25 @@ checks <- function(id, con) {
     # Get the data ########################################################################################
     # Load initial data with no filtering applied. This only runs once. If the date range changes the data will be updated in the observeEvent below.
     data_all <- reactiveValues(
-      sampleIds = DBI::dbGetQuery(con, paste0("SELECT sampleId, StnId FROM eqsampls WHERE DateValue(CollectDateTime) > '", input$dateRange[1], "' AND DateValue(CollectDateTime) < '", input$dateRange[2], "';")),
+      sampleIds = DBI::dbGetQuery(
+        con,
+        glue::glue_sql(
+          "SELECT sampleId, StnId FROM eqsampls WHERE DateValue(CollectDateTime) > {input$dateRange[1]} AND DateValue(CollectDateTime) < {input$dateRange[2]};",
+          .con = con
+        )
+      ),
       all_groups = DBI::dbGetQuery(con, "SELECT groupname, groupdesc, groupitems FROM eqgroups WHERE dbtablename = 'eqstns'"),
     )
     
     # Update the sampleIds when the date range changes, which will trigger the other data to update
     observeEvent(input$dateRange, {
-      data_all$sampleIds <- DBI::dbGetQuery(con, paste0("SELECT sampleId, StnId FROM eqsampls WHERE DateValue(CollectDateTime) > '", input$dateRange[1], "' AND DateValue(CollectDateTime) < '", input$dateRange[2], "';"))
+      data_all$sampleIds <- DBI::dbGetQuery(
+        con,
+        glue::glue_sql(
+          "SELECT sampleId, StnId FROM eqsampls WHERE DateValue(CollectDateTime) > {input$dateRange[1]} AND DateValue(CollectDateTime) < {input$dateRange[2]};",
+          .con = con
+        )
+      )
       
       if (!is.null(data_filtered$sampleIds)) {
         # If the date range changes but the reset button wasn't pressed, update the filtered data to include more sampleIds while applying filtering for the stations and groups that are already selected

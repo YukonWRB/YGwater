@@ -299,13 +299,24 @@ addSubLocation <- function(id, inputs) {
           # Check each field to see if it's been modified; if so, update the DB entry by targeting the location_id and appropriate column name
           # Changes to the location english sub_location_name
           if (input$subloc_name != moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "sub_location_name"]) {
-            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE sub_locations SET sub_location_name = '", input$subloc_name, "' WHERE sub_location_id = ", selected_sub_loc(), ";"))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE sub_locations SET sub_location_name = {input$subloc_name} WHERE sub_location_id = {selected_sub_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to the location french sub_location_name
           if (input$subloc_name_fr != moduleData$exist_sub_locs[which(moduleData$exist_sub_locs$sub_location_id == selected_sub_loc()), "sub_location_name_fr"]) {
-            DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE sub_locations SET sub_location_name_fr = '%s' WHERE sub_location_id = %d", input$subloc_name_fr, selected_sub_loc()))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE sub_locations SET sub_location_name_fr = {input$subloc_name_fr} WHERE sub_location_id = {selected_sub_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to coordinates
