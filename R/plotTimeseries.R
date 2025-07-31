@@ -211,18 +211,18 @@ plotTimeseries <- function(location,
     # Try to find the location_id from a character string
     location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location};", .con = con))[1,1]
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = {location};", .con = con))[1,1]
+      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE name = {location};", .con = con))[1,1]
     }
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = {location};", .con = con))[1,1]
+      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE name_fr = {location};", .con = con))[1,1]
     }
     # If nothing so far, maybe it's a numeric that's masquerading as a character
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
+      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
     }
   } else {
     # Try to find the location_id from a numeric value
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
+    location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
   }
   if (is.na(location_id)) {
     stop("The location you entered does not exist in the database.")
