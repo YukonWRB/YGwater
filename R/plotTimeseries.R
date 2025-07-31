@@ -186,12 +186,11 @@ plotTimeseries <- function(location,
         warning("Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL.")
         aggregation_type <- NULL
       } else {
-        aggregation_type <- DBI::dbGetQuery(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = '", aggregation_type, "';")[1,1]
-        aggregation_type <- as.numeric(aggregation_type)
+        aggregation_type <- DBI::dbGetQuery(con, glue::glue_sql("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = {aggregation_type};", .con = con))[1,1]
       }
     } else {
       if (inherits(aggregation_type, "numeric")) {
-        aggregation_type <- DBI::dbGetQuery(con, paste0("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = ", aggregation_type, ";"))[1,1]
+        aggregation_type <- DBI::dbGetQuery(con, glue::glue_sql("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = {aggregation_type};", .con = con))[1,1]
         if (is.na(aggregation_type)) {
           warning("Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL.")
           aggregation_type <- NULL
@@ -210,38 +209,35 @@ plotTimeseries <- function(location,
   # Determine the timeseries and adjust the date range #################
   if (inherits(location, "character")) {
     # Try to find the location_id from a character string
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location};", .con = con))[1,1]
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = {location};", .con = con))[1,1]
     }
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = {location};", .con = con))[1,1]
     }
     # If nothing so far, maybe it's a numeric that's masquerading as a character
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
     }
   } else {
     # Try to find the location_id from a numeric value
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
   }
   if (is.na(location_id)) {
     stop("The location you entered does not exist in the database.")
   }
   
-  #Confirm parameter and location exist in the database and that there is only one entry
+  # Confirm parameter and location exist in the database and that there is only one entry
   if (inherits(parameter, "character")) {
     parameter <- tolower(parameter)
-    escaped_parameter <- gsub("'", "''", parameter)
-    parameter_tbl <- DBI::dbGetQuery(con, 
-                                     paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
-    )
+    parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = {parameter} OR param_name_fr = {parameter};", .con = con))
     parameter_code <- parameter_tbl$parameter_id[1]
     if (is.na(parameter_code)) {
       stop("The parameter you entered does not exist in the database.")
     }
   } else if (inherits(parameter, "numeric")) {
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = ", parameter, ";"))
+    parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = {parameter};", .con = con))
     if (nrow(parameter_tbl) == 0) {
       stop("The parameter you entered does not exist in the database.")
     }
@@ -272,20 +268,26 @@ plotTimeseries <- function(location,
       }
     } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
-    } else { #both record_rate and aggregation_type_id are not NULL
+    } else { # both record_rate and aggregation_type_id are not NULL
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
     }
   } else {  #sub location was specified
     # Find the sub location_id
     if (inherits(sub_location, "character")) {
-      escaped_sub_location <- gsub("'", "''", sub_location)
-      sub_location_tbl <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = '", escaped_sub_location, "';"))
-      if (nrow(sub_location_tbl) == 0) {
-        stop("The sub-location you entered does not exist in the database.")
+      # Try to find the sub_location_id from a character string
+      sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_location};", .con = con))[[1]]
+      if (is.na(sub_location_id)) {
+        sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_name_fr = {sub_location};", .con = con))[[1]]
       }
-      sub_location_id <- sub_location_tbl$sub_location_id[1]
+      # If nothing so far, maybe it's a numeric that's masquerading as a character
+      if (is.na(sub_location_id)) {
+        sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_id = {sub_location};", .con = con))[[1]]
+      }
     } else if (inherits(sub_location, "numeric")) {
-      sub_location_id <- sub_location
+      sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_id = {sub_location};", .con = con))[[1]]
+    }
+    if (is.na(sub_location_id)) {
+      stop("The sub-location you entered does not exist in the database.")
     }
     if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
       if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL

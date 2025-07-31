@@ -30,6 +30,7 @@ contDataUI <- function(id) {
       }
     ", ns("accordion")))
     ),
+    uiOutput(ns("top")),
     page_sidebar(
       sidebar = sidebar(
         title = NULL,
@@ -190,6 +191,20 @@ contData <- function(id, language, inputs) {
                                    media = FALSE,
                                    params = FALSE)
     
+    output$top <- renderUI({
+      tagList(
+        accordion(
+          id = ns("accordion"),
+          open = TRUE,
+          accordion_panel(
+            title = tr("instructions", language$language),
+            tags$p(HTML(tr("view_data_instructions_continuous", language$language))),
+            tags$div(style = "height: 10px;")
+          )
+        )
+      )
+    })
+    
     output$sidebar <- renderUI({
       req(filteredData, language)
       
@@ -318,18 +333,8 @@ contData <- function(id, language, inputs) {
     })  %>% # End of renderUI for sidebar
       bindEvent(language)
     
-    
     output$main <- renderUI({
       tagList(
-        accordion(
-          id = ns("accordion"),
-          open = TRUE,
-          accordion_panel(
-            title = tr("instructions", language$language),
-            tags$p(HTML(tr("view_data_instructions_continuous", language$language))),
-            tags$div(style = "height: 10px;")
-          )
-        ),
         DT::DTOutput(ns("tbl")), # Table with timeseries data, filtered by the sidebar inputs
         actionButton(ns("select_all"), tr("select_all", language$language), style = "display: none;"),  # Button will be hidden until a row is selected
         actionButton(ns("view_data"), tr("view_data1", language$language), style =  "display: none;"),  # Button will be hidden until a row is selected
@@ -1160,9 +1165,13 @@ contData <- function(id, language, inputs) {
     observeEvent(input$filter, {
       req(filteredData, language$language)
       if (language$language == "Français") {
-        timeseries <- dbGetQueryDT(con, "SELECT * FROM timeseries_metadata_fr WHERE timeseries_id IN ($1);", list(filteredData$timeseries$timeseries))
+        timeseries <- dbGetQueryDT(session$userData$AquaCache, 
+                                   paste0("SELECT * FROM timeseries_metadata_fr
+                                   WHERE timeseries_id IN (", paste(filteredData$timeseries$timeseries, collapse = ", "), ");"))
       } else {
-        timeseries <- dbGetQueryDT(con, "SELECT * FROM timeseries_metadata_en WHERE timeseries_id IN ($1);", list(filteredData$timeseries$timeseries))
+        timeseries <- dbGetQueryDT(session$userData$AquaCache,
+                                   paste0("SELECT * FROM timeseries_metadata_en
+                                   WHERE timeseries_id IN (", paste(filteredData$timeseries$timeseries, collapse = ", "), ");"))
       }
       table_data(timeseries)
     })
@@ -1285,8 +1294,6 @@ contData <- function(id, language, inputs) {
         ")
       
       subset <- dbGetQueryDT(session$userData$AquaCache, query)
-      
-      
       subset[, c(3:12) := lapply(.SD, round, 2), .SDcols = c(3:12)]
       
       output$modal_timeseries_subset <- DT::renderDT({  # Create datatable for the measurements

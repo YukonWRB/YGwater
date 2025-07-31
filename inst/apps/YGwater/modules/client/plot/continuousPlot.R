@@ -2817,8 +2817,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         output$full_screen_ui <- renderUI({
           # Side-by-side buttons
           page_fluid(
-            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), class = "btn btn-primary"),
-            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), class = "btn btn-primary")
+            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), class = "btn btn-secondary"),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), class = "btn btn-secondary")
           )
         })
       } else {

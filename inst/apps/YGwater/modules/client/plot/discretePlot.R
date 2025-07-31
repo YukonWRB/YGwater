@@ -25,8 +25,9 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     moduleData <- reactiveValues()
     
-    moduleData$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
+    moduleData$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
     moduleData$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC")
+    moduleData$AC_loc_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT s.location_id, r.parameter_id FROM samples s INNER JOIN results r ON s.sample_id = r.sample_id")
     
     output$sidebar <- renderUI({
       tagList(
@@ -198,8 +199,8 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
       tagList(
         plotly::plotlyOutput(ns("plot"), width = "100%", height = "800px", inline = TRUE),
         page_fluid(
-          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;", class = "btn btn-primary")),
-          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;", class = "btn btn-primary"))
+          div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen", style = "display: none;", class = "btn btn-secondary")),
+          div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data", style = "display: none;", class = "btn btn-secondary"))
         )
       ) # End of tagList
     }) %>% # End renderUI
@@ -255,15 +256,38 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     
+    # Helper function to update the list of available parameters based on selected locations
+    update_parameters <- function() {
+      if (is.null(input$locations_AC) || length(input$locations_AC) == 0) {
+        params <- moduleData$AC_params
+      } else {
+        param_ids <- unique(moduleData$AC_loc_params$parameter_id[moduleData$AC_loc_params$location_id %in% input$locations_AC])
+        params <- moduleData$AC_params[moduleData$AC_params$parameter_id %in% param_ids, , drop = FALSE]
+      }
+      selected <- input$parameters_AC[input$parameters_AC %in% params$parameter_id]
+      updateSelectizeInput(
+        session,
+        "parameters_AC",
+        choices = stats::setNames(params$parameter_id, params$param_name),
+        selected = selected,
+        server = TRUE
+      )
+    }
+    
     observeEvent(input$data_source, {
       req(moduleData)
       if (input$data_source == "EQ") {
         # These updates are performed in the observeEvent for input$EQWin_source
       } else if (input$data_source == "AC") { # AC selected
-        updateSelectizeInput(session, "parameters_AC", choices = stats::setNames(moduleData$AC_params$parameter_id, moduleData$AC_params$param_name), server = TRUE)
         updateSelectizeInput(session, "locations_AC", choices = stats::setNames(moduleData$AC_locs$location_id, moduleData$AC_locs$name), selected = if (!is.null(inputs$location_id)) inputs$location_id else NULL, server = TRUE)
+        update_parameters()
       }
     })
+    
+    # Update the list of available parameters in response to location selection
+    observeEvent(input$locations_AC, {
+      update_parameters()
+    }, ignoreNULL = FALSE)
     
     # Toggle visibility of location and location group inputs
     observeEvent(input$locs_groups, {
