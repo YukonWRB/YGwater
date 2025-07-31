@@ -148,12 +148,12 @@ plotOverlap <- function(location,
         warning("Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL.")
         aggregation_type <- NULL
       } else {
-        aggregation_type <- DBI::dbGetQuery(con, paste0("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = '", aggregation_type, "';"))[1,1]
+        aggregation_type <- DBI::dbGetQuery(con, glue::glue_sql("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = {aggregation_type};", .con = con))[1,1]
         aggregation_type <- as.numeric(aggregation_type)
       }
     } else {
       if (inherits(aggregation_type, "numeric")) {
-        aggregation_type <- DBI::dbGetQuery(con, paste0("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = ", aggregation_type, ";"))[1,1]
+        aggregation_type <- DBI::dbGetQuery(con, glue::glue_sql("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = {aggregation_type};", .con = con))[1,1]
         if (is.na(aggregation_type)) {
           warning("Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL.")
           aggregation_type <- NULL
@@ -265,20 +265,20 @@ plotOverlap <- function(location,
   # Get the location and parameter metadata ###########
   if (inherits(location, "character")) {
     # Try to find the location_id from a character string
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location};", .con = con))[1,1]
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
+      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE name = {location};", .con = con))[1,1]
     }
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
+      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE name_fr = {location};", .con = con))[1,1]
     }
     # If nothing so far, maybe it's a numeric that's masquerading as a character
     if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
     }
   } else {
     # Try to find the location_id from a numeric value
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
+    location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
   }
   if (is.na(location_id)) {
     stop("The location you entered does not exist in the database.")
@@ -287,14 +287,13 @@ plotOverlap <- function(location,
   
   #Confirm parameter and location exist in the database and that there is only one entry
   if (inherits(parameter, "character")) {
-    escaped_parameter <- gsub("'", "''", parameter)
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+    parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE param_name = {parameter} OR param_name_fr = {parameter};", .con = con))
     parameter_code <- parameter_tbl$parameter_id[1]
     if (is.na(parameter_code)) {
       stop("The parameter you entered does not exist in the database.")
     }
   } else if (inherits(parameter, "numeric")) {
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE parameter_id = ", parameter, ";"))
+    parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE parameter_id = {parameter};", .con = con))
     if (nrow(parameter_tbl) == 0) {
       stop("The parameter you entered does not exist in the database.")
     }
@@ -331,8 +330,7 @@ plotOverlap <- function(location,
   } else {  #sub location was specified
     # Find the sub location_id
     if (inherits(sub_location, "character")) {
-      escaped_sub_location <- gsub("'", "''", sub_location)
-      sub_location_tbl <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = '", escaped_sub_location, "';"))
+      sub_location_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_location};", .con = con))
       if (nrow(sub_location_tbl) == 0) {
         stop("The sub-location you entered does not exist in the database.")
       }
@@ -444,7 +442,7 @@ plotOverlap <- function(location,
     daily_end <- daily_end + 60*60*24
   }
   
-  daily <- dbGetQueryDT(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", daily_start, "' AND '", daily_end, "' ORDER by date ASC;"))
+  daily <- dbGetQueryDT(con, glue::glue_sql("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;", .con = con))
   
   #Fill in any missing days in daily with NAs
   all_dates <- data.table::data.table(date = seq.Date(min(daily$date), max(daily$date), by = "day"))
@@ -474,9 +472,9 @@ plotOverlap <- function(location,
     # if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance (rest is populated with daily means. Gives 3 full years of data at 1 hour intervals)
     if (nrow(realtime) < 100000) { # limits the number of data points to 100000
       if (rate == "max") {
-        new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL ORDER BY datetime")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+        new_realtime <- dbGetQueryDT(con, glue::glue_sql("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime", .con = con)) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       } else if (rate == "hour") {
-        new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL ORDER BY datetime")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+        new_realtime <- dbGetQueryDT(con, glue::glue_sql("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime", .con = con)) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       } else if (rate == "day") {
         new_realtime <- data.table::data.table()
       }
@@ -672,7 +670,7 @@ plotOverlap <- function(location,
   
   ## Filter out unusable data from the traces
   if (!unusable) {  # if unusable is FALSE, the grades must be pulled so that we can filter them out
-    grades_dt <- dbGetQueryDT(con, paste0("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", startDay, "' AND g.start_dt <= '", endDay, "' AND gt.grade_type_code = 'N' ORDER BY start_dt;"))
+    grades_dt <- dbGetQueryDT(con, glue::glue_sql("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = {tsid} AND g.end_dt >= {startDay} AND g.start_dt <= {endDay} AND gt.grade_type_code = 'N' ORDER BY start_dt;", .con = con))
     if (nrow(grades_dt) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
       realtime[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
