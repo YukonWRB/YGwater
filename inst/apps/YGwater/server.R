@@ -138,33 +138,6 @@ app_server <- function(input, output, session) {
   ui_loaded <- reactiveValues()
   reset_ui_loaded() # Initialize the ui_loaded reactive values
   
-  ## database connections ###########
-  # Look for .mdb files in the AccessPath directories
-  if (dir.exists(config$accessPath1) & !config$public) {
-    # List the *.mdb files in the directory
-    mdb_files1 <- list.files(config$accessPath1, pattern = "*.mdb", full.names = TRUE)
-    if (length(mdb_files1) == 0) {
-      mdb_files1 <- NULL
-    }
-  } else {
-    mdb_files1 <- NULL
-  }
-  if (dir.exists(config$accessPath2) & !config$public) {
-    # List the *.mdb files in the directory
-    mdb_files2 <- list.files(config$accessPath2, pattern = "*.mdb", full.names = TRUE)
-    if (length(mdb_files2) == 0) {
-      mdb_files2 <- NULL
-    }
-  } else {
-    mdb_files2 <- NULL
-  }
-  
-  mdb_files <- c(mdb_files1, mdb_files2)
-  
-  if (is.null(mdb_files) & !config$public) {
-    print("No .mdb files found in the accessPath1 directory.")
-  }
-  
   
   # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
   session$userData$config <- config
@@ -642,7 +615,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$discretePlot) {
         output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
         ui_loaded$discretePlot <- TRUE
-        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+        discretePlot("discretePlot", config$mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
@@ -664,7 +637,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$mixPlot) {
         output$plotMix_ui <- renderUI(mixPlotUI("mixPlot"))
         ui_loaded$mixPlot <- TRUE
-        mixPlot("mixPlot", mdb_files, language = languageSelection, windowDims) # Call the server
+        mixPlot("mixPlot", config$mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
     
@@ -746,7 +719,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$WQReport) {
         output$WQReport_ui <- renderUI(WQReportUI("WQReport"))
         ui_loaded$WQReport <- TRUE
-        WQReport("WQReport", mdb_files = mdb_files, language = languageSelection) # Call the server
+        WQReport("WQReport", mdb_files = config$mdb_files, language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "snowBulletin") {

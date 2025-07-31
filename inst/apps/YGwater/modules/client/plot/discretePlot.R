@@ -21,7 +21,6 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
     
     EQWin_selector <- reactiveVal(FALSE)  # flags whether the EQWin source UI is already rendered
     
-    
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     moduleData <- reactiveValues()
     
