@@ -3,12 +3,12 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   library(shiny)
   library(shinyjs)
   library(bslib)
-
+  
   # Use a user-writable cache directory for sass
   cache_dir <- tools::R_user_dir("YGwater", "cache")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
   options(bslib.sass.cache = cache_dir)
-
+  
   # Initialize a shared cache environment available to all sessions
   if (!exists("app_cache", envir = .GlobalEnv)) {
     assign("app_cache", new.env(parent = emptyenv()), envir = .GlobalEnv)
@@ -120,24 +120,33 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   ## Access database connections ###########
   # Look for .mdb files in the AccessPath directories
-  if (dir.exists(accessPath1) & !public) {
-    # List the *.mdb files in the directory
-    mdb_files1 <- list.files(accessPath1, pattern = "*.mdb", full.names = TRUE)
-    if (length(mdb_files1) == 0) {
+  if (!is.null(accessPath1)) {
+    if (dir.exists(accessPath1) & !public) {
+      # List the *.mdb files in the directory
+      mdb_files1 <- list.files(accessPath1, pattern = "*.mdb", full.names = TRUE)
+      if (length(mdb_files1) == 0) {
+        mdb_files1 <- NULL
+      }
+    } else {
       mdb_files1 <- NULL
     }
   } else {
     mdb_files1 <- NULL
   }
-  if (dir.exists(accessPath2) & !public) {
-    # List the *.mdb files in the directory
-    mdb_files2 <- list.files(accessPath2, pattern = "*.mdb", full.names = TRUE)
-    if (length(mdb_files2) == 0) {
+  if (!is.null(accessPath2)) {
+    if (dir.exists(accessPath2) & !public) {
+      # List the *.mdb files in the directory
+      mdb_files2 <- list.files(accessPath2, pattern = "*.mdb", full.names = TRUE)
+      if (length(mdb_files2) == 0) {
+        mdb_files2 <- NULL
+      }
+    } else {
       mdb_files2 <- NULL
     }
   } else {
     mdb_files2 <- NULL
   }
+  
   
   mdb_files <- c(mdb_files1, mdb_files2)
   
