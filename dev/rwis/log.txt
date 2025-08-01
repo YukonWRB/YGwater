@@ -1,0 +1,10 @@
+DEBUG - Initializing DownloadRWISData.R log
+DEBUG - .libPaths are: C:/Users/esniede/AppData/Local/R/win-library/4.4
+C:/Program Files/R/R-4.4.2/library
+DEBUG - output_folder is: dev/rwis
+DEBUG - retrieving RWIS data from local database
+INFO - Connecting to RWIS
+RWIS connection established
+Reading data from RWIS...
+DEBUG - processing RWIS data
+DEBUG - processing RWIS data

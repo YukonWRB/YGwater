@@ -6,7 +6,6 @@ library(plotly)
 library(magick)
 library(shinyjs)
 library(tesseract)
-library(ggplot2)
 
 
 
@@ -168,7 +167,14 @@ process_ocr_batch <- function(files_df, ocr_text_list, current_index = NULL) {
                 img_path <- files_df$Path[i]
                 img <- magick::image_read(img_path)
 
-                # Perform OCR on the image
+                # --- Preprocessing for better OCR accuracy ---
+                img <- img %>%
+                    magick::image_convert(colorspace = "gray") %>%   # Convert to grayscale
+                    magick::image_contrast(sharpen = 1) %>%          # Increase contrast
+                    magick::image_modulate(brightness = 110, saturation = 100, hue = 100) %>% # Enhance brightness
+                    magick::image_threshold(type = "black", threshold = "60%") # Binarize
+
+                # Perform OCR on the preprocessed image
                 ocr_result <- tesseract::ocr_data(img, engine = tesseract::tesseract(options = list(tessedit_create_hocr = 1)))
 
                 # Filter out words with confidence less than 50%
@@ -176,8 +182,6 @@ process_ocr_batch <- function(files_df, ocr_text_list, current_index = NULL) {
                 
                 # Filter out common OCR noise and error words
                 ocr_result <- filter_ocr_noise(ocr_result)
-
-                # Store the OCR text in the reactive value
                 ocr_text_list[[i]] <- ocr_result
             }
         }
@@ -330,9 +334,28 @@ ui <- fluidPage(
                 margin-top: 5px;
                 margin-bottom: 5px;
             }
+            .borehole-id-display {
+                background: #f8f9fa;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+                padding: 8px 12px;
+                font-family: monospace;
+                font-size: 14px;
+                color: #495057;
+                margin-bottom: 10px;
+            }
         "))
     ),
-    titlePanel("Simpler Index", windowTitle = "Simpler Index"),
+    titlePanel(
+        div(style = "display: flex; align-items: center; gap: 10px;",
+            div(
+                style = "width: 60px; height: 40px; background: linear-gradient(135deg, #007bff, #0056b3); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;",
+                "YWRR"
+            ),
+            "Simpler Index"
+        ), 
+        windowTitle = "Simpler Index"
+    ),
     div(class = "sidebar-layout",
         div(class = "sidebar-panel", id = "sidebar",
             div(class = "resize-handle", id = "resize-handle"),
@@ -383,7 +406,7 @@ ui <- fluidPage(
                         )
                     )
                 ),
-                div(class = "control-group", style = "margin-left: auto;",
+                div(class = "control-group",
                     actionButton("zoom_out", "-", class = "zoom-btn btn-secondary", title = "Zoom Out"),
                     actionButton("zoom_reset", "⌂", class = "reset-btn btn-secondary", title = "Reset View"),
                     actionButton("zoom_in", "+", class = "zoom-btn btn-secondary", title = "Zoom In"),
@@ -402,7 +425,14 @@ ui <- fluidPage(
             br(),
             
             # Well identification
-            textInput("borehole_id", "Borehole ID:", placeholder = "Enter borehole ID"),
+            div(
+                style = "margin-bottom: 15px;",
+                tags$label("Borehole ID:", style = "font-weight: bold; display: block; margin-bottom: 5px;"),
+                div(
+                    class = "borehole-id-display",
+                    textOutput("borehole_id_display")
+                )
+            ),
             textInput("well_name", "Well Name:", placeholder = "Enter well name"),
             selectizeInput("community", "Community:",
                 choices = list(
@@ -473,40 +503,40 @@ ui <- fluidPage(
             # Well construction details
             fluidRow(
                 column(8, numericInput("depth_to_bedrock", "Depth to Bedrock:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("depth_to_bedrock_unit", "Unit:", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                column(4, radioButtons("depth_to_bedrock_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
             ),
             dateInput("date_drilled", "Date Drilled:", value = NULL),
             fluidRow(
                 column(8, numericInput("casing_outside_diameter", "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
-                column(4, radioButtons("casing_outside_diameter_unit", "Unit:", choices = list("mm" = "mm", "inch" = "inch"), selected = "mm", inline = TRUE))
+                column(4, radioButtons("casing_outside_diameter_unit", "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
             ),
             fluidRow(
                 column(8, numericInput("well_depth", "Well Depth:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("well_depth_unit", "Unit:", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                column(4, radioButtons("well_depth_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
             ),
             fluidRow(
                 column(8, numericInput("top_of_screen", "Top of Screen:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("top_of_screen_unit", "Unit:", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                column(4, radioButtons("top_of_screen_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
             ),
             fluidRow(
                 column(8, numericInput("bottom_of_screen", "Bottom of Screen:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("bottom_of_screen_unit", "Unit:", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                column(4, radioButtons("bottom_of_screen_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
             ),
             fluidRow(
                 column(8, numericInput("well_head_stick_up", "Well Head Stick Up:", value = NULL, step = 0.01)),
-                column(4, radioButtons("well_head_stick_up_unit", "Unit:", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                column(4, radioButtons("well_head_stick_up_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
             ),
             fluidRow(
                 column(8, numericInput("static_water_level", "Static Water Level:", value = NULL, step = 0.01)),
-                column(4, radioButtons("static_water_level_unit", "Unit:", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                column(4, radioButtons("static_water_level_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
             ),
             fluidRow(
                 column(8, numericInput("estimated_yield", "Estimated Yield:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("estimated_yield_unit", "Unit:", choices = list("L/min" = "L/min", "G/min" = "G/min"), selected = "L/min", inline = TRUE))
+                column(4, radioButtons("estimated_yield_unit", "", choices = list("L/s" = "L/s", "G/min" = "G/min"), selected = "G/min", inline = TRUE))
             ),
             fluidRow(
                 column(8, numericInput("surveyed_ground_level_elevation", "Surveyed Ground Level Elevation:", value = NULL, step = 0.01)),
-                column(4, radioButtons("surveyed_ground_level_elevation_unit", "Unit:", choices = list("m" = "m", "ft" = "m"), selected = "m", inline = TRUE))
+                column(4, radioButtons("surveyed_ground_level_elevation_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
             ),
             br(),
             
@@ -714,40 +744,73 @@ ui <- fluidPage(
             // Setup zoom when page loads
             setupZoom();
             
-            // Add click handler for borehole ID input
-            $('#borehole_id').on('focus click', function() {
-                Shiny.setInputValue('borehole_id_clicked', Math.random());
+            // Add click handlers for all input fields
+            $('#well_name').on('focus click', function() {
+                Shiny.setInputValue('well_name_clicked', Math.random());
             });
             
-            // Re-setup zoom when new PDF is loaded
-            $(document).on('shiny:value', function(event) {
-                if (event.name === 'pdf_viewer') {
-                    setTimeout(function() {
-                        setupZoom();
-                        // Reset zoom when new PDF loads
-                        zoomLevel = 1;
-                        panX = 0;
-                        panY = 0;
-                    }, 100);
-                }
+            $('#easting').on('focus click', function() {
+                Shiny.setInputValue('easting_clicked', Math.random());
             });
             
-            // Also setup zoom when plots are re-rendered
-            $(document).on('shiny:outputinvalidated', function(event) {
-                if (event.name && event.name.indexOf('pdf_plot_') === 0) {
-                    setTimeout(function() {
-                        setupZoom();
-                    }, 50);
-                }
+            $('#northing').on('focus click', function() {
+                Shiny.setInputValue('northing_clicked', Math.random());
             });
             
-            // Additional fallback for when plot content changes
-            $(document).on('DOMNodeInserted', '#pdf-container', function() {
-                setTimeout(function() {
-                    if ($('#pdf-container').find('div[id*=\"pdf_plot_\"]').length > 0) {
-                        setupZoom();
-                    }
-                }, 50);
+            $('#latitude').on('focus click', function() {
+                Shiny.setInputValue('latitude_clicked', Math.random());
+            });
+            
+            $('#longitude').on('focus click', function() {
+                Shiny.setInputValue('longitude_clicked', Math.random());
+            });
+            
+            $('#location_source').on('focus click', function() {
+                Shiny.setInputValue('location_source_clicked', Math.random());
+            });
+            
+            $('#surveyed_location_top_casing').on('focus click', function() {
+                Shiny.setInputValue('surveyed_location_top_casing_clicked', Math.random());
+            });
+            
+            $('#depth_to_bedrock').on('focus click', function() {
+                Shiny.setInputValue('depth_to_bedrock_clicked', Math.random());
+            });
+            
+            $('#date_drilled').on('focus click', function() {
+                Shiny.setInputValue('date_drilled_clicked', Math.random());
+            });
+            
+            $('#casing_outside_diameter').on('focus click', function() {
+                Shiny.setInputValue('casing_outside_diameter_clicked', Math.random());
+            });
+            
+            $('#well_depth').on('focus click', function() {
+                Shiny.setInputValue('well_depth_clicked', Math.random());
+            });
+            
+            $('#top_of_screen').on('focus click', function() {
+                Shiny.setInputValue('top_of_screen_clicked', Math.random());
+            });
+            
+            $('#bottom_of_screen').on('focus click', function() {
+                Shiny.setInputValue('bottom_of_screen_clicked', Math.random());
+            });
+            
+            $('#well_head_stick_up').on('focus click', function() {
+                Shiny.setInputValue('well_head_stick_up_clicked', Math.random());
+            });
+            
+            $('#static_water_level').on('focus click', function() {
+                Shiny.setInputValue('static_water_level_clicked', Math.random());
+            });
+            
+            $('#estimated_yield').on('focus click', function() {
+                Shiny.setInputValue('estimated_yield_clicked', Math.random());
+            });
+            
+            $('#surveyed_ground_level_elevation').on('focus click', function() {
+                Shiny.setInputValue('surveyed_ground_level_elevation_clicked', Math.random());
             });
         });
     "))
@@ -758,7 +821,7 @@ server <- function(input, output, session) {
     # Store split PDF info
     rv <- reactiveValues(
         files_df = NULL,
-        well_df = NULL,  # Separate dataframe for well information
+        well_data = list(),  # Named list organized by borehole ID
         pdf_index = 1,
         ocr_text = list(),
         ocr_display_mode = "none",
@@ -767,8 +830,19 @@ server <- function(input, output, session) {
     
     # Reactive value to control brush mode
     brush_enabled <- reactiveVal(FALSE)
-
-
+    
+    # Flag to prevent circular updates when loading metadata
+    loading_metadata <- reactiveVal(FALSE)
+    
+    # Reactive expression to get the current well ID based on pdf_index
+    current_well_id <- reactive({
+        req(rv$files_df)
+        req(rv$pdf_index)
+        req(nrow(rv$files_df) >= rv$pdf_index)
+        
+        # Since each row has its own unique well ID, just return it directly
+        return(rv$files_df$unique_id[rv$pdf_index])
+    })
 
 
     # Split PDFs into single-page files on upload
@@ -829,9 +903,9 @@ server <- function(input, output, session) {
 
         rv$files_df <- all_split_files
 
-        # Initialize well information dataframe with same number of rows
+        # Initialize well information as named list organized by borehole ID
         well_fields <- c(
-            "borehole_id", "well_name", "community", "coordinate_system",
+            "well_name", "community", "coordinate_system",
             "easting", "northing", "utm_zone", "latitude", "longitude",
             "location_source", "surveyed_location_top_casing", "purpose_of_well",
             "depth_to_bedrock", "depth_to_bedrock_unit", "date_drilled",
@@ -843,15 +917,26 @@ server <- function(input, output, session) {
             "surveyed_ground_level_elevation_unit"
         )
         
-        # Create well dataframe with same number of rows as files_df
-        rv$well_df <- data.frame(
-            page_id = seq_len(nrow(rv$files_df)),
-            stringsAsFactors = FALSE
-        )
+        # Initialize well_data as empty named list
+        rv$well_data <- list()
         
-        # Initialize all well fields with NA
-        for (field in well_fields) {
-            rv$well_df[[field]] <- NA
+        # Assign unique borehole IDs to each row (page) in files_df
+        for (i in seq_len(nrow(rv$files_df))) {
+            # Generate unique ID for each page
+            unique_id <- paste0("BH", sprintf("%04d", i))
+            rv$files_df$unique_id[i] <- unique_id
+
+            # Create metadata list with NA values for all fields
+            metadata <- list()
+            for (field in well_fields) {
+                metadata[[field]] <- NA
+            }
+            
+            # Create well_data entry for this individual page/well
+            rv$well_data[[unique_id]] <- list(
+                files = i,  # Single page index for this well
+                metadata = metadata  # Named list of well metadata
+            )
         }
 
         rv$pdf_index <- 1
@@ -909,9 +994,26 @@ server <- function(input, output, session) {
         req(rv$files_df)
         if (nrow(rv$files_df) > 0) {
             selected_row <- rv$pdf_index
+            
+            # Find which well this page belongs to
+            well_id_to_remove <- rv$files_df$unique_id[selected_row]
+            if (!is.null(well_id_to_remove) && well_id_to_remove %in% names(rv$well_data)) {
+                rv$well_data[[well_id_to_remove]] <- NULL
+            }
+            
+            # Remove from files_df
             rv$files_df <- rv$files_df[-selected_row, ]
-            rv$well_df <- rv$well_df[-selected_row, ]  # Also remove from well_df
             rv$ocr_text <- rv$ocr_text[-selected_row]
+            
+            # Update well_data structure - adjust file indices
+            for (well_id in names(rv$well_data)) {
+                file_index <- rv$well_data[[well_id]]$files
+                # Adjust the file index if it's greater than the removed row
+                if (file_index > selected_row) {
+                    rv$well_data[[well_id]]$files <- file_index - 1
+                }
+            }
+            
             if (nrow(rv$files_df) == 0) {
                 rv$pdf_index <- 1
             } else if (rv$pdf_index > nrow(rv$files_df)) {
@@ -950,12 +1052,16 @@ server <- function(input, output, session) {
             options = list(pageLength = 5, dom = 'tip') # removes search box
         )
     })
-
+    
+    # Consolidated observer for PDF rendering - triggers on PDF index changes AND OCR settings
     observe({
         req(rv$files_df)
         req(rv$pdf_index)
         
-        # Always render normal version - OCR overlay is handled in the plot itself
+        # Include brush_enabled() as a reactive dependency so UI re-renders when brush state changes
+        current_brush_enabled <- brush_enabled()
+        
+        # Only render UI when PDF index changes OR brush state changes
         output$pdf_viewer <- renderUI({
             img_path <- rv$files_df$Path[rv$pdf_index]
             
@@ -970,116 +1076,123 @@ server <- function(input, output, session) {
             container_max_width <- 1200  # Maximum reasonable width
             display_width <- min(container_max_width, img_width)
             display_height <- display_width * aspect_ratio
-            
-            # Use CSS to make the plot responsive while maintaining aspect ratio
+
             tags$div(
                 style = "width: 100%; display: flex; justify-content: center; align-items: flex-start;",
                 plotOutput(
                     outputId = paste0("pdf_plot_", rv$pdf_index),
                     width = paste0(display_width, "px"),
                     height = paste0(display_height, "px"),
-                    brush = if (brush_enabled()) {
-                        brushOpts(id = "pdf_brush", resetOnNew = TRUE)
+                    # Conditionally include brush based on brush_enabled state
+                    brush = if (current_brush_enabled) {
+                        brushOpts(
+                            id = "pdf_brush", 
+                            resetOnNew = TRUE,
+                            direction = "xy",
+                            opacity = 0.3,
+                            fill = "#007bff"
+                        )
                     } else {
                         NULL
                     }
                 )
             )
         })
+    })
+
+    # Single observer for plot rendering that responds to both PDF changes AND OCR settings
+    observe({
+        req(rv$files_df)
+        req(rv$pdf_index)
         
-        output[[paste0("pdf_plot_", rv$pdf_index)]] <- renderPlot({
-            img_path <- rv$files_df$Path[rv$pdf_index]
+        # Include OCR display mode and confidence as reactive dependencies
+        current_ocr_mode <- input$ocr_display_mode
+        current_confidence <- input$confidence_threshold
+        
+        # Create the plot output only once per PDF index
+        plot_id <- paste0("pdf_plot_", rv$pdf_index)
+        
+        # Use isolate to prevent unnecessary re-rendering
+        output[[plot_id]] <- renderPlot({
+            img_path <- isolate(rv$files_df$Path[rv$pdf_index])
             img <- magick::image_read(img_path)
             
             # Enhance image quality for better display
             img <- img %>%
                 magick::image_enhance()
             
-            img_gg <- as.raster(img)
-            
             # Get image dimensions
             info <- magick::image_info(img)
             img_width <- info$width
             img_height <- info$height
             
-            # Start with base plot with improved styling
-            p <- ggplot2::ggplot() +
-                ggplot2::annotation_raster(img_gg, xmin = 0, xmax = 1, ymin = 0, ymax = 1) +
-                ggplot2::theme_void() +
-                ggplot2::theme(
-                    panel.background = ggplot2::element_rect(fill = "white", color = NA),
-                    plot.background = ggplot2::element_rect(fill = "white", color = NA),
-                    plot.margin = ggplot2::margin(5, 5, 5, 5, "pt"),
-                    aspect.ratio = img_height / img_width,
-                    panel.border = ggplot2::element_rect(color = "#ddd", fill = NA, size = 1)
-                ) +
-                ggplot2::coord_fixed(ratio = 1) +
-                ggplot2::scale_x_continuous(expand = c(0, 0)) +
-                ggplot2::scale_y_continuous(expand = c(0, 0))
+            # Convert magick image to raster format for base R
+            img_raster <- as.raster(img)
+            
+            # Set up the plot area with correct orientation
+            par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+            plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height), 
+                 xlab = "", ylab = "", axes = FALSE, asp = 1)
+            
+            # Display the image
+            rasterImage(img_raster, 0, 0, img_width, img_height)
             
             # Add OCR rectangles if in OCR mode and OCR data exists
-            if (rv$ocr_display_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
+            if (current_ocr_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
                 ocr_df <- rv$ocr_text[[rv$pdf_index]]
                 
                 # Filter by confidence threshold
                 if (nrow(ocr_df) > 0) {
-                    ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
+                    ocr_df <- ocr_df[ocr_df$confidence >= current_confidence, , drop = FALSE]
                 }
 
                 if (nrow(ocr_df) > 0) {
-                    # bbox is "x1,y1,x2,y2"
-                    rects <- do.call(rbind, lapply(seq_len(nrow(ocr_df)), function(i) {
+                    # Process each OCR word with flipped Y coordinates
+                    for (i in seq_len(nrow(ocr_df))) {
                         coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
-                        data.frame(
-                            xmin = coords[1] / img_width,
-                            xmax = coords[3] / img_width,
-                            ymin = 1 - coords[4] / img_height,
-                            ymax = 1 - coords[2] / img_height,
-                            word = ocr_df$word[i],
-                            stringsAsFactors = FALSE
-                        )
-                    }))
-                    
-                    if (rv$ocr_display_mode == "text") {
-                        # Show text with solid background instead of OCR boxes
-                        p <- p + ggplot2::geom_rect(
-                            data = rects,
-                            ggplot2::aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-                            fill = "white", color = "black", size = 0.3, alpha = 0.9
-                        )
+                        x1 <- coords[1]
+                        y1 <- img_height - coords[4]  # Flip Y coordinates to match plot
+                        x2 <- coords[3]
+                        y2 <- img_height - coords[2]  # Flip Y coordinates to match plot
                         
-                        # Add text labels
-                        text_data <- rects
-                        text_data$x <- (text_data$xmin + text_data$xmax) / 2
-                        text_data$y <- (text_data$ymin + text_data$ymax) / 2
-                        
-                        p <- p + ggplot2::geom_text(
-                            data = text_data,
-                            ggplot2::aes(x = x, y = y, label = word),
-                            size = 3, color = "black", fontface = "bold",
-                            check_overlap = TRUE
-                        )
-                    } else {
-                        # Default to highlighting boxes
-                        p <- p + ggplot2::geom_rect(
-                            data = rects,
-                            ggplot2::aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
-                            color = "#007bff", size = 0.5, alpha = 0.3
-                        )
+                        if (current_ocr_mode == "text") {
+                            # Draw white background rectangle
+                            rect(x1, y1, x2, y2, col = "white", border = "black", lwd = 1)
+                            # Add text
+                            text((x1 + x2) / 2, (y1 + y2) / 2, ocr_df$word[i], 
+                                 cex = 0.7, col = "black", font = 2)
+                        } else {
+                            # Draw highlight rectangle
+                            rect(x1, y1, x2, y2, col = rgb(0, 0.48, 1, 0.3), 
+                                 border = rgb(0, 0.48, 1, 0.8), lwd = 1)
+                        }
                     }
                 }
             }
-            
-            p
         }, res = 150)  # Higher resolution for better image quality
     })
 
     observeEvent(input$brush_select, {
-        brush_enabled(!brush_enabled())
+        # Toggle brush state
+        new_state <- !brush_enabled()
+        brush_enabled(new_state)
         
-        # If enabling brush, reset zoom/pan to avoid coordinate issues
-        if (brush_enabled()) {
+        # If disabling brush, reset zoom/pan and re-enable controls
+        if (!new_state) {
             runjs("
+                // Re-enable zoom and pan controls
+                $('#zoom_out, #zoom_in, #zoom_reset, #zoom_fit').prop('disabled', false);
+                $('#zoom_out, #zoom_in, #zoom_reset, #zoom_fit').removeClass('disabled');
+                
+                // Re-setup zoom functionality
+                setTimeout(function() {
+                    setupZoom();
+                }, 100);
+            ")
+        } else {
+            # If enabling brush, disable zoom/pan controls
+            runjs("
+                // Reset zoom/pan to avoid coordinate issues
                 const plot = $('#pdf-container').find('div[id*=\"pdf_plot_\"]');
                 if (plot.length > 0) {
                     zoomLevel = 1;
@@ -1090,11 +1203,17 @@ server <- function(input, output, session) {
                         'transform-origin': '0 0'
                     });
                 }
+                
+                // Disable zoom and pan controls
+                $('#pdf-container').off('wheel mousedown');
+                $(document).off('mousemove.pdfpan mouseup.pdfpan');
+                $('#zoom_out, #zoom_in, #zoom_reset, #zoom_fit').prop('disabled', true);
+                $('#zoom_out, #zoom_in, #zoom_reset, #zoom_fit').addClass('disabled');
             ")
         }
         
         # If enabling brush and no OCR data exists, process OCR
-        if (brush_enabled() && !is.null(rv$files_df)) {
+        if (new_state && !is.null(rv$files_df)) {
             # Check if we need OCR processing for brush functionality
             needs_ocr <- any(sapply(rv$ocr_text, function(x) is.null(x)))
             
@@ -1110,64 +1229,123 @@ server <- function(input, output, session) {
         }
         
         # Toggle button styling based on brush state
-        if (brush_enabled()) {
+        if (new_state) {
             runjs("$('#brush_select').addClass('btn-active');")
+            showNotification("Brush tool enabled. Zoom/pan disabled for accurate selection.", type = "message", duration = 3)
         } else {
             runjs("$('#brush_select').removeClass('btn-active');")
+            # Clear any selected text
+            rv$selected_text <- NULL
+            showNotification("Brush tool disabled. Zoom/pan re-enabled.", type = "message", duration = 2)
         }
     })
 
     observeEvent(input$pdf_brush, {
+        # Only process brush if brush is enabled
+        if (!brush_enabled()) return()
+        
         brush <- input$pdf_brush
-        if (!is.null(brush)) {
+        if (!is.null(brush) && !is.null(rv$files_df) && rv$pdf_index <= length(rv$ocr_text)) {
+            # Ensure OCR data exists for current page
+            if (is.null(rv$ocr_text[[rv$pdf_index]])) {
+                showNotification("No OCR data available. Processing...", type = "warning", duration = 2)
+                rv$ocr_text <- process_ocr_batch(rv$files_df, rv$ocr_text, rv$pdf_index)
+            }
+            
             # Find intersection between brush bbox and OCR bounding boxes
-            if (rv$ocr_display_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
-                ocr_df <- rv$ocr_text[[rv$pdf_index]]
+            ocr_df <- rv$ocr_text[[rv$pdf_index]]
+            if (!is.null(ocr_df) && nrow(ocr_df) > 0) {
                 # Filter by confidence threshold
+                ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
+                
                 if (nrow(ocr_df) > 0) {
-                    ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
-                }
-                info <- magick::image_info(magick::image_read(rv$files_df$Path[rv$pdf_index]))
-                img_width <- info$width
-                img_height <- info$height
+                    info <- magick::image_info(magick::image_read(rv$files_df$Path[rv$pdf_index]))
+                    img_width <- info$width
+                    img_height <- info$height
 
-                # Convert brush coordinates (normalized) to image pixel coordinates
-                brush_xmin <- brush$xmin * img_width
-                brush_xmax <- brush$xmax * img_width
-                # Y is reversed in ggplot2 raster
-                brush_ymin <- (1 - brush$ymax) * img_height
-                brush_ymax <- (1 - brush$ymin) * img_height
+                    # The brush coordinates are in plot coordinates, not normalized 0-1
+                    # They should already be in pixel coordinates matching the plot
+                    brush_xmin <- brush$xmin
+                    brush_xmax <- brush$xmax
+                    brush_ymin <- brush$ymin
+                    brush_ymax <- brush$ymax
+                    
+                    # Debug: Print brush coordinates
+                    cat("Brush coordinates: x(", brush_xmin, "-", brush_xmax, "), y(", brush_ymin, "-", brush_ymax, ")\n")
+                    cat("Image dimensions:", img_width, "x", img_height, "\n")
+                    cat("OCR words to check:", nrow(ocr_df), "\n")
 
-                # Function to check intersection between two rectangles
-                rect_intersect <- function(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) {
-                    !(ax2 < bx1 || ax1 > bx2 || ay2 < by1 || ay1 > by2)
-                }
+                    # Function to check intersection between two rectangles
+                    rect_intersect <- function(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) {
+                        !(ax2 < bx1 || ax1 > bx2 || ay2 < by1 || ay1 > by2)
+                    }
 
-                # Find OCR words whose bbox intersects with brush
-                intersect_idx <- sapply(ocr_df$bbox, function(b) {
-                    coords <- as.numeric(strsplit(b, ",")[[1]])
-                    # OCR bbox: x1, y1, x2, y2
-                    rect_intersect(
-                        brush_xmin, brush_ymin, brush_xmax, brush_ymax,
-                        coords[1], coords[2], coords[3], coords[4]
-                    )
-                })
+                    # Find OCR words whose bbox intersects with brush
+                    intersect_idx <- sapply(ocr_df$bbox, function(b) {
+                        coords <- as.numeric(strsplit(b, ",")[[1]]);
+                        # Convert OCR coordinates to match the plot coordinate system
+                        ocr_x1 <- coords[1]
+                        ocr_y1 <- img_height - coords[4]  # Flip Y to match plot rendering
+                        ocr_x2 <- coords[3]
+                        ocr_y2 <- img_height - coords[2]  # Flip Y to match plot rendering
+                        
+                        # Calculate centroid of OCR rectangle
+                        ocr_centroid_x <- (ocr_x1 + ocr_x2) / 2
+                        ocr_centroid_y <- (ocr_y1 + ocr_y2) / 2
+                        
+                        # Debug: Print first few OCR coordinates and centroids
+                        if (which(ocr_df$bbox == b) <= 3) {
+                            cat("OCR word '", ocr_df$word[which(ocr_df$bbox == b)], "' at: x(", ocr_x1, "-", ocr_x2, "), y(", ocr_y1, "-", ocr_y2, "), centroid(", ocr_centroid_x, ",", ocr_centroid_y, ")\n")
+                        }
+                        
+                        # Check if brush contains the centroid
+                        centroid_in_brush <- (ocr_centroid_x >= brush_xmin && ocr_centroid_x <= brush_xmax &&
+                                            ocr_centroid_y >= brush_ymin && ocr_centroid_y <= brush_ymax)
+                        
+                        return(centroid_in_brush)
+                    })
+                    
+                    cat("Number of intersections found:", sum(intersect_idx), "\n")
 
-                selected_words <- ocr_df$word[intersect_idx]
-
-                # Save selected text to reactiveValues for later use
-                rv$selected_text <- concat_ocr_words_by_row(ocr_df[intersect_idx, ])
-                
-                
-                if (length(rv$selected_text) > 0) {
-                    cat(paste(rv$selected_text, collapse = "\n"), "\n")
+                    if (any(intersect_idx)) {
+                        # Save selected text to reactiveValues for later use
+                        rv$selected_text <- concat_ocr_words_by_row(ocr_df[intersect_idx, ])
+                        
+                        if (length(rv$selected_text) > 0) {
+                            cat("Selected text:\n", paste(rv$selected_text, collapse = "\n"), "\n")
+                            showNotification(paste("Selected:", rv$selected_text), 
+                                           type = "message", duration = 5)
+                        }
+                    } else {
+                        rv$selected_text <- NULL
+                        showNotification("No text found in selected area", type = "warning", duration = 2)
+                    }
                 } else {
-                    cat("No text found in brush region.\n")
+                    showNotification("No OCR words above confidence threshold", type = "warning", duration = 2)
                 }
+            } else {
+                showNotification("No OCR data available for this page", type = "warning", duration = 2)
             }
         }
     })
-    
+
+    # Display the borehole ID
+    output$borehole_id_display <- renderText({
+        req(rv$files_df)
+        req(rv$pdf_index)
+        
+        well_id <- current_well_id()
+        
+        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
+            # Generate display ID based on filename and page
+            file_base <- tools::file_path_sans_ext(rv$files_df$Name[rv$pdf_index])
+            page_num <- rv$files_df$Page[rv$pdf_index]
+            return(paste0(well_id))
+        }
+        
+        return("No ID available")
+    })
+
     # Display OCR text in right panel
     output$ocr_text_display <- renderText({
         if (!is.null(rv$selected_text) && length(rv$selected_text) > 0) {
@@ -1179,354 +1357,235 @@ server <- function(input, output, session) {
             ""
         }
     })
-    
-    # Observer for borehole ID input - add selected text when field is clicked
-    observeEvent(input$borehole_id_clicked, {
-        # Check if there's selected text to add
-        if (!is.null(rv$selected_text) && length(rv$selected_text) > 0) {
-            # Combine selected text into a single string
-            selected_text_combined <- paste(rv$selected_text, collapse = " ")
-            
-            # Get current value in the borehole ID field
-            current_borehole_id <- input$borehole_id
-            
-            # Add selected text to the current borehole ID (replace if empty, otherwise add)
-            if (is.null(selected_text_combined) || selected_text_combined == "") {
-                new_borehole_id <- current_borehole_id
-            } else {
-                new_borehole_id <- selected_text_combined
+
+    # Observer for input field clicks - add selected text when any field is clicked
+    input_fields <- c(
+        "well_name", "easting", "northing",
+        "latitude", "longitude", "location_source", "surveyed_location_top_casing",
+        "depth_to_bedrock", "date_drilled",
+        "casing_outside_diameter", "well_depth",
+        "top_of_screen", "bottom_of_screen",
+        "well_head_stick_up", "static_water_level", "estimated_yield",
+        "surveyed_ground_level_elevation"
+    )
+
+    lapply(input_fields, function(field) {
+        observeEvent(input[[paste0(field, "_clicked")]], {
+            if (!is.null(rv$selected_text) && length(rv$selected_text) > 0) {
+                selected_text_combined <- paste(rv$selected_text, collapse = " ")
+                current_value <- input[[field]]
+                new_value <- if (is.null(selected_text_combined) || selected_text_combined == "") current_value else selected_text_combined;
+
+                # Use appropriate update function based on input type
+                if (grepl("date", field)) {
+                    # Try to parse as date
+                    parsed_date <- suppressWarnings(as.Date(new_value))
+                    if (is.na(parsed_date)) {
+                        showNotification(paste("Warning: Selected text is not a valid date for", field), type = "warning", duration = 3)
+                    } else {
+                        updateDateInput(session, field, value = parsed_date)
+                    }
+                } else if (grepl("depth|diameter|easting|northing|latitude|longitude|top|bottom|stick_up|static_water_level|estimated_yield|surveyed_ground_level_elevation", field)) {
+                    parsed_num <- suppressWarnings(as.numeric(new_value))
+                    if (is.na(parsed_num)) {
+                        showNotification(paste("Warning: Selected text is not numeric for", field), type = "warning", duration = 3)
+                    } else {
+                        updateNumericInput(session, field, value = parsed_num)
+                    }
+                } else {
+                    updateTextInput(session, field, value = new_value)
+                }
+                rv$selected_text <- NULL
+                showNotification(paste("Selected text added to", field), type = "message", duration = 2)
             }
-            
-            # Update the text input with the new borehole ID
-            updateTextInput(session, "borehole_id", value = new_borehole_id)
-            
-            # Clear the selected text after using it
-            rv$selected_text <- NULL
-            
-            # Show notification
-            showNotification("Selected text added to borehole ID", type = "message", duration = 2)
-        }
+        })
     })
 
 
     # Save metadata
     observeEvent(input$save_metadata, {
-        req(rv$well_df)
+        req(rv$well_data)
+        req(rv$files_df)
         req(rv$pdf_index)
         
-        # Show current well data dataframe for debugging
-        current_df <- well_data_df()
-        if (nrow(current_df) > 0) {
-            cat("Current well data saved:\n")
-            print(current_df)
-        }
+        well_id <- current_well_id()
         
-        showNotification("Well information saved!", type = "message", duration = 2)
+        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
+            current_metadata <- rv$well_data[[well_id]]$metadata
+            cat("Well information saved for borehole", well_id, ":\n")
+            
+            # Print relevant fields
+            fields_to_show <- c("well_name", "community", "easting", "northing", 
+                               "well_depth", "date_drilled", "purpose_of_well")
+            for (field in fields_to_show) {
+                field_value <- current_metadata[[field]]
+                if (!is.null(field_value) && !is.na(field_value) && field_value != "") {
+                    cat(paste0(field, ": ", field_value), "\n")
+                }
+            }
+            
+            showNotification("Well information saved!", type = "message", duration = 2)
+        }
     })
     
     # Export data
     observeEvent(input$export_data, {
         req(rv$files_df)
+        req(rv$well_data)
         
         # Export both OCR and well data
         export_data <- list(
-            well_data = rv$well_df,
+            well_data = rv$well_data,
             ocr_data = rv$ocr_text,
             files_info = rv$files_df[, c("Name", "OrigFile", "Page", "Path", "tag")]
         )
         
         # You could save this to CSV, Excel, or JSON here
         cat("Export data structure:\n")
-        cat("Well data records:", nrow(rv$well_df), "\n")
+        cat("Number of boreholes:", length(rv$well_data), "\n")
         cat("OCR data pages:", length(rv$ocr_text), "\n")
         cat("Total files:", nrow(rv$files_df), "\n")
         
         showNotification("Export data prepared! Check console for details.", type = "message", duration = 3)
     })
-
-    # Observe all input fields and update well_df at pdf_index
-    observeEvent(list(
-        input$borehole_id, input$well_name, input$community, input$coordinate_system,
-        input$easting, input$northing, input$utm_zone, input$latitude, input$longitude,
-        input$location_source, input$surveyed_location_top_casing, input$purpose_of_well,
-        input$depth_to_bedrock, input$depth_to_bedrock_unit, input$date_drilled,
-        input$casing_outside_diameter, input$casing_outside_diameter_unit,
-        input$well_depth, input$well_depth_unit, input$top_of_screen, input$top_of_screen_unit,
-        input$bottom_of_screen, input$bottom_of_screen_unit, input$well_head_stick_up,
-        input$well_head_stick_up_unit, input$static_water_level, input$static_water_level_unit,
-        input$estimated_yield, input$estimated_yield_unit, input$surveyed_ground_level_elevation,
-        input$surveyed_ground_level_elevation_unit
-    ), {
-        req(rv$well_df)
-        req(rv$pdf_index <= nrow(rv$well_df))
-        req(rv$pdf_index > 0)
-
-        # Update well dataframe with current input values (compact version)
-        fields <- c(
-            "borehole_id", "well_name", "community", "coordinate_system",
-            "easting", "northing", "utm_zone", "latitude", "longitude",
-            "location_source", "surveyed_location_top_casing", "purpose_of_well",
-            "depth_to_bedrock", "depth_to_bedrock_unit", "date_drilled",
-            "casing_outside_diameter", "casing_outside_diameter_unit",
-            "well_depth", "well_depth_unit", "top_of_screen", "top_of_screen_unit",
-            "bottom_of_screen", "bottom_of_screen_unit", "well_head_stick_up",
-            "well_head_stick_up_unit", "static_water_level", "static_water_level_unit",
-            "estimated_yield", "estimated_yield_unit", "surveyed_ground_level_elevation",
-            "surveyed_ground_level_elevation_unit"
-        )
-        for (field in fields) {
-            value <- input[[field]]
-            if (!is.null(value)) {
-            # Convert date to character for consistency
-            if (field == "date_drilled") value <- as.character(value)
-            rv$well_df[[field]][rv$pdf_index] <- value
-            }
+    
+    # Comprehensive observer to store all input values in metadata for the current well
+    observe({
+        # Don't update metadata when we're loading
+        if (loading_metadata()) return()
+        
+        req(rv$files_df)
+        req(rv$pdf_index)
+        req(nrow(rv$files_df) >= rv$pdf_index)
+        
+        well_id <- current_well_id()
+        
+        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
+            # Update metadata with current input values for the correct well
+            rv$well_data[[well_id]]$metadata <- list(
+                borehole_id = well_id,
+                well_name = input$well_name,
+                community = input$community,
+                coordinate_system = input$coordinate_system,
+                easting = input$easting,
+                northing = input$northing,
+                utm_zone = input$utm_zone,
+                latitude = input$latitude,
+                longitude = input$longitude,
+                location_source = input$location_source,
+                surveyed_location_top_casing = input$surveyed_location_top_casing,
+                purpose_of_well = input$purpose_of_well,
+                depth_to_bedrock = input$depth_to_bedrock,
+                depth_to_bedrock_unit = input$depth_to_bedrock_unit,
+                date_drilled = input$date_drilled,
+                casing_outside_diameter = input$casing_outside_diameter,
+                casing_outside_diameter_unit = input$casing_outside_diameter_unit,
+                well_depth = input$well_depth,
+                well_depth_unit = input$well_depth_unit,
+                top_of_screen = input$top_of_screen,
+                top_of_screen_unit = input$top_of_screen_unit,
+                bottom_of_screen = input$bottom_of_screen,
+                bottom_of_screen_unit = input$bottom_of_screen_unit,
+                well_head_stick_up = input$well_head_stick_up,
+                well_head_stick_up_unit = input$well_head_stick_up_unit,
+                static_water_level = input$static_water_level,
+                static_water_level_unit = input$static_water_level_unit,
+                estimated_yield = input$estimated_yield,
+                estimated_yield_unit = input$estimated_yield_unit,
+                surveyed_ground_level_elevation = input$surveyed_ground_level_elevation,
+                surveyed_ground_level_elevation_unit = input$surveyed_ground_level_elevation_unit
+            )
         }
-    }, ignoreInit = TRUE)
+    })
 
-    # Update input fields when pdf_index changes
+    # Observer to load metadata into input fields when switching pages
     observeEvent(rv$pdf_index, {
-        req(rv$well_df)
-        req(rv$pdf_index <= nrow(rv$well_df))
-        
-        current_row <- rv$well_df[rv$pdf_index, ]
-        print(paste("Updating inputs for PDF index:", rv$pdf_index))
-        
-        # Update all input fields from well_df
-        updateTextInput(session, "borehole_id", value = ifelse(is.null(current_row$borehole_id) || is.na(current_row$borehole_id), "", current_row$borehole_id))
-        #updateTextInput(session, "well_name", value = ifelse(is.na(current_row$well_name), "", current_row$well_name))
-        #updateTextInput(session, "location_source", value = ifelse(is.na(current_row$location_source), "", current_row$location_source))
-        #updateTextInput(session, "surveyed_location_top_casing", value = ifelse(is.na(current_row$surveyed_location_top_casing), "", current_row$surveyed_location_top_casing))
-        #
-        ## Update selectize inputs
-        #updateSelectizeInput(session, "community", selected = ifelse(is.na(current_row$community), NULL, current_row$community))
-        #updateSelectizeInput(session, "purpose_of_well", selected = ifelse(is.na(current_row$purpose_of_well), NULL, current_row$purpose_of_well))
-        #updateSelectizeInput(session, "utm_zone", selected = ifelse(is.na(current_row$utm_zone), "8N", current_row$utm_zone))
-        #
-        ## Update radio buttons
-        #updateRadioButtons(session, "coordinate_system", selected = ifelse(is.na(current_row$coordinate_system), "utm", current_row$coordinate_system))
-        #updateRadioButtons(session, "depth_to_bedrock_unit", selected = ifelse(is.na(current_row$depth_to_bedrock_unit), "ft", current_row$depth_to_bedrock_unit))
-        #updateRadioButtons(session, "casing_outside_diameter_unit", selected = ifelse(is.na(current_row$casing_outside_diameter_unit), "mm", current_row$casing_outside_diameter_unit))
-        #updateRadioButtons(session, "well_depth_unit", selected = ifelse(is.na(current_row$well_depth_unit), "ft", current_row$well_depth_unit))
-        #updateRadioButtons(session, "top_of_screen_unit", selected = ifelse(is.na(current_row$top_of_screen_unit), "ft", current_row$top_of_screen_unit))
-        #updateRadioButtons(session, "bottom_of_screen_unit", selected = ifelse(is.na(current_row$bottom_of_screen_unit), "ft", current_row$bottom_of_screen_unit))
-        #updateRadioButtons(session, "well_head_stick_up_unit", selected = ifelse(is.na(current_row$well_head_stick_up_unit), "ft", current_row$well_head_stick_up_unit))
-        #updateRadioButtons(session, "static_water_level_unit", selected = ifelse(is.na(current_row$static_water_level_unit), "ft", current_row$static_water_level_unit))
-        #updateRadioButtons(session, "estimated_yield_unit", selected = ifelse(is.na(current_row$estimated_yield_unit), "L/min", current_row$estimated_yield_unit))
-        #updateRadioButtons(session, "surveyed_ground_level_elevation_unit", selected = ifelse(is.na(current_row$surveyed_ground_level_elevation_unit), "m", current_row$surveyed_ground_level_elevation_unit))
-        #
-        ## Update numeric inputs
-        #updateNumericInput(session, "easting", value = ifelse(is.na(current_row$easting), NULL, current_row$easting))
-        #updateNumericInput(session, "northing", value = ifelse(is.na(current_row$northing), NULL, current_row$northing))
-        #updateNumericInput(session, "latitude", value = ifelse(is.na(current_row$latitude), NULL, current_row$latitude))
-        #updateNumericInput(session, "longitude", value = ifelse(is.na(current_row$longitude), NULL, current_row$longitude))
-        #updateNumericInput(session, "depth_to_bedrock", value = ifelse(is.na(current_row$depth_to_bedrock), NULL, current_row$depth_to_bedrock))
-        #updateNumericInput(session, "casing_outside_diameter", value = ifelse(is.na(current_row$casing_outside_diameter), NULL, current_row$casing_outside_diameter))
-        #updateNumericInput(session, "well_depth", value = ifelse(is.na(current_row$well_depth), NULL, current_row$well_depth))
-        #updateNumericInput(session, "top_of_screen", value = ifelse(is.na(current_row$top_of_screen), NULL, current_row$top_of_screen))
-        #updateNumericInput(session, "bottom_of_screen", value = ifelse(is.na(current_row$bottom_of_screen), NULL, current_row$bottom_of_screen))
-        #updateNumericInput(session, "well_head_stick_up", value = ifelse(is.na(current_row$well_head_stick_up), NULL, current_row$well_head_stick_up))
-        #updateNumericInput(session, "static_water_level", value = ifelse(is.na(current_row$static_water_level), NULL, current_row$static_water_level))
-        #updateNumericInput(session, "estimated_yield", value = ifelse(is.na(current_row$estimated_yield), NULL, current_row$estimated_yield))
-        #updateNumericInput(session, "surveyed_ground_level_elevation", value = ifelse(is.na(current_row$surveyed_ground_level_elevation), NULL, current_row$surveyed_ground_level_elevation))
-        
-        # Update date input
-        #updateDateInput(session, "date_drilled", value = ifelse(is.na(current_row$date_drilled), NULL, as.Date(current_row$date_drilled)))
-    })
-
-    # ...existing code...
-
-    observeEvent(input$remove_pdf, {
         req(rv$files_df)
-        if (nrow(rv$files_df) > 0) {
-            selected_row <- rv$pdf_index
-            rv$files_df <- rv$files_df[-selected_row, ]
-            rv$well_df <- rv$well_df[-selected_row, ]  # Also remove from well_df
-            rv$ocr_text <- rv$ocr_text[-selected_row]
-            if (nrow(rv$files_df) == 0) {
-                rv$pdf_index <- 1
-            } else if (rv$pdf_index > nrow(rv$files_df)) {
-                rv$pdf_index <- nrow(rv$files_df)
-            }
-        }
-    })
-
-    # Save metadata
-    observeEvent(input$save_metadata, {
-        req(rv$well_df)
         req(rv$pdf_index)
+        req(nrow(rv$files_df) >= rv$pdf_index)
         
-        # Show current well data for the current PDF
-        current_row <- rv$well_df[rv$pdf_index, ]
-        cat("Well information saved for page", rv$pdf_index, ":\n")
+        well_id <- current_well_id()
         
-        # Print relevant fields
-        fields_to_show <- c("borehole_id", "well_name", "community", "easting", "northing", 
-                           "well_depth", "date_drilled", "purpose_of_well")
-        for (field in fields_to_show) {
-            if (!is.na(current_row[[field]]) && current_row[[field]] != "") {
-                cat(paste0(field, ": ", current_row[[field]]), "\n")
+        print(paste("Loading metadata for well ID:", well_id, "at index", rv$pdf_index))
+        print(rv$well_data[[well_id]]$metadata$easting);
+
+        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
+            # Set flag to prevent metadata updates while loading
+            loading_metadata(TRUE)
+            
+            metadata <- rv$well_data[[well_id]]$metadata
+            
+            # Helper function to safely get metadata values
+            get_meta_value <- function(field, default = "") {
+                val <- metadata[[field]]
+                if (is.null(val) || is.na(val) || identical(val, NA)) {
+                    return(default)
+                }
+                return(val)
             }
+            
+            get_meta_numeric <- function(field) {
+                val <- metadata[[field]]
+                if (is.null(val) || is.na(val) || identical(val, NA)) {
+                    return(NA)
+                }
+                return(val)
+            }
+            
+            get_meta_date <- function(field) {
+                val <- metadata[[field]]
+                if (is.null(val) || is.na(val) || identical(val, NA)) {
+                    return(NULL)
+                }
+                return(val)
+            }
+            
+            #updateTextInput(session, "borehole_id", value = well_id)
+            updateTextInput(session, "well_name", value = get_meta_value("well_name"))
+            updateTextInput(session, "location_source", value = get_meta_value("location_source"))
+            updateTextInput(session, "surveyed_location_top_casing", value = get_meta_value("surveyed_location_top_casing"))
+            
+            # Update selectize inputs
+            updateSelectizeInput(session, "community", selected = get_meta_value("community", NULL))
+            updateSelectizeInput(session, "utm_zone", selected = get_meta_value("utm_zone", "8N"))
+            updateSelectizeInput(session, "purpose_of_well", selected = get_meta_value("purpose_of_well", NULL))
+            
+            # Update radio buttons
+            updateRadioButtons(session, "coordinate_system", selected = get_meta_value("coordinate_system", "utm"))
+            updateRadioButtons(session, "depth_to_bedrock_unit", selected = get_meta_value("depth_to_bedrock_unit", "ft"))
+            updateRadioButtons(session, "casing_outside_diameter_unit", selected = get_meta_value("casing_outside_diameter_unit", "mm"))
+            updateRadioButtons(session, "well_depth_unit", selected = get_meta_value("well_depth_unit", "ft"))
+            updateRadioButtons(session, "top_of_screen_unit", selected = get_meta_value("top_of_screen_unit", "ft"))
+            updateRadioButtons(session, "bottom_of_screen_unit", selected = get_meta_value("bottom_of_screen_unit", "ft"))
+            updateRadioButtons(session, "well_head_stick_up_unit", selected = get_meta_value("well_head_stick_up_unit", "ft"))
+            updateRadioButtons(session, "static_water_level_unit", selected = get_meta_value("static_water_level_unit", "ft"))
+            updateRadioButtons(session, "estimated_yield_unit", selected = get_meta_value("estimated_yield_unit", "L/min"))
+            updateRadioButtons(session, "surveyed_ground_level_elevation_unit", selected = get_meta_value("surveyed_ground_level_elevation_unit", "m"))
+            
+            # Update numeric inputs
+            updateNumericInput(session, "easting", value = get_meta_numeric("easting"))
+            updateNumericInput(session, "northing", value = get_meta_numeric("northing"))
+            updateNumericInput(session, "latitude", value = get_meta_numeric("latitude"))
+            updateNumericInput(session, "longitude", value = get_meta_numeric("longitude"))
+            updateNumericInput(session, "depth_to_bedrock", value = get_meta_numeric("depth_to_bedrock"))
+            updateNumericInput(session, "casing_outside_diameter", value = get_meta_numeric("casing_outside_diameter"))
+            updateNumericInput(session, "well_depth", value = get_meta_numeric("well_depth"))
+            updateNumericInput(session, "top_of_screen", value = get_meta_numeric("top_of_screen"))
+            updateNumericInput(session, "bottom_of_screen", value = get_meta_numeric("bottom_of_screen"))
+            updateNumericInput(session, "well_head_stick_up", value = get_meta_numeric("well_head_stick_up"))
+            updateNumericInput(session, "static_water_level", value = get_meta_numeric("static_water_level"))
+            updateNumericInput(session, "estimated_yield", value = get_meta_numeric("estimated_yield"))
+            updateNumericInput(session, "surveyed_ground_level_elevation", value = get_meta_numeric("surveyed_ground_level_elevation"))
+            
+            # Update date input
+            updateDateInput(session, "date_drilled", value = get_meta_date("date_drilled"))
+            
+            # Re-enable metadata saving after all updates are complete
+            loading_metadata(FALSE)
+
         }
-        
-        showNotification("Well information saved!", type = "message", duration = 2)
-    })
-    
-    # Export data
-    observeEvent(input$export_data, {
-        req(rv$files_df)
-        req(rv$well_df)
-        
-        # Export both OCR and well data
-        export_data <- list(
-            well_data = rv$well_df,
-            ocr_data = rv$ocr_text,
-            files_info = rv$files_df[, c("Name", "OrigFile", "Page", "Path", "tag")]
-        )
-        
-        # You could save this to CSV, Excel, or JSON here
-        cat("Export data structure:\n")
-        cat("Well data records:", nrow(rv$well_df), "\n")
-        cat("OCR data pages:", length(rv$ocr_text), "\n")
-        cat("Total files:", nrow(rv$files_df), "\n")
-        
-        showNotification("Export data prepared! Check console for details.", type = "message", duration = 3)
     })
 
 }
 
 shinyApp(ui, server)
-# Example: OCR and highlight bounding boxes for specific text in a PDF
-# 
-# # Convert PDF to PNG
-# pngfile <- pdftools::pdf_convert('C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\ywwr\\.data\\204110248.pdf', dpi = 600)
-# 
-# # Preprocess image and extract text using OCR
-# text <- pngfile %>%
-#     image_resize("2000x") %>%
-#     image_convert(type = 'Grayscale') %>%
-#     image_trim(fuzz = 40) %>%
-#     image_write(format = 'png', density = '300x300') %>%
-#     tesseract::ocr() 
-# 
-# cat(text)
-# 
-# Ensure required packages are available
-# if (!requireNamespace("magick", quietly = TRUE)) stop("The 'magick' package is required.")
-# if (!requireNamespace("tesseract", quietly = TRUE)) stop("The 'tesseract' package is required.")
-
-# Read the PNG file
-# img <- magick::image_read(pngfile)
-
-# Run OCR with HOCR output to get bounding boxes
-# ocr_data <- tesseract::ocr_data(img, engine = tesseract::tesseract(options = list(tessedit_create_hocr = 1)))
-
-# Find the row(s) containing the specific text, e.g., "Date"
-# search_text <- "Date"
-
-# matches <- ocr_data[
-#     grepl(search_text, ocr_data$word, ignore.case = TRUE) & ocr_data$conf > 0.8,
-# ]
-
-# Print the bounding box locations for the matched text
-# print(matches[, "bbox"])
-
-# Draw rectangles on the image for each bounding box
-# for (bbox in matches[,"bbox"]) {
-#     coords <- as.numeric(unlist(strsplit(bbox, ",")))
-#     if (length(coords) == 4) {
-#         img <- magick::image_draw(img)
-#         rect(coords[1], coords[2], coords[3], coords[4], border = "#00ffaa", lwd = 5, col = "#d400ff")
-#         dev.off()
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     coords <- as.numeric(unlist(strsplit(bbox, ",")))
-#     if (length(coords) == 4) {
-#         img <- magick::image_draw(img)
-#         rect(coords[1], coords[2], coords[3], coords[4], border = "#00ffaa", lwd = 5, col = "#d400ff")
-#         dev.off()
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     if (length(coords) == 4) {
-#         img <- magick::image_draw(img)
-#         rect(coords[1], coords[2], coords[3], coords[4], border = "#00ffaa", lwd = 5, col = "#d400ff")
-#         dev.off()
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     if (length(coords) == 4) {
-#         img <- magick::image_draw(img)
-#         rect(coords[1], coords[2], coords[3], coords[4], border = "#00ffaa", lwd = 5, col = "#d400ff")
-#         dev.off()
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     if (length(coords) == 4) {
-#         img <- magick::image_draw(img)
-#         rect(coords[1], coords[2], coords[3], coords[4], border = "#00ffaa", lwd = 5, col = "#d400ff")
-#         dev.off()
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-#     }
-# }
-
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-# Save the annotated image
-# magick::image_write(img, path = "annotated.png", format = "png")
-
