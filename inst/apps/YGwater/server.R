@@ -18,9 +18,6 @@ app_server <- function(input, output, session) {
   # Allow re connection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
   session$allowReconnect(TRUE)
   
-  
-  # Hide all 'admin' side tabs if they were generated
-  
   # Show relevant tabs for viz mode
   showViz <- function(show = TRUE) {
     if (show) {
@@ -75,6 +72,7 @@ app_server <- function(input, output, session) {
     }
   }
   
+  # Hide all 'admin' side tabs if they were generated
   if (!config$public) { # Immediately run the showAdmin function to hide the admin tabs, they're only shown upon login
     showAdmin(show = FALSE)
   }
@@ -171,7 +169,8 @@ app_server <- function(input, output, session) {
   languageSelection <- reactiveValues() # holds language and abbreviation
   
   # Populate the language selection dropdown
-  session$sendCustomMessage("updateLangMenu", names(translation_cache))
+  # Commented out as using only French/english,
+  # session$sendCustomMessage("updateLangMenu", names(translation_cache))
   
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({

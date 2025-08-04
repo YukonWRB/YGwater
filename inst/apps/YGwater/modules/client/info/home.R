@@ -3,10 +3,6 @@ homeUI <- function(id) {
   ns <- NS(id)
   tagList()
   verticalLayout(
-    htmlOutput(ns("betaTitle")),
-    tags$div(style = "height: 10px;"),
-    htmlOutput(ns("betaText")),
-    tags$div(style = "height: 60px;"),
     htmlOutput(ns("title")),
     tags$div(style = "height: 10px;"),
     htmlOutput(ns("main_text")),

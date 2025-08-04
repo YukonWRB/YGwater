@@ -173,8 +173,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   )
   
   # Load the YG BS 5 theme
-  app_theme <<- bslib::bs_theme(version = 5) %>%
-    bs_add_rules(paste(readLines(system.file("apps/YGwater/www/css/YG_bs5.css", package = "YGwater")), collapse = "\n"))
+  # app_theme <<- bslib::bs_theme(version = 5) %>%
+  # bs_add_rules(paste(readLines(system.file("apps/YGwater/www/css/YG_bs5.css", package = "YGwater")), collapse = "\n"))
   
 }
 

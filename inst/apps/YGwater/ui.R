@@ -61,10 +61,11 @@ app_ui <- function(request) {
       # Make the container for the top bar, which sits above the nav bar
       div(
         class = "top-bar-container d-none d-md-block",
+        style = "background-color: #244C5A; margin-bottom: 0; border-bottom: none",
         fluidRow(
           column(3,
                  div(class = "logo",
-                     htmltools::img(src = "imgs/Yukon_logo-min.png", .noWS = "outside", alt = "Yukon Government logo")
+                     htmltools::img(src = "imgs/Yukon_logo_white-min.png", .noWS = "outside", alt = "Yukon Government logo")
                      
                  ),
                  class = "logo-container"),
@@ -79,7 +80,7 @@ app_ui <- function(request) {
                            actionButton("logoutBtn", "Logout", class = "btn btn-primary", style = "display: none;")) # Initially hidden
                      }
                  ),
-                 class = "aurora-login-container")
+                 class = "aurora-login-container"),
         )
       ),
       # And now the navbar itself
@@ -87,7 +88,7 @@ app_ui <- function(request) {
         title = tags$a(
           class = "d-md-none",
           href = "#",
-          tags$img(src = "imgs/Yukon_logo.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
+          tags$img(src = "imgs/Yukon_logo_white-min.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
         ),
         id = "navbar",
         window_title = NULL,
@@ -95,7 +96,7 @@ app_ui <- function(request) {
                                         collapsible = TRUE),
         fluid = TRUE,
         lang = "en",
-        theme = NULL, # Theme is set earlier by css file reference
+        theme = NULL, # Theme is set earlier by css file referene in globals (THIS IS NOT WORKING)
         gap = "10px",
         nav_panel(title = uiOutput("homeNavTitle"), value = "home",
                   uiOutput("home_ui")),
@@ -245,8 +246,11 @@ app_ui <- function(request) {
                              value = "deploy_recover",
                              uiOutput("deploy_recover_ui"))
           )
-        }
-      ), # End page_navbar (though it's modified below to add a language selector)
+        },
+        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a dropdown menu instead.
+        nav_spacer(),
+        nav_item(actionButton("language_button", NULL))
+      ), # End page_navbar
       
       # Now a footer, rendered in the server for language support
       div(
