@@ -154,8 +154,6 @@ app_ui <- function(request) {
                  nav_panel(title = uiOutput("infoNavAboutTitle"), value = "about",
                            uiOutput("about_ui"))
         ),
-        nav_panel(title = "Feedback", value = "feedback",
-                  uiOutput("feedback_ui")),
         if (!config$public) {
           nav_menu(title = "Application tasks",
                    value = "appTasks",
@@ -249,7 +247,12 @@ app_ui <- function(request) {
         },
         # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a dropdown menu instead.
         nav_spacer(),
-        nav_item(actionButton("language_button", NULL))
+        nav_panel(title = "Feedback", value = "feedback",
+                  uiOutput("feedback_ui")),
+        # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover
+        nav_item(actionButton("language_button", NULL, 
+                              class = "btn btn-secondary language-button",
+                              style = "border: none; background-color: transparent; color: white; padding: 0; margin: 0; hover ???: ;")),
       ), # End page_navbar
       
       # Now a footer, rendered in the server for language support
@@ -259,65 +262,66 @@ app_ui <- function(request) {
       )
     ), # End of page_fluid
     
-    # Insert language selector into the navbar
-    HTML("<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    var parent = document.getElementsByClassName('navbar-nav');
-    
-    if (parent.length > 0) {
-      parent[0].insertAdjacentHTML('afterend', 
-        '<ul class=\"navbar-nav ms-auto\">' +
-        '<li class=\"nav-item dropdown\">' +
-        '<a href=\"#\" class=\"nav-link dropdown-toggle\" data-bs-toggle=\"dropdown\" role=\"button\" aria-expanded=\"false\">' +
-        'Language</a>' +
-        '<ul class=\"dropdown-menu\" id=\"lang-dropdown\">' +
-        '</ul>' +
-        '</li>' +
-        '</ul>'
-      );
-    }
-
-    // Define the function globally so it can be used in the onclick event
-    window.setLang = function(lang) {
-      Shiny.setInputValue(\"langSelect\", lang, {priority: \"event\"});
-      
-      // Remove active class from all menu items
-      var items = document.querySelectorAll('#lang-dropdown li');
-      items.forEach(function(item) {
-        item.classList.remove('active');
-      });
-    
-      // Find and highlight the selected language
-      var links = document.querySelectorAll('#lang-dropdown a');
-      links.forEach(function(link) {
-        if (link.textContent.trim() === lang) {
-          link.parentElement.classList.add('active');
-        }
-      });
-    };
-
-    // Function to dynamically update the dropdown menu from Shiny
-    Shiny.addCustomMessageHandler(\"updateLangMenu\", function(langs) {
-      var dropdown = document.getElementById('lang-dropdown');
-      dropdown.innerHTML = '';  // Clear existing options
-      langs.forEach(function(lang) {
-        var li = document.createElement('li');
-        var a = document.createElement('a');
-        a.href = '#';
-        a.textContent = lang;
-        a.setAttribute('onclick', \"setLang('\" + lang + \"')\");  // Attach function
-        li.appendChild(a);
-        dropdown.appendChild(li);
-      });
-    });
-    
-        // Function to set the initial selected language based on the user's browser language
-    Shiny.addCustomMessageHandler('setSelectedLanguage', function(lang) {
-      console.log('Setting initial language: ' + lang);
-      Shiny.setInputValue('langSelect', lang, {priority: 'event'});
-    });
-  });
-</script>")
+    # Below is commented out because it is not used anymore. It was used to add a language selector drop-down to the navbar, but current implementation uses a button that toggles the language.
+#     # Insert language selector into the navbar
+#     HTML("<script>
+#   document.addEventListener('DOMContentLoaded', function() {
+#     var parent = document.getElementsByClassName('navbar-nav');
+#     
+#     if (parent.length > 0) {
+#       parent[0].insertAdjacentHTML('afterend', 
+#         '<ul class=\"navbar-nav ms-auto\">' +
+#         '<li class=\"nav-item dropdown\">' +
+#         '<a href=\"#\" class=\"nav-link dropdown-toggle\" data-bs-toggle=\"dropdown\" role=\"button\" aria-expanded=\"false\">' +
+#         'Language</a>' +
+#         '<ul class=\"dropdown-menu\" id=\"lang-dropdown\">' +
+#         '</ul>' +
+#         '</li>' +
+#         '</ul>'
+#       );
+#     }
+# 
+#     // Define the function globally so it can be used in the onclick event
+#     window.setLang = function(lang) {
+#       Shiny.setInputValue(\"langSelect\", lang, {priority: \"event\"});
+#       
+#       // Remove active class from all menu items
+#       var items = document.querySelectorAll('#lang-dropdown li');
+#       items.forEach(function(item) {
+#         item.classList.remove('active');
+#       });
+#     
+#       // Find and highlight the selected language
+#       var links = document.querySelectorAll('#lang-dropdown a');
+#       links.forEach(function(link) {
+#         if (link.textContent.trim() === lang) {
+#           link.parentElement.classList.add('active');
+#         }
+#       });
+#     };
+# 
+#     // Function to dynamically update the dropdown menu from Shiny
+#     Shiny.addCustomMessageHandler(\"updateLangMenu\", function(langs) {
+#       var dropdown = document.getElementById('lang-dropdown');
+#       dropdown.innerHTML = '';  // Clear existing options
+#       langs.forEach(function(lang) {
+#         var li = document.createElement('li');
+#         var a = document.createElement('a');
+#         a.href = '#';
+#         a.textContent = lang;
+#         a.setAttribute('onclick', \"setLang('\" + lang + \"')\");  // Attach function
+#         li.appendChild(a);
+#         dropdown.appendChild(li);
+#       });
+#     });
+#     
+#         // Function to set the initial selected language based on the user's browser language
+#     Shiny.addCustomMessageHandler('setSelectedLanguage', function(lang) {
+#       console.log('Setting initial language: ' + lang);
+#       Shiny.setInputValue('langSelect', lang, {priority: 'event'});
+#     });
+#   });
+# </script>")
   ) # End tagList
   
 }

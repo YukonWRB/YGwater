@@ -166,7 +166,7 @@ app_server <- function(input, output, session) {
   # Language selection ########################################################
   
   # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
-  languageSelection <- reactiveValues() # holds language and abbreviation
+  languageSelection <- reactiveValues(language = NULL, abbrev = NULL) # holds language and abbreviation
   
   # Populate the language selection dropdown
   # Commented out as using only French/english,
@@ -183,85 +183,174 @@ app_server <- function(input, output, session) {
   
   # Set initial language based on browser language
   # Check if userLang contains en or fr in the string and set the language accordingly
-  observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
+  observeEvent(input$userLang, { # userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
     lang_code <- substr(input$userLang, 1, 2)
     
     selected_lang <- if (lang_code == "fr") "Français" else "English"
     
     # Send the selected language to JavaScript so it updates input$langSelect
-    session$sendCustomMessage(type = 'setSelectedLanguage', message = selected_lang)
+    # session$sendCustomMessage(type = 'setSelectedLanguage', message = selected_lang)
     
-    # Also update the HTML <head> for language settings
+    languageSelection$language <- selected_lang
+    languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+    
+    updateActionButton(
+      session, "language_button",
+      label = ifelse(selected_lang == "English", "Français", "English")
+    )
+    
+    # Update the HTML <head> for language settings
     session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(lang_code == "fr", "fr", "en")))
   }, ignoreInit = TRUE, ignoreNULL = TRUE, once = TRUE) # This observeEvent should only run once when the app is loaded.
   
-  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
-  # Observe user selection of language
-  observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
-    if (input$langSelect %in% names(translation_cache)) {
-      languageSelection$language <- input$langSelect
-      languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-      
-      # Render the navigation bar titles based on the language
-      output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
-      output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
-      output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
-      output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
-      output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
-      
-      output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
-      output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
-      output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-      # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
-      
-      output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
-      output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
-      output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
-      output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
-      output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
-      
-      output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
-      output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
-      output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
-      
-      output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
-      output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
-      output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
-      
-      output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
-      output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
-      output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
-      
-      session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
-      
-      # Render the footer based on the language
-      output$footer_ui <- renderUI({
-        div(
-          span("Was this page helpful?",
-               # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
-               actionButton(
-                 "thumbs_up",
-                 label = bsicons::bs_icon("hand-thumbs-up", 
-                                          size = "2em", 
-                                          fill = "#244C5A"),
-                 class = "btn btn-link",
-                 width = "50px"),
-               actionButton(
-                 "thumbs_down",
-                 label = bsicons::bs_icon("hand-thumbs-down", 
-                                          size = "2em", 
-                                          fill = "#244C5A"),
-                 class = "btn btn-link",
-                 width = "50px")
-          ),
-          # Set background color of div
-          style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
-          # Make a placeholder for feedback text and submit button
-          uiOutput("feedback_ui")
-        )
-      }) 
-    }
-  })  # No need for a bindEvent as this rendering is trigered by a language change
+  
+  # Below is commented out; it was used to work with a language selection drop-down menu but this is replaced by an actionButton
+  # # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
+  # # Observe user selection of language
+  # observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
+  #   if (input$langSelect %in% names(translation_cache)) {
+  #     languageSelection$language <- input$langSelect
+  #     languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+  #     
+  #     # Render the navigation bar titles based on the language
+  #     output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
+  #     output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
+  #     output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
+  #     output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
+  #     output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
+  #     
+  #     output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
+  #     output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
+  #     output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
+  #     # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+  #     
+  #     output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
+  #     output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
+  #     output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
+  #     output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
+  #     output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
+  #     
+  #     output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
+  #     output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
+  #     output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
+  #     
+  #     output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
+  #     output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
+  #     output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
+  #     
+  #     output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
+  #     output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
+  #     output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
+  #     
+  #     session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
+  #     
+  #     # Render the footer based on the language
+  #     output$footer_ui <- renderUI({
+  #       div(
+  #         span("Was this page helpful?",
+  #              # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
+  #              actionButton(
+  #                "thumbs_up",
+  #                label = bsicons::bs_icon("hand-thumbs-up", 
+  #                                         size = "2em", 
+  #                                         fill = "#244C5A"),
+  #                class = "btn btn-link",
+  #                width = "50px"),
+  #              actionButton(
+  #                "thumbs_down",
+  #                label = bsicons::bs_icon("hand-thumbs-down", 
+  #                                         size = "2em", 
+  #                                         fill = "#244C5A"),
+  #                class = "btn btn-link",
+  #                width = "50px")
+  #         ),
+  #         # Set background color of div
+  #         style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
+  #         # Make a placeholder for feedback text and submit button
+  #         uiOutput("feedback_ui")
+  #       )
+  #     }) 
+  #   }
+  # })  # No need for a bindEvent as this rendering is trigered by a language change
+  
+  # Below code replaced the drop-down button selection
+  # Toggle language when the button is pressed
+  observeEvent(input$language_button, {
+    new_lang <- if (languageSelection$language == "English") "Français" else "English"
+    languageSelection$language <- new_lang
+    languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+    
+    updateActionButton(
+      session, "language_button",
+      label = ifelse(new_lang == "English", "Français", "English")
+    )
+    
+    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(new_lang == "Français", "fr", "en")))
+  })
+  
+  # Render UI text based on the selected language
+  observeEvent(languageSelection$language, {
+    req(languageSelection$language)
+    
+    # Render the navigation bar titles based on the language
+    output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
+    output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
+    output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
+    output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
+    output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
+    
+    output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
+    output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
+    output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
+    # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+    
+    output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
+    output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
+    output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
+    output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
+    output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
+    
+    output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
+    output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
+    output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
+    
+    output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
+    output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
+    output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
+    
+    output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
+    output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
+    output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
+    
+    session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
+    
+    # Render the footer based on the language
+    output$footer_ui <- renderUI({
+      div(
+        span("Was this page helpful?",
+             # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
+             actionButton(
+               "thumbs_up",
+               label = bsicons::bs_icon("hand-thumbs-up",
+                                        size = "2em",
+                                        fill = "#244C5A"),
+               class = "btn btn-link",
+               width = "50px"),
+             actionButton(
+               "thumbs_down",
+               label = bsicons::bs_icon("hand-thumbs-down",
+                                        size = "2em",
+                                        fill = "#244C5A"),
+               class = "btn btn-link",
+               width = "50px")
+        ),
+        # Set background color of div
+        style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
+        # Make a placeholder for feedback text and submit button
+        uiOutput("feedback_ui")
+      )
+    })
+  })  # No need for a bindEvent as this rendering is triggered by a language change
   
   # ObserveEvents for thumbs up/down buttons
   # add a textAreaInput to allow the user to write something, and a 'submit feedback' button
