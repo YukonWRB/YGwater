@@ -207,41 +207,18 @@ plotTimeseries <- function(location,
   }
   
   # Determine the timeseries and adjust the date range #################
-  if (inherits(location, "character")) {
-    # Try to find the location_id from a character string
-    location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location};", .con = con))[1,1]
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE name = {location};", .con = con))[1,1]
-    }
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE name_fr = {location};", .con = con))[1,1]
-    }
-    # If nothing so far, maybe it's a numeric that's masquerading as a character
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
-    }
-  } else {
-    # Try to find the location_id from a numeric value
-    location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location_id = {location};", .con = con))[1,1]
-  }
+  location_txt <- as.character(location)
+  location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;", .con = con))[1, 1]
   if (is.na(location_id)) {
     stop("The location you entered does not exist in the database.")
   }
-  
+
   # Confirm parameter and location exist in the database and that there is only one entry
-  if (inherits(parameter, "character")) {
-    parameter <- tolower(parameter)
-    parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = {parameter} OR param_name_fr = {parameter};", .con = con))
-    parameter_code <- parameter_tbl$parameter_id[1]
-    if (is.na(parameter_code)) {
-      stop("The parameter you entered does not exist in the database.")
-    }
-  } else if (inherits(parameter, "numeric")) {
-    parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = {parameter};", .con = con))
-    if (nrow(parameter_tbl) == 0) {
-      stop("The parameter you entered does not exist in the database.")
-    }
-    parameter_code <- parameter
+  parameter_txt <- tolower(as.character(parameter))
+  parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;", .con = con))
+  parameter_code <- parameter_tbl$parameter_id[1]
+  if (is.na(parameter_code)) {
+    stop("The parameter you entered does not exist in the database.")
   }
   
   # Where column param_name_fr is not filled in, use the English name
@@ -273,19 +250,8 @@ plotTimeseries <- function(location,
     }
   } else {  #sub location was specified
     # Find the sub location_id
-    if (inherits(sub_location, "character")) {
-      # Try to find the sub_location_id from a character string
-      sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_location};", .con = con))[[1]]
-      if (is.na(sub_location_id)) {
-        sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_name_fr = {sub_location};", .con = con))[[1]]
-      }
-      # If nothing so far, maybe it's a numeric that's masquerading as a character
-      if (is.na(sub_location_id)) {
-        sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_id = {sub_location};", .con = con))[[1]]
-      }
-    } else if (inherits(sub_location, "numeric")) {
-      sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_id = {sub_location};", .con = con))[[1]]
-    }
+    sub_loc_txt <- as.character(sub_location)
+    sub_location_id <- DBI::dbGetQuery( con, glue::glue_sql( "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;", .con = con))[[1]]
     if (is.na(sub_location_id)) {
       stop("The sub-location you entered does not exist in the database.")
     }
@@ -591,7 +557,7 @@ plotTimeseries <- function(location,
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
+      if (parameter_name %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter_name, ignore.case = TRUE)) { #remove all values less than 0
         trace_data[trace_data$value < 0 & !is.na(trace_data$value),"value"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         trace_data[trace_data$value < -100 & !is.na(trace_data$value),"value"] <- NA
