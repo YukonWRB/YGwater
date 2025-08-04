@@ -36,6 +36,11 @@ app_ui <- function(request) {
         document.title = newTitle;
       });
     ")),
+      tags$script(HTML("
+      Shiny.addCustomMessageHandler('updateLang', function(message) {
+        $('html').attr('lang', message.lang);
+      });"
+    )),
       tags$script("Shiny.addCustomMessageHandler(
       'toggleDropdown',
           function toggleDropdown(msg) {
@@ -46,6 +51,7 @@ app_ui <- function(request) {
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc.
       tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
       tags$link(rel = "stylesheet", type = "text/css", href = "css/buttons.css"), # styling for hover effects on buttons with YG colors
+    
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
       tags$style(HTML("
         a.dropdown-toggle > .shiny-html-output {
@@ -76,8 +82,8 @@ app_ui <- function(request) {
                  div(class = "login-container",
                      if (!config$public) { # 'public' is a global variable established in the globals file
                        div(class = "login-btn-container",
-                           actionButton("loginBtn", "Login", class = "btn btn-primary"),
-                           actionButton("logoutBtn", "Logout", class = "btn btn-primary", style = "display: none;")) # Initially hidden
+                           actionButton("loginBtn", "Login"),
+                           actionButton("logoutBtn", "Logout", style = "display: none;")) # Initially hidden
                      }
                  ),
                  class = "aurora-login-container"),
@@ -245,14 +251,11 @@ app_ui <- function(request) {
                              uiOutput("deploy_recover_ui"))
           )
         },
-        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a dropdown menu instead.
+        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a drop-down menu instead.
         nav_spacer(),
-        nav_panel(title = "Feedback", value = "feedback",
-                  uiOutput("feedback_ui")),
         # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover
         nav_item(actionButton("language_button", NULL, 
-                              class = "btn btn-secondary language-button",
-                              style = "border: none; background-color: transparent; color: white; padding: 0; margin: 0; hover ???: ;")),
+                              class = "language-button")),
       ), # End page_navbar
       
       # Now a footer, rendered in the server for language support

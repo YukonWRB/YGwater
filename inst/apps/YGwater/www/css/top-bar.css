@@ -21,7 +21,6 @@
   align-items: center;
   flex: 1;
 }
-
 .logo-container img {
   height: 60px;
   width: auto; /* Maintain aspect ratio */
@@ -63,7 +62,16 @@
 .login-btn-container {
   display: flex;
   gap: 10px;
-  margin-bottom: 0;
+  border: none !important;
+  background-color: #F2A900 !important;
+  color: rgba(255,255,255,0.55) !important;
+  margin: 0 !important;
+  border-radius: 4px; 
+}
+/* hover effect for login buttons */
+.login-btn-container .btn:hover {
+  color: #ffffff !important;
+  background-color: #F2A900 !important; /* Ensures hover color matches the button */
 }
 
 /* Ensure buttons look clean */
@@ -72,18 +80,32 @@
   padding: 5px 10px;
 }
 
-.selectize-control, .selectize-dropdown {
-  width: auto !important; /* Auto-adjust the dropdown width */
+/* styling for the language button !! remove/comment out if returning to use drop-down menu instead */
+.language-button {
+  border: none !important;
+  background-color: transparent !important;
+  color: rgba(255,255,255,0.55) !important; 
+  padding: var(--bs-nav-link-padding-y) var(--bs-nav-link-padding-x) !important;
+  margin: 0 !important;
 }
-.selectize-dropdown {
-  z-index: 1050 !important; /* Ensure the dropdown overlays other content */
+.language-button:hover {
+  color: #ffffff !important;
+  background-color: transparent !important;
 }
 
-/* Highlight selected language in the dropdown */
-.dropdown-menu li.active a {
-    font-weight: bold;
-    background-color: #00454e !important; /* Bootstrap primary blue */
-    color: white !important; /* Ensures text is visible */
-    border-radius: 4px; /* Optional: smooth corners */
-}
+/* not being used while an actionButton selects language instead
+/*.selectize-control, .selectize-dropdown {
+/*  width: auto !important; /* Auto-adjust the dropdown width */
+/*}
+/*.selectize-dropdown {
+/*  z-index: 1050 !important; /* Ensure the dropdown overlays other content */
+/*}
+
+/* Highlight selected language in the dropdown
+/*.dropdown-menu li.active a {
+/*    font-weight: bold;
+/*    background-color: #00454e !important; /* Bootstrap primary blue */
+/*    color: white !important; /* Ensures text is visible */
+/*    border-radius: 4px; /* Optional: smooth corners */
+/*}
 
