@@ -498,6 +498,3 @@ mapLocs <- function(id, language) {
     return(outputs)  # Sends values back to the main server function
   })
 }
-
-
-
