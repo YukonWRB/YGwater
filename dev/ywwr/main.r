@@ -25,9 +25,6 @@ ui <- fluidPage(
         )
     )
 )
-
-workingDir <- getwd()
-cat("Current working directory:", workingDir, "\n")
 server <- function(input, output, session) {
     # Store split PDF info
     rv <- reactiveValues(
@@ -128,11 +125,8 @@ server <- function(input, output, session) {
     })
 
     output$pdf_viewer <- renderUI({
-
         req(rv$files_df)
         idx <- rv$pdf_index
-        addResourcePath("pdfs", dirname(rv$files_df$Path[[idx]]))
-
         tags$iframe(
             style = "height:600px; width:100%;",
             src = file.path("/pdfs", basename(rv$files_df$Path[[idx]]))
@@ -156,45 +150,49 @@ split_pdf_to_pages <- function(pdf_path, output_dir = tempdir()) {
 
 shinyApp(ui, server)
 
- pngfile <- pdftools::pdf_convert('C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\ywwr\\.data\\204110248.pdf', dpi = 600)
- text <- pngfile %>%
-   image_resize("2000x") %>%
-   image_convert(type = 'Grayscale') %>%
-   image_trim(fuzz = 40) %>%
-   image_write(format = 'png', density = '300x300') %>%
-   tesseract::ocr() 
- 
- cat(text)
- 
- if (!requireNamespace("magick", quietly = TRUE)) stop("The 'magick' package is required.")
- if (!requireNamespace("tesseract", quietly = TRUE)) stop("The 'tesseract' package is required.")
- 
- # Read the PNG file
- img <- magick::image_read(pngfile)
- 
- # Run OCR with HOCR output to get bounding boxes
- ocr_data <- tesseract::ocr_data(img, engine = tesseract::tesseract(options = list(tessedit_create_hocr = 1)))
- 
- # Find the row(s) containing the specific text, e.g., "Project"
- search_text <- "Date"
- 
- matches <- ocr_data[
-     grepl(search_text, ocr_data$word, ignore.case = TRUE) & ocr_data$conf > 0.8,
- ]
- 
- # Print the bounding box locations for the matched text
- print(matches[, "bbox"])
- 
- 
- # Draw black rectangles on the image for each bounding box
- for (bbox in matches[,"bbox"]) {
-     coords <- as.numeric(unlist(strsplit(bbox, ",")))
-     if (length(coords) == 4) {
-         img <- magick::image_draw(img)
-         rect(coords[1], coords[2], coords[3], coords[4], border = "#00ffaa", lwd = 5, col = "#d400ff")
-         dev.off()
-     }
- }
- 
- # Save or display the modified image
- magick::image_write(img, path = "annotated.png", format = "png")
+
+
+
+pngfile <- pdftools::pdf_convert('C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\ywwr\\.data\\204110248.pdf', dpi = 600)
+text <- pngfile %>%
+  image_resize("2000x") %>%
+  image_convert(type = 'Grayscale') %>%
+  image_trim(fuzz = 40) %>%
+  image_write(format = 'png', density = '300x300') %>%
+  tesseract::ocr() 
+
+cat(text)
+
+if (!requireNamespace("magick", quietly = TRUE)) stop("The 'magick' package is required.")
+if (!requireNamespace("tesseract", quietly = TRUE)) stop("The 'tesseract' package is required.")
+
+# Read the PNG file
+img <- magick::image_read(pngfile)
+
+# Run OCR with HOCR output to get bounding boxes
+ocr_data <- tesseract::ocr_data(img, engine = tesseract::tesseract(options = list(tessedit_create_hocr = 1)))
+
+# Find the row(s) containing the specific text, e.g., "Project"
+search_text <- "Well"
+
+
+matches <- ocr_data[
+    grepl(search_text, ocr_data$word, ignore.case = TRUE) & ocr_data$conf > 0.8,
+]
+
+# Print the bounding box locations for the matched text
+print(matches[, "bbox"])
+
+
+# Draw black rectangles on the image for each bounding box
+for (bbox in matches[,"bbox"]) {
+    coords <- as.numeric(unlist(strsplit(bbox, ",")))
+    if (length(coords) == 4) {
+        img <- magick::image_draw(img)
+        rect(coords[1], coords[2], coords[3], coords[4], border = "#00ffaa", lwd = 5, col = "#d400ff")
+        dev.off()
+    }
+}
+
+# Save or display the modified image
+magick::image_write(img, path = "annotated.png", format = "png")

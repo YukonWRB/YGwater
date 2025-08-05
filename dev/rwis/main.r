@@ -42,13 +42,6 @@ on.exit(close(fc))
 
 writeLines("DEBUG - Initializing DownloadRWISData.R log", fc)
 
-## setup library paths
-writeLines(sprintf("DEBUG - .libPaths are: %s", paste(.libPaths(), collapse="\n")), fc)
-writeLines(sprintf("DEBUG - lib_loc is: %s",lib_loc), fc)
-writeLines(sprintf("DEBUG - output_folder is: %s",output_folder), fc)
-
-
-
 
 
 
@@ -224,6 +217,42 @@ plot(
   ylab = "Rainfall (rn1) at Station 87",
   main = "Rainfall at Station 87"
 )
+
+
+
+# Download stations_stations table from RWIS
+RWIS <- YGwater::RWISConnect()
+writeLines(sprintf("RWIS connection established"), fc)
+on.exit(DBI::dbDisconnect(RWIS), add = TRUE)
+
+writeLines(sprintf("Reading stations_stations data from RWIS..."), fc)
+stations <- DBI::dbGetQuery(RWIS, "SELECT * FROM stations_station;")
+
+
+colnames(rain_wide) <- sub("^rn1\\.", "", colnames(rain_wide))
+station_map <- setNames(stations$abbreviation, stations$id)
+colnames(rain_wide) <- station_map[colnames(rain_wide)]
+
+
+rain_wide
+
+
+RWIS <- YGwater::RWISConnect()
+writeLines(sprintf("RWIS connection established"), fc)
+on.exit(DBI::dbDisconnect(RWIS), add = TRUE)
+
+# columns to read in
+ss <- paste(c(important_params, important_headers), collapse = ", ")
+
+# read in data
+writeLines(sprintf("Reading data from RWIS..."), fc)
+start_date_UTC <- start_date
+attr(start_date_UTC, "tzone") <- "UTC"
+measurements <- DBI::dbGetQuery(RWIS, paste0("SELECT ", ss, " FROM measurements_measurement WHERE measurement_time > '", start_date_UTC, "' AND measurement_time <= '", .POSIXct(Sys.time(), tz = "UTC"), "';"))
+
+
+
+
 
 
 writeLines(sprintf("DEBUG - writing RWIS data to local files"), fc)

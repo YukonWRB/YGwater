@@ -235,7 +235,24 @@ ui <- fluidPage(
                 background: #f8f9fa;
                 border-left: 1px solid #dee2e6;
                 position: relative;
+                padding: 0;
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+            }
+            .borehole-header {
+                background: #f8f9fa;
+                border-bottom: 1px solid #dee2e6;
                 padding: 15px;
+                position: sticky;
+                top: 0;
+                z-index: 100;
+            }
+            .scrollable-content {
+                flex: 1;
+                overflow-y: auto;
+                padding: 15px;
+                max-height: calc(100vh - 120px);
             }
             .resize-handle {
                 width: 5px;
@@ -421,129 +438,143 @@ ui <- fluidPage(
         ),
         div(class = "right-panel", id = "right-sidebar",
             div(class = "resize-handle-right", id = "resize-handle-right"),
-            h4("Well Information"),
-            br(),
-            
-            # Well identification
-            div(
-                style = "margin-bottom: 15px;",
+            # Navigation buttons in right panel
+            div(style = "padding: 15px; border-bottom: 1px solid #dee2e6;",
+                fluidRow(
+                    column(12,
+                        actionButton("prev_pdf_right", icon("arrow-left"), class = "nav-btn", title = "Previous"),
+                        actionButton("next_pdf_right", icon("arrow-right"), class = "nav-btn", title = "Next"),
+                        actionButton("remove_pdf_right", icon("trash"), title = "Remove Selected", class = "nav-btn")
+                    )
+                )
+            ),
+            # Fixed borehole ID header - only the ID display
+            div(class = "borehole-header",
                 tags$label("Borehole ID:", style = "font-weight: bold; display: block; margin-bottom: 5px;"),
                 div(
                     class = "borehole-id-display",
                     textOutput("borehole_id_display")
                 )
             ),
-            textInput("well_name", "Well Name:", placeholder = "Enter well name"),
-            selectizeInput("community", "Community:",
-                choices = list(
-                    "Whitehorse" = "whitehorse",
-                    "Dawson City" = "dawson_city",
-                    "Watson Lake" = "watson_lake",
-                    "Haines Junction" = "haines_junction",
-                    "Mayo" = "mayo",
-                    "Carmacks" = "carmacks",
-                    "Faro" = "faro",
-                    "Teslin" = "teslin",
-                    "Other" = "other"
+            # Scrollable content area
+            div(class = "scrollable-content",
+                # Borehole linking controls in scrollable area
+                fluidRow(
+                    column(12,
+                        selectizeInput("borehole_id_selector", "Link img to BH:",
+                            choices = NULL,
+                            selected = NULL,
+                            options = list(
+                                placeholder = "Select borehole",
+                                maxItems = 1
+                            )
+                        ) |> bslib::tooltip(
+                            "Select a borehole ID to link this file/page to an existing borehole record."
+                        )
+                    )
                 ),
-                selected = NULL,
-                options = list(
-                    placeholder = "Select community",
-                    maxItems = 1
-                )
-            ),
-            
-            # Location information
-            radioButtons("coordinate_system", "Coordinate System:",
-                choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
-                selected = "utm",
-                inline = TRUE
-            ),
-            conditionalPanel(
-                condition = "input.coordinate_system == 'utm'",
-                numericInput("easting", "Easting:", value = NULL, min = 0),
-                numericInput("northing", "Northing:", value = NULL, min = 0),
-                selectizeInput("utm_zone", "UTM Zone:",
+                fluidRow(
+                    column(12,
+                        div(
+                            class = "borehole-id-display",
+                            style = "background: #e8f4fd; border-color: #007bff; color: #0056b3; margin-bottom: 15px;",
+                            textOutput("file_count_display")
+                        )
+                    )
+                ),
+                br(),
+                
+                # Location information
+                radioButtons("coordinate_system", "Coordinate System:",
+                    choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
+                    selected = "utm",
+                    inline = TRUE
+                ),
+                conditionalPanel(
+                    condition = "input.coordinate_system == 'utm'",
+                    numericInput("easting", "Easting:", value = NULL, min = 0),
+                    numericInput("northing", "Northing:", value = NULL, min = 0),
+                    selectizeInput("utm_zone", "UTM Zone:",
+                        choices = list(
+                            "7N" = "7N", "8N" = "8N", "9N" = "9N", "10N" = "10N",
+                            "11N" = "11N", "12N" = "12N", "13N" = "13N"
+                        ),
+                        selected = "8N",
+                        options = list(
+                            placeholder = "Select UTM zone",
+                            maxItems = 1
+                        )
+                    )
+                ),
+                conditionalPanel(
+                    condition = "input.coordinate_system == 'latlon'",
+                    numericInput("latitude", "Latitude:", value = NULL, min = 40, max = 85, step = 0.000001),
+                    numericInput("longitude", "Longitude:", value = NULL, min = -141, max = -60, step = 0.000001)
+                ),
+                textInput("location_source", "Location Source:", placeholder = "GPS, Survey, etc."),
+                textInput("surveyed_location_top_casing", "Surveyed Location of Top of Casing:", placeholder = "Enter surveyed location"),
+                
+                selectizeInput("purpose_of_well", "Purpose of Well:",
                     choices = list(
-                        "7N" = "7N", "8N" = "8N", "9N" = "9N", "10N" = "10N",
-                        "11N" = "11N", "12N" = "12N", "13N" = "13N"
+                        "Domestic" = "domestic",
+                        "Municipal" = "municipal",
+                        "Industrial" = "industrial",
+                        "Agricultural" = "agricultural",
+                        "Monitoring" = "monitoring",
+                        "Test Well" = "test_well",
+                        "Other" = "other"
                     ),
-                    selected = "8N",
+                    selected = NULL,
                     options = list(
-                        placeholder = "Select UTM zone",
+                        placeholder = "Select purpose",
                         maxItems = 1
                     )
-                )
-            ),
-            conditionalPanel(
-                condition = "input.coordinate_system == 'latlon'",
-                numericInput("latitude", "Latitude:", value = NULL, min = 40, max = 85, step = 0.000001),
-                numericInput("longitude", "Longitude:", value = NULL, min = -141, max = -60, step = 0.000001)
-            ),
-            textInput("location_source", "Location Source:", placeholder = "GPS, Survey, etc."),
-            textInput("surveyed_location_top_casing", "Surveyed Location of Top of Casing:", placeholder = "Enter surveyed location"),
-            
-            selectizeInput("purpose_of_well", "Purpose of Well:",
-                choices = list(
-                    "Domestic" = "domestic",
-                    "Municipal" = "municipal",
-                    "Industrial" = "industrial",
-                    "Agricultural" = "agricultural",
-                    "Monitoring" = "monitoring",
-                    "Test Well" = "test_well",
-                    "Other" = "other"
                 ),
-                selected = NULL,
-                options = list(
-                    placeholder = "Select purpose",
-                    maxItems = 1
+                
+                # Well construction details
+                fluidRow(
+                    column(8, numericInput("depth_to_bedrock", "Depth to Bedrock:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons("depth_to_bedrock_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                ),
+                dateInput("date_drilled", "Date Drilled:", value = NULL),
+                fluidRow(
+                    column(8, numericInput("casing_outside_diameter", "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
+                    column(4, radioButtons("casing_outside_diameter_unit", "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
+                ),
+                fluidRow(
+                    column(8, numericInput("well_depth", "Well Depth:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons("well_depth_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                ),
+                fluidRow(
+                    column(8, numericInput("top_of_screen", "Top of Screen:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons("top_of_screen_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                ),
+                fluidRow(
+                    column(8, numericInput("bottom_of_screen", "Bottom of Screen:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons("bottom_of_screen_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                ),
+                fluidRow(
+                    column(8, numericInput("well_head_stick_up", "Well Head Stick Up:", value = NULL, step = 0.01)),
+                    column(4, radioButtons("well_head_stick_up_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                ),
+                fluidRow(
+                    column(8, numericInput("static_water_level", "Static Water Level:", value = NULL, step = 0.01)),
+                    column(4, radioButtons("static_water_level_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                ),
+                fluidRow(
+                    column(8, numericInput("estimated_yield", "Estimated Yield:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons("estimated_yield_unit", "", choices = list("L/s" = "L/s", "G/min" = "G/min"), selected = "G/min", inline = TRUE))
+                ),
+                fluidRow(
+                    column(8, numericInput("surveyed_ground_level_elevation", "Surveyed Ground Level Elevation:", value = NULL, step = 0.01)),
+                    column(4, radioButtons("surveyed_ground_level_elevation_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                ),
+                br(),
+                
+                # Action buttons
+                fluidRow(
+                    column(12, downloadButton("save_export_data", "Save & Export to CSV", class = "btn-primary btn-block"))
                 )
-            ),
-            
-            # Well construction details
-            fluidRow(
-                column(8, numericInput("depth_to_bedrock", "Depth to Bedrock:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("depth_to_bedrock_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-            ),
-            dateInput("date_drilled", "Date Drilled:", value = NULL),
-            fluidRow(
-                column(8, numericInput("casing_outside_diameter", "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
-                column(4, radioButtons("casing_outside_diameter_unit", "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
-            ),
-            fluidRow(
-                column(8, numericInput("well_depth", "Well Depth:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("well_depth_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-            ),
-            fluidRow(
-                column(8, numericInput("top_of_screen", "Top of Screen:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("top_of_screen_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-            ),
-            fluidRow(
-                column(8, numericInput("bottom_of_screen", "Bottom of Screen:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("bottom_of_screen_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-            ),
-            fluidRow(
-                column(8, numericInput("well_head_stick_up", "Well Head Stick Up:", value = NULL, step = 0.01)),
-                column(4, radioButtons("well_head_stick_up_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-            ),
-            fluidRow(
-                column(8, numericInput("static_water_level", "Static Water Level:", value = NULL, step = 0.01)),
-                column(4, radioButtons("static_water_level_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-            ),
-            fluidRow(
-                column(8, numericInput("estimated_yield", "Estimated Yield:", value = NULL, min = 0, step = 0.1)),
-                column(4, radioButtons("estimated_yield_unit", "", choices = list("L/s" = "L/s", "G/min" = "G/min"), selected = "G/min", inline = TRUE))
-            ),
-            fluidRow(
-                column(8, numericInput("surveyed_ground_level_elevation", "Surveyed Ground Level Elevation:", value = NULL, step = 0.01)),
-                column(4, radioButtons("surveyed_ground_level_elevation_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-            ),
-            br(),
-            
-            # Action buttons
-            fluidRow(
-                column(6, actionButton("save_metadata", "Save Info", class = "btn-primary btn-block")),
-                column(6, actionButton("export_data", "Export", class = "btn-success btn-block"))
             )
         )
     ),
@@ -816,7 +847,6 @@ ui <- fluidPage(
     "))
 )
 
-
 server <- function(input, output, session) {
     # Store split PDF info
     rv <- reactiveValues(
@@ -841,7 +871,7 @@ server <- function(input, output, session) {
         req(nrow(rv$files_df) >= rv$pdf_index)
         
         # Since each row has its own unique well ID, just return it directly
-        return(rv$files_df$unique_id[rv$pdf_index])
+        return(rv$files_df$borehole_id[rv$pdf_index])
     })
 
 
@@ -887,7 +917,7 @@ server <- function(input, output, session) {
                 Path = png_files,
                 stringsAsFactors = FALSE
             )
-            split_df$NewFilename <- file.path("/pdfs", basename(split_df$Path))
+            split_df$NewFilename <- file.path(basename(split_df$Path))
             split_df$tag <- paste0(split_df$Name, "-", split_df$Page)
             
             if (i == 1) {
@@ -899,10 +929,11 @@ server <- function(input, output, session) {
             # Show completion for current file
             showNotification(paste("Completed converting", orig_name, "- Generated", length(png_files), "page(s)"), 
                            type = "message", duration = 1.5)
+                        
         }
 
         rv$files_df <- all_split_files
-
+        print(all_split_files)
         # Initialize well information as named list organized by borehole ID
         well_fields <- c(
             "well_name", "community", "coordinate_system",
@@ -923,8 +954,8 @@ server <- function(input, output, session) {
         # Assign unique borehole IDs to each row (page) in files_df
         for (i in seq_len(nrow(rv$files_df))) {
             # Generate unique ID for each page
-            unique_id <- paste0("BH", sprintf("%04d", i))
-            rv$files_df$unique_id[i] <- unique_id
+            borehole_id <- paste0("BH", sprintf("%04d", i))
+            rv$files_df$borehole_id[i] <- borehole_id
 
             # Create metadata list with NA values for all fields
             metadata <- list()
@@ -933,8 +964,8 @@ server <- function(input, output, session) {
             }
             
             # Create well_data entry for this individual page/well
-            rv$well_data[[unique_id]] <- list(
-                files = i,  # Single page index for this well
+            rv$well_data[[borehole_id]] <- list(
+                files = rv$files_df$NewFilename[i],  # Add filename for this well
                 metadata = metadata  # Named list of well metadata
             )
         }
@@ -996,7 +1027,58 @@ server <- function(input, output, session) {
             selected_row <- rv$pdf_index
             
             # Find which well this page belongs to
-            well_id_to_remove <- rv$files_df$unique_id[selected_row]
+            well_id_to_remove <- rv$files_df$borehole_id[selected_row]
+            if (!is.null(well_id_to_remove) && well_id_to_remove %in% names(rv$well_data)) {
+                rv$well_data[[well_id_to_remove]] <- NULL
+            }
+            
+            # Remove from files_df
+            rv$files_df <- rv$files_df[-selected_row, ]
+            rv$ocr_text <- rv$ocr_text[-selected_row]
+            
+            # Update well_data structure - adjust file indices
+            for (well_id in names(rv$well_data)) {
+                file_index <- rv$well_data[[well_id]]$files
+                # Adjust the file index if it's greater than the removed row
+                if (file_index > selected_row) {
+                    rv$well_data[[well_id]]$files <- file_index - 1
+                }
+            }
+            
+            if (nrow(rv$files_df) == 0) {
+                rv$pdf_index <- 1
+            } else if (rv$pdf_index > nrow(rv$files_df)) {
+                rv$pdf_index <- nrow(rv$files_df)
+            }
+        }
+    })
+
+
+    observeEvent(input$next_pdf_right, {
+        req(rv$files_df)
+        if (rv$pdf_index < nrow(rv$files_df)) {
+            rv$pdf_index <- rv$pdf_index + 1
+            # Ensure table selection follows
+            dataTableProxy("pdf_table") %>% selectRows(rv$pdf_index)
+        }
+    })
+
+    observeEvent(input$prev_pdf_right, {
+        req(rv$files_df)
+        if (rv$pdf_index > 1) {
+            rv$pdf_index <- rv$pdf_index - 1
+            # Ensure table selection follows
+            dataTableProxy("pdf_table") %>% selectRows(rv$pdf_index)
+        }
+    })
+
+    observeEvent(input$remove_pdf_right, {
+        req(rv$files_df)
+        if (nrow(rv$files_df) > 0) {
+            selected_row <- rv$pdf_index
+            
+            # Find which well this page belongs to
+            well_id_to_remove <- rv$files_df$borehole_id[selected_row]
             if (!is.null(well_id_to_remove) && well_id_to_remove %in% names(rv$well_data)) {
                 rv$well_data[[well_id_to_remove]] <- NULL
             }
@@ -1040,11 +1122,11 @@ server <- function(input, output, session) {
         req(rv$files_df)
 
         dat <- rv$files_df[, 
-            c("tag", "Date")
+            c("tag", "borehole_id")
         ]
 
         # Format Date as dd-mm-yy hh:mm
-        dat$Date <- format(as.POSIXct(dat$Date), "%d-%m-%y %H:%M")
+        #dat$Date <- format(as.POSIXct(dat$Date), "%d-%m-%y %H:%M")
 
         datatable(
             dat,
@@ -1053,17 +1135,20 @@ server <- function(input, output, session) {
         )
     })
     
-    # Consolidated observer for PDF rendering - triggers on PDF index changes AND OCR settings
+    # Separate UI rendering observer - only react to brush changes
     observe({
         req(rv$files_df)
-        req(rv$pdf_index)
         
-        # Include brush_enabled() as a reactive dependency so UI re-renders when brush state changes
+        # Only depend on brush state for UI changes
         current_brush_enabled <- brush_enabled()
         
-        # Only render UI when PDF index changes OR brush state changes
+        # Use isolate to prevent reactive dependency on pdf_index
+        pdf_index <- isolate(rv$pdf_index)
+        req(pdf_index)
+        
+        # Render UI
         output$pdf_viewer <- renderUI({
-            img_path <- rv$files_df$Path[rv$pdf_index]
+            img_path <- isolate(rv$files_df$Path[pdf_index])
             
             # Get image dimensions to calculate aspect ratio
             img <- magick::image_read(img_path)
@@ -1080,7 +1165,7 @@ server <- function(input, output, session) {
             tags$div(
                 style = "width: 100%; display: flex; justify-content: center; align-items: flex-start;",
                 plotOutput(
-                    outputId = paste0("pdf_plot_", rv$pdf_index),
+                    outputId = paste0("pdf_plot_", pdf_index),
                     width = paste0(display_width, "px"),
                     height = paste0(display_height, "px"),
                     # Conditionally include brush based on brush_enabled state
@@ -1099,22 +1184,21 @@ server <- function(input, output, session) {
             )
         })
     })
-
-    # Single observer for plot rendering that responds to both PDF changes AND OCR settings
+    
+    # Plot rendering observer - react to pdf_index and OCR settings
     observe({
         req(rv$files_df)
         req(rv$pdf_index)
         
-        # Include OCR display mode and confidence as reactive dependencies
+        # Include OCR settings as reactive dependencies
         current_ocr_mode <- input$ocr_display_mode
         current_confidence <- input$confidence_threshold
         
-        # Create the plot output only once per PDF index
+        # Create the plot output only when dependencies change
         plot_id <- paste0("pdf_plot_", rv$pdf_index)
         
-        # Use isolate to prevent unnecessary re-rendering
         output[[plot_id]] <- renderPlot({
-            img_path <- isolate(rv$files_df$Path[rv$pdf_index])
+            img_path <- rv$files_df$Path[rv$pdf_index]
             img <- magick::image_read(img_path)
             
             # Enhance image quality for better display
@@ -1173,11 +1257,11 @@ server <- function(input, output, session) {
     })
 
     observeEvent(input$brush_select, {
-        # Toggle brush state
+        // Toggle brush state
         new_state <- !brush_enabled()
         brush_enabled(new_state)
         
-        # If disabling brush, reset zoom/pan and re-enable controls
+        // If disabling brush, reset zoom/pan and re-enable controls
         if (!new_state) {
             runjs("
                 // Re-enable zoom and pan controls
@@ -1190,7 +1274,7 @@ server <- function(input, output, session) {
                 }, 100);
             ")
         } else {
-            # If enabling brush, disable zoom/pan controls
+            // If enabling brush, disable zoom/pan controls
             runjs("
                 // Reset zoom/pan to avoid coordinate issues
                 const plot = $('#pdf-container').find('div[id*=\"pdf_plot_\"]');
@@ -1212,120 +1296,31 @@ server <- function(input, output, session) {
             ")
         }
         
-        # If enabling brush and no OCR data exists, process OCR
+        // If enabling brush and no OCR data exists, process OCR
         if (new_state && !is.null(rv$files_df)) {
-            # Check if we need OCR processing for brush functionality
+            // Check if we need OCR processing for brush functionality
             needs_ocr <- any(sapply(rv$ocr_text, function(x) is.null(x)))
             
             if (needs_ocr) {
-                # Process OCR for brush text extraction
+                // Process OCR for brush text extraction
                 rv$ocr_text <- process_ocr_batch(rv$files_df, rv$ocr_text, rv$pdf_index)
                 
-                # Enable highlight mode for visualization if not already enabled
+                // Enable highlight mode for visualization if not already enabled
                 if (rv$ocr_display_mode == "none") {
                     updateSelectizeInput(session, "ocr_display_mode", selected = "highlight")
                 }
             }
         }
         
-        # Toggle button styling based on brush state
+        // Toggle button styling based on brush state
         if (new_state) {
             runjs("$('#brush_select').addClass('btn-active');")
             showNotification("Brush tool enabled. Zoom/pan disabled for accurate selection.", type = "message", duration = 3)
         } else {
             runjs("$('#brush_select').removeClass('btn-active');")
-            # Clear any selected text
+            // Clear any selected text
             rv$selected_text <- NULL
             showNotification("Brush tool disabled. Zoom/pan re-enabled.", type = "message", duration = 2)
-        }
-    })
-
-    observeEvent(input$pdf_brush, {
-        # Only process brush if brush is enabled
-        if (!brush_enabled()) return()
-        
-        brush <- input$pdf_brush
-        if (!is.null(brush) && !is.null(rv$files_df) && rv$pdf_index <= length(rv$ocr_text)) {
-            # Ensure OCR data exists for current page
-            if (is.null(rv$ocr_text[[rv$pdf_index]])) {
-                showNotification("No OCR data available. Processing...", type = "warning", duration = 2)
-                rv$ocr_text <- process_ocr_batch(rv$files_df, rv$ocr_text, rv$pdf_index)
-            }
-            
-            # Find intersection between brush bbox and OCR bounding boxes
-            ocr_df <- rv$ocr_text[[rv$pdf_index]]
-            if (!is.null(ocr_df) && nrow(ocr_df) > 0) {
-                # Filter by confidence threshold
-                ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
-                
-                if (nrow(ocr_df) > 0) {
-                    info <- magick::image_info(magick::image_read(rv$files_df$Path[rv$pdf_index]))
-                    img_width <- info$width
-                    img_height <- info$height
-
-                    # The brush coordinates are in plot coordinates, not normalized 0-1
-                    # They should already be in pixel coordinates matching the plot
-                    brush_xmin <- brush$xmin
-                    brush_xmax <- brush$xmax
-                    brush_ymin <- brush$ymin
-                    brush_ymax <- brush$ymax
-                    
-                    # Debug: Print brush coordinates
-                    cat("Brush coordinates: x(", brush_xmin, "-", brush_xmax, "), y(", brush_ymin, "-", brush_ymax, ")\n")
-                    cat("Image dimensions:", img_width, "x", img_height, "\n")
-                    cat("OCR words to check:", nrow(ocr_df), "\n")
-
-                    # Function to check intersection between two rectangles
-                    rect_intersect <- function(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) {
-                        !(ax2 < bx1 || ax1 > bx2 || ay2 < by1 || ay1 > by2)
-                    }
-
-                    # Find OCR words whose bbox intersects with brush
-                    intersect_idx <- sapply(ocr_df$bbox, function(b) {
-                        coords <- as.numeric(strsplit(b, ",")[[1]]);
-                        # Convert OCR coordinates to match the plot coordinate system
-                        ocr_x1 <- coords[1]
-                        ocr_y1 <- img_height - coords[4]  # Flip Y to match plot rendering
-                        ocr_x2 <- coords[3]
-                        ocr_y2 <- img_height - coords[2]  # Flip Y to match plot rendering
-                        
-                        # Calculate centroid of OCR rectangle
-                        ocr_centroid_x <- (ocr_x1 + ocr_x2) / 2
-                        ocr_centroid_y <- (ocr_y1 + ocr_y2) / 2
-                        
-                        # Debug: Print first few OCR coordinates and centroids
-                        if (which(ocr_df$bbox == b) <= 3) {
-                            cat("OCR word '", ocr_df$word[which(ocr_df$bbox == b)], "' at: x(", ocr_x1, "-", ocr_x2, "), y(", ocr_y1, "-", ocr_y2, "), centroid(", ocr_centroid_x, ",", ocr_centroid_y, ")\n")
-                        }
-                        
-                        # Check if brush contains the centroid
-                        centroid_in_brush <- (ocr_centroid_x >= brush_xmin && ocr_centroid_x <= brush_xmax &&
-                                            ocr_centroid_y >= brush_ymin && ocr_centroid_y <= brush_ymax)
-                        
-                        return(centroid_in_brush)
-                    })
-                    
-                    cat("Number of intersections found:", sum(intersect_idx), "\n")
-
-                    if (any(intersect_idx)) {
-                        # Save selected text to reactiveValues for later use
-                        rv$selected_text <- concat_ocr_words_by_row(ocr_df[intersect_idx, ])
-                        
-                        if (length(rv$selected_text) > 0) {
-                            cat("Selected text:\n", paste(rv$selected_text, collapse = "\n"), "\n")
-                            showNotification(paste("Selected:", rv$selected_text), 
-                                           type = "message", duration = 5)
-                        }
-                    } else {
-                        rv$selected_text <- NULL
-                        showNotification("No text found in selected area", type = "warning", duration = 2)
-                    }
-                } else {
-                    showNotification("No OCR words above confidence threshold", type = "warning", duration = 2)
-                }
-            } else {
-                showNotification("No OCR data available for this page", type = "warning", duration = 2)
-            }
         }
     })
 
@@ -1346,6 +1341,94 @@ server <- function(input, output, session) {
         return("No ID available")
     })
 
+    # Display the file count for current borehole
+    output$file_count_display <- renderText({
+        req(rv$files_df)
+        req(rv$pdf_index)
+        
+        well_id <- current_well_id()
+        
+        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
+            files <- rv$well_data[[well_id]]$files
+            if (is.null(files)) {
+                file_count <- 0
+            } else if (is.character(files)) {
+                # Count unique filenames
+                file_count <- length(unique(files))
+            } else {
+                file_count <- 1
+            }
+            
+            if (file_count == 1) {
+                return(paste("Files associated:", file_count, "file"))
+            } else {
+                return(paste("Files associated:", file_count, "files"))
+            }
+        }
+        
+        return("Files associated: 0 files")
+    })
+
+
+
+    # Update borehole ID selector choices when files change
+    observe({
+        if (!is.null(rv$files_df) && nrow(rv$files_df) > 0) {
+            # Create choices list with borehole IDs as labels and indices as values
+            # Exclude the currently selected borehole from choices
+            current_id <- rv$files_df$borehole_id[rv$pdf_index]
+            choices <- setNames(
+                which(rv$files_df$borehole_id != current_id),
+                rv$files_df$borehole_id[rv$files_df$borehole_id != current_id]
+            )
+            updateSelectizeInput(session, "borehole_id_selector", 
+                                choices = choices,
+                                selected = character(0),
+                                options = list(
+                                    placeholder = "Select a borehole ID"
+                                ))
+        } else {
+            # Clear choices when no files
+            updateSelectizeInput(session, "borehole_id_selector", 
+                                choices = NULL,
+                                selected = NULL)
+        }
+    })
+
+
+    observeEvent(input$borehole_id_selector, {
+        req(rv$files_df)
+        req(input$borehole_id_selector)
+        selected_index <- as.integer(input$borehole_id_selector)
+        selected_id <- rv$files_df$borehole_id[selected_index]
+        current_filename <- rv$files_df$Name[rv$pdf_index]
+        print(selected_id)
+        if (!is.null(selected_id) && selected_id %in% names(rv$well_data)) {
+            # Add current filename to the list of filenames for the selected borehole
+            filenames <- rv$well_data[[selected_id]]$files
+            if (is.null(filenames)) {
+                rv$well_data[[selected_id]]$files <- current_filename
+            } else if (!(current_filename %in% filenames)) {
+                rv$well_data[[selected_id]]$files <- c(filenames, current_filename)
+            }
+            showNotification(paste("Added file", current_filename, "to borehole", selected_id), type = "message", duration = 2)
+            print(rv$well_data[[selected_id]]$files)
+
+
+
+
+            # Update the borehole_id for the current file/page to the selected borehole ID
+            rv$files_df$borehole_id[rv$pdf_index] <- selected_id
+            print(selected_id)
+            #rv$well_data[[selected_id]] <- NULL  # Commented out: do not remove metadata
+
+            # Move to the selected borehole/page in the table
+            rv$pdf_index <- selected_index
+            # Optionally, remove the old well_data entry for the selected borehole (if needed)
+        }
+    })
+
+    
     # Display OCR text in right panel
     output$ocr_text_display <- renderText({
         if (!is.null(rv$selected_text) && length(rv$selected_text) > 0) {
@@ -1402,53 +1485,103 @@ server <- function(input, output, session) {
     })
 
 
-    # Save metadata
-    observeEvent(input$save_metadata, {
-        req(rv$well_data)
-        req(rv$files_df)
-        req(rv$pdf_index)
-        
-        well_id <- current_well_id()
-        
-        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
-            current_metadata <- rv$well_data[[well_id]]$metadata
-            cat("Well information saved for borehole", well_id, ":\n")
+    # Combined Save and Export functionality
+    output$save_export_data <- downloadHandler(
+        filename = function() {
+            paste("well_metadata_", Sys.Date(), ".csv", sep = "")
+        },
+        content = function(file) {
+            req(rv$well_data)
             
-            # Print relevant fields
-            fields_to_show <- c("well_name", "community", "easting", "northing", 
-                               "well_depth", "date_drilled", "purpose_of_well")
-            for (field in fields_to_show) {
-                field_value <- current_metadata[[field]]
-                if (!is.null(field_value) && !is.na(field_value) && field_value != "") {
-                    cat(paste0(field, ": ", field_value), "\n")
-                }
+            # Prepare a data frame with one row per well and columns for all metadata fields
+            well_ids <- names(rv$well_data)
+            if (length(well_ids) == 0) {
+                # Create empty data frame if no wells
+                write.csv(data.frame(), file, row.names = FALSE)
+                return()
             }
             
-            showNotification("Well information saved!", type = "message", duration = 2)
+            metadata_fields <- names(rv$well_data[[well_ids[1]]]$metadata)
+            well_metadata_df <- data.frame(matrix(nrow = length(well_ids), ncol = length(metadata_fields)))
+            colnames(well_metadata_df) <- metadata_fields
+            rownames(well_metadata_df) <- well_ids
+
+            # Helper function to convert feet to meters
+            ft_to_m <- function(x) {
+                if (is.null(x) || is.na(x)) return(NA)
+                as.numeric(x) * 0.3048
+            }
+
+            # Loop through each well and populate the data frame
+            for (i in seq_along(well_ids)) {
+                well_id <- well_ids[i]
+                meta <- rv$well_data[[well_id]]$metadata
+
+                if (!is.null(meta$surveyed_ground_level_elevation_unit) && !is.na(meta$surveyed_ground_level_elevation_unit) && meta$surveyed_ground_level_elevation_unit == "ft") {
+                    well_metadata_df[i, "surveyed_ground_level_elevation"] <- ft_to_m(meta$surveyed_ground_level_elevation)
+                    well_metadata_df[i, "surveyed_ground_level_elevation_unit"] <- "m"
+                } else {
+                    well_metadata_df[i, "surveyed_ground_level_elevation"] <- meta$surveyed_ground_level_elevation
+                    well_metadata_df[i, "surveyed_ground_level_elevation_unit"] <- meta$surveyed_ground_level_elevation_unit
+                }
+
+                # Estimated yield: convert G/min to L/s if needed
+                if (!is.null(meta$estimated_yield_unit) && !is.na(meta$estimated_yield_unit) && meta$estimated_yield_unit == "G/min") {
+                    # 1 US gallon = 3.78541 liters, so G/min to L/s: multiply by 3.78541/60
+                    gmin_to_ls <- function(x) { if (is.null(x) || is.na(x)) return(NA); as.numeric(x) * 3.78541 / 60 }
+                    well_metadata_df[i, "estimated_yield"] <- gmin_to_ls(meta$estimated_yield)
+                    well_metadata_df[i, "estimated_yield_unit"] <- "L/s"
+                } else {
+                    well_metadata_df[i, "estimated_yield"] <- meta$estimated_yield
+                    well_metadata_df[i, "estimated_yield_unit"] <- meta$estimated_yield_unit
+                }
+
+                # If easting, northing, and utm_zone are provided, convert to lat/lon
+                if (!is.null(meta$coordinate_system) && !is.na(meta$coordinate_system) && meta$coordinate_system == "utm" &&
+                    !is.null(meta$easting) && !is.na(meta$easting) &&
+                    !is.null(meta$northing) && !is.na(meta$northing) &&
+                    !is.null(meta$utm_zone) && !is.na(meta$utm_zone)) {
+                    # Extract zone number and hemisphere
+                    zone_str <- as.character(meta$utm_zone)
+                    zone_num <- as.numeric(gsub("[^0-9]", "", zone_str))
+                    hemisphere <- ifelse(grepl("N", zone_str, ignore.case = TRUE), "north", "south")
+                    # Use sf for conversion
+                    if (requireNamespace("sf", quietly = TRUE)) {
+                        coords_sf <- sf::st_sfc(
+                            sf::st_point(c(as.numeric(meta$easting), as.numeric(meta$northing))),
+                            crs = paste0("EPSG:", 32600 + zone_num)
+                        )
+                        coords_ll <- sf::st_transform(coords_sf, crs = 4326)
+                        latlon <- sf::st_coordinates(coords_ll);
+                        well_metadata_df[i, "latitude"] <- latlon[2]
+                        well_metadata_df[i, "longitude"] <- latlon[1]
+                    }
+                } else {
+                    well_metadata_df[i, "latitude"] <- meta$latitude
+                    well_metadata_df[i, "longitude"] <- meta$longitude
+                }
+
+                # Copy all other fields
+                well_metadata_df[i, "borehole_id"] <- meta$borehole_id
+                well_metadata_df[i, "well_name"] <- meta$well_name
+                well_metadata_df[i, "community"] <- meta$community
+                well_metadata_df[i, "coordinate_system"] <- meta$coordinate_system
+                well_metadata_df[i, "easting"] <- meta$easting
+                well_metadata_df[i, "northing"] <- meta$northing
+                well_metadata_df[i, "utm_zone"] <- meta$utm_zone
+                well_metadata_df[i, "location_source"] <- meta$location_source
+                well_metadata_df[i, "surveyed_location_top_casing"] <- meta$surveyed_location_top_casing
+                well_metadata_df[i, "purpose_of_well"] <- meta$purpose_of_well
+                well_metadata_df[i, "date_drilled"] <- meta$date_drilled
+            }
+            
+            # Write the CSV file
+            write.csv(well_metadata_df, file, row.names = FALSE)
+            
+            showNotification("Well metadata exported successfully!", type = "message", duration = 3)
         }
-    })
-    
-    # Export data
-    observeEvent(input$export_data, {
-        req(rv$files_df)
-        req(rv$well_data)
-        
-        # Export both OCR and well data
-        export_data <- list(
-            well_data = rv$well_data,
-            ocr_data = rv$ocr_text,
-            files_info = rv$files_df[, c("Name", "OrigFile", "Page", "Path", "tag")]
-        )
-        
-        # You could save this to CSV, Excel, or JSON here
-        cat("Export data structure:\n")
-        cat("Number of boreholes:", length(rv$well_data), "\n")
-        cat("OCR data pages:", length(rv$ocr_text), "\n")
-        cat("Total files:", nrow(rv$files_df), "\n")
-        
-        showNotification("Export data prepared! Check console for details.", type = "message", duration = 3)
-    })
-    
+    )
+
     # Comprehensive observer to store all input values in metadata for the current well
     observe({
         # Don't update metadata when we're loading
@@ -1587,5 +1720,7 @@ server <- function(input, output, session) {
     })
 
 }
+
+
 
 shinyApp(ui, server)
