@@ -193,6 +193,25 @@ process_ocr_batch <- function(files_df, ocr_text_list, current_index = NULL) {
     return(ocr_text_list)
 }
 
+# Process OCR for a single page when needed
+process_ocr_page <- function(index, files_df, ocr_text_list) {
+    if (!is.null(ocr_text_list[[index]])) return(ocr_text_list)
+
+    img_path <- files_df$Path[index]
+    img <- magick::image_read(img_path) %>%
+        magick::image_convert(colorspace = "gray") %>%
+        magick::image_contrast(sharpen = 1) %>%
+        magick::image_modulate(brightness = 110, saturation = 100, hue = 100) %>%
+        magick::image_threshold(type = "black", threshold = "60%")
+
+    ocr_result <- tesseract::ocr_data(img, engine = tesseract::tesseract(options = list(tessedit_create_hocr = 1)))
+    ocr_result <- filter_ocr_noise(ocr_result)
+
+    ocr_text_list[[index]] <- ocr_result
+    showNotification(paste("OCR processed for page", index), type = "message", duration = 2)
+    ocr_text_list
+}
+
 split_pdf_to_pages <- function(pdf_path, output_dir = tempdir()) {
     if (!requireNamespace("pdftools", quietly = TRUE)) {
         stop("The 'pdftools' package is required.")
@@ -855,7 +874,8 @@ server <- function(input, output, session) {
         pdf_index = 1,
         ocr_text = list(),
         ocr_display_mode = "none",
-        selected_text = NULL
+        selected_text = NULL,
+        image_cache = list()
     )
     
     # Reactive value to control brush mode
@@ -934,6 +954,8 @@ server <- function(input, output, session) {
 
         rv$files_df <- all_split_files
         print(all_split_files)
+        rv$ocr_text <- vector("list", nrow(rv$files_df))
+        rv$image_cache <- vector("list", nrow(rv$files_df))
         # Initialize well information as named list organized by borehole ID
         well_fields <- c(
             "well_name", "community", "coordinate_system",
@@ -1035,6 +1057,8 @@ server <- function(input, output, session) {
             # Remove from files_df
             rv$files_df <- rv$files_df[-selected_row, ]
             rv$ocr_text <- rv$ocr_text[-selected_row]
+            rv$image_cache <- rv$image_cache[-selected_row]
+            rv$image_cache <- rv$image_cache[-selected_row]
             
             # Update well_data structure - adjust file indices
             for (well_id in names(rv$well_data)) {
@@ -1053,6 +1077,13 @@ server <- function(input, output, session) {
         }
     })
 
+    # Process OCR when page changes if needed
+    observeEvent(rv$pdf_index, {
+        req(rv$files_df)
+        if (rv$ocr_display_mode %in% c("highlight", "text")) {
+            rv$ocr_text <- process_ocr_page(rv$pdf_index, rv$files_df, rv$ocr_text)
+        }
+    })
 
     observeEvent(input$next_pdf_right, {
         req(rv$files_df)
@@ -1086,7 +1117,8 @@ server <- function(input, output, session) {
             # Remove from files_df
             rv$files_df <- rv$files_df[-selected_row, ]
             rv$ocr_text <- rv$ocr_text[-selected_row]
-            
+            rv$image_cache <- rv$image_cache[-selected_row]
+
             # Update well_data structure - adjust file indices
             for (well_id in names(rv$well_data)) {
                 file_index <- rv$well_data[[well_id]]$files
@@ -1107,14 +1139,13 @@ server <- function(input, output, session) {
 
     observeEvent(input$ocr_display_mode, {
         req(rv$files_df)
-        
+
         # Update the display mode
         rv$ocr_display_mode <- input$ocr_display_mode
-        
-        # If switching to highlight or text mode, ensure OCR data is available
+
+        # If switching to highlight or text mode, ensure OCR data is available for current page
         if (rv$ocr_display_mode %in% c("highlight", "text")) {
-            # Process OCR for all pages (function handles caching and notifications)
-            rv$ocr_text <- process_ocr_batch(rv$files_df, rv$ocr_text, rv$pdf_index)
+            rv$ocr_text <- process_ocr_page(rv$pdf_index, rv$files_df, rv$ocr_text)
         }
     })
 
@@ -1149,12 +1180,18 @@ server <- function(input, output, session) {
         # Render UI
         output$pdf_viewer <- renderUI({
             img_path <- isolate(rv$files_df$Path[pdf_index])
-            
-            # Get image dimensions to calculate aspect ratio
-            img <- magick::image_read(img_path)
-            info <- magick::image_info(img)
-            img_width <- info$width
-            img_height <- info$height
+
+            if (is.null(rv$image_cache[[pdf_index]])) {
+                img <- magick::image_read(img_path)
+                info <- magick::image_info(img)
+                rv$image_cache[[pdf_index]] <- list(
+                    raster = as.raster(img),
+                    width = info$width,
+                    height = info$height
+                )
+            }
+            img_width <- rv$image_cache[[pdf_index]]$width
+            img_height <- rv$image_cache[[pdf_index]]$height
             aspect_ratio <- img_height / img_width
             
             # Calculate optimal display size
@@ -1198,20 +1235,18 @@ server <- function(input, output, session) {
         plot_id <- paste0("pdf_plot_", rv$pdf_index)
         
         output[[plot_id]] <- renderPlot({
-            img_path <- rv$files_df$Path[rv$pdf_index]
-            img <- magick::image_read(img_path)
-            
-            # Enhance image quality for better display
-            img <- img %>%
-                magick::image_enhance()
-            
-            # Get image dimensions
-            info <- magick::image_info(img)
-            img_width <- info$width
-            img_height <- info$height
-            
-            # Convert magick image to raster format for base R
-            img_raster <- as.raster(img)
+            cache <- rv$image_cache[[rv$pdf_index]]
+            if (is.null(cache)) {
+                img <- magick::image_read(rv$files_df$Path[rv$pdf_index]) %>%
+                    magick::image_enhance()
+                info <- magick::image_info(img)
+                cache <- list(raster = as.raster(img), width = info$width, height = info$height)
+                rv$image_cache[[rv$pdf_index]] <- cache
+            }
+
+            img_width <- cache$width
+            img_height <- cache$height
+            img_raster <- cache$raster
             
             # Set up the plot area with correct orientation
             par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
@@ -1257,11 +1292,11 @@ server <- function(input, output, session) {
     })
 
     observeEvent(input$brush_select, {
-        // Toggle brush state
+        # Toggle brush state
         new_state <- !brush_enabled()
         brush_enabled(new_state)
         
-        // If disabling brush, reset zoom/pan and re-enable controls
+        # If disabling brush, reset zoom/pan and re-enable controls
         if (!new_state) {
             runjs("
                 // Re-enable zoom and pan controls
@@ -1274,8 +1309,8 @@ server <- function(input, output, session) {
                 }, 100);
             ")
         } else {
-            // If enabling brush, disable zoom/pan controls
-            runjs("
+            # If enabling brush, disable zoom/pan controls
+            runjs(" 
                 // Reset zoom/pan to avoid coordinate issues
                 const plot = $('#pdf-container').find('div[id*=\"pdf_plot_\"]');
                 if (plot.length > 0) {
@@ -1296,29 +1331,25 @@ server <- function(input, output, session) {
             ")
         }
         
-        // If enabling brush and no OCR data exists, process OCR
+        # If enabling brush and no OCR data exists, process OCR for current page
         if (new_state && !is.null(rv$files_df)) {
-            // Check if we need OCR processing for brush functionality
-            needs_ocr <- any(sapply(rv$ocr_text, function(x) is.null(x)))
-            
-            if (needs_ocr) {
-                // Process OCR for brush text extraction
-                rv$ocr_text <- process_ocr_batch(rv$files_df, rv$ocr_text, rv$pdf_index)
-                
-                // Enable highlight mode for visualization if not already enabled
-                if (rv$ocr_display_mode == "none") {
-                    updateSelectizeInput(session, "ocr_display_mode", selected = "highlight")
-                }
+            if (is.null(rv$ocr_text[[rv$pdf_index]])) {
+                rv$ocr_text <- process_ocr_page(rv$pdf_index, rv$files_df, rv$ocr_text)
+            }
+
+            # Enable highlight mode for visualization if not already enabled
+            if (rv$ocr_display_mode == "none") {
+                updateSelectizeInput(session, "ocr_display_mode", selected = "highlight")
             }
         }
         
-        // Toggle button styling based on brush state
+        # Toggle button styling based on brush state
         if (new_state) {
             runjs("$('#brush_select').addClass('btn-active');")
             showNotification("Brush tool enabled. Zoom/pan disabled for accurate selection.", type = "message", duration = 3)
         } else {
             runjs("$('#brush_select').removeClass('btn-active');")
-            // Clear any selected text
+            # Clear any selected text
             rv$selected_text <- NULL
             showNotification("Brush tool disabled. Zoom/pan re-enabled.", type = "message", duration = 2)
         }
