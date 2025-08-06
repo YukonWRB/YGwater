@@ -227,7 +227,7 @@ plotDiscrete <- function(start,
     
     # Validate existence of standards
     if (!is.null(standard)) {
-      standards <- DBI::dbGetQuery(EQWin, paste0("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ('", paste0(standard, collapse = "', '"), "')"))
+      standards <- DBI::dbGetQuery(EQWin, glue::glue_sql("SELECT StdId, StdCode, StdFlag, StdDesc FROM eqstds WHERE StdCode IN ({standard*})", .con = EQWin))
       if (nrow(standards) == 0) {
         stop("No standards found in the EQWin database with the name '", standard, "'")
       }
@@ -236,14 +236,14 @@ plotDiscrete <- function(start,
     # Fetch the station and/or parameter list if necessary (locGrp or paramGrp was specified)
     if (!is.null(locGrp)) {
       # Check if the group actually exists
-      grp_count <- DBI::dbGetQuery(EQWin, paste0("SELECT COUNT(*) FROM eqgroups WHERE groupname = '", locGrp, "' AND dbtablename = 'eqstns'"))[1,1]
+      grp_count <- DBI::dbGetQuery(EQWin, glue::glue_sql("SELECT COUNT(*) FROM eqgroups WHERE groupname = {locGrp} AND dbtablename = 'eqstns'", .con = EQWin))[1,1]
       if (grp_count == 0) {
         stop("The station group '", locGrp, "' does not exist in the EQWin database")
       } else if (grp_count > 1) {
         stop("There are multiple station groups with the name '", locGrp, "' in the EQWin database")
       } # otherwise proceed to fetch the locations
       
-      StnIds <- DBI::dbGetQuery(EQWin, paste0("SELECT groupitems FROM eqgroups WHERE groupname = '", locGrp, "' AND dbtablename = 'eqstns'"))$groupitems
+      StnIds <- DBI::dbGetQuery(EQWin, glue::glue_sql("SELECT groupitems FROM eqgroups WHERE groupname = {locGrp} AND dbtablename = 'eqstns'", .con = EQWin))$groupitems
       StnIds <- strsplit(StnIds, ",")[[1]]
       if (length(StnIds) == 0) {
         stop("No locations found in the station group '", locGrp, "'")
@@ -251,14 +251,14 @@ plotDiscrete <- function(start,
     }
     if (!is.null(paramGrp)) {
       # Check if the group actually exists
-      grp_count <- DBI::dbGetQuery(EQWin, paste0("SELECT COUNT(*) FROM eqgroups WHERE groupname = '", paramGrp, "' AND dbtablename = 'eqparams'"))[1,1]
+      grp_count <- DBI::dbGetQuery(EQWin, glue::glue_sql("SELECT COUNT(*) FROM eqgroups WHERE groupname = {paramGrp} AND dbtablename = 'eqparams'", .con = EQWin))[1,1]
       if (grp_count == 0) {
         stop("The parameter group '", paramGrp, "' does not exist in the EQWin database")
       } else if (grp_count > 1) {
         stop("There are multiple parameter groups with the name '", paramGrp, "' in the EQWin database")
       } # otherwise proceed to fetch the parameters
       
-      paramIds <- DBI::dbGetQuery(EQWin, paste0("SELECT groupitems FROM eqgroups WHERE groupname = '", paramGrp, "' AND dbtablename = 'eqparams'"))$groupitems
+      paramIds <- DBI::dbGetQuery(EQWin, glue::glue_sql("SELECT groupitems FROM eqgroups WHERE groupname = {paramGrp} AND dbtablename = 'eqparams'", .con = EQWin))$groupitems
       paramIds <- strsplit(paramIds, ",")[[1]]
       if (length(paramIds) == 0) {
         stop("No parameters found in the parameter group '", paramGrp, "'")
@@ -267,7 +267,7 @@ plotDiscrete <- function(start,
     
     # Validate existence of parameters and/or locations
     if (!is.null(locations)) {
-      StnIds <- DBI::dbGetQuery(EQWin, paste0("SELECT StnId, StnCode FROM eqstns WHERE StnCode IN ('", paste0(locations, collapse = "', '"), "')"))
+      StnIds <- DBI::dbGetQuery(EQWin, glue::glue_sql("SELECT StnId, StnCode FROM eqstns WHERE StnCode IN ({locations*})", .con = EQWin))
       if (nrow(StnIds) == 0) {
         stop("No locations found in the EQWin database with the names '", paste0(locations, collapse = "', '"), "'")
       }
@@ -280,7 +280,7 @@ plotDiscrete <- function(start,
     }
     
     if (!is.null(parameters)) {
-      paramIds <- DBI::dbGetQuery(EQWin, paste0("SELECT ParamId, ParamCode FROM eqparams WHERE ParamCode IN ('", paste0(parameters, collapse = "', '"), "')"))
+      paramIds <- DBI::dbGetQuery(EQWin, glue::glue_sql("SELECT ParamId, ParamCode FROM eqparams WHERE ParamCode IN ({parameters*})", .con = EQWin))
       if (nrow(paramIds) == 0) {
         stop("No parameters found in the EQWin database with the names '", paste0(parameters, collapse = "', '"), "'")
       }
@@ -292,7 +292,7 @@ plotDiscrete <- function(start,
       paramIds <- paramIds$ParamId
     }
     
-    sampleIds <- DBI::dbGetQuery(EQWin, paste0("SELECT eqsampls.StnId, eqsampls.SampleId, eqsampls.CollectDateTime FROM eqsampls INNER JOIN eqcodes ON eqsampls.SampleClass = eqcodes.CodeValue WHERE eqcodes.CodeField = 'eqsampls.SampleClass' AND eqsampls.StnId IN (", paste0(StnIds, collapse = ", "), ") AND eqsampls.CollectDateTime > #", as.character(start), "# AND eqsampls.CollectDateTime < #", as.character(end), "# AND eqcodes.CodeValue <> 'D';"))
+    sampleIds <- DBI::dbGetQuery(EQWin, glue::glue_sql("SELECT eqsampls.StnId, eqsampls.SampleId, eqsampls.CollectDateTime FROM eqsampls INNER JOIN eqcodes ON eqsampls.SampleClass = eqcodes.CodeValue WHERE eqcodes.CodeField = 'eqsampls.SampleClass' AND eqsampls.StnId IN ({StnIds*}) AND eqsampls.CollectDateTime > {start} AND eqsampls.CollectDateTime < {end} AND eqcodes.CodeValue <> 'D';", .con = EQWin))
     
     if (nrow(sampleIds) == 0) {
       stop("No samples found for the date range and locations specified.")

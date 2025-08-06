@@ -35,8 +35,8 @@ if (Sys.getenv("CI") == "true") {
              aquacachePass = "runner",
              aquacacheAdminUser = "runner",
              aquacacheAdminPass = "runner",
-             AQUSER = "AQ_APIReadWrite",
-             AQPASS = "h@_4bmXW",
+             AQUSER = "readonly",
+             AQPASS = "WaterIsLife",
              AQSERVER = "https://yukon.aquaticinformatics.net/AQUARIUS")
   message("Running on CI, setting environment accordingly.")
 }

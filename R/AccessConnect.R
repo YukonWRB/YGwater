@@ -28,8 +28,8 @@ AccessConnect <- function(path, silent = FALSE) {
   }
   
   # Proceed with the connection if the driver is available
-  con <- tryCatch({
-    odbc::dbConnect(odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", path))
+  tryCatch({
+    con <- odbc::dbConnect(odbc::odbc(), .connection_string = paste0("Driver={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=", path))
   }, error = function(e) {
     message("Failed to connect to the database: ", e$message)
     return(NULL)

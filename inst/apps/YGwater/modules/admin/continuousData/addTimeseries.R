@@ -47,6 +47,7 @@ addTimeseries <- function(id) {
     
     output$ui <- renderUI({
       tagList(
+        actionButton(ns("reload_module"), "Reload module data", icon = icon("refresh")),
         radioButtons(ns("mode"), NULL,
                      choices = c("Add new" = "add", "Modify existing" = "modify"),
                      inline = TRUE),
@@ -205,6 +206,31 @@ addTimeseries <- function(id) {
         ),
         rownames = FALSE)
     }) |> bindEvent(moduleData$timeseries_display)
+    
+    observeEvent(input$reload_module, {
+      getModuleData()
+      updateSelectizeInput(session, "location",
+                           choices = stats::setNames(moduleData$locations$location_id,
+                                                     moduleData$locations$name))
+      updateSelectizeInput(session, "sub_location",
+                           choices = stats::setNames(moduleData$sub_locations$sub_location_id,
+                                                     moduleData$sub_locations$sub_location_name))
+      updateSelectizeInput(session, "parameter",
+                           choices = stats::setNames(moduleData$parameters$parameter_id,
+                                                     moduleData$parameters$param_name))
+      updateSelectizeInput(session, "media",
+                           choices = stats::setNames(moduleData$media$media_id,
+                                                     moduleData$media$media_type))
+      updateSelectizeInput(session, "aggregation_type",
+                           choices = stats::setNames(moduleData$aggregation_types$aggregation_type_id,
+                                                     moduleData$aggregation_types$aggregation_type))
+      updateSelectizeInput(session, "default_owner",
+                           choices = stats::setNames(moduleData$organizations$organization_id,
+                                                     moduleData$organizations$name))
+      updateSelectizeInput(session, "share_with", choices = moduleData$users$role_name)
+      updateSelectizeInput(session, "source_fx", choices = moduleData$source_fx)
+      showNotification("Module reloaded", type = "message")
+    }, ignoreInit = TRUE)
     
     observeEvent(input$z_specify, {
       if (input$z_specify) {
@@ -421,7 +447,7 @@ addTimeseries <- function(id) {
         source_fx_args = input$source_fx_args,
         data = reactiveValuesToList(moduleData)
       )
-    }, ignoreInit = TRUE)
+    })
     
     # Observe the result of the ExtendedTask
     observeEvent(addNewTimeseries$result(), {
@@ -453,7 +479,7 @@ addTimeseries <- function(id) {
         updateTextInput(session, "source_fx_args", value = "")
         updateTextAreaInput(session, "note", value = "")
       }
-    }, ignoreInit = TRUE)
+    })
     
     
     # Modify existing timeseries ###############

@@ -381,40 +381,18 @@ plotMultiTimeseries <- function(type = 'traces',
     
     # Determine the timeseries and adjust the date range #################
     # Confirm parameter and location, sub location exist in the database and that there is only one entry
-    
-    if (inherits(location, "character")) {
-      # Try to find the location_id from a character string
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
-      if (is.na(location_id)) {
-        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
-      }
-      if (is.na(location_id)) {
-        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
-      }
-      # If nothing so far, maybe it's a numeric that's masquerading as a character
-      if (is.na(location_id)) {
-        location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
-      }
-    } else {
-      # Try to find the location_id from a numeric value
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
-    }
-    
+    location_txt <- as.character(location)
+    location_id <- DBI::dbGetQuery(con, glue::glue_sql( "SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;", .con = con))[1, 1]
     if (is.na(location_id)) {
       warning("The location you entered, ", location, ", does not exist in the database. Moving on to the next entry.")
       remove <- c(remove, i)
       next
     }
     timeseries$location_id[i] <- location_id
-    
+
     if (!is.null(sub_location)) {
-      if (inherits(sub_location, "character")) {
-        sub_location <- tolower(sub_location)
-        escaped_sub_location <- gsub("'", "''", sub_location)
-        sub_location_id <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = '", escaped_sub_location, "' OR sub_location_name_fr = '", escaped_sub_location, "';"))[1,1]
-      } else { # Check if the sub_location_id exists
-        sub_location_id <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_id = ", sub_location, ";"))[1,1]
-      }
+      sub_loc_txt <- as.character(sub_location)
+      sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;", .con = con))[[1]]
       if (is.na(sub_location_id)) {
         warning("The sub-location you entered for location ", location, ", sub-location ", sub_location, " does not exist in the database. Moving on to the next entry.")
         remove <- c(remove, i)
@@ -422,24 +400,14 @@ plotMultiTimeseries <- function(type = 'traces',
       }
       timeseries$sub_location_id[i] <- sub_location_id
     }
-    if (inherits(parameter, "character")) {
-      parameter <- tolower(parameter)
-      escaped_parameter <- gsub("'", "''", parameter)
-      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
-      parameter_code <- parameter_tbl$parameter_id[1]
-      if (is.na(parameter_code)) {
-        warning("The parameter you entered for location ", location, ", parameter ", parameter, " does not exist in the database. Moving on to the next entry.")
-        remove <- c(remove, i)
-        next
-      }
-    } else if (inherits(parameter, "numeric")) {
-      parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = ", parameter, ";"))
-      if (nrow(parameter_tbl) == 0) {
-        warning("The parameter code you entered for location ", location, ", parameter ", parameter, " does not exist in the database. Moving on to the next entry.")
-        remove <- c(remove, i)
-        next
-      }
-      parameter_code <- parameter
+
+    parameter_txt <- tolower(as.character(parameter))
+    parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;", .con = con))
+    parameter_code <- parameter_tbl$parameter_id[1]
+    if (is.na(parameter_code)) {
+      warning("The parameter you entered for location ", location, ", parameter ", parameter, " does not exist in the database. Moving on to the next entry.")
+      remove <- c(remove, i)
+      next
     }
     
     timeseries[i, "axis_orientation"] <- if (is.null(invert[i])) {if (parameter_tbl$plot_default_y_orientation[1] == "inverted") TRUE else FALSE} else invert[i]
@@ -716,7 +684,7 @@ plotMultiTimeseries <- function(type = 'traces',
         if (!inherits(filter, "numeric")) {
           message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
         } else {
-          if (parameter %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
+          if (timeseries[i, "parameter_name"] %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", timeseries[i, "parameter_name"], ignore.case = TRUE)) { #remove all values less than 0
             trace_data[trace_data$value < 0 & !is.na(trace_data$value),"value"] <- NA
           } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
             trace_data[trace_data$value < -100 & !is.na(trace_data$value),"value"] <- NA

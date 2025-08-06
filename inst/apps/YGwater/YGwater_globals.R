@@ -3,12 +3,12 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   library(shiny)
   library(shinyjs)
   library(bslib)
-
+  
   # Use a user-writable cache directory for sass
   cache_dir <- tools::R_user_dir("YGwater", "cache")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
   options(bslib.sass.cache = cache_dir)
-
+  
   # Initialize a shared cache environment available to all sessions
   if (!exists("app_cache", envir = .GlobalEnv)) {
     assign("app_cache", new.env(parent = emptyenv()), envir = .GlobalEnv)
@@ -114,30 +114,67 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   
   # Establish database connection parameters
-  # The actual connection is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
+  # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
   # double assignment creates a global variable that can be accessed by all UI and server functions
   
-  # confirm G drive access
-  g_drive <- dir.exists("//env-fs/env-data/corp/water")
   
+  ## Access database connections ###########
+  # Look for .mdb files in the AccessPath directories
+  if (!is.null(accessPath1)) {
+    if (dir.exists(accessPath1) & !public) {
+      # List the *.mdb files in the directory
+      mdb_files1 <- list.files(accessPath1, pattern = "*.mdb", full.names = TRUE)
+      if (length(mdb_files1) == 0) {
+        mdb_files1 <- NULL
+      }
+    } else {
+      mdb_files1 <- NULL
+    }
+  } else {
+    mdb_files1 <- NULL
+  }
+  if (!is.null(accessPath2)) {
+    if (dir.exists(accessPath2) & !public) {
+      # List the *.mdb files in the directory
+      mdb_files2 <- list.files(accessPath2, pattern = "*.mdb", full.names = TRUE)
+      if (length(mdb_files2) == 0) {
+        mdb_files2 <- NULL
+      }
+    } else {
+      mdb_files2 <- NULL
+    }
+  } else {
+    mdb_files2 <- NULL
+  }
+  
+  
+  mdb_files <- c(mdb_files1, mdb_files2)
+  
+  if (is.null(mdb_files) & !public) {
+    print("No .mdb files found in the accessPath directories.")
+  }
+  
+  # confirm G drive access for FOD reports
+  g_drive <- dir.exists("//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/")
+  
+  # Make the configuration list available globally
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,
     dbPort = dbPort,
     dbUser = dbUser,
     dbPass = dbPass,
-    accessPath1 = accessPath1,
-    accessPath2 = accessPath2,
     public = public,
     g_drive = g_drive,
+    mdb_files = mdb_files,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2" # Default background color for all main panels
   )
   
   # Load the YG BS 5 theme
-  app_theme <<- bslib::bs_theme(version = 5) %>%
-    bs_add_rules(paste(readLines(system.file("apps/YGwater/www/css/YG_bs5.css", package = "YGwater")), collapse = "\n"))
+  # app_theme <<- bslib::bs_theme(version = 5) %>%
+  # bs_add_rules(paste(readLines(system.file("apps/YGwater/www/css/YG_bs5.css", package = "YGwater")), collapse = "\n"))
   
 }
 

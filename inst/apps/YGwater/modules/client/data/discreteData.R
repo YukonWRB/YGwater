@@ -30,6 +30,7 @@ discDataUI <- function(id) {
       }
     ", ns("accordion")))
     ),
+    uiOutput(ns("top")),
     page_sidebar(
       sidebar = sidebar(
         title = NULL,
@@ -179,6 +180,20 @@ discData <- function(id, language, inputs) {
                                    sample_types = FALSE,
                                    params = FALSE)
     
+    output$top <- renderUI({
+      tagList(
+        accordion(
+          id = ns("accordion"),
+          open = TRUE,
+          accordion_panel(
+            title = tr("instructions", language$language),
+            tags$p(HTML(tr("view_data_instructions_discrete", language$language))),
+            tags$div(style = "height: 10px;"),
+          )
+        )
+      )
+    })
+    
     output$sidebar <- renderUI({
       req(filteredData, language)
       
@@ -287,18 +302,8 @@ discData <- function(id, language, inputs) {
     })  %>% # End of renderUI for sidebar
       bindEvent(language$language)
     
-    
     output$main <- renderUI({
       tagList(
-        accordion(
-          id = ns("accordion"),
-          open = TRUE,
-          accordion_panel(
-            title = tr("instructions", language$language),
-            tags$p(HTML(tr("view_data_instructions_discrete", language$language))),
-            tags$div(style = "height: 10px;"),
-          )
-        ),
         DT::DTOutput(ns("tbl")), # Table with sample data, filtered by the sidebar inputs
         actionButton(ns("select_all"), tr("select_all", language$language), style = "display: none;"),  # Button will be hidden until a row is selected
         actionButton(ns("view_data"), tr("view_data1", language$language), style =  "display: none;"),  # Button will be hidden until a row is selected

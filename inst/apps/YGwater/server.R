@@ -18,9 +18,6 @@ app_server <- function(input, output, session) {
   # Allow re connection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
   session$allowReconnect(TRUE)
   
-  
-  # Hide all 'admin' side tabs if they were generated
-  
   # Show relevant tabs for viz mode
   showViz <- function(show = TRUE) {
     if (show) {
@@ -75,6 +72,7 @@ app_server <- function(input, output, session) {
     }
   }
   
+  # Hide all 'admin' side tabs if they were generated
   if (!config$public) { # Immediately run the showAdmin function to hide the admin tabs, they're only shown upon login
     showAdmin(show = FALSE)
   }
@@ -108,7 +106,6 @@ app_server <- function(input, output, session) {
     ui_loaded$contData <- FALSE
     ui_loaded$news <- FALSE
     ui_loaded$about <- FALSE
-    ui_loaded$feedback <- FALSE # !!! THIS TAB TO BE DELETED ONCE TESTING IS COMPLETE
     ui_loaded$addLocation <- FALSE
     ui_loaded$addSubLocation <- FALSE
     ui_loaded$equip <- FALSE
@@ -137,33 +134,6 @@ app_server <- function(input, output, session) {
   
   ui_loaded <- reactiveValues()
   reset_ui_loaded() # Initialize the ui_loaded reactive values
-  
-  ## database connections ###########
-  # Look for .mdb files in the AccessPath directories
-  if (dir.exists(config$accessPath1) & !config$public) {
-    # List the *.mdb files in the directory
-    mdb_files1 <- list.files(config$accessPath1, pattern = "*.mdb", full.names = TRUE)
-    if (length(mdb_files1) == 0) {
-      mdb_files1 <- NULL
-    }
-  } else {
-    mdb_files1 <- NULL
-  }
-  if (dir.exists(config$accessPath2) & !config$public) {
-    # List the *.mdb files in the directory
-    mdb_files2 <- list.files(config$accessPath2, pattern = "*.mdb", full.names = TRUE)
-    if (length(mdb_files2) == 0) {
-      mdb_files2 <- NULL
-    }
-  } else {
-    mdb_files2 <- NULL
-  }
-  
-  mdb_files <- c(mdb_files1, mdb_files2)
-  
-  if (is.null(mdb_files) & !config$public) {
-    print("No .mdb files found in the accessPath1 directory.")
-  }
   
   
   # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
@@ -195,10 +165,11 @@ app_server <- function(input, output, session) {
   # Language selection ########################################################
   
   # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
-  languageSelection <- reactiveValues() # holds language and abbreviation
+  languageSelection <- reactiveValues(language = NULL, abbrev = NULL) # holds language and abbreviation
   
   # Populate the language selection dropdown
-  session$sendCustomMessage("updateLangMenu", names(translation_cache))
+  # Commented out as using only French/english,
+  # session$sendCustomMessage("updateLangMenu", names(translation_cache))
   
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
@@ -211,85 +182,174 @@ app_server <- function(input, output, session) {
   
   # Set initial language based on browser language
   # Check if userLang contains en or fr in the string and set the language accordingly
-  observeEvent(input$userLang, { #userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
+  observeEvent(input$userLang, { # userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
     lang_code <- substr(input$userLang, 1, 2)
     
     selected_lang <- if (lang_code == "fr") "Français" else "English"
     
     # Send the selected language to JavaScript so it updates input$langSelect
-    session$sendCustomMessage(type = 'setSelectedLanguage', message = selected_lang)
+    # session$sendCustomMessage(type = 'setSelectedLanguage', message = selected_lang)
     
-    # Also update the HTML <head> for language settings
+    languageSelection$language <- selected_lang
+    languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+    
+    updateActionButton(
+      session, "language_button",
+      label = ifelse(selected_lang == "English", "Français", "English")
+    )
+    
+    # Update the HTML <head> for language settings
     session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(lang_code == "fr", "fr", "en")))
   }, ignoreInit = TRUE, ignoreNULL = TRUE, once = TRUE) # This observeEvent should only run once when the app is loaded.
   
-  # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
-  # Observe user selection of language
-  observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
-    if (input$langSelect %in% names(translation_cache)) {
-      languageSelection$language <- input$langSelect
-      languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-      
-      # Render the navigation bar titles based on the language
-      output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
-      output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
-      output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
-      output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
-      output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
-      
-      output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
-      output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
-      output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-      # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
-      
-      output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
-      output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
-      output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
-      output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
-      output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
-      
-      output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
-      output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
-      output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
-      
-      output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
-      output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
-      output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
-      
-      output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
-      output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
-      output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
-      
-      session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
-      
-      # Render the footer based on the language
-      output$footer_ui <- renderUI({
-        div(
-          span("Was this page helpful?",
-               # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
-               actionButton(
-                 "thumbs_up",
-                 label = bsicons::bs_icon("hand-thumbs-up", 
-                                          size = "2em", 
-                                          fill = "#244C5A"),
-                 class = "btn btn-link",
-                 width = "50px"),
-               actionButton(
-                 "thumbs_down",
-                 label = bsicons::bs_icon("hand-thumbs-down", 
-                                          size = "2em", 
-                                          fill = "#244C5A"),
-                 class = "btn btn-link",
-                 width = "50px")
-          ),
-          # Set background color of div
-          style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
-          # Make a placeholder for feedback text and submit button
-          uiOutput("feedback_ui")
-        )
-      }) 
-    }
-  })  # No need for a bindEvent as this rendering is trigered by a language change
+  
+  # Below is commented out; it was used to work with a language selection drop-down menu but this is replaced by an actionButton
+  # # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
+  # # Observe user selection of language
+  # observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
+  #   if (input$langSelect %in% names(translation_cache)) {
+  #     languageSelection$language <- input$langSelect
+  #     languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+  #     
+  #     # Render the navigation bar titles based on the language
+  #     output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
+  #     output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
+  #     output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
+  #     output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
+  #     output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
+  #     
+  #     output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
+  #     output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
+  #     output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
+  #     # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+  #     
+  #     output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
+  #     output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
+  #     output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
+  #     output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
+  #     output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
+  #     
+  #     output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
+  #     output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
+  #     output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
+  #     
+  #     output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
+  #     output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
+  #     output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
+  #     
+  #     output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
+  #     output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
+  #     output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
+  #     
+  #     session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
+  #     
+  #     # Render the footer based on the language
+  #     output$footer_ui <- renderUI({
+  #       div(
+  #         span("Was this page helpful?",
+  #              # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
+  #              actionButton(
+  #                "thumbs_up",
+  #                label = bsicons::bs_icon("hand-thumbs-up", 
+  #                                         size = "2em", 
+  #                                         fill = "#244C5A"),
+  #                class = "btn btn-link",
+  #                width = "50px"),
+  #              actionButton(
+  #                "thumbs_down",
+  #                label = bsicons::bs_icon("hand-thumbs-down", 
+  #                                         size = "2em", 
+  #                                         fill = "#244C5A"),
+  #                class = "btn btn-link",
+  #                width = "50px")
+  #         ),
+  #         # Set background color of div
+  #         style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
+  #         # Make a placeholder for feedback text and submit button
+  #         uiOutput("feedback_ui")
+  #       )
+  #     }) 
+  #   }
+  # })  # No need for a bindEvent as this rendering is trigered by a language change
+  
+  # Below code replaced the drop-down button selection
+  # Toggle language when the button is pressed
+  observeEvent(input$language_button, {
+    new_lang <- if (languageSelection$language == "English") "Français" else "English"
+    languageSelection$language <- new_lang
+    languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+    
+    updateActionButton(
+      session, "language_button",
+      label = ifelse(new_lang == "English", "Français", "English")
+    )
+    
+    session$sendCustomMessage(type = 'updateLang', message = list(lang = ifelse(new_lang == "Français", "fr", "en")))
+  })
+  
+  # Render UI text based on the selected language
+  observeEvent(languageSelection$language, {
+    req(languageSelection$language)
+    
+    # Render the navigation bar titles based on the language
+    output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
+    output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
+    output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
+    output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
+    output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
+    
+    output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
+    output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
+    output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
+    # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
+    
+    output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
+    output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
+    output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
+    output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
+    output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
+    
+    output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
+    output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
+    output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
+    
+    output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
+    output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
+    output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
+    
+    output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
+    output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
+    output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
+    
+    session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
+    
+    # Render the footer based on the language
+    output$footer_ui <- renderUI({
+      div(
+        span("Was this page helpful?",
+             # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
+             actionButton(
+               "thumbs_up",
+               label = bsicons::bs_icon("hand-thumbs-up",
+                                        size = "2em",
+                                        fill = "#244C5A"),
+               class = "btn btn-link",
+               width = "50px"),
+             actionButton(
+               "thumbs_down",
+               label = bsicons::bs_icon("hand-thumbs-down",
+                                        size = "2em",
+                                        fill = "#244C5A"),
+               class = "btn btn-link",
+               width = "50px")
+        ),
+        # Set background color of div
+        style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
+        # Make a placeholder for feedback text and submit button
+        uiOutput("feedback_ui")
+      )
+    })
+  })  # No need for a bindEvent as this rendering is triggered by a language change
   
   # ObserveEvents for thumbs up/down buttons
   # add a textAreaInput to allow the user to write something, and a 'submit feedback' button
@@ -642,7 +702,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$discretePlot) {
         output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
         ui_loaded$discretePlot <- TRUE
-        discretePlot("discretePlot", mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+        discretePlot("discretePlot", config$mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
@@ -664,7 +724,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$mixPlot) {
         output$plotMix_ui <- renderUI(mixPlotUI("mixPlot"))
         ui_loaded$mixPlot <- TRUE
-        mixPlot("mixPlot", mdb_files, language = languageSelection, windowDims) # Call the server
+        mixPlot("mixPlot", config$mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
     
@@ -746,7 +806,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$WQReport) {
         output$WQReport_ui <- renderUI(WQReportUI("WQReport"))
         ui_loaded$WQReport <- TRUE
-        WQReport("WQReport", mdb_files = mdb_files, language = languageSelection) # Call the server
+        WQReport("WQReport", mdb_files = config$mdb_files, language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "snowBulletin") {
@@ -794,13 +854,6 @@ $(document).keyup(function(event) {
         output$news_ui <- renderUI(newsUI("news"))
         ui_loaded$news <- TRUE
         news("news", language = languageSelection) # Call the server
-      }
-    }
-    if (input$navbar == "feedback") { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
-      if (!ui_loaded$feedback) {
-        output$feedback_ui <- renderUI(feedbackUI("feedback"))
-        ui_loaded$feedback <- TRUE
-        feedback("feedback") # Call the server
       }
     }
     
