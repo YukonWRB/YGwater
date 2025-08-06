@@ -4,14 +4,14 @@
 \alias{dbGetQueryDT}
 \title{Retrieve a data.table from a database connection}
 \usage{
-dbGetQueryDT(con, statement, sqlite_date_convert = TRUE, ...)
+dbGetQueryDT(con, statement, params = NULL, ...)
 }
 \arguments{
 \item{con}{A connection object as returned by a \code{\link[DBI:dbConnect]{DBI::dbConnect()}} call or, in the context of this package, a \code{\link[=AquaConnect]{AquaConnect()}}, or \code{\link[=RWISConnect]{RWISConnect()}}, or \code{\link[=snowConnect]{snowConnect()}} call.}
 
 \item{statement}{A SQL statement to be passed to the database.}
 
-\item{sqlite_date_convert}{Logical. If TRUE AND \code{con} is to an sqlite DB, the function will convert character strings to date or datetime objects with UTC 0 offset. This is useful for sqlite databases where dates are stored as text. If FALSE, no conversion will be done. Defaults to TRUE.}
+\item{params}{A list of parameters to be passed to the SQL statement. This is optional and can be used to parameterize the SQL query.}
 
 \item{...}{Other parameters passed to the ... parameter of \code{\link[DBI:dbGetQuery]{DBI::dbGetQuery()}}.}
 }
@@ -22,4 +22,6 @@ A data.table object.
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
 A simple wrapper function around \code{\link[DBI:dbGetQuery]{DBI::dbGetQuery()}} that returns a data.table object instead of a data.frame. Can be used as a direct replacement for \code{\link[DBI:dbGetQuery]{DBI::dbGetQuery()}}, but be aware of the downstream effects of using a data.table object instead of a data.frame.
+
+The \code{params} argument allows for parameterized queries, which can help prevent SQL injection attacks. However, BE AWARE THAT THIS IS SLOW where any element of \code{params} is a vector of length greater than 1 as this results in multiple queries. In such cases, it is recommended to use a different approach, such as preparing the statement with \code{\link[glue:glue_sql]{glue::glue_sql()}} instead (see notes the note about what to do for IN operations in the glue help file).
 }
