@@ -1164,14 +1164,26 @@ contData <- function(id, language, inputs) {
     table_data <- reactiveVal()
     observeEvent(input$filter, {
       req(filteredData, language$language)
+      
+      # Get the relevant timeseries based on the user's input selections (filteredData might not be narrowed to the user's selections if they used a selector 'upstream' of an earlier selection)
+      relevant_ts <- filteredData$timeseries[filteredData$timeseries$start_datetime >= input$date_range[1] & filteredData$timeseries$end_datetime <= input$date_range[2] + 1, ]
+      if (input$locations[1] != "all") relevant_ts <- relevant_ts[relevant_ts$location_id %in% input$locations, ]
+      if (input$sub_locations[1] != "all") relevant_ts <- relevant_ts[relevant_ts$sub_location_id %in% input$sub_locations, ]
+      if (input$params[1] != "all") relevant_ts <- relevant_ts[relevant_ts$parameter_id %in% input$params, ]
+      if (input$media[1] != "all") relevant_ts <- relevant_ts[relevant_ts$media_id %in% input$media, ]
+      if (input$z[1] != "all") relevant_ts <- relevant_ts[relevant_ts$z %in% input$z, ]
+      if (input$aggregation[1] != "all") relevant_ts <- relevant_ts[relevant_ts$aggregation_type_id %in% input$aggregation, ]
+      if (input$rate[1] != "all") relevant_ts <- relevant_ts[relevant_ts$record_rate %in% input$rate, ]
+      
+      
       if (language$language == "Français") {
         timeseries <- dbGetQueryDT(session$userData$AquaCache, 
                                    paste0("SELECT * FROM timeseries_metadata_fr
-                                   WHERE timeseries_id IN (", paste(filteredData$timeseries$timeseries, collapse = ", "), ");"))
+                                   WHERE timeseries_id IN (", paste(relevant_ts$timeseries_id, collapse = ", "), ");"))
       } else {
         timeseries <- dbGetQueryDT(session$userData$AquaCache,
                                    paste0("SELECT * FROM timeseries_metadata_en
-                                   WHERE timeseries_id IN (", paste(filteredData$timeseries$timeseries, collapse = ", "), ");"))
+                                   WHERE timeseries_id IN (", paste(relevant_ts$timeseries_id, collapse = ", "), ");"))
       }
       table_data(timeseries)
     })
