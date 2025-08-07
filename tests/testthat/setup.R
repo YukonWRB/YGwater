@@ -43,7 +43,7 @@ if (Sys.getenv("CI") == "true") {
 
 set.seed(123) # Set seed for reproducibility in tests
 
-# Ensure ragg is available for deterministic PNG output
+# Ensure ragg is available for deterministic PNG outputs
 if (!requireNamespace("ragg", quietly = TRUE)) {
   install.packages("ragg")
 }
