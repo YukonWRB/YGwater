@@ -91,12 +91,18 @@ getWeather <- function(station,
     possible_yrs <- paste0(possibilities$start, " to ", possibilities$end)
     possible_coords <- paste0(substr(possibilities$lat, 1, 7), ", ", substr(possibilities$lon, 1, 9))
     possible_interval <- possibilities$interval
-    message("The following ECCC stations are possible matches for your input:")
+    cli::cli_alert_info("{.strong The following ECCC stations are possible matches for your input:}")
+    
     for (i in 1:nrow(possibilities)) {
-      cat(crayon::bold$blue$underline("Choice", i, ":"), possible_names[i], crayon::bold$green(" Interval"), possible_interval[i], crayon::bold$green(" Years"), possible_yrs[i], crayon::bold$green(" Coords"), possible_coords[i], "\n")
+      cli::cli_text(
+        "{.underline {.strong Choice {i}:}} {possible_names[i]} ",
+        "{.strong Interval} {possible_interval[i]} ",
+        "{.strong Years} {possible_yrs[i]} ",
+        "{.strong Coords} {possible_coords[i]}"
+      )
     }
-    choice <- readline(prompt =
-                         writeLines(crayon::bold$red("\nChoose your desired station from the list and enter the number corresponding to the choice below:")))
+    choice <- as.numeric(readline(prompt =
+                         cli::cli_text("{.strong {.fg_red \nChoose your desired station from the list and enter the number corresponding to the choice below:}}")))
     station <- possibilities[choice,]
     interval <- station$interval
   }

@@ -22,7 +22,6 @@ Depends:
 Imports:
     cli,
     cowplot,
-    crayon,
     DBI,
     dplyr,
     data.table,

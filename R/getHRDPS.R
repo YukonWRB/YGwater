@@ -93,7 +93,9 @@ getHRDPS <- function(clip = c("YT"),
     }
     failed <- FALSE
   }, error = function(e) {
-    cat(crayon::red(paste0("Fetching rasters failed on at least one file for the most recent release (issue time ", issue_hour, "UTC); fetching the prior issue time forecasts. This is probably temporary, try again once the files have been written to the url.")))
+    cli::cli_alert_danger(
+      "{.fg_red Fetching rasters failed on at least one file for the most recent release (issue time {issue_hour} UTC); fetching the prior issue time forecasts. This is probably temporary — try again once the files have been written to the URL.}"
+    )
     failed <<- TRUE
   })
   
@@ -141,7 +143,9 @@ getHRDPS <- function(clip = c("YT"),
         }
       }
     }, error = function(e) {
-      cat(crayon::red(paste0("Fetching rasters failed on the most recent release (issue time ", issue_hour, " UTC) as well as the prior release. Suggest you investigate connection issues: try accessing the rasters directly at https://dd.weather.gc.ca/model_hrdps/continental/2.5km and see if the directories are populated. If they are the issue is likely on this end, otherwise it's an ECCC issue.")))
+      cli::cli_alert_danger(
+        "{.fg_red Fetching rasters failed on the most recent release (issue time {issue_hour} UTC) as well as the prior release. Suggest you investigate connection issues: try accessing the rasters directly at https://dd.weather.gc.ca/model_hrdps/continental/2.5km and see if the directories are populated. If they are the issue is likely on this end, otherwise it's an ECCC issue.}"
+      )
     })
   }
 }

@@ -2,6 +2,6 @@
 #' @noRd
 ask <- function(...) {
   choices <- c("Yes", "No")
-  cat(crayon::green(paste0(...,"\n", collapse = "")))
+  cli::cat_bullet(..., bullet = "arrow", col = "darkgreen")
   utils::menu(choices) == which(choices == "Yes")
 }
