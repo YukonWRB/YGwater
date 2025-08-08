@@ -32,7 +32,6 @@ Imports:
     graphics,
     grDevices,
     grid,
-    gridExtra,
     hablar,
     httr,
     jsonlite,

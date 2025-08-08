@@ -43,9 +43,6 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
   
   
   rlang::check_installed("trend", reason = "necessary to calculate trends.")
-  if (plots) {
-    rlang::check_installed("gridExtra", reason = "necessary to create plots.")
-  }
 
   if (!is.null(save_path)) {
     if (save_path %in% c("Choose", "choose")) {
@@ -91,7 +88,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
           if (flow_end > level_end - 6*30*24*60*60) { #check if last flow is recent enough
             locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name == "water level", "parameter_id"]) , ] #drop level
           } else {
-            locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name =="flow", "parameter_id"]) , ] #drop flow
+            locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name == "flow", "parameter_id"]) , ] #drop flow
           }
         }
       }
@@ -129,7 +126,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
                                  "parameter" = sub(".*_", "", i),
                                  "latitude" = DBI::dbGetQuery(con, paste0("SELECT latitude FROM locations where location = '", sub("_.*", "", i), "'"))[1,1],
                                  "longitude" = DBI::dbGetQuery(con, paste0("SELECT longitude FROM locations where location = '", sub("_.*", "", i), "'"))[1,1],
-                                 "active" = max(data[[i]]$date) > as.Date(end_date)-365,
+                                 "active" = max(data[[i]]$date) > as.Date(end_date) - 365,
                                  "note" = paste0("Last data available on ", max(data[[i]]$date), "."))
     )
     #info
@@ -238,7 +235,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
           ggplot2::theme(axis.title.x = ggplot2::element_blank(),
                          axis.text.x = ggplot2::element_blank(),
                          axis.ticks.x = ggplot2::element_blank())
-        plots_separate <- gridExtra::arrangeGrob(plot2, plot)
+        plots_separate <- cowplot::plot_grid(plot2, plot, ncol = 1, align = "v", rel_heights = c(1, 1))
         plot_list[[i]] <- plots_separate
       }
       if (!is.null(save_path)) {

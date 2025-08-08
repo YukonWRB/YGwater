@@ -35,9 +35,6 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   # con <- NULL
   
   rlang::check_installed("trend", reason = " to calculate trends.")
-  if (plots) {
-    rlang::check_installed("gridExtra", reason = " to create plots.")
-  }
   
   if (!is.null(save_path)) {
     if (save_path == "choose") {
@@ -98,12 +95,12 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   
   if (!inactive) { # Filter out any location with no measurements for 5 or more years
     rm.inactive <- samples %>%
-      dplyr::group_by(location_id) %>%
+      dplyr::group_by(.data$location_id) %>%
       dplyr::summarise(min_year = min(lubridate::year(target_datetime)),
                        max_year = max(lubridate::year(target_datetime))) %>%
-      dplyr::mutate(rm.inactive = max_year - min_year < 5) %>%
+      dplyr::mutate(rm.inactive = .data$max_year - .data$min_year < 5) %>%
       dplyr::filter(rm.inactive) %>%
-      dplyr::pull(location_id)
+      dplyr::pull(.data$location_id)
     
     locations <- locations[!locations$location_id %in% rm.inactive,]
     samples <- samples[!samples$location_id %in% rm.inactive,]
@@ -420,7 +417,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       }
       
       if (plot_type == "combined") {
-        plots_combined <- gridExtra::arrangeGrob(plotSWE, plotDepth, plotDensity)
+        plots_combined <- cowplot::plot_grid(plotSWE, plotDepth, plotDensity, ncol = 1, align = "v", rel_heights = c(1, 1, 1))
         plotsCombined[[display_name]] <- plots_combined
       } else {
         plotsSWE[[display_name]] <- plotSWE
