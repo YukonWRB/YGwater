@@ -200,7 +200,8 @@ eq_fetch <- function(EQcode,
       match <- data.frame(matrix(ncol = length(params_data), nrow = 0)) # Create data frame containing all parameters that exist in sampledata
       
       colnames(match) <- params_data
-      stnstd <- plyr::rbind.fill(stnstd, match) # Fill in match with stnstd
+      # stnstd <- plyr::rbind.fill(stnstd, match) # Fill in match with stnstd
+      stnstd <- dplyr::bind_rows(stnstd, match) # Fill in match with stnstd
       stnstd <- stnstd %>% #Convert columns containing all NA to numeric
         dplyr::mutate_if(is.logical, as.numeric)
       stnstd <- stnstd %>% # Arrange stnstd such that parameter order matches sampledata

@@ -198,8 +198,8 @@ YOWNplot_WSC <- function(YOWNindex,
                      date_labels = "%m-%Y",
                      expand = c(0, 0)) +
     ggplot2::scale_y_continuous(name = "Water Level (m above sea level)",
-                       limits = c(plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)),
-                       breaks = seq(plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling), by = 0.5),
+                       limits = c(round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)),
+                       breaks = seq(round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling), by = 0.5),
                        expand = c(0, 0))
 
   title <- ggplot2::ggplot() +

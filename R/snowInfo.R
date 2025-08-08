@@ -226,7 +226,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       #Calculate the territory trend and add it to trends
       # terr_prct_chg_SWE <- mean(trends$annual_prct_chg_SWE, na.rm = TRUE)
       # terr_prct_chg_depth <- mean(trends$annual_prct_chg_DEPTH, na.rm = TRUE)
-      # trends <- plyr::rbind.fill(trends, data.frame("location_code" = "territory",
+      # trends <- dplyr::bind_rows(trends, data.frame("location_code" = "territory",
       #                                               "annual_prct_chg_SWE" = terr_prct_chg_SWE,
       #                                               "annual_prct_chg_DEPTH" = terr_prct_chg_depth,
       #                                               "note" = "Mean of the annual percent changes."))
@@ -297,13 +297,13 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       new_apr1 <- data.frame("location" = "all_locs_Apr1",
                              "name" = "Territory-averaged April 1")
       
-      results <- plyr::rbind.fill(results, plot_all_SWE)
-      results <- plyr::rbind.fill(results, plot_all_depth)
-      results <- plyr::rbind.fill(results, plot_apr1_SWE)
-      results <- plyr::rbind.fill(results, plot_apr1_depth)
+      results <- dplyr::bind_rows(results, plot_all_SWE)
+      results <- dplyr::bind_rows(results, plot_all_depth)
+      results <- dplyr::bind_rows(results, plot_apr1_SWE)
+      results <- dplyr::bind_rows(results, plot_apr1_depth)
       
-      locations <- plyr::rbind.fill(locations, new_all)
-      locations <- plyr::rbind.fill(locations, new_apr1)
+      locations <- dplyr::bind_rows(locations, new_all)
+      locations <- dplyr::bind_rows(locations, new_apr1)
       
       territory <- data.frame("subset" = c("mean max", "mean Apr 1"),
                               "inactive_locs" = inactive,

@@ -157,7 +157,7 @@ YOWNplot_SiteCompare <- function(YOWNindex,
 
   # Format chart labels based on time series ID
   if(tsunit == "asl"){
-    limits <- c(plyr::round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling))
+    limits <- c(round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor), round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling))
     breaks <- seq(floor(min(stats::na.omit(plotdf$value))), ceiling(max(stats::na.omit(plotdf$value))), by = 0.25)
 
     plot <- plot + ggplot2::scale_y_continuous(name = "",
@@ -165,7 +165,7 @@ YOWNplot_SiteCompare <- function(YOWNindex,
                                        breaks = breaks,
                                        expand = c(0, 0))
   } else if(tsunit == "bgs" | tsunit == "btoc") {
-    limits <- c(plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling), plyr::round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor))
+    limits <- c(round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor), round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling))
     breaks <- seq(ceiling(max(stats::na.omit(plotdf$value))), floor(min(stats::na.omit(plotdf$value))), by = -0.25)
     plot <- plot + ggplot2::scale_y_reverse(name = paste0("Groundwater level (m ", tsunit, " )"),
                                        limits = limits,

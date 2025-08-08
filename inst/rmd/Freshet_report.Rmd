@@ -588,7 +588,9 @@ stationInfo$Station <- paste0(stationInfo$STATION_NAME, " ([", stationInfo$STATI
 
 stationInfo <- stationInfo[c(8,6,3,4,5)]
 
-stationInfo <- plyr::rename(stationInfo, c("LATITUDE"="Latitude", "LONGITUDE"="Longitude", "DATUM_TO"="Datum"))
+names(stationInfo)[names(stationInfo) == "LATITUDE"] <- "Latitude"
+names(stationInfo)[names(stationInfo) == "LONGITUDE"] <- "Longitude"
+names(stationInfo)[names(stationInfo) == "DATUM_TO"] <- "Datum"
 
 #shrink the datum names
 sub <- gsub("APPROXIMATE GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (approximate)", stationInfo$Datum)
@@ -801,7 +803,7 @@ if (MESH){
     }
     
     #Rename certain stations if necessary
-    MESH <- plyr::rename(MESH, c("Marsh" = "09AB004"))
+    names(MESH)[names(MESH) == "Marsh"] <- "09AB004"
   }, error = function(e) {
     MESH <- list()
   })

@@ -512,7 +512,9 @@ stationInfo$Station <- paste0(stationInfo$STATION_NAME, " ([", stationInfo$STATI
 
 stationInfo <- stationInfo[c(8,6,3,4,5)]
 
-stationInfo <- plyr::rename(stationInfo, c("LATITUDE"="Latitude", "LONGITUDE"="Longitude", "DATUM_TO"="Datum"))
+names(stationInfo)[names(stationInfo) == "LATITUDE"] <- "Latitude"
+names(stationInfo)[names(stationInfo) == "LONGITUDE"] <- "Longitude"
+names(stationInfo)[names(stationInfo) == "DATUM_TO"] <- "Datum"
 
 #shrink the datum names
 sub <- gsub("APPROXIMATE GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (approximate)", stationInfo$Datum)
@@ -724,7 +726,7 @@ tryCatch({
   
   colnames(precipTable) <- c("Station name (number)", "Last week", paste0("Last ", last48hours, " hours"), paste0("Last ", last24hours, " hours"), paste0("Next ", next24hours, " hours"), paste0("Next ", next48hours, " hours"))
   
-  knitr::kable(precipTable, digits=1, caption=paste0("Accumulated precipitation (mm of water) over various time periods. Values are generated from Environment and Climate Change Canada's HRDPA model (past) and HRDPS model (forecast). Note that past and forecast time ranges vary depending on weather product availability."), align="lccccc")
+  knitr::kable(precipTable, digits=1, caption=paste0("Accumulated precipitation (mm of water) over various time periods. Values are generated from Environment and Climate Change Canada's HRDPA model (past) and HRDPS model (forecast). Note that past and forecast time ranges vary depending on weather product availability."), align = "lccccc")
 }, error = function(e) {
   cat("Precipitation data could not be fetched at this time. This likely reflects a network, server, or data availability issue.")
 }, warning = function (w) {
@@ -777,7 +779,8 @@ if (MESH ){
     }
     
     #Rename certain stations if necessary
-    MESH <- plyr::rename(MESH, c("Marsh" = "09AB004"))
+    names(MESH)[names(MESH) == "Marsh"] <- "09AB004"
+    
   }, error = function(e) {
     MESH <- list()
   })

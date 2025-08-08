@@ -41,7 +41,6 @@ Imports:
     methods,
     openxlsx,
     plotly,
-    plyr,
     remotes,
     rlang,
     rmarkdown,

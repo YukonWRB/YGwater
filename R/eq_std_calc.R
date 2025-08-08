@@ -54,7 +54,7 @@ eq_std_calc <- function(sampledata, calcs) {
 
   # Calculate temp
   if (!all(is.na(sampledata$`Temp-F (C)`))) {
-    temp <- plyr::round_any(mean(stats::na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
+    temp <- round_any(mean(stats::na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
   } else {
     temp <- NA
   }
@@ -118,7 +118,7 @@ eq_std_calc <- function(sampledata, calcs) {
   } else {
     pHx <- pH
   }
-  pHx <- plyr::round_any(pHx, accuracy = 0.1, f = floor)
+  pHx <- round_any(pHx, accuracy = 0.1, f = floor)
 
   if (is.na(hard)) {
     hardx <- 50
@@ -145,7 +145,7 @@ eq_std_calc <- function(sampledata, calcs) {
   }else {
     pHx <- pH
   }
-  pHx <- plyr::round_any(pHx, accuracy = 0.5, f = floor)
+  pHx <- round_any(pHx, accuracy = 0.5, f = floor)
   if (pHx <= 9.5 & pHx > 9) {
     pHx <- 9
   } else if (pHx >9.5) {
