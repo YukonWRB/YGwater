@@ -122,7 +122,7 @@ app_ui <- function(request) {
                  nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
                            uiOutput("plotContinuous_ui"))
                  # nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
-                 # uiOutput("plotsMix_ui"))
+                 # uiOutput("plotMix_ui"))
         ),
         if (!config$public) {
           nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
@@ -179,7 +179,7 @@ app_ui <- function(request) {
                              uiOutput("addContData_ui")),
                    nav_panel(title = "Edit/delete continuous data",
                              value = "editContData",
-                             uiOutput("editContcData_ui")),
+                             uiOutput("editContData_ui")),
                    nav_panel(title = "Add/modify timeseries corrections",
                              value = "continuousCorrections",
                              uiOutput("continuousCorrections_ui")),

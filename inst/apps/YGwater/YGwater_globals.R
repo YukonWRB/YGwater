@@ -17,41 +17,53 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # Load the cache functions (in a file so they can be used across a few modules)
   source(system.file("apps/YGwater/modules/cache_functions.R", package = "YGwater"))
   
-  # 'Admin' side modules #####
-  # database admin modules
-  source(system.file("apps/YGwater/modules/admin/locations/locationMetadata.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/locations/addLocation.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/locations/addSubLocation.R", package = "YGwater"))
+  g_drive <- FALSE
   
-  # equipment sub-modules
-  source(system.file("apps/YGwater/modules/admin/equipment/deploy_recover.R", package = "YGwater"))
-  
-  # calibration sub-modules
-  source(system.file("apps/YGwater/modules/admin/equipment/calibrate.R", package = "YGwater"))
-  
-  # continuous data sub-modules
-  source(system.file("apps/YGwater/modules/admin/continuousData/addContData.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/continuousData/continuousCorrections.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/continuousData/imputeMissing.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/continuousData/editContData.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/continuousData/grades_approvals_qualifiers.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/continuousData/addTimeseries.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/continuousData/syncCont.R", package = "YGwater"))
-  
-  # discrete data sub-modules
-  source(system.file("apps/YGwater/modules/admin/discreteData/addDiscData.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/discreteData/editDiscData.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/discreteData/syncDisc.R", package = "YGwater"))
-  
-  
-  source(system.file("apps/YGwater/modules/admin/field/field_main.R", package = "YGwater"))
-  
-  # Files/document/image sub-modules
-  source(system.file("apps/YGwater/modules/admin/documents/addDocs.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/imgupload/addImgs.R", package = "YGwater"))
-  
-  source(system.file("apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/admin/applicationTasks/viewFeedback.R", package = "YGwater"))
+  if (!public) {
+    # 'Admin' side modules #####
+    # database admin modules
+    source(system.file("apps/YGwater/modules/admin/locations/locationMetadata.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/locations/addLocation.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/locations/addSubLocation.R", package = "YGwater"))
+    
+    # equipment sub-modules
+    source(system.file("apps/YGwater/modules/admin/equipment/deploy_recover.R", package = "YGwater"))
+    
+    # calibration sub-modules
+    source(system.file("apps/YGwater/modules/admin/equipment/calibrate.R", package = "YGwater"))
+    
+    # continuous data sub-modules
+    source(system.file("apps/YGwater/modules/admin/continuousData/addContData.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/continuousData/continuousCorrections.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/continuousData/imputeMissing.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/continuousData/editContData.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/continuousData/grades_approvals_qualifiers.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/continuousData/addTimeseries.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/continuousData/syncCont.R", package = "YGwater"))
+    
+    # discrete data sub-modules
+    source(system.file("apps/YGwater/modules/admin/discreteData/addDiscData.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/discreteData/editDiscData.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/discreteData/syncDisc.R", package = "YGwater"))
+    
+    
+    source(system.file("apps/YGwater/modules/admin/field/field_main.R", package = "YGwater"))
+    
+    # Files/document/image sub-modules
+    source(system.file("apps/YGwater/modules/admin/documents/addDocs.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/imgupload/addImgs.R", package = "YGwater"))
+    
+    source(system.file("apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/applicationTasks/viewFeedback.R", package = "YGwater"))
+    
+    # confirm G drive access for FOD reports
+    g_drive <- dir.exists("//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/")
+    
+    if (g_drive) {
+      # FOD module (only visible internally)
+      source(system.file("apps/YGwater/modules/client/FOD/FOD_main.R", package = "YGwater"))
+    }
+  }
   
   
   # 'client' side modules #####
@@ -87,12 +99,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/client/info/about.R", package = "YGwater"))
   
   
-  source(system.file("apps/YGwater/modules/client/info/feedback.R", package = "YGwater"))  # !!! delete this line when the feedback module is removed
-  
-  # FOD module (only visible internally)
-  source(system.file("apps/YGwater/modules/client/FOD/FOD_main.R", package = "YGwater"))
-  
-  
   
   # Load translations infrastructure to the global environment
   
@@ -115,8 +121,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   # Establish database connection parameters
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
-  # double assignment creates a global variable that can be accessed by all UI and server functions
-  
   
   ## Access database connections ###########
   # Look for .mdb files in the AccessPath directories
@@ -154,10 +158,10 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     print("No .mdb files found in the accessPath directories.")
   }
   
-  # confirm G drive access for FOD reports
-  g_drive <- dir.exists("//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/")
   
   # Make the configuration list available globally
+  # double assignment creates a global variable that can be accessed by all UI and server functions
+  
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,
