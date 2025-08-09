@@ -66,7 +66,7 @@ floodReport <-
       if (rlang::is_installed("R.utils")){
         message("Package R.utils successfully installed.")
       } else {
-        stop("Failed to install package R.utils You could troubleshoot by running utils::install.packages('R.utils') by itself.")
+        stop("Failed to install package R.utils. You could troubleshoot by running install.packages('R.utils') by itself.")
       }
     }
 
@@ -77,7 +77,7 @@ floodReport <-
       if (rlang::is_installed("imager")){
         message("Package imager successfully installed.")
       } else {
-        stop("Failed to install package imager You could troubleshoot by running utils::install.packages('imager') by itself.")
+        stop("Failed to install package imager. You could troubleshoot by running install.packages('imager') by itself.")
       }
     }
 
@@ -88,7 +88,7 @@ floodReport <-
       if (rlang::is_installed("purrr")){
         message("Package purrr successfully installed.")
       } else {
-        stop("Failed to install package purrr You could troubleshoot by running utils::install.packages('purrr') by itself.")
+        stop("Failed to install package purrr. You could troubleshoot by running install.packages('purrr') by itself.")
       }
     }
 
@@ -99,7 +99,7 @@ floodReport <-
       if (rlang::is_installed("knitr")){
         message("Package knitr successfully installed.")
       } else {
-        stop("Failed to install package knitr You could troubleshoot by running utils::install.packages('knitr') by itself.")
+        stop("Failed to install package knitr. You could troubleshoot by running install.packages('knitr') by itself.")
       }
     }
 

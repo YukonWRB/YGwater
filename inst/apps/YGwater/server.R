@@ -83,18 +83,16 @@ app_server <- function(input, output, session) {
   updating_from_url <- reactiveVal(FALSE)
   
   observeEvent(session$clientData$url_search, ignoreNULL = FALSE, {
-    print("updating")
     updating_from_url(TRUE)
     on.exit(updating_from_url(FALSE))
     query <- shiny::parseQueryString(isolate(session$clientData$url_search))
     page <- query[["page"]]
     if (!is.null(page) && page %in% bookmarkable_tabs && !identical(page, input$navbar)) {
-      bslib::nav_select(id = "navbar", selected = page)
+      try({bslib::nav_select(id = "navbar", selected = page)})
     }
   })
   
   observeEvent(input$navbar, {
-    print("pushing")
     if (updating_from_url()) return()
     if (is.null(input$navbar)) return()
     if (input$navbar %in% bookmarkable_tabs) {

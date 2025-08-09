@@ -96,7 +96,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   
   # Load translations infrastructure to the global environment
   
-  translations <- openxlsx::read.xlsx(system.file("apps/YGwater/translations.xlsx", package = "YGwater"), sheet = 1)
+  translations <- data.table::fread(system.file("apps/YGwater/translations.csv", package = "YGwater"))
   # Build a list from the data.frame
   translation_cache <<- lapply(setdiff(names(translations[, -2]), "id"), function(lang) { # Removes the second, "description" column, builds lists for each language
     setNames(translations[[lang]], translations$id)
