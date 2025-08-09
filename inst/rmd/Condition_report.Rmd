@@ -1039,7 +1039,14 @@ if (meteogram==TRUE){
 #This section will contain auto-generated images, selected based on the stations(s) selected.
 
 tryCatch({
-  images <- XML::readHTMLTable(httr::content(httr::GET("https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/", config=httr::authenticate(Sys.getenv("ECCCUSER"), Sys.getenv("ECCCPASS"))), "text"))[[1]]
+  html <- httr::content(
+    httr::GET(
+      "https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/",
+      config = httr::authenticate(Sys.getenv("ECCCUSER"), Sys.getenv("ECCCPASS"))
+    ),
+    "text"
+  )
+  images <- rvest::html_table(xml2::read_html(html))[[1]]
   images <- images[c(-1,-2),-1] #first two rows are not files and first column is nothing
   images <- images[grep(paste(stations, collapse="|"), images$Name), ] #subset only the images that match stations requested
   images <- images %>% dplyr::filter((as.POSIXct(images[,2], tz="UTC")-7*60*60) >= Sys.Date()-7) #Subsets only images < 7 days old.
