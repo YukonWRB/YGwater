@@ -78,7 +78,7 @@ getHRDPS <- function(clip = c("YT"),
       if (!(TRUE %in% grepl(name, existing))) { # Checks if the file exists already, runs if not.
         raster <- terra::rast(paste0("https://dd.weather.gc.ca/model_hrdps/continental/2.5km/", issue_hour, "/0", i, "/", issue_timedate, "_MSC_HRDPS_", param, "_RLatLon0.0225_PT0", i, "H.grib2"))
 
-        if (clipped == FALSE) {
+        if (!clipped) {
           if (!is.null(clip)) {
             clip <- terra::project(clip, raster) #project clip vector to crs of the raster
           }
@@ -129,7 +129,7 @@ getHRDPS <- function(clip = c("YT"),
         if (!(TRUE %in% grepl(name, existing))) { #Checks if the file exists already, runs if not.
           raster <- terra::rast(paste0("https://dd.weather.gc.ca/model_hrdps/continental/2.5km/", issue_hour, "/0", i, "/", issue_timedate, "_MSC_HRDPS_", param, "_RLatLon0.0225_PT0", i, "H.grib2"))
 
-          if (clipped == FALSE) {
+          if (!clipped) {
             if (!is.null(clip)) {
               clip <- terra::project(clip, raster) #project clip vector to crs of the raster
             }

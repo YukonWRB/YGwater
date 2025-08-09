@@ -250,7 +250,7 @@ basinPrecip <- function(location,
         for (j in within) { #Since within could actually be many polygons
           have_extent <- rbind(have_extent, have_time[which((stringr::str_detect(have_time$extent, j))),])
         }
-        have_extent <- rbind(have_extent, have_time[have_time$clipped == FALSE,]) #add in the unclipped ones too
+        have_extent <- rbind(have_extent, have_time[!have_time$clipped,]) #add in the unclipped ones too
         
         missing_extent <- have_time[!(have_time$files %in% have_extent$files), ]
         
@@ -349,7 +349,7 @@ basinPrecip <- function(location,
   start_hrdps <- lubridate::floor_date(start, "1 hours")
   hrdps <- FALSE #overwritten if hrdps are usable
   actual_times_hrdps <- NULL
-  if (hrdpa == FALSE) { #only hrdps need to be downloaded, times are in the future
+  if (!hrdpa) { #only hrdps need to be downloaded, times are in the future
     hrdps <- TRUE
     getHRDPS(clip = NULL, save_path = hrdps_loc, param = "APCP_Sfc") #This will not run through if the files are already present
     available_hrdps <- data.frame(files = list.files(paste0(hrdps_loc, "/APCP_Sfc"), pattern = "*.tiff$", full.names = TRUE))
@@ -687,7 +687,7 @@ basinPrecip <- function(location,
   
   if (type == "longlat") {
     list <- list(mean_precip = mean_precip, total_time_range_UTC = actual_times, reanalysis_time_range_UTC = actual_times_hrdpa, forecast_time_range_UTC = actual_times_hrdps, point = requested_point, plot = if (map) plot else NULL)
-    if (silent == FALSE) {
+    if (!silent) {
       if (map) {
         # decide verb and note based on flags
         verb <- if (!hrdps) {
@@ -749,7 +749,7 @@ basinPrecip <- function(location,
     }
   } else {
     list <- list(mean_precip = mean_precip, min = min, max = max, total_time_range_UTC = actual_times, reanalysis_time_range_UTC = actual_times_hrdpa, forecast_time_range_UTC = actual_times_hrdps, watershed = basin$feature_name, plot = if (map) plot else NULL)
-    if (silent == FALSE) {
+    if (!silent) {
       # Determine verb
       verb <- if (!hrdps) {
         "fell"

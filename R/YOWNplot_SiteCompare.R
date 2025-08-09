@@ -46,7 +46,7 @@ YOWNplot_SiteCompare <- function(YOWNindex,
     saveTo <- as.character(utils::choose.dir(caption="Select Save Folder"))
   } else if(saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
-  } else if (dir.exists(saveTo) == FALSE) {
+  } else if (!dir.exists(saveTo)) {
     stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
   }
 

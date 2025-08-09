@@ -781,7 +781,7 @@ ggplotOverlap <- function(location,
     plot <- plot + ggplot2::theme(panel.grid.major.y = ggplot2::element_line(color = "black", size = 0.5))
   }
   
-  if (snowbulletin == FALSE) {
+  if (!snowbulletin) {
     plot <- plot +
       ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
       ggplot2::scale_colour_manual(name = if (lang == "en") "Year" else "Ann\u00E9e", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#206976", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks = rev(unique(realtime$plot_year)))

@@ -33,14 +33,14 @@ aq_upload <- function(loc_id,
                       login = Sys.getenv(c("AQUSER", "AQPASS")),
                       server = Sys.getenv("AQSERVER"))
 {
-  if (overwrite ==TRUE){
-    if (is.null(start) | is.null(end)){
+  if (overwrite){
+    if (is.null(start) | is.null(end)) {
       stop("You input overwrite = TRUE but have not specified an end and/or start time. Both of these parameters must be set for overwrite to work.")
     }
   }
 
   #Check that data has correct column names
-  if (!(all(c("Value", "Time") %in% names(data)))){
+  if (!(all(c("Value", "Time") %in% names(data)))) {
     stop("Your data.frame must contain columns labelled Value and Time. Case sensitive.")
   }
 
@@ -56,9 +56,9 @@ aq_upload <- function(loc_id,
   #Make the Aquarius configuration and connect
   config = list(
     server = server,
-    username=login[1],
-    password=login[2],
-    timeSeriesName=paste0(ts_name, "@", loc_id),
+    username = login[1],
+    password = login[2],
+    timeSeriesName = paste0(ts_name, "@", loc_id),
     eventPeriodStartDay = start,
     eventPeriodEndDay = end
     )
@@ -77,7 +77,7 @@ aq_upload <- function(loc_id,
   output <- list(appended = result$NumberOfPointsAppended,
                  input = points_in_file)
 
-  if (result$AppendStatus == "Completed"){
+  if (result$AppendStatus == "Completed") {
     cli::cli_alert_success(
       "{.strong Your request was completed:} {result$NumberOfPointsAppended} points were appended out of the {points_in_file} that were in the provided dataset.\nThe points were appended to the timeseries {.strong {ts_name}} at location {.strong {loc_id}}."
     )

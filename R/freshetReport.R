@@ -110,7 +110,7 @@ freshetReport <-
     }
 
     #####Selection of image path and save path#####
-    if (is.null(image_path) == FALSE) {
+    if (!is.null(image_path)) {
       if (image_path == "choose") {
         message("Select the path to the folder containing your images.")
         image_path <- utils::choose.dir( caption="Select Image Folder")
@@ -127,7 +127,7 @@ freshetReport <-
     }
 
     #####Generate reports#####
-    if (is.null(report_name) == FALSE & is.null(custom_report_stations) == FALSE) {
+    if (!is.null(report_name) & !is.null(custom_report_stations)) {
       #deals with mistakes
       message("You specified custom report stations while the preset report was also set (it defaults to 'Territory' if you didn't change it). I've set the preset to Custom Water Report so you get a custom report instead.")
       report_name <- "Custom Water Report"
@@ -142,7 +142,7 @@ freshetReport <-
 
         preset_extras <- c("09EA003:2013","09EB001:2013", "09AH001:2021","09AH004:2021","09AE002:1992,2022", "09BC002:2013", "09FD003:2015", "10AA001:2012", "09DC006:1992", "09AB004:2007,2021", "09AB010:2021")
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -179,7 +179,7 @@ freshetReport <-
         stations <- c("09EA003", "09EA006", "09EA004", "09EA005", "09EB001", "09EB003", "09EB004", "09CD001")
         preset_extras <- c("09EA003:2013,1972","09EB001:2013,1964")
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -216,7 +216,7 @@ freshetReport <-
         stations <-c ("09AH001", "09AH004", "09AG001", "09AH005", "09AB010", "09AC001", "09AE002")
         preset_extras <- c("09AH001:2021,1992","09AH004:2021")
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -253,7 +253,7 @@ freshetReport <-
         stations <-c ("09AE002", "09AE006", "09AE003")
         preset_extras <- "09EA002:1962,1992,2021"
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -290,7 +290,7 @@ freshetReport <-
         stations <-c ("09BA001", "09BB001", "09BC001", "09BC002", "09BC004")
         preset_extras <- "09BC002:2013,1992,1972"
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -327,7 +327,7 @@ freshetReport <-
         stations <-c ("09FD002", "09FD003", "09FC001", "09FA001", "09FB003", "09FB002")
         preset_extras <- "09FD003:2007,2015"
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -364,7 +364,7 @@ freshetReport <-
         stations <-c ("10AA001", "10AA006", "10AA004", "10AA005", "10AB001", "10AB001", "10AD002")
         preset_extras <- "10AA001:2007,2012,2013"
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -401,7 +401,7 @@ freshetReport <-
         stations <-c ("09DC006", "09DC005", "09DA001", "09DB001", "09DD004")
         preset_extras <- "09DC006:1992,1983,2013"
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -439,7 +439,7 @@ freshetReport <-
         stations <-c ("09AA001", "09AA004", "09AA017", "09AB004", "09AB001", "09AB010")
         preset_extras <- c("09AA004:2007,2021", "09AA001:2007,2021", "09AA017:2007,2021", "09AB004:2007,2021", "09AB001:2007,2021", "09AB010:2007,2021")
 
-        if (preset_extra_years==TRUE){
+        if (preset_extra_years){
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
@@ -477,7 +477,7 @@ freshetReport <-
       stations <-c ("08AA007", "08AA008", "08AA009", "08AA012", "08AA005", "08AA010", "08AA011")
       preset_extras <- c("08AA007:2020", "08AA008:2020", "08AA005:2020", "08AA010:2020")
 
-      if (preset_extra_years==TRUE){
+      if (preset_extra_years){
         extra_years <- c(preset_extras, extra_years)
       } else {
         extra_years <- extra_years
@@ -511,7 +511,7 @@ freshetReport <-
       stations <- c("08AC002", "08AC001", "08AB001", "08AA003")
       preset_extras <- NULL
 
-      if (preset_extra_years==TRUE){
+      if (preset_extra_years){
         extra_years <- c(preset_extras, extra_years)
       } else {
         extra_years <- extra_years
@@ -554,7 +554,7 @@ freshetReport <-
         if (stop_go == "go"){
           stations <- custom_report_stations
 
-          if (is.null(extra_years)==FALSE) {
+          if (!is.null(extra_years)) {
             extra_years <- extra_years
           } else { extra_years <- NULL}
 

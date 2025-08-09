@@ -59,7 +59,7 @@ YOWNplot <- function(AQID,
     } else if (saveTo == "choose") {
       # Select save path using GUI
       saveTo <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"), "Desktop"))
-    } else if (dir.exists(saveTo) == FALSE) {
+    } else if (!dir.exists(saveTo)) {
       stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
     }
   }
@@ -384,10 +384,10 @@ YOWNplot <- function(AQID,
                                                       "\nPlot generated: ",
                                                       Sys.Date(),
                                                       "; Yukon Observation Well Network"))
-  } else if (stats == FALSE) {
+  } else if (!stats) {
     # Generate vector of TRUE/FALSE to stop GGplot from filling in gaps when NA values exist
     NAcomp <- rle(!is.na(plotdf$datemean))
-    NAcomp$values[which(NAcomp$lengths>1 & !NAcomp$values)] <- TRUE
+    NAcomp$values[which(NAcomp$lengths > 1 & !NAcomp$values)] <- TRUE
     NAadd <- inverse.rle(NAcomp)
 
     # Generate plot
@@ -497,7 +497,7 @@ YOWNplot <- function(AQID,
                                                                    "REDACTED" = "red",
                                                                    "MISSING DATA" = "black"))
       }
-    } else if (stats == FALSE) {
+    } else if (!stats) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf,
@@ -537,7 +537,7 @@ YOWNplot <- function(AQID,
                                     limits = c(round_any(min(stats::na.omit(plotdf$daymin)), 0.25, f = floor), round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling)),
                                     breaks = seq(floor(min(stats::na.omit(plotdf$daymin))), ceiling(max(stats::na.omit(plotdf$daymax))), by = 0.25),
                                     expand = c(0, 0))
-    } else if (stats == FALSE) {
+    } else if (!stats) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf, ggplot2::aes(x = .data$timestamp_MST, y = round_any(min(stats::na.omit(.data$daymean)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
@@ -554,7 +554,7 @@ YOWNplot <- function(AQID,
     }
   }
   # Set stats to numeric value of false for saving plot title
-  if (smooth == FALSE) {
+  if (!smooth) {
     smooth <- 0
   }
   #### Final combination of plot, title, subtitle, caption blocks, format and save plot ####
