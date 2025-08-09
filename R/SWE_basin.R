@@ -142,9 +142,9 @@ SWE_basin <- function(year,
       # calculate total percent of available numbers
       perc <- sum(as.numeric(sweb$perc), na.rm = TRUE)
       if (perc >= 10) {
-        swe <- hablar::rationalize(sum(as.numeric(sweb$swe), na.rm = TRUE))
+        swe <- inf_to_na(sum(as.numeric(sweb$swe), na.rm = TRUE))
       } else {
-        swe <- hablar::rationalize(sum(as.numeric(sweb$swe), na.rm = TRUE) * 10 / perc)
+        swe <- inf_to_na(sum(as.numeric(sweb$swe), na.rm = TRUE) * 10 / perc)
       }
       swe_basin_year[nrow(swe_basin_year) + 1, ]  <- c(b, yr_mon[ym,1], yr_mon[ym,2], swe, perc)
     }

@@ -177,7 +177,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       for (j in unique(yrs)) {
         AllSWEMax <- c(AllSWEMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow water equivalent", "result"]), na.rm = TRUE)
       }
-      AllSWEMax <- stats::na.omit(hablar::rationalize(AllSWEMax))
+      AllSWEMax <- stats::na.omit(inf_to_na(AllSWEMax))
       if (length(AllSWEMax) > 6) {
         AllSWESensMax <- trend::sens.slope(AllSWEMax)
       } else {
@@ -189,7 +189,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       for (j in unique(yrs)) {
         AllDepthMax <- c(AllDepthMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow depth", "result"]), na.rm = TRUE)
       }
-      AllDepthMax <- stats::na.omit(hablar::rationalize(AllDepthMax))
+      AllDepthMax <- stats::na.omit(inf_to_na(AllDepthMax))
       if (length(AllDepthMax) > 6) {
         AllDepthSensMax <- trend::sens.slope(AllDepthMax)
       } else {
@@ -366,7 +366,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
                             location = unique(plot_results$location),
                             name = unique(plot_results$name),
                             param_name = "density")
-      density <- hablar::rationalize(density)
+      density <- inf_to_na(density)
       
       plot_results <- rbind(plot_results, density[!is.na(density$result), ])
       

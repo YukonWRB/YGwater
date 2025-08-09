@@ -541,8 +541,8 @@ freshetReport <-
     } #End of Alsek report
 
     ### Generate a custom report ###
-    if (is.null(custom_report_stations)==FALSE){
-      if (methods::is(custom_report_stations, "character")==TRUE) {
+    if (!is.null(custom_report_stations)) {
+      if (inherits(custom_report_stations, "character")) {
         #Check for existence of all stations in hydat
         stop_go <- "go"
         for (i in custom_report_stations){

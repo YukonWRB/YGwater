@@ -209,7 +209,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
       })
     }
     colnames(precip) <- c("Location", "Name", "past 7 days (mm)", "past 3 days (mm)", "past 2 days (mm)", "past 24 hrs (mm)", "next 24 hrs (mm)", "next 48 hrs (mm)", "Location specific comments", "Yesterday's comments")
-    precip <- hablar::rationalize(precip)
+    precip <- inf_to_na(precip)
     if (nrow(precip) > 0) {
       tables$precipitation <- precip
     }
@@ -443,7 +443,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     if (past > 21) {
       colnames(levels) <- c("Location", "Name", " Level (m)", "% hist rng", "% hist mean", "24 hr chg (cm)", "48 hr chg (cm)", "72 hr chg (cm)", "1 week chg (cm)", "2 week chg (cm)", "3 week chg (cm)", "4 week chg (cm)", "Last data MST", "Hrs", "Location specific comments", "Yesterday's comments")
     }
-    levels <- hablar::rationalize(levels)
+    levels <- inf_to_na(levels)
     tables$levels <- levels
   }
   
@@ -577,7 +577,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     if (past > 21) {
       colnames(flows) <- c("Location", "Name", " Flow (m3/s)", "% hist rng", "% hist mean", "24 hr chg", "48 hr chg", "72 hr chg", "1 week chg", "2 week chg", "3 week chg", "4 week chg", "Last data MST", "Hrs", "Location specific comments", "Yesterday's comments")
     }
-    flows <- hablar::rationalize(flows)
+    flows <- inf_to_na(flows)
     tables$flows <- flows
   }
   
@@ -711,7 +711,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     if (past > 21) {
       colnames(snow) <- c("Location", "Name", "SWE (mm)", "% hist rng", "% hist mean", "24 hr chg", "48 hr chg", "72 hr chg", "1 week chg", "2 week chg", "3 week chg", "4 week chg", "Last data MST", "Hrs", "Location specific comments", "Yesterday's comments")
     }
-    snow <- hablar::rationalize(snow)
+    snow <- inf_to_na(snow)
     tables$snow <- snow
   }
   
@@ -846,7 +846,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     if (past > 21) {
       colnames(bridges) <- c("Location", "Name", " Distance (m)", "% hist rng", "% hist mean", "24 hr chg (cm)", "48 hr chg (cm)", "72 hr chg (cm)", "1 week chg (cm)", "2 week chg (cm)", "3 week chg (cm)", "4 week chg (cm)", "Last data MST", "Hrs", "Location specific comments", "Yesterday's comments")
     }
-    bridges <- hablar::rationalize(bridges)
+    bridges <- inf_to_na(bridges)
     tables$bridges <- bridges
   }
   

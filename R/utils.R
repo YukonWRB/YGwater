@@ -15,3 +15,15 @@ ask <- function(...) {
 round_any <- function(x, accuracy, f = round) {
   f(x / accuracy) * accuracy
 }
+
+#' Replace infinite values with NA
+#'
+#' Utility function to replace `Inf` and `-Inf` values with `NA`.
+#'
+#' @param x Numeric vector.
+#' @return Numeric vector with infinite values converted to `NA`.
+#' @keywords internal
+inf_to_na <- function(x) {
+  x[!is.finite(x)] <- NA
+  x
+}
