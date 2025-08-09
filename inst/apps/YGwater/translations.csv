@@ -1,0 +1,301 @@
+﻿id,description,English,Français
+titleCase,Sets language to use in titleCase function,en,fr
+title,the page/website title,Yukon Water Data Explorer,Explorateur des données sur l’eau du Yukon
+Nav menu titles,,,
+home,homeNavTitle,Home,Accueil
+maps,mapsNavMenuTitle,Maps,Cartes
+maps_locs,mapsNavLocsTitle,Monitoring locations,Emplacements de surveillance
+maps_params,mapsNavParamsTitle,Current/past conditions,Conditions présentes/historiques
+maps_raster,mapsNavRastersTitle,Rasters,Rasters
+plots,plotsNavMenuTitle,Plots ,Graphiques
+plots_discrete,plotsNavDiscTitle,Discrete data,Données discrètes
+plots_continuous,plotsNavContTitle,Continuous data,Données continues
+plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
+reports,reportsNavMenuTitle,Reports,Rapports
+reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
+reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de niveau/débit d'eau
+reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualitée de l'eau
+reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
+data,dataNavMenuTitle,Data,Données
+data_discrete,dataNavDiscTitle,Discrete data,Données discrètes
+data_continuous,dataNavContTitle,Continuous data,Données continues
+images,imagesNavMenuTitle,Images,Images
+images_table,imagesNavTableTitle,Table selection,Séléction par tableau
+images_map,imagesNavMapTitle,Map selection,Séléction par carte
+info,infoNavMenuTitle,Info,Info
+info_about,infoNavAboutTitle,About,À propos
+info_news,infoNavNewsTitle,News,Nouvelles
+Home module,,,
+betaTitle,beta version warning,🚧 Notice: this web site is under construction 🚧,🚧 Avis: ce site web est en état de construction. 🚧
+betaText,beta version warning,"<br>We're now in the internal user testing phase. To enter your feedback please navigate to the <b>'Feedback'</b> tab using the top navigation menu!<br><br>Some application pieces will continue to be improved during this testing phase, notably the addition of missing French translations, the addition of some filters and user interface improvements to the plotting modules/tabs, and fixes to new bugs.","<br>Nous sommes désormais en phase de tests internes. Pour nous faire part de vos retours, veuillez vous rendre dans l’onglet <b>« Feedback »</b> via le menu de navigation supérieur !<br><br>Certains éléments de l’application continueront d’être améliorés pendant cette phase de test, notamment les traductions manquantes en français, l’ajout de filtres et  d'améliorations de l’interface utilisateur pour les modules/onglets de visualisation, ainsi que la réparation de 'bugs'."
+homeTitle,Home page welcome message heading,Welcome to the Yukon Water Data Explorer!,Bienvenue à l'explorateur de données sur l'eau du Yukon!
+homeText,Home page welcome message,"Dive into the world of hydrology, meteorology, and water chemistry with the Yukon Department of Environment's Water Resources Branch.<br><br>Our mission? To bring data to your fingertips, aligning with the Open Government initiative for transparency, citizen empowerment, and sparking research creativity. Explore our historic and real-time data, made available under the terms of our limitation of liability.","Plongez dans le monde de l'hydrologie, de la météorologie et de la chimie de l'eau avec le département de l'environment du gouvernement du Yukon. <br><br>Notre mission? Mettre les données à portée de main, en alignement avec l'initiative de Gouvernement Ouvert pour la transparence, l'engagement des citoyens et l'incitation à la recherche créative. Explorez nos données historiques et courantes comme jamais auparavant, disponibles sous entente de nos limitations de responsabilité."
+home_discrete_continuous_title,Explainer for discrete vs continuous,How we organize our data,Au sujet de l'organization de nos données
+home_discrete_continuous,Explainer for discrete vs continuous,"We classify data as <b>discrete</b> or <b>continuous</b>. The classification depends on:</div><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g. snow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g. hourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.</li><br><br>","Nous classifions les données en <b>discrètes</b> ou <b>continues</b>. Cette classification dépend de :</div><li>la fréquence des mesures</li><li>la méthode de mesure</li><li>autres métadonnées pertinentes</li><br><b>Qu’est-ce que les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (p. ex. profondeur de neige) ou par analyse en laboratoire. Ces données doivent comporter une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Qu’est-ce que les données continues ?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (p. ex. horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument et les conditions d’enregistrement.</li>"
+home_map_locs_btn,button text,See a map of monitoring locations,Voire une carte avec les sites de surveillance
+home_map_params_btn,button text,See a map of  current or past conditions,Voire une carte des conditions actuelles ou historiques
+home_plot_cont_btn,button text,Plot continuous data,Tracer les données continues
+home_plot_disc_btn,button text,Plot discrete (sample) data,Tracer les données discrètes
+home_dl_cont_btn,button text,Download continuous data,Télécharger les données discrètes
+home_dl_disc_btn,button text,Download discrete (sample) data,Télécharger les données continues
+disclaimer_title,Legal disclaimer,Disclaimer and limitation of liability,Avertissement et limitation de responsabilité
+disclaimer_body,Legal disclaimer,"The User understands and acknowledges that the use of the data is solely at their own risk. The User is solely responsible for confirming the accuracy, availability, suitability, reliability, usability, completeness or timeliness of the data. The User accepts the data “as is” and acknowledges that the Government of Yukon makes no warranties or representations (express or implied) with respect to the accuracy, availability, suitability, reliability, usability, completeness or timeliness of the data, including, without limitation, implied warranties for merchantability, fitness for a particular purpose, and non-infringement. In consideration of access to the data, the User also agrees that in no event will the Government of Yukon be liable (in tort or contract) or responsible whatsoever to the User or any other legal entity for the accuracy, availability, suitability, reliability, usability, completeness or timeliness of the data, including, without limitation, any loss of revenue or profit, or for direct, indirect, special, incidental, or consequential damages arising from or related to the data.","L'Utilisateur comprend et reconnaît que l'utilisation des données se fait entièrement à ses propres risques. L'Utilisateur est seul responsable de confirmer l'exactitude, la disponibilité, l'adéquation, la fiabilité, l'utilisabilité, l'intégralité ou la ponctualité des données. L'Utilisateur accepte les données “telles quelles”  et reconnaît que le Gouvernement du Yukon ne fournit aucune garantie ou représentation (expresse ou implicite) en ce qui concerne l'exactitude, la disponibilité, l'adéquation, la fiabilité, l'utilisabilité, l'intégralité ou la ponctualité des données, y compris, sans limitation, les garanties implicites de qualité marchande, d'adéquation à un usage particulier et de non-violation. En considération de l'accès aux données, l'Utilisateur convient également qu'en aucun cas le Gouvernement du Yukon ne sera tenu responsable (en tort ou en contrat) ou ne sera quelconque responsable envers l'Utilisateur ou toute autre entité juridique pour l'exactitude, la disponibilité, l'adéquation, la fiabilité, l'utilisabilité, l'intégralité ou la ponctualité des données, y compris, sans limitation, toute perte de revenus ou de profit, ou pour tout dommage direct, indirect, spécial, incidentel ou consécutif découlant de ou lié aux données."
+feedback,feedback mail link text,StreamLine app feedback,Commentaires sur l'appli StreamLine
+feedback_text,feedback mail link text,Please enter your feedback or questions here.,Veuillez saisir vos commentaires ou questions ici.
+Login pop-up,,,
+login_txt,Body text for pop-up,Log in to add/modify data and administer assets.,Connectez vous pour ajouter/modifier des données.
+un,username,Username,Nom d'utilisateur
+pwd,password,Password,Mot de passe
+login_success,modal title,Login successful,Connecté
+login_success_msg,modal text,You are now logged in as,Vous êtes maintenant connecté sous le nom d'utilisateur
+login_fail,modal title,Login failed,Échec
+login_fail_msg,modal text,Username or password failed.,Nom d'utilisateur ou du mot de passe non reconnu.
+login_fail_missing,modal text,Please enter both a username and password.,Entrez un nom d'utilisateur et un mot de passe.
+login_fail_attempts,modal text,Too many login attempts. Please try again later.,"Trop d'essais, essayez plus tard."
+login_confirm,modal actionButton text,Log in,Connection
+Error modal,,,
+errorModalTitle,pop-up error message title,Our apologies!,Désolé!
+errorModalMsg,pop-up error message body,The feature you selected could not be loaded.,La fonctionnalité que vous avez sélectionnée n'a pas pu être chargée.
+Data view module,,,
+instructions,,How to use this interface,Comment utiliser cette interface
+view_data_instructions_discrete,instructions,"<li>Update the drop-down menus to see a subset of  available samples (optional).</li><li>Click the ""Show samples"" button to display the matching samples in a table.</li><li>Select the samples you want to download or select all using the button below the tabl) and select ""View X sample results"". This will take you to the download screen.</li>","<li>Mettez à jour les menus déroulants pour afficher un sous-ensemble des échantillons disponibles (facultatif).</li><li>Cliquez sur le bouton « Afficher les échantillons » pour afficher les échantillons correspondants dans un tableau.</li><li>Sélectionnez les échantillons que vous souhaitez télécharger ou sélectionnez tout à l’aide du bouton sous le tableau, puis choisissez « Voir les détails de X échantillons ». Cela vous amènera à l’écran de téléchargement.</li>"
+view_data_instructions_continuous,instructions,"<li>Update the drop-down menus to see a subset of available timeseries (optional).</li><li>Click the ""Show timeseries"" button to display the matching timeseries in a table.</li><li>Select the timeseries you want to download or select all using the button below the table, and select ""View X timeseries details"". This will take you to the download screen.</li>","<li>Mettez à jour les menus déroulants pour afficher un sous-ensemble des séries temporelles disponibles (facultatif).</li><li>Cliquez sur le bouton « Afficher les séries temporelles » pour afficher les séries correspondantes dans un tableau.</li><li>Sélectionnez les séries temporelles que vous souhaitez télécharger ou sélectionnez tout à l’aide du bouton sous le tableau, puis choisissez « Voir les détails de X séries temporelles ». Cela vous amènera à l’écran de téléchargement.</li>"
+dl_data,download data button,Download Data,Ask ChatGPT
+dl_num_rows,advice about number of rows selected (modal),Number of rows which will be returned:,Nombre de rangées à télécharger:
+dl_num_results,,Number of results which will be returned:,Nombre de résultats à télécharger:
+frequency,modal selection title,Frequency:,Résolution:
+daily,modal selection,Daily (with statistics),Journalière (avec statistiques)
+hourly,modal selection,Hourly + daily (with stats),Horaire + journalière (avec stats)
+max,modal selection,Max + daily (with stats),Maximum + journalière (avec stats)
+ts_subset_msg,modal message,Subset of data (first and last measurement per timeseries),Sous-ensemble de données (première et dernière mesures)
+discrete_subset_msg,modal message,Subset of data (up to 3 results per sample),Sous-ensemble de données (jusqu'à 3 résultats par échantillon)
+loc_meta_msg,modal message,Subset of location metadata (up to first three locations),Sous-ensemble des métadonnées des sites (jusqu'aux trois premiers endroits)
+date_range_select,modal selection title,Select a date range,Choissez la plage temporelle
+date_range_select_doy,,Start/end days (year is ignored),Dates de début/fin (l'année est ignorée)
+date_start,continuous data selector,With data starting after,Avec des données à partir de
+date_end,continuous data selector,With data ending before,Avec des données avant
+dl_format,modal selection title,Choose a format,Sélectionnez un format
+dl_format_no_xlsx,modal selection title,Choose a format (.xlsx not available over 1 million rows),Sélectionnez un format (.xlsx non disponible au-delà d'un million de lignes)
+dl_format_xlsx,modal selection,.xlsx (Microsoft Excel workbook),.xlsx (fichier Microsoft Excel)
+dl_format_csv,modal selection,.csv (multiple zipped files),.csv (multiples fichiers zippés)
+dl_format_sqlite,modal selection,.sqlite (database),.sqlite (base de données)
+dl_prep,notification for download,Preparing download...,Préparation du téléchargement...
+no_samps_locs,notification of automatic reset,"This selection results in 0 corresponding measurements, location selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection pour l'endroit a été réinitialisé à sa valeur précédente."
+no_samps_sub_locs,notification of automatic reset,"This selection results in 0 corresponding measurements, sub-location selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection  de sous-endroit a été réinitialisé à sa valeur précédente."
+no_samps_medias,notification of automatic reset,"This selection results in 0 corresponding measurements, media type selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection de type de média a été réinitialisé à sa valeur précédente."
+no_samps_types,notification of automatic reset,"This selection results in 0 corresponding measurements, sample type selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection de type d'échantillon a été réinitialisé à sa valeur précédente."
+no_ts_locs,notification of automatic reset,"This selection results in 0 corresponding timeseries, location selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection pour l'endroit a été réinitialisé à sa valeur précédente."
+no_ts_sub_locs,notification of automatic reset,"This selection results in 0 corresponding timeseries, sub-location selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection  de sous-endroit a été réinitialisé à sa valeur précédente."
+no_ts_z,notification of automatic reset,"This selection results in 0 corresponding timeseries, depth/height selector reset to its previous value","Cette sélection ne correspond à aucune série temporelle, la sélection de la profondeur/hauteur a été réinitialisé à sa valeur précédente."
+no_ts_medias,notification of automatic reset,"This selection results in 0 corresponding timeseries, media type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de type de média a été réinitialisé à sa valeur précédente."
+no_ts_agg,notification of automatic reset,"This selection results in 0 corresponding timeseries, aggregation type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de type d'aggrégation a été réinitialisé à sa valeur précédente."
+no_ts_rate,notification of automatic reset,"This selection results in 0 corresponding timeseries, recording rate selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection du rythme d'enregistrement a été réinitialisé à sa valeur précédente."
+continuous_subset_msg,,Subset of daily mean data (first and last result per timeseries),Sous-ensemble des moyennes journalières (premier et dernier résultat par série temporelle)
+dl_additional_data,,"Tables for grades, approvals, and qualifiers will also be included as part of your download.","Des tableaux pour les qualificatifs, cotes, et niveaux d'approbations feront parti de votre téléchargement."
+Map/data/plot module common,,,
+filter,,Filter,Filtrer
+apply,,Apply,Appliquer
+param_modal,button text for modal,Filter by group/sub-group,Filtrer par groupe/sous-groupe
+loc_modal,button text for modal,Filter by network/project,Filtrer par réseau/projet
+tooltip_reset,tooltip text for resetting filters,Filters affect each other by limiting subsequent options. Reset to clear all filters.,Les filtres s'affectent mutuellement en limitant les options suivantes. Réinitialiser pour effacer tous les filtres.
+year_filter,year filter title,With data between…,Avec des données entre...
+choose_locs,location selection title,Or choose one of more locations,Ou choisissez une ou plusieures stations
+tooltip1,table tool tips,Continuous = recorded at regular intervals automatically; Discrete =  measurements or sample acquisition at variable time intervals.,Continues = enregistré à intervalles réguliers automatiquement ; Discrètes = mesures  ou acquisition d'échantillons à  intervalles de temps variables.
+tooltip2,table tool tips,UTC-7,UTC-7
+filters,,Filters,Filtres
+reset_filters,,Reset filters,Réinitialiser les filtres
+view_samples,,Show samples,Voir les échantillons
+view_timeseries,,Show timeseries,Voir les séries temporelles
+view_data,text or button,View data,Voir les données
+dl_data_discrete,,Download discrete (sample) data,Télécharger les données discrètes
+dl_data_continuous,,Download continuous data,Télécharger les données continues
+view_data1,"text, part 1",View,Voir les détails de
+view_data2_discrete,"text, part 2",sample results,échantillons
+view_data2_continuous,"text, part2",timeseries details,séries temporelles
+select_all,button text,Select/deselect all,Sélectionner/dé-sélectionner tout
+view_plots,button text,View plots,Voir les graphiques
+view_plots_discrete,,Plot discrete (sample) data,Tracer les données discrètes
+view_plots_continuous,,Plot continuous data,Tracer les données continues
+nominal_rate,,Nominal recording rate,Rythme d'enregistrement nominal
+Image view module,,,
+img_type_lab,input label,Image Type,Type d'image
+img_type_auto,input choice,Automatic (series),Automatique (série)
+img_type_man,input choice,Manual (one-off),Manuelle (non-série)
+date_range_lab,input label,Date Range,Plage temporelle
+date_sep,dateRangeInput separator, to , à 
+Visualize/plot module,,,
+tooltip_visualize_map,tooltip text to explain to user what to do,Only the parameter and date options are mandatory; other fields are there to help you narrow your options.,Placeholder…
+tooltip_visualize_plot,tooltip text to explain to user what to do,Placeholder…,Placeholder…
+optional_placeholder,placeholder text,Optional…,Optionnel…
+mandatory_placeholder,placeholder text,Select a parameter,Sélectionnez un paramètre
+map_mapType,,Map type,Type de carte
+map_date_select,,Select a date,Sélectionnez une date
+map_date_within,,With data within ... day(s) at most,Avec données dans un délai de … jour(s) au plus
+map_date_within_selected1,,and data within,et données dans un délai de
+map_date_within_selected2,,day(s) or less of target date,jour(s) ou moins de la date ciblée
+render_map,,Create map,Créer la carte
+map_min_yrs,minimum number of years to use historic range stats,With at least … years of record,Avec au moins … années de mesures
+map_min_yrs_selected1,,With at least,Avec au moins
+map_min_yrs_selected2,,years of record,années de mesures
+map_target_date,target date for historical range map,Target date,Date ciblée
+map_absolute1,,Absolute values,Valeures absolue
+map_absolute2,,Absolute value,Valeure absolue
+map_relative,,% historic range,% plage historique
+map_actual_date,,Date,Date
+map_actual_yrs,,Years of record,Années de mesures
+map_actual_hist_range,,Historic range,Plage historique
+map_one_parameter,,One parameter,Un paramètre
+map_two_parameter,,Two parameters,Deux paramètres
+map_latest_measurements,,Latest measurements,Plus récentes mesures
+map_latest_measurements_modal,,"Heads up: the most recent measurements will be compared against historical daily means values. Keep this in mind when viewing parameters that fluctuate throughout a day, such as temperature.","Attention : les mesures les plus récentes seront comparées aux valeurs moyennes journalières historiques. Considerez ceci lorsque vous consultez des paramètres qui fluctue au cours de la journée, tels que la température."
+map_primary_param,,Primary parameter,Paramètre primaire
+map_primary_param_solo,single parameter (public facing),Plotted parameter,Paramètre représenté
+map_edit_primary_param,,Edit primary parameter,Modifer paramètre primaire
+map_edit_primary_param_solo,,Edit plotted parameter,Modifier le paramètre
+map_second_param,,Secondary parameter,Paramètre secondaire
+map_add_second_param,,Add secondary parameter,Ajouter paramètre secondaire
+map_edit_second_param,,Edit secondary parameter,Modifier paramètre secondaire
+map_rm_second_param,,Remove secondary parameter,Enlever paramètre secondaire
+map_edit_aes,,Edit map aesthetics,Modifier l'esthétique de la carte
+gen_waterInfo_info,,"This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes. In particular, note that very little of the data underlying the trends calculated has been cleaned or certified as correct by a human.","Cette fonction est conçue pour faciliter le rapport des données hydrologiques en compilant des statistiques de base (années de relevés, mois d’exploitation, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples du niveau (pour les lacs) ou du débit pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives. En particulier, il convient de souligner que très peu des données sous-jacentes aux tendances calculées ont été nettoyées ou certifiées comme correctes par un humain."
+gen_waterInfo_param_select,,One parameter or both?,Un ou deux paramètres?
+gen_waterInfo_param_select_one,,"One (flow where exists, else level)","Un (débit si existe, autrement niveau)"
+gen_waterInfo_param_select_both,,Both (flow and level where both exist),Deux (débit et niveau lorsque existent)
+gen_loc_select,,"Select one, many, or all locations","Sélectionnez un, plusieurs, ou tous les endroits"
+gen_no_loc,,Select at least one location.,Sélectionez au moins un endroit.
+gen_waterInfo_end_date,,Last day to use for calculations,Dernière date à considérer pour les calculs
+gen_waterInfo_min_months,,Months in which to look for minimums,Mois dans lesquels rechercher les valeures minimum
+gen_waterInfo_max_months,,Months in which to look for maximums,Mois dans lesquels rechercher les valeures maximum
+gen_waterInfo_prct_miss,,Max % missing data to retain annual value (in months of interest),Max % de données manquantes pour retenir une valeure annuelle (dans les mois d'intérêt)
+gen_generate_plots,,Generate plots?,Générer les graphiques?
+gen_waterInfo_ptype,,Min/max on single plot or separate?,Min/max sur le même graphique ou séparé?
+gen_waterInfo_ptype_combine,,Single,même
+gen_waterInfo_ptype_separate,,Separate,séparés
+gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (EEN) et de la densité pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
+gen_snowInfo_inactive,,Include inactive locations?,Inclure les parcours inactifs?
+gen_snowInfo_complete,,Complete years only?,Années complètes seulement?
+gen_snowInfo_ptype,,Combined or separate plots?,Grahpiques séparés ou combinés?
+gen_snowInfo_ptype_separate,,Separate,séparés
+gen_snowInfo_ptype_combine,,Combined,combinés
+gen_snowBul_info,,"This function allows you to create Excel workbooks with the statistics used in creating the Snow Bulletin, or to create the entire Snow Bulletin Word document.","Cette fonction vous permet to créer des documents Excel qui contiennent les statistics utilisées lors de la création du bulletin de conditions de neige, ou de créer le bulletin de neige en document Word."
+gen_snowBul_toggle_stats,,Statistics,Statistiques
+gen_snowBul_toggle_bulletin,,Bulletin,Bulletin
+gen_snowBul_year,,Year,Année
+gen_snowBul_month,,Month,Mois
+gen_snowBul_basins,,Basins,Basins versants
+gen_snowBul_lang,,Bulletin language,Language du bulletin
+gen_snowBul_precip_period,,Period of record for precip stats,Période a utiliser pour les statistiques de précipitation
+gen_snowBul_cddf_period,,Period of record for CDDF stats,Période à utiliser pour les statistiques de DJGC
+gen_snowBul_period1,,Last 40 years,Derniers 40 ans
+gen_snowBul_period2,,All years of record,Toutes les années disponibles
+gen_snowBul_period3,,1981-2010,1981-2010
+gen_snowBul_period4,,1991-2020,1991-2020
+gen_snowBul_scale,,Plot scale,Échelle des graphiques
+gen_snowBul_error_stats,,Error generating snow bulletin stats Excel tables,Échec lors de la création des tableaux de statistiques
+gen_snowBul_error_report,,Error generating snow bulletin Word document,Échec lors de la création du rapport Word
+add_trace,,Add trace,Ajouter une ligne
+modify_trace,,Modify trace,Modifier la ligne
+remove_trace,,Remove trace,Enlever la ligne
+add_subplot,,Add subplot,Ajouter un graphique
+modify_subplot,,Modify subplot,Modifier le graphique
+remove_subplot,,Remove subplot,Enlever le graphique
+About view module,,,
+licence_title,,Using data from this application,Utilisation des données de cette application
+licence1,,"The data, reports, and plots generated from this application are licenced under the Yukon Government's ","Les données, rapports et graphiques générés par cette application sont licenciés sous la "
+licence2,,Open Government Licence,licence de gouvernement ouvert du Yukon
+licence_url,,https://open.yukon.ca/open-government-licence-yukon,https://open.yukon.ca/fr/gouvernement-ouvert-licence-du-yukon
+about_title1,title,About us,À propos de nous
+about_content1,content,Content to be developed!,À développer!
+about_title2,title,About this application,À propos cette application
+about_content2,content,"This web site was created using R Shiny, which allows us to leverage the R programming language's inherent suitability for data wrangling and plotting. The application code is contained within an R package which which holds many useful and interesting functions besides those showcased in this application, and is publicly viewable at ","Ce site web a été conçu en utilisant R Shiny, ce qui nous permet de tirer parti de l'aptitude inhérente du langage de programmation R pour la manipulation de données et la création de graphiques. Le code de l'application est contenu dans un package R qui comprend de nombreuses fonctions utiles et intéressantes en plus de celles présentées dans cette application, et est publiquement consultable à "
+about_url,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
+app_version1,,Application version,Application version
+app_version2,,connected to AquaCache database version ,connectée à la base de données AquaCache version
+app_version3,,revision,révision
+Generic labels,,,
+data_type,direct translation,Data Type,Types de données
+loc,direct translation,Location,Endroit
+locs,,Locations,Endroits
+loc(s),,Location(s),Endroit(s)
+sub_loc,,Sub-location,Sous-endroit
+sub_loc(s),,Sub-location(s),Sous-endroit(s)
+z,,Depth/height (meters),Profondeur/hauteur (mètres)
+continuous,direct translation,Continuous,Continues
+discrete,direct translation,Discrete,Discrètes
+type,direct translation,Type,Type
+media_type,,Sample media,Média d'échantillonage
+media_type(s),direct translation,Sample media(s),Média(s) d'échantillonage
+sample_type(s),,Sample type(s),Type d'échantillon
+aggregation_type,,Aggregation type,Type d'agrégation des mesures
+aggregation_type(s),,Aggregation type(s),Type d'agrégation des mesures
+param_group,direct translation,Parameter group,Groupe de paramètre
+param_groups,direct translation,Parameter groups,Groupes de paramètres
+param_group(s),direct translation,Parameter group(s),Groupe(s) de paramètre(s)
+param_sub_group,direct translation,Parameter sub-group,Sous-groupe de paramètre
+param_sub_groups,direct translation,Parameter sub-groups,Sous-roupes de paramètres
+param_sub_group(s),direct translation,Parameter sub-group(s),Sous-groupe(s) de paramètre(s)
+group,direct translation,Group,Groupe
+parameter,direct translation,Parameter,Paramètre
+parameters,direct translation,Parameters,Paramètres
+parameter(s),direct translation,Parameter(s),Paramètre(s)
+project,direct translation,Project,Projet
+projects,direct translation,Projects,Projets
+project(s),direct translation,Project(s),Projet(s)
+network,direct translation,Network,Réseau
+networks,direct translation,Networks,Réseaux
+network(s),direct translation,Network(s),Réseau(x)
+units,direct translation,Units,Unités
+period,direct translation,Period,Période
+category,direct translation,Category,Catégorie
+measurement_type,,Measurement type (frequency),Type de mesure (fréquence)
+reset,direct translation,Reset,Réinitialiser
+all,direct translation,All,Tout
+all_locs,,All locations,Tous les endroits
+from,direct translation,from,de
+to,direct translations,to,à
+from_utc_offset,direct translation,From (UTC-7),De (UTC-7)
+to_utc_offset,direct translations,To (UTC-7),À (UTC-7)
+start,direct translation,Start,Début
+end,direct translations,End,Fin
+start_utc_offset,direct translation,Start (UTC-7),Début (UTC-7)
+end_utc_offset,direct translations,End (UTC-7),Fin (UTC-7)
+datetime,direct translation,Date/Time,Date/temps
+datetime_utc_offset,direct translation,Date/Time (UTC-7),Date/temps (UTC-7)
+settings,direct translation,Settings,Paramètres
+save,,Save,Enregistrer
+create_report,,Create report,Créer le rapport
+close,modal actionButton text,Close,Fermer
+cancel,,Cancel,Annuler
+jan,,January,janvier
+feb,,February,février
+mar,,March,mars
+apr,,April,avril
+may,,May,mai
+jun,,June,juin
+jul,,July,juillet
+aug,,August,aout
+sep,,September,septembre
+oct,,October,octobre
+nov,,November,novembre
+dec,,December,décembre
+generating_working,,Working…,Travail en cours…
+english,,English,Anglais
+francais,,French,Français
+DT internationalization,,,
+tbl_info,DT internationalization, _TOTAL_ records total,_TOTAL_ éléments au total
+tbl_info_empty,DT internationalization,No records to show!,Rien à voir ici!
+tbl_prev,DT internationalization,Previous,Précédent
+tbl_next,DT internationalization,Next,Prochain
+tbl_search,DT internationalization,Search:,Recherche
+tbl_length,DT internationalization,Show _MENU_ records,Montrer _MENU_ éléments
+tbl_filtered,DT internationalization,(filtered from _MAX_ records),(filtrées de _MAX_ éléments)
+tbl_zero,DT internationalization,No matching records found,Aucunes données existantes
+Database columns and table names,,,
+param_name_col,DB column selection ,param_name,param_name_fr
+media_type_col,DB column selection ,media_type,media_type_fr
+param_group_col,DB column selection ,group_name,group_name_fr
+param_sub_group_col,DB column selection ,sub_group_name,sub_group_name_fr
+generic_name_col,DB column selection ,name,name_fr
+sample_type_col,,sample_type,sample_type_fr
+sub_location_col,,sub_location_name,sub_location_name_fr
+aggregation_type_col,,aggregation_type,aggregation_type_fr
