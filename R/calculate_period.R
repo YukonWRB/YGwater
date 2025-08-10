@@ -42,7 +42,7 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
   # Calculate the duration in days, hours, minutes, and seconds and assign to the right location in data
   if (nrow(changes) > 0) {
     data[, "period" := NA_character_]
-    data[match(changes$datetime, data[[datetime_col]]), period := iso_period(changes$period)]
+    data[match(changes$datetime, data[[datetime_col]]), "period" := iso_period(changes$period)]
     data[, "period" := zoo::na.locf(zoo::na.locf(period, na.rm = FALSE), fromLast = TRUE)]
     
   } else { #In this case there were too few measurements to conclusively determine a period so pull a few from the DB and redo the calculation
@@ -85,7 +85,7 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
     }
     if (nrow(changes) > 0) {
       data[, "period" := NA_character_]
-      data[match(changes$datetime, data[[datetime_col]]), period := iso_period(changes$period)]
+      data[match(changes$datetime, data[[datetime_col]]), "period" := iso_period(changes$period)]
       data[, "period" := zoo::na.locf(zoo::na.locf(period, na.rm = FALSE), fromLast = TRUE)]
     } else {
       data[, "period" := NULL]

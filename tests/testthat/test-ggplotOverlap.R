@@ -176,6 +176,7 @@ test_that("historic range can be < requested year", {
   
   expect_snapshot_file(path)
 })
+
 #Test for historical range and return periods able to flex.
 test_that("returns can be for yrs > requested year", {
   skip_on_ci()

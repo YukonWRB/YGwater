@@ -8,6 +8,8 @@ utils::globalVariables(c("floodAtlas_ts_globals", "floodAtlas_over_globals", "YG
 #globals related to use of data.table (anywhere in the package)
 utils::globalVariables(c("."))
 
+# globals for calculate_period
+utils::globalVariables(c("idx"))
 
 
 
