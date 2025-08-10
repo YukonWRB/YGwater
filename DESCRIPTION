@@ -59,7 +59,6 @@ Suggests:
     AquaCache,
     bslib,
     bsicons,
-    covr,
     curl,
     DT,
     exifr,
