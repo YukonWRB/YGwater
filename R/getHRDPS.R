@@ -94,7 +94,7 @@ getHRDPS <- function(clip = c("YT"),
     failed <- FALSE
   }, error = function(e) {
     cli::cli_alert_danger(
-      "{.fg_red Fetching rasters failed on at least one file for the most recent release (issue time {issue_hour} UTC); fetching the prior issue time forecasts. This is probably temporary — try again once the files have been written to the URL.}"
+      "{.fg_red Fetching rasters failed on at least one file for the most recent release (issue time {issue_hour} UTC); fetching the prior issue time forecasts. This is probably temporary, try again once the files have been written to the URL.}"
     )
     failed <<- TRUE
   })
