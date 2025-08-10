@@ -1,8 +1,6 @@
 #' Download ECCC weather station data
 #'
 #' @description
-#' `r lifecycle::badge("stable")`
-#'
 #' This script downloads data from an ECCC station for a given date range, calling [weathercan::weather_dl()] to download the data. This function facilitates interaction with that package by modifying start and end dates if your request is out of range, and allows you to interactively search for locations by name. Note that this function may take a long time to complete if you are requesting multiple years of data!
 #' 
 #' @seealso [chooseWeather()], [combineWeather()].

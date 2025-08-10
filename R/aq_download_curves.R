@@ -1,8 +1,6 @@
 #' Get flow rating curves from Aquarius
 #'
 #'@description
-#' `r lifecycle::badge("experimental")`
-#'
 #' Fetches and processes rating curve data downloaded from an Aquarius web-hosted server and returns it in a concise format. Information about all rating curves for a location can be returned, or the user can specify a particular input and output parameter for which to retrieve the rating curve. This function also requests input-output relationships from Aquarius and fits a power law or polynomial model to the data; the best-fit model is selected based on AIC and the equation returned. 
 #'
 #'@details

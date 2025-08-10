@@ -1,8 +1,6 @@
 #' Calculate snow survey stats for stations
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#' 
 #' This script summarises the SWE data of each station for a particular year and month and compares it to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course' summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
 #' 
 #' @param stations A vector of snow course stations, identified with their location ID. Default is "all", where all stations in the snow db are taken.

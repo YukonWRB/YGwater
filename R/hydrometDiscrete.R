@@ -1,8 +1,6 @@
 #' Discrete hydrometric data plotting
 #'
 #' @description
-#' `r lifecycle::badge('deprecated')`
-#' 
 #' Deprecated for general usage but retained for use with snow bulletin. Use [plotDiscrete()] instead.
 #'
 #' Generate plots of snow survey data (snow water equivalent and snow depth) or other variables sampled at regular intervals (weekly or monthly).

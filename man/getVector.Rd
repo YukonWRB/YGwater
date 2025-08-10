@@ -45,7 +45,5 @@ getVector(
 If successful, a terra object. If unsuccessful because the query targets more than 1 geometry types, a table showing you the result of the query.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 This function formulates an SQL query to retrieve points, lines, or polygons from the database and returns them as a terra object. At minimum, only one of \code{geom_id}, \code{layer_name}, \code{feature_name}, or \code{geom_type} are required, though if the combination you enter results in more than one geom_type you will get a descriptive error.
 }

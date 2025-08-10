@@ -45,7 +45,5 @@ SWE_station(
 A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 This script summarises the SWE data of each station for a particular year and month and compares it to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course' summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
 }

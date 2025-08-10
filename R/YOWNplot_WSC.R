@@ -1,8 +1,6 @@
 #' YOWN-WSC comparative plot generation relative to a common datum
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' Plots YOWN data alongside WSC stations, in m asl. Only works for stations that have values in the "Elevation" field in their Aquarius information page.
 #'
 #' @details

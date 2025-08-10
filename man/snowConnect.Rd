@@ -30,7 +30,5 @@ snowConnect(
 A connection to the database.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 This function exists to facilitate connecting to the snow database, especially if the database type and connection method changes in the future.
 }

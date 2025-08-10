@@ -1,8 +1,6 @@
 #' Get formatted timeseries data from Aquarius.
 #'
 #'@description
-#' `r lifecycle::badge("stable")`
-#'
 #' Fetches and processes data downloaded from an Aquarius web-hosted server and returns it in a concise format. Note that any times returned by this function are in UTC.
 #'
 #'@details

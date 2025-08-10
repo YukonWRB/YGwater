@@ -1,8 +1,6 @@
 #' Plot multiple timeseries from the aquacache
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#' 
 #' This function plots multiple continuous timeseries from the aquacache using either a facet plot or a single plot with multiple traces. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
 #' 
 #' @param type Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.

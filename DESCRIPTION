@@ -34,7 +34,6 @@ Imports:
     grid,
     httr,
     jsonlite,
-    lifecycle,
     lubridate,
     magrittr,
     openxlsx,
@@ -70,7 +69,6 @@ Suggests:
     odbc,
     officer,
     officedown,
-    pool,
     purrr,
     R.utils,
     reticulate,
@@ -85,7 +83,6 @@ Suggests:
     vdiffr,
     weathercan,
     ragg,
-    zipR
 Remotes:
     github::ropensci/weathercan,
     github::YukonWRB/AquaCache

@@ -1,9 +1,7 @@
-#' YOWNplot
+#' Generalized plotting for YOWN wells
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
-#' Generalized YOWN plotting function
+#' Generates a plot of the specified YOWN well's water level data, with options for statistical calculations and formatting. The plot can be saved to a specified directory or displayed in the console.
 #'
 #' @details
 #' To store login credentials in your .renviron profile, call [usethis::edit_r_environ()] and enter your username and password as value pairs, as AQUSER="your username" and AQPASS = "your password".

@@ -1,8 +1,6 @@
 #' Plot of overlapping years or portions thereof
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#'
 #' A pared-down, sped up, simplified version of the original [ggplotOverlap()] function. Created for use with a simple Shiny application linked to the Flood Atlas, but will likely see other uses.
 #'
 #' @param location The location for which you want a plot.

@@ -1,8 +1,6 @@
 #' Plots and tabular data for snow survey locations
 #'
 #' @description
-#' `r lifecycle::badge("stable")`
-#'
 #' This function is intended to facilitate the reporting of snow survey data by compiling basic statistics (years of record, missing years, mean, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of SWE, depth, and density for all requested stations. At its most basic (parameters to FALSE or NULL where applicable), the result is a list of two data.frames to the R environment with location metadata and field measurements.
 #'
 #' @param locations The list of locations requested, as a character vector of length n. Default "all" fetches all stations.

@@ -33,8 +33,6 @@ aq_download_curves(
 A list with an element per rating model (one per inputParameter/outputParameter combination). Each element contains a list of rating curves, each with a data.frame of the relationship between input and output, the best-fit equation, and a plot of the data and fit. Metadata about the location is also included.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 Fetches and processes rating curve data downloaded from an Aquarius web-hosted server and returns it in a concise format. Information about all rating curves for a location can be returned, or the user can specify a particular input and output parameter for which to retrieve the rating curve. This function also requests input-output relationships from Aquarius and fits a power law or polynomial model to the data; the best-fit model is selected based on AIC and the equation returned.
 }
 \details{

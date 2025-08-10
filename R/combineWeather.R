@@ -1,8 +1,6 @@
 #' Combine continuous ECCC climate station data
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#'
 #' Retrieves climate station data from two stations, ideally in close proximity (but that's up to you) and with different temporal coverage and combines them to make a continuous dataset. You can use this to fill gaps in a timeseries or to combine two timeseries. Since the two locations likely have offset measurements at the exact same moment even if they are quite close (for example, station 1 might be slightly warmer than station 2), an offset is calculated if possible and applied to the *second* or subsequent station to make the datasets comparable. Put another way, data from the first listed station takes precedence where an overlap exists; see details for more information. Statistics about this offset are printed to the console for each variable. If the stations do not have temporal overlap no offset is calculated and the two are joined as is.
 #'
 #' @seealso [getWeather()], [chooseWeather()].

@@ -1,8 +1,6 @@
 #' YOWN site comparative plot generation, in m bgs
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' Plots multiple YOWN stations on the same chart
 #'
 #' @details

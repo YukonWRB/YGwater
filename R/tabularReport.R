@@ -1,8 +1,6 @@
 #' Tabular output of hydrometric data
 #'
 #' @description
-#' lifeCycle::badge("stable")
-#' 
 #' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using AquaConnect by default and MUST connect to a database created and maintained by the package AquaCache.
 #' 
 #' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run AquaCache::getNewContinuous first.

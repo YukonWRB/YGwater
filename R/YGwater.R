@@ -1,8 +1,6 @@
 #' Launch the YGwater Shiny application
 #' 
-#' @description
-#' `r lifecycle::badge('stable')`
-#' 
+#' @description 
 #' Launches a Shiny application to visualize the WRB's water-related data in maps and plots, and to download data from the WRB's hydrometric database. The application is designed to work with the WRB's aquacache database, which contains hydrometric data, and optionally with EQWin databases for water quality data.
 #'
 #' @param host Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in `port` to be open on the host machine. Ignored if `server` is set to TRUE (Shiny Server takes care of that).
@@ -26,7 +24,6 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   rlang::check_installed("shinyjs", reason = "required to use YGwater app")
   rlang::check_installed("DT", reason = "required to use YGwater app")
   rlang::check_installed("tidyhydat", reason = "required to use YGwater app")
-  rlang::check_installed("zipR", reason = "required to use YGwater app")
   rlang::check_installed("future", reason = "required to enable asynchronous operations in YGwater apps")
   rlang::check_installed("bslib", reason = "required to enable bootstrap 5 themes and elements in YGwater apps")
   rlang::check_installed("bsicons", reason = "required to use YGwater app")

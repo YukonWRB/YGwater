@@ -1,8 +1,8 @@
 #' Retrieve raster files from the database
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
-#'
+#' This function retrieves raster data from a PostGIS-enabled database and returns it as a terra object. It allows for filtering of the raster data using SQL clauses, spatial boundaries, and selection of specific raster bands.
+#' 
 #' @param clauses Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1'. If NULL, all raster data is returned.
 #' @param boundary Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector c(top, bottom, right, left) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.
 #' @param bands The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.
@@ -196,8 +196,6 @@ getRaster <- function(clauses = NULL,
 #' Retrieve vector files from the database
 #' 
 #' @description
-#' `r lifecycle::badge('stable')`
-#'
 #' This function formulates an SQL query to retrieve points, lines, or polygons from the database and returns them as a terra object. At minimum, only one of `geom_id`, `layer_name`, `feature_name`, or `geom_type` are required, though if the combination you enter results in more than one geom_type you will get a descriptive error.
 #'
 #' @param geom_id A numeric vector of geom_ids from the 'vectors' table.

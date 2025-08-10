@@ -1,8 +1,6 @@
 #' Plots and tabular data for hydrometric locations
 #'
 #' @description
-#' `r lifecycle::badge("stable")`
-#'
 #' This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations.
 #'
 #'@details

@@ -1,7 +1,6 @@
 #' Calculates snow survey stats for basins
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
 #' The purpose of this script is to summarise the SWE data of each basin for a particular year and month and compare to previous years. It is used for the snow bulletin, specifically the SWE map and the plot B. It is meant to replace Ellen Ward's code from 2020-04-16, r script called swe_compiled_basin.R.
 
 #' @param year The year of interest. If summarise = TRUE, the stats will be calculated based on all years prior to 'year'. If summarise = FALSE, only data from the current year and before are taken.

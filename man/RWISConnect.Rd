@@ -27,8 +27,6 @@ RWISConnect(
 A connection to the database
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 Establishes a connection to the RWIS (Road Weather Information System) database. Only works from within YG networks.
 }
 \seealso{

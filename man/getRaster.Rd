@@ -30,5 +30,5 @@ getRaster(
 A terra::rast object containing the raster data.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+This function retrieves raster data from a PostGIS-enabled database and returns it as a terra object. It allows for filtering of the raster data using SQL clauses, spatial boundaries, and selection of specific raster bands.
 }

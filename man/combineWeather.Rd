@@ -33,8 +33,6 @@ combineWeather(
 A list of data.frames, one for each variable. The data.frame has a date column and a variable column. All dates between start and end are included, whether or not data is available for those dates.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 Retrieves climate station data from two stations, ideally in close proximity (but that's up to you) and with different temporal coverage and combines them to make a continuous dataset. You can use this to fill gaps in a timeseries or to combine two timeseries. Since the two locations likely have offset measurements at the exact same moment even if they are quite close (for example, station 1 might be slightly warmer than station 2), an offset is calculated if possible and applied to the \emph{second} or subsequent station to make the datasets comparable. Put another way, data from the first listed station takes precedence where an overlap exists; see details for more information. Statistics about this offset are printed to the console for each variable. If the stations do not have temporal overlap no offset is calculated and the two are joined as is.
 }
 \details{
