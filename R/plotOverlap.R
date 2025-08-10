@@ -469,11 +469,11 @@ plotOverlap <- function(location,
         new_realtime <- suppressWarnings(calculate_period(new_realtime, timeseries_id = tsid, con = con))
         # if calculate_period didn't return a column for new_realtime, it couldn't be done. No need to continue
         if ("period" %in% colnames(new_realtime)) {
-          new_realtime[, period_secs := as.numeric(lubridate::period(period))]
+          new_realtime[, "period_secs" := as.numeric(lubridate::period(period))]
           # Shift datetime and add period_secs to compute the 'expected' next datetime
-          new_realtime[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+          new_realtime[, "expected" := data.table::shift(datetime, type = "lead") - period_secs]
           # Create 'gap_exists' column to identify where gaps are
-          new_realtime[, gap_exists := datetime < expected & !is.na(expected)]
+          new_realtime[, "gap_exists" := datetime < expected & !is.na(expected)]
           # Find indices where gaps exist
           gap_indices <- which(new_realtime$gap_exists)
           # Create a data.table of NA rows to be inserted

@@ -25,9 +25,7 @@ getRaster <- function(clauses = NULL,
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
-  
-  #warn_deprecated_rc(returnclass, "pgGetRast(returnclass = 'should be a `terra` object')")
-  rpostgis:::dbConnCheck(con)
+
   if (!suppressMessages(rpostgis::pgPostGIS(con))) {
     cli::cli_abort("PostGIS is not enabled on this database.")
   }

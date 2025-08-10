@@ -556,11 +556,11 @@ ggplotOverlap <- function(location,
     dat$day <- format(dat$datetime, "%m-%d")
     summary_dat <- dat %>%
       dplyr::group_by(.data$day) %>%
-      dplyr::summarise(min = round(min(value), 0),
-                       max = round(max(value), 0),
-                       md = round(stats::median(value), 0),
-                       q75 = round(stats::quantile(value, 0.75), 0),
-                       q25 = round(stats::quantile(value, 0.25), 0))
+      dplyr::summarise(min = round(min(.data$value), 0),
+                       max = round(max(.data$value), 0),
+                       md = round(stats::median(.data$value), 0),
+                       q75 = round(stats::quantile(.data$value, 0.75), 0),
+                       q25 = round(stats::quantile(.data$value, 0.25), 0))
     
     # Add date
     summary_dat$datetime <- NA
