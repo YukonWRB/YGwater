@@ -57,17 +57,6 @@ floodReport <-
            save_path = "choose") {
     
     #initial checks
-    rlang::check_installed("R.utils", reason = "necessary for this function to download WSC images.")
-    if (!rlang::is_installed("R.utils")) { #This is here because R.utils is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-      message("Installing dependency 'R.utils'...")
-      utils::install.packages("R.utils")
-      if (rlang::is_installed("R.utils")){
-        message("Package R.utils successfully installed.")
-      } else {
-        stop("Failed to install package R.utils. You could troubleshoot by running install.packages('R.utils') by itself.")
-      }
-    }
-    
     rlang::check_installed("imager", reason = "necessary for this function to download precip rasters.")
     if (!rlang::is_installed("imager")) { #This is here because imager is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
       message("Installing dependency 'imager'...")

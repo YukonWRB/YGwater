@@ -70,7 +70,7 @@ Suggests:
     officer,
     officedown,
     purrr,
-    R.utils,
+    ragg,
     reticulate,
     rpostgis,
     RSQLite,
@@ -82,7 +82,7 @@ Suggests:
     tibble,
     vdiffr,
     weathercan,
-    ragg,
+    zip,
 Remotes:
     github::ropensci/weathercan,
     github::YukonWRB/AquaCache

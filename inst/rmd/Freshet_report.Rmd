@@ -39,12 +39,12 @@ The Government of Yukon partners with the Government of Canada to maintain water
 This report provides current conditions, outlook, and technical data.
 
 <br>
-
-# Current status
-
-## Weather conditions
-
-[ENTER WX CONDITIONS HERE]
+  
+  # Current status
+  
+  ## Weather conditions
+  
+  [ENTER WX CONDITIONS HERE]
 
 ## Snow conditions
 
@@ -59,12 +59,12 @@ This report provides current conditions, outlook, and technical data.
 [UPDATE ADVISORIES]
 
 <br>
-
-# Outlook
-
-## Weather forecast
-
-[ENTER FORECAST HERE]
+  
+  # Outlook
+  
+  ## Weather forecast
+  
+  [ENTER FORECAST HERE]
 
 ## Water level and flow outlook
 
@@ -173,7 +173,7 @@ if (report_type %in% c("Both", "Level", "both", "level")){
       }
       
       datum_na <- is.na(as.numeric(utils::tail(tidyhydat::hy_stn_datum_conv(i)[,4], n=1)))#Check if there is a datum on record - any datum
-
+      
       
       #Level data processing
       if (datum_na) { #then there is no datum elevation
@@ -252,79 +252,79 @@ if (report_type %in% c("Both", "Level", "both", "level")){
         )
       }
       
-#next few lines calculate where we're at for level return periods
-        if (!(level_returns %in% c("None", "none"))){ #if level_returns is "none", the column is simply not created.
+      #next few lines calculate where we're at for level return periods
+      if (!(level_returns %in% c("None", "none"))){ #if level_returns is "none", the column is simply not created.
+        
+        if (level_returns %in% c("auto", "Auto", "Table", "table") & i %in% data$level_returns$ID){ #where possible, plug in the verified value
+          stn <- dplyr::filter(data$level_returns, ID == i)
+          tbl$Current_return_period <-
+            if (todayLevel < stn$twoyear) {
+              "<2 year"
+            } else if (todayLevel < stn$fiveyear) {
+              "2 to 5 year"
+            } else if (todayLevel < stn$tenyear) {
+              "5 to 10 year" 
+            } else if (todayLevel < stn$twentyyear) {
+              "10 to 20 year" 
+            } else if (todayLevel < stn$fiftyyear) {
+              "20 to 50 year" 
+            } else if (todayLevel < stn$onehundredyear) {
+              "50 to 100 year"
+            } else if (todayLevel < stn$twohundredyear) {
+              "100 to 200 year"
+            } else if (todayLevel > stn$twohundredyear & is.na(stn$fivehundredyear)) {
+              "> 200 year" 
+            } else if (todayLevel < stn$fivehundredyear) {
+              "200 to 500 year" 
+            } else if (todayLevel > stn$fivehundredyear & is.na(stn$thousandyear)) {
+              "> 500 year"
+            } else if (todayLevel < stn$thousandyear) {
+              "500 to 1000 year"
+            } else if (todayLevel > stn$thousandyear & is.na(stn$twothousandyear)) {
+              "> 1000 year"
+            } else if (todayLevel < stn$twothousandyear) {
+              "1000 to 2000 year"
+            } else if (todayLevel > stn$twothousandyear) {
+              "> 2000 year"
+            }
           
-          if (level_returns %in% c("auto", "Auto", "Table", "table") & i %in% data$level_returns$ID){ #where possible, plug in the verified value
-            stn <- dplyr::filter(data$level_returns, ID == i)
-            tbl$Current_return_period <-
-              if (todayLevel < stn$twoyear) {
-                "<2 year"
-              } else if (todayLevel < stn$fiveyear) {
-                "2 to 5 year"
-              } else if (todayLevel < stn$tenyear) {
-                "5 to 10 year" 
-              } else if (todayLevel < stn$twentyyear) {
-                "10 to 20 year" 
-              } else if (todayLevel < stn$fiftyyear) {
-                "20 to 50 year" 
-              } else if (todayLevel < stn$onehundredyear) {
-                "50 to 100 year"
-              } else if (todayLevel < stn$twohundredyear) {
-                "100 to 200 year"
-              } else if (todayLevel > stn$twohundredyear & is.na(stn$fivehundredyear)) {
-                "> 200 year" 
-              } else if (todayLevel < stn$fivehundredyear) {
-                "200 to 500 year" 
-              } else if (todayLevel > stn$fivehundredyear & is.na(stn$thousandyear)) {
-                "> 500 year"
-              } else if (todayLevel < stn$thousandyear) {
-                "500 to 1000 year"
-              } else if (todayLevel > stn$thousandyear & is.na(stn$twothousandyear)) {
-                "> 1000 year"
-              } else if (todayLevel < stn$twothousandyear) {
-                "1000 to 2000 year"
-              } else if (todayLevel > stn$twothousandyear) {
-                "> 2000 year"
-              }
-            
-          } else if (level_returns %in% c("Table", "table") & !(i %in% data$level_returns$ID)){ #if human-verified values only requested but not available, give NA
-            tbl$Current_return_period <- "NA"
-            
-          } else if (level_returns %in% c("calculated", "Calculated", "Auto", "auto")){ #if auto selected, run code OR if both selected and no human-verified value available.
-            peaks <- fasstr::calc_annual_peaks(levelData[[1]], values = Level, months = 5:9, allowed_missing = 5)
-            peaks <- dplyr::select(peaks, Year, Value = Max_1_Day)
-            peaks <- dplyr::mutate(peaks, Measure = "1-Day")
-            
-            freq <- fasstr::compute_frequency_analysis(data = peaks, use_max=TRUE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))$Freq_Fitted_Quantiles
-            freq <- dplyr::filter(freq, `1-Day` > tbl$Level_m)
-            
-            tbl$Current_return_period <- 
-              if (utils::tail(freq, n=1)$`Return Period` < 2.01) {
-                "<2 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` < 5.01) {
-                " 2 to 5 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` < 10.01) {
-                "5 to 10 year*"
-              } else if(utils::tail(freq, n=1)$`Return Period` < 20.01) {
-                "10 to 20 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` < 50.01) {
-                "20 to 50 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` < 100.01) {
-                "50 to 100 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` < 200.01) {
-                "100 to 200 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` < 500.01) {
-                "200 to 500 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` < 1000.01) {
-                "500 to 100 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` < 2000.01) {
-                "1000 to 2000 year*"
-              } else if (utils::tail(freq, n=1)$`Return Period` > 2000) {
-                "> 2000 year*"
-              }
-          }
+        } else if (level_returns %in% c("Table", "table") & !(i %in% data$level_returns$ID)){ #if human-verified values only requested but not available, give NA
+          tbl$Current_return_period <- "NA"
+          
+        } else if (level_returns %in% c("calculated", "Calculated", "Auto", "auto")){ #if auto selected, run code OR if both selected and no human-verified value available.
+          peaks <- fasstr::calc_annual_peaks(levelData[[1]], values = Level, months = 5:9, allowed_missing = 5)
+          peaks <- dplyr::select(peaks, Year, Value = Max_1_Day)
+          peaks <- dplyr::mutate(peaks, Measure = "1-Day")
+          
+          freq <- fasstr::compute_frequency_analysis(data = peaks, use_max=TRUE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))$Freq_Fitted_Quantiles
+          freq <- dplyr::filter(freq, `1-Day` > tbl$Level_m)
+          
+          tbl$Current_return_period <- 
+            if (utils::tail(freq, n=1)$`Return Period` < 2.01) {
+              "<2 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` < 5.01) {
+              " 2 to 5 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` < 10.01) {
+              "5 to 10 year*"
+            } else if(utils::tail(freq, n=1)$`Return Period` < 20.01) {
+              "10 to 20 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` < 50.01) {
+              "20 to 50 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` < 100.01) {
+              "50 to 100 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` < 200.01) {
+              "100 to 200 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` < 500.01) {
+              "200 to 500 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` < 1000.01) {
+              "500 to 100 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` < 2000.01) {
+              "1000 to 2000 year*"
+            } else if (utils::tail(freq, n=1)$`Return Period` > 2000) {
+              "> 2000 year*"
+            }
         }
+      }
       
       #Determine if the last data point is > 6 hours old
       if (levelData[[3]]$Date[1] > (Sys.time() - 60*60*1)) {
@@ -518,21 +518,21 @@ if (report_type %in% c("Both", "Flow", "both", "flow")){
           }
         }
         #Determine if the last data point is > 6 hours old
-      if (levelData[[3]]$Date[1] > (Sys.time() - 60*60*1)) {
-        tbl$Last_data <- "< 1 hr"
-      } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*1)) {
-        tbl$Last_data <- "1-2 hrs"
-      } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*2)) {
-        tbl$Last_data <- "2-3 hrs"
-      } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*3)) {
-        tbl$Last_data <- "3-4 hrs"
-      } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*4)) {
-        tbl$Last_data <- "4-5 hrs"
-      } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*5)) {
-        tbl$Last_data <- "5-6 hrs"
-      } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*6)) {
-        tbl$Last_data <- "> 6 hrs"
-      }
+        if (levelData[[3]]$Date[1] > (Sys.time() - 60*60*1)) {
+          tbl$Last_data <- "< 1 hr"
+        } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*1)) {
+          tbl$Last_data <- "1-2 hrs"
+        } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*2)) {
+          tbl$Last_data <- "2-3 hrs"
+        } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*3)) {
+          tbl$Last_data <- "3-4 hrs"
+        } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*4)) {
+          tbl$Last_data <- "4-5 hrs"
+        } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*5)) {
+          tbl$Last_data <- "5-6 hrs"
+        } else if (levelData[[3]]$Date[1] < (Sys.time() - 60*60*6)) {
+          tbl$Last_data <- "> 6 hrs"
+        }
         
       }, error=function(e) {}
       ) #End of tryCatch for station existence
@@ -548,10 +548,10 @@ if (report_type %in% c("Both", "Flow", "both", "flow")){
 
 if (force_CGVD28){
   stationInfo <- lapply(stations, function(x) dplyr::bind_cols(tidyhydat::hy_stations(x)[c(2,1,7,8)], if(nrow(dplyr::slice_tail(as.data.frame(tidyhydat::hy_stn_datum_conv(x)[,3])))==1) as.data.frame(tidyhydat::hy_stn_datum_conv(x)[1,3]) else (data.frame(DATUM_TO="Local datum")))) %>%
-  purrr::reduce(dplyr::bind_rows)
+    purrr::reduce(dplyr::bind_rows)
 } else {
   stationInfo <- lapply(stations, function(x) dplyr::bind_cols(tidyhydat::hy_stations(x)[c(2,1,7,8)], if(nrow(dplyr::slice_tail(as.data.frame(tidyhydat::hy_stn_datum_conv(x)[,3])))==1) dplyr::slice_tail(as.data.frame(tidyhydat::hy_stn_datum_conv(x)[,3])) else (data.frame(DATUM_TO="Local datum")))) %>%
-  purrr::reduce(dplyr::bind_rows)
+    purrr::reduce(dplyr::bind_rows)
 }
 
 
@@ -658,9 +658,9 @@ if (rate & report_type %in% c("Both", "Level", "both", "level")){
   
   if (force_CGVD28){
     cat("*masl = metres above sea level  \n  \n**Notes:**  \nCurrent water levels are presented relative to the local datum (column 2) and relative to the Geodetic Survey of Canada Datum, which is assumed by Water Survey of Canada to refer to Canadian Geodetic Vertical Datum 1928 (CGVD28, column 3). The local datum is an arbitrary elevation used at each hydrometric station and reported by the Water Survey of Canada at [wateroffice.ec.gc.ca](https://wateroffice.ec.gc.ca/). Local datum values can be compared at one station across years but not across stations, while masl elevations can be compared across stations and years with consideration of the datum used. More recent datums are published for each of these stations on the Water Survey of Canada website. This report uses CGVD28 to match elevations reported by the Yukon Energy Corporation for Marsh Lake.")
-    } else {
-      cat("*masl = metres above sea level  \n  \n**Notes:**  \nCurrent water levels are presented relative to the local datum (column 2) and relative to the Canadian Geodetic Vertical Datum 2013 (CGVD2013, column 3). The local datum is an arbitrary elevation used at each hydrometric station and reported by the Water Survey of Canada at [wateroffice.ec.gc.ca](https://wateroffice.ec.gc.ca/). Local datum values can be compared at one station across years but not across stations, while masl elevations can be compared across stations and years with consideration to the datum used. Older (deprecated) vertical datums are published for each station on the Water Survey of Canada website. Datum information is provided in a table of station information at the end of this document.")
-    }
+  } else {
+    cat("*masl = metres above sea level  \n  \n**Notes:**  \nCurrent water levels are presented relative to the local datum (column 2) and relative to the Canadian Geodetic Vertical Datum 2013 (CGVD2013, column 3). The local datum is an arbitrary elevation used at each hydrometric station and reported by the Water Survey of Canada at [wateroffice.ec.gc.ca](https://wateroffice.ec.gc.ca/). Local datum values can be compared at one station across years but not across stations, while masl elevations can be compared across stations and years with consideration to the datum used. Older (deprecated) vertical datums are published for each station on the Water Survey of Canada website. Datum information is provided in a table of station information at the end of this document.")
+  }
 }
 
 ```
@@ -677,7 +677,7 @@ if (report_type %in% c("Both", "Level", "both", "level") & length(levelInfo) > 0
     } else {
       levelTable <- dplyr::bind_rows(levelInfo)[c(5, 6, 8, 12)]
     }
-
+    
     levelTable <-  dplyr::bind_cols(stationInfo[,1], levelTable) #add in the pre-made column with links embedded.
     names(levelTable) <- gsub("\\.", " ", names(levelTable))
     names(levelTable) <- gsub("X", "", names(levelTable))
@@ -691,7 +691,7 @@ if (report_type %in% c("Both", "Level", "both", "level") & length(levelInfo) > 0
     } else {
       colnames(levelTable) <- c("Station name (number)", "Current level (m)", "Current level (masl*)", "24 hr change (cm)", "72 hr change (cm)", "Current return period")
     }
-
+    
     levelTable$`Advisory in effect` <- ""
     levelTable$Community <- community #this vector is made prior to gathering station data from tidyhydat
     levelTable <- dplyr::relocate(levelTable, Community)
@@ -725,7 +725,7 @@ if (report_type %in% c("Both", "Flow", "both", "flow") & length(flowInfo) > 0){
     dplyr::bind_cols(stationInfo[,1], .)#add in the pre-made column with links embedded.
   
   flowTable$Community <- community #this vector is made prior to gathering station data from tidyhydat
-
+  
   if (!flow_returns %in% c("none", "None")){
     flowTable <- dplyr::filter(flowTable, Current_flow != 0.0001)[c(20,1, 5, 6, 8, 12, 17, 18)] #0.0001 is the indicator for lake stations, remove those
   } else {
@@ -733,7 +733,7 @@ if (report_type %in% c("Both", "Flow", "both", "flow") & length(flowInfo) > 0){
   }
   
   
-
+  
   
   names(flowTable) <- gsub("\\.", " ", names(flowTable))
   names(flowTable) <- gsub("X", "", names(flowTable))
@@ -754,7 +754,7 @@ if (report_type %in% c("Both", "Flow", "both", "flow") & length(flowInfo) > 0){
   }
   
   if (TRUE %in% stringr::str_detect(flowTable$`Current return period`, "\\*")){
-      cat("*Value obtained programatically by analysing May to September daily mean flows. For informational purposes only: no human checks were performed on underlying data.")
+    cat("*Value obtained programatically by analysing May to September daily mean flows. For informational purposes only: no human checks were performed on underlying data.")
   }
 }
 ```
@@ -883,7 +883,7 @@ for(i in stations) {
         },
         error=function(e) {})
       } # End of if "level" or "both" selected statement
-
+      
       
       if (!stringr::str_detect(station_info$STATION_NAME, "LAKE") | stringr::str_detect(station_info$STATION_NAME, "RIVER")){ #Lakes don't have flow measurements, but sometimes LAKE is mentioned when describing the river location
         if (report_type %in% c("Both", "Flow", "both", "flow")){
@@ -891,9 +891,9 @@ for(i in stations) {
             cat("  \n### Flow  \n")
             #Flow data plotting
             flowPlot <- utils_daily_flow_plot(station_number = i,
-                                  flow_years = flowDataList[[n]][[2]],
-                                               returns = flow_returns,
-                                               complete_df = flowDataList[[n]][[1]])
+                                              flow_years = flowDataList[[n]][[2]],
+                                              returns = flow_returns,
+                                              complete_df = flowDataList[[n]][[1]])
             
             if (plot_titles){
               flowPlot <- flowPlot +
@@ -988,11 +988,11 @@ for(i in stations) {
     error= function(e) {})
     
   } else {#End of if loop
-   cat("  \n\\newpage\n\n") 
-   cat("## ", tidyhydat::hy_stations(i)$STATION_NAME, " Station ", i)
-   cat("  \n Station ", i, " could not be found in the WSC tidyhydat database.\n")
-   cat("  \n\\newpage\n\n")
-
+    cat("  \n\\newpage\n\n") 
+    cat("## ", tidyhydat::hy_stations(i)$STATION_NAME, " Station ", i)
+    cat("  \n Station ", i, " could not be found in the WSC tidyhydat database.\n")
+    cat("  \n\\newpage\n\n")
+    
   }
 } #End of For loop generating plots at each station.
 
@@ -1038,8 +1038,8 @@ if (precip){
   }, error = function(e) {
     cat("Precipitation data could not be fetched at this time. This likely reflects a network, server, or data availability issue.")
   }, warning = function (w) {
-  cat("Precipitation data could not be fetched at this time. This likely reflects a network, server, or data availability issue.")
-}
+    cat("Precipitation data could not be fetched at this time. This likely reflects a network, server, or data availability issue.")
+  }
   )
   
   
@@ -1064,29 +1064,29 @@ if (precip){
 ```{r Meteograms, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, fig.height=8.8, fig.width=7.5, results='asis'}
 if (meteogram){
   tryCatch({
-     cat("  \n# Weather forecast(s)  \n")
-
-  stationCoords <- sf::st_as_sf(stationInfo, coords=c("Longitude", "Latitude"), crs=4326) %>% 
-    sf::st_set_crs(4326) %>%
-    sf::st_transform(3579)
-  
-  meteoStns <- sf::st_as_sf(dplyr::filter(data$spatial_stns[,c(1,3,7,8)], Type == "Meteogram"), coords=c("Longitude", "Latitude"), crs=4326) %>%
-    sf::st_set_crs(4326) %>%
-    sf::st_transform(3579)
-  
-  buffers <- sf::st_buffer(stationCoords, dist = 120000) #150 km buffer
-  
-  meteos <- as.data.frame(meteoStns[lengths(sf::st_intersects(meteoStns, buffers)) > 0,]) #subset meteoStns according to the meteoStns that return TRUE for intersection
-
-  dateTimeUTC <- format(Sys.time(), "%Y%m%d")
-
-  par(mar=c(0,0,0,0)) #sets the plot margins to 0 - important
-  
-  for (i in meteos$`Meteogram_code`) {
-    cat("  \n")
-    imager::load.image(paste0("https://collaboration.cmc.ec.gc.ca/cmc/ensemble/data2/combine/images/", dateTimeUTC, "00_054@007_E1_", i, "_I_NAEFS@EPSGRAMS_tt@surf@nt@pr@ws@surf_360.png")) %>% plot(axes=FALSE)
-    cat("  \n")
-  }}, error=function(e) {cat("  \nMeteograms could not be fetched or processed. Check the URL https://collaboration.cmc.ec.gc.ca/cmc/ensemble/data2/combine/images/ to confirm it is accessible, and if yes contact Ghislain for troubleshooting.")}
+    cat("  \n# Weather forecast(s)  \n")
+    
+    stationCoords <- sf::st_as_sf(stationInfo, coords=c("Longitude", "Latitude"), crs=4326) %>% 
+      sf::st_set_crs(4326) %>%
+      sf::st_transform(3579)
+    
+    meteoStns <- sf::st_as_sf(dplyr::filter(data$spatial_stns[,c(1,3,7,8)], Type == "Meteogram"), coords=c("Longitude", "Latitude"), crs=4326) %>%
+      sf::st_set_crs(4326) %>%
+      sf::st_transform(3579)
+    
+    buffers <- sf::st_buffer(stationCoords, dist = 120000) #150 km buffer
+    
+    meteos <- as.data.frame(meteoStns[lengths(sf::st_intersects(meteoStns, buffers)) > 0,]) #subset meteoStns according to the meteoStns that return TRUE for intersection
+    
+    dateTimeUTC <- format(Sys.time(), "%Y%m%d")
+    
+    par(mar=c(0,0,0,0)) #sets the plot margins to 0 - important
+    
+    for (i in meteos$`Meteogram_code`) {
+      cat("  \n")
+      imager::load.image(paste0("https://collaboration.cmc.ec.gc.ca/cmc/ensemble/data2/combine/images/", dateTimeUTC, "00_054@007_E1_", i, "_I_NAEFS@EPSGRAMS_tt@surf@nt@pr@ws@surf_360.png")) %>% plot(axes=FALSE)
+      cat("  \n")
+    }}, error=function(e) {cat("  \nMeteograms could not be fetched or processed. Check the URL https://collaboration.cmc.ec.gc.ca/cmc/ensemble/data2/combine/images/ to confirm it is accessible, and if yes contact Ghislain for troubleshooting.")}
   ) #End of tryCatch
 }
 
@@ -1120,7 +1120,8 @@ if (WSC_images) {
         cat("  \n### ", stringr::str_to_title(tidyhydat::hy_stations(i)$STATION_NAME), "(", substr(as.character(as.POSIXct(last_image[,2], tz="UTC")-7*60*60), 1, 16), "Yukon Time)  \n")
         
         temp <- paste0(tempfile(),".jpg")
-        R.utils::downloadFile(paste0("https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/", last_image[,1]), temp, username=Sys.getenv("ECCCUSER"), password = Sys.getenv("ECCCPASS"))
+        curl::curl_download(paste0("https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/", last_image[,1]), temp, handle = curl::new_handle(userpwd = paste(Sys.getenv("ECCCUSER"), Sys.getenv("ECCCPASS"), sep = ":")))
+        
         imager::load.image(paste0(temp)) %>% plot(axes=FALSE)
         unlink(temp)
         cat("  \n")
@@ -1152,15 +1153,15 @@ datums <- unique(stationInfo$Datum)
 
 #Make a table with the necessary notes and their associated datums
 note_table <- data.frame(datum = c("CGVD28 (approximate)", 
-             "CGVD28 (assumed)", 
-             "CGVD2013:2010", 
-             "CGVD28", 
-             "Local datum"), 
-           note = c("Derived from a digital elevation model with vertical datum in Canadian Geodetic Vertical Datum of 1928 ([CGVD28](https://cgrsc.ca/resources/geodetic-control-networks/vertical-control-networks/)); uncertainty in accordance with the [Canadian Digital Elevation Model](https://ftp.maps.canada.ca/pub/nrcan_rncan/elevation/cdem_mnec/doc/CDEM_product_specs.pdf).", 
-             "Vertical datum not specified in historical records, but implementation date indicates use of [(CGVD28](https://cgrsc.ca/resources/geodetic-control-networks/vertical-control-networks/)).",
-             "Vertical datum in Canadian Geodetic Vertical Datum of 2013, epoch 2010 [(CGVD2013:2010](https://cgrsc.ca/resources/geodetic-control-networks/vertical-control-networks/)).",
-             "Vertical datum in Canadian Geodetic Vertical Datum of 1928 [(CGVD28](https://cgrsc.ca/resources/geodetic-control-networks/vertical-control-networks/)).", 
-             "Arbitrary datum relative to station or other nearby fixed point."))
+                                   "CGVD28 (assumed)", 
+                                   "CGVD2013:2010", 
+                                   "CGVD28", 
+                                   "Local datum"), 
+                         note = c("Derived from a digital elevation model with vertical datum in Canadian Geodetic Vertical Datum of 1928 ([CGVD28](https://cgrsc.ca/resources/geodetic-control-networks/vertical-control-networks/)); uncertainty in accordance with the [Canadian Digital Elevation Model](https://ftp.maps.canada.ca/pub/nrcan_rncan/elevation/cdem_mnec/doc/CDEM_product_specs.pdf).", 
+                                  "Vertical datum not specified in historical records, but implementation date indicates use of [(CGVD28](https://cgrsc.ca/resources/geodetic-control-networks/vertical-control-networks/)).",
+                                  "Vertical datum in Canadian Geodetic Vertical Datum of 2013, epoch 2010 [(CGVD2013:2010](https://cgrsc.ca/resources/geodetic-control-networks/vertical-control-networks/)).",
+                                  "Vertical datum in Canadian Geodetic Vertical Datum of 1928 [(CGVD28](https://cgrsc.ca/resources/geodetic-control-networks/vertical-control-networks/)).", 
+                                  "Arbitrary datum relative to station or other nearby fixed point."))
 
 
 #Add a number to each datum and populate notes with the required notes
