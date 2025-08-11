@@ -1,8 +1,6 @@
 #' Retrieve a data.table from a database connection
 #' 
 #' @description
-#' `r lifecycle::badge('stable')`
-#' 
 #' A simple wrapper function around [DBI::dbGetQuery()] that returns a data.table object instead of a data.frame. Can be used as a direct replacement for [DBI::dbGetQuery()], but be aware of the downstream effects of using a data.table object instead of a data.frame.
 #' 
 #' The `params` argument allows for parameterized queries, which can help prevent SQL injection attacks. However, BE AWARE THAT THIS IS SLOW where any element of `params` is a vector of length greater than 1 as this results in multiple queries. In such cases, it is recommended to use a different approach, such as preparing the statement with [glue::glue_sql()] instead (see notes the note about what to do for IN operations in the glue help file).

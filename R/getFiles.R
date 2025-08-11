@@ -1,8 +1,6 @@
 #' Extract image from postgreSQL DB
 #'
 #' @description
-#' lifecycle::badge("stable")
-#' 
 #' Extracts an image stored in the aquacache as BYTEA type. For extracting documents see [getDocument()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
 #' 
 #' @details
@@ -31,8 +29,6 @@ getImage <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
 #' Extract document from postgreSQL DB
 #'
 #' @description
-#' lifecycle::badge("stable")
-
 #' Extracts a document stored in the aquacache as BYTEA type. For extracting images see [getImage()], for extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
 #'
 #'@details
@@ -63,7 +59,6 @@ getDocument <- function(id, con = NULL, save_dir = NULL, save_name = NULL) {
 #'
 #' @description
 #' *NOTE* Unless you really need the additional flexibility use functions [getDocument()] or [getImage()].
-#' lifecycle::badge("stable")
 #'
 #' Extracts a document/file stored in a postgreSQL database as BYTEA type. Should be flexible enough to work with most schemas, but was designed around the 'documents' and 'images' tables created with this package and with files uploaded to the database with functions from package AquaCache. For extracting vector files as *terra* rasters (points, lines polygons) see [getVector()], and for extracting rasters to R as *terra* objects see [getRaster()].
 #'

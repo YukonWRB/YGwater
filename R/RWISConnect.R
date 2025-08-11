@@ -1,7 +1,6 @@
 #' Connect to the RWIS database
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
 #'
 #' Establishes a connection to the RWIS (Road Weather Information System) database. Only works from within YG networks.
 #'

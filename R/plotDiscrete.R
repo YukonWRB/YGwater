@@ -28,8 +28,7 @@
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param dbSource The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
 #' @param dbCon A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.
-#' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
-#' databases/EQWinDB/WaterResources.mdb".
+#' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #'
 #' @return An interactive HTML plot of the data from EQWin.
@@ -60,7 +59,7 @@ plotDiscrete <- function(start,
                          gridy = FALSE,
                          dbSource = "EQ", 
                          dbCon = NULL,
-                         dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb",
+                         dbPath = eqwin_db_path(),
                          data = FALSE) {
   
   # testing parameters for EQWIN direct

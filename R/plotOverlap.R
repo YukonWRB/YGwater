@@ -1,8 +1,6 @@
 #' Plot of overlapping years or portions thereof
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#'
 #' A pared-down, sped up, simplified version of the original [ggplotOverlap()] function. Created for use with a simple Shiny application linked to the Flood Atlas, but will likely see other uses.
 #'
 #' @param location The location for which you want a plot.
@@ -424,8 +422,8 @@ plotOverlap <- function(location,
     daily <- merge(all_dates, daily, by = "date", all.x = TRUE)
   }
   # Convert date to datetime so it plays well with the realtime data later
-  daily[, date := as.POSIXct(date) + 12*60*60]
-  daily[, date := lubridate::force_tz(date, tzone)]
+  daily[, "date" := as.POSIXct(date) + 12*60*60]
+  daily[, "date" := lubridate::force_tz(date, tzone)]
   data.table::setnames(daily, "date", "datetime")
   
   ## Get realtime/hourly data ################
@@ -453,36 +451,26 @@ plotOverlap <- function(location,
         new_realtime <- data.table::data.table()
       }
       
-      # if (nrow(new_realtime) > 20000) {
-      #   
-      #   # Retain last 20 000 records
-      #   new_realtime <- new_realtime[(.N - 20000):.N]
-      #   
-      #   # Add the truncated dates to the dates vector
-      #   end_new_dates <- min(new_realtime$datetime)
-      #   new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
-      #   dates <- c(dates, new_dates)
-      # }
       if (nrow(new_realtime) > 0) {
         # Fill in any missing data points in realtime with NAs
         # Must use calculate_period to get the correct number of hours in the period as it can change.
         new_realtime <- suppressWarnings(calculate_period(new_realtime, timeseries_id = tsid, con = con))
         # if calculate_period didn't return a column for new_realtime, it couldn't be done. No need to continue
         if ("period" %in% colnames(new_realtime)) {
-          new_realtime[, period_secs := as.numeric(lubridate::period(period))]
+          new_realtime[, "period_secs" := as.numeric(lubridate::period(period))]
           # Shift datetime and add period_secs to compute the 'expected' next datetime
-          new_realtime[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+          new_realtime[, "expected" := data.table::shift(new_realtime$datetime, type = "lead") - new_realtime$period_secs]
           # Create 'gap_exists' column to identify where gaps are
-          new_realtime[, gap_exists := datetime < expected & !is.na(expected)]
+          new_realtime[, "gap_exists" := new_realtime$datetime < new_realtime$expected & !is.na(new_realtime$expected)]
           # Find indices where gaps exist
           gap_indices <- which(new_realtime$gap_exists)
           # Create a data.table of NA rows to be inserted
-          na_rows <- data.table::data.table(datetime = new_realtime[gap_indices, datetime]  + 1,  # Add 1 second to place it at the start of the gap
+          na_rows <- data.table::data.table(datetime = new_realtime[new_realtime$gap_indices, "datetime"]  + 1,  # Add 1 second to place it at the start of the gap
                                             value = NA)
           # Combine with NA rows
           new_realtime <- data.table::rbindlist(list(new_realtime[, c("datetime", "value")], na_rows), use.names = TRUE)
           # order by datetime
-          data.table::setorder(new_realtime, datetime) 
+          data.table::setorder(new_realtime, "datetime") 
         }
         
         realtime <- data.table::rbindlist(list(realtime, new_realtime))
@@ -495,7 +483,7 @@ plotOverlap <- function(location,
     }
     
     if (get_daily) {
-      new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , list(datetime, value)]
+      new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , c("datetime", "value")]
       if (nrow(new_realtime) > 0) {
         realtime <- data.table::rbindlist(list(realtime, new_realtime))
       }
@@ -506,7 +494,7 @@ plotOverlap <- function(location,
     for (i in 1:length(dates)) {
       toDate <- as.Date(dates[i]) # convert to plain date to check if there are any datetimes with that plain date in the data.frame
       if (!(toDate %in% as.Date(realtime$datetime))) {
-        row <- daily[daily$datetime == dates[i] , list(datetime, value)]
+        row <- daily[daily$datetime == dates[i] , c("datetime", "value")]
         realtime <- data.table::rbindlist(list(realtime, row))
       }
     }
@@ -647,10 +635,10 @@ plotOverlap <- function(location,
     grades_dt <- dbGetQueryDT(con, glue::glue_sql("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = {tsid} AND g.end_dt >= {startDay} AND g.start_dt <= {endDay} AND gt.grade_type_code = 'N' ORDER BY start_dt;", .con = con))
     if (nrow(grades_dt) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
-      realtime[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
+      realtime[grades_dt, on = .(realtime$datetime >= start_dt, realtime$datetime <= end_dt), "value" := NA]
       
       # If there's an entire year with only NA, remove it
-      realtime <- realtime[, if (any(!is.na(value))) .SD, by = year]
+      realtime <- realtime[, if (any(!is.na(realtime$value))) .SD, by = realtime$year]
     }
   }
   
@@ -679,7 +667,7 @@ plotOverlap <- function(location,
                         color = I("#5f9da6"), 
                         line = list(width = 0.2), 
                         hoverinfo = if (hover) "text" else "none",
-                        text = if (hover) ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")"),
+                        text = if (hover) ~paste0("q25: ", round(.data$q25, 2), ", q75: ", round(.data$q75, 2), " (", as.Date(.data$datetime), ")"),
                         legendrank = 1) %>%
     plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], 
                         x = ~datetime, 
@@ -690,7 +678,7 @@ plotOverlap <- function(location,
                         color = I("#D4ECEF"), 
                         line = list(width = 0.2), 
                         hoverinfo = if (hover) "text" else "none",
-                        text = if (hover) ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"),
+                        text = if (hover) ~paste0("Min: ", round(.data$min, 2), ", Max: ", round(.data$max, 2), " (", as.Date(.data$datetime), ")"),
                         legendrank = 2)
   
   # Add traces
@@ -711,7 +699,7 @@ plotOverlap <- function(location,
                               name = i,
                               color = I(colors[col_idx]),
                               hoverinfo = if (hover) "text" else "none", 
-                              text = if (hover) ~paste0(plot_year, ": ", round(value, 2), " (", datetime, ")"),
+                              text = if (hover) ~paste0(.data$plot_year, ": ", round(.data$value, 2), " (", .data$datetime, ")"),
                               legendrank = rank)
     rank <- rank - 1
     col_idx <- col_idx + 1

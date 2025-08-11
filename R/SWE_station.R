@@ -1,8 +1,6 @@
 #' Calculate snow survey stats for stations
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#' 
 #' This script summarises the SWE data of each station for a particular year and month and compares it to previous years. This information is used for the snow bulletin, specifically the SWE map and the 'Drainage basin and snow course' summary table. It is meant to replace Ellen Ward's code from 2020-04-16, script called swe_compiled.R.
 #' 
 #' @param stations A vector of snow course stations, identified with their location ID. Default is "all", where all stations in the snow db are taken.
@@ -34,6 +32,18 @@ SWE_station <- function(stations = "all",
                         summarise = TRUE, 
                         save_path = "choose") 
 {
+  # parameters for testing
+  # stations = "all"
+  # year = 2023
+  # month = 4
+  # csv = FALSE
+  # return_missing = FALSE
+  # active = TRUE
+  # source = "aquacache"
+  # aquaCon = NULL
+  # snowCon = NULL
+  # summarise = TRUE
+  # save_path = "choose"
   
   # parameter checks
   if (!month %in% c(3, 4, 5)) {
@@ -56,7 +66,6 @@ SWE_station <- function(stations = "all",
         stop("The save path you specified does not exist.")
       }
     }
-    
   }
   
   # First retrieve location-basin info from snow db
@@ -191,7 +200,17 @@ SWE_station <- function(stations = "all",
       if (nrow(duplicated) > 0) {
         sub <- duplicated %>% 
           dplyr::group_by(.data$target_date, .data$parameter) %>%
-          dplyr::summarise(location_name = unique(location_name), location_id = unique(location_id), target_date = unique(target_date), sample_date = mean(sample_date), elevation = mean(elevation), estimate_flag = if (TRUE %in% estimate_flag) TRUE else FALSE, parameter = unique(parameter), value = mean(value), mon = unique(mon), yr = unique(yr), day = unique(day))
+          dplyr::summarise(location_name = unique(.data$location_name), 
+                           location_id = unique(.data$location_id), 
+                           target_date = unique(.data$target_date), 
+                           sample_date = mean(.data$sample_date), 
+                           elevation = mean(.data$elevation), 
+                           estimate_flag = if (TRUE %in% estimate_flag) TRUE else FALSE, 
+                           parameter = unique(.data$parameter), 
+                           value = mean(.data$value), 
+                           mon = unique(.data$mon), 
+                           yr = unique(.data$yr), 
+                           day = unique(.data$day))
         
         tab <- tab[!(tab$target_date %in% duplicated$target_date & tab$parameter %in% duplicated$parameter),]
         tab <- rbind(tab, sub)

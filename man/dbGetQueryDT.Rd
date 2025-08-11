@@ -19,8 +19,6 @@ dbGetQueryDT(con, statement, params = NULL, ...)
 A data.table object.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 A simple wrapper function around \code{\link[DBI:dbGetQuery]{DBI::dbGetQuery()}} that returns a data.table object instead of a data.frame. Can be used as a direct replacement for \code{\link[DBI:dbGetQuery]{DBI::dbGetQuery()}}, but be aware of the downstream effects of using a data.table object instead of a data.frame.
 
 The \code{params} argument allows for parameterized queries, which can help prevent SQL injection attacks. However, BE AWARE THAT THIS IS SLOW where any element of \code{params} is a vector of length greater than 1 as this results in multiple queries. In such cases, it is recommended to use a different approach, such as preparing the statement with \code{\link[glue:glue_sql]{glue::glue_sql()}} instead (see notes the note about what to do for IN operations in the glue help file).

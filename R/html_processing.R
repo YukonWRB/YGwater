@@ -4,20 +4,20 @@
 #'
 #' @param file Full path to the .html file. This must be an html file from an In Situ logger.
 #' @param aq_upload Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned. Uses function [aq_upload()] with default parameters, so you'll want to make sure your Aquarius login details are in your .Renviron file.
-#' @param master_sheet Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.
-#' @param logger_tracking Path to YOWN logger tracking sheet (.xlsx), used to track logger metadata. This part is done within a tryCatch block to enable this function to run even if the logger tracking sheet is open, missing, or otherwise inaccessible.
-#' @param dropbox Path to YOWN logger dropbox folder, where the html file is located. This is used to move the file to the appropriate folder after processing.
-#' @param repo Path to YOWN Active Wells folder, which will be concatenated with the YOWN ID to create the final resting place for the html file. If NULL the file will not get moved.
+#' @param master_sheet Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity. Defaults to a WRB network location.
+#' @param logger_tracking Path to YOWN logger tracking sheet (.xlsx), used to track logger metadata. Defaults to a WRB network location. This part is done within a tryCatch block to enable this function to run even if the logger tracking sheet is open, missing, or otherwise inaccessible.
+#' @param dropbox Path to YOWN logger dropbox folder, where the html file is located. Defaults to a WRB network location. This is used to move the file to the appropriate folder after processing.
+#' @param repo Path to YOWN Active Wells folder, which will be concatenated with the YOWN ID to create the final resting place for the html file. Defaults to a WRB network location. If NULL the file will not get moved.
 #'
 #' @return Moves YOWN html file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions. Adds pressure column if missing, based on depth column and conversions calcs on In Situ website
 #' @export
 
 html_processing <- function(file,
                             aq_upload = TRUE,
-                            master_sheet = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
-                            logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
-                            dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
-                            repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
+                            master_sheet = yown_master_path(),
+                            logger_tracking = yown_tracking_path(),
+                            dropbox = yown_dropbox_path(),
+                            repo = yown_active_path()) {
   # Debug params 
   # file <- "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\VuSitu_Log_2024-12-04_13-00-00_YOWN-2402D_WH_Copper_Pad_2_Log_2024-12-04_YOWN-2402D.html"
   # aq_upload <- TRUE

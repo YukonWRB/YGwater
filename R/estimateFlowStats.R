@@ -2,8 +2,6 @@
 #' Function that predicts water flow statistics at creeks
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
-#' 
 #' The purpose of this script is to estimate flows of rivers/streams/creeks based on the flow at multiple other stations of choice. It was created because Highways (YG) often wants flows statistics for small streams from which water is pulled during highway work. 
 #' 
 #' Statistics for each station are averaged over all years/seasons available, except for all-time data points. Years or seasons with more than 5 percent missing data (this is the default) are excluded from the statistics. Additionally, only stations with a minimum of 15 years/seasons of data (this is the default) are retained. Next, statistics are expressed as m3/s/km2 and plotted to visualize outliers (plots). Each statistic is averaged for all stations and applied to the ungauged rivers/streams/creeks using their catchment area.
@@ -197,27 +195,41 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   
   
   ## Plot
-  # # Reformat 
-  # flow_stats_km$stat <- sub("min", "minimum", flow_stats_km$stat)
-  # flow_stats_km$stat <- sub("max", "maximum", flow_stats_km$stat)
-  # flow_stats_km$stat <- sub("maximum_all", "all-time maximum", flow_stats_km$stat)
-  # flow_stats_km <<- flow_stats_km
-  
   colours <- c("black", "#DC4405", "#773F65", "#F2A900", "#244C5A", "#C60D58", "#41763B", "#0097A9", "#7A9A01", "#CD7F32", "#912D2D", "#0729B1", "#E0082F", "#CF08E0", "#E0CF08", "#08E0AF", "#DCB005", "#DC5C05", "#5C05DC")
   text_size <- 12
     
-  plot_all <- ggplot2::ggplot(flow_stats_km, ggplot2::aes(stat, value, colour = .data$location)) + 
+  plot_all <- ggplot2::ggplot(flow_stats_km, ggplot2::aes(.data$stat, .data$value, colour = .data$location)) + 
     ggplot2::geom_point() + 
-    ggplot2::facet_grid(rows = dplyr::vars(season)) +
+    ggplot2::facet_grid(rows = dplyr::vars(.data$season)) +
     ggplot2::scale_color_manual(values = colours)
   # For maximum
-  plot_max <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="mean_seasonal_max",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station") + ggplot2::theme(text = ggplot2::element_text(size = text_size)) + ggplot2::scale_color_manual(values=colours)
+  plot_max <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat == "mean_seasonal_max",], ggplot2::aes(.data$season, .data$value, colour = .data$location)) +
+    ggplot2::geom_point(size = 3) + 
+    ggplot2::facet_grid(cols = ggplot2::vars(.data$stat), scales = "free") + 
+    ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + 
+    ggplot2::labs(col = "Station") + 
+    ggplot2::theme(text = ggplot2::element_text(size = text_size)) + 
+    ggplot2::scale_color_manual(values = colours)
   # For minimum
-  plot_min <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="mean_seasonal_min",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station") + ggplot2::scale_color_manual(values=colours)
+  plot_min <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat == "mean_seasonal_min",], ggplot2::aes(.data$season, .data$value, colour = .data$location)) +
+    ggplot2::geom_point(size = 3) + 
+    ggplot2::facet_grid(cols = ggplot2::vars(.data$stat), scales = "free") + 
+    ggplot2::ylab("Discharge (m3/s/km2)") + 
+    ggplot2::xlab("Season") + ggplot2::labs(col = "Station") + 
+    ggplot2::scale_color_manual(values = colours)
   # For mean
-  plot_mean <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="mean_seasonal_mean",], ggplot2::aes(season, value, colour=location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station") + ggplot2::scale_color_manual(values=colours)
+  plot_mean <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat == "mean_seasonal_mean",], ggplot2::aes(.data$season, .data$value, colour = .data$location)) + 
+    ggplot2::geom_point(size = 3) + 
+    ggplot2::facet_grid(cols = ggplot2::vars(.data$stat), scales = "free") + 
+    ggplot2::ylab("Discharge (m3/s/km2)") + 
+    ggplot2::xlab("Season") + ggplot2::labs(col = "Station") + ggplot2::scale_color_manual(values = colours)
   # For max_all
-  plot_max_all <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat=="max_all_time",], ggplot2::aes(season, value, colour = location)) + ggplot2::geom_point(size=3) + ggplot2::facet_grid(cols=ggplot2::vars(stat), scales = "free") + ggplot2::ylab("Discharge (m3/s/km2)") + ggplot2::xlab("Season") + ggplot2::labs(col="Station") + ggplot2::scale_color_manual(values=colours)
+  plot_max_all <- ggplot2::ggplot(flow_stats_km[flow_stats_km$stat == "max_all_time",], ggplot2::aes(.data$season, .data$value, colour = .data$location)) + 
+    ggplot2::geom_point(size = 3) +
+    ggplot2::facet_grid(cols = ggplot2::vars(.data$stat), scales = "free") + 
+    ggplot2::ylab("Discharge (m3/s/km2)") + 
+    ggplot2::xlab("Season") + ggplot2::labs(col = "Station") + 
+    ggplot2::scale_color_manual(values = colours)
   
   # Calculate average of all stations
   flow_stats_km_agg <- flow_stats_km %>%

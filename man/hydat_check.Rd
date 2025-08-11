@@ -15,7 +15,5 @@ hydat_check(silent = FALSE, path = NULL)
 An updated local copy of hydat, if indicated by the age of the remote HYDAT.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 Checks and, if necessary, updates the local version of the WSC HYDAT database. Intended for use on a schedule to ensure the user always has the latest version.
 }

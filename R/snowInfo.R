@@ -1,8 +1,6 @@
 #' Plots and tabular data for snow survey locations
 #'
 #' @description
-#' `r lifecycle::badge("stable")`
-#'
 #' This function is intended to facilitate the reporting of snow survey data by compiling basic statistics (years of record, missing years, mean, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of SWE, depth, and density for all requested stations. At its most basic (parameters to FALSE or NULL where applicable), the result is a list of two data.frames to the R environment with location metadata and field measurements.
 #'
 #' @param locations The list of locations requested, as a character vector of length n. Default "all" fetches all stations.
@@ -35,9 +33,6 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   # con <- NULL
   
   rlang::check_installed("trend", reason = " to calculate trends.")
-  if (plots) {
-    rlang::check_installed("gridExtra", reason = " to create plots.")
-  }
   
   if (!is.null(save_path)) {
     if (save_path == "choose") {
@@ -98,12 +93,12 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   
   if (!inactive) { # Filter out any location with no measurements for 5 or more years
     rm.inactive <- samples %>%
-      dplyr::group_by(location_id) %>%
-      dplyr::summarise(min_year = min(lubridate::year(target_datetime)),
-                       max_year = max(lubridate::year(target_datetime))) %>%
-      dplyr::mutate(rm.inactive = max_year - min_year < 5) %>%
+      dplyr::group_by(.data$location_id) %>%
+      dplyr::summarise(min_year = min(lubridate::year(.data$target_datetime)),
+                       max_year = max(lubridate::year(.data$target_datetime))) %>%
+      dplyr::mutate(rm.inactive = .data$max_year - .data$min_year < 5) %>%
       dplyr::filter(rm.inactive) %>%
-      dplyr::pull(location_id)
+      dplyr::pull(.data$location_id)
     
     locations <- locations[!locations$location_id %in% rm.inactive,]
     samples <- samples[!samples$location_id %in% rm.inactive,]
@@ -180,7 +175,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       for (j in unique(yrs)) {
         AllSWEMax <- c(AllSWEMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow water equivalent", "result"]), na.rm = TRUE)
       }
-      AllSWEMax <- stats::na.omit(hablar::rationalize(AllSWEMax))
+      AllSWEMax <- stats::na.omit(inf_to_na(AllSWEMax))
       if (length(AllSWEMax) > 6) {
         AllSWESensMax <- trend::sens.slope(AllSWEMax)
       } else {
@@ -192,7 +187,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       for (j in unique(yrs)) {
         AllDepthMax <- c(AllDepthMax, max(results[results$location_id == locations$location_id[i] & results$year == j & results$param_name == "snow depth", "result"]), na.rm = TRUE)
       }
-      AllDepthMax <- stats::na.omit(hablar::rationalize(AllDepthMax))
+      AllDepthMax <- stats::na.omit(inf_to_na(AllDepthMax))
       if (length(AllDepthMax) > 6) {
         AllDepthSensMax <- trend::sens.slope(AllDepthMax)
       } else {
@@ -229,7 +224,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       #Calculate the territory trend and add it to trends
       # terr_prct_chg_SWE <- mean(trends$annual_prct_chg_SWE, na.rm = TRUE)
       # terr_prct_chg_depth <- mean(trends$annual_prct_chg_DEPTH, na.rm = TRUE)
-      # trends <- plyr::rbind.fill(trends, data.frame("location_code" = "territory",
+      # trends <- dplyr::bind_rows(trends, data.frame("location_code" = "territory",
       #                                               "annual_prct_chg_SWE" = terr_prct_chg_SWE,
       #                                               "annual_prct_chg_DEPTH" = terr_prct_chg_depth,
       #                                               "note" = "Mean of the annual percent changes."))
@@ -300,13 +295,13 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       new_apr1 <- data.frame("location" = "all_locs_Apr1",
                              "name" = "Territory-averaged April 1")
       
-      results <- plyr::rbind.fill(results, plot_all_SWE)
-      results <- plyr::rbind.fill(results, plot_all_depth)
-      results <- plyr::rbind.fill(results, plot_apr1_SWE)
-      results <- plyr::rbind.fill(results, plot_apr1_depth)
+      results <- dplyr::bind_rows(results, plot_all_SWE)
+      results <- dplyr::bind_rows(results, plot_all_depth)
+      results <- dplyr::bind_rows(results, plot_apr1_SWE)
+      results <- dplyr::bind_rows(results, plot_apr1_depth)
       
-      locations <- plyr::rbind.fill(locations, new_all)
-      locations <- plyr::rbind.fill(locations, new_apr1)
+      locations <- dplyr::bind_rows(locations, new_all)
+      locations <- dplyr::bind_rows(locations, new_apr1)
       
       territory <- data.frame("subset" = c("mean max", "mean Apr 1"),
                               "inactive_locs" = inactive,
@@ -369,7 +364,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
                             location = unique(plot_results$location),
                             name = unique(plot_results$name),
                             param_name = "density")
-      density <- hablar::rationalize(density)
+      density <- inf_to_na(density)
       
       plot_results <- rbind(plot_results, density[!is.na(density$result), ])
       
@@ -420,7 +415,7 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
       }
       
       if (plot_type == "combined") {
-        plots_combined <- gridExtra::arrangeGrob(plotSWE, plotDepth, plotDensity)
+        plots_combined <- cowplot::plot_grid(plotSWE, plotDepth, plotDensity, ncol = 1, align = "v", rel_heights = c(1, 1, 1))
         plotsCombined[[display_name]] <- plots_combined
       } else {
         plotsSWE[[display_name]] <- plotSWE

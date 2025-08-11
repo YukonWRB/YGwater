@@ -1,8 +1,6 @@
 #' Check and update HYDAT
 #'
 #' @description
-#' `r lifecycle::badge("stable")`
-#'
 #' Checks and, if necessary, updates the local version of the WSC HYDAT database. Intended for use on a schedule to ensure the user always has the latest version.
 #'
 #' @param silent Should messages be output to the console?

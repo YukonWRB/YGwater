@@ -43,7 +43,7 @@ if (report_type %in% c("Both", "Level", "both", "level")){
   levelDataList <- list()
   levelInfo <- list()
   #parse out the extra years if requested
-  if (is.null(extra_years)==FALSE){
+  if (!is.null(extra_years)){
     years <- data.frame(data=extra_years)
     years <- tidyr::separate(years, col=data, into=c("station","years"), sep=":")
   } else {
@@ -54,7 +54,7 @@ if (report_type %in% c("Both", "Level", "both", "level")){
     
     #tryCatch special here: the error function was not creating any output, so the error data.frames are created here. If successful, it is overwritten in the for loop, otherwise the error output is already created for each i
     tbl <- data.frame(
-      Station_name = if(is.na(tidyhydat::hy_stations(i)$STATION_NUMBER[1])==FALSE){stringr::str_to_title(tidyhydat::hy_stations(i)$STATION_NAME)} else{paste0(i, " DOES NOT EXIST")},
+      Station_name = if (!is.na(tidyhydat::hy_stations(i)$STATION_NUMBER[1])) {stringr::str_to_title(tidyhydat::hy_stations(i)$STATION_NAME)} else {paste0(i, " DOES NOT EXIST")},
       ID = i,
       Start_year = NA,
       Today_percent_historic = NA,
@@ -80,7 +80,7 @@ if (report_type %in% c("Both", "Level", "both", "level")){
     levelData <- data.frame() #Created to standardize the eventual output of this code block
     tryCatch ({
       #Get the level data
-      if (is.null(extra_years)==FALSE & i %in% years$station==TRUE){
+      if (!is.null(extra_years) & i %in% years$station){
         levelData <- utils_level_data(
           station_number = i,
           select_years = as.numeric(unlist(strsplit(paste0(lubridate::year(Sys.Date()), ",", subset(years, station == i, select=years)[1,]), ","))),
@@ -105,7 +105,7 @@ if (report_type %in% c("Both", "Level", "both", "level")){
       datum_na <- is.na(as.numeric(utils::tail(tidyhydat::hy_stn_datum_conv(i)[,4], n=1)))#Check if there is a datum on record - any datum
       
       #Level data processing
-      if (datum_na==TRUE) { #then there is no datum elevation
+      if (datum_na) { #then there is no datum elevation
         startYearLevel <- min(lubridate::year(levelData[[1]]$Date), na.rm = T)
         todayLevel <- mean(dplyr::filter(levelData[[3]], Date %in% seq.POSIXt(from = as.POSIXct(max(levelData[[3]]$Date) - 60*60), to = as.POSIXct(max(levelData[[3]]$Date)), by = "5 min"))$Level, na.rm=TRUE)
         todayLevelmasl <- NA
@@ -287,7 +287,7 @@ flowInfo <- list()
 
 if (report_type %in% c("Both", "Flow", "both", "flow")){
   #parse out the extra years if requested
-  if (is.null(extra_years)==FALSE){
+  if (!is.null(extra_years)){
     years <- data.frame(data=extra_years)
     years <- tidyr::separate(years, col=data, into=c("station","years"), sep=":")
   } else {
@@ -299,7 +299,7 @@ if (report_type %in% c("Both", "Flow", "both", "flow")){
     flowData <- data.frame() #Created to standardize the eventual output of this code block; some stations have no flow
     
     tbl <- data.frame( #make the table for all stations (even lakes) so that start year information can be extracted in order when making the station info table later.
-      Station_name = if(is.na(tidyhydat::hy_stations(i)$STATION_NUMBER[1])==FALSE){stringr::str_to_title(tidyhydat::hy_stations(i)$STATION_NAME)} else {paste0(i, " DOES NOT EXIST")},
+      Station_name = if (!is.na(tidyhydat::hy_stations(i)$STATION_NUMBER[1])) {stringr::str_to_title(tidyhydat::hy_stations(i)$STATION_NAME)} else {paste0(i, " DOES NOT EXIST")},
       ID = i,
       `Start year flow` = NA,
       Current_flow= 0.0001, #this is a number so that lake stations can be removed after.
@@ -319,13 +319,13 @@ if (report_type %in% c("Both", "Flow", "both", "flow")){
       Last_data = "NA"
     )    
     
-    if (stringr::str_detect(station_info$STATION_NAME, "LAKE")==FALSE | stringr::str_detect(station_info$STATION_NAME, "RIVER")==TRUE){ #Lakes don't have flow measurements, but sometimes LAKE is mentioned when describing the river location
+    if (!stringr::str_detect(station_info$STATION_NAME, "LAKE") | stringr::str_detect(station_info$STATION_NAME, "RIVER")){ #Lakes don't have flow measurements, but sometimes LAKE is mentioned when describing the river location
       
       tbl$Current_flow <- NA #Overwrite 0.0001 so that the reader knows that a station could/should have flow but does not
       
       tryCatch ({
         #Get the Flow data
-        if (is.null(extra_years)==FALSE & i %in% years$station==TRUE){
+        if (!is.null(extra_years) & i %in% years$station){
           flowData <- utils_flow_data(
             station_number = i,
             select_years = as.numeric(unlist(strsplit(paste0(lubridate::year(Sys.Date()), ",", subset(years, station == i, select=years)[1,]), ","))),
@@ -512,7 +512,9 @@ stationInfo$Station <- paste0(stationInfo$STATION_NAME, " ([", stationInfo$STATI
 
 stationInfo <- stationInfo[c(8,6,3,4,5)]
 
-stationInfo <- plyr::rename(stationInfo, c("LATITUDE"="Latitude", "LONGITUDE"="Longitude", "DATUM_TO"="Datum"))
+names(stationInfo)[names(stationInfo) == "LATITUDE"] <- "Latitude"
+names(stationInfo)[names(stationInfo) == "LONGITUDE"] <- "Longitude"
+names(stationInfo)[names(stationInfo) == "DATUM_TO"] <- "Datum"
 
 #shrink the datum names
 sub <- gsub("APPROXIMATE GEODETIC SURVEY OF CANADA DATUM", "CGVD28 (approximate)", stationInfo$Datum)
@@ -724,7 +726,7 @@ tryCatch({
   
   colnames(precipTable) <- c("Station name (number)", "Last week", paste0("Last ", last48hours, " hours"), paste0("Last ", last24hours, " hours"), paste0("Next ", next24hours, " hours"), paste0("Next ", next48hours, " hours"))
   
-  knitr::kable(precipTable, digits=1, caption=paste0("Accumulated precipitation (mm of water) over various time periods. Values are generated from Environment and Climate Change Canada's HRDPA model (past) and HRDPS model (forecast). Note that past and forecast time ranges vary depending on weather product availability."), align="lccccc")
+  knitr::kable(precipTable, digits=1, caption=paste0("Accumulated precipitation (mm of water) over various time periods. Values are generated from Environment and Climate Change Canada's HRDPA model (past) and HRDPS model (forecast). Note that past and forecast time ranges vary depending on weather product availability."), align = "lccccc")
 }, error = function(e) {
   cat("Precipitation data could not be fetched at this time. This likely reflects a network, server, or data availability issue.")
 }, warning = function (w) {
@@ -777,7 +779,8 @@ if (MESH ){
     }
     
     #Rename certain stations if necessary
-    MESH <- plyr::rename(MESH, c("Marsh" = "09AB004"))
+    names(MESH)[names(MESH) == "Marsh"] <- "09AB004"
+    
   }, error = function(e) {
     MESH <- list()
   })
@@ -811,7 +814,7 @@ if (CLEVER ){
 for(i in stations) {
   n <- which(stations==i)
   station_info <- tidyhydat::hy_stations(i)
-  if(is.na(station_info$STATION_NUMBER[1])==FALSE){ #if the station is in the database, continue!
+  if (!is.na(station_info$STATION_NUMBER[1])){ #if the station is in the database, continue!
     tryCatch ( {
       cat("  \n# ", stringr::str_to_title(station_info$STATION_NAME)," (station ", i,")  \n")
       
@@ -863,7 +866,7 @@ for(i in stations) {
       } # End of if "level" or "both" selected statement
 
       
-      if (stringr::str_detect(station_info$STATION_NAME, "LAKE")==FALSE | stringr::str_detect(station_info$STATION_NAME, "RIVER")==TRUE){ #Lakes don't have flow measurements, but sometimes LAKE is mentioned when describing the river location
+      if (!stringr::str_detect(station_info$STATION_NAME, "LAKE") | stringr::str_detect(station_info$STATION_NAME, "RIVER")){ #Lakes don't have flow measurements, but sometimes LAKE is mentioned when describing the river location
         if (report_type %in% c("Both", "Flow", "both", "flow")){
           tryCatch ({
             cat("  \n### Flow  \n")
@@ -998,7 +1001,7 @@ tryCatch({
 ```
 
 ```{r Meteograms, eval=TRUE, echo=FALSE, message=FALSE, warning=FALSE, fig.height=8.8, fig.width=7.5, results='asis'}
-if (meteogram==TRUE){
+if (meteogram){
   tryCatch({
     cat("  \n# Weather forecast(s)  \n")
 
@@ -1036,29 +1039,37 @@ if (meteogram==TRUE){
 #This section will contain auto-generated images, selected based on the stations(s) selected.
 
 tryCatch({
-  images <- XML::readHTMLTable(httr::content(httr::GET("https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/", config=httr::authenticate(Sys.getenv("ECCCUSER"), Sys.getenv("ECCCPASS"))), "text"))[[1]]
+  html <- httr::content(
+    httr::GET(
+      "https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/",
+      config = httr::authenticate(Sys.getenv("ECCCUSER"), Sys.getenv("ECCCPASS"))
+    ),
+    "text"
+  )
+  images <- rvest::html_table(xml2::read_html(html))[[1]]
   images <- images[c(-1,-2),-1] #first two rows are not files and first column is nothing
   images <- images[grep(paste(stations, collapse="|"), images$Name), ] #subset only the images that match stations requested
   images <- images %>% dplyr::filter((as.POSIXct(images[,2], tz="UTC")-7*60*60) >= Sys.Date()-7) #Subsets only images < 7 days old.
   
-  if (nrow(images)>=1){
+  if (nrow(images) >= 1){
     images <- dplyr::arrange(images, desc(images$`Last modified`)) %>% dplyr::mutate(Station = substr(Name, 1,7))  #Sort by descending, make column for station
     
-    par(mar=c(0,0,0,0)) #sets the plot margins to 0 - important
+    par(mar = c(0,0,0,0)) #sets the plot margins to 0 - important
     cat("  \n# Fixed Camera Images  \n")
     for (i in unique(images$Station)){
-      last_image <- dplyr::filter(images, Station==i)[1,]
+      last_image <- dplyr::filter(images, Station == i)[1,]
       cat("  \n### ", stringr::str_to_title(tidyhydat::hy_stations(i)$STATION_NAME), "(", substr(as.character(as.POSIXct(last_image[,2], tz="UTC")-7*60*60), 1, 16), "Yukon Time)  \n")
       
       
       temp <- paste0(tempfile(),".jpg")
-      R.utils::downloadFile(paste0("https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/", last_image[,1]), temp, username=Sys.getenv("ECCCUSER"), password = Sys.getenv("ECCCPASS"))
+      curl::curl_download(paste0("https://collaboration.cmc.ec.gc.ca/cmc/hydrometric_additionalData/FieldData/YT/", last_image[,1]), temp, handle = curl::new_handle(userpwd = paste(Sys.getenv("ECCCUSER"), Sys.getenv("ECCCPASS"), sep = ":")))
+      
       imager::load.image(paste0(temp)) %>% plot(axes=FALSE)
       unlink(temp)
       cat("  \n")
     }
   }
-}, error=function(e){cat("  \n  \newpage Fetching images failed. Do you have login credentials in your .Renviron file? Check the function notes for details.")})
+}, error = function(e){cat("  \n  \newpage Fetching images failed. Do you have login credentials in your .Renviron file? Check the function notes for details.")})
 
 
 ```

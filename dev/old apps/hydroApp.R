@@ -1,8 +1,6 @@
 #' Original Shiny application (hydroApp) for WRB data viewing
 #' 
 #' @description
-#' `r lifecycle::badge('stable')`
-#' 
 #' The original WRB Shiny application. Not intended for public viewing.
 #'
 #' @param host Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in `port` to be open on the host machine.

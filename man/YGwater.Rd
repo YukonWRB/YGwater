@@ -46,7 +46,5 @@ YGwater(
 Opens a Shiny application.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 Launches a Shiny application to visualize the WRB's water-related data in maps and plots, and to download data from the WRB's hydrometric database. The application is designed to work with the WRB's aquacache database, which contains hydrometric data, and optionally with EQWin databases for water quality data.
 }

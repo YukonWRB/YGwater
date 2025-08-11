@@ -116,7 +116,12 @@ basinPrecip <- function(location,
     type <- "DB"
     requested_point <- location
     location <- getVector(layer_name = "Locations", feature_name = location, silent = TRUE, con = con)
-  } else {crayon::red(stop("Your input for `location` could not be coerced to decimal degrees or to a location in our database. Please review the help file for proper format and try again."))}
+  } else {
+    cli::cli_abort(c(
+      "x" = "Your input for `location` could not be coerced to decimal degrees or to a location in our database.",
+      "i" = "Please review the help file for proper format and try again."
+    ))
+    }
   
   #Load the drainage basin
   tryCatch({
@@ -137,7 +142,10 @@ basinPrecip <- function(location,
   })
   
   if (type == "DB" & nrow(basin) == 0) {
-    stop(crayon::red(paste0("You've stumbled upon a station for which there is no corresponding polygon in the database. Talk to the Data Scientist to have it created.")))
+    cli::cli_abort(c(
+      "x" = "No drainage basin found for the location {requested_point}.",
+      "i" = "Please check that the location is correct and try again."
+    ))
   }
   
   #Determine the appropriate clip polygon for the files to minimize space requirements.
@@ -242,7 +250,7 @@ basinPrecip <- function(location,
         for (j in within) { #Since within could actually be many polygons
           have_extent <- rbind(have_extent, have_time[which((stringr::str_detect(have_time$extent, j))),])
         }
-        have_extent <- rbind(have_extent, have_time[have_time$clipped == FALSE,]) #add in the unclipped ones too
+        have_extent <- rbind(have_extent, have_time[!have_time$clipped,]) #add in the unclipped ones too
         
         missing_extent <- have_time[!(have_time$files %in% have_extent$files), ]
         
@@ -341,7 +349,7 @@ basinPrecip <- function(location,
   start_hrdps <- lubridate::floor_date(start, "1 hours")
   hrdps <- FALSE #overwritten if hrdps are usable
   actual_times_hrdps <- NULL
-  if (hrdpa == FALSE) { #only hrdps need to be downloaded, times are in the future
+  if (!hrdpa) { #only hrdps need to be downloaded, times are in the future
     hrdps <- TRUE
     getHRDPS(clip = NULL, save_path = hrdps_loc, param = "APCP_Sfc") #This will not run through if the files are already present
     available_hrdps <- data.frame(files = list.files(paste0(hrdps_loc, "/APCP_Sfc"), pattern = "*.tiff$", full.names = TRUE))
@@ -673,23 +681,106 @@ basinPrecip <- function(location,
         plot <- grDevices::recordPlot()
       }
     }, error = function(e) {
-      warning(crayon::red("The map could not be generated."))
+      cli::cli_warn("The map could not be generated. Please check your internet connection and try again.")
     })
   }
   
   if (type == "longlat") {
     list <- list(mean_precip = mean_precip, total_time_range_UTC = actual_times, reanalysis_time_range_UTC = actual_times_hrdpa, forecast_time_range_UTC = actual_times_hrdps, point = requested_point, plot = if (map) plot else NULL)
-    if (silent == FALSE) {
+    if (!silent) {
       if (map) {
-        cat("  \n  \n", crayon::blue(crayon::bold(crayon::underline(round(mean_precip, 2)))), " mm of rain or water equivalent ", if (hrdps == FALSE) "fell" else if (hrdps == TRUE & hrdpa == TRUE) "will have falllen" else if (hrdps == TRUE & hrdpa == FALSE) "will fall", " at your requested point (", requested_point[1], ", ", requested_point[2], ") between ", crayon::blue(crayon::bold(as.character(actual_times[1]), "and ", as.character(actual_times[2]), "UTC.")), "The smallest watershed for which I could find a polygon is ", basin$feature_name, ", ", stringr::str_to_title(basin$description), "  \n  \nNOTES:  \n Your requested times have been adjusted to align with available data.\n", if (hrdps == FALSE) "Precipitation is based solely on retrospective-looking data produced by the HRDPA" else if (hrdps == TRUE & hrdpa == TRUE) "Precipitation is based on a mixture of retrospective-looking data from the HRDPA re-analysis and modelled precipitation using the HRDPS." else if (hrdps == TRUE & hrdpa == FALSE) "Precipitation is based on the HRDPS climate model outputs.", "  \n\n")
+        # decide verb and note based on flags
+        verb <- if (!hrdps) {
+          "fell"
+        } else if (hrdps && hrdpa) {
+          "will have fallen"
+        } else {
+          "will fall"
+        }
+        note_txt <- if (!hrdps) {
+          "Precipitation is based solely on retrospective-looking data produced by the HRDPA."
+        } else if (hrdps && hrdpa) {
+          "Precipitation is based on a mixture of retrospective-looking data from the HRDPA re-analysis and modelled precipitation using the HRDPS."
+        } else {
+          "Precipitation is based on the HRDPS climate model outputs."
+        }
+        cli::cli_text(
+          "\n\n",
+          "{.fg_blue {.strong {.underline {round(mean_precip, 2)}}}} mm of rain or water equivalent ",
+          verb, " at your requested point (", requested_point[1], ", ", requested_point[2], 
+          ") between {.fg_blue {.strong {as.character(actual_times[1])}}} and ",
+          "{.fg_blue {.strong {as.character(actual_times[2])}}} UTC.\n",
+          "The smallest watershed for which I could find a polygon is ", basin$feature_name,
+          ", ", stringr::str_to_title(basin$description), "\n\n",
+          "NOTES:\n",
+          "  Your requested times have been adjusted to align with available data.\n",
+          "  ", note_txt, "\n\n"
+        )
       } else {
-        cat("  \n  \n", crayon::blue(crayon::bold(crayon::underline(round(mean_precip, 2)))), " mm of rain or water equivalent ", if (hrdps == FALSE) "fell" else if (hrdps == TRUE & hrdpa == TRUE) "will have falllen" else if (hrdps == TRUE & hrdpa == FALSE) "will fall", " at your requested point (", requested_point[1], ", ", requested_point[2], ") between ", crayon::blue(crayon::bold(as.character(actual_times[1]), "and ", as.character(actual_times[2]), "UTC.")), "  \n  \nNOTES:  \n Your requested times have been adjusted to align with available data.\n", if (hrdps == FALSE) "Precipitation is based solely on retrospective-looking data produced by the HRDPA" else if (hrdps == TRUE & hrdpa == TRUE) "Precipitation is based on a mixture of retrospective-looking data from the HRDPA re-analysis and modelled precipitation using the HRDPS." else if (hrdps == TRUE & hrdpa == FALSE) "Precipitation is based on the HRDPS climate model outputs.", "  \n\n")
+        # decide verb and note based on flags
+        verb <- if (!hrdps) {
+          "fell"
+        } else if (hrdps && hrdpa) {
+          "will have fallen"
+        } else {
+          "will fall"
+        }
+        
+        note_txt <- if (!hrdps) {
+          "Precipitation is based solely on retrospective-looking data produced by the HRDPA."
+        } else if (hrdps && hrdpa) {
+          "Precipitation is based on a mixture of retrospective-looking data from the HRDPA re-analysis and modelled precipitation using the HRDPS."
+        } else {
+          "Precipitation is based on the HRDPS climate model outputs."
+        }
+        
+        # emit styled text
+        cli::cli_text(
+          "\n\n",
+          "{.fg_blue {.strong {.underline {round(mean_precip, 2)}}}} mm of rain or water equivalent ",
+          verb, " at your requested point (", requested_point[1], ", ", requested_point[2], 
+          ") between {.fg_blue {.strong {as.character(actual_times[1])}}} and ",
+          "{.fg_blue {.strong {as.character(actual_times[2])}}} UTC.\n\n",
+          "NOTES:\n",
+          "  Your requested times have been adjusted to align with available data.\n",
+          "  ", note_txt, "\n\n"
+        )
       }
     }
   } else {
     list <- list(mean_precip = mean_precip, min = min, max = max, total_time_range_UTC = actual_times, reanalysis_time_range_UTC = actual_times_hrdpa, forecast_time_range_UTC = actual_times_hrdps, watershed = basin$feature_name, plot = if (map) plot else NULL)
-    if (silent == FALSE) {
-      cat("  \n  \nOn average,", crayon::blue(crayon::bold(crayon::underline(round(mean_precip, 2)))), " mm of rain or water equivalent (range:", round(min,2), "to", round(max,2), "mm)", if (hrdps == FALSE) "fell" else if (hrdps == TRUE & hrdpa == TRUE) "will have fallen" else if (hrdps == TRUE & hrdpa == FALSE) "will fall", "across the watershed requested (", basin$feature_name, ", ", stringr::str_to_title(basin$description), ") between", crayon::blue(crayon::bold(as.character(actual_times[1]), "and", as.character(actual_times[2]), "UTC.")), "  \n  \nNOTES:  \n Your requested times have been adjusted to align with available data.\n", if (hrdps == FALSE) "Precipitation is based solely on retrospective-looking data produced by the HRDPA" else if (hrdps == TRUE & hrdpa == TRUE) "Precipitation is based on a mixture of retrospective-looking data from the HRDPA re-analysis and modelled precipitation using the HRDPS." else if (hrdps == TRUE & hrdpa == FALSE) "Precipitation is based on the HRDPS climate model outputs.", "  \n")
+    if (!silent) {
+      # Determine verb
+      verb <- if (!hrdps) {
+        "fell"
+      } else if (hrdps && hrdpa) {
+        "will have fallen"
+      } else {
+        "will fall"
+      }
+      
+      # Determine notes text
+      note_txt <- if (!hrdps) {
+        "Precipitation is based solely on retrospective-looking data produced by the HRDPA."
+      } else if (hrdps && hrdpa) {
+        "Precipitation is based on a mixture of retrospective-looking data from the HRDPA re-analysis and modelled precipitation using the HRDPS."
+      } else {
+        "Precipitation is based on the HRDPS climate model outputs."
+      }
+      
+      # Emit styled output
+      cli::cli_text(
+        "\n\n",
+        "On average, {.fg_blue {.strong {.underline {round(mean_precip, 2)}}}} mm of rain or water equivalent ",
+        "(range: {round(min, 2)} to {round(max, 2)} mm) ",
+        verb, " across the watershed requested (", basin$feature_name, ", ",
+        stringr::str_to_title(basin$description), ") between ",
+        "{.fg_blue {.strong {as.character(actual_times[1])}}} and ",
+        "{.fg_blue {.strong {as.character(actual_times[2])}}} UTC.\n\n",
+        "NOTES:\n",
+        "  Your requested times have been adjusted to align with available data.\n",
+        "  ", note_txt, "\n"
+      )
     }
   }
   if (maptype == "dynamic") {

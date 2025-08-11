@@ -77,6 +77,31 @@ app_server <- function(input, output, session) {
     showAdmin(show = FALSE)
   }
   
+  # Bookmarking and browser history navigation -------------------------------
+  bookmarkable_tabs <- c("home", "monitoringLocations", "parameterValues", "rasterValues", "discrete", "continuous", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "discData", "contData", "news", "about", "feedback")
+  
+  updating_from_url <- reactiveVal(FALSE)
+  
+  observeEvent(session$clientData$url_search, ignoreNULL = FALSE, {
+    updating_from_url(TRUE)
+    on.exit(updating_from_url(FALSE))
+    query <- shiny::parseQueryString(isolate(session$clientData$url_search))
+    page <- query[["page"]]
+    if (!is.null(page) && page %in% bookmarkable_tabs && !identical(page, input$navbar)) {
+      try({bslib::nav_select(id = "navbar", selected = page)})
+    }
+  })
+  
+  observeEvent(input$navbar, {
+    if (updating_from_url()) return()
+    if (is.null(input$navbar)) return()
+    if (input$navbar %in% bookmarkable_tabs) {
+      updateQueryString(paste0("?page=", input$navbar), mode = "push")
+    } else {
+      updateQueryString("", mode = "push")
+    }
+  }, ignoreNULL = TRUE)
+  
   
   # Track window dimensions (used to modify plot appearance)
   windowDims <- reactive({

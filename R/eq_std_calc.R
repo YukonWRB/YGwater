@@ -54,7 +54,7 @@ eq_std_calc <- function(sampledata, calcs) {
 
   # Calculate temp
   if (!all(is.na(sampledata$`Temp-F (C)`))) {
-    temp <- plyr::round_any(mean(stats::na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
+    temp <- round_any(mean(stats::na.omit(sampledata$`Temp-F (C)`)), 5, f = floor)
   } else {
     temp <- NA
   }
@@ -118,7 +118,7 @@ eq_std_calc <- function(sampledata, calcs) {
   } else {
     pHx <- pH
   }
-  pHx <- plyr::round_any(pHx, accuracy = 0.1, f = floor)
+  pHx <- round_any(pHx, accuracy = 0.1, f = floor)
 
   if (is.na(hard)) {
     hardx <- 50
@@ -132,7 +132,7 @@ eq_std_calc <- function(sampledata, calcs) {
   hardx <- floor(hardx)
 
   lookup_mn <- data$eq_std_calc_CCME_Mn
-  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx > Min & hardx <= Max)[which(colnames(lookup_mn) == as.character(pHx))])
+  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(lookup_mn, hardx > "Min" & hardx <= "Max")[which(colnames(lookup_mn) == as.character(pHx))])
   if (is.element("CCME_Mn-D_lt", calcs$MaxVal)) {
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Mn-D_lt")] <- `CCME_Mn-D_lt`
   }
@@ -145,10 +145,10 @@ eq_std_calc <- function(sampledata, calcs) {
   }else {
     pHx <- pH
   }
-  pHx <- plyr::round_any(pHx, accuracy = 0.5, f = floor)
+  pHx <- round_any(pHx, accuracy = 0.5, f = floor)
   if (pHx <= 9.5 & pHx > 9) {
     pHx <- 9
-  } else if (pHx >9.5) {
+  } else if (pHx > 9.5) {
     pHx <- 10
   }
   if (is.na(temp)) {
@@ -158,7 +158,7 @@ eq_std_calc <- function(sampledata, calcs) {
   }
 
   lookup_nh4 <- data$eq_std_calc_CCME_NH4
-  CCME_NH4_lt <- dplyr::pull(dplyr::filter(lookup_nh4, Temp == tempx)[which(colnames(lookup_nh4) == as.character(pHx))])
+  CCME_NH4_lt <- dplyr::pull(dplyr::filter(lookup_nh4, "Temp" == tempx)[which(colnames(lookup_nh4) == as.character(pHx))])
   if (is.element("CCME_NH4_lt", calcs$MaxVal)) {
     calcs$MaxVal[which(calcs$MaxVal == "CCME_NH4_lt")] <- CCME_NH4_lt
   }

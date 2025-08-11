@@ -106,7 +106,5 @@ to FALSE to force standard scatter traces.}
 An html plot.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 A pared-down, sped up, simplified version of the original \code{\link[=ggplotOverlap]{ggplotOverlap()}} function. Created for use with a simple Shiny application linked to the Flood Atlas, but will likely see other uses.
 }

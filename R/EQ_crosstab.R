@@ -1,7 +1,6 @@
 #' Concatenate 'crosstab' type lab reports for entry to EQWin
 #' 
 #' @description
-#' `r lifecycle::badge('experimental')`
 #' 
 #' This function is designed to concatenate lab reports that are in a 'crosstab' format. The function reads in the lab reports, concatenates them, and saves the output as an Excel file. The function is designed to work with lab reports that are in a specific format, and may need to be modified to work with other formats.
 #' Total phosphate measurements are sometimes reported twice under the same paramter name and code, with a result for the total phosphate and a result for the orthophosphate. This function will rename the second-listed total phosphate measurement to 'P-PO4T' to avoid duplicate column names. If this is NOT what you need, modify the parameter code yourself in the workbook before using this function.

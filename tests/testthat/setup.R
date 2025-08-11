@@ -25,6 +25,11 @@ if (!isTRUE(getOption("YGwater_pythonSetupDone", FALSE))) {
   options(YGwater_pythonSetupDone = TRUE)
 }
 
+# # Set NOT_CRAN = TRUE to avoid covr checks not running because they don't know otherwise
+# Sys.setenv(NOT_CRAN = "true")
+# message("Setting NOT_CRAN = TRUE to avoid covr checks not running because they don't know otherwise. Fix this if ever publishing to CRAN.")
+
+
 # If on CI, set environment variables which would otherwise be found in the user's .Renviron file.
 # We're working with a micro postgres database here installed on the CI environment!
 if (Sys.getenv("CI") == "true") {
@@ -43,7 +48,7 @@ if (Sys.getenv("CI") == "true") {
 
 set.seed(123) # Set seed for reproducibility in tests
 
-# Ensure ragg is available for deterministic PNG output
+# Ensure ragg is available for deterministic PNG outputs
 if (!requireNamespace("ragg", quietly = TRUE)) {
   install.packages("ragg")
 }

@@ -1,8 +1,6 @@
 #' Upload data to Aquarius
 #'
 #'@description
-#' `r lifecycle::badge("stable")`
-#'
 #' Bypasses the web GUI and allows you to append data to Aquarius directly. By default (overwrite = FALSE), will NOT overwrite or modify points in Aquarius - even if there is no visible data point but an NA or NULL stored in the Aquarius database. If you get a situation where attempting to append points results in no newly appended points, there may be an 'invisible' point; try an overwrite append once sure that you've got the right 'loc_id' and 'timeseries_name'.
 #'
 #'@details
@@ -33,14 +31,14 @@ aq_upload <- function(loc_id,
                       login = Sys.getenv(c("AQUSER", "AQPASS")),
                       server = Sys.getenv("AQSERVER"))
 {
-  if (overwrite ==TRUE){
-    if (is.null(start) | is.null(end)){
+  if (overwrite){
+    if (is.null(start) | is.null(end)) {
       stop("You input overwrite = TRUE but have not specified an end and/or start time. Both of these parameters must be set for overwrite to work.")
     }
   }
 
   #Check that data has correct column names
-  if (!(all(c("Value", "Time") %in% names(data)))){
+  if (!(all(c("Value", "Time") %in% names(data)))) {
     stop("Your data.frame must contain columns labelled Value and Time. Case sensitive.")
   }
 
@@ -56,9 +54,9 @@ aq_upload <- function(loc_id,
   #Make the Aquarius configuration and connect
   config = list(
     server = server,
-    username=login[1],
-    password=login[2],
-    timeSeriesName=paste0(ts_name, "@", loc_id),
+    username = login[1],
+    password = login[2],
+    timeSeriesName = paste0(ts_name, "@", loc_id),
     eventPeriodStartDay = start,
     eventPeriodEndDay = end
     )
@@ -77,10 +75,15 @@ aq_upload <- function(loc_id,
   output <- list(appended = result$NumberOfPointsAppended,
                  input = points_in_file)
 
-  if (result$AppendStatus == "Completed"){
-    cat("\n", paste0(crayon::bold$green("Your request was completed:\n"), result$NumberOfPointsAppended, " points were appended out of the ", points_in_file, " that were in the provided dataset.\nThe points were appended to the timeseries ", crayon::bold(ts_name), " at location ", crayon::bold(loc_id), "."))
+  if (result$AppendStatus == "Completed") {
+    cli::cli_alert_success(
+      "{.strong Your request was completed:} {result$NumberOfPointsAppended} points were appended out of the {points_in_file} that were in the provided dataset.\nThe points were appended to the timeseries {.strong {ts_name}} at location {.strong {loc_id}}."
+    )
+    
   } else {
-    cat("\n", paste0(crayon::bold$red("Your request was not completed or had an irregular status:\n"), "The status returned was ", crayon::bold(result$AppendStatus), "\n", result$NumberOfPointsAppended, " points were appended out of ", points_in_file, " requested.\nThe target timeseries was ", crayon::bold(ts_name), " at location ", crayon::bold(loc_id), "."))
+    cli::cli_alert_danger(
+      "{.strong Your request was not completed or had an irregular status:} {result$AppendStatus}.\n{result$NumberOfPointsAppended} points were appended out of the {points_in_file} that were in the provided dataset.\nThe target timeseries was {.strong {ts_name}} at location {.strong {loc_id}}."
+    )
   }
 
   return(output)

@@ -1,8 +1,6 @@
 #' Function for creating snow bulletin (Rmarkdown)- internal
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#'
 #' This function generates the snow bulletin for a specified date as a Microsoft Word document on a Yukon Government template.
 #'
 #' This function fetches data from the local postgresql hydrometric database created/maintained by the AquaCache package; see details for more info on database connections.
