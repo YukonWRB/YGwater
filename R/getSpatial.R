@@ -29,7 +29,37 @@ getRaster <- function(clauses = NULL,
   if (!suppressMessages(rpostgis::pgPostGIS(con))) {
     cli::cli_abort("PostGIS is not enabled on this database.")
   }
-  name1 <- rpostgis:::dbTableNameFix(con, tbl_name)
+  
+  # Direct past in of rpostgis::dbTableNameFix to remove need for ::: on unexported function
+  dbTableNameFix <- function(conn = NULL, t.nm, as.identifier = TRUE) {
+    ## case of no schema provided
+    if (length(t.nm) == 1 && !is.null(conn) && !inherits(conn, what = "AnsiConnection")) {
+      schemalist <- DBI::dbGetQuery(conn,"select nspname as s from pg_catalog.pg_namespace;")$s
+      user <- DBI::dbGetQuery(conn,"SELECT current_user as user;")$user
+      schema <- DBI::dbGetQuery(conn,"SHOW search_path;")$search_path
+      schema <- gsub(" ","", unlist(strsplit(schema,",",fixed = TRUE)), fixed = TRUE)
+      # use user schema if available
+      if ("\"$user\"" == schema[1] && user %in% schemalist) {
+        sch <- user
+      } else {
+        sch <- schema[!schema == "\"$user\""][1]
+      }
+      t.nm <- c(sch, t.nm)
+    }
+    if (length(t.nm) > 2)
+    {
+      cli::cli_abort("Invalid PostgreSQL table/view name. Must be provided as one ('table') or two-length c('schema','table') character vector.")
+    }
+    if (is.null(conn)) {conn <- DBI::ANSI()}
+    if (!as.identifier) {return(t.nm)} else {
+      t.nm <- DBI::dbQuoteIdentifier(conn, t.nm)
+      return(t.nm)
+    }
+  }
+  name1 <- dbTableNameFix(con, tbl_name)
+  
+  
+  
   nameque <- paste(name1, collapse = ".")
   namechar <- gsub("'", "''", paste(gsub("^\"|\"$", "", name1), 
                                     collapse = "."))

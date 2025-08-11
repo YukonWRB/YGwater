@@ -94,8 +94,8 @@ snowInfo <- function(locations = "all", inactive = FALSE, save_path = "choose", 
   if (!inactive) { # Filter out any location with no measurements for 5 or more years
     rm.inactive <- samples %>%
       dplyr::group_by(.data$location_id) %>%
-      dplyr::summarise(min_year = min(lubridate::year(target_datetime)),
-                       max_year = max(lubridate::year(target_datetime))) %>%
+      dplyr::summarise(min_year = min(lubridate::year(.data$target_datetime)),
+                       max_year = max(lubridate::year(.data$target_datetime))) %>%
       dplyr::mutate(rm.inactive = .data$max_year - .data$min_year < 5) %>%
       dplyr::filter(rm.inactive) %>%
       dplyr::pull(.data$location_id)

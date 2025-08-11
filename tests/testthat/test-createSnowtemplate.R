@@ -5,7 +5,7 @@ test_that("all workbooks are created when a DB connection can be made", {
   # Ensure datatase connection can be made
   sk <- FALSE
   tryCatch({
-    con <- snowConnect()
+    con <- snowConnect(silent = TRUE)
   }, error = function(e) {
     sk <<- TRUE
   })

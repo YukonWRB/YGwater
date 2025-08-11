@@ -24,7 +24,17 @@
 #'
 #' @export
 
-waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
+waterInfo <- function(con = AquaConnect(), 
+                      locations = "all", 
+                      level_flow = "both", 
+                      end_date = Sys.Date(), 
+                      months_min = c(1:4), 
+                      months_max = c(5:9), 
+                      allowed_missing = 10, 
+                      save_path = "choose", 
+                      plots = TRUE, 
+                      plot_type = "combined", 
+                      quiet = FALSE)
   {
   
   # locations <- "all"
@@ -100,7 +110,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
     daily$year <- lubridate::year(daily$date)
     daily$month <- lubridate::month(daily$date)
     tryCatch({
-      extremes[[paste0(locs$location[i], "_", locs$parameter_id[i])]] <- fasstr::calc_annual_extremes(data = daily, dates = date, values = value, months_min = months_min, months_max = months_max, allowed_missing = allowed_missing, water_year_start = 1)
+      extremes[[paste0(locs$location[i], "_", locs$parameter_id[i])]] <- fasstr::calc_annual_extremes(data = daily, dates = date, values = "value", months_min = months_min, months_max = months_max, allowed_missing = allowed_missing, water_year_start = 1)
       data[[paste0(locs$location[i], "_", locs$parameter_id[i])]] <- daily
     }, error = function(e) {
       message("Failed on location ", locs$location[i], " and parameter_id ", locs$parameter_id[i])

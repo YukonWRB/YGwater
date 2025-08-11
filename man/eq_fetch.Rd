@@ -11,8 +11,7 @@ eq_fetch(
   dates = "all",
   BD = 2,
   apply_standards = TRUE,
-  path =
-    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
+  path = eqwin_db_path()
 )
 }
 \arguments{
@@ -28,8 +27,7 @@ eq_fetch(
 
 \item{apply_standards}{TRUE or FALSE, include standards with data. Provides a pop-up list for selection.}
 
-\item{path}{The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
-databases/EQWinDB/WaterResources.mdb".}
+\item{path}{The path to the EQWin database.}
 }
 \value{
 A list with one sub-list per station, each one containing 2 data frames with sample data and calculated standards

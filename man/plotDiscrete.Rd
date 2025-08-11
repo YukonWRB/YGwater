@@ -31,8 +31,7 @@ plotDiscrete(
   gridy = FALSE,
   dbSource = "EQ",
   dbCon = NULL,
-  dbPath =
-    "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb",
+  dbPath = eqwin_db_path(),
   data = FALSE
 )
 }
@@ -89,8 +88,7 @@ plotDiscrete(
 
 \item{dbCon}{A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.}
 
-\item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
-databases/EQWinDB/WaterResources.mdb".}
+\item{dbPath}{The path to the EQWin database, if called for in parameter \code{dbSource}.}
 
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 }

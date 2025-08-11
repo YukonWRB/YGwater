@@ -115,7 +115,7 @@ YOWNplot <- function(AQID,
                   "day" = format(fulldf$timestamp_MST, "%d"), # Add day column
                   "monthday" = format(fulldf$timestamp_MST, "%m-%d")) # Add month-day column
   datestats <- suppressWarnings(dplyr::group_by(fulldf, date) %>% # Calculate statistics by date (ie. Jan. 1, 2000)
-                                  dplyr::summarize("datemin" = min(value, na.rm = TRUE), "datemax" = max(value, na.rm = TRUE), "datemean" = mean(value, na.rm = TRUE)))
+                                  dplyr::summarize("datemin" = min(.data$value, na.rm = TRUE), "datemax" = max(.data$value, na.rm = TRUE), "datemean" = mean(.data$value, na.rm = TRUE)))
   fulldf <- suppressMessages(dplyr::full_join(fulldf, datestats)) # Join full df to datestats
   daystats <- suppressWarnings(dplyr::group_by(fulldf, .data$monthday) %>% # Calculate year-over-year daily statistics (ie. Jan. 1)
                                  dplyr::summarize("daymin" = min(.data$datemin, na.rm = TRUE), "daymax" = max(.data$datemax, na.rm = TRUE), daymean = mean(.data$datemean, na.rm = TRUE), N = dplyr::n()))
@@ -329,7 +329,8 @@ YOWNplot <- function(AQID,
                                      high = "#DC4405",
                                      breaks = c(min(plotdf_hist$year), max(plotdf_hist$year)),
                                      name = "",
-                                     labels = scales::label_date(format = "%Y"),
+                                     # labels = scales::label_date(format = "%Y"),
+                                     labels = function(x) format(x, "%Y"),
                                      expand = 0) +
       ggnewscale::new_scale_color() +
       ggplot2::geom_line(data = plotdf_current[NAaddc,],
@@ -392,7 +393,7 @@ YOWNplot <- function(AQID,
     plot <- ggplot2::ggplot() +
       ggplot2::geom_line(data = plotdf[NAadd,],
                          ggplot2::aes(x = .data$timestamp_MST,
-                                      y = value,
+                                      y = .data$value,
                                       colour = "Daily Average Water Level"),
                          linewidth = 1) +
       ggplot2::scale_colour_manual(name = "",
@@ -500,7 +501,7 @@ YOWNplot <- function(AQID,
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf,
                            ggplot2::aes(x = .data$timestamp_MST,
-                                        y = round_any(max(stats::na.omit(value)), 0.5, f = ceiling),
+                                        y = round_any(max(stats::na.omit(.data$value)), 0.5, f = ceiling),
                                         colour = factor(.data$grade_description), group = 1),
                            linewidth = 2.5,
                            show.legend = FALSE) +

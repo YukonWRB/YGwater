@@ -45,3 +45,37 @@ iso_period <- function(x) {
   seconds <- round(((remaining_hours - floor(remaining_hours)) * 60 - minutes) * 60)
   paste0("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S")
 }
+
+
+
+# Internal helper functions for default file paths
+
+#' @noRd
+eqwin_db_path <- function() {
+  "//carver/infosys/EQWin/WaterResources.mdb"
+}
+
+#' @noRd
+yown_master_path <- function() {
+  "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
+}
+
+#' @noRd
+yown_tracking_path <- function() {
+  "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
+}
+
+#' @noRd
+yown_dropbox_path <- function() {
+  "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
+}
+
+#' @noRd
+yown_active_path <- function() {
+  "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
+}
+
+#' @noRd
+yown_wdc_path <- function() {
+  "\\\\envgeoserver\\share\\WaterResources\\Groundwater\\YOWN_DATA\\"
+}

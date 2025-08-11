@@ -86,12 +86,13 @@ combineWeather <- function(stations, interval = NULL, start = NULL, end = NULL, 
       warning(paste0("Station ", station, " does not have data for this time frame"))
     } else {
       # Subset to variables of interest and months of interest
-      station <- station %>% dplyr::select(c(datetime_col, tidyselect::all_of(variables))) %>%
+      station <- station[, c(datetime_col, intersect(variables, names(station))), drop = FALSE]
+      station <- station %>%
         dplyr::filter(lubridate::month(.data[[datetime_col]]) %in% months)
 
       # Transform to long format
       station <- station %>%
-        tidyr::pivot_longer(cols = tidyselect::all_of(variables),
+        tidyr::pivot_longer(cols = variables,
                             names_to = "variable",
                             values_to = "value")
 

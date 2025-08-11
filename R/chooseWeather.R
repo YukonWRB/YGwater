@@ -126,10 +126,9 @@ chooseWeather <-
     for (s in 1:length(stn.data)) {
       tab <- stn.data[[s]]
       # Select columns of interest
+      tab <- tab[, cols[cols %in% names(tab)], drop = FALSE]
+      # Select months of interest
       tab <- tab %>%
-        dplyr::select(tidyselect::any_of(cols)
-        ) %>%
-        # Select months of interest
         dplyr::filter(.data$month %in% months) %>%
         # Select years of interest
         dplyr::filter(.data$year >= start & .data$year <= end)
@@ -156,16 +155,16 @@ chooseWeather <-
     }
 
     # Print out table about stations
-    stns <-
-      stns %>% dplyr::select(tidyselect::any_of(c('station_name',
-                                      'station_id',
-                                      'climate_id',
-                                      'lat',
-                                      'lon',
-                                      'elev',
-                                      'tz',
-                                      'start',
-                                      'end')))
+    stn_cols <- c('station_name',
+                  'station_id',
+                  'climate_id',
+                  'lat',
+                  'lon',
+                  'elev',
+                  'tz',
+                  'start',
+                  'end')
+    stns <- stns[, stn_cols[stn_cols %in% names(stns)], drop = FALSE]
     print("------------ Station descriptions ----------")
     print(as.data.frame(stns))
     print("--------------------------------------------")
@@ -198,26 +197,26 @@ chooseWeather <-
     sdata[is.na(sdata$missing), "missing"] <- FALSE
 
     # Remove redundant columns
-    sdata <- sdata %>% dplyr::select(-tidyselect::one_of(paste0(variable, "_flag")))
+    sdata <- sdata[, !names(sdata) %in% paste0(variable, "_flag"), drop = FALSE]
     sdata$date <- as.Date(sdata$date)
 
     plot <- ggplot2::ggplot(sdata, ggplot2::aes(x = date,
                                                 y = as.factor(.data$station))) +
       ggplot2::geom_point(ggplot2::aes(colour = missing))  +
       ggplot2::scale_color_manual(values = c("TRUE" = "#DC4405", "FALSE" = "#7A9A01")) +
-      ggplot2::facet_grid(rows=ggplot2::vars(variable)) +
+      ggplot2::facet_grid(rows = ggplot2::vars(variable)) +
       ggplot2::scale_y_discrete(limits = rev) +
       ggplot2::ylab("Station")
 
-    if (interval=="month") {
+    if (interval == "month") {
       plot <- plot +
         ggplot2::scale_x_date(date_breaks = "2 month",
-                              labels = scales::label_date_short())
+                              date_labels = "%b %Y")
     }
-    if (interval=="day") {
+    if (interval == "day") {
       plot <- plot +
         ggplot2::scale_x_date(date_breaks = "2 year",
-                              labels = scales::label_date_short())
+                              date_labels = "%Y")
     }
 
     print(plot)

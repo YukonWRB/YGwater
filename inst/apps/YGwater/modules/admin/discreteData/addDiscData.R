@@ -341,7 +341,7 @@ addDiscData <- function(id) {
           param_cols <- names(mapping$params)
           sub <- df[start_row:nrow(df), c(mapping$datetime, param_cols)]
           sub$row_id <- seq_len(nrow(sub))
-          long <- tidyr::pivot_longer(sub, cols = tidyselect::all_of(param_cols), names_to = "pcol", values_to = "value")
+          long <- tidyr::pivot_longer(sub, cols = param_cols, names_to = "pcol", values_to = "value")
           long$parameter_id <- vapply(long$pcol, function(pc) mapping$params[[pc]]$id, numeric(1))
           conv <- vapply(long$pcol, function(pc) mapping$params[[pc]]$conv, numeric(1))
           data$df <- data.frame(sample = long$row_id,

@@ -27,9 +27,9 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
   
   if (!all(is.na(smoothed_diffs)) && length(smoothed_diffs) > 0) {
     diff_dt <- data.table::data.table(idx = seq_along(smoothed_diffs), diff = smoothed_diffs)
-    diff_dt[, "run" := data.table::rleid(diff)]
-    runs <- diff_dt[, .(diff = diff[1], start = idx[1], "len" = .N), by = "run"]
-    runs <- runs[!is.na(diff) & diff < 25 & "len" >= 3]
+    diff_dt[, "run" := data.table::rleid(diff_dt$diff)]
+    runs <- diff_dt[, .(diff = diff[1], start = .I[1], len = .N), by = "run"]
+    runs <- runs[!is.na(runs$diff) & runs$diff < 25 & runs$len >= 3]
     if (nrow(runs) > 0) {
       changes <- data.frame(
         datetime = data[[datetime_col]][runs$start],
@@ -38,12 +38,11 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
     }
   }
   
-  
   # Calculate the duration in days, hours, minutes, and seconds and assign to the right location in data
   if (nrow(changes) > 0) {
     data[, "period" := NA_character_]
     data[match(changes$datetime, data[[datetime_col]]), "period" := iso_period(changes$period)]
-    data[, "period" := zoo::na.locf(zoo::na.locf(period, na.rm = FALSE), fromLast = TRUE)]
+    data[, "period" := zoo::na.locf(zoo::na.locf(data$period, na.rm = FALSE), fromLast = TRUE)]
     
   } else { #In this case there were too few measurements to conclusively determine a period so pull a few from the DB and redo the calculation
     if (is.null(timeseries_id)) {
@@ -73,9 +72,9 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
     
     if (length(smoothed_diffs) > 0) {
       diff_dt <- data.table::data.table(idx = seq_along(smoothed_diffs), diff = smoothed_diffs)
-      diff_dt[, "run" := data.table::rleid(diff)]
-      runs <- diff_dt[, .(diff = diff[1], start = idx[1], "len" = .N), by = "run"]
-      runs <- runs[!is.na(diff) & diff < 25 & "len" >= 3]
+      diff_dt[, "run" := data.table::rleid(diff_dt$diff)]
+      runs <- diff_dt[, .(diff = diff[1], start = .I[1], len = .N), by = "run"]
+      runs <- runs[!is.na(runs$diff) & runs$diff < 25 & runs$len >= 3]
       if (nrow(runs) > 0) {
         changes <- data.frame(
           datetime = data[[datetime_col]][runs$start],
@@ -86,7 +85,7 @@ calculate_period <- function(data, datetime_col = "datetime", timeseries_id = NU
     if (nrow(changes) > 0) {
       data[, "period" := NA_character_]
       data[match(changes$datetime, data[[datetime_col]]), "period" := iso_period(changes$period)]
-      data[, "period" := zoo::na.locf(zoo::na.locf(period, na.rm = FALSE), fromLast = TRUE)]
+      data[, "period" := zoo::na.locf(zoo::na.locf(data$period, na.rm = FALSE), fromLast = TRUE)]
     } else {
       data[, "period" := NULL]
       warning("There are too few measurements to conclusively determine a period.")
