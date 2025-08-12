@@ -8,8 +8,6 @@ library(shinyjs)
 library(tesseract)
 library(bslib)
 
-
-
 concat_ocr_words_by_row <- function(ocr_df) {
     if (is.null(ocr_df) || nrow(ocr_df) == 0) return(character(0))
     # Parse bbox coordinates
@@ -130,6 +128,62 @@ filter_ocr_noise <- function(ocr_df) {
     return(filtered_df)
 }
 
+# Helper function to apply different preprocessing methods
+preprocess_image <- function(img, method = "default") {
+    switch(method,
+        "default" = {
+            img %>%
+                magick::image_convert(colorspace = "gray") %>%
+                magick::image_contrast(sharpen = 1) %>%
+                magick::image_modulate(brightness = 110, saturation = 100, hue = 100) %>%
+                magick::image_threshold(type = "black", threshold = "60%")
+        },
+        "enhance_dark" = {
+            img %>%
+                magick::image_convert(colorspace = "gray") %>%
+                magick::image_contrast(sharpen = 2) %>%
+                magick::image_modulate(brightness = 130, saturation = 0) %>%
+                magick::image_threshold(type = "black", threshold = "45%")
+        },
+        "enhance_light" = {
+            img %>%
+                magick::image_convert(colorspace = "gray") %>%
+                magick::image_contrast(sharpen = 1.5) %>%
+                magick::image_modulate(brightness = 90, saturation = 0) %>%
+                magick::image_threshold(type = "black", threshold = "70%")
+        },
+        "high_contrast" = {
+            img %>%
+                magick::image_convert(colorspace = "gray") %>%
+                magick::image_contrast(sharpen = 3) %>%
+                magick::image_normalize() %>%
+                magick::image_threshold(type = "black", threshold = "50%")
+        },
+        "denoise" = {
+            img %>%
+                magick::image_convert(colorspace = "gray") %>%
+                magick::image_enhance() %>%
+                magick::image_threshold(type = "black", threshold = "60%")
+        },
+        "deskew" = {
+            # Attempt to deskew (straighten) the image
+            img %>%
+                magick::image_convert(colorspace = "gray") %>%
+                magick::image_deskew(threshold = 40) %>%
+                magick::image_contrast(sharpen = 1) %>%
+                magick::image_threshold(type = "black", threshold = "60%")
+        },
+        # Default fallback if method is not recognized
+        {
+            img %>%
+                magick::image_convert(colorspace = "gray") %>%
+                magick::image_contrast(sharpen = 1) %>%
+                magick::image_modulate(brightness = 110, saturation = 100, hue = 100) %>%
+                magick::image_threshold(type = "black", threshold = "60%")
+        }
+    )
+}
+
 process_ocr_batch <- function(files_df, ocr_text_list, current_index = NULL) {
     # Check if any OCR processing is needed
     needs_processing <- any(sapply(ocr_text_list, function(x) is.null(x)))
@@ -154,7 +208,7 @@ process_ocr_batch <- function(files_df, ocr_text_list, current_index = NULL) {
     pages_to_process <- sum(sapply(ocr_text_list, function(x) is.null(x)))
     
     if (pages_to_process > 0) {
-        showNotification(paste("Processing OCR for", pages_to_process, "pages. This may take a moment..."), 
+        showNotification(paste("Processing OCR for", pages_to_process, "pages using PSM mode", psm_mode, ". This may take a moment..."), 
                        type = "warning", duration = 5)
         
         # Loop through all images in files_df and run OCR
@@ -165,24 +219,45 @@ process_ocr_batch <- function(files_df, ocr_text_list, current_index = NULL) {
                                type = "message", duration = 1)
                 
                 img_path <- files_df$Path[i]
-                img <- magick::image_read(img_path)
-
-                # --- Preprocessing for better OCR accuracy ---
-                img <- img %>%
-                    magick::image_convert(colorspace = "gray") %>%   # Convert to grayscale
-                    magick::image_contrast(sharpen = 1) %>%          # Increase contrast
-                    magick::image_modulate(brightness = 110, saturation = 100, hue = 100) %>% # Enhance brightness
-                    magick::image_threshold(type = "black", threshold = "60%") # Binarize
-
-                # Perform OCR on the preprocessed image
-                ocr_result <- tesseract::ocr_data(img, engine = tesseract::tesseract(options = list(tessedit_create_hocr = 1)))
-
-                # Filter out words with confidence less than 50%
-                #ocr_result <- ocr_result[which(ocr_result$confidence >= 50), ]
-                
-                # Filter out common OCR noise and error words
-                ocr_result <- filter_ocr_noise(ocr_result)
-                ocr_text_list[[i]] <- ocr_result
+                # Add error handling for image loading
+                tryCatch({
+                    img <- magick::image_read(img_path)
+                    
+                    # Apply selected preprocessing method
+                    img <- preprocess_image(img, preprocessing_method)
+                    
+                    # Create OCR engine options
+                    tessoptions <- list(
+                        tessedit_create_hocr = 1,
+                        tessedit_pageseg_mode = psm_mode
+                    )
+                    
+                    # Add whitelist if provided
+                    if (!is.null(whitelist) && whitelist != "") {
+                        tessoptions$tessedit_char_whitelist <- whitelist
+                    }
+                    
+                    # Debug output
+                    cat("Running OCR with mode:", psm_mode, "method:", preprocessing_method, "\n")
+                    
+                    # Perform OCR on the preprocessed image
+                    ocr_result <- tesseract::ocr_data(img, engine = tesseract::tesseract(
+                        options = tessoptions
+                    ))
+                    
+                    # Filter out common OCR noise and error words
+                    ocr_result <- filter_ocr_noise(ocr_result)
+                    ocr_text_list[[i]] <- ocr_result
+                }, error = function(e) {
+                    message("Error processing OCR for page ", i, ": ", e$message)
+                    # Create an empty dataframe with the right structure instead of NULL
+                    ocr_text_list[[i]] <- data.frame(
+                        word = character(0),
+                        confidence = numeric(0),
+                        bbox = character(0),
+                        stringsAsFactors = FALSE
+                    )
+                })
             }
         }
         
@@ -238,8 +313,9 @@ ui <- bslib::page_fluid(
                 padding: 0;
                 display: flex;
                 flex-direction: column;
-                height: calc(100vh - 80px); /* Set fixed height based on viewport */
-                overflow: hidden; /* Hide overflow at the panel level */
+                height: calc(100vh - 80px);
+                overflow: hidden;
+                z-index: 1000 !important; /* Ensure right panel is above other elements */
             }
             .borehole-header {
                 background: #f8f9fa;
@@ -276,6 +352,8 @@ ui <- bslib::page_fluid(
                 min-width: 0; /* Allow panel to shrink below content width */
                 overflow: auto; /* Allow scrolling if needed */
                 background: #fafafa;
+                z-index: 1 !important;
+                position: relative;
             }
             #pdf-container {
                 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -354,6 +432,100 @@ ui <- bslib::page_fluid(
                 color: #495057;
                 margin-bottom: 10px;
             }
+            
+            /* New styles for OCR accordion */
+            .accordion-button {
+                background-color: #f8f9fa;
+                color: #212529;
+                padding: 8px 15px;
+                font-weight: 500;
+            }
+            .accordion-button:not(.collapsed) {
+                background-color: #e9ecef;
+                color: #0d6efd;
+            }
+            .accordion-body {
+                padding: 10px 15px;
+                background-color: #ffffff;
+                overflow: visible !important; /* Ensure dropdowns are visible */
+            }
+            .accordion {
+                margin-bottom: 15px;
+                border-radius: 6px;
+                overflow: visible !important; /* Allow dropdowns to extend outside */
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            
+            /* Fix for selectize dropdowns */
+            .selectize-dropdown {
+                z-index: 10000 !important; /* Ensure dropdown appears above everything */
+                position: absolute !important;
+            }
+            
+            /* Ensure containers don't clip the dropdowns */
+            .control-row, .control-group {
+                overflow: visible !important;
+            }
+            
+            /* Fix for the main panel to not hide dropdowns */
+            .main-panel {
+                overflow: visible !important; /* Allow dropdowns to extend outside */
+            }
+            
+            /* Only enable scrolling on the PDF container */
+            #pdf-container {
+                overflow: auto !important; 
+            }
+            
+            /* Fix z-index issues with panels and sliders */
+            .right-panel {
+                min-width: 200px;
+                max-width: none;
+                width: 400px;
+                background: #f8f9fa;
+                border-left: 1px solid #dee2e6;
+                position: relative;
+                padding: 0;
+                display: flex;
+                flex-direction: column;
+                height: calc(100vh - 80px);
+                overflow: hidden;
+                z-index: 1000 !important; /* Ensure right panel is above other elements */
+            }
+            
+            /* Ensure sliders are properly contained */
+            .control-row .slider-container {
+                position: relative;
+                z-index: 1;
+                overflow: visible;
+            }
+            
+            /* Ensure slider input is contained */
+            .main-panel .form-group {
+                position: relative;
+                z-index: 1;
+                max-width: 180px;
+            }
+            
+            /* Fix for the slider handles */
+            .irs {
+                position: relative;
+                z-index: 1;
+                width: 100%;
+                max-width: 180px;
+            }
+            
+            /* Ensure the main panel has a lower z-index than the right panel */
+            .main-panel {
+                z-index: 1 !important;
+                position: relative;
+            }
+            
+            /* Make sure sliders are clipped to their containers */
+            .slider-animate-container {
+                max-width: 180px !important;
+                overflow: hidden !important;
+            }
         "))
     ),
 
@@ -395,49 +567,62 @@ ui <- bslib::page_fluid(
             dataTableOutput("pdf_table")
         ),
         div(class = "main-panel",
+            # First row: select, redact, clear, save, zoom
             div(class = "control-row",
                 div(class = "control-group",
-                    actionButton("brush_select", "Select text", class = "btn-toggle") %>% 
+                    actionButton("brush_select", "Select", icon("mouse-pointer"), class = "btn-toggle") %>% 
                         tooltip("Enable the selection tool for OCR and content redaction."),
-                    actionButton("draw_rectangle", "Draw Rectangle", class = "btn-toggle") %>%
+                    actionButton("draw_rectangle", "Redact", icon("rectangle-xmark"), class = "btn-toggle") %>%
                         tooltip("Redact the selected area. Boxes are transparent for usability but can be made opaque on upload."),
-                    actionButton("clear_rectangles", "Clear", class = "btn btn-outline-secondary", title = "Clear Rectangles"),
+                    actionButton("clear_rectangles", "Clear", icon("eraser"), class = "btn btn-outline-secondary", title = "Clear Rectangles"),
                     downloadButton("save_image", "Save Image", class = "btn btn-outline-primary", title = "Save image with rectangles"),
-                    selectizeInput("ocr_display_mode", "OCR Display Mode:",
-                        choices = list(
-                            "None" = "none",
-                            "Highlight Boxes" = "highlight", 
-                            "Text Overlay" = "text"
-                        ),
-                        selected = "none",
-                        options = list(
-                            placeholder = "Select display mode",
-                            maxItems = 1
-                        )
-                    ),
-                    sliderInput("confidence_threshold", "OCR Confidence:",
-                        min = 40, max = 100, value = 70, step = 10,
-                        width = "150px"
-                    ),
-                    # Add simple zoom control
-                    sliderInput("zoom_level", "Zoom:",
-                        min = 0.5, max = 2.0, value = 1.0, step = 0.1,
-                        width = "150px"
-                    ),
-                    # OCR Text Display - now permanently visible
-                    div(
-                        style = "margin-left: 20px; width: 300px;",
-                        h6("Extracted Text:", style = "margin-bottom: 5px; color: #495057;"),
-                        div(
-                            style = "max-height: 120px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: white; font-family: monospace; font-size: 11px; font-weight: bold; color: #007bff;",
-                            verbatimTextOutput("ocr_text_display")
+                    # Zoom control - wrap in a container div
+                    div(class = "slider-container",
+                        sliderInput("zoom_level", "Zoom:",
+                            min = 0.5, max = 4.0, value = 1.0, step = 0.1,
+                            width = "150px"
                         )
                     )
-                ),
-                div(class = "control-group",
-                    # Removed zoom/pan buttons
                 )
             ),
+            
+            # Replace the Second row with simplified OCR controls
+            bslib::accordion(
+                id = "ocr-controls-accordion",
+                open = FALSE,
+                bslib::accordion_panel(
+                    title = "OCR Controls",
+                    div(class = "control-row", style = "margin-top: 10px;",
+                        div(class = "control-group",
+                            selectInput("ocr_display_mode", "OCR Display Mode:",
+                                choices = list(
+                                    "None" = "none",
+                                    "Highlight Boxes" = "highlight", 
+                                    "Text Overlay" = "text"
+                                ),
+                                selected = "none"
+                            ),
+                            div(class = "slider-container",
+                                sliderInput("confidence_threshold", "OCR Confidence:",
+                                    min = 40, max = 100, value = 70, step = 10,
+                                    width = "150px"
+                                )
+                            ),
+                            
+                            # OCR Text Display
+                            div(
+                                style = "margin-left: 20px; width: 300px;",
+                                h6("Extracted Text:", style = "margin-bottom: 5px; color: #495057;"),
+                                div(
+                                    style = "max-height: 120px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: white; font-family: monospace; font-size: 11px; font-weight: bold; color: #007bff;",
+                                    verbatimTextOutput("ocr_text_display")
+                                )
+                            )
+                        )
+                    )
+                )
+            ),
+            
             div(
                 id = "pdf-container",
                 style = "width:100%; max-width:100%; height:calc(100vh - 300px); min-height:500px; border:1px solid #ccc; margin:10px auto; overflow:auto; background:white; position:relative; display:block; padding:0;",
@@ -575,6 +760,22 @@ ui <- bslib::page_fluid(
                     column(8, numericInput("depth_to_bedrock", "Depth to Bedrock:", value = NULL, min = 0, step = 0.1)),
                     column(4, radioButtons("depth_to_bedrock_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                 ),
+                
+                # Add permafrost checkbox and conditional inputs
+                checkboxInput("permafrost_present", "Permafrost Present", value = FALSE),
+                
+                conditionalPanel(
+                    condition = "input.permafrost_present == true",
+                    fluidRow(
+                        column(8, numericInput("permafrost_top_depth", "Depth to Top of Permafrost:", value = NULL, min = 0, step = 0.1)),
+                        column(4, radioButtons("permafrost_top_depth_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    ),
+                    fluidRow(
+                        column(8, numericInput("permafrost_bottom_depth", "Depth to Bottom of Permafrost:", value = NULL, min = 0, step = 0.1)),
+                        column(4, radioButtons("permafrost_bottom_depth_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    )
+                ),
+                
                 dateInput("date_drilled", "Date Drilled:", value = NULL),
                 fluidRow(
                     column(8, numericInput("casing_outside_diameter", "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
@@ -610,9 +811,10 @@ ui <- bslib::page_fluid(
                 ),
                 br(),
                 
-                # Action buttons
+                # Action buttons - split into two buttons
                 fluidRow(
-                    column(12, downloadButton("save_export_data", "Save & Export to CSV", class = "btn-primary btn-block"))
+                    column(6, actionButton("upload_current_record", "Upload Record", class = "btn-primary btn-block")),
+                    column(6, actionButton("upload_all_records", "Upload All Records", class = "btn-primary btn-block"))
                 )
             )
         )
@@ -744,7 +946,7 @@ server <- function(input, output, session) {
         ocr_text = list(),
         ocr_display_mode = "none",
         selected_text = NULL,
-        rectangles = list()  # List to store rectangles for each page
+        rectangles = list()  # List to store rectangles for each PDF (by borehole_id)
     )
     
     # Reactive value to control brush mode
@@ -752,6 +954,19 @@ server <- function(input, output, session) {
     
     # Flag to prevent circular updates when loading metadata
     loading_metadata <- reactiveVal(FALSE)
+    
+    # Add observer for brush_select button
+    observeEvent(input$brush_select, {
+        # Toggle brush_enabled value
+        brush_enabled(!brush_enabled())
+        
+        # Update button appearance based on new state
+        if (brush_enabled()) {
+            runjs("$('#brush_select').addClass('btn-active');")
+        } else {
+            runjs("$('#brush_select').removeClass('btn-active');")
+        }
+    })
     
     # Reactive expression to get the current well ID based on pdf_index
     current_well_id <- reactive({
@@ -994,6 +1209,45 @@ server <- function(input, output, session) {
     })
 
 
+    # Fix the PDF table rendering
+    output$pdf_table <- renderDataTable({
+        req(rv$files_df)
+        validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
+
+        dat <- rv$files_df[, c("tag", "borehole_id")]
+        
+        datatable(
+            dat,
+            selection = "single",
+            options = list(
+                pageLength = 10, 
+                dom = 'tip',  # table, information, pagination (no search)
+                ordering = FALSE,
+                scrollY = "300px",
+                scrollCollapse = TRUE
+            )
+        )
+    })
+    
+    # Ensure the table selection works properly
+    observe({
+        req(rv$files_df)
+        req(rv$pdf_index)
+        if (nrow(rv$files_df) > 0 && rv$pdf_index <= nrow(rv$files_df)) {
+            # Isolate to prevent circular reactivity
+            isolate({
+                current_selection <- input$pdf_table_rows_selected
+                if (is.null(current_selection) || length(current_selection) == 0 || current_selection != rv$pdf_index) {
+                    dataTableProxy("pdf_table") %>% selectRows(rv$pdf_index)
+                }
+            })
+        }
+    })
+    
+    # Add a reactive value for OCR processing status
+    ocr_processing <- reactiveVal(FALSE)
+    
+    # Modified observer for OCR display mode
     observeEvent(input$ocr_display_mode, {
         req(rv$files_df)
         
@@ -1002,117 +1256,99 @@ server <- function(input, output, session) {
         
         # If switching to highlight or text mode, ensure OCR data is available
         if (rv$ocr_display_mode %in% c("highlight", "text")) {
-            # Process OCR for all pages (function handles caching and notifications)
-            rv$ocr_text <- process_ocr_batch(rv$files_df, rv$ocr_text, rv$pdf_index)
+            # Set processing flag
+            ocr_processing(TRUE)
+            
+            # Process OCR only if not already processed
+            if (is.null(rv$ocr_text[[rv$pdf_index]]) || nrow(rv$ocr_text[[rv$pdf_index]]) == 0) {
+                showNotification("Processing OCR for current page...", type = "message", duration = 3)
+                
+                img_path <- rv$files_df$Path[rv$pdf_index]
+                tryCatch({
+                    img <- magick::image_read(img_path)
+                    
+                    # Apply default preprocessing
+                    img <- img %>%
+                        magick::image_convert(colorspace = "gray") %>%
+                        magick::image_contrast(sharpen = 1) %>%
+                        magick::image_modulate(brightness = 110, saturation = 100, hue = 100) %>%
+                        magick::image_threshold(type = "black", threshold = "60%")
+                    
+                    # Create OCR engine options
+                    tessoptions <- list(
+                        tessedit_create_hocr = 1,
+                        tessedit_pageseg_mode = 3  # Default auto page segmentation
+                    )
+                    
+                    # Perform OCR on the preprocessed image
+                    ocr_result <- tesseract::ocr_data(img, engine = tesseract::tesseract(
+                        options = tessoptions
+                    ))
+                    
+                    # Filter out common OCR noise and error words
+                    ocr_result <- filter_ocr_noise(ocr_result)
+                    rv$ocr_text[[rv$pdf_index]] <- ocr_result
+                }, error = function(e) {
+                    message("Error processing OCR: ", e$message)
+                    rv$ocr_text[[rv$pdf_index]] <- data.frame(
+                        word = character(0),
+                        confidence = numeric(0),
+                        bbox = character(0),
+                        stringsAsFactors = FALSE
+                    )
+                })
+            }
+            
+            # Clear processing flag
+            ocr_processing(FALSE)
+            
+            # Verify OCR data for current page exists
+            if (is.null(rv$ocr_text[[rv$pdf_index]]) || nrow(rv$ocr_text[[rv$pdf_index]]) == 0) {
+                showNotification("No OCR text found for this page.", 
+                               type = "warning", duration = 4)
+            }
         }
     })
-
-    output$pdf_table <- renderDataTable({
-        req(rv$files_df)
-
-        dat <- rv$files_df[, 
-            c("tag", "borehole_id")
-        ]
-
-        # Format Date as dd-mm-yy hh:mm
-        #dat$Date <- format(as.POSIXct(dat$Date), "%d-%m-%y %H:%M")
-
-        datatable(
-            dat,
-            selection = "single",
-            options = list(pageLength = 5, dom = 'tip') # removes search box
-        )
-    })
     
-    # Separate UI rendering observer - only react to brush changes
-    observe({
-        req(rv$files_df)
-        
-        # Only depend on brush state for UI changes
-        current_brush_enabled <- brush_enabled()
-        
-        # Use isolate to prevent reactive dependency on pdf_index
-        pdf_index <- isolate(rv$pdf_index)
-        req(pdf_index)
-        
-        # Render UI
-        output$pdf_viewer <- renderUI({
-            img_path <- isolate(rv$files_df$Path[pdf_index])
-            
-            # Get image dimensions to calculate aspect ratio
-            img <- magick::image_read(img_path)
-            info <- magick::image_info(img)
-            img_width <- info$width
-            img_height <- info$height
-            
-            # Apply zoom factor to dimensions
-            zoom <- input$zoom_level
-            display_width <- img_width * zoom
-            display_height <- img_height * zoom
-            
-            # Use zoomed dimensions but maintain scrollbars for navigation
-            tags$div(
-                style = "width: 100%; overflow: auto;",
-                plotOutput(
-                    outputId = paste0("pdf_plot_", pdf_index),
-                    width = paste0(display_width, "px"),
-                    height = paste0(display_height, "px"),
-                    # Conditionally include brush based on brush_enabled state
-                    brush = if (current_brush_enabled) {
-                        brushOpts(
-                            id = "pdf_brush", 
-                            resetOnNew = TRUE,
-                            direction = "xy",
-                            opacity = 0.3,
-                            fill = "#007bff"
-                        )
-                    } else {
-                        NULL
-                    }
-                )
-            )
-        })
-    })
-    
-    # Plot rendering observer - react to pdf_index and OCR settings
+    # Simplify and fix the plot rendering function for OCR overlays
     observe({
         req(rv$files_df)
         req(rv$pdf_index)
         
-        # Include OCR settings and rectangles as reactive dependencies
+        # Get required values
         current_ocr_mode <- input$ocr_display_mode
         current_confidence <- input$confidence_threshold
-        page_key <- paste0("page_", rv$pdf_index)
-        current_rectangles <- rv$rectangles[[page_key]]
-        
-        # Create the plot output only when dependencies change
+        borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
+        current_rectangles <- if (!is.null(borehole_id)) rv$rectangles[[borehole_id]] else NULL
+        is_processing <- ocr_processing()
         plot_id <- paste0("pdf_plot_", rv$pdf_index)
         
+        # Render the plot
         output[[plot_id]] <- renderPlot({
+            # Load and prepare the image
             img_path <- rv$files_df$Path[rv$pdf_index]
             img <- magick::image_read(img_path)
-            
-            # Enhance image quality for better display
-            img <- img %>%
-                magick::image_enhance()
-            
-            # Get image dimensions
+            img <- img %>% magick::image_enhance()
             info <- magick::image_info(img)
             img_width <- info$width
             img_height <- info$height
-            
-            # Convert magick image to raster format for base R
             img_raster <- as.raster(img)
             
-            # Set up the plot area with correct orientation
+            # Set up the plot area
             par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
-            plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height), 
+            plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height),
                  xlab = "", ylab = "", axes = FALSE, asp = 1)
             
-            # Display the image
+            # Draw the image
             rasterImage(img_raster, 0, 0, img_width, img_height)
             
-            # Add OCR rectangles if in OCR mode and OCR data exists
+            # Show processing indicator if OCR is running
+            if (is_processing) {
+                rect(10, 10, 300, 50, col = "black", border = NA)
+                text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
+            }
+            
+            # Draw OCR overlay if in OCR mode and OCR data exists
             if (current_ocr_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
                 ocr_df <- rv$ocr_text[[rv$pdf_index]]
                 
@@ -1120,43 +1356,78 @@ server <- function(input, output, session) {
                 if (nrow(ocr_df) > 0) {
                     ocr_df <- ocr_df[ocr_df$confidence >= current_confidence, , drop = FALSE]
                 }
-
+                
+                # Draw OCR boxes or text
                 if (nrow(ocr_df) > 0) {
-                    # Process each OCR word with flipped Y coordinates
                     for (i in seq_len(nrow(ocr_df))) {
-                        coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
-                        x1 <- coords[1]
-                        y1 <- img_height - coords[4]  # Flip Y coordinates to match plot
-                        x2 <- coords[3]
-                        y2 <- img_height - coords[2]  # Flip Y coordinates to match plot
-                        
-                        if (current_ocr_mode == "text") {
-                            # Draw white background rectangle
-                            rect(x1, y1, x2, y2, col = "white", border = "black", lwd = 1)
-                            # Add text with larger font size
-                            text((x1 + x2) / 2, (y1 + y2) / 2, ocr_df$word[i], 
-                                 cex = 1.2, col = "black", font = 2)
-                        } else {
-                            # Draw highlight rectangle
-                            rect(x1, y1, x2, y2, col = rgb(0, 0.48, 1, 0.3), 
-                                 border = rgb(0, 0.48, 1, 0.8), lwd = 1)
-                        }
+                        tryCatch({
+                            # Parse bbox coordinates and convert to plot coordinates
+                            bbox <- strsplit(ocr_df$bbox[i], ",")[[1]]
+                            if (length(bbox) == 4) {
+                                coords <- as.numeric(bbox)
+                                
+                                # Handle coordinate conversion correctly
+                                # Tesseract coordinates: (left, top, right, bottom) with origin at top-left
+                                # Plot coordinates: (left, bottom, right, top) with origin at bottom-left
+                                x1 <- coords[1]  # left
+                                y1 <- img_height - coords[4]  # bottom (inverted)
+                                x2 <- coords[3]  # right
+                                y2 <- img_height - coords[2]  # top (inverted)
+                                
+
+                                # Draw rectangle and/or text based on display mode
+                                if (current_ocr_mode == "text") {
+                                    # Draw background for text
+                                    rect(x1, y1, x2, y2, 
+                                         col = rgb(1, 1, 1, 0.7), # semi-transparent white
+                                         border = "darkgray", 
+                                         lwd = 1)
+                                    
+                                    # Draw word on top
+                                    text_x <- (x1 + x2) / 2
+                                    text_y <- (y1 + y2) / 2
+                                    text(text_x, text_y, 
+                                         ocr_df$word[i],
+                                         cex = 0.9, 
+                                         col = "black", 
+                                         font = 2)
+                                } else if (current_ocr_mode == "highlight") {
+                                    # Draw highlight rectangle
+                                    rect(x1, y1, x2, y2, 
+                                         col = rgb(0, 0.48, 1, 0.3),  # Semi-transparent blue
+                                         border = rgb(0, 0.48, 1, 0.8),  # Solid blue border
+                                         lwd = 1)
+                                }
+                            }
+                        }, error = function(e) {
+                            # Silently ignore errors in drawing individual words
+                        })
                     }
+                } else {
+                    # Show message if no text meets confidence threshold
+                    text_width <- strwidth("No OCR text meets confidence threshold") * 1.2
+                    rect(img_width/2 - text_width/2, img_height/2 - 15, 
+                         img_width/2 + text_width/2, img_height/2 + 15,
+                         col = "white", border = "black")
+                    
+                    text(img_width/2, img_height/2,
+                         paste("No OCR text meets confidence threshold (", current_confidence, "%)"),
+                         cex = 1, col = "red")
                 }
             }
             
-            # Draw user-defined rectangles on top
+            # Draw user-defined redaction rectangles
             if (!is.null(current_rectangles) && length(current_rectangles) > 0) {
-                for (rect in current_rectangles) {
-                    rect(rect$xmin, rect$ymin, rect$xmax, rect$ymax, 
-                         col = adjustcolor(rect$color, alpha.f = 0.3), 
-                         border = rect$color, 
+                for (rect_data in current_rectangles) {
+                    rect(rect_data$xmin, rect_data$ymin, rect_data$xmax, rect_data$ymax,
+                         col = adjustcolor(rect_data$color, alpha.f = 0.3),
+                         border = rect_data$color,
                          lwd = 2)
                 }
             }
-        }, res = 50)  # Higher resolution for better image quality
+        }, res = 96)  # Increased resolution for better text rendering
     })
-
+    
     # Observer for brush selection to extract text
     observeEvent(input$pdf_brush, {
         req(input$pdf_brush)
@@ -1167,6 +1438,18 @@ server <- function(input, output, session) {
         # Get current OCR data
         ocr_df <- rv$ocr_text[[rv$pdf_index]]
         if (is.null(ocr_df) || nrow(ocr_df) == 0) {
+            rv$selected_text <- NULL
+            return()
+        }
+        
+        # Filter by confidence threshold to match what's displayed
+        # This is the key fix - apply the same confidence filter used for display
+        if (nrow(ocr_df) > 0) {
+            ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
+        }
+        
+        if (nrow(ocr_df) == 0) {
+            showNotification("No OCR text meets confidence threshold", type = "warning", duration = 2)
             rv$selected_text <- NULL
             return()
         }
@@ -1209,362 +1492,174 @@ server <- function(input, output, session) {
         # Update selected text
         if (length(selected_words) > 0) {
             rv$selected_text <- selected_words
-            showNotification(paste("Selected:", length(selected_words), "words"), 
-                           type = "message", duration = 2)
+            
+            # Create notification with the actual text (limit to reasonable length)
+            selected_text <- paste(selected_words, collapse = " ")
+            if (nchar(selected_text) > 100) {
+                selected_text <- paste0(substr(selected_text, 1, 97), "...")
+            }
+            showNotification(paste("Selected:", selected_text), 
+                           type = "message", duration = 3)
         } else {
             rv$selected_text <- NULL
             showNotification("No text found in selection", type = "warning", duration = 2)
         }
     })
 
-    # Observer for drawing rectangles
+    # --- Rectangle logic: store by borehole_id, not by page index ---
     observeEvent(input$draw_rectangle, {
         # Make sure we have a brush selection
         if (is.null(input$pdf_brush)) {
             showNotification("Please make a selection first", type = "warning", duration = 2)
             return()
         }
-        
         req(rv$files_df)
         req(rv$pdf_index)
-        
+        borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
+        if (is.null(borehole_id)) return()
+
         # Get brush coordinates (already in plot coordinates)
         brush <- input$pdf_brush
-        
-        # Store rectangle data directly in plot coordinates
-        page_key <- paste0("page_", rv$pdf_index)
-        if (is.null(rv$rectangles[[page_key]])) {
-            rv$rectangles[[page_key]] <- list()
-        }
 
-        # Create a single rectangle object and add it to the list
+        # Store rectangle data for this borehole_id
+        if (is.null(rv$rectangles[[borehole_id]])) {
+            rv$rectangles[[borehole_id]] <- list()
+        }
         new_rect <- list(
             xmin = brush$xmin,
             xmax = brush$xmax,
-            ymin = brush$ymin,  
-            ymax = brush$ymax,  
+            ymin = brush$ymin,
+            ymax = brush$ymax,
             color = "red"
         )
-
-        # Add the rectangle to the list for this page with proper list nesting
-        rv$rectangles[[page_key]] <- append(rv$rectangles[[page_key]], list(new_rect))
-
-        showNotification("Rectangle added", type = "message", duration = 2)
+        rv$rectangles[[borehole_id]] <- append(rv$rectangles[[borehole_id]], list(new_rect))
+        showNotification("Selection redacted", type = "message", duration = 2)
     })
-    
-    # Observer for clearing rectangles
+
     observeEvent(input$clear_rectangles, {
         req(rv$files_df)
         req(rv$pdf_index)
-        
-        page_key <- paste0("page_", rv$pdf_index)
-        rv$rectangles[[page_key]] <- NULL
-        
+        borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
+        if (is.null(borehole_id)) return()
+        rv$rectangles[[borehole_id]] <- NULL
         showNotification("Rectangles cleared", type = "message", duration = 2)
     })
-    
-    observeEvent(input$brush_select, {
-        # Toggle brush state
-        new_state <- !brush_enabled()
-        brush_enabled(new_state)
-        
-        # If disabling brush, no special handling needed for scroll navigation
-        if (!new_state) {
-            # No special handling needed
-        } else {
-            # No special handling needed for scroll navigation
-        }
-        
-        # If enabling brush and no OCR data exists, process OCR
-        if (new_state && !is.null(rv$files_df)) {
-            # Check if we need OCR processing for brush functionality
-            needs_ocr <- any(sapply(rv$ocr_text, function(x) is.null(x)))
-            
-            if (needs_ocr) {
-                # Process OCR for brush text extraction
-                rv$ocr_text <- process_ocr_batch(rv$files_df, rv$ocr_text, rv$pdf_index)
-                
-                # Enable highlight mode for visualization if not already enabled
-                if (rv$ocr_display_mode == "none") {
-                    updateSelectizeInput(session, "ocr_display_mode", selected = "highlight")
-                }
-            }
-        }
-        
-        # Toggle button styling based on brush state
-        if (new_state) {
-            runjs("$('#brush_select').addClass('btn-active');")
-            showNotification("Brush tool enabled. Use scroll bars to navigate.", type = "message", duration = 3)
-        } else {
-            runjs("$('#brush_select').removeClass('btn-active');")
-            # Clear any selected text
-            rv$selected_text <- NULL
-            showNotification("Brush tool disabled.", type = "message", duration = 2)
-        }
-    })
 
-    # Display the borehole ID
-    output$borehole_id_display <- renderText({
-        req(rv$files_df)
-        req(rv$pdf_index)
-        
-        well_id <- current_well_id()
-        
-        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
-            # Generate display ID based on filename and page
-            file_base <- tools::file_path_sans_ext(rv$files_df$Name[rv$pdf_index])
-            page_num <- rv$files_df$Page[rv$pdf_index]
-            return(paste0(well_id))
-        }
-        
-        return("No ID available")
-    })
-
-    # Display the file count for current borehole
-    output$file_count_display <- renderText({
-        req(rv$files_df)
-        req(rv$pdf_index)
-        
-        well_id <- current_well_id()
-        
-        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
-            files <- rv$well_data[[well_id]]$files
-            if (is.null(files)) {
-                file_count <- 0
-            } else if (is.character(files)) {
-                # Count unique filenames
-                file_count <- length(unique(files))
-            } else {
-                file_count <- 1
-            }
-            
-            if (file_count == 1) {
-                return(paste("Files associated:", file_count, "file"))
-            } else {
-                return(paste("Files associated:", file_count, "files"))
-            }
-        }
-        
-        return("Files associated: 0 files")
-    })
-
-
-
-    # Update borehole ID selector choices when files change
+    # --- Render rectangles for the current PDF (by borehole_id) ---
     observe({
-        if (!is.null(rv$files_df) && nrow(rv$files_df) > 0) {
-            # Create choices list with borehole IDs as labels and indices as values
-            # Exclude the currently selected borehole from choices
-            current_id <- rv$files_df$borehole_id[rv$pdf_index]
-            choices <- setNames(
-                which(rv$files_df$borehole_id != current_id),
-                rv$files_df$borehole_id[rv$files_df$borehole_id != current_id]
-            )
-            updateSelectizeInput(session, "borehole_id_selector", 
-                                choices = choices,
-                                selected = character(0),
-                                options = list(
-                                    placeholder = "Select a borehole ID"
-                                ))
-        } else {
-            # Clear choices when no files
-            updateSelectizeInput(session, "borehole_id_selector", 
-                                choices = NULL,
-                                selected = NULL)
-        }
-    })
-
-
-    observeEvent(input$borehole_id_selector, {
         req(rv$files_df)
-        req(input$borehole_id_selector)
-        selected_index <- as.integer(input$borehole_id_selector)
-        selected_id <- rv$files_df$borehole_id[selected_index]
-        current_filename <- rv$files_df$Name[rv$pdf_index]
-        print(selected_id)
-        if (!is.null(selected_id) && selected_id %in% names(rv$well_data)) {
-            # Add current filename to the list of filenames for the selected borehole
-            filenames <- rv$well_data[[selected_id]]$files
-            if (is.null(filenames)) {
-                rv$well_data[[selected_id]]$files <- current_filename
-            } else if (!(current_filename %in% filenames)) {
-                rv$well_data[[selected_id]]$files <- c(filenames, current_filename)
-            }
-            showNotification(paste("Added file", current_filename, "to borehole", selected_id), type = "message", duration = 2)
-            print(rv$well_data[[selected_id]]$files)
-
-
-
-
-            # Update the borehole_id for the current file/page to the selected borehole ID
-            rv$files_df$borehole_id[rv$pdf_index] <- selected_id
-            print(selected_id)
-            #rv$well_data[[selected_id]] <- NULL  # Commented out: do not remove metadata
-
-            # Move to the selected borehole/page in the table
-            rv$pdf_index <- selected_index
-            # Optionally, remove the old well_data entry for the selected borehole (if needed)
-        }
-    })
-
-    
-    # Display OCR text in right panel
-    output$ocr_text_display <- renderText({
-        if (!is.null(rv$selected_text) && length(rv$selected_text) > 0) {
-            # Show selected text when available
-            paste(rv$selected_text, collapse = "\n")
-        } else if (rv$ocr_display_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
-            paste("OCR text for page", rv$pdf_index, "is available. Use brush to select text.")
-        } else {
-            ""
-        }
-    })
-
-    # Observer for input field clicks - add selected text when any field is clicked
-    input_fields <- c(
-        "well_name", "easting", "northing",
-        "latitude", "longitude", "location_source", "surveyed_location_top_casing",
-        "depth_to_bedrock", "date_drilled",
-        "casing_outside_diameter", "well_depth",
-        "top_of_screen", "bottom_of_screen",
-        "well_head_stick_up", "static_water_level", "estimated_yield",
-        "surveyed_ground_level_elevation"
-    )
-
-    lapply(input_fields, function(field) {
-        observeEvent(input[[paste0(field, "_clicked")]], {
-            if (!is.null(rv$selected_text) && length(rv$selected_text) > 0) {
-                selected_text_combined <- paste(rv$selected_text, collapse = " ")
-                current_value <- input[[field]]
-                new_value <- if (is.null(selected_text_combined) || selected_text_combined == "") current_value else selected_text_combined;
-
-                # Use appropriate update function based on input type
-                if (grepl("date", field)) {
-                    # Try to parse as date
-                    parsed_date <- suppressWarnings(as.Date(new_value))
-                    if (is.na(parsed_date)) {
-                        showNotification(paste("Warning: Selected text is not a valid date for", field), type = "warning", duration = 3)
-                    } else {
-                        updateDateInput(session, field, value = parsed_date)
-                    }
-                } else if (grepl("depth|diameter|easting|northing|latitude|longitude|top|bottom|stick_up|static_water_level|estimated_yield|surveyed_ground_level_elevation", field)) {
-                    parsed_num <- suppressWarnings(as.numeric(new_value))
-                    if (is.na(parsed_num)) {
-                        showNotification(paste("Warning: Selected text is not numeric for", field), type = "warning", duration = 3)
-                    } else {
-                        updateNumericInput(session, field, value = parsed_num)
-                    }
-                } else {
-                    updateTextInput(session, field, value = new_value)
-                }
-                rv$selected_text <- NULL
-                showNotification(paste("Selected text added to", field), type = "message", duration = 2)
+        req(rv$pdf_index)
+        current_ocr_mode <- input$ocr_display_mode
+        current_confidence <- input$confidence_threshold
+        borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
+        # Use rectangles for this borehole_id
+        current_rectangles <- if (!is.null(borehole_id)) rv$rectangles[[borehole_id]] else NULL
+        is_processing <- ocr_processing()
+        plot_id <- paste0("pdf_plot_", rv$pdf_index)
+        
+        # Ensure that brush state is correctly reflected in UI when pdf_index changes
+        isolate({
+            if (brush_enabled()) {
+                runjs("$('#brush_select').addClass('btn-active');")
+            } else {
+                runjs("$('#brush_select').removeClass('btn-active');")
             }
         })
-    })
 
-
-    # Combined Save and Export functionality
-    output$save_export_data <- downloadHandler(
-        filename = function() {
-            paste("well_metadata_", Sys.Date(), ".csv", sep = "")
-        },
-        content = function(file) {
-            req(rv$well_data)
-            
-            # Prepare a data frame with one row per well and columns for all metadata fields
-            well_ids <- names(rv$well_data)
-            if (length(well_ids) == 0) {
-                # Create empty data frame if no wells
-                write.csv(data.frame(), file, row.names = FALSE)
-                return()
-            }
-            
-            metadata_fields <- names(rv$well_data[[well_ids[1]]]$metadata)
-            well_metadata_df <- data.frame(matrix(nrow = length(well_ids), ncol = length(metadata_fields)))
-            colnames(well_metadata_df) <- metadata_fields
-            rownames(well_metadata_df) <- well_ids
-
-            # Helper function to convert feet to meters
-            ft_to_m <- function(x) {
-                if (is.null(x) || is.na(x)) return(NA)
-                as.numeric(x) * 0.3048
-            }
-
-            # Loop through each well and populate the data frame
-            for (i in seq_along(well_ids)) {
-                well_id <- well_ids[i]
-                meta <- rv$well_data[[well_id]]$metadata
-
-                if (!is.null(meta$surveyed_ground_level_elevation_unit) && !is.na(meta$surveyed_ground_level_elevation_unit) && meta$surveyed_ground_level_elevation_unit == "ft") {
-                    well_metadata_df[i, "surveyed_ground_level_elevation"] <- ft_to_m(meta$surveyed_ground_level_elevation)
-                    well_metadata_df[i, "surveyed_ground_level_elevation_unit"] <- "m"
-                } else {
-                    well_metadata_df[i, "surveyed_ground_level_elevation"] <- meta$surveyed_ground_level_elevation
-                    well_metadata_df[i, "surveyed_ground_level_elevation_unit"] <- meta$surveyed_ground_level_elevation_unit
-                }
-
-                # Estimated yield: convert G/min to L/s if needed
-                if (!is.null(meta$estimated_yield_unit) && !is.na(meta$estimated_yield_unit) && meta$estimated_yield_unit == "G/min") {
-                    # 1 US gallon = 3.78541 liters, so G/min to L/s: multiply by 3.78541/60
-                    gmin_to_ls <- function(x) { if (is.null(x) || is.na(x)) return(NA); as.numeric(x) * 3.78541 / 60 }
-                    well_metadata_df[i, "estimated_yield"] <- gmin_to_ls(meta$estimated_yield)
-                    well_metadata_df[i, "estimated_yield_unit"] <- "L/s"
-                } else {
-                    well_metadata_df[i, "estimated_yield"] <- meta$estimated_yield
-                    well_metadata_df[i, "estimated_yield_unit"] <- meta$estimated_yield_unit
-                }
-
-                # If easting, northing, and utm_zone are provided, convert to lat/lon
-                if (!is.null(meta$coordinate_system) && !is.na(meta$coordinate_system) && meta$coordinate_system == "utm" &&
-                    !is.null(meta$easting) && !is.na(meta$easting) &&
-                    !is.null(meta$northing) && !is.na(meta$northing) &&
-                    !is.null(meta$utm_zone) && !is.na(meta$utm_zone)) {
-                    # Extract zone number and hemisphere
-                    zone_str <- as.character(meta$utm_zone)
-                    zone_num <- as.numeric(gsub("[^0-9]", "", zone_str))
-                    hemisphere <- ifelse(grepl("N", zone_str, ignore.case = TRUE), "north", "south")
-                    # Use sf for conversion
-                    if (requireNamespace("sf", quietly = TRUE)) {
-                        coords_sf <- sf::st_sfc(
-                            sf::st_point(c(as.numeric(meta$easting), as.numeric(meta$northing))),
-                            crs = paste0("EPSG:", 32600 + zone_num)
+        output$pdf_viewer <- renderUI({
+            img_path <- isolate(rv$files_df$Path[rv$pdf_index])
+            img <- magick::image_read(img_path)
+            info <- magick::image_info(img)
+            img_width <- info$width
+            img_height <- info$height
+            zoom <- input$zoom_level
+            display_width <- img_width * zoom
+            display_height <- img_height * zoom
+            tags$div(
+                style = "width: 100%; overflow: auto;",
+                plotOutput(
+                    outputId = plot_id,
+                    width = paste0(display_width, "px"),
+                    height = paste0(display_height, "px"),
+                    brush = if (brush_enabled()) {
+                        brushOpts(
+                            id = "pdf_brush",
+                            resetOnNew = TRUE,
+                            direction = "xy",
+                            opacity = 0.3,
+                            fill = "#007bff"
                         )
-                        coords_ll <- sf::st_transform(coords_sf, crs = 4326)
-                        latlon <- sf::st_coordinates(coords_ll);
-                        well_metadata_df[i, "latitude"] <- latlon[2]
-                        well_metadata_df[i, "longitude"] <- latlon[1]
+                    } else {
+                        NULL
                     }
-                } else {
-                    well_metadata_df[i, "latitude"] <- meta$latitude
-                    well_metadata_df[i, "longitude"] <- meta$longitude
-                }
+                )
+            )
+        })
 
-                # Copy all other fields
-                well_metadata_df[i, "borehole_id"] <- meta$borehole_id
-                well_metadata_df[i, "well_name"] <- meta$well_name
-                well_metadata_df[i, "community"] <- meta$community
-                well_metadata_df[i, "coordinate_system"] <- meta$coordinate_system
-                well_metadata_df[i, "easting"] <- meta$easting
-                well_metadata_df[i, "northing"] <- meta$northing
-                well_metadata_df[i, "utm_zone"] <- meta$utm_zone
-                well_metadata_df[i, "location_source"] <- meta$location_source
-                well_metadata_df[i, "surveyed_location_top_casing"] <- meta$surveyed_location_top_casing
-                well_metadata_df[i, "purpose_of_well"] <- meta$purpose_of_well
-                well_metadata_df[i, "date_drilled"] <- meta$date_drilled
+        output[[plot_id]] <- renderPlot({
+            img_path <- rv$files_df$Path[rv$pdf_index]
+            img <- magick::image_read(img_path)
+            img <- img %>% magick::image_enhance()
+            info <- magick::image_info(img)
+            img_width <- info$width
+            img_height <- info$height
+            img_raster <- as.raster(img)
+            par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+            plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height),
+                 xlab = "", ylab = "", axes = FALSE, asp = 1)
+            rasterImage(img_raster, 0, 0, img_width, img_height)
+            if (is_processing) {
+                rect(10, 10, 300, 50, col = "black", border = NA)
+                text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
             }
-            
-            # Write the CSV file
-            write.csv(well_metadata_df, file, row.names = FALSE)
-            
-            showNotification("Well metadata exported successfully!", type = "message", duration = 3)
-        }
-    )
-
-    # Handler for saving image with rectangles
+            if (current_ocr_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
+                ocr_df <- rv$ocr_text[[rv$pdf_index]]
+                if (nrow(ocr_df) > 0) {
+                    ocr_df <- ocr_df[ocr_df$confidence >= current_confidence, , drop = FALSE]
+                }
+                if (nrow(ocr_df) > 0) {
+                    for (i in seq_len(nrow(ocr_df))) {
+                        tryCatch({
+                            coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
+                            if (length(coords) == 4) {
+                                x1 <- coords[1]
+                                y1 <- img_height - coords[4]
+                                x2 <- coords[3]
+                                y2 <- img_height - coords[2]
+                                if (current_ocr_mode == "text") {
+                                    rect(x1, y1, x2, y2, col = "white", border = "black", lwd = 1)
+                                    text((x1 + x2) / 2, (y1 + y2) / 2, ocr_df$word[i],
+                                         cex = 1.2, col = "black", font = 2)
+                                } else {
+                                    rect(x1, y1, x2, y2, col = rgb(0, 0.48, 1, 0.3),
+                                         border = rgb(0, 0.48, 1, 0.8), lwd = 1)
+                                }
+                            }
+                        }, error = function(e) {})
+                    }
+                } else if (current_ocr_mode != "none") {
+                    rect(img_width/2 - 200, img_height/2 - 25, img_width/2 + 200, img_height/2 + 25,
+                         col = "white", border = "black")
+                    text(img_width/2, img_height/2,
+                         paste("No OCR text meets confidence threshold (", current_confidence, "%)"),
+                         cex = 1.2, col = "red")
+                }
+            }
+            # Draw user-defined rectangles for this PDF
+            if (!is.null(current_rectangles) && length(current_rectangles) > 0) {
+                for (rect in current_rectangles) {
+                    rect(rect$xmin, rect$ymin, rect$xmax, rect$ymax,
+                         col = adjustcolor(rect$color, alpha.f = 0.3),
+                         border = rect$color,
+                         lwd = 2)
+                }
+            }
+        }, res = 50)
+    })
+    
+    # --- Save image handler: use rectangles for current borehole_id ---
     output$save_image <- downloadHandler(
         filename = function() {
-            # Generate a filename based on the current PDF name and page
             req(rv$files_df, rv$pdf_index)
             base_name <- tools::file_path_sans_ext(basename(rv$files_df$Name[rv$pdf_index]))
             page_num <- rv$files_df$Page[rv$pdf_index]
@@ -1572,33 +1667,18 @@ server <- function(input, output, session) {
         },
         content = function(file) {
             req(rv$files_df, rv$pdf_index)
-            
-            # Get the current image path
             img_path <- rv$files_df$Path[rv$pdf_index]
             img <- magick::image_read(img_path)
-            
-            # Get image dimensions for coordinate conversion
             info <- magick::image_info(img)
             img_width <- info$width
             img_height <- info$height
-            
-            # Get rectangles for this page, if any
-            page_key <- paste0("page_", rv$pdf_index)
-            rectangles <- rv$rectangles[[page_key]]
-            
+            borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
+            rectangles <- if (!is.null(borehole_id)) rv$rectangles[[borehole_id]] else NULL
             if (!is.null(rectangles) && length(rectangles) > 0) {
-                # Create a drawing context
                 img <- magick::image_draw(img)
-                
-                # Draw each rectangle on the image
                 for (rect in rectangles) {
-                    # Convert from plot coordinates to image coordinates by flipping Y
-                    # Plot coordinates: (0,0) at bottom-left
-                    # Image coordinates: (0,0) at top-left
                     y_min_img <- img_height - rect$ymax
                     y_max_img <- img_height - rect$ymin
-                    
-                    # Draw solid black rectangle for redaction
                     rect(
                         rect$xmin, y_min_img, rect$xmax, y_max_img,
                         border = rect$color,
@@ -1606,14 +1686,9 @@ server <- function(input, output, session) {
                         lwd = 2
                     )
                 }
-                
-                # Close the drawing context
                 dev.off()
             }
-            
-            # Save the image
             magick::image_write(img, path = file, format = "png")
-            
             showNotification("Image saved with rectangles", type = "message", duration = 3)
         }
     )
@@ -1646,6 +1721,11 @@ server <- function(input, output, session) {
                 purpose_of_well = input$purpose_of_well,
                 depth_to_bedrock = input$depth_to_bedrock,
                 depth_to_bedrock_unit = input$depth_to_bedrock_unit,
+                permafrost_present = input$permafrost_present,
+                permafrost_top_depth = input$permafrost_top_depth,
+                permafrost_top_depth_unit = input$permafrost_top_depth_unit,
+                permafrost_bottom_depth = input$permafrost_bottom_depth,
+                permafrost_bottom_depth_unit = input$permafrost_bottom_depth_unit,
                 date_drilled = input$date_drilled,
                 casing_outside_diameter = input$casing_outside_diameter,
                 casing_outside_diameter_unit = input$casing_outside_diameter_unit,
@@ -1694,7 +1774,7 @@ server <- function(input, output, session) {
             }
             
             get_meta_numeric <- function(field) {
-                val <- metadata[[field]]
+                               val <- metadata[[field]]
                 if (is.null(val) || is.na(val) || identical(val, NA)) {
                     return(NA)
                 }
@@ -1710,6 +1790,7 @@ server <- function(input, output, session) {
             }
             
             #updateTextInput(session, "borehole_id", value = well_id)
+
             updateTextInput(session, "well_name", value = get_meta_value("well_name"))
 
             updateTextInput(session, "location_source", value = get_meta_value("location_source"))
@@ -1724,6 +1805,7 @@ server <- function(input, output, session) {
             updateRadioButtons(session, "coordinate_system", selected = get_meta_value("coordinate_system", "utm"))
             updateRadioButtons(session, "depth_to_bedrock_unit", selected = get_meta_value("depth_to_bedrock_unit", "ft"))
             updateRadioButtons(session, "casing_outside_diameter_unit", selected = get_meta_value("casing_outside_diameter_unit", "mm"))
+
             updateRadioButtons(session, "well_depth_unit", selected = get_meta_value("well_depth_unit", "ft"))
             updateRadioButtons(session, "top_of_screen_unit", selected = get_meta_value("top_of_screen_unit", "ft"))
             updateRadioButtons(session, "bottom_of_screen_unit", selected = get_meta_value("bottom_of_screen_unit", "ft"))
@@ -1755,7 +1837,150 @@ server <- function(input, output, session) {
 
         }
     })
-
+    
+    # Add click handler for permafrost inputs
+    observeEvent(input$permafrost_present, {
+        if (input$permafrost_present) {
+            showNotification("Permafrost fields enabled", type = "message", duration = 2)
+        }
+    })
+    
+    # Add renderText outputs for borehole ID and file count displays
+    output$borehole_id_display <- renderText({
+        req(rv$files_df)
+        req(rv$pdf_index)
+        
+        # Return the current borehole ID
+        return(rv$files_df$borehole_id[rv$pdf_index])
+    })
+    
+    output$file_count_display <- renderText({
+        req(rv$files_df)
+        req(rv$pdf_index)
+        
+        # Get current file and borehole information
+        current_borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
+        current_file_name <- rv$files_df$Name[rv$pdf_index]
+        current_page <- rv$files_df$Page[rv$pdf_index]
+        
+        # Count how many total pages this file has
+        same_file_rows <- which(rv$files_df$Name == current_file_name)
+        total_pages_in_file <- length(same_file_rows)
+        
+        # Build informative display text
+        if (total_pages_in_file > 1) {
+            return(sprintf("Page %d of %d from file: %s", 
+                          current_page, total_pages_in_file, current_file_name))
+        } else {
+            # For single page files, show simpler message
+            return(sprintf("Single page file: %s", current_file_name))
+        }
+    })
+    
+    # Update the borehole_id_selector choices whenever files_df changes or pdf_index changes
+    observe({
+        req(rv$files_df)
+        req(rv$pdf_index)
+        
+        # Get current borehole ID
+        current_id <- rv$files_df$borehole_id[rv$pdf_index]
+        
+        # Get all available borehole IDs except the current one
+        all_borehole_ids <- rv$files_df$borehole_id
+        borehole_choices <- setdiff(all_borehole_ids, current_id)
+        
+        # Create named list for dropdown with descriptive labels
+        names(borehole_choices) <- sapply(borehole_choices, function(id) {
+            idx <- which(rv$files_df$borehole_id == id)
+            if(length(idx) > 0) {
+                idx <- idx[1]  # Use first instance if multiple matches
+                file_name <- rv$files_df$Name[idx]
+                page_num <- rv$files_df$Page[idx]
+                return(paste0(id, " - ", file_name, " (Page ", page_num, ")"))
+            } else {
+                return(id)
+            }
+        })
+        
+        # Update the dropdown with all other borehole IDs
+        updateSelectizeInput(session, "borehole_id_selector", 
+                            choices = as.list(borehole_choices),
+                            selected = "",
+                            options = list(
+                                placeholder = "Select borehole to link to",
+                                maxItems = 1
+                            ))
+    })
+    
+    # Handle linking to another borehole when selection is made
+    observeEvent(input$borehole_id_selector, {
+        req(input$borehole_id_selector != "")
+        req(rv$files_df)
+        req(rv$pdf_index)
+        
+        # Get the selected borehole ID
+        target_borehole_id <- input$borehole_id_selector
+        
+        # Get the current borehole ID
+        current_borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
+        
+        # Make sure we're not linking to the same ID
+        if (target_borehole_id != current_borehole_id) {
+            # Show confirmation message
+            showNotification(
+                paste("Linking current page to", target_borehole_id), 
+                type = "message", 
+                duration = 3
+            )
+            
+            # Keep track of current metadata before changing borehole ID
+            current_metadata <- NULL
+            if (current_borehole_id %in% names(rv$well_data)) {
+                current_metadata <- rv$well_data[[current_borehole_id]]$metadata
+            }
+            
+            # Update the borehole_id in files_df
+            rv$files_df$borehole_id[rv$pdf_index] <- target_borehole_id
+            
+            # If target borehole doesn't exist in well_data, create it
+            if (!target_borehole_id %in% names(rv$well_data)) {
+                # Initialize with metadata from current borehole (if available)
+                rv$well_data[[target_borehole_id]] <- list(
+                    files = list(),
+                    metadata = current_metadata
+                )
+            }
+            
+            # Add current file to target borehole's files
+            current_file <- rv$files_df$NewFilename[rv$pdf_index]
+            if (!is.null(rv$well_data[[target_borehole_id]]$files)) {
+                if (is.list(rv$well_data[[target_borehole_id]]$files)) {
+                    rv$well_data[[target_borehole_id]]$files <- c(rv$well_data[[target_borehole_id]]$files, current_file)
+                } else {
+                    rv$well_data[[target_borehole_id]]$files <- c(rv$well_data[[target_borehole_id]]$files, current_file)
+                }
+            } else {
+                rv$well_data[[target_borehole_id]]$files <- current_file
+            }
+            
+            # Refresh the data table to show the updated borehole ID
+            dataTableProxy("pdf_table") %>% 
+                replaceData(rv$files_df[, c("tag", "borehole_id")])
+            
+            # Clear the dropdown selection
+            updateSelectizeInput(session, "borehole_id_selector", selected = "")
+            
+            # Show success message
+            showNotification(
+                paste("Successfully linked to", target_borehole_id), 
+                type = "message", 
+                duration = 3
+            )
+            
+            # Force metadata update for the new borehole ID
+            loading_metadata(FALSE)
+        }
+    })
 }
-
 shinyApp(ui, server)
+
