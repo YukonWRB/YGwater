@@ -1,8 +1,6 @@
 #' Get formatted timeseries data from Aquarius.
 #'
 #'@description
-#' `r lifecycle::badge("stable")`
-#'
 #' Fetches and processes data downloaded from an Aquarius web-hosted server and returns it in a concise format. Note that any times returned by this function are in UTC.
 #'
 #'@details
@@ -37,9 +35,9 @@ aq_download <- function(loc_id,
   #Make the Aquarius configuration
   config = list(
     server = server,
-    username=login[1],
-    password=login[2],
-    timeSeriesName=paste0(ts_name, "@", loc_id)
+    username = login[1],
+    password = login[2],
+    timeSeriesName = paste0(ts_name, "@", loc_id)
   )
 
   # Connect to Aquarius server
@@ -52,14 +50,14 @@ aq_download <- function(loc_id,
   locationData = timeseries$getLocationData(loc_id)
 
   start <- as.character(start)
-  if(nchar(start) == 10){
+  if (nchar(start) == 10) {
     start <- paste0(start, " 00:00:00")
   }
   start <- gsub(" ", "T", start)
   start <- paste0(start, "-00:00")
 
   end <- as.character(end)
-  if (nchar(end) == 10){
+  if (nchar(end) == 10) {
     end <- paste0(end, " 23:59:59.9999999")
   }
   end <- gsub(" ", "T", end)
@@ -104,18 +102,18 @@ aq_download <- function(loc_id,
 
 
   #Add in grades and approval columns
-  if (nrow(ts) > 0){
+  if (nrow(ts) > 0) {
     ts <- ts[!duplicated(ts) , ] #In unknown circumstances, Aquarius spits out duplicate points.
     ts$grade_level <- NA
     ts$grade_description <- NA
-    for (i in 1:nrow(grades)){
+    for (i in 1:nrow(grades)) {
       if (min(ts$datetime) > grades$start_time[i]) { #if the grade is prior to the first ts point
         ts[ts$datetime == min(ts$datetime),]$grade_level <- grades$level[i]
         ts[ts$datetime == min(ts$datetime),]$grade_description <- grades$description[i]
-      } else if (nrow(ts[ts$datetime == grades$start_time[i],]) !=0) { #if the times line up properly (are snapped to a point)
+      } else if (nrow(ts[ts$datetime == grades$start_time[i],]) != 0) { #if the times line up properly (are snapped to a point)
         ts[ts$datetime == grades$start_time[i],]$grade_level <- grades$level[i]
         ts[ts$datetime == grades$start_time[i],]$grade_description <- grades$description[i]
-      } else if (which.min(abs(ts$datetime - grades$start_time[i])) != nrow(ts)){ #if the times do not line up with anything in ts (not snapped), but not after the ts end
+      } else if (which.min(abs(ts$datetime - grades$start_time[i])) != nrow(ts)) { #if the times do not line up with anything in ts (not snapped), but not after the ts end
         index <- which.min(abs(ts$datetime - grades$start_time[i])) + 1
         ts[index,]$grade_level <- grades$level[i]
         ts[index,]$grade_description <- grades$description[i]
@@ -124,14 +122,14 @@ aq_download <- function(loc_id,
 
     ts$approval_level <- NA
     ts$approval_description <- NA
-    for (i in 1:nrow(approvals)){
+    for (i in 1:nrow(approvals)) {
       if (min(ts$datetime) > approvals$start_time[i]) { #if the approval is prior to the first ts point
         ts[ts$datetime == min(ts$datetime),]$approval_level <- approvals$level[i]
         ts[ts$datetime == min(ts$datetime),]$approval_description <- approvals$description[i]
-      } else if (nrow(ts[ts$datetime == approvals$start_time[i],]) !=0) { #if the times line up properly (are snapped to a point)
+      } else if (nrow(ts[ts$datetime == approvals$start_time[i],]) != 0) { #if the times line up properly (are snapped to a point)
         ts[ts$datetime == approvals$start_time[i],]$approval_level <- approvals$level[i]
         ts[ts$datetime == approvals$start_time[i],]$approval_description <- approvals$description[i]
-      } else if (which.min(abs(ts$datetime - approvals$start_time[i])) != nrow(ts)){ #if the times do not line up with anything in ts (not snapped), but not after the ts end
+      } else if (which.min(abs(ts$datetime - approvals$start_time[i])) != nrow(ts)) { #if the times do not line up with anything in ts (not snapped), but not after the ts end
         index <- which.min(abs(ts$datetime - approvals$start_time[i])) + 1
         ts[index,]$approval_level <- approvals$level[i]
         ts[index,]$approval_description <- approvals$description[i]

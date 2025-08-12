@@ -254,8 +254,6 @@ mapRaster <- function(id, language) {
       }
 
       # Deal with raster
-      print(paste0("Selected raster series ID: ", map_params$raster_id))
-      
       # Query valid_from, valid_to, and reference_id for the selected raster series
       if (!is.null(map_params$raster_id) && nzchar(map_params$raster_id)) {
         raster_dates <- dbGetQueryDT(
@@ -272,7 +270,6 @@ mapRaster <- function(id, language) {
         raster_dates$valid_from <- as.POSIXct(raster_dates$valid_from, tz = "UTC")
         raster_dates$valid_to <- as.POSIXct(raster_dates$valid_to, tz = "UTC")
         raster_dates$midpoint <- as.POSIXct((as.numeric(raster_dates$valid_from) + as.numeric(raster_dates$valid_to)) / 2, origin = "1970-01-01", tz = "UTC")
-        print(raster_dates)
       }
 
       # Calculate the difference in days between valid_from and map_params$target
@@ -289,8 +286,8 @@ mapRaster <- function(id, language) {
 
       if (!is.na(selected_reference_id)) {
         r_db <- getRaster(
-          session$userData$AquaCache,
-          name = c("spatial", "rasters"),
+          con = session$userData$AquaCache,
+          tbl_name = c("spatial", "rasters"),
           clause = sprintf("WHERE reference_id = %d", selected_reference_id),
           bands = 1
         )
@@ -411,7 +408,6 @@ mapRaster <- function(id, language) {
         moduleData$timeseries[moduleData$timeseries$timeseries_id %in% closest_measurements1$timeseries_id, c("timeseries_id", "location_id")],
         by = "location_id"
       )
-      print(moduleData$parameters$parameter_id)
       locs_tsids1$param_name <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$point_id,  get(tr("param_name_col", language$language))]
       locs_tsids1$param_unit <- moduleData$parameters[moduleData$parameters$parameter_id == map_params$point_id,  "unit_default"]
 

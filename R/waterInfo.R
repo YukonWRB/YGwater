@@ -1,8 +1,6 @@
 #' Plots and tabular data for hydrometric locations
 #'
 #' @description
-#' `r lifecycle::badge("stable")`
-#'
 #' This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations.
 #'
 #'@details
@@ -26,7 +24,17 @@
 #'
 #' @export
 
-waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both", end_date = Sys.Date(), months_min = c(1:4), months_max = c(5:9), allowed_missing = 10, save_path = "choose", plots = TRUE, plot_type = "combined", quiet = FALSE)
+waterInfo <- function(con = AquaConnect(), 
+                      locations = "all", 
+                      level_flow = "both", 
+                      end_date = Sys.Date(), 
+                      months_min = c(1:4), 
+                      months_max = c(5:9), 
+                      allowed_missing = 10, 
+                      save_path = "choose", 
+                      plots = TRUE, 
+                      plot_type = "combined", 
+                      quiet = FALSE)
   {
   
   # locations <- "all"
@@ -43,9 +51,6 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
   
   
   rlang::check_installed("trend", reason = "necessary to calculate trends.")
-  if (plots) {
-    rlang::check_installed("gridExtra", reason = "necessary to create plots.")
-  }
 
   if (!is.null(save_path)) {
     if (save_path %in% c("Choose", "choose")) {
@@ -91,7 +96,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
           if (flow_end > level_end - 6*30*24*60*60) { #check if last flow is recent enough
             locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name == "water level", "parameter_id"]) , ] #drop level
           } else {
-            locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name =="flow", "parameter_id"]) , ] #drop flow
+            locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name == "flow", "parameter_id"]) , ] #drop flow
           }
         }
       }
@@ -105,7 +110,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
     daily$year <- lubridate::year(daily$date)
     daily$month <- lubridate::month(daily$date)
     tryCatch({
-      extremes[[paste0(locs$location[i], "_", locs$parameter_id[i])]] <- fasstr::calc_annual_extremes(data = daily, dates = date, values = value, months_min = months_min, months_max = months_max, allowed_missing = allowed_missing, water_year_start = 1)
+      extremes[[paste0(locs$location[i], "_", locs$parameter_id[i])]] <- fasstr::calc_annual_extremes(data = daily, dates = date, values = "value", months_min = months_min, months_max = months_max, allowed_missing = allowed_missing, water_year_start = 1)
       data[[paste0(locs$location[i], "_", locs$parameter_id[i])]] <- daily
     }, error = function(e) {
       message("Failed on location ", locs$location[i], " and parameter_id ", locs$parameter_id[i])
@@ -129,7 +134,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
                                  "parameter" = sub(".*_", "", i),
                                  "latitude" = DBI::dbGetQuery(con, paste0("SELECT latitude FROM locations where location = '", sub("_.*", "", i), "'"))[1,1],
                                  "longitude" = DBI::dbGetQuery(con, paste0("SELECT longitude FROM locations where location = '", sub("_.*", "", i), "'"))[1,1],
-                                 "active" = max(data[[i]]$date) > as.Date(end_date)-365,
+                                 "active" = max(data[[i]]$date) > as.Date(end_date) - 365,
                                  "note" = paste0("Last data available on ", max(data[[i]]$date), "."))
     )
     #info
@@ -238,7 +243,7 @@ waterInfo <- function(con = AquaConnect(), locations = "all", level_flow = "both
           ggplot2::theme(axis.title.x = ggplot2::element_blank(),
                          axis.text.x = ggplot2::element_blank(),
                          axis.ticks.x = ggplot2::element_blank())
-        plots_separate <- gridExtra::arrangeGrob(plot2, plot)
+        plots_separate <- cowplot::plot_grid(plot2, plot, ncol = 1, align = "v", rel_heights = c(1, 1))
         plot_list[[i]] <- plots_separate
       }
       if (!is.null(save_path)) {

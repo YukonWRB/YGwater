@@ -115,7 +115,5 @@ to FALSE to force standard scatter traces.}
 A plotly object and a data frame with the data used to create the plot (if \code{data} is TRUE).
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 This function plots multiple continuous timeseries from the aquacache using either a facet plot or a single plot with multiple traces. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
 }

@@ -17,8 +17,20 @@ discDataUI <- function(id) {
           border-bottom: 5px solid #007BFF;  /* Blue bottom border */
           border-radius: 10px;  /* Rounded corners */
         }"
-      )
+      ),
+      HTML(sprintf("
+     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #E5F4F6;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #0097A9;
+        /* expanded header */
+        --bs-accordion-active-bg:   #0097A9;
+      }
+    ", ns("accordion")))
     ),
+    uiOutput(ns("top")),
     page_sidebar(
       sidebar = sidebar(
         title = NULL,
@@ -116,37 +128,37 @@ discData <- function(id, language, inputs) {
       filteredData$sub_locs <- filteredData$sub_locs[filteredData$sub_locs$location_id %in% loc_id, ]
       filteredData$media <- filteredData$media[filteredData$media$media_id %in% filteredData$samples$media_id, ]
       filteredData$sample_types <- filteredData$sample_types[filteredData$sample_types$sample_type_id %in% filteredData$samples$sample_type, ]
-
+      
       remain_projects <- filteredData$locations_projects[filteredData$locations_projects$location_id %in% loc_id, ]
       filteredData$projects <- filteredData$projects[filteredData$projects$project_id %in% remain_projects$project_id, ]
       remain_networks <- filteredData$locations_networks[filteredData$locations_networks$location_id %in% loc_id, ]
       filteredData$networks <- filteredData$networks[filteredData$networks$network_id %in% remain_networks$network_id, ]
-
+      
       filteredData$params <- DBI::dbGetQuery(session$userData$AquaCache,
-        paste0("SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
-               paste(filteredData$samples$sample_id, collapse = ", "), ");"))
+                                             paste0("SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+                                                    paste(filteredData$samples$sample_id, collapse = ", "), ");"))
       if (nrow(filteredData$params) > 0) {
         filteredData$parameter_relationships <- DBI::dbGetQuery(session$userData$AquaCache,
-          paste0("SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
-                 paste(filteredData$samples$sample_id, collapse = ", "), "));"))
+                                                                paste0("SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
+                                                                       paste(filteredData$samples$sample_id, collapse = ", "), "));"))
         if (length(filteredData$parameter_relationships$group_id) > 0) {
           filteredData$param_groups <- DBI::dbGetQuery(session$userData$AquaCache,
-            paste0("SELECT * FROM parameter_groups WHERE group_id IN (",
-                   paste(filteredData$parameter_relationships$group_id, collapse = ", "), ");"))
+                                                       paste0("SELECT * FROM parameter_groups WHERE group_id IN (",
+                                                              paste(filteredData$parameter_relationships$group_id, collapse = ", "), ");"))
         } else {
           filteredData$param_groups <- data.frame(group_id = numeric(), group_name = character(),
-                                                 group_name_fr = character(), description = character(),
-                                                 description_fr = character())
+                                                  group_name_fr = character(), description = character(),
+                                                  description_fr = character())
         }
         sub_groups <- filteredData$parameter_relationships$sub_group_id[!is.na(filteredData$parameter_relationships$sub_group_id)]
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache,
-            paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
-                   paste(sub_groups, collapse = ", "), ");"))
+                                                           paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
+                                                                  paste(sub_groups, collapse = ", "), ");"))
         } else {
           filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(),
-                                                     sub_group_name_fr = character(), description = character(),
-                                                     description_fr = character())
+                                                      sub_group_name_fr = character(), description = character(),
+                                                      description_fr = character())
         }
       }
     } else {
@@ -167,6 +179,20 @@ discData <- function(id, language, inputs) {
                                    media = FALSE,
                                    sample_types = FALSE,
                                    params = FALSE)
+    
+    output$top <- renderUI({
+      tagList(
+        accordion(
+          id = ns("accordion"),
+          open = TRUE,
+          accordion_panel(
+            title = tr("instructions", language$language),
+            tags$p(HTML(tr("view_data_instructions_discrete", language$language))),
+            tags$div(style = "height: 10px;"),
+          )
+        )
+      )
+    })
     
     output$sidebar <- renderUI({
       req(filteredData, language)
@@ -253,12 +279,14 @@ discData <- function(id, language, inputs) {
           actionButton(ns("reset"),
                        label = tr("reset_filters", language$language),
                        width = "100%",
-                       style = "font-size: 14px;"
+                       style = "font-size: 14px;", 
+                       class = "btn btn-primary"
           ),
           actionButton(ns("filter"),
                        label = tr("view_samples", language$language),
                        width = "100%",
-                       style = "font-size: 14px;"
+                       style = "font-size: 14px;", 
+                       class = "btn btn-primary"
           )
         )
       ) # End of tagList
@@ -274,11 +302,8 @@ discData <- function(id, language, inputs) {
     })  %>% # End of renderUI for sidebar
       bindEvent(language$language)
     
-    
     output$main <- renderUI({
       tagList(
-        tags$p(HTML(tr("view_data_instructions", language$language))),
-        tags$div(style = "height: 10px;"),
         DT::DTOutput(ns("tbl")), # Table with sample data, filtered by the sidebar inputs
         actionButton(ns("select_all"), tr("select_all", language$language), style = "display: none;"),  # Button will be hidden until a row is selected
         actionButton(ns("view_data"), tr("view_data1", language$language), style =  "display: none;"),  # Button will be hidden until a row is selected
@@ -404,14 +429,14 @@ discData <- function(id, language, inputs) {
       req(input$projects, input$networks, filteredData$locations_projects, filteredData$locations_networks)
       
       remain_locs <- filteredData$locs
-
+      
       if (!("all" %in% input$networks)) {
         net_ids <- filteredData$locations_networks$location_id[
           filteredData$locations_networks$network_id %in% input$networks
         ]
         remain_locs <- remain_locs[remain_locs$location_id %in% net_ids, ]
       }
-
+      
       if (!("all" %in% input$projects)) {
         proj_ids <- filteredData$locations_projects$location_id[
           filteredData$locations_projects$project_id %in% input$projects

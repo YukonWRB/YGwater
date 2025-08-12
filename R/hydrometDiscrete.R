@@ -1,8 +1,6 @@
 #' Discrete hydrometric data plotting
 #'
 #' @description
-#' `r lifecycle::badge('deprecated')`
-#' 
 #' Deprecated for general usage but retained for use with snow bulletin. Use [plotDiscrete()] instead.
 #'
 #' Generate plots of snow survey data (snow water equivalent and snow depth) or other variables sampled at regular intervals (weekly or monthly).
@@ -251,13 +249,13 @@ hydrometDiscrete <- function(location = NULL,
     stats_discrete <- all_discrete[all_discrete$year < max(years),]
     stats_discrete <- stats_discrete %>%
       dplyr::group_by(.data$month) %>%
-      dplyr::summarise(value = min(.data$value, na.rm=TRUE), type = "min") %>%
+      dplyr::summarise(value = min(.data$value, na.rm = TRUE), type = "min") %>%
       dplyr::bind_rows(stats_discrete %>%
                   dplyr::group_by(.data$month) %>%
-                  dplyr::summarise(value = max(.data$value, na.rm=TRUE), type = "max")) %>%
+                  dplyr::summarise(value = max(.data$value, na.rm = TRUE), type = "max")) %>%
       dplyr::bind_rows(stats_discrete %>%
                   dplyr::group_by(.data$month) %>%
-                  dplyr::summarise(value = stats::median(.data$value, na.rm=TRUE), type = "median"))
+                  dplyr::summarise(value = stats::median(.data$value, na.rm = TRUE), type = "median"))
 
     if (overlaps) {
       stats_discrete$fake_date <- NA
@@ -270,12 +268,13 @@ hydrometDiscrete <- function(location = NULL,
     } else {
       stats_discrete$fake_date <- as.Date(paste0(max(years), "-", stats_discrete$month, "-01"))
     }
+    day_seq <- seq(min(stats_discrete$fake_date), max(stats_discrete$fake_date), by = "1 day")
+  } else {
+    day_seq <- seq(min(all_discrete$fake_date), max(all_discrete$fake_date), by = "1 day")
   }
     
     
     # x axis settings
-    
-    day_seq <- seq(min(stats_discrete$fake_date), max(stats_discrete$fake_date), by = "1 day")
     if  (length(day_seq) > 200) {
       date_breaks = "2 months"
       if (lang == "fr") {
@@ -372,18 +371,16 @@ hydrometDiscrete <- function(location = NULL,
     }
     plot <- plot +
       ggplot2::geom_segment(data = stats_discrete, linewidth = plot_scale * 1.5,
-                            ggplot2::aes(color = .data$type, yend = value,
+                            ggplot2::aes(color = .data$type, yend = .data$value,
                                          x = .data$fake_date - 12, xend = .data$fake_date + 12)) +
       ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
       ggnewscale::new_scale_color()
   } else if (plot_type == "violin") {
     plot <- plot +
-      ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width") #+ # Using a scale other than "width" may result in issues for locations where there are many "0" values.        
-      # ggplot2::scale_y_continuous(limits = c(min(all_discrete$value), max(all_discrete$value)), expand = c(0.01, 0.05))
+      ggplot2::geom_violin(draw_quantiles = c(0.5), adjust = 0.7, width = 12, alpha = 0.8, fill = "aliceblue", scale = "width")
   } else if (plot_type == "boxplot") {
     plot <- plot +
-      ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE) #+
-      # ggplot2::scale_y_continuous(limits = c(min(all_discrete$value), max(all_discrete$value)), expand = c(0.01, 0.05))
+      ggplot2::geom_boxplot(outlier.shape = 8 , outlier.size = 1.7*plot_scale, color = "black", fill = "aliceblue", varwidth = TRUE)
   }
 
   if (nrow(discrete) > 0) {
@@ -397,7 +394,7 @@ hydrometDiscrete <- function(location = NULL,
     if (plot_type == "linedbox") {
       plot <- plot +
         ggplot2::geom_segment(data = discrete, linewidth = plot_scale*1.5,
-                              ggplot2::aes(yend = value,
+                              ggplot2::aes(yend = .data$value,
                                            x = .data$fake_date - 12, xend = .data$fake_date + 12), color = 'black')
     }
   }

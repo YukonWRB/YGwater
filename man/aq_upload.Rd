@@ -36,8 +36,6 @@ aq_upload(
 Appends points to the Aquarius server.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 Bypasses the web GUI and allows you to append data to Aquarius directly. By default (overwrite = FALSE), will NOT overwrite or modify points in Aquarius - even if there is no visible data point but an NA or NULL stored in the Aquarius database. If you get a situation where attempting to append points results in no newly appended points, there may be an 'invisible' point; try an overwrite append once sure that you've got the right 'loc_id' and 'timeseries_name'.
 }
 \details{

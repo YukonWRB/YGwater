@@ -1,8 +1,8 @@
 #' Retrieve raster files from the database
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
-#'
+#' This function retrieves raster data from a PostGIS-enabled database and returns it as a terra object. It allows for filtering of the raster data using SQL clauses, spatial boundaries, and selection of specific raster bands.
+#' 
 #' @param clauses Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1'. If NULL, all raster data is returned.
 #' @param boundary Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector c(top, bottom, right, left) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.
 #' @param bands The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.
@@ -25,13 +25,41 @@ getRaster <- function(clauses = NULL,
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
-  
-  #warn_deprecated_rc(returnclass, "pgGetRast(returnclass = 'should be a `terra` object')")
-  rpostgis:::dbConnCheck(con)
+
   if (!suppressMessages(rpostgis::pgPostGIS(con))) {
     cli::cli_abort("PostGIS is not enabled on this database.")
   }
-  name1 <- rpostgis:::dbTableNameFix(con, tbl_name)
+  
+  # Direct past in of rpostgis::dbTableNameFix to remove need for ::: on unexported function
+  dbTableNameFix <- function(conn = NULL, t.nm, as.identifier = TRUE) {
+    ## case of no schema provided
+    if (length(t.nm) == 1 && !is.null(conn) && !inherits(conn, what = "AnsiConnection")) {
+      schemalist <- DBI::dbGetQuery(conn,"select nspname as s from pg_catalog.pg_namespace;")$s
+      user <- DBI::dbGetQuery(conn,"SELECT current_user as user;")$user
+      schema <- DBI::dbGetQuery(conn,"SHOW search_path;")$search_path
+      schema <- gsub(" ","", unlist(strsplit(schema,",",fixed = TRUE)), fixed = TRUE)
+      # use user schema if available
+      if ("\"$user\"" == schema[1] && user %in% schemalist) {
+        sch <- user
+      } else {
+        sch <- schema[!schema == "\"$user\""][1]
+      }
+      t.nm <- c(sch, t.nm)
+    }
+    if (length(t.nm) > 2)
+    {
+      cli::cli_abort("Invalid PostgreSQL table/view name. Must be provided as one ('table') or two-length c('schema','table') character vector.")
+    }
+    if (is.null(conn)) {conn <- DBI::ANSI()}
+    if (!as.identifier) {return(t.nm)} else {
+      t.nm <- DBI::dbQuoteIdentifier(conn, t.nm)
+      return(t.nm)
+    }
+  }
+  name1 <- dbTableNameFix(con, tbl_name)
+  
+  
+  
   nameque <- paste(name1, collapse = ".")
   namechar <- gsub("'", "''", paste(gsub("^\"|\"$", "", name1), 
                                     collapse = "."))
@@ -198,8 +226,6 @@ getRaster <- function(clauses = NULL,
 #' Retrieve vector files from the database
 #' 
 #' @description
-#' `r lifecycle::badge('stable')`
-#'
 #' This function formulates an SQL query to retrieve points, lines, or polygons from the database and returns them as a terra object. At minimum, only one of `geom_id`, `layer_name`, `feature_name`, or `geom_type` are required, though if the combination you enter results in more than one geom_type you will get a descriptive error.
 #'
 #' @param geom_id A numeric vector of geom_ids from the 'vectors' table.

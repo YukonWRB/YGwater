@@ -227,7 +227,7 @@ snowBulletinMod <- function(id, language) {
               # Zip up everything in 'dir' and write the zip to `file`
               files <- list.files(dir, full.names = TRUE)
               
-              zip::zipr(zipfile = paste0(dir, "/report.zip"), files = files)
+              zip::zip(zipfile = paste0(dir, "/report.zip", files = files, mode = "cherry-pick", include_directories = FALSE))
               outputFile(paste0(dir, "/report.zip"))
               
               # Delete everything in the 'dir' except for the .zip file

@@ -21,12 +21,12 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
     
     EQWin_selector <- reactiveVal(FALSE)  # flags whether the EQWin source UI is already rendered
     
-    
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     moduleData <- reactiveValues()
     
-    moduleData$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
+    moduleData$AC_locs <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC")
     moduleData$AC_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC")
+    moduleData$AC_loc_params <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT DISTINCT s.location_id, r.parameter_id FROM samples s INNER JOIN results r ON s.sample_id = r.sample_id")
     
     output$sidebar <- renderUI({
       tagList(
@@ -126,7 +126,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                      label = tooltip(
                        trigger = list(
                          "Facet on",
-                         bs_icon("info-circle-fill")
+                         bsicons::bs_icon("info-circle-fill")
                        ),
                        "Multiple plots are built where each plot represents a different location or parameter, with the other variable represented as different traces or points."
                      ),
@@ -136,7 +136,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                       label = tooltip(
                         trigger = list(
                           "Use log scale",
-                          bs_icon("info-circle-fill")
+                          bsicons::bs_icon("info-circle-fill")
                         ),
                         "Warning: negative values will be removed for log transformation.",
                       )),
@@ -144,7 +144,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                       label = tooltip(
                         trigger = list(
                           "Share X axis between subplots (dates are aligned)",
-                          bs_icon("info-circle-fill")
+                          bsicons::bs_icon("info-circle-fill")
                         ),
                         "This will align the x-axis across all subplots, making it easier to compare trends over time."
                       ),
@@ -153,7 +153,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                       label = tooltip(
                         trigger = list(
                           "Share Y axis between subplots (values are aligned)",
-                          bs_icon("info-circle-fill")
+                          bsicons::bs_icon("info-circle-fill")
                         ),
                         "This will align the y-axis across all subplots, making it easier to compare values across different locations or parameters."
                       ),
@@ -174,7 +174,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                       label = tooltip(
                         trigger = list(
                           "Use target datetime",
-                          bs_icon("info-circle-fill")
+                          bsicons::bs_icon("info-circle-fill")
                         ),
                         "Some measurements have a 'fake' datetime to line up repeated measurements with a certain date. An example are snow survey measurements: these can be taken withing a few days of the 1st of the month but visualize nicely when lined up with the 1st."
                       )
@@ -186,7 +186,8 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                        style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
           input_task_button(ns("make_plot"),
                             "Create Plot",
-                            style = "display: block; width: 100%;") # Ensure block display and full width
+                            style = "display: block; width: 100%;", # Ensure block display and full width
+                            class = "btn btn-primary")
         )
       ) # End of tagList
     })  %>% # End of renderUI for sidebar
@@ -254,15 +255,38 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     
+    # Helper function to update the list of available parameters based on selected locations
+    update_parameters <- function() {
+      if (is.null(input$locations_AC) || length(input$locations_AC) == 0) {
+        params <- moduleData$AC_params
+      } else {
+        param_ids <- unique(moduleData$AC_loc_params$parameter_id[moduleData$AC_loc_params$location_id %in% input$locations_AC])
+        params <- moduleData$AC_params[moduleData$AC_params$parameter_id %in% param_ids, , drop = FALSE]
+      }
+      selected <- input$parameters_AC[input$parameters_AC %in% params$parameter_id]
+      updateSelectizeInput(
+        session,
+        "parameters_AC",
+        choices = stats::setNames(params$parameter_id, params$param_name),
+        selected = selected,
+        server = TRUE
+      )
+    }
+    
     observeEvent(input$data_source, {
       req(moduleData)
       if (input$data_source == "EQ") {
         # These updates are performed in the observeEvent for input$EQWin_source
       } else if (input$data_source == "AC") { # AC selected
-        updateSelectizeInput(session, "parameters_AC", choices = stats::setNames(moduleData$AC_params$parameter_id, moduleData$AC_params$param_name), server = TRUE)
         updateSelectizeInput(session, "locations_AC", choices = stats::setNames(moduleData$AC_locs$location_id, moduleData$AC_locs$name), selected = if (!is.null(inputs$location_id)) inputs$location_id else NULL, server = TRUE)
+        update_parameters()
       }
     })
+    
+    # Update the list of available parameters in response to location selection
+    observeEvent(input$locations_AC, {
+      update_parameters()
+    }, ignoreNULL = FALSE)
     
     # Toggle visibility of location and location group inputs
     observeEvent(input$locs_groups, {

@@ -19,8 +19,7 @@
 #' @param stds A vector of standard names as listed in the EQWin eqstds table. Leave NULL to exclude standards. Standards will be output to an Excel workbook, one labelled tab per standard.
 #' @param stnStds TRUE/FALSE to include/exclude the station-specific standards listed in the eqstns table, column StnStd. Station standards will be added to the 'standards' workbook as per parameter `stds`.
 #' @param save_path The path to save the Excel file(s). Default is "choose" to allow user to select a folder interactively.
-#' @param dbPath The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
-#' databases/EQWinDB/WaterResources.mdb".
+#' @param dbPath The path to the EQWin database. Defaults to a WRB network location.
 #' 
 #' @return A list of data.frames containing the data, location and parameter info, and (optionally) standards, plus an Excel workbook containing the requested station data, an optional workbook containing the standards.
 #' @export
@@ -36,7 +35,7 @@
 #' parameters = c("pH-F"), format = 'wide', stds = c("CCME_LT", "CCME_ST"), stnStds = TRUE)
 #' }
 
-EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, format = 'wide', DL1 = NULL, DL2 = NULL, stds = NULL, stnStds = TRUE, save_path = "choose", dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb") {
+EQWinData <- function(start, end = Sys.Date() + 1, stations = NULL, stnGrp = NULL, parameters = NULL, paramGrp = NULL, format = 'wide', DL1 = NULL, DL2 = NULL, stds = NULL, stnStds = TRUE, save_path = "choose", dbPath = eqwin_db_path()) {
   
   # initial checks, connection, and validations #######################################################################################
   if (is.null(stations) & is.null(stnGrp)) stop("You must specify either stations or stnGrp")

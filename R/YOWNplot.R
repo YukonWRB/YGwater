@@ -1,9 +1,7 @@
-#' YOWNplot
+#' Generalized plotting for YOWN wells
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
-#' Generalized YOWN plotting function
+#' Generates a plot of the specified YOWN well's water level data, with options for statistical calculations and formatting. The plot can be saved to a specified directory or displayed in the console.
 #'
 #' @details
 #' To store login credentials in your .renviron profile, call [usethis::edit_r_environ()] and enter your username and password as value pairs, as AQUSER="your username" and AQPASS = "your password".
@@ -59,7 +57,7 @@ YOWNplot <- function(AQID,
     } else if (saveTo == "choose") {
       # Select save path using GUI
       saveTo <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"), "Desktop"))
-    } else if (dir.exists(saveTo) == FALSE) {
+    } else if (!dir.exists(saveTo)) {
       stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
     }
   }
@@ -117,7 +115,7 @@ YOWNplot <- function(AQID,
                   "day" = format(fulldf$timestamp_MST, "%d"), # Add day column
                   "monthday" = format(fulldf$timestamp_MST, "%m-%d")) # Add month-day column
   datestats <- suppressWarnings(dplyr::group_by(fulldf, date) %>% # Calculate statistics by date (ie. Jan. 1, 2000)
-                                  dplyr::summarize("datemin" = min(value, na.rm = TRUE), "datemax" = max(value, na.rm = TRUE), "datemean" = mean(value, na.rm = TRUE)))
+                                  dplyr::summarize("datemin" = min(.data$value, na.rm = TRUE), "datemax" = max(.data$value, na.rm = TRUE), "datemean" = mean(.data$value, na.rm = TRUE)))
   fulldf <- suppressMessages(dplyr::full_join(fulldf, datestats)) # Join full df to datestats
   daystats <- suppressWarnings(dplyr::group_by(fulldf, .data$monthday) %>% # Calculate year-over-year daily statistics (ie. Jan. 1)
                                  dplyr::summarize("daymin" = min(.data$datemin, na.rm = TRUE), "daymax" = max(.data$datemax, na.rm = TRUE), daymean = mean(.data$datemean, na.rm = TRUE), N = dplyr::n()))
@@ -331,7 +329,8 @@ YOWNplot <- function(AQID,
                                      high = "#DC4405",
                                      breaks = c(min(plotdf_hist$year), max(plotdf_hist$year)),
                                      name = "",
-                                     labels = scales::label_date(format = "%Y"),
+                                     # labels = scales::label_date(format = "%Y"),
+                                     labels = function(x) format(x, "%Y"),
                                      expand = 0) +
       ggnewscale::new_scale_color() +
       ggplot2::geom_line(data = plotdf_current[NAaddc,],
@@ -384,17 +383,17 @@ YOWNplot <- function(AQID,
                                                       "\nPlot generated: ",
                                                       Sys.Date(),
                                                       "; Yukon Observation Well Network"))
-  } else if (stats == FALSE) {
+  } else if (!stats) {
     # Generate vector of TRUE/FALSE to stop GGplot from filling in gaps when NA values exist
     NAcomp <- rle(!is.na(plotdf$datemean))
-    NAcomp$values[which(NAcomp$lengths>1 & !NAcomp$values)] <- TRUE
+    NAcomp$values[which(NAcomp$lengths > 1 & !NAcomp$values)] <- TRUE
     NAadd <- inverse.rle(NAcomp)
 
     # Generate plot
     plot <- ggplot2::ggplot() +
       ggplot2::geom_line(data = plotdf[NAadd,],
                          ggplot2::aes(x = .data$timestamp_MST,
-                                      y = value,
+                                      y = .data$value,
                                       colour = "Daily Average Water Level"),
                          linewidth = 1) +
       ggplot2::scale_colour_manual(name = "",
@@ -459,18 +458,18 @@ YOWNplot <- function(AQID,
   if (timeSeriesID == "Wlevel_bgs.Calculated" | timeSeriesID == "Wlevel_btoc.Calculated") {
     if (stats != FALSE) {
       plot <- plot + ggplot2::scale_y_reverse(name = ytitle,
-                                              limits = c(plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
-                                                         plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor)),
-                                              breaks = seq(plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
-                                                           plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor), by = -0.25),
+                                              limits = c(round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
+                                                         round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor)),
+                                              breaks = seq(round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
+                                                           round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor), by = -0.25),
                                               expand = c(0, 0))
-
+      
       if (tolower(stats) == "ribbon") {
         plot <- plot +
           ggnewscale::new_scale_colour() +
           ggplot2::geom_path(data = plotdf,
                              ggplot2::aes(x = .data$timestamp_MST,
-                                          y = plyr::round_any(max(stats::na.omit(.data$daymax)), 0.5, f = ceiling),
+                                          y = round_any(max(stats::na.omit(.data$daymax)), 0.5, f = ceiling),
                                           colour = factor(.data$grade_description), group = 1),
                              linewidth = 2.5,
                              show.legend = FALSE) +
@@ -486,7 +485,7 @@ YOWNplot <- function(AQID,
           ggnewscale::new_scale_colour() +
           ggplot2::geom_path(data = plotdf_current,
                              ggplot2::aes(x = .data$monthday,
-                                          y = plyr::round_any(max(stats::na.omit(plotdf$datemax)), 0.5, f = ceiling),
+                                          y = round_any(max(stats::na.omit(plotdf$datemax)), 0.5, f = ceiling),
                                           colour = factor(.data$grade_description), group = 1),
                              linewidth = 2.5,
                              show.legend = FALSE) +
@@ -497,12 +496,12 @@ YOWNplot <- function(AQID,
                                                                    "REDACTED" = "red",
                                                                    "MISSING DATA" = "black"))
       }
-    } else if (stats == FALSE) {
+    } else if (!stats) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
         ggplot2::geom_path(data = plotdf,
                            ggplot2::aes(x = .data$timestamp_MST,
-                                        y = plyr::round_any(max(stats::na.omit(value)), 0.5, f = ceiling),
+                                        y = round_any(max(stats::na.omit(.data$value)), 0.5, f = ceiling),
                                         colour = factor(.data$grade_description), group = 1),
                            linewidth = 2.5,
                            show.legend = FALSE) +
@@ -514,10 +513,10 @@ YOWNplot <- function(AQID,
                                                 "REDACTED" = "red",
                                                 "MISSING DATA" = "black")) +
         ggplot2::scale_y_reverse(name = ytitle,
-                                 limits = c(plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
-                                            plyr::round_any(min(stats::na.omit(plotdf$value)), 0.25, f = floor)),
-                                 breaks = seq(plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
-                                              plyr::round_any(min(stats::na.omit(plotdf$value)), 0.25, f = floor), by = -0.25),
+                                 limits = c(round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
+                                            round_any(min(stats::na.omit(plotdf$value)), 0.25, f = floor)),
+                                 breaks = seq(round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
+                                              round_any(min(stats::na.omit(plotdf$value)), 0.25, f = floor), by = -0.25),
                                  expand = c(0, 0))
     }
 
@@ -526,7 +525,7 @@ YOWNplot <- function(AQID,
     if (stats != FALSE) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
-        ggplot2::geom_path(data = plotdf_current, ggplot2::aes(x = .data$timestamp_MST, y = plyr::round_any(min(stats::na.omit(.data$daymin)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
+        ggplot2::geom_path(data = plotdf_current, ggplot2::aes(x = .data$timestamp_MST, y = round_any(min(stats::na.omit(.data$daymin)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
         ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
                                                                  "B" = "#0097A9",
                                                                  "C" = "#F2A900",
@@ -534,13 +533,13 @@ YOWNplot <- function(AQID,
                                                                  "REDACTED" = "red",
                                                                  "MISSING DATA" = "black")) +
         ggplot2::scale_y_continuous(name = ytitle,
-                                    limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling)),
+                                    limits = c(round_any(min(stats::na.omit(plotdf$daymin)), 0.25, f = floor), round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling)),
                                     breaks = seq(floor(min(stats::na.omit(plotdf$daymin))), ceiling(max(stats::na.omit(plotdf$daymax))), by = 0.25),
                                     expand = c(0, 0))
-    } else if (stats == FALSE) {
+    } else if (!stats) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
-        ggplot2::geom_path(data = plotdf, ggplot2::aes(x = .data$timestamp_MST, y = plyr::round_any(min(stats::na.omit(.data$daymean)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
+        ggplot2::geom_path(data = plotdf, ggplot2::aes(x = .data$timestamp_MST, y = round_any(min(stats::na.omit(.data$daymean)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
         ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
                                                                  "B" = "#0097A9",
                                                                  "C" = "#F2A900",
@@ -548,13 +547,13 @@ YOWNplot <- function(AQID,
                                                                  "REDACTED" = "red",
                                                                  "MISSING DATA" = "black")) +
         ggplot2::scale_y_continuous(name = ytitle,
-                                    limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymean)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymean)), 0.5, f = ceiling)),
+                                    limits = c(round_any(min(stats::na.omit(plotdf$daymean)), 0.25, f = floor), round_any(max(stats::na.omit(plotdf$daymean)), 0.5, f = ceiling)),
                                     breaks = seq(floor(min(stats::na.omit(plotdf$daymean))), ceiling(max(stats::na.omit(plotdf$daymean))), by = 0.25),
                                     expand = c(0, 0))
     }
   }
   # Set stats to numeric value of false for saving plot title
-  if (smooth == FALSE) {
+  if (!smooth) {
     smooth <- 0
   }
   #### Final combination of plot, title, subtitle, caption blocks, format and save plot ####
@@ -564,7 +563,7 @@ YOWNplot <- function(AQID,
 
   # Draw arranged plots on background template file
   final_plot <- cowplot::ggdraw() +
-    cowplot::draw_image("G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/4_YOWN_DATA_ANALYSIS/1_WATER LEVEL/00_AUTOMATED_REPORTING/01_MARKUP_IMAGES/Template_grades.jpg") +
+    cowplot::draw_image(system.file("data-raw/Template_grades.jpg", package = "YGwater")) +
     cowplot::draw_plot(final)
 
   # Save plot to specified directory

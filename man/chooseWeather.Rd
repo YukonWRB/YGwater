@@ -39,8 +39,6 @@ chooseWeather(
 A table printed to the console describing the stations and a plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 Provides information on the coverage of chosen climate variables for chosen climate stations in proximity. Outputs station descriptions and plots to help you choose the most appropriate climate station(s) to use.
 
 chooses station based on given name, coordinates, and period of interest, and displays in a plot the availability of the months of interest for the variables of interest.

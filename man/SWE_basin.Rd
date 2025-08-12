@@ -36,6 +36,5 @@ SWE_basin(
 A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 The purpose of this script is to summarise the SWE data of each basin for a particular year and month and compare to previous years. It is used for the snow bulletin, specifically the SWE map and the plot B. It is meant to replace Ellen Ward's code from 2020-04-16, r script called swe_compiled_basin.R.
 }

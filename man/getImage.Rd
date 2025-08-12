@@ -19,8 +19,6 @@ getImage(id, con = NULL, save_dir = NULL, save_name = NULL)
 A data.frame containing the row(s) identified by the specified ID. One of the columns will contain the binary object (file). The image will be saved to file if requested and possible.
 }
 \description{
-lifecycle::badge("stable")
-
 Extracts an image stored in the aquacache as BYTEA type. For extracting documents see \code{\link[=getDocument]{getDocument()}}, for extracting vector files as \emph{terra} rasters (points, lines polygons) see \code{\link[=getVector]{getVector()}}, and for extracting rasters to R as \emph{terra} objects see \code{\link[=getRaster]{getRaster()}}.
 }
 \details{

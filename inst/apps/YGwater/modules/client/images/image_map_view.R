@@ -307,7 +307,7 @@ imgMapView <- function(id, language) {
           xlab = "Date/Time (UTC-7)"
         )
         unique_dates <- unique(as.Date(images_filtered$datetime))
-        n_ticks <- max(3, min(length(unique_dates), 7))
+        n_ticks <- max(3, min(length(unique_dates), 7, na.rm = TRUE), na.rm = TRUE)
         x_ticks <- pretty(range(images_filtered$datetime, na.rm = TRUE), n = n_ticks)
         axis(1, at = x_ticks, labels = format(x_ticks, "%d-%b-%Y"), las = 0, cex.axis = 0.7)
         x_minor <- pretty(range(images_filtered$datetime, na.rm = TRUE), n = 10)
@@ -402,7 +402,7 @@ imgMapView <- function(id, language) {
         return()
         datesControl(TRUE)
       }
-      if (as.POSIXct(input$dates[1], tz = "MST") - 7*60 < min(images$images$datetime)) {
+      if (as.POSIXct(input$dates[1], tz = "MST") - 7*60 < min(images$images$datetime, na.rm = TRUE)) {
         images$images <- DBI::dbGetQuery(
           session$userData$AquaCache,
           paste0("SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';")

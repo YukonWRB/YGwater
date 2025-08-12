@@ -1,8 +1,6 @@
 #' YOWN site comparative plot generation, in m bgs
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' Plots multiple YOWN stations on the same chart
 #'
 #' @details
@@ -21,7 +19,6 @@
 #' @export
 
 #TODO: Fill in documentation above
-#TODO: pass login and server parameters to the aq_download function
 
 YOWNplot_SiteCompare <- function(YOWNindex,
                                  tsunit = "bgs",
@@ -31,35 +28,35 @@ YOWNplot_SiteCompare <- function(YOWNindex,
                                  login = Sys.getenv(c("AQUSER", "AQPASS")),
                                  server ="https://yukon.aquaticinformatics.net/AQUARIUS") {
 
-  YOWNindex = c("YOWN-1930S", "YOWN-1930D")
-  tsunit = "bgs"
-  chartRange = "all"
-  chartXInterval ="6 month"
-  saveTo = "desktop"
-  login = Sys.getenv(c("AQUSER", "AQPASS"))
-  server ="https://yukon.aquaticinformatics.net/AQUARIUS"
+  # YOWNindex = c("YOWN-1930S", "YOWN-1930D")
+  # tsunit = "bgs"
+  # chartRange = "all"
+  # chartXInterval = "6 month"
+  # saveTo = "desktop"
+  # login = Sys.getenv(c("AQUSER", "AQPASS"))
+  # server = "https://yukon.aquaticinformatics.net/AQUARIUS"
 
   # Sort out save location
   saveTo <- tolower(saveTo)
   if (saveTo %in% c("Choose", "choose")) {
-    print("Select the folder where you want this graph saved.")
-    saveTo <- as.character(utils::choose.dir(caption="Select Save Folder"))
-  } else if(saveTo == "desktop") {
+    message("Select the folder where you want this graph saved.")
+    saveTo <- as.character(utils::choose.dir(caption = "Select Save Folder"))
+  } else if (saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
-  } else if (dir.exists(saveTo) == FALSE) {
+  } else if (!dir.exists(saveTo)) {
     stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
   }
 
   # Format chart labels based on time series ID
-  if(tsunit == "asl"){
-    print("Generating plot in m asl")
+  if (tsunit == "asl") {
+    message("Generating plot in m asl")
     axislab <- "Water Level (m above sea level)"
     ts_name <- "Wlevel_masl.Calculated"
-  } else if(tsunit == "btoc") {
+  } else if (tsunit == "btoc") {
     print("Generating plot in m btoc")
     axislab <- "Water Level (m below top of casing)"
     ts_name <- "Wlevel_btoc.Calculated"
-  } else if(tsunit == "bgs"){
+  } else if (tsunit == "bgs") {
     print("Generating plot in m bgs")
     axislab <- "Water Level (m below ground surface)"
     ts_name <- "Wlevel_bgs.Calculated"
@@ -71,15 +68,12 @@ YOWNplot_SiteCompare <- function(YOWNindex,
   # Populate list
   for (i in YOWNindex) {
 
-    #TODO: Cole, is line below intended as a debug/dev thing?
-    print(i)
-
     # Download data from Aquarius
     #TODO: pass the aqts server ID, username, password to this function in case they ever change
     datalist <- YGwater::aq_download(loc_id = i,
                                       ts_name = ts_name,
                                      login = Sys.getenv(c("AQUSER", "AQPASS")),
-                                     server ="https://yukon.aquaticinformatics.net/AQUARIUS")
+                                     server = "https://yukon.aquaticinformatics.net/AQUARIUS")
 
     # Unlist time series data
     timeseries <- datalist$timeseries
@@ -102,10 +96,10 @@ YOWNplot_SiteCompare <- function(YOWNindex,
     gapdf$lag_val <- as.numeric(gapdf$lag_val)
 
     # If there are gaps present, fill in gaps with hourly timestamps
-    if(nrow(gapdf != 0)){
+    if (nrow(gapdf != 0)) {
       # Create a list of data frames for each identified data gap, fill in hourly time stamps
       gaplist <- list()
-      for(j in 1:nrow(gapdf)) {
+      for (j in 1:nrow(gapdf)) {
         df <- data.frame(seq.POSIXt(from = gapdf[j, 1], by = "-1 hour", length.out = gapdf[j, 8]), NA, as.character(-5), "MISSING DATA", gapdf$approval_level[j], gapdf$approval_description[j], NA, NA)
         colnames(df) <- colnames(gapdf)
         gaplist[[j]] <- df
@@ -118,8 +112,7 @@ YOWNplot_SiteCompare <- function(YOWNindex,
       df <- timeseries
     }
     df$YOWNID <- i
-    df <- df %>%
-      dplyr::select(.data$YOWNID, tidyselect::everything())
+    df <- df[, c("YOWNID", setdiff(names(df), "YOWNID")), drop = FALSE]
     sitelist[[i]] <- df
   }
 
@@ -156,16 +149,16 @@ YOWNplot_SiteCompare <- function(YOWNindex,
                    legend.text = ggplot2::element_text(size = 9))
 
   # Format chart labels based on time series ID
-  if(tsunit == "asl"){
-    limits <- c(plyr::round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling))
+  if (tsunit == "asl") {
+    limits <- c(round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor), round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling))
     breaks <- seq(floor(min(stats::na.omit(plotdf$value))), ceiling(max(stats::na.omit(plotdf$value))), by = 0.25)
 
     plot <- plot + ggplot2::scale_y_continuous(name = "",
                                        limits = limits,
                                        breaks = breaks,
                                        expand = c(0, 0))
-  } else if(tsunit == "bgs" | tsunit == "btoc") {
-    limits <- c(plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling), plyr::round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor))
+  } else if (tsunit == "bgs" | tsunit == "btoc") {
+    limits <- c(round_any(min(stats::na.omit(plotdf$value)), 0.5, f = floor), round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling))
     breaks <- seq(ceiling(max(stats::na.omit(plotdf$value))), floor(min(stats::na.omit(plotdf$value))), by = -0.25)
     plot <- plot + ggplot2::scale_y_reverse(name = paste0("Groundwater level (m ", tsunit, " )"),
                                        limits = limits,
@@ -216,11 +209,11 @@ YOWNplot_SiteCompare <- function(YOWNindex,
 
   # Add final aesthetic tweaks, print plot onto template
   final_plot <- cowplot::ggdraw() +
-    cowplot::draw_image("G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\01_MARKUP_IMAGES\\template_nogrades.jpg") +
+    cowplot::draw_image("G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER_LEVEL\\00_AUTOMATED_REPORTING\\01_MARKUP_IMAGES\\Template_nogrades.jpg") +
     cowplot::draw_plot(final)
 
   ggplot2::ggsave(plot = final_plot, filename = paste0(saveTo, "SiteCompare.pdf"),  height = 8.5, width = 11, units = "in")
 
-  print("Site Comparison Plot Generated")
+  message("Site Comparison Plot Generated")
 
 }

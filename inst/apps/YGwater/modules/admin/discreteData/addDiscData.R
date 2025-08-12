@@ -316,7 +316,7 @@ addDiscData <- function(id) {
     data <- reactiveValues(df = data.frame(sample = integer(), datetime = as.POSIXct(character()), parameter_id = integer(), value = numeric()))
 
     observeEvent(input$add_row, {
-      next_sample <- ifelse(nrow(data$df) == 0, 1, max(data$df$sample) + 1)
+      next_sample <- ifelse(nrow(data$df) == 0, 1, max(data$df$sample, na.rm = TRUE) + 1)
       data$df <- rbind(data$df, data.frame(sample = next_sample, datetime = Sys.time(), parameter_id = NA_integer_, value = NA_real_))
     })
 
@@ -341,7 +341,7 @@ addDiscData <- function(id) {
           param_cols <- names(mapping$params)
           sub <- df[start_row:nrow(df), c(mapping$datetime, param_cols)]
           sub$row_id <- seq_len(nrow(sub))
-          long <- tidyr::pivot_longer(sub, cols = tidyselect::all_of(param_cols), names_to = "pcol", values_to = "value")
+          long <- tidyr::pivot_longer(sub, cols = param_cols, names_to = "pcol", values_to = "value")
           long$parameter_id <- vapply(long$pcol, function(pc) mapping$params[[pc]]$id, numeric(1))
           conv <- vapply(long$pcol, function(pc) mapping$params[[pc]]$conv, numeric(1))
           data$df <- data.frame(sample = long$row_id,

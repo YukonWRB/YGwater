@@ -33,8 +33,6 @@ YOWNplot_WSC(
 Writes .pdf plot of WSC and YOWN data
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
-
 Plots YOWN data alongside WSC stations, in m asl. Only works for stations that have values in the "Elevation" field in their Aquarius information page.
 }
 \details{

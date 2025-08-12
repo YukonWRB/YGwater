@@ -36,7 +36,8 @@ imputeMissingUI <- function(id) {
         /* expanded header */
         --bs-accordion-active-bg:   #7A9A01;
       }
-    ", ns("accordion3")))),
+    ", ns("accordion3")))
+      ),
     
     page_fluid(
       accordion(
@@ -169,7 +170,7 @@ imputeMissing <- function(id) {
       } else {
         period <- 3600
       }
-      full_dt <- data.frame(datetime = seq(min(df$datetime), max(df$datetime), by = period))
+      full_dt <- data.frame(datetime = seq(min(df$datetime, na.rm = TRUE), max(df$datetime, na.rm = TRUE), by = period))
       full_dt <- merge(full_dt, df, by = 'datetime', all.x = TRUE)
       full_data(full_dt)
       loc <- ts_meta()[input$ts_table_rows_selected, 'location']
@@ -235,7 +236,7 @@ imputeMissing <- function(id) {
         tsid2 <- candidates()[sel, 'timeseries_id']
         q <- sprintf(
           "SELECT datetime, value FROM continuous.measurements_continuous WHERE timeseries_id = %s AND datetime >= '%s' AND datetime <= '%s'",
-          tsid2, min(df$datetime), max(df$datetime)
+          tsid2, min(df$datetime, na.rm = TRUE), max(df$datetime, na.rm = TRUE)
         )
         cand <- DBI::dbGetQuery(session$userData$AquaCache, q)
         cand$datetime <- as.POSIXct(cand$datetime, tz = 'UTC')

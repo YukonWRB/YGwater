@@ -1,8 +1,6 @@
 #' Function for creating snow bulletin statistics - internal
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
-#'
 #' This function generates the statistics associated with the snow bulletin for a specified date. The output is a list of tables (in R), or a number of excel workbooks. Data is fetched from the local AquaCache database created/maintained by the AquaCache package OR from the snow database.
 #'
 #' @details

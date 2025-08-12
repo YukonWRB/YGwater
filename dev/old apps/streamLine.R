@@ -1,8 +1,6 @@
 #' StreamLine Shiny application for WRB data viewing
 #' 
 #' @description
-#' `r lifecycle::badge('experimental')`
-#' 
 #' The in-development public-facing Shiny application for viewing WRB data. Not intended for public viewing yet, but please experiment!.
 #'
 #' @param host Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in `port` to be open on the host machine.

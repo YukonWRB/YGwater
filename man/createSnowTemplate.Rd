@@ -24,8 +24,6 @@ createSnowTemplate(
 A snow survey template for the specified circuit(s) and target date. This excel workbook has a sheet for every snow course within the circuit and contains a summary sheet with current and previous years stats.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
-
 NOTE: locations must be associated with a circuit in the snow database for this function to work. If you are missing locations, you will need to add them to the snow database before running this function.
 
 This function creates snow survey templates for a snow survey circuit in an excel workbook. The function takes the master template and copies it into multiple sheets with circuit name, course name and snow survey target date pre-filled. The outputted template is meant to be filled out by those conducting snow surveys.

@@ -2017,16 +2017,16 @@ tryCatch({
   tabl$perc_hist_med <- round(tabl$swe/tabl$swe_med*100, 0)
   
   # Add R next to record swe
-  if (length(tabl[tabl$record_flag == TRUE,]$swe) > 0) {
-    tabl[tabl$record_flag == TRUE,]$swe <- paste0(tabl[tabl$record_flag == TRUE,]$swe, " R")
+  if (length(tabl[tabl$record_flag ,]$swe) > 0) {
+    tabl[tabl$record_flag ,]$swe <- paste0(tabl[tabl$record_flag ,]$swe, " R")
   }
   # Add E next to estimated swe
-  if (length(tabl[tabl$estimate_flag == TRUE,]$swe) > 0) {
-    tabl[tabl$estimate_flag == TRUE,]$swe <- paste0(tabl[tabl$estimate_flag == TRUE,]$swe, " E")
+  if (length(tabl[tabl$estimate_flag ,]$swe) > 0) {
+    tabl[tabl$estimate_flag ,]$swe <- paste0(tabl[tabl$estimate_flag ,]$swe, " E")
   }
   # Add B next to swe outside of sampling period
-  if (length(tabl[tabl$date_flag == TRUE,]$swe) > 0) {
-    tabl[tabl$date_flag == TRUE,]$swe <- paste0(tabl[tabl$date_flag == TRUE,]$swe, " B")
+  if (length(tabl[tabl$date_flag ,]$swe) > 0) {
+    tabl[tabl$date_flag ,]$swe <- paste0(tabl[tabl$date_flag ,]$swe, " B")
   }
   # Add C next to columns 'years' and 'swe_med' for composite stations
   tabl[tabl$location_id %in% c("10AD-SC01B", "09BA-SC02B", "09AB-SC02B"), c("swe_med")] <- paste0(tabl[tabl$location_id %in% c("10AD-SC01B", "09BA-SC02B", "09AB-SC02B"), c("swe_med")], " C")

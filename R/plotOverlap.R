@@ -1,8 +1,6 @@
 #' Plot of overlapping years or portions thereof
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#'
 #' A pared-down, sped up, simplified version of the original [ggplotOverlap()] function. Created for use with a simple Shiny application linked to the Flood Atlas, but will likely see other uses.
 #'
 #' @param location The location for which you want a plot.
@@ -148,12 +146,12 @@ plotOverlap <- function(location,
         warning("Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL.")
         aggregation_type <- NULL
       } else {
-        aggregation_type <- DBI::dbGetQuery(con, paste0("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = '", aggregation_type, "';"))[1,1]
+        aggregation_type <- DBI::dbGetQuery(con, glue::glue_sql("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = {aggregation_type};", .con = con))[1,1]
         aggregation_type <- as.numeric(aggregation_type)
       }
     } else {
       if (inherits(aggregation_type, "numeric")) {
-        aggregation_type <- DBI::dbGetQuery(con, paste0("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = ", aggregation_type, ";"))[1,1]
+        aggregation_type <- DBI::dbGetQuery(con, glue::glue_sql("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = {aggregation_type};", .con = con))[1,1]
         if (is.na(aggregation_type)) {
           warning("Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL.")
           aggregation_type <- NULL
@@ -263,42 +261,19 @@ plotOverlap <- function(location,
   
   
   # Get the location and parameter metadata ###########
-  if (inherits(location, "character")) {
-    # Try to find the location_id from a character string
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
-    }
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
-    }
-    # If nothing so far, maybe it's a numeric that's masquerading as a character
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
-    }
-  } else {
-    # Try to find the location_id from a numeric value
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
-  }
+  location_txt <- as.character(location)
+  location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;",  .con = con))[1, 1]
   if (is.na(location_id)) {
     stop("The location you entered does not exist in the database.")
   }
   
   
   #Confirm parameter and location exist in the database and that there is only one entry
-  if (inherits(parameter, "character")) {
-    escaped_parameter <- gsub("'", "''", parameter)
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
-    parameter_code <- parameter_tbl$parameter_id[1]
-    if (is.na(parameter_code)) {
-      stop("The parameter you entered does not exist in the database.")
-    }
-  } else if (inherits(parameter, "numeric")) {
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE parameter_id = ", parameter, ";"))
-    if (nrow(parameter_tbl) == 0) {
-      stop("The parameter you entered does not exist in the database.")
-    }
-    parameter_code <- parameter
+  parameter_txt <- tolower(as.character(parameter))
+  parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;",  .con = con))
+  parameter_code <- parameter_tbl$parameter_id[1]
+  if (is.na(parameter_code)) {
+    stop("The parameter you entered does not exist in the database.")
   }
   # Default to the english name if the french name is not available
   parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name_fr"] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
@@ -330,15 +305,10 @@ plotOverlap <- function(location,
     }
   } else {  #sub location was specified
     # Find the sub location_id
-    if (inherits(sub_location, "character")) {
-      escaped_sub_location <- gsub("'", "''", sub_location)
-      sub_location_tbl <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = '", escaped_sub_location, "';"))
-      if (nrow(sub_location_tbl) == 0) {
-        stop("The sub-location you entered does not exist in the database.")
-      }
-      sub_location_id <- sub_location_tbl$sub_location_id[1]
-    } else if (inherits(sub_location, "numeric")) {
-      sub_location_id <- sub_location
+    sub_loc_txt <- as.character(sub_location)
+    sub_location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;", .con = con))[[1]]
+    if (is.na(sub_location_id)) {
+      stop("The sub-location you entered does not exist in the database.")
     }
     if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
       if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
@@ -444,7 +414,7 @@ plotOverlap <- function(location,
     daily_end <- daily_end + 60*60*24
   }
   
-  daily <- dbGetQueryDT(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date BETWEEN '", daily_start, "' AND '", daily_end, "' ORDER by date ASC;"))
+  daily <- dbGetQueryDT(con, glue::glue_sql("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;", .con = con))
   
   #Fill in any missing days in daily with NAs
   all_dates <- data.table::data.table(date = seq.Date(min(daily$date), max(daily$date), by = "day"))
@@ -452,8 +422,8 @@ plotOverlap <- function(location,
     daily <- merge(all_dates, daily, by = "date", all.x = TRUE)
   }
   # Convert date to datetime so it plays well with the realtime data later
-  daily[, date := as.POSIXct(date) + 12*60*60]
-  daily[, date := lubridate::force_tz(date, tzone)]
+  daily[, "date" := as.POSIXct(date) + 12*60*60]
+  daily[, "date" := lubridate::force_tz(date, tzone)]
   data.table::setnames(daily, "date", "datetime")
   
   ## Get realtime/hourly data ################
@@ -474,43 +444,33 @@ plotOverlap <- function(location,
     # if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance (rest is populated with daily means. Gives 3 full years of data at 1 hour intervals)
     if (nrow(realtime) < 100000) { # limits the number of data points to 100000
       if (rate == "max") {
-        new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL ORDER BY datetime")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+        new_realtime <- dbGetQueryDT(con, glue::glue_sql("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime", .con = con)) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       } else if (rate == "hour") {
-        new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value_corrected IS NOT NULL ORDER BY datetime")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+        new_realtime <- dbGetQueryDT(con, glue::glue_sql("SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime", .con = con)) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       } else if (rate == "day") {
         new_realtime <- data.table::data.table()
       }
       
-      # if (nrow(new_realtime) > 20000) {
-      #   
-      #   # Retain last 20 000 records
-      #   new_realtime <- new_realtime[(.N - 20000):.N]
-      #   
-      #   # Add the truncated dates to the dates vector
-      #   end_new_dates <- min(new_realtime$datetime)
-      #   new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
-      #   dates <- c(dates, new_dates)
-      # }
       if (nrow(new_realtime) > 0) {
         # Fill in any missing data points in realtime with NAs
         # Must use calculate_period to get the correct number of hours in the period as it can change.
         new_realtime <- suppressWarnings(calculate_period(new_realtime, timeseries_id = tsid, con = con))
         # if calculate_period didn't return a column for new_realtime, it couldn't be done. No need to continue
         if ("period" %in% colnames(new_realtime)) {
-          new_realtime[, period_secs := as.numeric(lubridate::period(period))]
+          new_realtime[, "period_secs" := as.numeric(lubridate::period(period))]
           # Shift datetime and add period_secs to compute the 'expected' next datetime
-          new_realtime[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+          new_realtime[, "expected" := data.table::shift(new_realtime$datetime, type = "lead") - new_realtime$period_secs]
           # Create 'gap_exists' column to identify where gaps are
-          new_realtime[, gap_exists := datetime < expected & !is.na(expected)]
+          new_realtime[, "gap_exists" := new_realtime$datetime < new_realtime$expected & !is.na(new_realtime$expected)]
           # Find indices where gaps exist
           gap_indices <- which(new_realtime$gap_exists)
           # Create a data.table of NA rows to be inserted
-          na_rows <- data.table::data.table(datetime = new_realtime[gap_indices, datetime]  + 1,  # Add 1 second to place it at the start of the gap
+          na_rows <- data.table::data.table(datetime = new_realtime[new_realtime$gap_indices, "datetime"]  + 1,  # Add 1 second to place it at the start of the gap
                                             value = NA)
           # Combine with NA rows
           new_realtime <- data.table::rbindlist(list(new_realtime[, c("datetime", "value")], na_rows), use.names = TRUE)
           # order by datetime
-          data.table::setorder(new_realtime, datetime) 
+          data.table::setorder(new_realtime, "datetime") 
         }
         
         realtime <- data.table::rbindlist(list(realtime, new_realtime))
@@ -523,7 +483,7 @@ plotOverlap <- function(location,
     }
     
     if (get_daily) {
-      new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , list(datetime, value)]
+      new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , c("datetime", "value")]
       if (nrow(new_realtime) > 0) {
         realtime <- data.table::rbindlist(list(realtime, new_realtime))
       }
@@ -534,7 +494,7 @@ plotOverlap <- function(location,
     for (i in 1:length(dates)) {
       toDate <- as.Date(dates[i]) # convert to plain date to check if there are any datetimes with that plain date in the data.frame
       if (!(toDate %in% as.Date(realtime$datetime))) {
-        row <- daily[daily$datetime == dates[i] , list(datetime, value)]
+        row <- daily[daily$datetime == dates[i] , c("datetime", "value")]
         realtime <- data.table::rbindlist(list(realtime, row))
       }
     }
@@ -672,13 +632,13 @@ plotOverlap <- function(location,
   
   ## Filter out unusable data from the traces
   if (!unusable) {  # if unusable is FALSE, the grades must be pulled so that we can filter them out
-    grades_dt <- dbGetQueryDT(con, paste0("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", startDay, "' AND g.start_dt <= '", endDay, "' AND gt.grade_type_code = 'N' ORDER BY start_dt;"))
+    grades_dt <- dbGetQueryDT(con, glue::glue_sql("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = {tsid} AND g.end_dt >= {startDay} AND g.start_dt <= {endDay} AND gt.grade_type_code = 'N' ORDER BY start_dt;", .con = con))
     if (nrow(grades_dt) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
-      realtime[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
+      realtime[grades_dt, on = .(realtime$datetime >= start_dt, realtime$datetime <= end_dt), "value" := NA]
       
       # If there's an entire year with only NA, remove it
-      realtime <- realtime[, if (any(!is.na(value))) .SD, by = year]
+      realtime <- realtime[, if (any(!is.na(realtime$value))) .SD, by = realtime$year]
     }
   }
   
@@ -707,7 +667,7 @@ plotOverlap <- function(location,
                         color = I("#5f9da6"), 
                         line = list(width = 0.2), 
                         hoverinfo = if (hover) "text" else "none",
-                        text = if (hover) ~paste0("q25: ", round(q25, 2), ", q75: ", round(q75, 2), " (", as.Date(datetime), ")"),
+                        text = if (hover) ~paste0("q25: ", round(.data$q25, 2), ", q75: ", round(.data$q75, 2), " (", as.Date(.data$datetime), ")"),
                         legendrank = 1) %>%
     plotly::add_ribbons(data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ], 
                         x = ~datetime, 
@@ -718,7 +678,7 @@ plotOverlap <- function(location,
                         color = I("#D4ECEF"), 
                         line = list(width = 0.2), 
                         hoverinfo = if (hover) "text" else "none",
-                        text = if (hover) ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")"),
+                        text = if (hover) ~paste0("Min: ", round(.data$min, 2), ", Max: ", round(.data$max, 2), " (", as.Date(.data$datetime), ")"),
                         legendrank = 2)
   
   # Add traces
@@ -739,7 +699,7 @@ plotOverlap <- function(location,
                               name = i,
                               color = I(colors[col_idx]),
                               hoverinfo = if (hover) "text" else "none", 
-                              text = if (hover) ~paste0(plot_year, ": ", round(value, 2), " (", datetime, ")"),
+                              text = if (hover) ~paste0(.data$plot_year, ": ", round(.data$value, 2), " (", .data$datetime, ")"),
                               legendrank = rank)
     rank <- rank - 1
     col_idx <- col_idx + 1
@@ -763,11 +723,11 @@ plotOverlap <- function(location,
   
   plot <- plot %>%
     plotly::layout(
-      title = if (title) list(text = stn_name, 
-                              x = 0.05, 
+      title = if (title) list(text = stn_name,
+                              x = 0.05,
                               xref = "container",
                               font = list(size = axis_scale * 18))
-      else NULL, 
+      else NULL,
       xaxis = list(title = list(standoff = 0), 
                    showgrid = gridx, 
                    showline = TRUE, 
@@ -796,7 +756,8 @@ plotOverlap <- function(location,
                     t = 40 * axis_scale,
                     l = 50 * axis_scale), 
       hovermode = if (hover) "x unified" else ("none"),
-      legend = list(font = list(size = legend_scale * 12))
+      legend = list(font = list(size = legend_scale * 12)),
+      font = list(family = "DejaVu Sans")
     ) %>%
     plotly::config(locale = lang)
   

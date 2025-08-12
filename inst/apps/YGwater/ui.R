@@ -12,8 +12,8 @@ app_ui <- function(request) {
   
   tagList(
     shinyjs::useShinyjs(),
-    useBusyIndicators(),
-    div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")),
+    div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")), # Used for a heartbeat every 5 seconds to keep app alive, which occasionally gives issues on mobile devices.
+    
     # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
     # Uses two parameters: 'id' for the element ID and 'col' for the color. Color can be R-recognized color name or hex code.
     shinyjs::extendShinyjs(
@@ -23,10 +23,10 @@ app_ui <- function(request) {
         col : "red"
       };
       params = shinyjs.getParams(params, defaultParams);
-
       var el = $("#" + params.id);
                          el.css("background-color", params.col);
 }', functions = c("backgroundCol")),
+    
     tags$head(
       tags$script(src = "js/fullscreen.js"),  # JS to handle full screen button
       tags$script(src = "js/window_resize.js"),  # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
@@ -36,6 +36,11 @@ app_ui <- function(request) {
         document.title = newTitle;
       });
     ")),
+      tags$script(HTML("
+      Shiny.addCustomMessageHandler('updateLang', function(message) {
+        $('html').attr('lang', message.lang);
+      });"
+    )),
       tags$script("Shiny.addCustomMessageHandler(
       'toggleDropdown',
           function toggleDropdown(msg) {
@@ -44,7 +49,9 @@ app_ui <- function(request) {
         "),
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc.
-      tags$link(rel = "stylesheet", href = "css/YG_bs5.css"),
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
+      tags$link(rel = "stylesheet", type = "text/css", href = "css/buttons.css"), # styling for hover effects on buttons with YG colors
+    
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
       tags$style(HTML("
         a.dropdown-toggle > .shiny-html-output {
@@ -55,16 +62,16 @@ app_ui <- function(request) {
     .alert { white-space: normal !important; }
   "))
     ),
-    # page_fluid is the main container for the app, which contains the top bar, nav bar, and content
+    # page_fluid is the main container for the app, which contains the top bar, nav bar, content, and footer.
     page_fluid(
       # Make the container for the top bar, which sits above the nav bar
-      
       div(
         class = "top-bar-container d-none d-md-block",
+        style = "background-color: #244C5A; margin-bottom: 0; border-bottom: none",
         fluidRow(
           column(3,
                  div(class = "logo",
-                     htmltools::img(src = "imgs/Yukon_logo-min.png", .noWS = "outside", alt = "Yukon Government logo")
+                     htmltools::img(src = "imgs/Yukon_logo_white-min.png", .noWS = "outside", alt = "Yukon Government logo")
                      
                  ),
                  class = "logo-container"),
@@ -75,18 +82,19 @@ app_ui <- function(request) {
                  div(class = "login-container",
                      if (!config$public) { # 'public' is a global variable established in the globals file
                        div(class = "login-btn-container",
-                           actionButton("loginBtn", "Login", class = "btn btn-primary"),
-                           actionButton("logoutBtn", "Logout", class = "btn btn-primary", style = "display: none;")) # Initially hidden
+                           actionButton("loginBtn", "Login"),
+                           actionButton("logoutBtn", "Logout", style = "display: none;")) # Initially hidden
                      }
                  ),
-                 class = "aurora-login-container")
+                 class = "aurora-login-container"),
         )
       ),
+      # And now the navbar itself
       page_navbar(
         title = tags$a(
           class = "d-md-none",
           href = "#",
-          tags$img(src = "imgs/Yukon_logo.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
+          tags$img(src = "imgs/Yukon_logo_white-min.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
         ),
         id = "navbar",
         window_title = NULL,
@@ -94,7 +102,7 @@ app_ui <- function(request) {
                                         collapsible = TRUE),
         fluid = TRUE,
         lang = "en",
-        theme = NULL, # Theme is set earlier by css file reference
+        theme = NULL, # Theme is set earlier by css file referene in globals (THIS IS NOT WORKING)
         gap = "10px",
         nav_panel(title = uiOutput("homeNavTitle"), value = "home",
                   uiOutput("home_ui")),
@@ -114,7 +122,7 @@ app_ui <- function(request) {
                  nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
                            uiOutput("plotContinuous_ui"))
                  # nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
-                 # uiOutput("plotsMix_ui"))
+                 # uiOutput("plotMix_ui"))
         ),
         if (!config$public) {
           nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
@@ -152,8 +160,6 @@ app_ui <- function(request) {
                  nav_panel(title = uiOutput("infoNavAboutTitle"), value = "about",
                            uiOutput("about_ui"))
         ),
-        nav_panel(title = "Feedback", value = "feedback",
-                  uiOutput("feedback_ui")),
         if (!config$public) {
           nav_menu(title = "Application tasks",
                    value = "appTasks",
@@ -173,7 +179,7 @@ app_ui <- function(request) {
                              uiOutput("addContData_ui")),
                    nav_panel(title = "Edit/delete continuous data",
                              value = "editContData",
-                             uiOutput("editContcData_ui")),
+                             uiOutput("editContData_ui")),
                    nav_panel(title = "Add/modify timeseries corrections",
                              value = "continuousCorrections",
                              uiOutput("continuousCorrections_ui")),
@@ -244,69 +250,81 @@ app_ui <- function(request) {
                              value = "deploy_recover",
                              uiOutput("deploy_recover_ui"))
           )
-        }
-      ) # End page_navbar (though it's modified below)
+        },
+        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a drop-down menu instead.
+        nav_spacer(),
+        # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover
+        nav_item(actionButton("language_button", NULL, 
+                              class = "language-button")),
+      ), # End page_navbar
+      
+      # Now a footer, rendered in the server for language support
+      div(
+        hr(),
+        uiOutput("footer_ui"),
+      )
     ), # End of page_fluid
     
-    # Insert language selector into the navbar
-    HTML("<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    var parent = document.getElementsByClassName('navbar-nav');
-    
-    if (parent.length > 0) {
-      parent[0].insertAdjacentHTML('afterend', 
-        '<ul class=\"navbar-nav ms-auto\">' +
-        '<li class=\"nav-item dropdown\">' +
-        '<a href=\"#\" class=\"nav-link dropdown-toggle\" data-bs-toggle=\"dropdown\" role=\"button\" aria-expanded=\"false\">' +
-        'Language</a>' +
-        '<ul class=\"dropdown-menu\" id=\"lang-dropdown\">' +
-        '</ul>' +
-        '</li>' +
-        '</ul>'
-      );
-    }
-
-    // Define the function globally so it can be used in the onclick event
-    window.setLang = function(lang) {
-      Shiny.setInputValue(\"langSelect\", lang, {priority: \"event\"});
-      
-      // Remove active class from all menu items
-      var items = document.querySelectorAll('#lang-dropdown li');
-      items.forEach(function(item) {
-        item.classList.remove('active');
-      });
-    
-      // Find and highlight the selected language
-      var links = document.querySelectorAll('#lang-dropdown a');
-      links.forEach(function(link) {
-        if (link.textContent.trim() === lang) {
-          link.parentElement.classList.add('active');
-        }
-      });
-    };
-
-    // Function to dynamically update the dropdown menu from Shiny
-    Shiny.addCustomMessageHandler(\"updateLangMenu\", function(langs) {
-      var dropdown = document.getElementById('lang-dropdown');
-      dropdown.innerHTML = '';  // Clear existing options
-      langs.forEach(function(lang) {
-        var li = document.createElement('li');
-        var a = document.createElement('a');
-        a.href = '#';
-        a.textContent = lang;
-        a.setAttribute('onclick', \"setLang('\" + lang + \"')\");  // Attach function
-        li.appendChild(a);
-        dropdown.appendChild(li);
-      });
-    });
-    
-        // Function to set the initial selected language based on the user's browser language
-    Shiny.addCustomMessageHandler('setSelectedLanguage', function(lang) {
-      console.log('Setting initial language: ' + lang);
-      Shiny.setInputValue('langSelect', lang, {priority: 'event'});
-    });
-  });
-</script>")
+    # Below is commented out because it is not used anymore. It was used to add a language selector drop-down to the navbar, but current implementation uses a button that toggles the language.
+#     # Insert language selector into the navbar
+#     HTML("<script>
+#   document.addEventListener('DOMContentLoaded', function() {
+#     var parent = document.getElementsByClassName('navbar-nav');
+#     
+#     if (parent.length > 0) {
+#       parent[0].insertAdjacentHTML('afterend', 
+#         '<ul class=\"navbar-nav ms-auto\">' +
+#         '<li class=\"nav-item dropdown\">' +
+#         '<a href=\"#\" class=\"nav-link dropdown-toggle\" data-bs-toggle=\"dropdown\" role=\"button\" aria-expanded=\"false\">' +
+#         'Language</a>' +
+#         '<ul class=\"dropdown-menu\" id=\"lang-dropdown\">' +
+#         '</ul>' +
+#         '</li>' +
+#         '</ul>'
+#       );
+#     }
+# 
+#     // Define the function globally so it can be used in the onclick event
+#     window.setLang = function(lang) {
+#       Shiny.setInputValue(\"langSelect\", lang, {priority: \"event\"});
+#       
+#       // Remove active class from all menu items
+#       var items = document.querySelectorAll('#lang-dropdown li');
+#       items.forEach(function(item) {
+#         item.classList.remove('active');
+#       });
+#     
+#       // Find and highlight the selected language
+#       var links = document.querySelectorAll('#lang-dropdown a');
+#       links.forEach(function(link) {
+#         if (link.textContent.trim() === lang) {
+#           link.parentElement.classList.add('active');
+#         }
+#       });
+#     };
+# 
+#     // Function to dynamically update the dropdown menu from Shiny
+#     Shiny.addCustomMessageHandler(\"updateLangMenu\", function(langs) {
+#       var dropdown = document.getElementById('lang-dropdown');
+#       dropdown.innerHTML = '';  // Clear existing options
+#       langs.forEach(function(lang) {
+#         var li = document.createElement('li');
+#         var a = document.createElement('a');
+#         a.href = '#';
+#         a.textContent = lang;
+#         a.setAttribute('onclick', \"setLang('\" + lang + \"')\");  // Attach function
+#         li.appendChild(a);
+#         dropdown.appendChild(li);
+#       });
+#     });
+#     
+#         // Function to set the initial selected language based on the user's browser language
+#     Shiny.addCustomMessageHandler('setSelectedLanguage', function(lang) {
+#       console.log('Setting initial language: ' + lang);
+#       Shiny.setInputValue('langSelect', lang, {priority: 'event'});
+#     });
+#   });
+# </script>")
   ) # End tagList
   
 }

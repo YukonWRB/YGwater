@@ -10,8 +10,7 @@
 #' @param dates "all" for all dates (default) OR character vector of length 2 of start and end date in format c("YYYY-MM-DD", "YYYY-MM-DD")
 #' @param BD Treatment of values below detection limits (0 = Set to zero; 1 = Set to NA; 2 = Set to 0.5*(LOD); 3 = Set to sqrt(2)LOD). Above detection values are set to the upper limit of detection.
 #' @param apply_standards TRUE or FALSE, include standards with data. Provides a pop-up list for selection.
-#' @param path The path to the EQWin database. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/
-#' databases/EQWinDB/WaterResources.mdb".
+#' @param path The path to the EQWin database.
 
 #' @return A list with one sub-list per station, each one containing 2 data frames with sample data and calculated standards
 #'
@@ -23,7 +22,7 @@ eq_fetch <- function(EQcode,
                      dates = "all",
                      BD = 2,
                      apply_standards = TRUE,
-                     path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"){
+                     path = eqwin_db_path()){
   
   # EQcode <- "KNO"
   # stationIDs = c("FORMO-01", "FORMO-CK", "FO-WQ-SE-1", "FO-WQ-SE2-1", "FO-WQ-ST1-1", "FO-WQ-ST1-2", "FO-WQ-ST1-3")
@@ -31,7 +30,7 @@ eq_fetch <- function(EQcode,
   # dates = "all"
   # BD <- 2
   # apply_standards = TRUE
-  # path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
+  # path = eqwin_db_path()
   
   # Set a few options
   old_scipen <- getOption("scipen")
@@ -63,7 +62,7 @@ eq_fetch <- function(EQcode,
       dplyr::filter(stringr::str_detect(.data$StnCode, paste0("^", "\\(", EQcode, "\\)"))) %>%
       dplyr::filter(.data$StnCode %in% stationIDs[stationIDs %in% eqstns$StnCode])
     warning(paste0("The following stations do not match exactly what is in EQWin and were omitted: ",
-      paste(setdiff(stationIDs, stns$StnCode), collapse = ", "),". Check spelling and letter case"))
+                   paste(setdiff(stationIDs, stns$StnCode), collapse = ", "),". Check spelling and letter case"))
   }
   
   # Download all samples for specified stations, filter by user choice
@@ -96,8 +95,7 @@ eq_fetch <- function(EQcode,
   },
   error = function(e){
     message(paste("The following parameters do not match exactly what is in EQWin:", paste(setdiff(paramIDs, params$ParamCode), collapse = ", ")))
-  }
-  )
+  })
   
   # Download all results
   print("Fetching sample results")
@@ -127,7 +125,7 @@ eq_fetch <- function(EQcode,
   merge2 <- merge(results, merge1, by.x = "SampleId", by.y = "SampleId")
   merge3 <- merge(merge2, params, by.x = "ParamId", by.y = "ParamId")
   suppressMessages(sampledata <- merge3 %>%
-                     dplyr::filter(StnCode %in% stationIDs) %>%
+                     dplyr::filter(.data$StnCode %in% stationIDs) %>%
                      dplyr::mutate(Param = paste0(merge3$ParamCode, " (", merge3$Units, ")")) %>%
                      dplyr::select(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param, .data$Units, .data$Result) %>%
                      dplyr::group_by(.data$StnCode, .data$CollectDateTime, .data$StnType, .data$Param) %>%
@@ -200,7 +198,8 @@ eq_fetch <- function(EQcode,
       match <- data.frame(matrix(ncol = length(params_data), nrow = 0)) # Create data frame containing all parameters that exist in sampledata
       
       colnames(match) <- params_data
-      stnstd <- plyr::rbind.fill(stnstd, match) # Fill in match with stnstd
+      # stnstd <- plyr::rbind.fill(stnstd, match) # Fill in match with stnstd
+      stnstd <- dplyr::bind_rows(stnstd, match) # Fill in match with stnstd
       stnstd <- stnstd %>% #Convert columns containing all NA to numeric
         dplyr::mutate_if(is.logical, as.numeric)
       stnstd <- stnstd %>% # Arrange stnstd such that parameter order matches sampledata

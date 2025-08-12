@@ -732,14 +732,14 @@ addImgs <- function(id) {
     
     observeEvent(uploadAquacache$result(), {
       
-      success_count <- sum(unlist(uploadAquacache$result()) == TRUE)
+      success_count <- sum(unlist(uploadAquacache$result()) )
       failure_count <- length(uploadAquacache$result()) - success_count
 
       showModal(modalDialog(
         title = "Upload Complete",
         paste(success_count, "images uploaded successfully."),
         if (failure_count > 0) {
-          HTML(paste0(failure_count, " images failed to upload.<br><br>Failure messages:<br>", paste(unlist(uploadAquacache$result()[!unlist(uploadAquacache$result()) == TRUE]), collapse = "<br>")))
+          HTML(paste0(failure_count, " images failed to upload.<br><br>Failure messages:<br>", paste(unlist(uploadAquacache$result()[!unlist(uploadAquacache$result()) ]), collapse = "<br>")))
         },
         easyClose = TRUE,
         size = "xl",
@@ -1066,7 +1066,7 @@ addImgs <- function(id) {
     
     # Observe map clicks, add marker on click, lines from click to selection
     observeEvent(input$map_click, {
-      if (toggles$edit == TRUE) {
+      if (toggles$edit ) {
         click <- input$map_click
         if (!is.null(click)) {
           updateNumericInput(session, "image_latitude", value = click$lat)

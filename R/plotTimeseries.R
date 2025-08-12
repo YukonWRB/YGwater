@@ -1,8 +1,6 @@
 #' Plot a continous timeseries from the aquacache
 #'
 #' @description
-#' `r lifecycle::badge('stable')`
-#' 
 #' This function plots continuous timeseries from the aquacache. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
 #' 
 #' @param location The location for which you want a plot.
@@ -109,6 +107,7 @@ plotTimeseries <- function(location,
   # gridx = FALSE
   # gridy = FALSE
   # hover = TRUE
+  # webgl = FALSE
   
   # Checks and initial work ##########################################
   
@@ -186,12 +185,11 @@ plotTimeseries <- function(location,
         warning("Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL.")
         aggregation_type <- NULL
       } else {
-        aggregation_type <- DBI::dbGetQuery(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = '", aggregation_type, "';")[1,1]
-        aggregation_type <- as.numeric(aggregation_type)
+        aggregation_type <- DBI::dbGetQuery(con, glue::glue_sql("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = {aggregation_type};", .con = con))[1,1]
       }
     } else {
       if (inherits(aggregation_type, "numeric")) {
-        aggregation_type <- DBI::dbGetQuery(con, paste0("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = ", aggregation_type, ";"))[1,1]
+        aggregation_type <- DBI::dbGetQuery(con, glue::glue_sql("SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = {aggregation_type};", .con = con))[1,1]
         if (is.na(aggregation_type)) {
           warning("Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL.")
           aggregation_type <- NULL
@@ -208,44 +206,18 @@ plotTimeseries <- function(location,
   }
   
   # Determine the timeseries and adjust the date range #################
-  if (inherits(location, "character")) {
-    # Try to find the location_id from a character string
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name = '", location, "';"))[1,1]
-    }
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE name_fr = '", location, "';"))[1,1]
-    }
-    # If nothing so far, maybe it's a numeric that's masquerading as a character
-    if (is.na(location_id)) {
-      location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
-    }
-  } else {
-    # Try to find the location_id from a numeric value
-    location_id <- DBI::dbGetQuery(con, paste0("SELECT location_id FROM locations WHERE location_id = ", location, ";"))[1,1]
-  }
+  location_txt <- as.character(location)
+  location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;", .con = con))[1, 1]
   if (is.na(location_id)) {
     stop("The location you entered does not exist in the database.")
   }
-  
-  #Confirm parameter and location exist in the database and that there is only one entry
-  if (inherits(parameter, "character")) {
-    parameter <- tolower(parameter)
-    escaped_parameter <- gsub("'", "''", parameter)
-    parameter_tbl <- DBI::dbGetQuery(con, 
-                                     paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';")
-    )
-    parameter_code <- parameter_tbl$parameter_id[1]
-    if (is.na(parameter_code)) {
-      stop("The parameter you entered does not exist in the database.")
-    }
-  } else if (inherits(parameter, "numeric")) {
-    parameter_tbl <- DBI::dbGetQuery(con, paste0("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = ", parameter, ";"))
-    if (nrow(parameter_tbl) == 0) {
-      stop("The parameter you entered does not exist in the database.")
-    }
-    parameter_code <- parameter
+
+  # Confirm parameter and location exist in the database and that there is only one entry
+  parameter_txt <- tolower(as.character(parameter))
+  parameter_tbl <- DBI::dbGetQuery(con, glue::glue_sql("SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;", .con = con))
+  parameter_code <- parameter_tbl$parameter_id[1]
+  if (is.na(parameter_code)) {
+    stop("The parameter you entered does not exist in the database.")
   }
   
   # Where column param_name_fr is not filled in, use the English name
@@ -272,20 +244,15 @@ plotTimeseries <- function(location,
       }
     } else if (is.null(aggregation_type_id)) { #record_rate is not NULL but aggregation_type_id is
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "';"))
-    } else { #both record_rate and aggregation_type_id are not NULL
+    } else { # both record_rate and aggregation_type_id are not NULL
       exist_check <- DBI::dbGetQuery(con, paste0("SELECT timeseries_id, EXTRACT(EPOCH FROM record_rate) AS record_rate, aggregation_type_id, z, start_datetime, end_datetime FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND record_rate = '", record_rate, "' AND aggregation_type_id = ", aggregation_type_id, ";"))
     }
   } else {  #sub location was specified
     # Find the sub location_id
-    if (inherits(sub_location, "character")) {
-      escaped_sub_location <- gsub("'", "''", sub_location)
-      sub_location_tbl <- DBI::dbGetQuery(con, paste0("SELECT sub_location_id FROM sub_locations WHERE sub_location_name = '", escaped_sub_location, "';"))
-      if (nrow(sub_location_tbl) == 0) {
-        stop("The sub-location you entered does not exist in the database.")
-      }
-      sub_location_id <- sub_location_tbl$sub_location_id[1]
-    } else if (inherits(sub_location, "numeric")) {
-      sub_location_id <- sub_location
+    sub_loc_txt <- as.character(sub_location)
+    sub_location_id <- DBI::dbGetQuery( con, glue::glue_sql( "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;", .con = con))[[1]]
+    if (is.na(sub_location_id)) {
+      stop("The sub-location you entered does not exist in the database.")
     }
     if (is.null(record_rate)) { # aggregation_type_id may or may not be NULL
       if (is.null(aggregation_type_id)) { #both record_rate and aggregation_type_id are NULL
@@ -429,44 +396,44 @@ plotTimeseries <- function(location,
     
     # Many rows could be adjacent repeats of grade_type_description with different start_dt and end_dt, in which case these rows should be amalgamated
     # create a run‐length grouping over the three columns that must stay identical
-    grades_dt[, run := data.table::rleid(grade_type_description)]
+    grades_dt[, "run" := data.table::rleid(grades_dt$grade_type_description)]
     
     # now collapse each run into one interval
     grades_dt <- grades_dt[, .(
-      start_dt = data.table::first(start_dt),
-      end_dt = data.table::last(end_dt),
-      grade_type_description = data.table::first(grade_type_description),
-      grade_type_description_fr = data.table::first(grade_type_description_fr),
-      color_code = data.table::first(color_code)
-    ), by = run]
+      start_dt = data.table::first(grades_dt$start_dt),
+      end_dt = data.table::last(grades_dt$end_dt),
+      grade_type_description = data.table::first(grades_dt$grade_type_description),
+      grade_type_description_fr = data.table::first(grades_dt$grade_type_description_fr),
+      color_code = data.table::first(grades_dt$color_code)
+    ), by = "run"]
     # drop the helper
-    grades_dt[, run := NULL]
+    grades_dt[, "run" := NULL]
   }
   if (approvals) {
     approvals_dt <- dbGetQueryDT(con, paste0("SELECT a.start_dt, a.end_dt, at.approval_type_description, at.approval_type_description_fr, at.color_code FROM approvals a LEFT JOIN approval_types at ON a.approval_type_id = at.approval_type_id WHERE a.timeseries_id = ", tsid, " AND a.end_dt >= '", start_date, "' AND a.start_dt <= '", end_date, "' ORDER BY start_dt;"))
     # amalgamate
-    approvals_dt[, run := data.table::rleid(approval_type_description)]
+    approvals_dt[, "run" := data.table::rleid(approvals_dt$approval_type_description)]
     approvals_dt <- approvals_dt[, .(
-      start_dt = data.table::first(start_dt),
-      end_dt = data.table::last(end_dt),
-      approval_type_description = data.table::first(approval_type_description),
-      approval_type_description_fr = data.table::first(approval_type_description_fr),
-      color_code = data.table::first(color_code)
-    ), by = run]
-    approvals_dt[, run := NULL]
+      start_dt = data.table::first(approvals_dt$start_dt),
+      end_dt = data.table::last(approvals_dt$end_dt),
+      approval_type_description = data.table::first(approvals_dt$approval_type_description),
+      approval_type_description_fr = data.table::first(approvals_dt$approval_type_description_fr),
+      color_code = data.table::first(approvals_dt$color_code)
+    ), by = "run"]
+    approvals_dt[, "run" := NULL]
   }
   if (qualifiers) {
     qualifiers_dt <- dbGetQueryDT(con, paste0("SELECT q.start_dt, q.end_dt, qt.qualifier_type_description, qt.qualifier_type_description_fr, qt.color_code FROM qualifiers q LEFT JOIN qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE q.timeseries_id = ", tsid, " AND q.end_dt >= '", start_date, "' AND q.start_dt <= '", end_date, "' ORDER BY start_dt;"))
     # amalgamate
-    qualifiers_dt[, run := data.table::rleid(qualifier_type_description)]
+    qualifiers_dt[, "run" := data.table::rleid(qualifiers_dt$qualifier_type_description)]
     qualifiers_dt <- qualifiers_dt[, .(
-      start_dt = data.table::first(start_dt),
-      end_dt = data.table::last(end_dt),
-      qualifier_type_description = data.table::first(qualifier_type_description),
-      qualifier_type_description_fr = data.table::first(qualifier_type_description_fr),
-      color_code = data.table::first(color_code)
-    ), by = run]
-    qualifiers_dt[, run := NULL]
+      start_dt = data.table::first(qualifiers_dt$start_dt),
+      end_dt = data.table::last(qualifiers_dt$end_dt),
+      qualifier_type_description = data.table::first(qualifiers_dt$qualifier_type_description),
+      qualifier_type_description_fr = data.table::first(qualifiers_dt$qualifier_type_description_fr),
+      color_code = data.table::first(qualifiers_dt$color_code)
+    ), by = "run"]
+    qualifiers_dt[, "run" := NULL]
   }
   
   ## trace and range data ###################
@@ -527,7 +494,7 @@ plotTimeseries <- function(location,
     unus <- grades_dt[grades_dt$grade_type_description == "Unusable"]
     if (nrow(unus) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
-      trace_data[unus, on = .(datetime >= start_dt, datetime <= end_dt), value := NA]
+      trace_data[unus, on = .(datetime >= start_dt, datetime <= end_dt), "value" := NA]
     }
   }
   
@@ -589,10 +556,10 @@ plotTimeseries <- function(location,
     if (!inherits(filter, "numeric")) {
       message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
-        trace_data[trace_data$value < 0 & !is.na(trace_data$value),"value"] <- NA
+      if (parameter_name %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter_name, ignore.case = TRUE)) { #remove all values less than 0
+        trace_data[trace_data$value < 0 & !is.na(trace_data$value), "value"] <- NA
       } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
-        trace_data[trace_data$value < -100 & !is.na(trace_data$value),"value"] <- NA
+        trace_data[trace_data$value < -100 & !is.na(trace_data$value), "value"] <- NA
       }
       
       rollmedian <- zoo::rollapply(trace_data$value, width = filter, FUN = "median", align = "center", fill = "extend", na.rm = TRUE)
@@ -635,7 +602,7 @@ plotTimeseries <- function(location,
                           color = I("#D4ECEF"), 
                           line = list(width = 0.2), 
                           hoverinfo = if (hover) "text" else "none", 
-                          text = ~paste0("Min: ", round(min, 2), ", Max: ", round(max, 2), " (", as.Date(datetime), ")")) 
+                          text = ~paste0("Min: ", round(.data$min, 2), ", Max: ", round(.data$max, 2), " (", as.Date(.data$datetime), ")")) 
   }
   
   plot <- plot %>%
@@ -648,7 +615,7 @@ plotTimeseries <- function(location,
                       name = parameter_name, 
                       color = I("#00454e"), 
                       hoverinfo = if (hover) "text" else "none", 
-                      text = ~paste0(parameter_name, ": ", round(value, 4), " (", datetime, ")"))
+                      text = ~paste0(parameter_name, ": ", round(.data$value, 4), " (", .data$datetime, ")"))
   
   # Add the grades, approvals, qualifiers as ribbons below the plotting area
   if (any(grades, approvals, qualifiers)) {
@@ -662,49 +629,49 @@ plotTimeseries <- function(location,
 
     if (approvals) {
       approvals_y_set <- if (grades & qualifiers) c(2.2, 3.2, 3.2, 2.2) else if (grades) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
-      approvals_dt[start_dt < mindt, start_dt := mindt]
-      approvals_dt[end_dt > maxdt, end_dt := maxdt]
+      approvals_dt[start_dt < mindt, "start_dt" := mindt]
+      approvals_dt[end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(approvals_dt) > 0) {
-        approvals_dt[, id := paste0("approval_", .I)]
+        approvals_dt[, "id" := paste0("approval_", .I)]
         poly_list[[length(poly_list) + 1]] <- approvals_dt[, .(
           datetime = c(start_dt, start_dt, end_dt, end_dt),
           y = approvals_y_set,
-          color = color_code,
-          text = if (lang == "en") paste0("Approval: ", approval_type_description) else paste0("Approbation:", approval_type_description_fr),
-          id = id
-        ), by = id]
+          color = approvals_dt$color_code,
+          text = if (lang == "en") paste0("Approval: ", approvals_dt[["approval_type_description"]]) else paste0("Approbation:", approvals_dt[["approval_type_description_fr"]]),
+          id = approvals_dt$id
+        ), by = "id"]
       }
     }
 
     if (grades) {
       grades_y_set <- if (qualifiers) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
-      grades_dt[start_dt < mindt, start_dt := mindt]
-      grades_dt[end_dt > maxdt, end_dt := maxdt]
+      grades_dt[start_dt < mindt, "start_dt" := mindt]
+      grades_dt[end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(grades_dt) > 0) {
-        grades_dt[, id := paste0("grade_", .I)]
+        grades_dt[, "id" := paste0("grade_", .I)]
         poly_list[[length(poly_list) + 1]] <- grades_dt[, .(
           datetime = c(start_dt, start_dt, end_dt, end_dt),
           y = grades_y_set,
-          color = color_code,
-          text = if (lang == "en") paste0("Grade: ", grade_type_description) else paste0("Cote:", grade_type_description_fr),
-          id = id
-        ), by = id]
+          color = grades_dt$color_code,
+          text = if (lang == "en") paste0("Grade: ", grades_dt[["grade_type_description"]]) else paste0("Cote:", grades_dt[["grade_type_description_fr"]]),
+          id = grades_dt$id
+        ), by = "id"]
       }
     }
 
     if (qualifiers) {
       qualifiers_y_set <- c(0, 1, 1, 0)
-      qualifiers_dt[start_dt < mindt, start_dt := mindt]
-      qualifiers_dt[end_dt > maxdt, end_dt := maxdt]
+      qualifiers_dt[start_dt < mindt, "start_dt" := mindt]
+      qualifiers_dt[end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(qualifiers_dt) > 0) {
-        qualifiers_dt[, id := paste0("qualifier_", .I)]
+        qualifiers_dt[, "id" := paste0("qualifier_", .I)]
         poly_list[[length(poly_list) + 1]] <- qualifiers_dt[, .(
           datetime = c(start_dt, start_dt, end_dt, end_dt),
           y = qualifiers_y_set,
-          color = color_code,
-          text = if (lang == "en") paste0("Qualifier: ", qualifier_type_description) else paste0("Qualificatif:", qualifier_type_description_fr),
-          id = id
-        ), by = id]
+          color = qualifiers_dt$color_code,
+          text = if (lang == "en") paste0("Qualifier: ", qualifiers_dt[["qualifier_type_description"]]) else paste0("Qualificatif:", qualifiers_dt[["qualifier_type_description_fr"]]),
+          id =  qualifiers_dt$id
+        ), by =  "id"]
       }
     }
 
@@ -779,7 +746,8 @@ plotTimeseries <- function(location,
       plotly::layout(
         yaxis = list(showticklabels = FALSE, showgrid = FALSE, zeroline = FALSE),
         xaxis = list(showgrid = FALSE),
-        annotations = annotation_list
+        annotations = annotation_list,
+        font = list(family = "DejaVu Sans")
       )
     
     
@@ -795,11 +763,11 @@ plotTimeseries <- function(location,
   
   plot <- plot %>%
     plotly::layout(
-      title = if (title) list(text = stn_name, 
-                              x = 0.05, 
+      title = if (title) list(text = stn_name,
+                              x = 0.05,
                               xref = "container",
                               font = list(size = axis_scale * 18))
-      else NULL, 
+      else NULL,
       xaxis = list(title = list(standoff = 0), 
                    showgrid = gridx, 
                    showline = TRUE, 
@@ -829,7 +797,8 @@ plotTimeseries <- function(location,
                     l = 50 * axis_scale), 
       hovermode = if (hover) "x unified" else ("none"),
       legend = list(font = list(size = legend_scale * 12),
-                    orientation = legend_position)
+                    orientation = legend_position),
+      font = list(family = "DejaVu Sans")
     ) %>%
     plotly::config(locale = lang)
   

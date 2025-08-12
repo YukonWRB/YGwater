@@ -1,8 +1,6 @@
 #' Connect to the snow postgres database
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' This function exists to facilitate connecting to the snow database, especially if the database type and connection method changes in the future.
 #'
 #' @param name Database name.

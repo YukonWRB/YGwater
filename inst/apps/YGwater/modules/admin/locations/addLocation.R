@@ -642,6 +642,10 @@ addLocation <- function(id, inputs) {
     # Run checks, if everything passes call AquaCache::addACLocation or update the location details
     observeEvent(input$add_loc, {
       
+      # Disable the button to prevent multiple clicks
+      shinyjs::disable("add_loc")
+      on.exit(shinyjs::enable("add_loc"))  # Re-enable the button when the observer exits
+      
       # Ensure lat + lon are truthy
       if (!isTruthy(input$lat) || !isTruthy(input$lon)) {
         showModal(modalDialog(
@@ -694,57 +698,118 @@ addLocation <- function(id, inputs) {
           # Check each field to see if it's been modified; if so, update the DB entry by targeting the location_id and appropriate column name
           # Changes to the location code
           if (input$loc_code != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "location"]) {
-            DBI::dbExecute(session$userData$AquaCache,  paste0("UPDATE locations SET location = '", input$loc_code, "' WHERE location_id = ", selected_loc(), ";"))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE locations SET location = {input$loc_code} WHERE location_id = {selected_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
             # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', should match on 'feature_name' = input$loc_code
-            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE vectors SET feature_name = '", input$loc_code,"' WHERE layer_name = 'Locations' AND feature_name = '", moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "location"], "';"))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE vectors SET feature_name = {input$loc_code} WHERE layer_name = 'Locations' AND feature_name = {moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), 'location']};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to the location english name
           if (input$loc_name != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "name"]) {
-            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE locations SET name = '", input$loc_name, "' WHERE location_id = ", selected_loc(), ";"))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE locations SET name = {input$loc_name} WHERE location_id = {selected_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
             # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', should match on 'feature_name' = input$loc_code
-            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE vectors SET description = '", input$loc_name, "' WHERE layer_name = 'Locations' AND feature_name = '", input$loc_code, "';"))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE vectors SET description = {input$loc_name} WHERE layer_name = 'Locations' AND feature_name = {input$loc_code};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to the location french name
           if (input$loc_name_fr != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "name_fr"]) {
-            DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE locations SET name_fr = '%s' WHERE location_id = %d", input$loc_name_fr, selected_loc()))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE locations SET name_fr = {input$loc_name_fr} WHERE location_id = {selected_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to the location type
           if (input$loc_type != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "location_type"]) {
-            DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE locations SET location_type = %s WHERE location_id = %d", input$loc_type, selected_loc()))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE locations SET location_type = {input$loc_type} WHERE location_id = {selected_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to coordinates
           updated_coords <- FALSE
           if (input$lat != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "latitude"]) {
-            DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE locations SET latitude = %f WHERE location_id = %d", input$lat, selected_loc()))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE locations SET latitude = {input$lat} WHERE location_id = {selected_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
             updated_coords <- TRUE
           }
           if (input$lon != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "longitude"]) {
-            DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE locations SET longitude = %f WHERE location_id = %d", input$lon, selected_loc()))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE locations SET longitude = {input$lon} WHERE location_id = {selected_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
             updated_coords <- TRUE
           }
           if (updated_coords) {
             # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', match it on 'feature_name' = input$loc_code. the 'geom' field (geometry data type) will be updated with the new coordinates
-            DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE vectors SET geom = ST_SetSRID(ST_MakePoint(%f, %f), 4269) WHERE layer_name = 'Locations' AND feature_name = '%s'", input$lon, input$lat, input$loc_code))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE vectors SET geom = ST_SetSRID(ST_MakePoint({input$lon}, {input$lat}), 4269) WHERE layer_name = 'Locations' AND feature_name = {input$loc_code};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to visibility
           if (input$viz != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "visibility_public"]) {
-            DBI::dbExecute(session$userData$AquaCache, 
-                           sprintf("UPDATE locations SET visibility_public = '%s' WHERE location_id = %d", input$viz, selected_loc()))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE locations SET visibility_public = {input$viz} WHERE location_id = {selected_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to share_with
           if (!all(input$share_with %in% moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"])) {
-            DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE locations SET share_with = {", paste(input$share_with, collapse = ", "), "} WHERE location_id = ", selected_loc(), ";"))
+            share_with_sql <- DBI::SQL(paste0("{", paste(input$share_with, collapse = ", "), "}"))
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "UPDATE locations SET share_with = {share_with_sql} WHERE location_id = {selected_loc()};",
+                .con = session$userData$AquaCache
+              )
+            )
           }
           
           # Changes to owner

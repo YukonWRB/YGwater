@@ -1,14 +1,14 @@
 #' YOWN Water Data Catalogue Update Function
 #'
-#' @param WDC_struc Link to master directory containing folders linked to the WDC
-#' @param master_file Path to YOWN master sheet
+#' @param WDC_struc Link to master directory containing folders linked to the WDC.
+#' @param master_file Path to YOWN master sheet.
 #'
 #' @return Updated files in the WDC folder structure
 #' @export
 
 YOWN_WDC_Update <- function(
-    WDC_struc = "\\\\envgeoserver\\share\\WaterResources\\Groundwater\\YOWN_DATA\\",
-    master_file = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\2_SPREADSHEETS\\1_YOWN_MASTER_TABLE\\YOWN_MASTER.xlsx") {
+    WDC_struc = yown_wdc_path(),
+    master_file = yown_master_path()) {
   
   
   # Function arg checks

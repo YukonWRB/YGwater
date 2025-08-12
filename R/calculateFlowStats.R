@@ -1,8 +1,6 @@
 #' Function that calculates water flow statistics at creeks
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
-#' 
 #' The purpose of this script is to calculate flows of rivers/streams/creeks. It was created because Highways (YG) often wants flows statistics for small streams from which water is pulled during highway work. 
 #' 
 #' Statistics for each station are averaged over all years/seasons available, except for all-time data points. Years or seasons with more than 5 percent missing data (this is the default) are excluded from the statistics. Additionally, only stations with a minimum of 15 years/seasons of data (this is the default) are retained.

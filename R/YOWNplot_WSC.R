@@ -1,8 +1,6 @@
 #' YOWN-WSC comparative plot generation relative to a common datum
 #'
 #' @description
-#' `r lifecycle::badge("experimental")`
-#'
 #' Plots YOWN data alongside WSC stations, in m asl. Only works for stations that have values in the "Elevation" field in their Aquarius information page.
 #'
 #' @details
@@ -46,7 +44,7 @@ YOWNplot_WSC <- function(YOWNindex,
     saveTo <- as.character(utils::choose.dir(caption = "Select Save Folder"))
   } else if (saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
-  } else if (dir.exists(saveTo) == FALSE) {
+  } else if (!dir.exists(saveTo)) {
     stop("Specified directory does not exist. Consider specifying save path as one of 'choose' or 'desktop'; refer to help file.")
   }
 
@@ -198,8 +196,8 @@ YOWNplot_WSC <- function(YOWNindex,
                      date_labels = "%m-%Y",
                      expand = c(0, 0)) +
     ggplot2::scale_y_continuous(name = "Water Level (m above sea level)",
-                       limits = c(plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)),
-                       breaks = seq(plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling), by = 0.5),
+                       limits = c(round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)),
+                       breaks = seq(round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling), by = 0.5),
                        expand = c(0, 0))
 
   title <- ggplot2::ggplot() +

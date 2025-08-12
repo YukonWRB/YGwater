@@ -1,8 +1,6 @@
 #' Creates snow survey template for specific survey target date and circuit
 #'
 #' @description
-#' `r lifecycle::badge("stable")`
-#'
 #' NOTE: locations must be associated with a circuit in the snow database for this function to work. If you are missing locations, you will need to add them to the snow database before running this function.
 #' 
 #' This function creates snow survey templates for a snow survey circuit in an excel workbook. The function takes the master template and copies it into multiple sheets with circuit name, course name and snow survey target date pre-filled. The outputted template is meant to be filled out by those conducting snow surveys.
