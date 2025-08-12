@@ -24,8 +24,11 @@ mapParams <- function(id, language) {
       parameters = cached$parameters
     )
     
+    mapCreated <- reactiveVal(FALSE)
+    
     output$sidebar_page <- renderUI({
       req(moduleData, language)
+      mapCreated(FALSE)
       page_sidebar(
         sidebar = sidebar(
           title = NULL,
@@ -436,7 +439,7 @@ mapParams <- function(id, language) {
         abs_vals <- abs(mapping_data$value)
 
         if (length(abs_vals) == 0) {
-          leaflet::leafletProxy("map", session) %>%leaflet::clearMarkers()
+          leaflet::leafletProxy("map", session) %>% leaflet::clearMarkers()
           return()
         }
         
@@ -498,6 +501,7 @@ mapParams <- function(id, language) {
           stroke = TRUE,
           weight = 1,
           radius = 8,
+          options = leaflet::pathOptions(pane = "overlay"),
           popup = ~paste0(
             "<strong>", get(tr("generic_name_col", language$language)),  "</strong><br/>",
             titleCase(param_name, language$abbrev), "<br>",
@@ -522,16 +526,30 @@ mapParams <- function(id, language) {
     # Create the basic map
     mapCreated <- reactiveVal(FALSE) # Used to track map creation so that points show up right away with defaults
     output$map <- leaflet::renderLeaflet({
-      mapCreated(TRUE)
       
-      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 15)) %>%
-        leaflet::addTiles() %>%
-        leaflet::addProviderTiles("Esri.WorldTopoMap", group = "Topographic") %>%
-        leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
+      map <- leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 15)) %>%
+        leaflet::addMapPane("basemap", zIndex = 1) %>%
+        leaflet::addMapPane("overlay", zIndex = 420) %>%
+        leaflet::addTiles(options = leaflet::tileOptions(pane = "basemap")) %>%
+        leaflet::addProviderTiles(
+          "Esri.WorldTopoMap",
+          group = "Topographic",
+          options = leaflet::providerTileOptions(pane = "basemap")
+        ) %>%
+        leaflet::addProviderTiles(
+          "Esri.WorldImagery",
+          group = "Satellite",
+          options = leaflet::providerTileOptions(pane = "basemap")
+        ) %>%
         leaflet::addLayersControl(baseGroups = c("Topographic", "Satellite")) %>%
-        leaflet::addScaleBar(position = "bottomleft", 
-                             options = leaflet::scaleBarOptions(imperial = FALSE)) %>%
+        leaflet::addScaleBar(
+          position = "bottomleft",
+          options = leaflet::scaleBarOptions(imperial = FALSE)
+        ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
+      
+      mapCreated(TRUE)
+      map
     })
     
     # Observe the map being created and update it when the parameters change

@@ -1,4 +1,6 @@
-# Get the data to populate drop-downs. Runs every time this module is loaded.
+# These cache functions fetch and store data in a global cache environment, allowing for efficient data retrieval across user sessions in a Shiny app or other R environments. The cache is automatically refreshed based on the specified TTL (time-to-live) value, ensuring that users always have access to up-to-date information without unnecessary database queries.
+
+
 
 # continuous plot and data modules ######
 cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
@@ -188,7 +190,7 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
                list(
                  locations = dbGetQueryDT(
                    con,
-                   "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"
+                   "SELECT location, name, name_fr, latitude, longitude, location_id FROM locations"
                  ),
                  timeseries = dbGetQueryDT(
                    con,
@@ -210,7 +212,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
              env = env,
              fetch_fun = function() {
                list(
-                 locations = dbGetQueryDT(con, "SELECT location, name, name_fr, latitude, longitude, location_id, geom_id, visibility_public, location_type FROM locations"),
+                 locations = dbGetQueryDT(con, "SELECT location, name, name_fr, latitude, longitude, location_id FROM locations"),
                  timeseries = dbGetQueryDT(
                    con,
                    "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, ts.z, 'continuous' AS data_type

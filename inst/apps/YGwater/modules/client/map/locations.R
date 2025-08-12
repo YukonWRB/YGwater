@@ -47,8 +47,6 @@ mapLocs <- function(id, language) {
       parameters = cached$parameters,
       parameter_groups = cached$parameter_groups,
       parameter_sub_groups = cached$parameter_sub_groups
-      # has_image_series = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT location_id FROM image_series;"),
-      # has_documents = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
     )
     
     
