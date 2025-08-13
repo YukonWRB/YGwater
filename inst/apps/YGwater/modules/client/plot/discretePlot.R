@@ -55,8 +55,9 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                          # Toggle button for locations or location groups (only show if data source == EQWin)
                          radioButtons(ns("locs_groups"),
                                       NULL,
-                                      choices = c("Locations", "Location Groups"),
-                                      selected = "Locations"),
+                                      choices = setNames(c("locations", "loc_groups"),
+                                                         c(tr("locs", language$language), tr("loc_groups", language$language))),
+                                      selected = "locations"),
                          # Selectize input for locations, populated once connection is established
                          selectizeInput(ns("locations_EQ"),
                                         tr("select_locs", language$language),
@@ -64,7 +65,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                                         multiple = TRUE),
                          # Selectize input for location groups, populated once connection is established. only shown if data source is EQWin
                          selectizeInput(ns("location_groups"),
-                                        tr("select_params", language$language),
+                                        tr("select_loc_group", language$language),
                                         choices = NULL,
                                         multiple = TRUE,
                                         options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values
@@ -72,16 +73,17 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                          # Toggle button for parameters or parameter groups (only show if data source == EQWin)
                          radioButtons(ns("params_groups"),
                                       NULL,
-                                      choices = c("Parameters", "Parameter Groups"),
-                                      selected = "Parameters"),
+                                      choices = setNames(c("parameters", "param_groups"),
+                                                         c(tr("parameters", language$language), tr("param_groups", language$language))),
+                                      selected = "parameters"),
                          # Selectize input for parameters, populated once connection is established
                          selectizeInput(ns("parameters_EQ"),
-                                        "Select parameters",
+                                        tr("select_params", language$language),
                                         choices = NULL,
                                         multiple = TRUE),
                          # Selectize input for parameter groups, populated once connection is established. only shown if data source is EQWin
                          selectizeInput(ns("parameter_groups"),
-                                        "Select a parameter group",
+                                        tr("select_param_group", language$language),
                                         choices = NULL,
                                         multiple = TRUE,
                                         options = list(maxItems = 1)), # This fixes a bug where the 'Placeholder' value remains after updating values
@@ -89,7 +91,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                          div(
                            style = "display: flex; align-items: center;",
                            tags$label(
-                             "Select a standard to apply (optional)", 
+                             tr("select_standard_opt", language$language),
                              class = "form-label",
                              style = "margin-right: 5px;"
                            ),
@@ -98,7 +100,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                              `data-bs-toggle` = "tooltip",
                              `data-bs-placement` = "right",
                              `data-bs-trigger` = "click hover",
-                             title = "Warning: this adds a lot of time for plot generation!!!",
+                             title = tr("standard_warning", language$language),
                              icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
                            )
                          ),
@@ -211,7 +213,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
       } else {
         if (!EQWin_selector()) { # Only renders the ui element once
           output$EQWin_source_ui <- renderUI({
-            selectizeInput(ns("EQWin_source"), "EQWin database", choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
+            selectizeInput(ns("EQWin_source"), tr("EQWin_db", language$language), choices = stats::setNames(mdb_files, basename(mdb_files)), selected = mdb_files[1])
           })
           EQWin_selector(TRUE)
         }
@@ -289,7 +291,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
     
     # Toggle visibility of location and location group inputs
     observeEvent(input$locs_groups, {
-      if (input$locs_groups == "Location Groups") {
+      if (input$locs_groups == "loc_groups") {
         shinyjs::show("location_groups")
         shinyjs::hide("locations_EQ")
       } else {
@@ -298,7 +300,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
       }
     })
     observeEvent(input$params_groups, {
-      if (input$params_groups == "Parameter Groups") {
+      if (input$params_groups == "param_groups") {
         shinyjs::show("parameter_groups")
         shinyjs::hide("parameters_EQ")
       } else {
@@ -462,7 +464,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
       
       # Validate required inputs based on data source
       if (input$data_source == "EQ") {
-        if (input$locs_groups == "Locations") {
+        if (input$locs_groups == "locations") {
           if (is.null(input$locations_EQ)) {
             showModal(modalDialog(tr("pl_select_loc", language$language), 
                                   footer = tagList(
@@ -473,7 +475,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
           }
         } else {
           if (is.null(input$location_groups)) {
-            showModal(modalDialog("Please select one location group.", 
+            showModal(modalDialog(tr("select_loc_group_msg", language$language),
                                   footer = tagList(
                                     actionButton(ns("cancel"), tr("cancel", language$language))
                                   ),
@@ -482,9 +484,9 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
           }
         }
         # Same treatment for parameters/parameter_groups
-        if (input$params_groups == "Parameters") {
+        if (input$params_groups == "parameters") {
           if (is.null(input$parameters_EQ)) {
-            showModal(modalDialog(tr("pl_select_param", language$language), 
+            showModal(modalDialog(tr("pl_select_param", language$language),
                                   footer = tagList(
                                     actionButton(ns("cancel"), tr("cancel", language$language))
                                   ),
@@ -493,7 +495,7 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
           }
         } else {
           if (is.null(input$parameter_groups)) {
-            showModal(modalDialog("Please select one parameter group.", 
+            showModal(modalDialog(tr("select_param_group_msg", language$language),
                                   footer = tagList(
                                     actionButton(ns("cancel"), tr("cancel", language$language))
                                   ),
@@ -524,10 +526,10 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
         plot_output_discrete$invoke(
           start = input$date_range[1],
           end = input$date_range[2],
-          locations = if (input$locs_groups == "Locations") input$locations_EQ else NULL,
-          locGrp = if (input$locs_groups == "Location Groups") input$location_groups else NULL,
-          parameters = if (input$params_groups == "Parameters") input$parameters_EQ else NULL,
-          paramGrp = if (input$params_groups == "Parameter Groups") input$parameter_groups else NULL,
+          locations = if (input$locs_groups == "locations") input$locations_EQ else NULL,
+          locGrp = if (input$locs_groups == "loc_groups") input$location_groups else NULL,
+          parameters = if (input$params_groups == "parameters") input$parameters_EQ else NULL,
+          paramGrp = if (input$params_groups == "param_groups") input$parameter_groups else NULL,
           standard = if (length(input$standard) == 0) NULL else input$standard,
           log = input$log_scale,
           facet_on = input$facet_on,

@@ -345,6 +345,15 @@ app_server <- function(input, output, session) {
     output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
     output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
     
+    output$FODNavTitle <- renderUI({tr("fod_comments", languageSelection$language)})
+    
+    session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
+    
+    if (!config$public) {
+      updateActionButton(session, "loginBtn", label = tr("login", languageSelection$language))
+      updateActionButton(session, "logoutBtn", label = tr("logout", languageSelection$language))
+    }
+    
     session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
     
     # Render the footer based on the language
@@ -406,7 +415,7 @@ app_server <- function(input, output, session) {
                         placeholder = tr("feedback_placeholder_up", languageSelection$language),
                         rows = 3,
                         width = "100%"),
-          actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
+          actionButton("submit_feedback", tr("feedback_submit", languageSelection$language), class = "btn btn-primary")
         )
       })
       feedback$type <- TRUE
@@ -445,7 +454,7 @@ app_server <- function(input, output, session) {
                         placeholder = tr("feedback_placeholder_down", languageSelection$language),
                         rows = 3,
                         width = "100%"),
-          actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
+          actionButton("submit_feedback", tr("feedback_submit", languageSelection$language), class = "btn btn-primary")
         )
       })
       feedback$type <- FALSE
@@ -487,7 +496,7 @@ app_server <- function(input, output, session) {
         title = tr("login_fail", languageSelection$language),
         tr("login_fail_attempts", languageSelection$language),
         easyClose = TRUE,
-        footer = modalButton("Close")
+        footer = modalButton(tr("close", languageSelection$language))
       ))
       return()
     } else {
@@ -500,7 +509,7 @@ $(document).keyup(function(event) {
     }
   });
   ')),
-        title = "Login",
+        title = tr("login", languageSelection$language),
         renderUI(HTML(tr("login_txt", languageSelection$language), "<br> <br>")),
         textInput("username", tr("un", languageSelection$language)),
         passwordInput("password", tr("pwd", languageSelection$language)),
@@ -576,8 +585,8 @@ $(document).keyup(function(event) {
       } else {
         removeModal()
         showModal(modalDialog(
-          title = "Login Failed",
-          "Invalid username or password or insufficient privileges.",
+          title = tr("login_fail", languageSelection$language),
+          tr("login_fail_msg", languageSelection$language),
           easyClose = TRUE,
           footer = modalButton(tr("close", languageSelection$language))
         ))
@@ -590,8 +599,8 @@ $(document).keyup(function(event) {
     }, error = function(e) {
       removeModal()
       showModal(modalDialog(
-        title = "Login Failed",
-        "Invalid username or password.",
+        title = tr("login_fail", languageSelection$language),
+        tr("login_fail_msg", languageSelection$language),
         easyClose = TRUE,
         footer = modalButton(tr("close", languageSelection$language))
       ))

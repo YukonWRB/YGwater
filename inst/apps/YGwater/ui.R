@@ -151,7 +151,7 @@ app_ui <- function(request) {
                            uiOutput("discData_ui"))
         ), # End data nav_menu
         if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
-          nav_panel(title = "FOD comments", value = "FOD",
+          nav_panel(title = uiOutput("FODNavTitle"), value = "FOD",
                     uiOutput("fod_ui"))
         },
         nav_menu(title = uiOutput("infoNavMenuTitle"), value = "info",
