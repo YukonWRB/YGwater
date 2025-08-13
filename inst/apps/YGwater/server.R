@@ -116,7 +116,6 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discretePlot <- FALSE
     ui_loaded$continuousPlot <- FALSE
-    ui_loaded$mixPlot <- FALSE
     ui_loaded$mapParamValues <- FALSE
     ui_loaded$mapRasterValues <- FALSE
     ui_loaded$mapMonitoringLocations <- FALSE
@@ -351,7 +350,7 @@ app_server <- function(input, output, session) {
     # Render the footer based on the language
     output$footer_ui <- renderUI({
       div(
-        span("Was this page helpful?",
+        span(tr("feedback_text", languageSelection$language),
              # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
              actionButton(
                "thumbs_up",
@@ -391,10 +390,10 @@ app_server <- function(input, output, session) {
           div(
             textAreaInput("feedback_text",
                           label = NULL,
-                          placeholder = "Optional: tell us what you liked",
+                          placeholder = tr("feedback_placeholder_up", languageSelection$language),
                           rows = 3,
                           width = "100%"),
-            actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
+            actionButton("submit_feedback", tr("feedback_submit", languageSelection$language), class = "btn btn-primary")
           )
         })
         feedback$type <- TRUE
@@ -404,7 +403,7 @@ app_server <- function(input, output, session) {
         div(
           textAreaInput("feedback_text",
                         label = NULL,
-                        placeholder = "Optional: tell us what you liked",
+                        placeholder = tr("feedback_placeholder_up", languageSelection$language),
                         rows = 3,
                         width = "100%"),
           actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
@@ -430,10 +429,10 @@ app_server <- function(input, output, session) {
           div(
             textAreaInput("feedback_text",
                           label = NULL,
-                          placeholder = "Optional: tell us how we can improve",
+                          placeholder = tr("feedback_placeholder_down", languageSelection$language),
                           rows = 3,
                           width = "100%"),
-            actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
+            actionButton("submit_feedback", tr("feedback_submit", languageSelection$language), class = "btn btn-primary")
           )
         })
         feedback$type <- FALSE
@@ -443,7 +442,7 @@ app_server <- function(input, output, session) {
         div(
           textAreaInput("feedback_text",
                         label = NULL,
-                        placeholder = "Optional: tell us how we can improve",
+                        placeholder = tr("feedback_placeholder_down", languageSelection$language),
                         rows = 3,
                         width = "100%"),
           actionButton("submit_feedback", "Submit feedback", class = "btn btn-primary")
@@ -743,13 +742,6 @@ $(document).keyup(function(event) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
-      }
-    }
-    if (input$navbar == "mix") { # This is reached through a nav_menu
-      if (!ui_loaded$mixPlot) {
-        output$plotMix_ui <- renderUI(mixPlotUI("mixPlot"))
-        ui_loaded$mixPlot <- TRUE
-        mixPlot("mixPlot", config$mdb_files, language = languageSelection, windowDims) # Call the server
       }
     }
     

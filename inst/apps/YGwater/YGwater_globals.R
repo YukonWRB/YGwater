@@ -70,8 +70,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   # Plot modules
   source(system.file("apps/YGwater/modules/client/plot/discretePlot.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/client/plot/continuousPlot.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/plot/mixPlot.R", package = "YGwater"))
-  
+
   # Report modules
   source(system.file("apps/YGwater/modules/client/reports/basins.R", package = "YGwater"))
   source(system.file("apps/YGwater/modules/client/reports/WQReport.R", package = "YGwater"))

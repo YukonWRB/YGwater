@@ -24,7 +24,7 @@ mapParams <- function(id, language) {
       parameters = cached$parameters
     )
     
-    mapCreated <- reactiveVal(FALSE)
+    mapCreated <- reactiveVal(FALSE) # Track whether the map has been initialized on the client
     
     output$sidebar_page <- renderUI({
       req(moduleData, language)
@@ -120,7 +120,7 @@ mapParams <- function(id, language) {
       if (input$latest) {
         # Show the user a modal that explains that the most recent values will be compared against daily means
         showModal(modalDialog(
-          tr("map_latest_measurements_modal", language$language),
+          HTML(tr("map_latest_measurements_modal", language$language)),
           easyClose = TRUE,
           footer = modalButton(tr("close", language$language))
         ))
@@ -439,7 +439,9 @@ mapParams <- function(id, language) {
         abs_vals <- abs(mapping_data$value)
 
         if (length(abs_vals) == 0) {
-          leaflet::leafletProxy("map", session) %>% leaflet::clearMarkers()
+          leaflet::leafletProxy("map", session) %>% 
+            leaflet::clearMarkers() %>%
+            leaflet::clearControls()
           return()
         }
         
@@ -491,6 +493,8 @@ mapParams <- function(id, language) {
       
       leaflet::leafletProxy("map", session) %>%
         leaflet::clearMarkers() %>%
+        leaflet::clearControls() %>%
+        leaflet::addMapPane("overlay", zIndex = 420) %>%
         leaflet::addCircleMarkers(
           data = mapping_data,
           lng = ~longitude,
@@ -512,7 +516,6 @@ mapParams <- function(id, language) {
             tr("map_actual_yrs", language$language), ": ", doy_count
           )
         ) %>%
-        leaflet::clearControls() %>%  # Clear existing legends
         leaflet::addLegend(
           position = "bottomright",
           pal = value_palette,
@@ -524,7 +527,6 @@ mapParams <- function(id, language) {
     }
     
     # Create the basic map
-    mapCreated <- reactiveVal(FALSE) # Used to track map creation so that points show up right away with defaults
     output$map <- leaflet::renderLeaflet({
       
       map <- leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 15)) %>%
@@ -550,11 +552,11 @@ mapParams <- function(id, language) {
       
       mapCreated(TRUE)
       map
-    })
+    }) |> bindEvent(language$language) # Re-render the map if the language changes
     
     # Observe the map being created and update it when the parameters change
     observe({
-      req(mapCreated(), map_params, input$map_zoom, language$language)  # Ensure the map has been created before updating
+      req(mapCreated(), map_params, language$language)  # Ensure the map has been created before updating
       updateMap()  # Call the updateMap function to refresh the map with the current parameters
     })
     
