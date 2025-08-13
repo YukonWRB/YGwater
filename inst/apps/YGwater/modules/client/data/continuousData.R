@@ -203,7 +203,8 @@ contData <- function(id, language, inputs) {
           )
         )
       )
-    })
+    }) |> # End of renderUI for instructions
+      bindEvent(language$language)
     
     output$sidebar <- renderUI({
       req(filteredData, language)
@@ -330,8 +331,8 @@ contData <- function(id, language, inputs) {
       input_values$params <- input$params
       
       return(tags)
-    })  %>% # End of renderUI for sidebar
-      bindEvent(language)
+    })  |> # End of renderUI for sidebar
+      bindEvent(language$language)
     
     output$main <- renderUI({
       tagList(
@@ -340,7 +341,7 @@ contData <- function(id, language, inputs) {
         actionButton(ns("view_data"), tr("view_data1", language$language), style =  "display: none;"),  # Button will be hidden until a row is selected
         # The modal UI elements are created lower down
       ) # End of tagList
-    }) %>% # End renderUI
+    }) |> # End renderUI
       bindEvent(language$language) # Re-render the UI if the language or changes
     
     
@@ -1382,7 +1383,7 @@ contData <- function(id, language, inputs) {
                         dom = 'rt',
                         scrollX = TRUE
                       )
-        ) %>%
+        ) |>
           DT::formatRound(columns = c(4,5,5), digits = 3) # Round numbers, here index starts at 1 (not javascript)
       }) # End of function creating location metatadata datatable
       
