@@ -20,17 +20,17 @@ data,dataNavMenuTitle,Data,Données
 data_discrete,dataNavDiscTitle,Discrete data,Données discrètes
 data_continuous,dataNavContTitle,Continuous data,Données continues
 images,imagesNavMenuTitle,Images,Images
-images_table,imagesNavTableTitle,Table selection,Séléction par tableau
-images_map,imagesNavMapTitle,Map selection,Séléction par carte
+images_table,imagesNavTableTitle,Table selection,Sélection par tableau
+images_map,imagesNavMapTitle,Map selection,Sélection par carte
 info,infoNavMenuTitle,Info,Info
 info_about,infoNavAboutTitle,About,À propos
 info_news,infoNavNewsTitle,News,Nouvelles
 Home module,,,
 betaTitle,beta version warning,🚧 Notice: this web site is under construction 🚧,🚧 Avis: ce site web est en état de construction. 🚧
-betaText,beta version warning,"<br>We're now in the external user testing phase - almost ready to launch! You can log feedback by clicking the thumbs up/down buttons at the bottom of each page. This will track which page you're on, but please add a descriptive comment before submitting.<br><br>Some application pieces will continue to be improved during this testing phase, notably the addition of missing French translations, user interface improvements, and fixes to new bugs.","<br>Nous sommes désormais en phase de tests externes - le dévelopement est presque terminé! Vous trouverez une interface pour nous faire part de vos retours en bas de chaque page. <br><br>Certains éléments de l’application continueront d’être améliorés pendant cette phase de test, notamment les traductions manquantes en français, l'améliorations de l’interface utilisateur, ainsi que la réparation de 'bugs'."
+betaText,beta version warning,"<br>We're now in the external user testing phase - almost ready to launch! You can log feedback by clicking the thumbs up/down buttons at the bottom of each page. This will track which page you're on, but please add a descriptive comment before submitting.<br><br>Some application pieces will continue to be improved during this testing phase, notably the addition of missing French translations, user interface improvements, and fixes to new bugs.","<br>Nous sommes désormais en phase de tests externes - le développement est presque terminé! Vous trouverez une interface pour nous faire part de vos retours en bas de chaque page. <br><br>Certains éléments de l’application continueront d’être améliorés pendant cette phase de test, notamment les traductions manquantes en français, l'améliorations de l’interface utilisateur, ainsi que la réparation de 'bugs'."
 homeTitle,Home page welcome message heading,Welcome to the Yukon Water Data Explorer!,Bienvenue à l'explorateur de données sur l'eau du Yukon!
 homeText,Home page welcome message,"Dive into the world of hydrology, meteorology, and water chemistry with the Yukon Department of Environment's Water Resources Branch.<br><br>Our mission? To bring data to your fingertips, aligning with the Open Government initiative for transparency, citizen empowerment, and sparking research creativity. Explore our historic and real-time data, made available under the terms of our limitation of liability.","Plongez dans le monde de l'hydrologie, de la météorologie et de la chimie de l'eau avec le département de l'environment du gouvernement du Yukon. <br><br>Notre mission? Mettre les données à portée de main, en alignement avec l'initiative de Gouvernement Ouvert pour la transparence, l'engagement des citoyens et l'incitation à la recherche créative. Explorez nos données historiques et courantes comme jamais auparavant, disponibles sous entente de nos limitations de responsabilité."
-home_discrete_continuous_title,Explainer for discrete vs continuous,How we organize our data,Au sujet de l'organization de nos données
+home_discrete_continuous_title,Explainer for discrete vs continuous,How we organize our data,Au sujet de l'organisation de nos données
 home_discrete_continuous,Explainer for discrete vs continuous,"We classify data as <b>discrete</b> or <b>continuous</b>. The classification depends on:</div><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g. snow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g. hourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.</li><br><br>","Nous classifions les données en <b>discrètes</b> ou <b>continues</b>. Cette classification dépend de :</div><li>la fréquence des mesures</li><li>la méthode de mesure</li><li>autres métadonnées pertinentes</li><br><b>Qu’est-ce que les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (p. ex. profondeur de neige) ou par analyse en laboratoire. Ces données doivent comporter une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Qu’est-ce que les données continues ?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (p. ex. horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument et les conditions d’enregistrement.</li>"
 home_map_locs_btn,button text,See a map of monitoring locations,Voire une carte avec les sites de surveillance
 home_map_params_btn,button text,See a map of  current or past conditions,Voire une carte des conditions actuelles ou historiques
@@ -40,8 +40,8 @@ home_dl_cont_btn,button text,Download continuous data,Télécharger les données
 home_dl_disc_btn,button text,Download discrete (sample) data,Télécharger les données continues
 feedback_text,thumbs up down button text,Was this page helpful?,Avez-vous trouvé cette page utile?
 feedback_submit,submit button text,Submit feedback,Soumettre vos commentaires
-feedback_placeholder_up,placeholder text,Optional: how did this page help you?,Optionnel: en quoi cette page vous a-t-elle été utile?
-feedback_placeholder_down,placeholder text,Optional: how can we improve this page?,Optionnel: comment peut-on améliorer cette page?
+feedback_placeholder_up,placeholder text,Optional: how did this page help you?,Facultatif: en quoi cette page vous a-t-elle été utile?
+feedback_placeholder_down,placeholder text,Optional: how can we improve this page?,Facultatif: comment peut-on améliorer cette page?
 Login pop-up,,,
 login_txt,Body text for pop-up,Log in to add/modify data and administer assets.,Connectez vous pour ajouter/modifier des données.
 un,username,Username,Nom d'utilisateur
@@ -127,9 +127,9 @@ Visualize/plot module,,,
 facet_on,,Split plots by,Diviser les graphiques par
 facet_on_tooltip,,"Creates multiple plots, each showing one location or one parameter. The other variable appears as separate lines or points.","Crée plusieurs graphiques, chacun montrant un seul emplacement ou un seul paramètre. L’autre variable apparaît sous forme de lignes ou de points distincts."
 use_log_scale,,Use logarithmic scale,Utiliser une échelle logarithmique
-log_scale_warning,,Warning: points with negative values will be removed for log transformation.,Attention: les points ayant des valeures négatives ne sont pas représentés avec l'échelle logarithmique.
+log_scale_warning,,Warning: points with negative values will be removed for log transformation.,Attention: les points ayant des valeurs négatives ne sont pas représentés avec l'échelle logarithmique.
 share_x_axis,,Use the same X-axis bounds for all plots (dates line up),Utiliser le même axe X pour tous les graphiques (dates alignées)
-share_y_axis,,Use the same Y-axis bounds for all plots (values are aligned),Utiliser le même axe Y pour tous les graphiques (valeures alignées)
+share_y_axis,,Use the same Y-axis bounds for all plots (values are aligned),Utiliser le même axe Y pour tous les graphiques (valeurs alignées)
 share_x_axis_tooltip,,Aligns the X-axis for all plots to make it easier to compare trends over time.,Aligne l'axe X de tous les graphiques pour faciliter la comparaison des tendances dans le temps.
 share_y_axis_tooltip,,Aligns the Y-axis for all plots to make it easier to compare values across locations or parameters.,Aligne l’axe Y de tous les graphiques pour faciliter la comparaison des valeurs entre emplacements ou paramètres.
 loc_code,,Choose how to display location names/codes,Choisissez comment montrer le nom/code des emplacements
@@ -144,22 +144,20 @@ full_screen,,Full screen,Plein écran
 language,,Language,Langue
 show_x_grid,,Show X-axis gridlines,Afficher la grille de l'axe X
 show_y_grid,,Show Y-axis gridlines,Afficher la grille de l'axe Y
-num_rows,,Number of rows (leave blank for automatic),Number of rows (leave blank for automatic)
+num_rows,,Number of rows (leave blank for automatic),Nombres de lignes (laisser vide pour automatique)
 colorblind_friend,,Color-blind friendly,Adapté au daltonisme
 point_scale,,Point size factor,Facteur de taille des points
 line_scale,,Line scale factor,Facteur de taille des lignes
 modal_select_multi_not_null,,"Please narrow selections to a single timeseries before adding another.","SVP sélectionner une seule sélection avant d'ajouter une nouvelle série temporelle."
 modal_error_multi_trace,,"There are duplicate traces. Each trace must have a unique combination of location, sub-location, Z (height/depth), recording rate, aggregation type, parameter, and lead/lag","Des tracés en double ont été trouvés. Chaque tracé doit avoir une combinaison unique d’emplacement, de sous-emplacement, de Z (hauteur/profondeur), de fréquence d’enregistrement, de type d’agrégation, de paramètre et d’avance/retard."
 first_plot_hints_standards,,"<p><strong>This plot is interactive.</strong> You can zoom or move it with the buttons at the top left, or by clicking and dragging with your mouse.</p><ul><li>Double-click a legend entry to show only that series of timeseries; double-click again to show all.</li><li>Click a legend entry once to hide or show a timeseries.</li></ul><p><strong>Symbols:</strong></p><ul><li>Values above/below the detection limit → <strong>stars</strong> (✱)</li><li>Standard/guideline values → <strong>lines</strong></li></ul>","<p><strong>Ce graphique est interactif.</strong> Vous pouvez zoomer ou le déplacer avec les boutons en haut à gauche, ou en cliquant et en faisant glisser la souris.</p><ul><li>Double-cliquez un élément de la légende pour n’afficher que cette série; double-cliquez de nouveau pour tout afficher.</li><li>Cliquez une fois sur un élément de la légende pour masquer ou afficher une série.</li></ul><p><strong>Symboles&nbsp;:</strong></p><ul><li>Valeurs au-dessus/en dessous de la limite de détection → <strong>étoiles</strong> (✱)</li><li>Valeurs de référence/normes → <strong>lignes</strong></li>"
-first_plot_hints_no_standards,,"<p><strong>This plot is interactive.</strong> You can zoom or move it with the buttons at the top left, or by clicking and dragging with your mouse.</p><ul><li>Double-click a legend entry to show only that series of timeseries; double-click again to show all.</li><li>Click a legend entry once to hide or show a timeseries.</li></ul>","<p><strong>Ce graphique est interactif.</strong> Vous pouvez zoomer ou le déplacer avec les boutons en haut à gauche, ou en cliquant et en faisant glisser la souris.</p><ul><li>Double-cliquez un élément de la légende pour n’afficher que cette série; double-cliquez de nouveau pour tout afficher.</li><li>Cliquez une fois sur un élément de la légende pour masquer ou afficher une série.</li></ul>
+first_plot_hints_no_standards,,"<p><strong>This plot is interactive.</strong> You can zoom or move it with the buttons at the top left, or by clicking and dragging with your mouse.</p><ul><li>Double-click a legend entry to show only that series of timeseries; double-click again to show all.</li><li>Click a legend entry once to hide or show a timeseries.</li></ul>","<p><strong>Ce graphique est interactif.</strong> Vous pouvez zoomer ou le déplacer avec les boutons en haut à gauche, ou en cliquant et en faisant glisser la souris.</p><ul><li>Double-cliquez un élément de la légende pour n’afficher que cette série; double-cliquez de nouveau pour tout afficher.</li><li>Cliquez une fois sur un élément de la légende pour masquer ou afficher une série.</li></ul>"
 first_plot_hints_standards_short,,"<p>Values above/below the detection limit are shown with <strong>stars</strong> (✱).<br><br>Standard/guideline values are shown with <strong>lines</strong>.</p>","<p>Les valeurs au-dessus/en dessous de la limite de détection sont affichées avec des <strong>étoiles</strong> (✱).<br><br>Les valeurs de référence/normes sont affichées avec des <strong>lignes</strong>.</p>"
-lead_lag,,Lead/lag in hours, Avance/retard en heures
+lead_lag,,Lead/lag in hours,Avance/retard en heures
 guideline_scale,,Guideline/standard scale factor,Facteur de taille des standards
-axis_scale,,Text and values scale factor),Facteur des tailles du texte et des valeures
+axis_scale,,Text and values scale factor,Facteur des tailles du texte et des valeurs
 legend_scale,,Legend text size factor,Facteur de taille de la légende
-tooltip_visualize_map,tooltip text to explain to user what to do,Only the parameter and date options are mandatory; other fields are there to help you narrow your options.,Placeholder…
-tooltip_visualize_plot,tooltip text to explain to user what to do,Placeholder…,Placeholder…
-optional_placeholder,placeholder text,Optional…,Optionnel…
+optional_placeholder,placeholder text,Optional…,Facultatif…
 mandatory_placeholder,placeholder text,Select a parameter,Sélectionnez un paramètre
 map_mapType,,Map type,Type de carte
 map_date_select,,Select a date,Sélectionnez une date
@@ -171,8 +169,8 @@ map_min_yrs,minimum number of years to use historic range stats,With at least �
 map_min_yrs_selected1,,With at least,Avec au moins
 map_min_yrs_selected2,,years of record,années de mesures
 map_target_date,target date for historical range map,Target date,Date ciblée
-map_absolute1,,Absolute values,Valeures absolue
-map_absolute2,,Absolute value,Valeure absolue
+map_absolute1,,Absolute values,Valeurs absolue
+map_absolute2,,Absolute value,Valeur absolue
 map_relative,,% historic range,% plage historique
 map_actual_date,,Date,Date
 map_actual_yrs,,Years of record,Années de mesures
@@ -197,8 +195,8 @@ gen_waterInfo_param_select_both,,Both (flow and level where both exist),Deux (d�
 gen_loc_select,,"Select one, many, or all locations","Sélectionnez un, plusieurs, ou tous les endroits"
 gen_no_loc,,Select at least one location.,Sélectionez au moins un endroit.
 gen_waterInfo_end_date,,Last day to use for calculations,Dernière date à considérer pour les calculs
-gen_waterInfo_min_months,,Months in which to look for minimums,Mois dans lesquels rechercher les valeures minimum
-gen_waterInfo_max_months,,Months in which to look for maximums,Mois dans lesquels rechercher les valeures maximum
+gen_waterInfo_min_months,,Months in which to look for minimums,Mois dans lesquels rechercher les valeurs minimum
+gen_waterInfo_max_months,,Months in which to look for maximums,Mois dans lesquels rechercher les valeurs maximum
 gen_waterInfo_prct_miss,,Max % missing data to retain annual value (in months of interest),Max % de données manquantes pour retenir une valeure annuelle (dans les mois d'intérêt)
 gen_generate_plots,,Generate plots?,Générer les graphiques?
 gen_waterInfo_ptype,,Min/max on single plot or separate?,Min/max sur le même graphique ou séparé?
@@ -210,7 +208,7 @@ gen_snowInfo_complete,,Complete years only?,Années complètes seulement?
 gen_snowInfo_ptype,,Combined or separate plots?,Grahpiques séparés ou combinés?
 gen_snowInfo_ptype_separate,,Separate,séparés
 gen_snowInfo_ptype_combine,,Combined,combinés
-gen_snowBul_info,,"This function allows you to create Excel workbooks with the statistics used in creating the Snow Bulletin, or to create the entire Snow Bulletin Word document.","Cette fonction vous permet to créer des documents Excel qui contiennent les statistics utilisées lors de la création du bulletin de conditions de neige, ou de créer le bulletin de neige en document Word."
+gen_snowBul_info,,"This function allows you to create Excel workbooks with the statistics used in creating the Snow Bulletin, or to create the entire Snow Bulletin Word document.","Cette fonction vous permet de créer des documents Excel qui contiennent les statistics utilisées lors de la création du bulletin de conditions de neige, ou de créer le bulletin de neige en document Word."
 gen_snowBul_toggle_stats,,Statistics,Statistiques
 gen_snowBul_toggle_bulletin,,Bulletin,Bulletin
 gen_snowBul_year,,Year,Année
@@ -253,7 +251,6 @@ loc(s),,Location(s),Emplacement(s)
 select_locs,,Select locations,Sélectionnez des emplacements
 pl_select_loc,,Please select a location.,SVP sélectionner un emplacement
 pl_select_param,,Please select a parameter,SVP sélectionner un paramètre
-
 sub_loc,,Sub-location,Sous-emplacement
 sub_loc(s),,Sub-location(s),Sous-emplacements(s)
 z,,Depth/height (meters),Profondeur/hauteur (mètres)
@@ -334,7 +331,7 @@ param_name_col,DB column selection ,param_name,param_name_fr
 media_type_col,DB column selection ,media_type,media_type_fr
 param_group_col,DB column selection ,group_name,group_name_fr
 param_sub_group_col,DB column selection ,sub_group_name,sub_group_name_fr
-generic_name_col,DB column selection ,name,name_fr
+generic_name_col,DB column selection,name,name_fr
 sample_type_col,,sample_type,sample_type_fr
 sub_location_col,,sub_location_name,sub_location_name_fr
 aggregation_type_col,,aggregation_type,aggregation_type_fr
