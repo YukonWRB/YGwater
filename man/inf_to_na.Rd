@@ -7,7 +7,7 @@
 inf_to_na(x)
 }
 \arguments{
-\item{x}{Numeric vector.}
+\item{x}{Numeric vector, data.frame, or data.table. If data.frame or data.table, will only work on 'numeric' class columns.}
 }
 \value{
 Numeric vector with infinite values converted to \code{NA}.
