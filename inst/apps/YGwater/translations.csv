@@ -259,14 +259,19 @@ About view module,,,
 licence_title,,Using data from this application,Utilisation des données de cette application
 licence1,,"The data, reports, and plots generated from this application are licenced under the Yukon Government's ","Les données, rapports et graphiques générés par cette application sont licenciés sous la "
 licence2,,Open Government Licence,licence de gouvernement ouvert du Yukon
-licence_url,,https://open.yukon.ca/open-government-licence-yukon,https://open.yukon.ca/fr/gouvernement-ouvert-licence-du-yukon
+licence_url,,https://yukon.ca/en/your-government/open-government/open-government-licence-yukon,https://yukon.ca/fr/votre-gouvernement/gouvernement-ouvert/gouvernement-ouvert-licence-du-yukon
 about_title1,title,About us,À propos de nous
 about_content1,content,Content to be developed!,À développer!
 about_title2,title,About this application,À propos cette application
-about_content2,content,"This web site was created using R Shiny, which allows us to leverage the R programming language's inherent suitability for data wrangling and plotting. The application code is contained within an R package which which holds many useful and interesting functions besides those showcased in this application, and is publicly viewable at ","Ce site web a été conçu en utilisant R Shiny, ce qui nous permet de tirer parti de l'aptitude inhérente du langage de programmation R pour la manipulation de données et la création de graphiques. Le code de l'application est contenu dans un package R qui comprend de nombreuses fonctions utiles et intéressantes en plus de celles présentées dans cette application, et est publiquement consultable à "
-about_url,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
+about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strenghts in data handling and visualization. The application code is packaged with many other useful functions beyond thos show here, and is publicly viewable at ","Ce site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour la gestion et la visualisation des données. Le code de l’application est regroupé dans un package contenant de nombreuses autres fonctions utiles, au-delà de celles présentées ici, et il est accessible publiquement ici : "
+about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base de données maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre package R disponible ici : "
+about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time.","Cette base de données contient des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales, divers types de métadonnées et plus encore, ce qui nous aide à dresser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
+about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3, so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux packages R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
+about_url_ygwater,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
+about_url_aquacache,url,https://github.com/YukonWRB/AquaCache,https://github.com/YukonWRB/AquaCache
+current_software,,Current software and database status:,État actuel du logiciel et de la base de données
 app_version1,,Application version,Application version
-app_version2,,connected to AquaCache database version ,connectée à la base de données AquaCache version
+app_version2,,connected to AquaCache database revision ,connectée à la base de données AquaCache révision
 app_version3,,revision,révision
 Generic labels,,,
 data_type,direct translation,Data Type,Types de données
