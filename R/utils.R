@@ -18,7 +18,7 @@ round_any <- function(x, accuracy, f = round) {
 
 #' Replace infinite values with NA
 #'
-#' Utility function to replace `Inf` and `-Inf` values with `NA`.
+#' Utility function to replace `Inf`, `-Inf`, and `NaN` values with `NA`.
 #'
 #' @param x Numeric vector, data.frame, or data.table. If data.frame or data.table, will only work on 'numeric' class columns.
 #' @return Numeric vector with infinite values converted to `NA`.
