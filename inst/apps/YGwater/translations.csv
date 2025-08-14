@@ -69,7 +69,6 @@ max,modal selection,Max + daily (with stats),Maximum + journalière (avec stats)
 ts_subset_msg,modal message,Subset of data (first and last measurement per timeseries),Sous-ensemble de données (première et dernière mesures)
 discrete_subset_msg,modal message,Subset of data (up to 3 results per sample),Sous-ensemble de données (jusqu'à 3 résultats par échantillon)
 loc_meta_msg,modal message,Subset of location metadata (up to first three locations),Sous-ensemble des métadonnées des sites (jusqu'aux trois premiers endroits)
-date_range_select,modal selection title,Select a date range,Choissez la plage temporelle
 date_range_select_doy,,Start/end days (year is ignored),Dates de début/fin (l'année est ignorée)
 date_start,continuous data selector,With data starting after,Avec des données à partir de
 date_end,continuous data selector,With data ending before,Avec des données avant

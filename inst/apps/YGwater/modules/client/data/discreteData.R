@@ -208,12 +208,13 @@ discData <- function(id, language, inputs) {
       tags <- tagList(
         # start and end datetime
         dateRangeInput(ns("date_range"),
-                       tr("date_range_select", language$language),
+                       tr("date_range_lab", language$language),
                        start = as.Date(filteredData$range$min_date),
                        end = as.Date(filteredData$range$max_date),
                        min = as.Date(filteredData$range$min_date),
                        format = "yyyy-mm-dd",
-                       language = language$abbrev
+                       language = language$abbrev,
+                       separator = tr("date_sep", language$language)
         ),
         # Selectize input for locations
         selectizeInput(ns("locations"),
