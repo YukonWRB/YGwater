@@ -100,10 +100,10 @@ home <- function(id, language) {
       })
       output$plot_buttons <- renderUI({
         fluidRow(
-          column(6, actionButton(ns("plot_cont"), tr("home_plot_cont_btn", language$language),
+          column(6, actionButton(ns("plot_cont"), tr("view_plots_continuous", language$language),
                                  class = "btn-bar w-100 btn-bar-plot-c",
                                  icon = icon("chart-simple"))),
-          column(6, actionButton(ns("plot_disc"), tr("home_plot_disc_btn", language$language),
+          column(6, actionButton(ns("plot_disc"), tr("view_plots_discrete", language$language),
                                  class = "btn-bar w-100 btn-bar-plot-d",
                                  icon = icon("chart-simple")))
         )
@@ -116,10 +116,10 @@ home <- function(id, language) {
       })
       output$data_buttons <- renderUI({
         fluidRow(
-          column(6, actionButton(ns("dl_cont"), tr("home_dl_cont_btn", language$language),
+          column(6, actionButton(ns("dl_cont"), tr("dl_data_continuous", language$language),
                                  class = "btn-bar w-100 btn-bar-dl-c",
                                  icon = icon("table"))),
-          column(6, actionButton(ns("dl_disc"), tr("home_dl_disc_btn", language$language),
+          column(6, actionButton(ns("dl_disc"), tr("dl_data_discrete", language$language),
                                  class = "btn-bar w-100 btn-bar-dl-d",
                                  icon = icon("table")))
         )

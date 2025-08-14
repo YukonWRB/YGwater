@@ -185,12 +185,12 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         selectizeInput(ns("plot_type"),
                        label = tooltip(
                          trigger = list(
-                           "Plot type",
+                           tr("plot_type", language$language),
                            bsicons::bs_icon("info-circle-fill")
                          ),
-                         "Long timeseries plots help visualize a change with time and allows for multiple traces or subplots, while overlapping years plots are useful for comparing data across years at one location."
+                         tr("plot_type_tooltip", language$language),
                        ),
-                       choices = stats::setNames(c("ts", "over"), c("Long timeseries", "Overlapping years")), 
+                       choices = stats::setNames(c("ts", "over"), c(tr("plot_type_ts", language$language), tr("plot_type_overlap", language$language))), 
                        selected = "ts"),
         
         selectizeInput(ns("location"),
@@ -257,27 +257,32 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           ns = ns,
           condition = "input.plot_type == 'over'",
           div(
-            selectizeInput(ns("years"), label = "Select years to plot", choices = NULL, multiple = TRUE), #Choices are populated based on the location and parameter
+            selectizeInput(ns("years"), 
+                           label = tr("plot_select_years", language$language), 
+                           choices = NULL, 
+                           multiple = TRUE), # Choices are populated based on the location and parameter
             style = "display: flex; align-items: center;",
             span(
               id = ns("log_info_years"),
               `data-bs-toggle` = "tooltip",
               `data-placement` = "right",
               `data-trigger` = "click hover",
-              title = "For periods overlaping the new year select the December year.",
+              title = tr("plot_select_yrs", language$language),
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )
           ),
           div(
-            selectizeInput(ns("historic_range_overlap"),"Historic range includes all years of record or up to last year plotted?", 
-                           choices = c("all", "last"), selected = "all"),
+            selectizeInput(ns("historic_range_overlap"),
+                           label = tr("plot_hist_range_select", language$language), 
+                           choices = stats::setNames(c("all", "last"), c(tr("all_yrs_record", language$language), tr("last_yr_only", language$language))),
+                           selected = "all"),
             style = "display: flex; align-items: center;",
             span(
               id = ns("log_info_hist_range"),
               `data-bs-toggle` = "tooltip",
               `data-placement` = "right",
               `data-trigger` = "click hover",
-              title = "Historic ranges are plotted as a gray ribbon.",
+              title = tr("plot_hist_range_select_tooltip", language$language),
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )
           )
@@ -296,36 +301,36 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           div(
             style = "display: flex; justify-content: flex-start; margin-bottom: 10px; margin-top: 10px;", # Use flexbox to align buttons side by side
             actionButton(ns("add_trace"),
-                         "Add trace",
+                         tr("add_trace", language$language),  
                          style = "margin-right: 5px;"),
             actionButton(ns("add_subplot"),
-                         "Add subplot",
+                         tr("add_subplot", language$language),  
                          style = "margin-right: 10px;"),
             tooltip(
               trigger = list(
                 bsicons::bs_icon("info-circle-fill")
               ),
-              "Click “Add trace” to overlay a new timeseries on the same plot, or “Add subplot” to create a separate panel.",
+              tr("add_subplot_trace_tooltip", language$language),
               placement = "right"
             )
           ),
-          checkboxInput(ns("log_y"), "Log scale y-axis?"),
+          # checkboxInput(ns("log_y"), "Log scale y-axis?"),
           uiOutput(ns("share_axes")),
-          checkboxInput(ns("historic_range"), "Plot historic range?")
+          checkboxInput(ns("historic_range"), tr("plot_hist_range", language$language))
         ),
         accordion(
           id = ns("accordion1"),
           open = FALSE,
           accordion_panel(
             id = ns("accordion1"),
-            title = "Extra options",
+            title = tr("plot_extra_options", language$language),
             icon = bsicons::bs_icon("gear"),
-            checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
-            checkboxInput(ns("plot_filter"), "Filter extreme values?"),
-            checkboxInput(ns("unusable"), "Show unusable data?"),
-            checkboxInput(ns("grades"), "Show grades?"),
-            checkboxInput(ns("approvals"), "Show approvals?"),
-            checkboxInput(ns("qualifiers"), "Show qualifiers?"),
+            checkboxInput(ns("apply_datum"), tr("plot_apply_vert_datum", language$language)),
+            checkboxInput(ns("plot_filter"), tr("plot_filter", language$language)),
+            checkboxInput(ns("unusable"), tr("plot_show_unusable", language$language)),
+            checkboxInput(ns("grades"), tr("plot_show_grades", language$language)),
+            checkboxInput(ns("approvals"), tr("plot_show_approvals", language$language)),
+            checkboxInput(ns("qualifiers"), tr("plot_show_qualifiers", language$language)),
             actionButton(ns("extra_aes"),
                          tr("modify_plot_aes", language$language),
                          style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
@@ -2127,19 +2132,19 @@ continuousPlot <- function(id, language, windowDims, inputs) {
               checkboxInput(ns("shareX"),
                             label = tooltip(
                               trigger = list(
-                                "Share X axis between subplots (dates are aligned)",
+                                tr("share_x_axis", language$language),
                                 bsicons::bs_icon("info-circle-fill")
                               ),
-                              "This will align the x-axis across all subplots, making it easier to compare trends over time."
+                              tr("share_x_axis_tooltip", language$language)
                             ),
                             value = TRUE),
               checkboxInput(ns("shareY"),
                             label = tooltip(
                               trigger = list(
-                                "Share Y axis between subplots (values are aligned)",
+                                tr("share_y_axis", language$language),
                                 bsicons::bs_icon("info-circle-fill")
                               ),
-                              "This will align the y-axis across all subplots, making it easier to compare values across different locations or parameters."
+                              tr("share_y_axis_tooltip", language$language)
                             ),
                             value = FALSE),
             )
