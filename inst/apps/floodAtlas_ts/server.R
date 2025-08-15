@@ -39,28 +39,32 @@ app_server <- function(input, output, session) {
   # Parse URL query parameters on app load from URL and trigger plot creation
   params <- reactiveValues()
   
+  # try to JSON-decode; if not JSON, return as-is
+  unj <- function(x) {
+    tryCatch(jsonlite::fromJSON(x), error = function(e) x)
+  }
+  
   observeEvent(session, {
     query <- parseQueryString(session$clientData$url_search)
+    
+    print(query)
     
     # loc_code
     if (!is.null(query$loc_code)) {
       # remove punctuation
-      sub_loc <- gsub("[[:punct:]]", "", query$loc_code)
-      params$loc_code <- sub_loc
+      params$loc_code <- unj(query$loc_code)
       updateTextInput(session, "loc_code", value = params$loc_code)
     }
     
     # param_code
     if (!is.null(query$param_code)) {
-      sub_param <- gsub("[[:punct:]]", "", query$param_code)
-      params$param_code <- as.numeric(sub_param)
+      params$param_code <- as.numeric(unj(query$param_code))
       updateNumericInput(session, "param_code", value = params$param_code)
     }
     
     # lang
     if (!is.null(query$lang)) {
-      sub_lang <- gsub("[[:punct:]]", "", query$lang)
-      params$lang <- sub_lang
+      params$lang <- unj(query$lang)
       updateTextInput(session, "lang", value = params$lang)
     }
     
@@ -164,6 +168,7 @@ app_server <- function(input, output, session) {
   observeEvent(input$user_speed, {
     req(params$loc_code, params$param_code, params$lang)
     rate <- if (input$user_speed < 0.0003) "day" else if (input$user_speed < 0.002) "hour" else "max"
+    
     plot_output$invoke(params$loc_code, params$param_code, params$lang, session$userData$use_webgl, config, rate)
   })
   

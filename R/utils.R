@@ -16,7 +16,7 @@ round_any <- function(x, accuracy, f = round) {
   f(x / accuracy) * accuracy
 }
 
-#' Replace infinite values with NA
+#' Replace infinite and NaN values with NA
 #'
 #' Utility function to replace `Inf`, `-Inf`, and `NaN` values with `NA`.
 #'
