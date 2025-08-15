@@ -35,10 +35,6 @@ home_discrete_continuous_title,Explainer for discrete vs continuous,How we organ
 home_discrete_continuous,Explainer for discrete vs continuous,"We sort data as <b>discrete</b> or <b>continuous</b>. This depends on:</div><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g. snow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g. hourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.</li><br><br>","Nous classifions les données en <b>discrètes</b> ou <b>continues</b>. Cette classification dépend de :</div><li>la fréquence des mesures</li><li>la méthode de mesure</li><li>autres métadonnées pertinentes</li><br><b>Qu’est-ce que les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (p. ex. profondeur de neige) ou par analyse en laboratoire. Ces données doivent comporter une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Qu’est-ce que les données continues ?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (p. ex. horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument et les conditions d’enregistrement.</li>"
 home_map_locs_btn,button text,See a map of monitoring locations,Voir une carte des sites de surveillance
 home_map_params_btn,button text,See a map of current or past conditions,Voir une carte des conditions actuelles ou passées
-home_plot_cont_btn,button text,Plot continuous data,Tracer les données continues
-home_plot_disc_btn,button text,Plot discrete (sample) data,Tracer les données discrètes
-home_dl_cont_btn,button text,Download continuous data,Télécharger les données continues
-home_dl_disc_btn,button text,Download discrete (sample) data,Télécharger les données discrètes
 feedback_text,thumbs up down button text,Was this page helpful?,Avez-vous trouvé cette page utile?
 feedback_submit,submit button text,Send feedback,Envoyer vos commentaires
 feedback_placeholder_up,placeholder text,Optional: how did this page help you?,Facultatif: en quoi cette page vous a-t-elle été utile?
@@ -73,7 +69,6 @@ max,modal selection,Max + daily (with stats),Maximum + journalière (avec stats)
 ts_subset_msg,modal message,Subset of data (first and last measurement per timeseries),Sous-ensemble de données (première et dernière mesures)
 discrete_subset_msg,modal message,Subset of data (up to 3 results per sample),Sous-ensemble de données (jusqu'à 3 résultats par échantillon)
 loc_meta_msg,modal message,Subset of location metadata (up to first three locations),Sous-ensemble des métadonnées des sites (jusqu'aux trois premiers endroits)
-date_range_select,modal selection title,Select a date range,Choissez la plage temporelle
 date_range_select_doy,,Start/end days (year is ignored),Dates de début/fin (l'année est ignorée)
 date_start,continuous data selector,With data starting after,Avec des données à partir de
 date_end,continuous data selector,With data ending before,Avec des données avant
@@ -135,6 +130,22 @@ img_type_man,input choice,Manual (one-off),Manuelle (non-série)
 date_range_lab,input label,Date Range,Plage temporelle
 date_sep,dateRangeInput separator, to , à 
 Visualize/plot module,,,
+plot_type,,Plot type,Type de graphique
+plot_type_tooltip,,"Timeseries plots show changes over time and can display multiple traces or subplots. Overlapping years plots help compare data from different years at the same location.","Les graphiques de longues séries temporelles montrent les changements au fil du temps et peuvent afficher plusieurs tracés ou sous-graphiques. Les graphiques d’années superposées permettent de comparer les données de différentes années pour un même emplacement."
+plot_type_overlap,,Overlapping years,Années superposées
+plot_select_years,,Select years to plot,Sélectionez les années à tracer
+plot_select_yrs,,"For periods overlapping the new year, select the December year","Pour les périodes chevauchant la nouvelle année, sélectionnez l’année de décembre."
+plot_type_ts,,Timeseries,Série temporelle
+plot_hist_range,,Plot historic range?,Tracer la plage historique
+plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec
+plot_hist_range_select_tooltip,,"Choose whether the historic range should include all available years of record or only up to the last year shown on the plot.","Choisissez si la plage historique doit inclure toutes les années de données disponibles ou seulement jusqu’à la dernière année affichée sur le graphique."
+plot_extra_options,,Extra options,Options supplémentaires
+plot_apply_vert_datum,,Apply vertical datum?,Appliquer le référentiel vertical?
+plot_filter,,Filter extreme values?,Filtrer les valeures extrêmes?
+plot_show_unusable,,Show unusable data?,Montrer les données inutilisables?
+plot_show_grades,,Show grades?,Montrer les cotes?
+plot_show_approvals,,Show approval levels?,Montrer les niveaux d'approbations?
+plot_show_qualifiers,,Show qualifiers?,Montrer les qualificatifs?
 facet_on,,Split plots by,Diviser les graphiques par
 facet_on_tooltip,,"Creates multiple plots, each showing one location or one parameter. The other variable appears as separate lines or points.","Crée plusieurs graphiques, chacun montrant un seul emplacement ou un seul paramètre. L’autre variable apparaît sous forme de lignes ou de points distincts."
 use_log_scale,,Use logarithmic scale,Utiliser une échelle logarithmique
@@ -229,30 +240,37 @@ gen_snowBul_lang,,Bulletin language,Language du bulletin
 gen_snowBul_precip_period,,Period of record for precip stats,Période a utiliser pour les statistiques de précipitation
 gen_snowBul_cddf_period,,Period of record for CDDF stats,Période à utiliser pour les statistiques de DJGC
 gen_snowBul_period1,,Last 40 years,Derniers 40 ans
-gen_snowBul_period2,,All years of record,Toutes les années disponibles
+all_yrs_record,,All years of record,Toutes les années disponibles
+last_yr_only,,Up to last plotted year,Jusqu'à la dernière année tracée
 gen_snowBul_period3,,1981-2010,1981-2010
 gen_snowBul_period4,,1991-2020,1991-2020
 gen_snowBul_scale,,Plot scale,Échelle des graphiques
 gen_snowBul_error_stats,,Error generating snow bulletin stats Excel tables,Échec lors de la création des tableaux de statistiques
 gen_snowBul_error_report,,Error generating snow bulletin Word document,Échec lors de la création du rapport Word
-add_trace,,Add trace,Ajouter une ligne
-modify_trace,,Modify trace,Modifier la ligne
-remove_trace,,Remove trace,Enlever la ligne
-add_subplot,,Add subplot,Ajouter un graphique
-modify_subplot,,Modify subplot,Modifier le graphique
-remove_subplot,,Remove subplot,Enlever le graphique
+add_trace,,Add trace,Ajouter un tracé
+modify_trace,,Modify trace,Modifier le tracé
+remove_trace,,Remove trace,Enlever le tracé
+add_subplot,,Add subplot,Ajouter un sous-graphe
+modify_subplot,,Modify subplot,Modifier le sous-graphe
+remove_subplot,,Remove subplot,Enlever le sous-graphe
+add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the same plot, or 'Add subplot' to create a separate panel.","Cliquez sur « Ajouter un tracé » pour superposer une nouvelle série temporelle sur le même graphique, ou sur « Ajouter un sous-graphe » pour créer un panneau séparé."
 About view module,,,
 licence_title,,Using data from this application,Utilisation des données de cette application
 licence1,,"The data, reports, and plots generated from this application are licenced under the Yukon Government's ","Les données, rapports et graphiques générés par cette application sont licenciés sous la "
 licence2,,Open Government Licence,licence de gouvernement ouvert du Yukon
-licence_url,,https://open.yukon.ca/open-government-licence-yukon,https://open.yukon.ca/fr/gouvernement-ouvert-licence-du-yukon
+licence_url,,https://yukon.ca/en/your-government/open-government/open-government-licence-yukon,https://yukon.ca/fr/votre-gouvernement/gouvernement-ouvert/gouvernement-ouvert-licence-du-yukon
 about_title1,title,About us,À propos de nous
 about_content1,content,Content to be developed!,À développer!
 about_title2,title,About this application,À propos cette application
-about_content2,content,"This web site was created using R Shiny, which allows us to leverage the R programming language's inherent suitability for data wrangling and plotting. The application code is contained within an R package which which holds many useful and interesting functions besides those showcased in this application, and is publicly viewable at ","Ce site web a été conçu en utilisant R Shiny, ce qui nous permet de tirer parti de l'aptitude inhérente du langage de programmation R pour la manipulation de données et la création de graphiques. Le code de l'application est contenu dans un package R qui comprend de nombreuses fonctions utiles et intéressantes en plus de celles présentées dans cette application, et est publiquement consultable à "
-about_url,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
+about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strenghts in data handling and visualization. The application code is packaged with many other useful functions beyond thos show here, and is publicly viewable at ","Ce site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour la gestion et la visualisation des données. Le code de l’application est regroupé dans un package contenant de nombreuses autres fonctions utiles, au-delà de celles présentées ici, et il est accessible publiquement ici : "
+about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base de données maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre package R disponible ici : "
+about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time.","Cette base de données contient des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales, divers types de métadonnées et plus encore, ce qui nous aide à dresser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
+about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3, so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux packages R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
+about_url_ygwater,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
+about_url_aquacache,url,https://github.com/YukonWRB/AquaCache,https://github.com/YukonWRB/AquaCache
+current_software,,Current software and database status:,État actuel du logiciel et de la base de données
 app_version1,,Application version,Application version
-app_version2,,connected to AquaCache database version ,connectée à la base de données AquaCache version
+app_version2,,connected to AquaCache database revision ,connectée à la base de données AquaCache révision
 app_version3,,revision,révision
 Generic labels,,,
 data_type,direct translation,Data Type,Types de données

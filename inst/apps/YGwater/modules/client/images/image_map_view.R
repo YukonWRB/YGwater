@@ -85,6 +85,7 @@ imgMapView <- function(id, language) {
                 label = tr("date_range_lab", language$language),
                 start = Sys.Date() - 7,
                 end = Sys.Date(),
+                format = "yyyy-mm-dd",
                 language = language$abbrev,
                 separator = tr("date_sep", language$language)
               )

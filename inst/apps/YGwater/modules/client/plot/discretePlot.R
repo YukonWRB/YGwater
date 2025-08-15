@@ -49,7 +49,10 @@ discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
                        start = Sys.Date() - 30,
                        end = Sys.Date(),
                        max = Sys.Date() + 1,
-                       format = "yyyy-mm-dd"),
+                       format = "yyyy-mm-dd",
+                       language = language$abbrev,
+                       separator = tr("date_sep", language$language)
+                       ),
         conditionalPanel(ns = ns,
                          condition = "input.data_source == 'EQ'",
                          # Toggle button for locations or location groups (only show if data source == EQWin)

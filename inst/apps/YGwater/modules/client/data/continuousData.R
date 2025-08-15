@@ -221,12 +221,13 @@ contData <- function(id, language, inputs) {
       tags <- tagList(
         # start and end datetime
         dateRangeInput(ns("date_range"),
-                       tr("date_range_select", language$language),
+                       tr("date_range_lab", language$language),
                        start = as.Date(filteredData$range$min_date),
                        end = as.Date(filteredData$range$max_date),
                        min = as.Date(filteredData$range$min_date),
                        format = "yyyy-mm-dd",
-                       language = language$abbrev
+                       language = language$abbrev,
+                       separator = tr("date_sep", language$language)
         ),
         # Selectize input for locations
         selectizeInput(ns("locations"),
@@ -1399,13 +1400,33 @@ contData <- function(id, language, inputs) {
         DT::DTOutput(ns("modal_location_metadata")),
         textOutput(ns("additional_data")),
         
-        selectizeInput(ns("modal_frequency"), label = tr("frequency", language$language), choices = stats::setNames(c("daily", "hourly", "max"), c(tr("daily", language$language), tr("hourly", language$language), tr("max", language$language))), selected = "daily"),
-        dateRangeInput(ns("modal_date_range"), label = tr("date_range_select", language$language), start = min_date, end = max_date, min = min_date, max = max_date, format = "yyyy-mm-dd", language = language$abbrev),
-        
+        selectizeInput(ns("modal_frequency"), 
+                       label = tr("frequency", language$language), 
+                       choices = stats::setNames(
+                         c("daily", "hourly", "max"), 
+                         c(tr("daily", language$language), tr("hourly", language$language), tr("max", language$language))), 
+                       selected = "daily"),
+        dateRangeInput(ns("modal_date_range"), 
+                       label = tr("date_range_lab", language$language), 
+                       start = min_date, 
+                       end = max_date, 
+                       min = min_date, 
+                       max = max_date, 
+                       format = "yyyy-mm-dd",
+                       language = language$abbrev,
+                       separator = tr("date_sep", language$language)
+        ),
         textOutput(ns("num_rows")),
-        selectizeInput(ns("modal_format"), label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx"),
+        selectizeInput(ns("modal_format"), 
+                       label = tr("dl_format", language$language), 
+                       choices = stats::setNames(
+                         c("xlsx", "csv", "sqlite"), 
+                         c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), 
+                       selected = "xlsx"),
         footer = tagList(
-          downloadButton(ns("download"), tr("dl_data", language$language), icon = icon("download")),
+          downloadButton(ns("download"), 
+                         tr("dl_data", language$language), 
+                         icon = icon("download")),
           actionButton(ns("modal_close"), tr("close", language$language))
         ),
         size = "xl"

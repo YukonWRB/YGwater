@@ -64,7 +64,12 @@ imgTableView <- function(id, language) {
           fillable = TRUE,
           fillable_mobile = TRUE,
           selectizeInput(ns("type"), label = tr("img_type_lab", language$language), choices = NULL),
-          dateRangeInput(ns("dates"), label = tr("date_range_lab", language$language), start = Sys.Date() - 2, end = Sys.Date(), language = language$abbrev, separator = tr("date_sep", language$language)),
+          dateRangeInput(ns("dates"), 
+                         label = tr("date_range_lab", language$language), 
+                         start = Sys.Date() - 2, end = Sys.Date(), 
+                         language = language$abbrev,
+                         format = "yyyy-mm-dd",
+                         separator = tr("date_sep", language$language)),
           selectizeInput(ns("loc"), label = tr("loc", language$language), choices = loc_choices, multiple = FALSE),
           DT::dataTableOutput(ns("tbl"))
         ),
