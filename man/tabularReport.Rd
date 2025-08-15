@@ -10,6 +10,7 @@ tabularReport(
   snow_locations = "all",
   bridge_locations = "all",
   precip_locations = "default",
+  report_datetime = Sys.time(),
   past = 28,
   save_path = "choose",
   archive_path = "choose",
@@ -27,6 +28,8 @@ tabularReport(
 
 \item{precip_locations}{List of flow/level locations for which to report precipitation. "default" is a pre-determined list of locations, "all" is all locations for which there is a drainage polygon (which may be more or less than the number of stations reporting level or flow information). NULL will not create the table. WARNING: this portion of the script is slow. Setting this parameter to "all" could take about an hour to get all information together.}
 
+\item{report_datetime}{Date-time for which to generate the report. Defaults to the current time.}
+
 \item{past}{The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.}
 
 \item{save_path}{The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.}
@@ -36,7 +39,7 @@ tabularReport(
 \item{con}{A connection to the aquacache database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }
 \value{
-An Excel workbook containing the report with one tab per timeseries type.
+The path to which the report was saved, and Excel workbook containing the report with one tab per timeseries type.
 }
 \description{
 Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using AquaConnect by default and MUST connect to a database created and maintained by the package AquaCache.

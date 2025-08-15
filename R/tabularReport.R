@@ -10,26 +10,28 @@
 #' @param snow_locations List of snow pillow locations to include in the report, as a character vector. "default" includes all of the WRB snow pillows as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
 #' @param bridge_locations List of bridge freeboard radar locations to include in the report, as a character vector. "default" includes all of the radars as of Feb 2023, "all" fetches all snow pillow locations in the DB. NULL will not create the table.
 #' @param precip_locations List of flow/level locations for which to report precipitation. "default" is a pre-determined list of locations, "all" is all locations for which there is a drainage polygon (which may be more or less than the number of stations reporting level or flow information). NULL will not create the table. WARNING: this portion of the script is slow. Setting this parameter to "all" could take about an hour to get all information together.
+#' @param report_datetime Date-time for which to generate the report. Defaults to the current time.
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
 #' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
 #' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including extension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.
 
 #' @param con A connection to the aquacache database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
-#' @return An Excel workbook containing the report with one tab per timeseries type.
+#' @return The path to which the report was saved, and Excel workbook containing the report with one tab per timeseries type.
 #' @export
 
 
 # TODO: Adapt to use new DB
 
-tabularReport <- function(level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", past = 28, save_path = "choose", archive_path = "choose", con = NULL) {
+tabularReport <- function(level_locations = "all", flow_locations = "all", snow_locations = "all", bridge_locations = "all", precip_locations = "default", report_datetime = Sys.time(), past = 28, save_path = "choose", archive_path = "choose", con = NULL) {
   
   # level_locations = "all"
   # flow_locations = "all"
   # snow_locations = "all"
   # bridge_locations = "all"
   # precip_locations = "default"
-  # past = 28
+  # report_datetime = as.POSIXct("2024-06-01 12:00", tz = "UTC")
+  # past = 7
   # save_path = "choose"
   # archive_path = NULL
   # con = NULL
@@ -39,6 +41,9 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
+  
+  report_time <- as.POSIXct(report_datetime, tz = "UTC")
+  report_day <- as.Date(report_time)
   
   if (!is.null(level_locations)) {
     if (level_locations[1] == "default") {
@@ -163,8 +168,8 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   # Get the data -------------------------
   tables <- list()
   ## Precipitation -----------------------
-  if (!is.null(precip_locations)) { #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
-    precip <- data.frame()
+  precip <- data.frame()
+  if (!is.null(precip_locations) && report_day == Sys.Date()) { #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
     if (!yesterday_comments) {
       yesterday_comment_precip <- NA
     }
@@ -217,19 +222,19 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   }
   
   ## Water level ------------------------
+  level_daily <- list()
+  level_rt <- list()
   if (!is.null(level_locations)) {
-    level_daily <- list()
-    level_rt <- list()
     names_level <- NULL
     for (i in 1:nrow(level_locations)) {
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date(), "' AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", report_day, "' AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", report_day - 1, "'AND timeseries_id = ", level_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         level_daily[[level_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", level_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", level_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(report_time, "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(report_time, "UTC"), "'"))
       if (nrow(rt) > 0) {
         level_rt[[level_locations[i, "location"]]] <- rt
       }
@@ -240,19 +245,19 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   }
   
   ## Water flow ---------------------------
+  flow_daily <- list()
+  flow_rt <- list()
   if (!is.null(flow_locations)) {
-    flow_daily <- list()
-    flow_rt <- list()
     names_flow <- NULL
     for (i in 1:nrow(flow_locations)) {
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date(), "' AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", report_day, "' AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", report_day - 1, "'AND timeseries_id = ", flow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         flow_daily[[flow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", flow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(report_time, "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(report_time, "UTC"), "'"))
       if (nrow(rt) > 0) {
         flow_rt[[flow_locations[i, "location"]]] <- rt
       }
@@ -263,19 +268,19 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   }
   
   ## Snow pack --------------------------
+  snow_daily <- list()
+  snow_rt <- list()
   if (!is.null(snow_locations)) {
-    snow_daily <- list()
-    snow_rt <- list()
     names_snow <- NULL
     for (i in 1:nrow(snow_locations)) {
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date(), "' AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", report_day, "' AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", report_day - 1, "'AND timeseries_id = ", snow_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         snow_daily[[snow_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", snow_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(report_time, "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(report_time, "UTC"), "'"))
       if (nrow(rt) > 0) {
         snow_rt[[snow_locations[i, "location"]]] <- rt
       }
@@ -286,19 +291,19 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   }
   
   ## Bridge freeboard --------------------------
+  bridges_daily <- list()
+  bridges_rt <- list()
   if (!is.null(bridge_locations)) {
-    bridges_daily <- list()
-    bridges_rt <- list()
     names_bridges <- NULL
     for (i in 1:nrow(bridge_locations)) {
-      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date(), "' AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
+      daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", report_day, "' AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       if (nrow(daily) == 0) {
-        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", Sys.Date() - 1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
+        daily <- DBI::dbGetQuery(con, paste0("SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '", report_day - 1, "'AND timeseries_id = ", bridge_locations[i, "timeseries_id"], ";"))
       }
       if (nrow(daily) > 0) {
         bridges_daily[[bridge_locations[i, "location"]]] <- daily
       }
-      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(Sys.time(), "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(Sys.time(), "UTC"), "'"))
+      rt <-  DBI::dbGetQuery(con, paste0("SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ", bridge_locations[i, "timeseries_id"], " AND datetime BETWEEN '", .POSIXct(report_time, "UTC") - (past + 2) * 60*60*24, "' AND '", .POSIXct(report_time, "UTC"), "'"))
       if (nrow(rt) > 0) {
         bridges_rt[[bridge_locations[i, "location"]]] <- rt
       }
@@ -317,7 +322,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     for (i in names(level_rt)) {
       rt <- level_rt[[i]]
       last_time <- rt[rt$datetime == max(rt$datetime) ,]$datetime
-      age <- difftime(Sys.time(), last_time, units = "hours")
+      age <- difftime(report_time, last_time, units = "hours")
       latest <- stats::median(rt[rt$datetime <= last_time & rt$datetime >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
       percent_historic <- round(((latest - level_daily[[i]]$min) / (level_daily[[i]]$max - level_daily[[i]]$min)) * 100, 0)
       percent_mean <- round(((latest - level_daily[[i]]$min) / (level_daily[[i]]$q50 - level_daily[[i]]$min)) * 100, 0)
@@ -451,7 +456,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     for (i in names(flow_rt)) {
       rt <- flow_rt[[i]]
       last_time <- rt[rt$datetime == max(rt$datetime) ,]$datetime
-      age <- difftime(Sys.time(), last_time, units = "hours")
+      age <- difftime(report_time, last_time, units = "hours")
       latest <- stats::median(rt[rt$datetime <= last_time & rt$datetime >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
       percent_historic <- round(((latest - flow_daily[[i]]$min) / (flow_daily[[i]]$max - flow_daily[[i]]$min)) * 100, 0)
       percent_mean <- round(latest/flow_daily[[i]]$q50 * 100, 0)
@@ -585,7 +590,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     for (i in names(snow_rt)) {
       rt <- snow_rt[[i]]
       last_time <- rt[rt$datetime == max(rt$datetime) ,]$datetime
-      age <- difftime(Sys.time(), last_time, units = "hours")
+      age <- difftime(report_time, last_time, units = "hours")
       latest <- stats::median(rt[rt$datetime <= last_time & rt$datetime >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
       percent_historic <- round(((latest - snow_daily[[i]]$min) / (snow_daily[[i]]$max - snow_daily[[i]]$min)) * 100, 0)
       percent_mean <- round(latest/snow_daily[[i]]$q50 * 100, 0)
@@ -719,7 +724,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     for (i in names(bridges_rt)) {
       rt <- bridges_rt[[i]]
       last_time <- rt[rt$datetime == max(rt$datetime) ,]$datetime
-      age <- difftime(Sys.time(), last_time, units = "hours")
+      age <- difftime(report_time, last_time, units = "hours")
       latest <- stats::median(rt[rt$datetime <= last_time & rt$datetime >= last_time - 60*30 , ]$value) #median of last 30 minutes of data
       percent_historic <- round(((latest - bridges_daily[[i]]$min) / (bridges_daily[[i]]$max - bridges_daily[[i]]$min)) * 100, 0)
       percent_mean <- round(((latest - bridges_daily[[i]]$min) / (bridges_daily[[i]]$q50 - bridges_daily[[i]]$min)) * 100, 0)
@@ -851,7 +856,7 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
   
   # Make the Excel workbook ---------------------------
   wb <- openxlsx::createWorkbook(creator = "Ghislain de Laplante (via automated process)", title = "Hydrometric Condition Report")
-  time <- Sys.time()
+  time <- report_time
   head <- data.frame(paste0("Issued at ", substr(format(time, tz = "MST"), 1, 16), " MST"),
                      NA,
                      "Forecaster name:",
@@ -1060,9 +1065,11 @@ tabularReport <- function(level_locations = "all", flow_locations = "all", snow_
     openxlsx::writeComment(wb, sheet = "precipitation", col = 3, row = 8, comment = weekComment)
   }
   
+  save_path <- paste0(save_path, "/HydrometricReport_", report_day, ".xlsx")
   # Save the workbook ----------------------------
-  openxlsx::saveWorkbook(wb, paste0(save_path, "/HydrometricReport_", Sys.Date(), ".xlsx"), overwrite = TRUE)
+  openxlsx::saveWorkbook(wb, save_path, overwrite = TRUE)
   
-  message("Tabular report created and saved in ", save_path, " with name HydrometricReport_", Sys.Date(), ".xlsx. \n")
+  message("Tabular report created and saved at ", save_path, "\n")
+  return(save_path)
 }
 
