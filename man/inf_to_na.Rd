@@ -15,4 +15,3 @@ Numeric vector with infinite values converted to \code{NA}.
 \description{
 Utility function to replace \code{Inf}, \code{-Inf}, and \code{NaN} values with \code{NA}.
 }
-\keyword{internal}

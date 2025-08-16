@@ -22,7 +22,7 @@ round_any <- function(x, accuracy, f = round) {
 #'
 #' @param x Numeric vector, data.frame, or data.table. If data.frame or data.table, will only work on 'numeric' class columns.
 #' @return Numeric vector with infinite values converted to `NA`.
-#' @keywords internal
+#' @export
 inf_to_na <- function(x) {
   
   # data.table
