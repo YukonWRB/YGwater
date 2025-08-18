@@ -47,8 +47,6 @@ mapLocs <- function(id, language) {
       parameters = cached$parameters,
       parameter_groups = cached$parameter_groups,
       parameter_sub_groups = cached$parameter_sub_groups
-      # has_image_series = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT location_id FROM image_series;"),
-      # has_documents = dbGetQueryDT(session$userData$AquaCache, "SELECT DISTINCT locations.location_id FROM locations JOIN documents_spatial ON locations.geom_id = documents_spatial.geom_id JOIN documents ON documents_spatial.document_id = documents.document_id;")
     )
     
     
@@ -231,7 +229,7 @@ mapLocs <- function(id, language) {
     
     # Update map popup based on language ###########################################
     popupData <- reactive({
-      get_cached(if (language$abbrev == "fr") "map_popup_data_fr" else "map_popup_data_en", 
+      get_cached(key = if (language$abbrev == "fr") "map_popup_data_fr" else "map_popup_data_en", 
                  env = if (session$userData$user_logged_in) session$userData$app_cache else .GlobalEnv,
                  fetch_fun = function() {
         # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.

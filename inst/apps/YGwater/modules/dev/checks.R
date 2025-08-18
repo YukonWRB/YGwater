@@ -4,8 +4,20 @@ checksUI <- function(id) {
     textOutput(ns("text_output")),
     sidebarLayout(
       sidebarPanel(
-        dateRangeInput(ns("dateRange"), "Date range", start = Sys.Date() - 10, end = Sys.Date() - 7, format = "yyyy-mm-dd"),
-        selectizeInput(ns("stnGrp"), "Location Group(s)", choices = "Placeholder", multiple = TRUE, options = list(placeholder = "Optional")),
+        dateRangeInput(ns("dateRange"), 
+                       "Date range", 
+                       start = Sys.Date() - 10, 
+                       end = Sys.Date() - 7, 
+                       format = "yyyy-mm-dd",
+                       language = language$abbrev,
+                       separator = tr("date_sep", language$language)
+                       ),
+        selectizeInput(ns("stnGrp"), 
+                       "Location Group(s)", 
+                       choices = "Placeholder", 
+                       multiple = TRUE, 
+                       options = list(placeholder = "Optional")
+                       ),
         selectizeInput(ns("stns"), "Locations(s)", choices = "Placeholder", multiple = TRUE, options = list(placeholder = "Optional")),
         selectizeInput(ns("sampleIds"), "Sample ID(s)", choices = "Placeholder", selected = "All", multiple = TRUE, options = list(placeholder = "Optional")),
         actionButton(ns("reset_filters"), "Reset filters"),

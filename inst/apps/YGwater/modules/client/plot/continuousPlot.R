@@ -185,12 +185,12 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         selectizeInput(ns("plot_type"),
                        label = tooltip(
                          trigger = list(
-                           "Plot type",
+                           tr("plot_type", language$language),
                            bsicons::bs_icon("info-circle-fill")
                          ),
-                         "Long timeseries plots help visualize a change with time and allows for multiple traces or subplots, while overlapping years plots are useful for comparing data across years at one location."
+                         tr("plot_type_tooltip", language$language),
                        ),
-                       choices = stats::setNames(c("ts", "over"), c("Long timeseries", "Overlapping years")), 
+                       choices = stats::setNames(c("ts", "over"), c(tr("plot_type_ts", language$language), tr("plot_type_overlap", language$language))), 
                        selected = "ts"),
         
         selectizeInput(ns("location"),
@@ -244,12 +244,13 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         ),
         # start and end datetime
         dateRangeInput(ns("date_range"),
-                       tr("date_range_select", language$language),
+                       tr("date_range_lab", language$language),
                        start = earliest,
                        end = as.Date(filteredData$range$max_date),
                        min = as.Date(filteredData$range$min_date),
                        format = "yyyy-mm-dd",
-                       language = language$abbrev
+                       language = language$abbrev,
+                       separator = tr("date_sep", language$language)
         ),
         
         # Now make a conditional panel depending on the selected plot type
@@ -257,27 +258,32 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           ns = ns,
           condition = "input.plot_type == 'over'",
           div(
-            selectizeInput(ns("years"), label = "Select years to plot", choices = NULL, multiple = TRUE), #Choices are populated based on the location and parameter
+            selectizeInput(ns("years"), 
+                           label = tr("plot_select_years", language$language), 
+                           choices = NULL, 
+                           multiple = TRUE), # Choices are populated based on the location and parameter
             style = "display: flex; align-items: center;",
             span(
               id = ns("log_info_years"),
               `data-bs-toggle` = "tooltip",
               `data-placement` = "right",
               `data-trigger` = "click hover",
-              title = "For periods overlaping the new year select the December year.",
+              title = tr("plot_select_yrs", language$language),
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )
           ),
           div(
-            selectizeInput(ns("historic_range_overlap"),"Historic range includes all years of record or up to last year plotted?", 
-                           choices = c("all", "last"), selected = "all"),
+            selectizeInput(ns("historic_range_overlap"),
+                           label = tr("plot_hist_range_select", language$language), 
+                           choices = stats::setNames(c("all", "last"), c(tr("all_yrs_record", language$language), tr("last_yr_only", language$language))),
+                           selected = "all"),
             style = "display: flex; align-items: center;",
             span(
               id = ns("log_info_hist_range"),
               `data-bs-toggle` = "tooltip",
               `data-placement` = "right",
               `data-trigger` = "click hover",
-              title = "Historic ranges are plotted as a gray ribbon.",
+              title = tr("plot_hist_range_select_tooltip", language$language),
               icon("info-circle", style = "font-size: 100%; margin-left: 5px;")
             )
           )
@@ -296,45 +302,44 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           div(
             style = "display: flex; justify-content: flex-start; margin-bottom: 10px; margin-top: 10px;", # Use flexbox to align buttons side by side
             actionButton(ns("add_trace"),
-                         "Add trace",
+                         tr("add_trace", language$language),  
                          style = "margin-right: 5px;"),
             actionButton(ns("add_subplot"),
-                         "Add subplot",
+                         tr("add_subplot", language$language),  
                          style = "margin-right: 10px;"),
             tooltip(
               trigger = list(
                 bsicons::bs_icon("info-circle-fill")
               ),
-              "Click “Add trace” to overlay a new timeseries on the same plot, or “Add subplot” to create a separate panel.",
+              tr("add_subplot_trace_tooltip", language$language),
               placement = "right"
             )
           ),
-          checkboxInput(ns("log_y"), "Log scale y-axis?"),
+          # checkboxInput(ns("log_y"), "Log scale y-axis?"),
           uiOutput(ns("share_axes")),
-          checkboxInput(ns("historic_range"), "Plot historic range?")
+          checkboxInput(ns("historic_range"), tr("plot_hist_range", language$language))
         ),
         accordion(
           id = ns("accordion1"),
           open = FALSE,
           accordion_panel(
             id = ns("accordion1"),
-            title = "Extra options",
+            title = tr("plot_extra_options", language$language),
             icon = bsicons::bs_icon("gear"),
-            checkboxInput(ns("apply_datum"), "Apply vertical datum?"),
-            checkboxInput(ns("plot_filter"), "Filter extreme values?"),
-            checkboxInput(ns("unusable"), "Show unusable data?"),
-            checkboxInput(ns("grades"), "Show grades?"),
-            checkboxInput(ns("approvals"), "Show approvals?"),
-            checkboxInput(ns("qualifiers"), "Show qualifiers?"),
+            checkboxInput(ns("apply_datum"), tr("plot_apply_vert_datum", language$language)),
+            checkboxInput(ns("plot_filter"), tr("plot_filter", language$language)),
+            checkboxInput(ns("unusable"), tr("plot_show_unusable", language$language)),
+            checkboxInput(ns("grades"), tr("plot_show_grades", language$language)),
+            checkboxInput(ns("approvals"), tr("plot_show_approvals", language$language)),
+            checkboxInput(ns("qualifiers"), tr("plot_show_qualifiers", language$language)),
             actionButton(ns("extra_aes"),
-                         "Modify plot aesthetics",
-                         title = "Modify plot aesthetics such as language, line size, text size.",
+                         tr("modify_plot_aes", language$language),
                          style = "display: block; width: 100%; margin-bottom: 10px;"), # Ensure block display and full width
           )
         ),
         br(),
         input_task_button(ns("make_plot"), 
-                          label = "Create Plot", 
+                          label = tr("create_plot", language$language), 
                           style = "display: block; width: 100%;",
                           class = "btn btn-primary")
       ) # End tagList
@@ -451,7 +456,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       }
       if (input$plot_type == "ts") {
         updateDateRangeInput(session, "date_range",
-                             label = tr("date_range_select", language$language))
+                             label = tr("date_range_lab", language$language))
       } else if (input$plot_type == "over") {
         print(input$param)
         
@@ -1249,33 +1254,33 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     
     observeEvent(input$extra_aes, {
       showModal(modalDialog(
-        title = "Modify plot aesthetics",
+        title = tr("modify_plot_aes", language$language),
         tags$div(
-          tags$h5("Language"),
+          tags$h5(tr("language", language$language)),
           radioButtons(ns("lang"),
                        NULL,
-                       choices = stats::setNames(c("en", "fr"), c("English", "French")),
+                       choices = stats::setNames(c("en", "fr"), c(tr("english", language$language), tr("francais", language$language))),
                        selected = plot_aes$lang),
           checkboxInput(ns("showgridx"),
-                        "Show x-axis gridlines",
+                        tr("show_x_grid", language$language),
                         value = plot_aes$showgridx),
           checkboxInput(ns("showgridy"),
-                        "Show y-axis gridlines",
+                        tr("show_y_grid", language$language),
                         value = plot_aes$showgridy),
           sliderInput(ns("line_scale"),
-                      "Line scale factor",
+                      tr("line_scale", language$language),
                       min = 0.2,
                       max = 3,
                       value = plot_aes$line_scale,
                       step = 0.1),
           sliderInput(ns("axis_scale"),
-                      "Axes scale factor (text and values)",
+                      tr("axis_scale", language$language),
                       min = 0.2,
                       max = 3,
                       value = plot_aes$axis_scale,
                       step = 0.1),
           sliderInput(ns("legend_scale"),
-                      "Legend text scale factor",
+                      tr("legend_scale", language$language),
                       min = 0.2,
                       max = 3,
                       value = plot_aes$legend_scale,
@@ -1283,8 +1288,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         ),
         easyClose = FALSE,
         footer = tagList(
-          actionButton(ns("aes_apply"), "Apply"),
-          actionButton(ns("aes_cancel"), "Cancel")
+          actionButton(ns("aes_apply"), tr("apply", language$language)),
+          actionButton(ns("aes_cancel"), tr("cancel", language$language))
         )
       ))
     })
@@ -1357,10 +1362,10 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                        choices = stats::setNames(moduleData$params$parameter_id,
                                                  moduleData$params[, tr("param_name_col", language$language)]), 
                        selected = character(0)),
-        numericInput(ns("traceNew_lead_lag"), "Lead/lag in hours", value = 0),
+        numericInput(ns("traceNew_lead_lag"), tr("lead_lag", language$language), value = 0),
         footer = tagList(
           actionButton(ns(paste0("add_new_", type)), tr(if (type == "trace") "add_trace" else if (type == "subplot") "add_subplot", language$language)),
-          actionButton(ns("cancel"), "Cancel")
+          actionButton(ns("cancel"), tr("cancel", language$language))
         ),
         easyClose = TRUE
       ))
@@ -1372,9 +1377,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       # Make sure that there is a single selected input$location, input$media, input$aggregation, input$rate, input$param before running the modal; give the user an informative modal if not
       if (is.null(input$location) || is.null(input$media) || is.null(input$aggregation) || is.null(input$rate) || is.null(input$param)) {
         showModal(modalDialog(
-          "Please select a single location, media type, aggregation type, record rate, and parameter before adding a trace.",
+          tr("modal_select_multi_not_null", language$language),
           footer = tagList(
-            actionButton(ns("cancel"), "Cancel")
+            actionButton(ns("cancel"), tr("cancel", language$language))
           ),
           easyClose = TRUE
         ))
@@ -1382,9 +1387,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       }
       if (nchar(input$location) == 0 || nchar(input$media) == 0 || nchar(input$aggregation) == 0 || nchar(input$rate) == 0 || nchar(input$param) == 0) {
         showModal(modalDialog(
-          "Please narrow selections to a single timeseries before adding another.",
+          tr("modal_select_multi_not_null", language$language),
           footer = tagList(
-            actionButton(ns("cancel"), "Cancel")
+            actionButton(ns("cancel"), tr("cancel", language$language))
           ),
           easyClose = TRUE
         ))
@@ -1405,9 +1410,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       # Make sure that there is a single selected input$location, input$media, input$aggregation, input$rate, input$param before running the modal; give the user an informative modal if not
       if (is.null(input$location) || is.null(input$media) || is.null(input$aggregation) || is.null(input$rate) || is.null(input$param)) {
         showModal(modalDialog(
-          "Please select a single location, media type, aggregation type, record rate, and parameter before adding a trace.",
+          tr("modal_select_multi_not_null", language$language),
           footer = tagList(
-            actionButton(ns("cancel"), "Cancel")
+            actionButton(ns("cancel"), tr("cancel", language$language))
           ),
           easyClose = TRUE
         ))
@@ -1415,9 +1420,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       }
       if (nchar(input$location) == 0 || nchar(input$media) == 0 || nchar(input$aggregation) == 0 || nchar(input$rate) == 0 || nchar(input$param) == 0) {
         showModal(modalDialog(
-          "Please narrow selections to a single timeseries before adding another.",
+          tr("modal_select_multi_not_null", language$language),
           footer = tagList(
-            actionButton(ns("cancel"), "Cancel")
+            actionButton(ns("cancel"), tr("cancel", language$language))
           ),
           easyClose = TRUE
         ))
@@ -2128,19 +2133,19 @@ continuousPlot <- function(id, language, windowDims, inputs) {
               checkboxInput(ns("shareX"),
                             label = tooltip(
                               trigger = list(
-                                "Share X axis between subplots (dates are aligned)",
+                                tr("share_x_axis", language$language),
                                 bsicons::bs_icon("info-circle-fill")
                               ),
-                              "This will align the x-axis across all subplots, making it easier to compare trends over time."
+                              tr("share_x_axis_tooltip", language$language)
                             ),
                             value = TRUE),
               checkboxInput(ns("shareY"),
                             label = tooltip(
                               trigger = list(
-                                "Share Y axis between subplots (values are aligned)",
+                                tr("share_y_axis", language$language),
                                 bsicons::bs_icon("info-circle-fill")
                               ),
-                              "This will align the y-axis across all subplots, making it easier to compare values across different locations or parameters."
+                              tr("share_y_axis_tooltip", language$language)
                             ),
                             value = FALSE),
             )
@@ -2594,15 +2599,27 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       
       if (input$plot_type == "over") {
         if (nchar(input$location) == 0) {
-          showModal(modalDialog("Please select a location.", easyClose = TRUE))
+          showModal(modalDialog(tr("pl_select_loc", language$language), 
+                                footer = tagList(
+                                  actionButton(ns("cancel"), tr("cancel", language$language))
+                                ),
+                                easyClose = TRUE))
           return()
         }
         if (is.null(input$param)) {
-          showModal(modalDialog("Please select a parameter", easyClose = TRUE))
+          showModal(modalDialog(tr("pl_select_param", language$language), 
+                                footer = tagList(
+                                  actionButton(ns("cancel"), tr("cancel", language$language))
+                                ),
+                                easyClose = TRUE))
           return()
         }
         if (nchar(input$param) == 0) {
-          showModal(modalDialog("Please select a parameter", easyClose = TRUE))
+          showModal(modalDialog(tr("pl_select_param", language$language), 
+                                footer = tagList(
+                                  actionButton(ns("cancel"), tr("cancel", language$language))
+                                ),
+                                easyClose = TRUE))
           return()
         }
         
@@ -2669,8 +2686,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
             
             if (nrow(unique_combinations) != nrow(combinations)) {
               showModal(modalDialog(
-                title = "Error",
-                "There are duplicate traces. Please ensure that each trace has a unique combination of location, sub-location, z, record rate, aggregation type, parameter, and lead/lag.",
+                title = tr("error", language$language),
+                tr("modal_error_multi_trace", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
                 easyClose = TRUE
               ))
               return()
@@ -2701,15 +2721,27 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                                                    config = session$userData$config)
           } else {  # Single trace
             if (nchar(input$location) == 0) {
-              showModal(modalDialog("Please select a location.", easyClose = TRUE))
+              showModal(modalDialog(tr("pl_select_log", language$language), 
+                                    footer = tagList(
+                                      actionButton(ns("cancel"), tr("cancel", language$language))
+                                    ),
+                                    easyClose = TRUE))
               return()
             }
             if (is.null(input$param)) {
-              showModal(modalDialog("Please select a parameter", easyClose = TRUE))
+              showModal(modalDialog(tr("pl_select_param", language$language), 
+                                    footer = tagList(
+                                      actionButton(ns("cancel"), tr("cancel", language$language))
+                                    ),
+                                    easyClose = TRUE))
               return()
             }
             if (nchar(input$param) == 0) {
-              showModal(modalDialog("Please select a parameter", easyClose = TRUE))
+              showModal(modalDialog(tr("pl_select_param", language$language), 
+                                    footer = tagList(
+                                      actionButton(ns("cancel"), tr("cancel", language$language))
+                                    ),
+                                    easyClose = TRUE))
               return()
             }
             
@@ -2778,8 +2810,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           
           if (nrow(unique_combinations) != nrow(combinations)) {
             showModal(modalDialog(
-              title = "Error",
-              "There are duplicate traces. Please ensure that each trace has a unique combination of location, sub-location, z, record rate, aggregation type, parameter, and lead/lag.",
+              title = tr("error", language$language),
+              tr("modal_error_multi_trace", language$language),
+              footer = tagList(
+                actionButton(ns("cancel"), tr("cancel", language$language))
+              ),
               easyClose = TRUE
             ))
             return()
@@ -2818,8 +2853,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     observeEvent(plot_output_overlap$result(), {
       if (inherits(plot_output_overlap$result(), "character")) {
         showModal(modalDialog(
-          title = "Error",
+          title = tr("error", language$language),
           plot_output_overlap$result(),
+          footer = tagList(
+            actionButton(ns("cancel"), tr("cancel", language$language))
+          ),
           easyClose = TRUE
         ))
         return()
@@ -2834,8 +2872,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         output$full_screen_ui <- renderUI({
           # Side-by-side buttons
           page_fluid(
-            div(class = "d-inline-block", actionButton(ns("full_screen"), "Full screen"), style = "display: none;"),
-            div(class = "d-inline-block", downloadButton(ns("download_data"), "Download data"), style = "display: none;")
+            div(class = "d-inline-block", actionButton(ns("full_screen"), tr("full_screen", language$language)), style = "display: none;"),
+            div(class = "d-inline-block", downloadButton(ns("download_data"), tr("dl_data", language$language)), style = "display: none;")
           )
         })
       } else {
@@ -2847,8 +2885,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     observeEvent(plot_output_timeseries$result(), {
       if (inherits(plot_output_timeseries$result(), "character")) {
         showModal(modalDialog(
-          title = "Error",
+          title = tr("error", language$language),
           plot_output_timeseries$result(),
+          footer = tagList(
+            actionButton(ns("cancel"), tr("cancel", language$language))
+          ),
           easyClose = TRUE
         ))
         return()
@@ -2875,8 +2916,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     observeEvent(plot_output_timeseries_traces$result(), {
       if (inherits(plot_output_timeseries_traces$result(), "character")) {
         showModal(modalDialog(
-          title = "Error",
+          title = tr("error", language$language),
           plot_output_timeseries_traces$result(),
+          footer = tagList(
+            actionButton(ns("cancel"), tr("cancel", language$language))
+          ),
           easyClose = TRUE
         ))
         return()
@@ -2903,8 +2947,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     observeEvent(plot_output_timeseries_subplots$result(), {
       if (inherits(plot_output_timeseries_subplots$result(), "character")) {
         showModal(modalDialog(
-          title = "Error",
+          title = tr("error", language$language),
           plot_output_timeseries_subplots$result(),
+          footer = tagList(
+            actionButton(ns("cancel"), tr("cancel", language$language))
+          ),
           easyClose = TRUE
         ))
         return()

@@ -203,7 +203,8 @@ contData <- function(id, language, inputs) {
           )
         )
       )
-    })
+    }) |> # End of renderUI for instructions
+      bindEvent(language$language)
     
     output$sidebar <- renderUI({
       req(filteredData, language)
@@ -220,12 +221,13 @@ contData <- function(id, language, inputs) {
       tags <- tagList(
         # start and end datetime
         dateRangeInput(ns("date_range"),
-                       tr("date_range_select", language$language),
+                       tr("date_range_lab", language$language),
                        start = as.Date(filteredData$range$min_date),
                        end = as.Date(filteredData$range$max_date),
                        min = as.Date(filteredData$range$min_date),
                        format = "yyyy-mm-dd",
-                       language = language$abbrev
+                       language = language$abbrev,
+                       separator = tr("date_sep", language$language)
         ),
         # Selectize input for locations
         selectizeInput(ns("locations"),
@@ -330,8 +332,8 @@ contData <- function(id, language, inputs) {
       input_values$params <- input$params
       
       return(tags)
-    })  %>% # End of renderUI for sidebar
-      bindEvent(language)
+    })  |> # End of renderUI for sidebar
+      bindEvent(language$language)
     
     output$main <- renderUI({
       tagList(
@@ -340,7 +342,7 @@ contData <- function(id, language, inputs) {
         actionButton(ns("view_data"), tr("view_data1", language$language), style =  "display: none;"),  # Button will be hidden until a row is selected
         # The modal UI elements are created lower down
       ) # End of tagList
-    }) %>% # End renderUI
+    }) |> # End renderUI
       bindEvent(language$language) # Re-render the UI if the language or changes
     
     
@@ -1382,7 +1384,7 @@ contData <- function(id, language, inputs) {
                         dom = 'rt',
                         scrollX = TRUE
                       )
-        ) %>%
+        ) |>
           DT::formatRound(columns = c(4,5,5), digits = 3) # Round numbers, here index starts at 1 (not javascript)
       }) # End of function creating location metatadata datatable
       
@@ -1398,13 +1400,33 @@ contData <- function(id, language, inputs) {
         DT::DTOutput(ns("modal_location_metadata")),
         textOutput(ns("additional_data")),
         
-        selectizeInput(ns("modal_frequency"), label = tr("frequency", language$language), choices = stats::setNames(c("daily", "hourly", "max"), c(tr("daily", language$language), tr("hourly", language$language), tr("max", language$language))), selected = "daily"),
-        dateRangeInput(ns("modal_date_range"), label = tr("date_range_select", language$language), start = min_date, end = max_date, min = min_date, max = max_date, format = "yyyy-mm-dd", language = language$abbrev),
-        
+        selectizeInput(ns("modal_frequency"), 
+                       label = tr("frequency", language$language), 
+                       choices = stats::setNames(
+                         c("daily", "hourly", "max"), 
+                         c(tr("daily", language$language), tr("hourly", language$language), tr("max", language$language))), 
+                       selected = "daily"),
+        dateRangeInput(ns("modal_date_range"), 
+                       label = tr("date_range_lab", language$language), 
+                       start = min_date, 
+                       end = max_date, 
+                       min = min_date, 
+                       max = max_date, 
+                       format = "yyyy-mm-dd",
+                       language = language$abbrev,
+                       separator = tr("date_sep", language$language)
+        ),
         textOutput(ns("num_rows")),
-        selectizeInput(ns("modal_format"), label = tr("dl_format", language$language), choices = stats::setNames(c("xlsx", "csv", "sqlite"), c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), selected = "xlsx"),
+        selectizeInput(ns("modal_format"), 
+                       label = tr("dl_format", language$language), 
+                       choices = stats::setNames(
+                         c("xlsx", "csv", "sqlite"), 
+                         c(tr("dl_format_xlsx", language$language), tr("dl_format_csv", language$language), tr("dl_format_sqlite", language$language))), 
+                       selected = "xlsx"),
         footer = tagList(
-          downloadButton(ns("download"), tr("dl_data", language$language), icon = icon("download")),
+          downloadButton(ns("download"), 
+                         tr("dl_data", language$language), 
+                         icon = icon("download")),
           actionButton(ns("modal_close"), tr("close", language$language))
         ),
         size = "xl"

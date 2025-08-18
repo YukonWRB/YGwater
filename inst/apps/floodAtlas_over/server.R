@@ -60,28 +60,31 @@ app_server <- function(input, output, session) {
 
   # Parse URL query parameters on app load from URL and trigger plot creation
   params <- reactiveValues()
+  
+  # try to JSON-decode; if not JSON, return as-is
+  unj <- function(x) {
+    tryCatch(jsonlite::fromJSON(x), error = function(e) x)
+  }
+  
   observeEvent(session, {
     query <- parseQueryString(session$clientData$url_search)
     
     # Set input values based on URL parameters if they exist
     # yrs
     if (!is.null(query$yrs)) {
-      sub_yrs <- gsub("[[:punct:]]", "", query$yrs)
-      params$yrs <- as.numeric(sub_yrs)
+      params$yrs <- as.numeric(unj(query$yrs))
     }
     
     # param_code
     if (!is.null(query$param_code)) {
-      sub_param <- gsub("[[:punct:]]", "", query$param_code)
-      params$param_code <- as.numeric(sub_param)
+      params$param_code <- as.numeric(unj(query$param_code))
       updateNumericInput(session, "param_code", value = params$param_code)
     }
     
     # loc_code
     if (!is.null(query$loc_code)) {
       # remove punctuation
-      sub_loc <- gsub("[[:punct:]]", "", query$loc_code)
-      params$loc_code <- sub_loc
+      params$loc_code <- unj(query$loc_code)
       updateTextInput(session, "loc_code", value = params$loc_code)
       
       # Find the years of record for the location
@@ -92,8 +95,7 @@ app_server <- function(input, output, session) {
     
     # language
     if (!is.null(query$lang)) {
-      sub <-  gsub("[[:punct:]]", "", query$lang)
-      params$lang <- sub
+      params$lang <- unj(query$lang)
       updateTextInput(session, "lang", value = params$lang)
     }
     

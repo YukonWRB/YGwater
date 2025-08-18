@@ -56,7 +56,14 @@ about <- function(id, language) {
       output$content_web_page <- renderUI({
         HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal">',
                     tr("about_content2", language$language),
-                    '<a href="', tr("about_url", language$language), '" target="_blank">', tr("about_url", language$language), '</a>.',
+                    '<a href="', tr("about_url_ygwater", language$language), '" target="_blank">', tr("about_url_ygwater", language$language), '</a>.',
+                    '<br><br>',
+                    tr("about_content3", language$language),
+                    '<a href="', tr("about_url_aquacache", language$language), '" target="_blank">', tr("about_url_aquacache", language$language), '</a>.',
+                    tr("about_content4", language$language),
+                    '<br><br>',
+                    tr("about_content5", language$language),
+                    '<br><br>',
                     '</div>'
         ))
       })
@@ -64,10 +71,13 @@ about <- function(id, language) {
       output$version <- renderUI({
         # Get the AquaCache revision number
         revision <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT version FROM information.version_info WHERE item = 'Last patch number'")[1,1]
-        version <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT version FROM information.version_info WHERE item = 'AquaCache R package used for last patch'")[1,1]
-        
-        HTML(paste0('<div class="nunito-sans" style="font-size: 14px; font-weight: 500; font-style: normal;">',
-                    tr("app_version1", language$language), " ", utils::packageVersion("YGwater"), ", ", tr("app_version2", language$language), " ", version, " (", tr("app_version3", language$language), " ", revision, ").",
+
+        HTML(paste0('<div class="nunito-sans" style="font-size: 18px; font-weight: 600; font-style: normal;">',
+                    tr("current_software", language$language),
+                   ' <br>',
+                    '</div>',
+                    '<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
+                    tr("app_version1", language$language), " ", utils::packageVersion("YGwater"), ", ", tr("app_version2", language$language), " ", revision, ".",
                     '</div>'
         ))
       })

@@ -159,7 +159,10 @@ WQReportUI <- function(id) {
                            ns("SD_date_range"), 
                            label = NULL, 
                            start = "2000-01-01", 
-                           end = "2000-12-31"
+                           end = "2000-12-31",
+                           format = "yyyy-mm-dd",
+                           language = language$abbrev,
+                           separator = tr("date_sep", language$language)
                          )
                          
         ),
