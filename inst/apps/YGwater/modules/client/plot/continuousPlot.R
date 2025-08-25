@@ -1,4 +1,4 @@
-continuousPlotUI <- function(id) {
+contPlotUI <- function(id) {
   ns <- NS(id)
   
   tagList(
@@ -29,7 +29,7 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlot <- function(id, language, windowDims, inputs) {
+contPlot <- function(id, language, windowDims, inputs) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -455,13 +455,18 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         return()
       }
       if (input$plot_type == "ts") {
-        updateDateRangeInput(session, "date_range",
-                             label = tr("date_range_lab", language$language))
-      } else if (input$plot_type == "over") {
-        print(input$param)
+        earliest <- filteredData$range$max_date - 366
+        if (earliest < filteredData$range$min_date) {
+          earliest <- filteredData$range$min_date
+        }
         
+        updateDateRangeInput(session, "date_range",
+                             min = as.Date(filteredData$range$min_date),
+                             max = as.Date(filteredData$range$max_date),
+                             start = earliest,
+                             end = as.Date(filteredData$range$max_date))
+      } else if (input$plot_type == "over") {
         if (!is.null(input$param) && length(input$param) == 1) {
-          print("WTF")
           if (input$param %in% c(values$swe, values$snow_depth)) {
             updateDateRangeInput(session, "date_range",
                                  min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),

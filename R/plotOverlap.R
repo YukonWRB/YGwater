@@ -40,17 +40,17 @@
 #' 
 #' @export
 
-# 
-# location <- 9
+
+# location <- "29AB009"
 # sub_location <- NULL
 # z <- NULL
-# parameter <- 1250
-# record_rate = 86400
-# aggregation_type <- 1
+# parameter <- 1165
+# record_rate = NULL
+# aggregation_type = NULL
 # startDay <- 1
 # endDay <- 365
 # tzone <- "MST"
-# years <- NULL
+# years <- 2025
 # datum <- FALSE
 # title <- TRUE
 # filter <- 20
@@ -68,6 +68,8 @@
 # hover = FALSE
 # custom_title = NULL
 # rate = "max"
+# webgl = FALSE
+# slider = FALSE
 
 
 plotOverlap <- function(location,
@@ -441,7 +443,6 @@ plotOverlap <- function(location,
     }
     end_UTC <- end
     attr(end_UTC, "tzone") <- "UTC"
-    # if (nrow(realtime) < 20000) { # limits the number of data points to 20000 for performance (rest is populated with daily means. Gives 3 full years of data at 1 hour intervals)
     if (nrow(realtime) < 100000) { # limits the number of data points to 100000
       if (rate == "max") {
         new_realtime <- dbGetQueryDT(con, glue::glue_sql("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime", .con = con)) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
@@ -465,7 +466,7 @@ plotOverlap <- function(location,
           # Find indices where gaps exist
           gap_indices <- which(new_realtime$gap_exists)
           # Create a data.table of NA rows to be inserted
-          na_rows <- data.table::data.table(datetime = new_realtime[new_realtime$gap_indices, "datetime"]  + 1,  # Add 1 second to place it at the start of the gap
+          na_rows <- data.table::data.table(datetime = new_realtime[gap_indices, "datetime"][[1]] + 1,  # Add 1 second to place it at the start of the gap
                                             value = NA)
           # Combine with NA rows
           new_realtime <- data.table::rbindlist(list(new_realtime[, c("datetime", "value")], na_rows), use.names = TRUE)
@@ -635,7 +636,7 @@ plotOverlap <- function(location,
     grades_dt <- dbGetQueryDT(con, glue::glue_sql("SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = {tsid} AND g.end_dt >= {startDay} AND g.start_dt <= {endDay} AND gt.grade_type_code = 'N' ORDER BY start_dt;", .con = con))
     if (nrow(grades_dt) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
-      realtime[grades_dt, on = .(realtime$datetime >= start_dt, realtime$datetime <= end_dt), "value" := NA]
+      realtime[grades_dt, on = .(datetime >= start_dt, datetime <= end_dt), "value" := NA]
       
       # If there's an entire year with only NA, remove it
       realtime <- realtime[, if (any(!is.na(realtime$value))) .SD, by = realtime$year]

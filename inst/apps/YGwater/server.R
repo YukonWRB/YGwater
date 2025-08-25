@@ -22,7 +22,7 @@ app_server <- function(input, output, session) {
   showViz <- function(show = TRUE) {
     if (show) {
       nav_show(id = "navbar", target = "home")
-      nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
+      nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discPlot', 'contPlot' as well
       nav_show(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible. This will be removed once the FOD reports are integrated in the DB.
         nav_show(id = "navbar", target = "FOD")
@@ -34,7 +34,7 @@ app_server <- function(input, output, session) {
       nav_show(id = "navbar", target = "feedback")
     } else {
       nav_hide(id = "navbar", target = "home")
-      nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
+      nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discPlot', 'contPlot' as well
       nav_hide(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible This will be removed once the FOD reports are integrated in the DB.
         nav_hide(id = "navbar", target = "FOD")
@@ -78,7 +78,7 @@ app_server <- function(input, output, session) {
   }
   
   # Bookmarking and browser history navigation -------------------------------
-  bookmarkable_tabs <- c("home", "monitoringLocations", "parameterValues", "rasterValues", "discrete", "continuous", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "discData", "contData", "news", "about", "feedback")
+  bookmarkable_tabs <- c("home", "monitoringLocations", "parameterValues", "rasterValues", "discPlot", "contPlot", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "discData", "contData", "news", "about", "feedback")
   
   updating_from_url <- reactiveVal(FALSE)
   
@@ -114,8 +114,8 @@ app_server <- function(input, output, session) {
     ui_loaded$viz <- FALSE
     ui_loaded$admin <- FALSE
     ui_loaded$home <- FALSE
-    ui_loaded$discretePlot <- FALSE
-    ui_loaded$continuousPlot <- FALSE
+    ui_loaded$discPlot <- FALSE
+    ui_loaded$contPlot <- FALSE
     ui_loaded$mapParamValues <- FALSE
     ui_loaded$mapRasterValues <- FALSE
     ui_loaded$mapMonitoringLocations <- FALSE
@@ -227,76 +227,6 @@ app_server <- function(input, output, session) {
   }, ignoreInit = TRUE, ignoreNULL = TRUE, once = TRUE) # This observeEvent should only run once when the app is loaded.
   
   
-  # Below is commented out; it was used to work with a language selection drop-down menu but this is replaced by an actionButton
-  # # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
-  # # Observe user selection of language
-  # observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
-  #   if (input$langSelect %in% names(translation_cache)) {
-  #     languageSelection$language <- input$langSelect
-  #     languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-  #     
-  #     # Render the navigation bar titles based on the language
-  #     output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
-  #     output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
-  #     output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
-  #     output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
-  #     output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
-  #     
-  #     output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
-  #     output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
-  #     output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-  #     # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
-  #     
-  #     output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
-  #     output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
-  #     output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
-  #     output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
-  #     output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
-  #     
-  #     output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
-  #     output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
-  #     output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
-  #     
-  #     output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
-  #     output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
-  #     output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
-  #     
-  #     output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
-  #     output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
-  #     output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
-  #     
-  #     session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
-  #     
-  #     # Render the footer based on the language
-  #     output$footer_ui <- renderUI({
-  #       div(
-  #         span("Was this page helpful?",
-  #              # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
-  #              actionButton(
-  #                "thumbs_up",
-  #                label = bsicons::bs_icon("hand-thumbs-up", 
-  #                                         size = "2em", 
-  #                                         fill = "#244C5A"),
-  #                class = "btn btn-link",
-  #                width = "50px"),
-  #              actionButton(
-  #                "thumbs_down",
-  #                label = bsicons::bs_icon("hand-thumbs-down", 
-  #                                         size = "2em", 
-  #                                         fill = "#244C5A"),
-  #                class = "btn btn-link",
-  #                width = "50px")
-  #         ),
-  #         # Set background color of div
-  #         style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
-  #         # Make a placeholder for feedback text and submit button
-  #         uiOutput("feedback_ui")
-  #       )
-  #     }) 
-  #   }
-  # })  # No need for a bindEvent as this rendering is trigered by a language change
-  
-  # Below code replaced the drop-down button selection
   # Toggle language when the button is pressed
   observeEvent(input$language_button, {
     new_lang <- if (languageSelection$language == "English") "Français" else "English"
@@ -325,7 +255,6 @@ app_server <- function(input, output, session) {
     output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
     output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
     output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-    # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
     
     output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
     output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
@@ -704,7 +633,7 @@ $(document).keyup(function(event) {
       message = list(msg = "hide dropdown"))
     
     # When user selects any a tab, update the last active tab for the current mode
-    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
+    if (input$navbar %in% c("home", "discPlot", "contPlot", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
     } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
@@ -731,22 +660,22 @@ $(document).keyup(function(event) {
     }
     
     ### Plots nav_menu ##########################
-    if (input$navbar == "discrete") {  # This is reached through a nav_menu
-      if (!ui_loaded$discretePlot) {
-        output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
-        ui_loaded$discretePlot <- TRUE
-        discretePlot("discretePlot", config$mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+    if (input$navbar == "discPlot") {  # This is reached through a nav_menu
+      if (!ui_loaded$discPlot) {
+        output$plotDiscrete_ui <- renderUI(discPlotUI("discPlot"))
+        ui_loaded$discPlot <- TRUE
+        discPlot("discPlot", config$mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
       }
     }
-    if (input$navbar == "continuous") { # This is reached through a nav_menu
-      if (!ui_loaded$continuousPlot) {
-        output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
-        ui_loaded$continuousPlot <- TRUE
-        continuousPlot("continuousPlot", language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+    if (input$navbar == "contPlot") { # This is reached through a nav_menu
+      if (!ui_loaded$contPlot) {
+        output$plotContinuous_ui <- renderUI(contPlotUI("contPlot"))
+        ui_loaded$contPlot <- TRUE
+        contPlot("contPlot", language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
@@ -766,8 +695,8 @@ $(document).keyup(function(event) {
           target <- moduleOutputs$mapLocs$change_tab
           if (target == "discData") ui_loaded$discData <- FALSE
           if (target == "contData") ui_loaded$contData <- FALSE
-          if (target == "discrete") ui_loaded$discretePlot <- FALSE
-          if (target == "continuous") ui_loaded$continuousPlot <- FALSE
+          if (target == "discPlot") ui_loaded$discPlot <- FALSE
+          if (target == "contPlot") ui_loaded$contPlot <- FALSE
           nav_select(session = session, "navbar", selected = target) # Change tabs
           moduleOutputs$mapLocs$change_tab <- NULL
         }

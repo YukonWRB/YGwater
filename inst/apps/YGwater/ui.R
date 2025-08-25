@@ -117,12 +117,10 @@ app_ui <- function(request) {
                   }
         ),
         nav_menu(title = uiOutput("plotsNavMenuTitle"), value = "plot",
-                 nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discrete",
+                 nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discPlot",
                            uiOutput("plotDiscrete_ui")),
-                 nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
+                 nav_panel(title = uiOutput("plotsNavContTitle"), value = "contPlot",
                            uiOutput("plotContinuous_ui"))
-                 # nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
-                 # uiOutput("plotMix_ui"))
         ),
         if (!config$public) {
           nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
@@ -145,10 +143,10 @@ app_ui <- function(request) {
                            uiOutput("imgMapView_ui")),
         ),
         nav_menu(title = uiOutput("dataNavMenuTitle"), value = "data",
-                 nav_panel(title = uiOutput("dataNavContTitle"), value = "contData",
-                           uiOutput("contData_ui")),
                  nav_panel(title = uiOutput("dataNavDiscTitle"), value = "discData",
-                           uiOutput("discData_ui"))
+                           uiOutput("discData_ui")),
+                 nav_panel(title = uiOutput("dataNavContTitle"), value = "contData",
+                           uiOutput("contData_ui"))
         ), # End data nav_menu
         if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
           nav_panel(title = uiOutput("FODNavTitle"), value = "FOD",

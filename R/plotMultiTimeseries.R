@@ -607,15 +607,15 @@ plotMultiTimeseries <- function(type = 'traces',
     if (!is.infinite(min_trace)) {
       trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid, con = con))
       if ("period" %in% colnames(trace_data)) {
-        trace_data[, period_secs := as.numeric(lubridate::period(period))]
+        trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
         # Shift datetime and add period_secs to compute the 'expected' next datetime
-        trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+        trace_data[, "expected" := data.table::shift(datetime, type = "lead") - period_secs]
         # Create 'gap_exists' column to identify where gaps are
-        trace_data[, gap_exists := datetime < expected & !is.na(expected)]
+        trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
         # Find indices where gaps exist
         gap_indices <- which(trace_data$gap_exists)
         # Create a data.table of NA rows to be inserted
-        na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime] + 1,  # Add 1 second to place it at the start of the gap
+        na_rows <- data.table::data.table(datetime = trace_data[gap_indices, "datetime"][[1]] + 1,  # Add 1 second to place it at the start of the gap
                                           value = NA)
         # Combine with NA rows
         trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)

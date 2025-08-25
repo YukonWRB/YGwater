@@ -1,4 +1,4 @@
-discretePlotUI <- function(id) {
+discPlotUI <- function(id) {
   ns <- NS(id)
   
   page_sidebar(
@@ -13,7 +13,7 @@ discretePlotUI <- function(id) {
   )
 }
 
-discretePlot <- function(id, mdb_files, language, windowDims, inputs) {
+discPlot <- function(id, mdb_files, language, windowDims, inputs) {
   
   moduleServer(id, function(input, output, session) {
     

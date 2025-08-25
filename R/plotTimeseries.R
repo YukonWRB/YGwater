@@ -395,7 +395,6 @@ plotTimeseries <- function(location,
     grades_dt <- dbGetQueryDT(con, paste0("SELECT g.start_dt, g.end_dt, gt.grade_type_description, gt.grade_type_description_fr, gt.color_code FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", start_date, "' AND g.start_dt <= '", end_date, "' ORDER BY start_dt;"))
     
     # Many rows could be adjacent repeats of grade_type_description with different start_dt and end_dt, in which case these rows should be amalgamated
-    # create a run‐length grouping over the three columns that must stay identical
     grades_dt[, "run" := data.table::rleid(grades_dt$grade_type_description)]
     
     # now collapse each run into one interval
@@ -505,15 +504,15 @@ plotTimeseries <- function(location,
     trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid, con = con))
     # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
     if ("period" %in% colnames(trace_data)) {
-      trace_data[, period_secs := as.numeric(lubridate::period(period))]
+      trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
       # Shift datetime and add period_secs to compute the 'expected' next datetime
-      trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+      trace_data[, "expected" := data.table::shift(datetime, type = "lead") - period_secs]
       # Create 'gap_exists' column to identify where gaps are
-      trace_data[, gap_exists := datetime < expected & !is.na(expected)]
+      trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
       # Find indices where gaps exist
       gap_indices <- which(trace_data$gap_exists)
       # Create a data.table of NA rows to be inserted
-      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime]  + 1,  # Add 1 second to place it at the start of the gap
+      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, "datetime"][[1]]  + 1,  # Add 1 second to place it at the start of the gap
                                         value = NA)
       # Combine with NA rows
       trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
