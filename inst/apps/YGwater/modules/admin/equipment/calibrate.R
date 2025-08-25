@@ -64,18 +64,18 @@ calUI <- function(id) {
       navbarPage(
         title = "",
         collapsible = TRUE,
-        id = "first_selection",
+        id = ns("first_selection"),
         fluid = TRUE,
         
         tabPanel(
           "Calibrate",
           sidebarLayout(
             sidebarPanel(
-              selectizeInput("selection", label = "Select a parameter", choices = c("Basic calibration info", "Temperature calibration", "Conductivity calibration", "pH calibration", "ORP calibration", "Turbidity calibration", "DO calibration", "Depth calibration")),
-              conditionalPanel(
+              selectizeInput(ns("selection"), label = "Select a parameter", choices = c("Basic calibration info", "Temperature calibration", "Conductivity calibration", "pH calibration", "ORP calibration", "Turbidity calibration", "DO calibration", "Depth calibration")),
+              conditionalPanel(ns = ns, 
                 condition = "input.selection == 'Basic calibration info'",
-                uiOutput("observer"),
-                shinyWidgets::airDatepickerInput("obs_datetime",
+                uiOutput(ns("observer")),
+                shinyWidgets::airDatepickerInput(ns("obs_datetime"),
                                                  label = "Calibration date/time (modify with the menu only)",
                                                  value = .POSIXct(Sys.time(), tz = "MST"),
                                                  range = FALSE,
@@ -87,100 +87,100 @@ calUI <- function(id) {
                                                  timepickerOpts = shinyWidgets::timepickerOptions(minutesStep = 15,
                                                                                                   timeFormat = "HH:mm")
                 ),
-                textOutput("instrument_reminder"),
-                uiOutput("ID_sensor_holder"),
-                uiOutput("ID_handheld_meter"),
-                textInput("calibration_purpose", "Calibration purpose", value = ""),
-                actionButton("save_basic_info", "Save this parameter info"),
+                textOutput(ns("instrument_reminder")),
+                uiOutput(ns("ID_sensor_holder")),
+                uiOutput(ns("ID_handheld_meter")),
+                textInput(ns("calibration_purpose"), "Calibration purpose", value = ""),
+                actionButton(ns("save_basic_info"), "Save this parameter info"),
               ),
-              conditionalPanel(
+              conditionalPanel(ns = ns, 
                 condition = "input.selection == 'pH calibration'",
-                numericInput("ph1_std", label = "Low pH solution value", value = 4),
-                numericInput("ph2_std", label = "Neutral pH solution value", value = 7),
-                numericInput("ph3_std", label = "High pH solution value", value = 10),
-                numericInput("ph1_pre_val", label = "pH 4 Pre-Cal Value", value = NA),
-                numericInput("ph2_pre_val", label = "pH 7 Pre-Cal Value", value = NA),
-                numericInput("ph3_pre_val", label = "pH 10 Pre-Cal Value", value = NA),
-                numericInput("ph1_mv", label = "pH 4 mV", value = NA),
-                numericInput("ph2_mv", label = "pH 7 mV", value = NA),
-                numericInput("ph3_mv", label = "pH 10 mV", value = NA),
-                actionButton("show_post_ph", "Show post-cal fields"),
-                numericInput("ph1_post_val", label = "pH 4 Post-Cal Value", value = 4),
-                numericInput("ph2_post_val", label = "pH 7 Post-Cal Value", value = 7),
-                numericInput("ph3_post_val", label = "pH 10 Post-Cal Value", value = 10),
-                actionButton("save_cal_ph", "Save this sheet"),
-                actionButton("delete_ph", "Delete this sheet")
+                numericInput(ns("ph1_std"), label = "Low pH solution value", value = 4),
+                numericInput(ns("ph2_std"), label = "Neutral pH solution value", value = 7),
+                numericInput(ns("ph3_std"), label = "High pH solution value", value = 10),
+                numericInput(ns("ph1_pre_val"), label = "pH 4 Pre-Cal Value", value = NA),
+                numericInput(ns("ph2_pre_val"), label = "pH 7 Pre-Cal Value", value = NA),
+                numericInput(ns("ph3_pre_val"), label = "pH 10 Pre-Cal Value", value = NA),
+                numericInput(ns("ph1_mv"), label = "pH 4 mV", value = NA),
+                numericInput(ns("ph2_mv"), label = "pH 7 mV", value = NA),
+                numericInput(ns("ph3_mv"), label = "pH 10 mV", value = NA),
+                actionButton(ns("show_post_ph"), "Show post-cal fields"),
+                numericInput(ns("ph1_post_val"), label = "pH 4 Post-Cal Value", value = 4),
+                numericInput(ns("ph2_post_val"), label = "pH 7 Post-Cal Value", value = 7),
+                numericInput(ns("ph3_post_val"), label = "pH 10 Post-Cal Value", value = 10),
+                actionButton(ns("save_cal_ph"), "Save this sheet"),
+                actionButton(ns("delete_ph"), "Delete this sheet")
               ),
-              conditionalPanel(
+              conditionalPanel(ns = ns, 
                 condition = "input.selection == 'Temperature calibration'",
-                textInput("temp_reference_desc", label = "Temp Reference Type", value = "Lab thermometer"),
-                numericInput("temp_reference", label = "Reference Temp", value = NA),
-                numericInput("temp_observed", label = "Sensor Temp", value = NA),
-                actionButton("save_cal_temp", "Save this sheet"),
-                actionButton("delete_temp", "Delete this sheet")
+                textInput(ns("temp_reference_desc"), label = "Temp Reference Type", value = "Lab thermometer"),
+                numericInput(ns("temp_reference"), label = "Reference Temp", value = NA),
+                numericInput(ns("temp_observed"), label = "Sensor Temp", value = NA),
+                actionButton(ns("save_cal_temp"), "Save this sheet"),
+                actionButton(ns("delete_temp"), "Delete this sheet")
               ),
-              conditionalPanel(
+              conditionalPanel(ns = ns, 
                 condition = "input.selection == 'Conductivity calibration'",
-                numericInput("spc1_std", label = "SpC Low-Range Standard", value = 0),
-                numericInput("spc2_std", label = "SpC High-Range Standard", value = 1413),
-                checkboxInput("spc_or_not", "Enter non-specific conductivity instead?", value = FALSE),
-                numericInput("spc1_pre", label = "SpC Low-Range Pre-Cal Value", value = NA),
-                numericInput("spc2_pre", label = "SpC High-Range Pre-Cal Value", value = NA),
-                actionButton("show_post_spc", "Show post-cal fields"),
-                numericInput("spc1_post", label = "SpC Low-Range Post-Cal Value", value = 0),
-                numericInput("spc2_post", label = "SpC High-Range Post-Cal Value", value = 1413),
-                actionButton("save_cal_spc", "Save this sheet"),
-                actionButton("delete_spc", "Delete this sheet")
+                numericInput(ns("spc1_std"), label = "SpC Low-Range Standard", value = 0),
+                numericInput(ns("spc2_std"), label = "SpC High-Range Standard", value = 1413),
+                checkboxInput(ns("spc_or_not"), "Enter non-specific conductivity instead?", value = FALSE),
+                numericInput(ns("spc1_pre"), label = "SpC Low-Range Pre-Cal Value", value = NA),
+                numericInput(ns("spc2_pre"), label = "SpC High-Range Pre-Cal Value", value = NA),
+                actionButton(ns("show_post_spc"), "Show post-cal fields"),
+                numericInput(ns("spc1_post"), label = "SpC Low-Range Post-Cal Value", value = 0),
+                numericInput(ns("spc2_post"), label = "SpC High-Range Post-Cal Value", value = 1413),
+                actionButton(ns("save_cal_spc"), "Save this sheet"),
+                actionButton(ns("delete_spc"), "Delete this sheet")
               ),
-              conditionalPanel(
+              conditionalPanel(ns = ns, 
                 condition = "input.selection == 'ORP calibration'",
-                numericInput("orp_std", label = "ORP Standard solution mV", value = NA),
-                numericInput("orp_pre_mv", label = "ORP mV Pre-Cal Value", value = NA),
-                actionButton("show_post_orp", "Show post-cal fields"),
-                numericInput("orp_post_mv", label = "ORP mV Post-Cal Value", value = NA),
-                actionButton("save_cal_orp", "Save this sheet"),
-                actionButton("delete_orp", "Delete this sheet")
+                numericInput(ns("orp_std"), label = "ORP Standard solution mV", value = NA),
+                numericInput(ns("orp_pre_mv"), label = "ORP mV Pre-Cal Value", value = NA),
+                actionButton(ns("show_post_orp"), "Show post-cal fields"),
+                numericInput(ns("orp_post_mv"), label = "ORP mV Post-Cal Value", value = NA),
+                actionButton(ns("save_cal_orp"), "Save this sheet"),
+                actionButton(ns("delete_orp"), "Delete this sheet")
               ),
-              conditionalPanel(
+              conditionalPanel(ns = ns, 
                 condition = "input.selection == 'Turbidity calibration'",
-                numericInput("turb1_std", label = "Low Turb Standard Value", value = 0),
-                numericInput("turb2_std", label = "High Turb Standard Value", value = 124),
-                numericInput("turb1_pre", label = "Low Turb Pre-cal Value", value = NA),
-                numericInput("turb2_pre", label = "High Turb Pre-cal Value", value = NA),
-                actionButton("show_post_turb", "Show post-cal fields"),
-                numericInput("turb1_post", label = "Low Turb Post-cal Value", value = 0),
-                numericInput("turb2_post", label = "High Turb Post-cal Value", value = 124),
-                actionButton("save_cal_turb", "Save this sheet"),
-                actionButton("delete_turb", "Delete this sheet")
+                numericInput(ns("turb1_std"), label = "Low Turb Standard Value", value = 0),
+                numericInput(ns("turb2_std"), label = "High Turb Standard Value", value = 124),
+                numericInput(ns("turb1_pre"), label = "Low Turb Pre-cal Value", value = NA),
+                numericInput(ns("turb2_pre"), label = "High Turb Pre-cal Value", value = NA),
+                actionButton(ns("show_post_turb"), "Show post-cal fields"),
+                numericInput(ns("turb1_post"), label = "Low Turb Post-cal Value", value = 0),
+                numericInput(ns("turb2_post"), label = "High Turb Post-cal Value", value = 124),
+                actionButton(ns("save_cal_turb"), "Save this sheet"),
+                actionButton(ns("delete_turb"), "Delete this sheet")
               ),
-              conditionalPanel(
+              conditionalPanel(ns = ns, 
                 condition = "input.selection == 'DO calibration'",
-                numericInput("baro_press_pre", label = "Baro Pressure Pre-Cal (mmHg)", value = NA),
-                numericInput("baro_press_post", label = "Baro Pressure Post-Cal (mmHg)", value = NA),
-                numericInput("do_pre_prct", label = "DO Pre-Cal % LOCAL", value = NA),
-                numericInput("do_post_prct", label = "DO Post-Cal % LOCAL", value = NA),
-                actionButton("calc_abs_do", "Calculate mg/l values"),
-                actionButton("calc_prct_do", "Calculate % values"),
-                numericInput("do_pre", label = "DO Pre-Cal mg/l", value = NA),
-                numericInput("do_post", label = "DO Post-Cal mg/l", value = NA),
-                actionButton("save_cal_do", "Save this sheet"),
-                actionButton("delete_do", "Delete this sheet")
+                numericInput(ns("baro_press_pre"), label = "Baro Pressure Pre-Cal (mmHg)", value = NA),
+                numericInput(ns("baro_press_post"), label = "Baro Pressure Post-Cal (mmHg)", value = NA),
+                numericInput(ns("do_pre_prct"), label = "DO Pre-Cal % LOCAL", value = NA),
+                numericInput(ns("do_post_prct"), label = "DO Post-Cal % LOCAL", value = NA),
+                actionButton(ns("calc_abs_do"), "Calculate mg/l values"),
+                actionButton(ns("calc_prct_do"), "Calculate % values"),
+                numericInput(ns("do_pre"), label = "DO Pre-Cal mg/l", value = NA),
+                numericInput(ns("do_post"), label = "DO Post-Cal mg/l", value = NA),
+                actionButton(ns("save_cal_do"), "Save this sheet"),
+                actionButton(ns("delete_do"), "Delete this sheet")
               ),
-              conditionalPanel(
+              conditionalPanel(ns = ns, 
                 condition = "input.selection == 'Depth calibration'",
-                radioButtons(inputId = "depth_check_ok", label = "Depth sensor output near 0 or as expected in air?", choiceNames = c("FALSE", "TRUE"), choiceValues = c("FALSE", "TRUE")),
-                radioButtons(inputId = "depth_changes_ok", label = "Depth sensor output changes as expected with depth?", choiceNames = c("Not Checked", "FALSE", "TRUE"), choiceValues = c("Not Checked", "FALSE", "TRUE")),
-                actionButton("save_cal_depth", "Save this sheet"),
-                actionButton("delete_depth", "Delete this sheet")
+                radioButtons(inputId = ns("depth_check_ok"), label = "Depth sensor output near 0 or as expected in air?", choiceNames = c("FALSE", "TRUE"), choiceValues = c("FALSE", "TRUE")),
+                radioButtons(inputId = ns("depth_changes_ok"), label = "Depth sensor output changes as expected with depth?", choiceNames = c("Not Checked", "FALSE", "TRUE"), choiceValues = c("Not Checked", "FALSE", "TRUE")),
+                actionButton(ns("save_cal_depth"), "Save this sheet"),
+                actionButton(ns("delete_depth"), "Delete this sheet")
               ),
-              actionButton("submit_btn", "Finalize + submit calibration", style = c("margin-top: 10px;"))
+              actionButton(ns("submit_btn"), "Finalize + submit calibration", style = c("margin-top: 10px;"))
             ),
             mainPanel(
-              DT::dataTableOutput("calibration_instruments_table"),
-              tableOutput("restart_table"),
-              tableOutput("saved"),
-              htmlOutput("ph_mv_note"),
-              htmlOutput("ORP_molarity_note")
+              DT::dataTableOutput(ns("calibration_instruments_table")),
+              tableOutput(ns("restart_table")),
+              tableOutput(ns("saved")),
+              htmlOutput(ns("ph_mv_note")),
+              htmlOutput(ns("ORP_molarity_note"))
             )
           )
         ),
@@ -188,23 +188,23 @@ calUI <- function(id) {
           "Add/modify instruments",
           sidebarLayout(
             sidebarPanel(
-              selectizeInput("existing_serial_no", "Search serial numbers or 'New record' for a new instrument", choices = "New record"),
-              textInput("serial_no", "New serial no (add alias by appending to serial #, e.g. 012345Blue)", value = "Search first!"),
-              uiOutput("recorder"),
-              selectizeInput("make", label = "Instrument make", choices = "placeholder"),
-              selectizeInput("model", label = "Instrument model", choices = "placeholder"),
-              selectizeInput("type", label = "Instrument type", choices = "placeholder"),
-              textInput("instrument_owner", "Instrument owner", value = ""),
-              checkboxInput("replaceableSensors", "Replaceable sensors?", value = FALSE),
-              textInput("asset_tag", "Asset tag number (if exists)", value = ""),
-              dateInput("date_in_service", label = "Date in service (if known)"),
-              dateInput("date_purchased", label = "Date purchased (if known)"),
-              dateInput("date_retired", label = "Date retired (if known)"),
-              uiOutput("retired_by"),
-              actionButton("save_cal_instrument", "Save new instrument")
+              selectizeInput(ns("existing_serial_no"), "Search serial numbers or 'New record' for a new instrument", choices = "New record"),
+              textInput(ns("serial_no"), "New serial no (add alias by appending to serial #, e.g. 012345Blue)", value = "Search first!"),
+              uiOutput(ns("recorder")),
+              selectizeInput(ns("make"), label = "Instrument make", choices = "placeholder"),
+              selectizeInput(ns("model"), label = "Instrument model", choices = "placeholder"),
+              selectizeInput(ns("type"), label = "Instrument type", choices = "placeholder"),
+              textInput(ns("instrument_owner"), "Instrument owner", value = ""),
+              checkboxInput(ns("replaceableSensors"), "Replaceable sensors?", value = FALSE),
+              textInput(ns("asset_tag"), "Asset tag number (if exists)", value = ""),
+              dateInput(ns("date_in_service"), label = "Date in service (if known)"),
+              dateInput(ns("date_purchased"), label = "Date purchased (if known)"),
+              dateInput(ns("date_retired"), label = "Date retired (if known)"),
+              uiOutput(ns("retired_by")),
+              actionButton(ns("save_cal_instrument"), "Save new instrument")
             ),
             mainPanel(
-              DT::dataTableOutput("manage_instruments_table")
+              DT::dataTableOutput(ns("manage_instruments_table"))
             )
           )
         ),
@@ -212,14 +212,14 @@ calUI <- function(id) {
           "Maintain instruments",
           sidebarLayout(
             sidebarPanel(
-              DT::dataTableOutput("maintain_instr_table")
+              DT::dataTableOutput(ns("maintain_instr_table"))
             ),
             mainPanel(
-              DT::dataTableOutput("past_instr_maintenance"),
-              actionButton("clear_selection", "Clear selection"),
-              textAreaInput("maintain_comment", "Describe the new maintenance performed", "", height = "100px", width = "800px"),
-              uiOutput("maintain_recorder"),
-              actionButton("submit_instr_maintain", "Save new maintenance event")
+              DT::dataTableOutput(ns("past_instr_maintenance")),
+              actionButton(ns("clear_selection"), "Clear selection"),
+              textAreaInput(ns("maintain_comment"), "Describe the new maintenance performed", "", height = "100px", width = "800px"),
+              uiOutput(ns("maintain_recorder")),
+              actionButton(ns("submit_instr_maintain"), "Save new maintenance event")
             )
           )
         ),
@@ -227,62 +227,62 @@ calUI <- function(id) {
           "Change/maintain sensors",
           sidebarLayout(
             sidebarPanel(
-              textOutput("sensors_reminder"),
-              selectizeInput("maintain_serial", "Select your instrument", choices = "loading choices..."),
-              div(class = "load_sensors_btn", actionButton("load_sensors", "Show sensors")),
+              textOutput(ns("sensors_reminder")),
+              selectizeInput(ns("maintain_serial"), "Select your instrument", choices = "loading choices..."),
+              div(class = "load_sensors_btn", actionButton(ns("load_sensors"), "Show sensors")),
               div(class = "show_sensors_btns",
-                  actionButton("sensor1_show", "Slot 1", style = c("margin-bottom: 5px;")),
-                  actionButton("sensor2_show", "Slot 2", style = c("margin-bottom: 5px;")),
-                  actionButton("sensor3_show", "Slot 3", style = c("margin-bottom: 5px;")),
-                  actionButton("sensor4_show", "Slot 4", style = c("margin-bottom: 5px;")),
-                  actionButton("sensor5_show", "Slot 5", style = c("margin-bottom: 5px;")),
-                  actionButton("sensor6_show", "Slot 6", style = c("margin-bottom: 5px;")),
-                  actionButton("sensor7_show", "Slot 7", style = c("margin-bottom: 5px;")),
-                  actionButton("sensor8_show", "Slot 8", style = c("margin-bottom: 5px;"))
+                  actionButton(ns("sensor1_show"), "Slot 1", style = c("margin-bottom: 5px;")),
+                  actionButton(ns("sensor2_show"), "Slot 2", style = c("margin-bottom: 5px;")),
+                  actionButton(ns("sensor3_show"), "Slot 3", style = c("margin-bottom: 5px;")),
+                  actionButton(ns("sensor4_show"), "Slot 4", style = c("margin-bottom: 5px;")),
+                  actionButton(ns("sensor5_show"), "Slot 5", style = c("margin-bottom: 5px;")),
+                  actionButton(ns("sensor6_show"), "Slot 6", style = c("margin-bottom: 5px;")),
+                  actionButton(ns("sensor7_show"), "Slot 7", style = c("margin-bottom: 5px;")),
+                  actionButton(ns("sensor8_show"), "Slot 8", style = c("margin-bottom: 5px;"))
               ),
-              selectizeInput("add_sensor_type_dropdown", "ADD a slot w/ sensor (CHANGE assigned sensor to the right)", choices = "placeholder"),
-              selectizeInput("new_sensor_serial", "Serial number (type your own if not in yet)", choices = NULL, options = list(create = TRUE)),
-              actionButton("add_new_sensor_serial", "Add new sensor to database"),
-              uiOutput("add_sensor_name"),
-              textOutput("add_sensor_note"),
-              actionButton("add_sensor_slot", "Submit")
+              selectizeInput(ns("add_sensor_type_dropdown"), "ADD a slot w/ sensor (CHANGE assigned sensor to the right)", choices = "placeholder"),
+              selectizeInput(ns("new_sensor_serial"), "Serial number (type your own if not in yet)", choices = NULL, options = list(create = TRUE)),
+              actionButton(ns("add_new_sensor_serial"), "Add new sensor to database"),
+              uiOutput(ns("add_sensor_name")),
+              textOutput(ns("add_sensor_note")),
+              actionButton(ns("add_sensor_slot"), "Submit")
             ),
             mainPanel(
-              DT::dataTableOutput("manage_sensors_table"),
-              DT::dataTableOutput("sensor1_details"),
-              DT::dataTableOutput("sensor2_details"),
-              DT::dataTableOutput("sensor3_details"),
-              DT::dataTableOutput("sensor4_details"),
-              DT::dataTableOutput("sensor5_details"),
-              DT::dataTableOutput("sensor6_details"),
-              DT::dataTableOutput("sensor7_details"),
-              DT::dataTableOutput("sensor8_details"),
-              htmlOutput("sensor_change_note"),
-              selectizeInput("change_sensor", "Assign a new sensor or leave as-is to log only maintenance note", choices = "placeholder", width = "500px"),
-              selectizeInput("add_sensor_serial", "Serial number (type your own if not in yet)", choices = NULL, options = list(create = TRUE)),
-              actionButton("add_new_sensor_serial2", "Add new sensor to database"),
-              textAreaInput("add_comment", "Add a note (date is already captured)", "", height = "100px", width = "800px"),
-              uiOutput("sensor_change_name"),
-              actionButton("submit_sensor_change", "Submit new record")
+              DT::dataTableOutput(ns("manage_sensors_table")),
+              DT::dataTableOutput(ns("sensor1_details")),
+              DT::dataTableOutput(ns("sensor2_details")),
+              DT::dataTableOutput(ns("sensor3_details")),
+              DT::dataTableOutput(ns("sensor4_details")),
+              DT::dataTableOutput(ns("sensor5_details")),
+              DT::dataTableOutput(ns("sensor6_details")),
+              DT::dataTableOutput(ns("sensor7_details")),
+              DT::dataTableOutput(ns("sensor8_details")),
+              htmlOutput(ns("sensor_change_note")),
+              selectizeInput(ns("change_sensor"), "Assign a new sensor or leave as-is to log only maintenance note", choices = "placeholder", width = "500px"),
+              selectizeInput(ns("add_sensor_serial"), "Serial number (type your own if not in yet)", choices = NULL, options = list(create = TRUE)),
+              actionButton(ns("add_new_sensor_serial2"), "Add new sensor to database"),
+              textAreaInput(ns("add_comment"), "Add a note (date is already captured)", "", height = "100px", width = "800px"),
+              uiOutput(ns("sensor_change_name")),
+              actionButton(ns("submit_sensor_change"), "Submit new record")
             )
           )
         ),
         tabPanel(
           "Deploy/Recover instruments",
           mainPanel(
-            textOutput("deploy_instrument_placeholder")
+            textOutput(ns("deploy_instrument_placeholder"))
           )
         ),
         tabPanel(
           "View unfinished calibrations",
           sidebarLayout(
             sidebarPanel(
-              numericInput("restart_index", label = "Select a calibration by index number", value = 0),
-              actionButton("restart_calibration", "Restart selected calibration"),
-              actionButton("delete_calibration", "Delete selected calibration")
+              numericInput(ns("restart_index"), label = "Select a calibration by index number", value = 0),
+              actionButton(ns("restart_calibration"), "Restart selected calibration"),
+              actionButton(ns("delete_calibration"), "Delete selected calibration")
             ),
             mainPanel(
-              DT::dataTableOutput("incomplete_table")
+              DT::dataTableOutput(ns("incomplete_table"))
             )
           )
         ) 
@@ -307,11 +307,11 @@ cal <- function(id) {
       showNotification(msg, type = ifelse(is.null(type), "default", type), duration = duration)
     }
     
-    table_reset <- '
+    table_reset <- sprintf('
 var colors = ["blue", "green"];
 var stack = [];
 table.on("click", "tr", function() {
-  var $rows = $("#calibration_instruments_table tbody tr"); // change the name of the table here
+  var $rows = $("#%s tbody tr"); // change the name of the table here
   var $row = $(this);
   var idx = $row.index();
   if($row.hasClass("selected")) {
@@ -333,8 +333,7 @@ table.on("click", "tr", function() {
       );
     }
   }
-});
-'
+});', ns("calibration_instruments_table"))
     
     # Initial show/hide and creation of containers ################################################
     # create a few containers
@@ -370,21 +369,21 @@ table.on("click", "tr", function() {
     shinyjs::hide("delete_depth")
     # Buttons to show sensor information
     shinyjs::hide("sensor1_show")
-    shinyjs::addClass("sensor1_show", "hidden")
+    shinyjs::addClass(ns("sensor1_show"), "hidden")
     shinyjs::hide("sensor2_show")
-    shinyjs::addClass("sensor2_show", "hidden")
+    shinyjs::addClass(ns("sensor2_show"), "hidden")
     shinyjs::hide("sensor3_show")
-    shinyjs::addClass("sensor3_show", "hidden")
+    shinyjs::addClass(ns("sensor3_show"), "hidden")
     shinyjs::hide("sensor4_show")
-    shinyjs::addClass("sensor4_show", "hidden")
+    shinyjs::addClass(ns("sensor4_show"), "hidden")
     shinyjs::hide("sensor5_show")
-    shinyjs::addClass("sensor5_show", "hidden")
+    shinyjs::addClass(ns("sensor5_show"), "hidden")
     shinyjs::hide("sensor6_show")
-    shinyjs::addClass("sensor6_show", "hidden")
+    shinyjs::addClass(ns("sensor6_show"), "hidden")
     shinyjs::hide("sensor7_show")
-    shinyjs::addClass("sensor7_show", "hidden")
+    shinyjs::addClass(ns("sensor7_show"), "hidden")
     shinyjs::hide("sensor8_show")
-    shinyjs::addClass("sensor8_show", "hidden")
+    shinyjs::addClass(ns("sensor8_show"), "hidden")
     shinyjs::hide("add_sensor_slot")
     shinyjs::hide("new_sensor_serial")
     shinyjs::hide("add_sensor_note")
@@ -452,16 +451,16 @@ table.on("click", "tr", function() {
     observeEvent(input$last_observer_id, {  # This is used to set the last observer ID to the last observer selected, recovered from cookies
       try({
         output$observer <- renderUI({
-          selectizeInput("observer", label = "Calibrator name", choices = select_data$recorder, selected = input$last_observer_id)
+          selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder, selected = input$last_observer_id)
         })
         output$add_sensor_name <- renderUI({
-          selectizeInput("add_sensor_name", label = "What's your name?", choices = select_data$recorder, selected = input$last_observer_id)
+          selectizeInput(ns("add_sensor_name"), label = "What's your name?", choices = select_data$recorder, selected = input$last_observer_id)
         })
         output$sensor_change_name <- renderUI({
-          selectizeInput("sensor_change_name", label = "Observer name", choices = select_data$recorder, selected = input$last_observer_id)
+          selectizeInput(ns("sensor_change_name"), label = "Observer name", choices = select_data$recorder, selected = input$last_observer_id)
         })
         output$maintain_recorder <- renderUI({
-          selectizeInput("maintain_recorder", label = "Maintenance recorder", choices = select_data$recorder, selected = input$last_observer_id)
+          selectizeInput(ns("maintain_recorder"), label = "Maintenance recorder", choices = select_data$recorder, selected = input$last_observer_id)
         })
       })
     })
@@ -477,32 +476,33 @@ table.on("click", "tr", function() {
         
         
         # look for a cookie with the last observer ID
-        shinyjs::runjs("
-      var lastObserverId = Cookies.get('last_observer_id');
-      Shiny.setInputValue('last_observer_id', lastObserverId);
-    ")
+        shinyjs::runjs(sprintf(
+      "var lastObserverId = Cookies.get('last_observer_id');\n"
+      "Shiny.setInputValue('%s', lastObserverId);",
+      ns('last_observer_id')
+    ))
         
         output$observer <- renderUI({
-          selectizeInput("observer", label = "Calibrator name", choices = select_data$recorder)
+          selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder)
         })
         output$add_sensor_name <- renderUI({
-          selectizeInput("add_sensor_name", label = "What's your name?", choices = select_data$recorder)
+          selectizeInput(ns("add_sensor_name"), label = "What's your name?", choices = select_data$recorder)
         })
         output$sensor_change_name <- renderUI({
-          selectizeInput("sensor_change_name", label = "Observer name", choices = select_data$recorder)
+          selectizeInput(ns("sensor_change_name"), label = "Observer name", choices = select_data$recorder)
         })
         output$maintain_recorder <- renderUI({
-          selectizeInput("maintain_recorder", label = "Maintenance recorder", choices = select_data$recorder)
+          selectizeInput(ns("maintain_recorder"), label = "Maintenance recorder", choices = select_data$recorder)
         })
         output$ID_sensor_holder <- renderUI({
           div(
-            selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no)),
+            selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no)),
             style = "color: white; background-color: blue;"
           )
         })
         output$ID_handheld_meter <- renderUI({
           div(
-            selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no)),
+            selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no)),
             style = "color: white; background-color: green;"
           )
         })
@@ -540,10 +540,10 @@ table.on("click", "tr", function() {
       if (input$observer == "new") {
         # Add a new observer using a modal dialog
         showModal(modalDialog(title = "Add new observer",
-                              textInput("new_observer_first", "First name"),
-                              textInput("new_observer_last", "Last name"),
-                              textInput("new_observer_org", "Organization"),
-                              actionButton("add_new_observer", "Add new observer")
+                              textInput(ns("new_observer_first"), "First name"),
+                              textInput(ns("new_observer_last"), "Last name"),
+                              textInput(ns("new_observer_org"), "Organization"),
+                              actionButton(ns("add_new_observer"), "Add new observer")
         ))
       } else { # If an existing observer is selected, save the observer ID to a cookie
         selected_id <- input$observer
@@ -554,10 +554,10 @@ table.on("click", "tr", function() {
       if (input$recorder == "new") {
         # Add a new observer using a modal dialog
         showModal(modalDialog(title = "Add new observer",
-                              textInput("new_observer_first", "First name"),
-                              textInput("new_observer_last", "Last name"),
-                              textInput("new_observer_org", "Organization"),
-                              actionButton("add_new_observer", "Add new observer")
+                              textInput(ns("new_observer_first"), "First name"),
+                              textInput(ns("new_observer_last"), "Last name"),
+                              textInput(ns("new_observer_org"), "Organization"),
+                              actionButton(ns("add_new_observer"), "Add new observer")
         ))
       } else { # If an existing observer is selected, save the observer ID to a cookie
         selected_id <- input$recorder
@@ -568,10 +568,10 @@ table.on("click", "tr", function() {
       if (input$retired_by == "new") {
         # Add a new observer using a modal dialog
         showModal(modalDialog(title = "Add new observer",
-                              textInput("new_observer_first", "First name"),
-                              textInput("new_observer_last", "Last name"),
-                              textInput("new_observer_org", "Organization"),
-                              actionButton("add_new_observer", "Add new observer")
+                              textInput(ns("new_observer_first"), "First name"),
+                              textInput(ns("new_observer_last"), "Last name"),
+                              textInput(ns("new_observer_org"), "Organization"),
+                              actionButton(ns("add_new_observer"), "Add new observer")
         ))
       } else { # If an existing observer is selected, save the observer ID to a cookie
         selected_id <- input$retired_by
@@ -582,10 +582,10 @@ table.on("click", "tr", function() {
       if (input$sensor_change_name == "new") {
         # Add a new observer using a modal dialog
         showModal(modalDialog(title = "Add new observer",
-                              textInput("new_observer_first", "First name"),
-                              textInput("new_observer_last", "Last name"),
-                              textInput("new_observer_org", "Organization"),
-                              actionButton("add_new_observer", "Add new observer")
+                              textInput(ns("new_observer_first"), "First name"),
+                              textInput(ns("new_observer_last"), "Last name"),
+                              textInput(ns("new_observer_org"), "Organization"),
+                              actionButton(ns("add_new_observer"), "Add new observer")
         ))
       } else { # If an existing observer is selected, save the observer ID to a cookie
         selected_id <- input$sensor_change_name
@@ -596,10 +596,10 @@ table.on("click", "tr", function() {
       if (input$add_sensor_name == "new") {
         # Add a new observer using a modal dialog
         showModal(modalDialog(title = "Add new observer",
-                              textInput("new_observer_first", "First name"),
-                              textInput("new_observer_last", "Last name"),
-                              textInput("new_observer_org", "Organization"),
-                              actionButton("add_new_observer", "Add new observer")
+                              textInput(ns("new_observer_first"), "First name"),
+                              textInput(ns("new_observer_last"), "Last name"),
+                              textInput(ns("new_observer_org"), "Organization"),
+                              actionButton(ns("add_new_observer"), "Add new observer")
         ))
       } else { # If an existing observer is selected, save the observer ID to a cookie
         selected_id <- input$add_sensor_name
@@ -623,16 +623,16 @@ table.on("click", "tr", function() {
       selected_id <- max(instruments_data$observers$observer_id)
       
       output$observer <- renderUI({
-        selectizeInput("observer", label = "Calibrator name", choices = select_data$recorder, selected = selected_id)
+        selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder, selected = selected_id)
       })
       output$recorder <- renderUI({
-        selectizeInput("recorder", label = "Observer name", choices = select_data$recorder, selected = selected_id)
+        selectizeInput(ns("recorder"), label = "Observer name", choices = select_data$recorder, selected = selected_id)
       })
       output$add_sensor_name <- renderUI({
-        selectizeInput("add_sensor_name", label = "What's your name?", choices = select_data$recorder, selected = selected_id)
+        selectizeInput(ns("add_sensor_name"), label = "What's your name?", choices = select_data$recorder, selected = selected_id)
       })
       output$sensor_change_name <- renderUI({
-        selectizeInput("sensor_change_name", label = "Observer name", choices = select_data$recorder, selected = selected_id)
+        selectizeInput(ns("sensor_change_name"), label = "Observer name", choices = select_data$recorder, selected = selected_id)
       })
       shinyjs::runjs(paste0("Cookies.set('last_observer_id', '", selected_id, "', { expires: 30 });"))
       removeModal()
@@ -643,9 +643,9 @@ table.on("click", "tr", function() {
       if (input$make == "new") {
         # Add a new make using a modal dialog
         showModal(modalDialog(title = "Add new make",
-                              textInput("new_make", "Make"),
-                              textInput("new_make_desc", "Description"),
-                              actionButton("add_new_make", "Add new make")
+                              textInput(ns("new_make"), "Make"),
+                              textInput(ns("new_make_desc"), "Description"),
+                              actionButton(ns("add_new_make"), "Add new make")
         ))
       }
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
@@ -667,9 +667,9 @@ table.on("click", "tr", function() {
       if (input$model == "new") {
         # Add a new model using a modal dialog
         showModal(modalDialog(title = "Add new model",
-                              textInput("new_model", "Model"),
-                              textInput("new_model_desc", "Description"),
-                              actionButton("add_new_model", "Add new model")
+                              textInput(ns("new_model"), "Model"),
+                              textInput(ns("new_model_desc"), "Description"),
+                              actionButton(ns("add_new_model"), "Add new model")
         ))
       }
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
@@ -691,9 +691,9 @@ table.on("click", "tr", function() {
       if (input$type == "new") {
         # Add a new type using a modal dialog
         showModal(modalDialog(title = "Add new type",
-                              textInput("new_type", "Type"),
-                              textInput("new_type_desc", "Description"),
-                              actionButton("add_new_type", "Add new type")
+                              textInput(ns("new_type"), "Type"),
+                              textInput(ns("new_type_desc"), "Description"),
+                              actionButton(ns("add_new_type"), "Add new type")
         ))
       }
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
@@ -715,9 +715,9 @@ table.on("click", "tr", function() {
       if (input$change_sensor == "new") {
         # Add a new sensor type using a modal dialog
         showModal(modalDialog(title = "Add new sensor type",
-                              textInput("new_sensor_type", "Sensor type"),
-                              textInput("new_sensor_desc", "Description"),
-                              actionButton("add_new_sensor_type", "Add new sensor type")
+                              textInput(ns("new_sensor_type"), "Sensor type"),
+                              textInput(ns("new_sensor_desc"), "Description"),
+                              actionButton(ns("add_new_sensor_type"), "Add new sensor type")
         ))
       }
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
@@ -725,9 +725,9 @@ table.on("click", "tr", function() {
       if (input$add_sensor_type_dropdown == "new") {
         # Add a new sensor type using a modal dialog
         showModal(modalDialog(title = "Add new sensor type",
-                              textInput("new_sensor_type", "Sensor type"),
-                              textInput("new_sensor_desc", "Description"),
-                              actionButton("add_new_sensor_type", "Add new sensor type")
+                              textInput(ns("new_sensor_type"), "Sensor type"),
+                              textInput(ns("new_sensor_desc"), "Description"),
+                              actionButton(ns("add_new_sensor_type"), "Add new sensor type")
         ))
       }
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
@@ -857,19 +857,19 @@ table.on("click", "tr", function() {
     reset_basic <- function(keep_observer = FALSE) {
       if (!keep_observer) {
         output$observer <- renderUI({
-          selectizeInput("observer", label = "Calibrator name", choices = select_data$recorder)
+          selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder)
         })
       }
       shinyWidgets::updateAirDateInput(session, "obs_datetime", value = .POSIXct(Sys.time(), tz = "MST"))
       output$ID_sensor_holder <- renderUI({
         div(
-          selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no)),
+          selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no)),
           style = "color: white; background-color: blue;"
         )
       })
       output$ID_handheld_meter <- renderUI({
         div(
-          selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no)),
+          selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no)),
           style = "color: white; background-color: green;"
         )
       })
@@ -941,13 +941,13 @@ table.on("click", "tr", function() {
     observeEvent(input$calibration_instruments_table_rows_selected, {
       output$ID_sensor_holder <- renderUI({
         div(
-          selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no)),
+          selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no)),
           style = "color: white; background-color: blue;"
         )
       })
       output$ID_handheld_meter <- renderUI({
         div(
-          selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no)),
+          selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no)),
           style = "color: white; background-color: green;"
         )
       })
@@ -955,26 +955,26 @@ table.on("click", "tr", function() {
         if (initial_instr_table$value) {
           output$ID_sensor_holder <- renderUI({
             div(
-              selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no), selected = initial_manage_instruments_table[input$calibration_instruments_table_rows_selected[1], "serial_no"]),
+              selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no), selected = initial_manage_instruments_table[input$calibration_instruments_table_rows_selected[1], "serial_no"]),
               style = "color: white; background-color: blue;"
             )
           })
           output$ID_handheld_meter <- renderUI({
             div(
-              selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no), selected = initial_manage_instruments_table[input$calibration_instruments_table_rows_selected[2], "serial_no"]),
+              selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no), selected = initial_manage_instruments_table[input$calibration_instruments_table_rows_selected[2], "serial_no"]),
               style = "color: white; background-color: green;"
             )
           })
         } else {
           output$ID_sensor_holder <- renderUI({
             div(
-              selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no), selected = instruments_data$manage_instruments[input$calibration_instruments_table_rows_selected[1], "serial_no"]),
+              selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no), selected = instruments_data$manage_instruments[input$calibration_instruments_table_rows_selected[1], "serial_no"]),
               style = "color: white; background-color: blue;"
             )
           })
           output$ID_handheld_meter <- renderUI({
             div(
-              selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no), selected = instruments_data$manage_instruments[input$calibration_instruments_table_rows_selected[2], "serial_no"]),
+              selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no), selected = instruments_data$manage_instruments[input$calibration_instruments_table_rows_selected[2], "serial_no"]),
               style = "color: white; background-color: green;"
             )
           })
@@ -984,26 +984,26 @@ table.on("click", "tr", function() {
         if (initial_instr_table$value) {
           output$ID_sensor_holder <- renderUI({
             div(
-              selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no), selected = initial_manage_instruments_table[input$calibration_instruments_table_rows_selected[1], "serial_no"]),
+              selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no), selected = initial_manage_instruments_table[input$calibration_instruments_table_rows_selected[1], "serial_no"]),
               style = "color: white; background-color: blue;"
             )
           })
           output$ID_handheld_meter <- renderUI({
             div(
-              selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no), selected = initial_manage_instruments_table[input$calibration_instruments_table_rows_selected[2], "serial_no"]),
+              selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no), selected = initial_manage_instruments_table[input$calibration_instruments_table_rows_selected[2], "serial_no"]),
               style = "color: white; background-color: green;"
             )
           })
         } else {
           output$ID_sensor_holder <- renderUI({
             div(
-              selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no), selected = instruments_data$manage_instruments[input$calibration_instruments_table_rows_selected[1], "serial_no"]),
+              selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no), selected = instruments_data$manage_instruments[input$calibration_instruments_table_rows_selected[1], "serial_no"]),
               style = "color: white; background-color: blue;"
             )
           })
           output$ID_handheld_meter <- renderUI({
             div(
-              selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no), selected = instruments_data$manage_instruments[input$calibration_instruments_table_rows_selected[2], "serial_no"]),
+              selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no), selected = instruments_data$manage_instruments[input$calibration_instruments_table_rows_selected[2], "serial_no"]),
               style = "color: white; background-color: green;"
             )
           })
@@ -1158,21 +1158,21 @@ table.on("click", "tr", function() {
         shinyjs::show("submit_btn")
         shinyjs::hide("load_sensors")
         shinyjs::hide("sensor1_show")
-        shinyjs::addClass("sensor1_show", "hidden")
+        shinyjs::addClass(ns("sensor1_show"), "hidden")
         shinyjs::hide("sensor2_show")
-        shinyjs::addClass("sensor2_show", "hidden")
+        shinyjs::addClass(ns("sensor2_show"), "hidden")
         shinyjs::hide("sensor3_show")
-        shinyjs::addClass("sensor3_show", "hidden")
+        shinyjs::addClass(ns("sensor3_show"), "hidden")
         shinyjs::hide("sensor4_show")
-        shinyjs::addClass("sensor4_show", "hidden")
+        shinyjs::addClass(ns("sensor4_show"), "hidden")
         shinyjs::hide("sensor5_show")
-        shinyjs::addClass("sensor5_show", "hidden")
+        shinyjs::addClass(ns("sensor5_show"), "hidden")
         shinyjs::hide("sensor6_show")
-        shinyjs::addClass("sensor6_show", "hidden")
+        shinyjs::addClass(ns("sensor6_show"), "hidden")
         shinyjs::hide("sensor7_show")
-        shinyjs::addClass("sensor7_show", "hidden")
+        shinyjs::addClass(ns("sensor7_show"), "hidden")
         shinyjs::hide("sensor8_show")
-        shinyjs::addClass("sensor8_show", "hidden")
+        shinyjs::addClass(ns("sensor8_show"), "hidden")
         shinyjs::hide("add_sensor_slot")
         shinyjs::hide("add_sensor_note")
         shinyjs::hide("sensor_change_note")
@@ -1193,26 +1193,26 @@ table.on("click", "tr", function() {
         shinyjs::hide("sensor_change_name")
         shinyjs::hide("submit_sensor_change")
         output$observer <- renderUI({
-          selectizeInput("observer", label = "Calibrator name", choices = select_data$recorder)
+          selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder)
         })
       } else if (input$first_selection == "Add/modify instruments") {
         shinyjs::hide("submit_btn")
         shinyjs::hide("sensor1_show")
-        shinyjs::addClass("sensor1_show", "hidden")
+        shinyjs::addClass(ns("sensor1_show"), "hidden")
         shinyjs::hide("sensor2_show")
-        shinyjs::addClass("sensor2_show", "hidden")
+        shinyjs::addClass(ns("sensor2_show"), "hidden")
         shinyjs::hide("sensor3_show")
-        shinyjs::addClass("sensor3_show", "hidden")
+        shinyjs::addClass(ns("sensor3_show"), "hidden")
         shinyjs::hide("sensor4_show")
-        shinyjs::addClass("sensor4_show", "hidden")
+        shinyjs::addClass(ns("sensor4_show"), "hidden")
         shinyjs::hide("sensor5_show")
-        shinyjs::addClass("sensor5_show", "hidden")
+        shinyjs::addClass(ns("sensor5_show"), "hidden")
         shinyjs::hide("sensor6_show")
-        shinyjs::addClass("sensor6_show", "hidden")
+        shinyjs::addClass(ns("sensor6_show"), "hidden")
         shinyjs::hide("sensor7_show")
-        shinyjs::addClass("sensor7_show", "hidden")
+        shinyjs::addClass(ns("sensor7_show"), "hidden")
         shinyjs::hide("sensor8_show")
-        shinyjs::addClass("sensor8_show", "hidden")
+        shinyjs::addClass(ns("sensor8_show"), "hidden")
         shinyjs::hide("add_sensor_slot")
         shinyjs::hide("add_sensor_note")
         shinyjs::hide("sensor_change_note")
@@ -1235,7 +1235,7 @@ table.on("click", "tr", function() {
         shinyjs::hide("date_retired")
         shinyjs::show("retired_by")
         output$retired_by <- renderUI({
-          selectizeInput("retired_by", label = "Retired by", choices = select_data$recorder, options = list(onInitialize = I('function() { this.setValue(""); }')))
+          selectizeInput(ns("retired_by"), label = "Retired by", choices = select_data$recorder, options = list(onInitialize = I('function() { this.setValue(""); }')))
         })
         updateSelectizeInput(session, "existing_serial_no", choices = c("New record", instruments_data$sheet$serial_no), selected = "")
         updateSelectizeInput(session, "make", choices = select_data$makes, selected = "")
@@ -1279,21 +1279,21 @@ table.on("click", "tr", function() {
         shinyjs::hide("submit_btn")
         shinyjs::hide("load_sensors")
         shinyjs::hide("sensor1_show")
-        shinyjs::addClass("sensor1_show", "hidden")
+        shinyjs::addClass(ns("sensor1_show"), "hidden")
         shinyjs::hide("sensor2_show")
-        shinyjs::addClass("sensor2_show", "hidden")
+        shinyjs::addClass(ns("sensor2_show"), "hidden")
         shinyjs::hide("sensor3_show")
-        shinyjs::addClass("sensor3_show", "hidden")
+        shinyjs::addClass(ns("sensor3_show"), "hidden")
         shinyjs::hide("sensor4_show")
-        shinyjs::addClass("sensor4_show", "hidden")
+        shinyjs::addClass(ns("sensor4_show"), "hidden")
         shinyjs::hide("sensor5_show")
-        shinyjs::addClass("sensor5_show", "hidden")
+        shinyjs::addClass(ns("sensor5_show"), "hidden")
         shinyjs::hide("sensor6_show")
-        shinyjs::addClass("sensor6_show", "hidden")
+        shinyjs::addClass(ns("sensor6_show"), "hidden")
         shinyjs::hide("sensor7_show")
-        shinyjs::addClass("sensor7_show", "hidden")
+        shinyjs::addClass(ns("sensor7_show"), "hidden")
         shinyjs::hide("sensor8_show")
-        shinyjs::addClass("sensor8_show", "hidden")
+        shinyjs::addClass(ns("sensor8_show"), "hidden")
         shinyjs::hide("add_sensor_slot")
         shinyjs::hide("add_sensor_note")
         shinyjs::hide("sensor_change_note")
@@ -1321,21 +1321,21 @@ table.on("click", "tr", function() {
     observeEvent(input$maintain_serial, {
       shinyjs::show("load_sensors")
       shinyjs::hide("sensor1_show")
-      shinyjs::addClass("sensor1_show", "hidden")
+      shinyjs::addClass(ns("sensor1_show"), "hidden")
       shinyjs::hide("sensor2_show")
-      shinyjs::addClass("sensor2_show", "hidden")
+      shinyjs::addClass(ns("sensor2_show"), "hidden")
       shinyjs::hide("sensor3_show")
-      shinyjs::addClass("sensor3_show", "hidden")
+      shinyjs::addClass(ns("sensor3_show"), "hidden")
       shinyjs::hide("sensor4_show")
-      shinyjs::addClass("sensor4_show", "hidden")
+      shinyjs::addClass(ns("sensor4_show"), "hidden")
       shinyjs::hide("sensor5_show")
-      shinyjs::addClass("sensor5_show", "hidden")
+      shinyjs::addClass(ns("sensor5_show"), "hidden")
       shinyjs::hide("sensor6_show")
-      shinyjs::addClass("sensor6_show", "hidden")
+      shinyjs::addClass(ns("sensor6_show"), "hidden")
       shinyjs::hide("sensor7_show")
-      shinyjs::addClass("sensor7_show", "hidden")
+      shinyjs::addClass(ns("sensor7_show"), "hidden")
       shinyjs::hide("sensor8_show")
-      shinyjs::addClass("sensor8_show", "hidden")
+      shinyjs::addClass(ns("sensor8_show"), "hidden")
       shinyjs::hide("add_sensor_slot")
       shinyjs::hide("add_sensor_note")
       shinyjs::hide("sensor_change_note")
@@ -1363,21 +1363,21 @@ table.on("click", "tr", function() {
         shinyjs::show("manage_sensors_table")
         #Hide the extra buttons
         shinyjs::hide("sensor1_show")
-        shinyjs::addClass("sensor1_show", "hidden")
+        shinyjs::addClass(ns("sensor1_show"), "hidden")
         shinyjs::hide("sensor2_show")
-        shinyjs::addClass("sensor2_show", "hidden")
+        shinyjs::addClass(ns("sensor2_show"), "hidden")
         shinyjs::hide("sensor3_show")
-        shinyjs::addClass("sensor3_show", "hidden")
+        shinyjs::addClass(ns("sensor3_show"), "hidden")
         shinyjs::hide("sensor4_show")
-        shinyjs::addClass("sensor4_show", "hidden")
+        shinyjs::addClass(ns("sensor4_show"), "hidden")
         shinyjs::hide("sensor5_show")
-        shinyjs::addClass("sensor5_show", "hidden")
+        shinyjs::addClass(ns("sensor5_show"), "hidden")
         shinyjs::hide("sensor6_show")
-        shinyjs::addClass("sensor6_show", "hidden")
+        shinyjs::addClass(ns("sensor6_show"), "hidden")
         shinyjs::hide("sensor7_show")
-        shinyjs::addClass("sensor7_show", "hidden")
+        shinyjs::addClass(ns("sensor7_show"), "hidden")
         shinyjs::hide("sensor8_show")
-        shinyjs::addClass("sensor8_show", "hidden")
+        shinyjs::addClass(ns("sensor8_show"), "hidden")
         shinyjs::hide("add_sensor_slot")
         shinyjs::hide("add_sensor_note")
         shinyjs::hide("add_sensor_type_dropdown")
@@ -1404,14 +1404,14 @@ table.on("click", "tr", function() {
         if (input$maintain_serial != "loading choices...") {
           shinyjs::hide("manage_sensors_table")
           # Reset the button colors
-          shinyjs::runjs('document.getElementById("sensor1_show").style.color = "#000000";')
-          shinyjs::runjs('document.getElementById("sensor2_show").style.color = "#000000";')
-          shinyjs::runjs('document.getElementById("sensor3_show").style.color = "#000000";')
-          shinyjs::runjs('document.getElementById("sensor4_show").style.color = "#000000";')
-          shinyjs::runjs('document.getElementById("sensor5_show").style.color = "#000000";')
-          shinyjs::runjs('document.getElementById("sensor6_show").style.color = "#000000";')
-          shinyjs::runjs('document.getElementById("sensor7_show").style.color = "#000000";')
-          shinyjs::runjs('document.getElementById("sensor8_show").style.color = "#000000";')
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns("sensor1_show")))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns("sensor2_show")))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns("sensor3_show")))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns("sensor4_show")))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns("sensor5_show")))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns("sensor6_show")))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns("sensor7_show")))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns("sensor8_show")))
           updateActionButton(session, "load_sensors", label = "Show instruments table again")
           
           #Find the instrument_id associated with this instrument
@@ -1428,7 +1428,7 @@ table.on("click", "tr", function() {
           if (sensors_data$number > 0) {
             for (i in 1:sensors_data$number) { #show the right number of sensors
               shinyjs::show(paste0("sensor", i, "_show"))
-              shinyjs::removeClass(paste0("sensor", i, "_show"), "hidden")
+              shinyjs::removeClass(ns(paste0("sensor", i, "_show")), "hidden")
               sensor_id <- sensors_data$sensors[sensors_data$sensors$sensor_id == sensors_data$instrument[nrow(sensors_data$instrument), paste0("sensor", i, "_id")], "sensor_id"]
               type_id <- sensors_data$sensors[sensors_data$sensors$sensor_id == sensor_id, "sensor_type"]
               sensor_type <- sensors_data$sensor_types[sensors_data$sensor_types$sensor_type_id == type_id, "sensor_type"]
@@ -1489,13 +1489,13 @@ table.on("click", "tr", function() {
       # Show a modal so the user can input the make, model, date in service, date purchased, asset tag, and notes
       showModal(modalDialog(
         title = "Add a new sensor",
-        selectizeInput("new_sensor_make", "Make (type your own if not in yet)", choices = unique(sensors_data$sensors$sensor_make), options = list(create = TRUE)),
-        selectizeInput("new_sensor_model", "Model (type your own if not in yet)", choices = unique(sensors_data$sensors$sensor_model), options = list(create = TRUE)),
-        textInput("new_sensor_asset_tag", "Asset tag (optional)"),
-        dateInput("new_sensor_date_purchased", "Date purchased (if known)", value = ""),
-        dateInput("new_sensor_date_in_service", "Date in service (if known)", value = ""),
-        textAreaInput("new_sensor_notes", "Notes (optional)"),
-        actionButton("add_sensor_to_db", "Add sensor")
+        selectizeInput(ns("new_sensor_make"), "Make (type your own if not in yet)", choices = unique(sensors_data$sensors$sensor_make), options = list(create = TRUE)),
+        selectizeInput(ns("new_sensor_model"), "Model (type your own if not in yet)", choices = unique(sensors_data$sensors$sensor_model), options = list(create = TRUE)),
+        textInput(ns("new_sensor_asset_tag"), "Asset tag (optional)"),
+        dateInput(ns("new_sensor_date_purchased"), "Date purchased (if known)", value = ""),
+        dateInput(ns("new_sensor_date_in_service"), "Date in service (if known)", value = ""),
+        textAreaInput(ns("new_sensor_notes"), "Notes (optional)"),
+        actionButton(ns("add_sensor_to_db"), "Add sensor")
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
@@ -1504,13 +1504,13 @@ table.on("click", "tr", function() {
       # Show a modal so the user can input the make, model, date in service, date purchased, asset tag, and notes
       showModal(modalDialog(
         title = "Add a new sensor",
-        selectizeInput("new_sensor_make", "Make (type your own if not in yet)", choices = unique(sensors_data$sensors$sensor_make), options = list(create = TRUE)),
-        selectizeInput("new_sensor_model", "Model (type your own if not in yet)", choices = unique(sensors_data$sensors$sensor_model), options = list(create = TRUE)),
-        textInput("new_sensor_asset_tag", "Asset tag (optional)"),
-        dateInput("new_sensor_date_purchased", "Date purchased", value = ""),
-        dateInput("new_sensor_date_in_service", "Date in service", value = ""),
-        textAreaInput("new_sensor_notes", "Notes (optional)"),
-        actionButton("add_sensor_to_db2", "Add sensor")
+        selectizeInput(ns("new_sensor_make"), "Make (type your own if not in yet)", choices = unique(sensors_data$sensors$sensor_make), options = list(create = TRUE)),
+        selectizeInput(ns("new_sensor_model"), "Model (type your own if not in yet)", choices = unique(sensors_data$sensors$sensor_model), options = list(create = TRUE)),
+        textInput(ns("new_sensor_asset_tag"), "Asset tag (optional)"),
+        dateInput(ns("new_sensor_date_purchased"), "Date purchased", value = ""),
+        dateInput(ns("new_sensor_date_in_service"), "Date in service", value = ""),
+        textAreaInput(ns("new_sensor_notes"), "Notes (optional)"),
+        actionButton(ns("add_sensor_to_db2"), "Add sensor")
       ))
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
@@ -1602,7 +1602,7 @@ table.on("click", "tr", function() {
       sensors_data$number <- sensors_data$number + 1
       
       shinyjs::show(paste0("sensor", sensors_data$number, "_show")) # show the new sensor button
-      shinyjs::removeClass(paste0("sensor", sensors_data$number, "_show"), "hidden")
+      shinyjs::removeClass(ns(paste0("sensor", sensors_data$number, "_show")), "hidden")
       shinyjs::hide("add_sensor_name")
       shinyjs::hide("add_sensor_slot")
       shinyjs::hide("new_sensor_serial")
@@ -1652,7 +1652,7 @@ table.on("click", "tr", function() {
           updateSelectizeInput(session, "add_sensor_serial", choices = serial_choices, selected = sub[nrow(sub), "sensor_serial"])
           updateTextAreaInput(session, "add_comment", value = sensors_data$instrument[nrow(sensors_data$instrument), sensor_notes_col])
           output$sensor_change_name <- renderUI({
-            selectizeInput("sensor_change_name", label = "Observer name", choices = select_data$recorder, selected = sensors_data$instrument[nrow(sensors_data$instrument), "observer"])
+            selectizeInput(ns("sensor_change_name"), label = "Observer name", choices = select_data$recorder, selected = sensors_data$instrument[nrow(sensors_data$instrument), "observer"])
           })
           updateActionButton(session, "submit_sensor_change", label = "Save edits")
         }
@@ -1665,10 +1665,10 @@ table.on("click", "tr", function() {
       for (i in 1:8) {
         if (i == sensor_index) {
           shinyjs::show(paste0("sensor", i, "_details"))
-          shinyjs::runjs(paste0('document.getElementById("sensor', i, '_show").style.color = "#00BFFF";'))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#00BFFF";', ns(paste0("sensor", i, "_show"))))
         } else {
           shinyjs::hide(paste0("sensor", i, "_details"))
-          shinyjs::runjs(paste0('document.getElementById("sensor', i, '_show").style.color = "#000000";'))
+          shinyjs::runjs(sprintf('document.getElementById("%s").style.color = "#000000";', ns(paste0("sensor", i, "_show"))))
         }
       }
       shinyjs::show("change_sensor")
@@ -1744,7 +1744,7 @@ table.on("click", "tr", function() {
         
         recorder <- select_data$recorder[names(select_data$recorder) == modify_record$observer]
         output$recorder <- renderUI({
-          selectizeInput("recorder", label = "Observer name", choices = select_data$recorder, selected = recorder)
+          selectizeInput(ns("recorder"), label = "Observer name", choices = select_data$recorder, selected = recorder)
         })
         make <- instruments_data$makes[instruments_data$makes$make == modify_record$make, "make_id"]
         updateSelectizeInput(session, "make", selected = make)
@@ -1760,11 +1760,11 @@ table.on("click", "tr", function() {
         updateDateInput(session, "date_retired", value = modify_record$date_retired)
         if (is.na(modify_record$retired_by)) {
           output$retired_by <- renderUI({
-            selectizeInput("retired_by", label = "Retired by", choices = select_data$recorder, options = list(onInitialize = I('function() { this.setValue(""); }')))
+            selectizeInput(ns("retired_by"), label = "Retired by", choices = select_data$recorder, options = list(onInitialize = I('function() { this.setValue(""); }')))
           })
         } else {
           output$retired_by <- renderUI({
-            selectizeInput("retired_by", label = "Retired by", choices = select_data$recorder, selected = modify_record$retired_by)
+            selectizeInput(ns("retired_by"), label = "Retired by", choices = select_data$recorder, selected = modify_record$retired_by)
           })
         }
         
@@ -1775,7 +1775,7 @@ table.on("click", "tr", function() {
       } else if (input$existing_serial_no == "New record") {
         updateTextInput(session, "serial_no", value = "")
         output$recorder <- renderUI({
-          selectizeInput("recorder", label = "Observer name", choices = select_data$recorder, selected = "")
+          selectizeInput(ns("recorder"), label = "Observer name", choices = select_data$recorder, selected = "")
         })
         updateSelectizeInput(session, "make", selected = "")
         updateSelectInput(session, "model", selected = "")
@@ -1783,7 +1783,7 @@ table.on("click", "tr", function() {
         updateTextInput(session, "asset_tag", value = "")
         updateCheckboxInput(session, "replaceableSensors", value = FALSE)
         output$retired_by <- renderUI({
-          selectizeInput("retired_by", label = "Retired by", choices = select_data$recorder, options = list(onInitialize = I('function() { this.setValue(""); }')))
+          selectizeInput(ns("retired_by"), label = "Retired by", choices = select_data$recorder, options = list(onInitialize = I('function() { this.setValue(""); }')))
         })
         updateDateInput(session, "date_retired", value = NA)
         updateActionButton(session, "save_cal_instrument", "Save new instrument")
@@ -1872,17 +1872,17 @@ table.on("click", "tr", function() {
       updateSelectizeInput(session, "existing_serial_no", choices = c("New record", instruments_data$sheet$serial_no), selected = input$existing_serial_no)
       updateTextInput(session, "serial_no", value = "")
       output$observer <- renderUI({
-        selectizeInput("observer", label = "Calibrator name", choices = select_data$recorder)
+        selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder)
       })
       output$ID_sensor_holder <- renderUI({
         div(
-          selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no)),
+          selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no)),
           style = "color: white; background-color: blue;"
         )
       })
       output$ID_handheld_meter <- renderUI({
         div(
-          selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no)),
+          selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no)),
           style = "color: white; background-color: green;"
         )
       })
@@ -2001,12 +2001,12 @@ table.on("click", "tr", function() {
         }
         # Reset the basic fields according to recovered info
         output$observer <- renderUI({
-          selectizeInput("observer", label = "Calibrator name", choices = select_data$recorder, selected = select_data$recorder[calibrations$incomplete_calibrations[restart_value, "observer"]])
+          selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder, selected = select_data$recorder[calibrations$incomplete_calibrations[restart_value, "observer"]])
         })
         shinyWidgets::updateAirDateInput(session, "obs_datetime", value = calibrations$incomplete_calibrations[restart_value, "obs_datetime"] - 7 * 60 * 60)
         output$ID_sensor_holder <- renderUI({
           div(
-            selectizeInput("ID_sensor_holder", label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no),
+            selectizeInput(ns("ID_sensor_holder"), label = "Logger/bulkhead/sonde serial #", choices = c("", instruments_data$others$serial_no),
                            selected =
                              if (!is.na(calibrations$incomplete_calibrations[calibrations$incomplete_calibrations$calibration_id == incomplete_ID , "id_sensor_holder"]))
                                instruments_data$others[instruments_data$others$instrument_id == calibrations$incomplete_calibrations[calibrations$incomplete_calibrations$calibration_id == incomplete_ID, "id_sensor_holder"], "serial_no"]
@@ -2016,7 +2016,7 @@ table.on("click", "tr", function() {
         })
         output$ID_handheld_meter <- renderUI({
           div(
-            selectizeInput("ID_handheld_meter", label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no),
+            selectizeInput(ns("ID_handheld_meter"), label = "Handheld serial # (if applicable)", choices = c("NA", instruments_data$handhelds$serial_no),
                            selected =
                              if (!is.na(calibrations$incomplete_calibrations[calibrations$incomplete_calibrations$calibration_id == incomplete_ID , "id_handheld_meter"]))
                                instruments_data$handhelds[instruments_data$handhelds$instrument_id == calibrations$incomplete_calibrations[calibrations$incomplete_calibrations$calibration_id == incomplete_ID, "id_handheld_meter"], "serial_no"]
@@ -2364,7 +2364,7 @@ table.on("click", "tr", function() {
             title = "Are you sure?",
             HTML(warnings),
             footer = tagList(
-              actionButton("ok_check_ph", "Yes, I'm sure"),
+              actionButton(ns("ok_check_ph"), "Yes, I'm sure"),
               modalButton("Cancel")
             )
           ))
@@ -2485,7 +2485,7 @@ table.on("click", "tr", function() {
             title = "Are you sure?",
             message,
             footer = tagList(
-              actionButton("ok_check_temp", "Yes, I'm sure"),
+              actionButton(ns("ok_check_temp"), "Yes, I'm sure"),
               modalButton("Cancel")
             )
           ))
@@ -2584,7 +2584,7 @@ table.on("click", "tr", function() {
             title = "Are you sure?",
             "ORP difference is > 5 mV; are you sure about your entries?",
             footer = tagList(
-              actionButton("ok_check_orp", "Yes, I'm sure"),
+              actionButton(ns("ok_check_orp"), "Yes, I'm sure"),
               modalButton("Cancel")
             )
           ))
@@ -2743,7 +2743,7 @@ table.on("click", "tr", function() {
               title = "Are you sure?",
               message,
               footer = tagList(
-                actionButton("ok_check_spc", "Yes, I'm sure"),
+                actionButton(ns("ok_check_spc"), "Yes, I'm sure"),
                 modalButton("Cancel")
               )
             ))
@@ -2891,7 +2891,7 @@ table.on("click", "tr", function() {
             title = "Are you sure?",
             "Your post-cal values are a bit off from the standard. Please check you entries before moving on.",
             footer = tagList(
-              actionButton("ok_check_turb", "Yes, I'm sure"),
+              actionButton(ns("ok_check_turb"), "Yes, I'm sure"),
               modalButton("Cancel")
             )
           ))
@@ -2996,7 +2996,7 @@ table.on("click", "tr", function() {
             title = "Are you sure?",
             message,
             footer = tagList(
-              actionButton("ok_check_DO", "Yes, I'm sure"),
+              actionButton(ns("ok_check_DO"), "Yes, I'm sure"),
               modalButton("Cancel")
             )
           ))
@@ -3088,7 +3088,7 @@ table.on("click", "tr", function() {
             title = "Are you sure?",
             "You indicated FALSE or 'Not Checked' for one of the values. Are you sure about that? Should you be using a different sensor?",
             footer = tagList(
-              actionButton("ok_check_depth", "Yes, I'm sure"),
+              actionButton(ns("ok_check_depth"), "Yes, I'm sure"),
               modalButton("Cancel")
             )
           ))
@@ -3176,7 +3176,7 @@ table.on("click", "tr", function() {
             "Finalized calibrations cannot be edited.",
             footer = tagList(
               modalButton("Cancel"),
-              actionButton("confirm_finalize", "OK")
+              actionButton(ns("confirm_finalize"), "OK")
             )
           )
         )
