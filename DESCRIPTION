@@ -61,6 +61,7 @@ Suggests:
     exifr,
     flextable,
     future,
+    htmlwidgets,
     imager,
     knitr,
     leaflet,

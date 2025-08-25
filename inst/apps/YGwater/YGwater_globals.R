@@ -173,10 +173,4 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2" # Default background color for all main panels
   )
-  
-  # Load the YG BS 5 theme
-  # app_theme <<- bslib::bs_theme(version = 5) %>%
-  # bs_add_rules(paste(readLines(system.file("apps/YGwater/www/css/YG_bs5.css", package = "YGwater")), collapse = "\n"))
-  
 }
-
