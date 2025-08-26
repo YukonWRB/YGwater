@@ -26,7 +26,7 @@ addTimeseries <- function(id) {
       moduleData$media <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT media_id, media_type FROM media_types")
       moduleData$aggregation_types <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT aggregation_type_id, aggregation_type FROM aggregation_types")
       moduleData$organizations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT organization_id, name FROM organizations")
-      moduleData$users = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM get_roles_with_select_on_locations();")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all users with select privileges on locations table
+      moduleData$users = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.get_shareable_principals_for('continuous.timeseries');")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
       
       moduleData$timeseries_display <- DBI::dbGetQuery(session$userData$AquaCache, "
         SELECT ts.timeseries_id, l.name AS location_name, sl.sub_location_name, p.param_name, m.media_type, at.aggregation_type, ts.z AS depth_height_m, ts.sensor_priority, o.name AS owner, ts.record_rate

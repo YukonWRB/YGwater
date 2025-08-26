@@ -988,6 +988,8 @@ $(document).keyup(function(event) {
         output$changePwd_ui <- renderUI(changePasswordUI("changePwd"))
         ui_loaded$changePwd <- TRUE
         changePassword("changePwd", language = languageSelection)
+      }
+    }
     if (input$navbar == "manageUsers") {
       if (!ui_loaded$manageUsers) {
         output$manageUsers_ui <- renderUI(manageUsersUI("manageUsers"))

@@ -154,9 +154,6 @@ imputeMissing <- function(id) {
     imputed_data <- reactiveVal(NULL)
     
     observeEvent(input$load, {
-      print(seleted_ts())
-      print(input$start)
-      print(input$end)
       req(selected_ts(), input$start, input$end)
       query <- sprintf(
         "SELECT datetime, value FROM continuous.measurements_continuous WHERE timeseries_id = %s AND datetime >= '%s' AND datetime <= '%s'",

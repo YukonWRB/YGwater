@@ -26,7 +26,7 @@ addSubLocation <- function(id, inputs) {
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, visibility_public, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations")
       moduleData$exist_sub_locs  = DBI::dbGetQuery(session$userData$AquaCache, "SELECT sub_location_id, location_id, sub_location_name, sub_location_name_fr, latitude, longitude, note, share_with FROM sub_locations;")
-      moduleData$users = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM get_roles_with_select_on_locations();")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all users with select privileges on locations table
+      moduleData$users = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.get_shareable_principals_for('public.sub_locations');")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
     }
     
     getModuleData()

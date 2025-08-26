@@ -317,7 +317,9 @@ contPlot <- function(id, language, windowDims, inputs) {
           ),
           # checkboxInput(ns("log_y"), "Log scale y-axis?"),
           uiOutput(ns("share_axes")),
-          checkboxInput(ns("historic_range"), tr("plot_hist_range", language$language))
+          checkboxInput(ns("historic_range"), 
+                        label = tr("plot_hist_range", language$language),
+                        value = TRUE)
         ),
         accordion(
           id = ns("accordion1"),
@@ -1162,7 +1164,6 @@ contPlot <- function(id, language, windowDims, inputs) {
                            selected = max(possible_years))
       
       if (input$plot_type == "over") {
-        print(input$param)
         if (!is.null(input$param) && length(input$param) == 1) {
           if (input$param %in% c(values$swe, values$snow_depth)) {
             updateDateRangeInput(session, "date_range",
