@@ -364,3 +364,12 @@ generic_name_col,DB column selection,name,name_fr
 sample_type_col,,sample_type,sample_type_fr
 sub_location_col,,sub_location_name,sub_location_name_fr
 aggregation_type_col,,aggregation_type,aggregation_type_fr
+changepwd_nav,nav panel title,Change password,Changer le mot de passe
+current_pw,label,Current password,Mot de passe actuel
+new_pw,label,New password,Nouveau mot de passe
+confirm_pw,label,Confirm new password,Confirmer le nouveau mot de passe
+pw_change_btn,button text,Change password,Modifier le mot de passe
+pw_change_success,modal text,Password updated successfully.,Mot de passe mis à jour avec succès.
+pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de passe ne correspondent pas.
+pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
+pw_change_title,modal title,Change password,Changer le mot de passe
