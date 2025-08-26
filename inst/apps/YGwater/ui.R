@@ -238,7 +238,12 @@ app_ui <- function(request) {
           nav_panel(title = "Add/modify field visit",
                     value = "visit",
                     uiOutput("visit_ui"))
-        }, 
+        },
+        if (!config$public) {
+          nav_panel(title = "Manage users",
+                    value = "manageUsers",
+                    uiOutput("manageUsers_ui"))
+        },
         if (!config$public) {
           nav_menu(title = "Equipment/instruments",
                    value = "equip",
