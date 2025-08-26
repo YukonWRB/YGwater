@@ -255,6 +255,11 @@ app_ui <- function(request) {
                              uiOutput("deploy_recover_ui"))
           )
         },
+        if (!config$public) {
+          nav_panel(title = uiOutput("changePwdNavTitle"),
+                    value = "changePwd",
+                    uiOutput("changePwd_ui"))
+        },
         # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a drop-down menu instead.
         nav_spacer(),
         # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover

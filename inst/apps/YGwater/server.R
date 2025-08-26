@@ -56,6 +56,7 @@ app_server <- function(input, output, session) {
       nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_show(id = "navbar", target = "visit")
       nav_show(id = "navbar", target = "appTasks")
+      nav_show(id = "navbar", target = "changePwd")
       if (isTRUE(session$userData$can_create_role)) {
         nav_show(id = "navbar", target = "manageUsers")
       }
@@ -69,7 +70,9 @@ app_server <- function(input, output, session) {
       nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_hide(id = "navbar", target = "visit")
       nav_hide(id = "navbar", target = "appTasks")
+      nav_hide(id = "navbar", target = "changePwd")
       nav_hide(id = "navbar", target = "manageUsers")
+
       if (logout) {
         shinyjs::hide("admin")
       }
@@ -156,8 +159,11 @@ app_server <- function(input, output, session) {
     ui_loaded$addImgs <- FALSE
     
     ui_loaded$manageNewsContent <- FALSE
-    ui_loaded$viewFeedback <- FALSE 
+    ui_loaded$viewFeedback <- FALSE
+    
+    ui_loaded$changePwd <- FALSE
     ui_loaded$manageUsers <- FALSE
+
     ui_loaded$visit <- FALSE
   }
   
@@ -278,6 +284,7 @@ app_server <- function(input, output, session) {
     output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
     output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
     output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
+    output$changePwdNavTitle <- renderUI({tr("changepwd_nav", languageSelection$language)})
     
     output$FODNavTitle <- renderUI({tr("fod_comments", languageSelection$language)})
     
@@ -647,7 +654,8 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discPlot", "contPlot", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "manageUsers")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers")) {
+
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -975,6 +983,11 @@ $(document).keyup(function(event) {
         viewFeedback("viewFeedback")
       }
     }
+    if (input$navbar == "changePwd") {
+      if (!ui_loaded$changePwd) {
+        output$changePwd_ui <- renderUI(changePasswordUI("changePwd"))
+        ui_loaded$changePwd <- TRUE
+        changePassword("changePwd", language = languageSelection)
     if (input$navbar == "manageUsers") {
       if (!ui_loaded$manageUsers) {
         output$manageUsers_ui <- renderUI(manageUsersUI("manageUsers"))
