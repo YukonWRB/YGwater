@@ -73,105 +73,105 @@ calUI <- function(id) {
             sidebarPanel(
               selectizeInput(ns("selection"), label = "Select a parameter", choices = c("Basic calibration info", "Temperature calibration", "Conductivity calibration", "pH calibration", "ORP calibration", "Turbidity calibration", "DO calibration", "Depth calibration")),
               conditionalPanel(ns = ns, 
-                condition = "input.selection == 'Basic calibration info'",
-                uiOutput(ns("observer")),
-                shinyWidgets::airDatepickerInput(ns("obs_datetime"),
-                                                 label = "Calibration date/time (modify with the menu only)",
-                                                 value = .POSIXct(Sys.time(), tz = "MST"),
-                                                 range = FALSE,
-                                                 multiple = FALSE,
-                                                 timepicker = TRUE,
-                                                 maxDate = Sys.Date() + 1,
-                                                 startView = Sys.Date(),
-                                                 update_on = "change",
-                                                 timepickerOpts = shinyWidgets::timepickerOptions(minutesStep = 15,
-                                                                                                  timeFormat = "HH:mm")
-                ),
-                textOutput(ns("instrument_reminder")),
-                uiOutput(ns("ID_sensor_holder")),
-                uiOutput(ns("ID_handheld_meter")),
-                textInput(ns("calibration_purpose"), "Calibration purpose", value = ""),
-                actionButton(ns("save_basic_info"), "Save this parameter info"),
+                               condition = "input.selection == 'Basic calibration info'",
+                               uiOutput(ns("observer")),
+                               shinyWidgets::airDatepickerInput(ns("obs_datetime"),
+                                                                label = "Calibration date/time (modify with the menu only)",
+                                                                value = .POSIXct(Sys.time(), tz = "MST"),
+                                                                range = FALSE,
+                                                                multiple = FALSE,
+                                                                timepicker = TRUE,
+                                                                maxDate = Sys.Date() + 1,
+                                                                startView = Sys.Date(),
+                                                                update_on = "change",
+                                                                timepickerOpts = shinyWidgets::timepickerOptions(minutesStep = 15,
+                                                                                                                 timeFormat = "HH:mm")
+                               ),
+                               textOutput(ns("instrument_reminder")),
+                               uiOutput(ns("ID_sensor_holder")),
+                               uiOutput(ns("ID_handheld_meter")),
+                               textInput(ns("calibration_purpose"), "Calibration purpose", value = ""),
+                               actionButton(ns("save_basic_info"), "Save this parameter info"),
               ),
               conditionalPanel(ns = ns, 
-                condition = "input.selection == 'pH calibration'",
-                numericInput(ns("ph1_std"), label = "Low pH solution value", value = 4),
-                numericInput(ns("ph2_std"), label = "Neutral pH solution value", value = 7),
-                numericInput(ns("ph3_std"), label = "High pH solution value", value = 10),
-                numericInput(ns("ph1_pre_val"), label = "pH 4 Pre-Cal Value", value = NA),
-                numericInput(ns("ph2_pre_val"), label = "pH 7 Pre-Cal Value", value = NA),
-                numericInput(ns("ph3_pre_val"), label = "pH 10 Pre-Cal Value", value = NA),
-                numericInput(ns("ph1_mv"), label = "pH 4 mV", value = NA),
-                numericInput(ns("ph2_mv"), label = "pH 7 mV", value = NA),
-                numericInput(ns("ph3_mv"), label = "pH 10 mV", value = NA),
-                actionButton(ns("show_post_ph"), "Show post-cal fields"),
-                numericInput(ns("ph1_post_val"), label = "pH 4 Post-Cal Value", value = 4),
-                numericInput(ns("ph2_post_val"), label = "pH 7 Post-Cal Value", value = 7),
-                numericInput(ns("ph3_post_val"), label = "pH 10 Post-Cal Value", value = 10),
-                actionButton(ns("save_cal_ph"), "Save this sheet"),
-                actionButton(ns("delete_ph"), "Delete this sheet")
+                               condition = "input.selection == 'pH calibration'",
+                               numericInput(ns("ph1_std"), label = "Low pH solution value", value = 4),
+                               numericInput(ns("ph2_std"), label = "Neutral pH solution value", value = 7),
+                               numericInput(ns("ph3_std"), label = "High pH solution value", value = 10),
+                               numericInput(ns("ph1_pre_val"), label = "pH 4 Pre-Cal Value", value = NA),
+                               numericInput(ns("ph2_pre_val"), label = "pH 7 Pre-Cal Value", value = NA),
+                               numericInput(ns("ph3_pre_val"), label = "pH 10 Pre-Cal Value", value = NA),
+                               numericInput(ns("ph1_mv"), label = "pH 4 mV", value = NA),
+                               numericInput(ns("ph2_mv"), label = "pH 7 mV", value = NA),
+                               numericInput(ns("ph3_mv"), label = "pH 10 mV", value = NA),
+                               actionButton(ns("show_post_ph"), "Show post-cal fields"),
+                               numericInput(ns("ph1_post_val"), label = "pH 4 Post-Cal Value", value = 4),
+                               numericInput(ns("ph2_post_val"), label = "pH 7 Post-Cal Value", value = 7),
+                               numericInput(ns("ph3_post_val"), label = "pH 10 Post-Cal Value", value = 10),
+                               actionButton(ns("save_cal_ph"), "Save this sheet"),
+                               actionButton(ns("delete_ph"), "Delete this sheet")
               ),
               conditionalPanel(ns = ns, 
-                condition = "input.selection == 'Temperature calibration'",
-                textInput(ns("temp_reference_desc"), label = "Temp Reference Type", value = "Lab thermometer"),
-                numericInput(ns("temp_reference"), label = "Reference Temp", value = NA),
-                numericInput(ns("temp_observed"), label = "Sensor Temp", value = NA),
-                actionButton(ns("save_cal_temp"), "Save this sheet"),
-                actionButton(ns("delete_temp"), "Delete this sheet")
+                               condition = "input.selection == 'Temperature calibration'",
+                               textInput(ns("temp_reference_desc"), label = "Temp Reference Type", value = "Lab thermometer"),
+                               numericInput(ns("temp_reference"), label = "Reference Temp", value = NA),
+                               numericInput(ns("temp_observed"), label = "Sensor Temp", value = NA),
+                               actionButton(ns("save_cal_temp"), "Save this sheet"),
+                               actionButton(ns("delete_temp"), "Delete this sheet")
               ),
               conditionalPanel(ns = ns, 
-                condition = "input.selection == 'Conductivity calibration'",
-                numericInput(ns("spc1_std"), label = "SpC Low-Range Standard", value = 0),
-                numericInput(ns("spc2_std"), label = "SpC High-Range Standard", value = 1413),
-                checkboxInput(ns("spc_or_not"), "Enter non-specific conductivity instead?", value = FALSE),
-                numericInput(ns("spc1_pre"), label = "SpC Low-Range Pre-Cal Value", value = NA),
-                numericInput(ns("spc2_pre"), label = "SpC High-Range Pre-Cal Value", value = NA),
-                actionButton(ns("show_post_spc"), "Show post-cal fields"),
-                numericInput(ns("spc1_post"), label = "SpC Low-Range Post-Cal Value", value = 0),
-                numericInput(ns("spc2_post"), label = "SpC High-Range Post-Cal Value", value = 1413),
-                actionButton(ns("save_cal_spc"), "Save this sheet"),
-                actionButton(ns("delete_spc"), "Delete this sheet")
+                               condition = "input.selection == 'Conductivity calibration'",
+                               numericInput(ns("spc1_std"), label = "SpC Low-Range Standard", value = 0),
+                               numericInput(ns("spc2_std"), label = "SpC High-Range Standard", value = 1413),
+                               checkboxInput(ns("spc_or_not"), "Enter non-specific conductivity instead?", value = FALSE),
+                               numericInput(ns("spc1_pre"), label = "SpC Low-Range Pre-Cal Value", value = NA),
+                               numericInput(ns("spc2_pre"), label = "SpC High-Range Pre-Cal Value", value = NA),
+                               actionButton(ns("show_post_spc"), "Show post-cal fields"),
+                               numericInput(ns("spc1_post"), label = "SpC Low-Range Post-Cal Value", value = 0),
+                               numericInput(ns("spc2_post"), label = "SpC High-Range Post-Cal Value", value = 1413),
+                               actionButton(ns("save_cal_spc"), "Save this sheet"),
+                               actionButton(ns("delete_spc"), "Delete this sheet")
               ),
               conditionalPanel(ns = ns, 
-                condition = "input.selection == 'ORP calibration'",
-                numericInput(ns("orp_std"), label = "ORP Standard solution mV", value = NA),
-                numericInput(ns("orp_pre_mv"), label = "ORP mV Pre-Cal Value", value = NA),
-                actionButton(ns("show_post_orp"), "Show post-cal fields"),
-                numericInput(ns("orp_post_mv"), label = "ORP mV Post-Cal Value", value = NA),
-                actionButton(ns("save_cal_orp"), "Save this sheet"),
-                actionButton(ns("delete_orp"), "Delete this sheet")
+                               condition = "input.selection == 'ORP calibration'",
+                               numericInput(ns("orp_std"), label = "ORP Standard solution mV", value = NA),
+                               numericInput(ns("orp_pre_mv"), label = "ORP mV Pre-Cal Value", value = NA),
+                               actionButton(ns("show_post_orp"), "Show post-cal fields"),
+                               numericInput(ns("orp_post_mv"), label = "ORP mV Post-Cal Value", value = NA),
+                               actionButton(ns("save_cal_orp"), "Save this sheet"),
+                               actionButton(ns("delete_orp"), "Delete this sheet")
               ),
               conditionalPanel(ns = ns, 
-                condition = "input.selection == 'Turbidity calibration'",
-                numericInput(ns("turb1_std"), label = "Low Turb Standard Value", value = 0),
-                numericInput(ns("turb2_std"), label = "High Turb Standard Value", value = 124),
-                numericInput(ns("turb1_pre"), label = "Low Turb Pre-cal Value", value = NA),
-                numericInput(ns("turb2_pre"), label = "High Turb Pre-cal Value", value = NA),
-                actionButton(ns("show_post_turb"), "Show post-cal fields"),
-                numericInput(ns("turb1_post"), label = "Low Turb Post-cal Value", value = 0),
-                numericInput(ns("turb2_post"), label = "High Turb Post-cal Value", value = 124),
-                actionButton(ns("save_cal_turb"), "Save this sheet"),
-                actionButton(ns("delete_turb"), "Delete this sheet")
+                               condition = "input.selection == 'Turbidity calibration'",
+                               numericInput(ns("turb1_std"), label = "Low Turb Standard Value", value = 0),
+                               numericInput(ns("turb2_std"), label = "High Turb Standard Value", value = 124),
+                               numericInput(ns("turb1_pre"), label = "Low Turb Pre-cal Value", value = NA),
+                               numericInput(ns("turb2_pre"), label = "High Turb Pre-cal Value", value = NA),
+                               actionButton(ns("show_post_turb"), "Show post-cal fields"),
+                               numericInput(ns("turb1_post"), label = "Low Turb Post-cal Value", value = 0),
+                               numericInput(ns("turb2_post"), label = "High Turb Post-cal Value", value = 124),
+                               actionButton(ns("save_cal_turb"), "Save this sheet"),
+                               actionButton(ns("delete_turb"), "Delete this sheet")
               ),
               conditionalPanel(ns = ns, 
-                condition = "input.selection == 'DO calibration'",
-                numericInput(ns("baro_press_pre"), label = "Baro Pressure Pre-Cal (mmHg)", value = NA),
-                numericInput(ns("baro_press_post"), label = "Baro Pressure Post-Cal (mmHg)", value = NA),
-                numericInput(ns("do_pre_prct"), label = "DO Pre-Cal % LOCAL", value = NA),
-                numericInput(ns("do_post_prct"), label = "DO Post-Cal % LOCAL", value = NA),
-                actionButton(ns("calc_abs_do"), "Calculate mg/l values"),
-                actionButton(ns("calc_prct_do"), "Calculate % values"),
-                numericInput(ns("do_pre"), label = "DO Pre-Cal mg/l", value = NA),
-                numericInput(ns("do_post"), label = "DO Post-Cal mg/l", value = NA),
-                actionButton(ns("save_cal_do"), "Save this sheet"),
-                actionButton(ns("delete_do"), "Delete this sheet")
+                               condition = "input.selection == 'DO calibration'",
+                               numericInput(ns("baro_press_pre"), label = "Baro Pressure Pre-Cal (mmHg)", value = NA),
+                               numericInput(ns("baro_press_post"), label = "Baro Pressure Post-Cal (mmHg)", value = NA),
+                               numericInput(ns("do_pre_prct"), label = "DO Pre-Cal % LOCAL", value = NA),
+                               numericInput(ns("do_post_prct"), label = "DO Post-Cal % LOCAL", value = NA),
+                               actionButton(ns("calc_abs_do"), "Calculate mg/l values"),
+                               actionButton(ns("calc_prct_do"), "Calculate % values"),
+                               numericInput(ns("do_pre"), label = "DO Pre-Cal mg/l", value = NA),
+                               numericInput(ns("do_post"), label = "DO Post-Cal mg/l", value = NA),
+                               actionButton(ns("save_cal_do"), "Save this sheet"),
+                               actionButton(ns("delete_do"), "Delete this sheet")
               ),
               conditionalPanel(ns = ns, 
-                condition = "input.selection == 'Depth calibration'",
-                radioButtons(inputId = ns("depth_check_ok"), label = "Depth sensor output near 0 or as expected in air?", choiceNames = c("FALSE", "TRUE"), choiceValues = c("FALSE", "TRUE")),
-                radioButtons(inputId = ns("depth_changes_ok"), label = "Depth sensor output changes as expected with depth?", choiceNames = c("Not Checked", "FALSE", "TRUE"), choiceValues = c("Not Checked", "FALSE", "TRUE")),
-                actionButton(ns("save_cal_depth"), "Save this sheet"),
-                actionButton(ns("delete_depth"), "Delete this sheet")
+                               condition = "input.selection == 'Depth calibration'",
+                               radioButtons(inputId = ns("depth_check_ok"), label = "Depth sensor output near 0 or as expected in air?", choiceNames = c("FALSE", "TRUE"), choiceValues = c("FALSE", "TRUE")),
+                               radioButtons(inputId = ns("depth_changes_ok"), label = "Depth sensor output changes as expected with depth?", choiceNames = c("Not Checked", "FALSE", "TRUE"), choiceValues = c("Not Checked", "FALSE", "TRUE")),
+                               actionButton(ns("save_cal_depth"), "Save this sheet"),
+                               actionButton(ns("delete_depth"), "Delete this sheet")
               ),
               actionButton(ns("submit_btn"), "Finalize + submit calibration", style = c("margin-top: 10px;"))
             ),
@@ -344,7 +344,7 @@ table.on("click", "tr", function() {
     instruments_data <- reactiveValues()
     select_data <- reactiveValues()  # Holds data to populate select menus
     sensors_data <- reactiveValues(datetime = .POSIXct(Sys.time(), tz = "UTC")) #get the time here so that multiple maintenance events are on same line
-
+    
     send_table <- reactiveValues()
     messages <- reactiveValues()
     complete <- reactiveValues(basic = FALSE,
@@ -477,10 +477,10 @@ table.on("click", "tr", function() {
         
         # look for a cookie with the last observer ID
         shinyjs::runjs(sprintf(
-      "var lastObserverId = Cookies.get('last_observer_id');
+          "var lastObserverId = Cookies.get('last_observer_id');
       Shiny.setInputValue('%s', lastObserverId);",
-      ns('last_observer_id')
-    ))
+          ns('last_observer_id')
+        ))
         
         output$observer <- renderUI({
           selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder)
@@ -517,7 +517,7 @@ table.on("click", "tr", function() {
         if (nrow(incomplete_calibrations) > 0) {
           alert(title = "Incomplete calibrations found!", text = "Go to to the page 'View unfinished calibrations' to restart or delete them.")
           incomplete_calibrations <- dplyr::left_join(incomplete_calibrations, instruments_data$observers[, c("observer_id", "observer_string")], by = dplyr::join_by(observer == observer_id))
-          complete$incomplete <- data.frame("Index" = seq(1, nrow(incomplete_calibrations)),
+          complete$incomplete <- data.frame("Index" = seq_len(nrow(incomplete_calibrations)),
                                             "Calibrator" = as.vector(incomplete_calibrations$observer_string),
                                             "Date/time UTC" = incomplete_calibrations$obs_datetime,
                                             "Purpose" = incomplete_calibrations$purpose,
@@ -536,76 +536,22 @@ table.on("click", "tr", function() {
     
     # Modals and observers to add new observers, instrument makes, models, types, and sensor types to the DB ########################################
     ## Add new observers  ################################################
-    observeEvent(input$observer, {
-      if (input$observer == "new") {
-        # Add a new observer using a modal dialog
-        showModal(modalDialog(title = "Add new observer",
-                              textInput(ns("new_observer_first"), "First name"),
-                              textInput(ns("new_observer_last"), "Last name"),
-                              textInput(ns("new_observer_org"), "Organization"),
-                              actionButton(ns("add_new_observer"), "Add new observer")
-        ))
-      } else { # If an existing observer is selected, save the observer ID to a cookie
-        selected_id <- input$observer
-        shinyjs::runjs(paste0("Cookies.set('last_observer_id', '", selected_id, "', { expires: 30 });"))
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent(input$recorder, {
-      if (input$recorder == "new") {
-        # Add a new observer using a modal dialog
-        showModal(modalDialog(title = "Add new observer",
-                              textInput(ns("new_observer_first"), "First name"),
-                              textInput(ns("new_observer_last"), "Last name"),
-                              textInput(ns("new_observer_org"), "Organization"),
-                              actionButton(ns("add_new_observer"), "Add new observer")
-        ))
-      } else { # If an existing observer is selected, save the observer ID to a cookie
-        selected_id <- input$recorder
-        shinyjs::runjs(paste0("Cookies.set('last_observer_id', '", selected_id, "', { expires: 30 });"))
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent(input$retired_by, {
-      if (input$retired_by == "new") {
-        # Add a new observer using a modal dialog
-        showModal(modalDialog(title = "Add new observer",
-                              textInput(ns("new_observer_first"), "First name"),
-                              textInput(ns("new_observer_last"), "Last name"),
-                              textInput(ns("new_observer_org"), "Organization"),
-                              actionButton(ns("add_new_observer"), "Add new observer")
-        ))
-      } else { # If an existing observer is selected, save the observer ID to a cookie
-        selected_id <- input$retired_by
-        shinyjs::runjs(paste0("Cookies.set('last_observer_id', '", selected_id, "', { expires: 30 });"))
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent(input$sensor_change_name, {
-      if (input$sensor_change_name == "new") {
-        # Add a new observer using a modal dialog
-        showModal(modalDialog(title = "Add new observer",
-                              textInput(ns("new_observer_first"), "First name"),
-                              textInput(ns("new_observer_last"), "Last name"),
-                              textInput(ns("new_observer_org"), "Organization"),
-                              actionButton(ns("add_new_observer"), "Add new observer")
-        ))
-      } else { # If an existing observer is selected, save the observer ID to a cookie
-        selected_id <- input$sensor_change_name
-        shinyjs::runjs(paste0("Cookies.set('last_observer_id', '", selected_id, "', { expires: 30 });"))
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent(input$add_sensor_name, {
-      if (input$add_sensor_name == "new") {
-        # Add a new observer using a modal dialog
-        showModal(modalDialog(title = "Add new observer",
-                              textInput(ns("new_observer_first"), "First name"),
-                              textInput(ns("new_observer_last"), "Last name"),
-                              textInput(ns("new_observer_org"), "Organization"),
-                              actionButton(ns("add_new_observer"), "Add new observer")
-        ))
-      } else { # If an existing observer is selected, save the observer ID to a cookie
-        selected_id <- input$add_sensor_name
-        shinyjs::runjs(paste0("Cookies.set('last_observer_id', '", selected_id, "', { expires: 30 });"))
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    observer_inputs <- c("observer", "recorder", "retired_by", "sensor_change_name", "add_sensor_name")
+    lapply(observer_inputs, function(inp) {
+      observeEvent(input[[inp]], {
+        if (input[[inp]] == "new") {
+          showModal(modalDialog(title = "Add new observer",
+                                textInput(ns("new_observer_first"), "First name"),
+                                textInput(ns("new_observer_last"), "Last name"),
+                                textInput(ns("new_observer_org"), "Organization"),
+                                actionButton(ns("add_new_observer"), "Add new observer")
+          ))
+        } else {
+          selected_id <- input[[inp]]
+          shinyjs::runjs(paste0("Cookies.set('last_observer_id', '", selected_id, "', { expires: 30 });"))
+        }
+      }, ignoreInit = TRUE, ignoreNULL = TRUE)
+    })
     
     observeEvent(input$add_new_observer, {
       # Ensure that a first and last name are entered
@@ -711,26 +657,6 @@ table.on("click", "tr", function() {
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     ## Add new sensor type ################################################
-    observeEvent(input$change_sensor, {
-      if (input$change_sensor == "new") {
-        # Add a new sensor type using a modal dialog
-        showModal(modalDialog(title = "Add new sensor type",
-                              textInput(ns("new_sensor_type"), "Sensor type"),
-                              textInput(ns("new_sensor_desc"), "Description"),
-                              actionButton(ns("add_new_sensor_type"), "Add new sensor type")
-        ))
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
-    observeEvent(input$add_sensor_type_dropdown, {
-      if (input$add_sensor_type_dropdown == "new") {
-        # Add a new sensor type using a modal dialog
-        showModal(modalDialog(title = "Add new sensor type",
-                              textInput(ns("new_sensor_type"), "Sensor type"),
-                              textInput(ns("new_sensor_desc"), "Description"),
-                              actionButton(ns("add_new_sensor_type"), "Add new sensor type")
-        ))
-      }
-    }, ignoreInit = TRUE, ignoreNULL = TRUE)
     observeEvent(input$add_new_sensor_type, {
       # Ensure that a sensor type is entered
       if (input$new_sensor_type == "") {
@@ -835,8 +761,12 @@ table.on("click", "tr", function() {
     })
     
     observeEvent(input$selection, {
+      if (input$selection != "Basic calibration info" & !complete$basic) {
+        alert(title = "Stop! You must save basic info first or load an incomplete calibration!", type = "error", timer = 2000)
+        updateSelectizeInput(session, "selection", selected = "Basic calibration info")
+        return()
+      }
       if (input$selection == "Basic calibration info") {
-        
         shinyjs::show("calibration_instruments_table")
       } else {
         shinyjs::hide("calibration_instruments_table")
@@ -1449,22 +1379,32 @@ table.on("click", "tr", function() {
     }, ignoreInit = TRUE)
     
     observeEvent(input$add_sensor_type_dropdown, {
+      if (input$add_sensor_type_dropdown == "new") {
+        showModal(modalDialog(title = "Add new sensor type",
+                              textInput(ns("new_sensor_type"), "Sensor type"),
+                              textInput(ns("new_sensor_desc"), "Description"),
+                              actionButton(ns("add_new_sensor_type"), "Add new sensor type")
+        ))
+      }
       shinyjs::show("add_sensor_slot")
       shinyjs::show("new_sensor_serial")
       shinyjs::show("add_sensor_note")
       shinyjs::show("add_sensor_name")
-    }, ignoreInit = TRUE)
-    
-    ## Add sensor to a slot in the instrument ############################
-    # Populate the sensor serial numbers dropdown based on the sensor type selected, in case it's a existing sensor
-    observeEvent(input$add_sensor_type_dropdown, {
       serial_choices <- sensors_data$sensors[sensors_data$sensors$sensor_type == input$add_sensor_type_dropdown, "sensor_serial"]
       updateSelectizeInput(session, "new_sensor_serial", choices = serial_choices)
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     observeEvent(input$change_sensor, {
-      serial_choices <- sensors_data$sensors[sensors_data$sensors$sensor_type == input$change_sensor, "sensor_serial"]
-      updateSelectizeInput(session, "add_sensor_serial", choices = serial_choices)
+      if (input$change_sensor == "new") {
+        showModal(modalDialog(title = "Add new sensor type",
+                              textInput(ns("new_sensor_type"), "Sensor type"),
+                              textInput(ns("new_sensor_desc"), "Description"),
+                              actionButton(ns("add_new_sensor_type"), "Add new sensor type")
+        ))
+      } else {
+        serial_choices <- sensors_data$sensors[sensors_data$sensors$sensor_type == input$change_sensor, "sensor_serial"]
+        updateSelectizeInput(session, "add_sensor_serial", choices = serial_choices)
+      }
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     ## If the user inputs a non-existent sensor, add it ############################
@@ -1832,13 +1772,13 @@ table.on("click", "tr", function() {
           alert("Unfilled mandatory entries!", text = "You need to provide your name, instrument make, model, type, and serial number of minimum 2 characters.", type = "error")
         } else {
           DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE instruments SET observer = ", input$recorder,
-                                      ", obs_datetime = '", as.character(.POSIXct(Sys.time(), tz = "UTC")),
-                                      "', make = ", input$make,
-                                      ", model = ", input$model,
-                                      ", type = ", input$type,
-                                      ", owner = '", input$instrument_owner,
-                                      "', holds_replaceable_sensors = ", input$replaceableSensors,
-                                      " WHERE serial_no = '", input$existing_serial_no, "'"))
+                                                            ", obs_datetime = '", as.character(.POSIXct(Sys.time(), tz = "UTC")),
+                                                            "', make = ", input$make,
+                                                            ", model = ", input$model,
+                                                            ", type = ", input$type,
+                                                            ", owner = '", input$instrument_owner,
+                                                            "', holds_replaceable_sensors = ", input$replaceableSensors,
+                                                            " WHERE serial_no = '", input$existing_serial_no, "'"))
           
           if (nchar(input$asset_tag) > 0) {
             DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE instruments SET asset_tag = '", gsub("[^[:alnum:]]", "", input$asset_tag), "' WHERE serial_no = '", input$existing_serial_no, "'"))
@@ -2059,7 +1999,7 @@ table.on("click", "tr", function() {
         incomplete_calibrations <- calibrations$calibrations[calibrations$calibrations$complete == FALSE, ] # find out if any calibrations are labelled as incomplete
         calibrations$incomplete_calibrations <- incomplete_calibrations
         
-        complete$incomplete <- data.frame("Index" = seq(1, nrow(incomplete_calibrations)),
+        complete$incomplete <- data.frame("Index" = seq_len(nrow(incomplete_calibrations)),
                                           "Calibrator" = as.vector(incomplete_calibrations$observer_string),
                                           "Date/time UTC" = incomplete_calibrations$obs_datetime,
                                           "Purpose" = incomplete_calibrations$purpose,
@@ -2190,14 +2130,6 @@ table.on("click", "tr", function() {
     
     
     # Calibration data saving, updating, and deleting #########################################################
-    # Chastise the user if they try to move on without saving basic info
-    observeEvent(input$selection, {
-      if (input$selection != "Basic calibration info" & !complete$basic) {
-        alert(title = "Stop! You must save basic info first or load an incomplete calibration!", type = "error", timer = 2000)
-        updateSelectizeInput(session, "selection", selected = "Basic calibration info")
-      }
-    })
-    
     ## Save basic info ##############################################################################
     observeEvent(input$save_basic_info, {
       if (nchar(input$ID_sensor_holder) < 1) {
@@ -2390,18 +2322,18 @@ table.on("click", "tr", function() {
           shinyjs::show("delete_ph")
         } else {
           DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE calibrate_ph SET ph1_std = ", input$ph1_std,
-                                      ", ph2_std = ", input$ph2_std,
-                                      ", ph3_std = ", input$ph3_std,
-                                      ", ph1_pre_val = ", input$ph1_pre_val,
-                                      ", ph2_pre_val = ", input$ph2_pre_val,
-                                      ", ph3_pre_val = ", input$ph3_pre_val,
-                                      ", ph1_mv = ", input$ph1_mv,
-                                      ", ph2_mv = ", input$ph2_mv,
-                                      ", ph3_mv = ", input$ph3_mv,
-                                      ", ph1_post_val = ", input$ph1_post_val,
-                                      ", ph2_post_val = ", input$ph2_post_val,
-                                      ", ph3_post_val = ", input$ph3_post_val,
-                                      " WHERE calibration_id = ", calibration_data$next_id))
+                                                            ", ph2_std = ", input$ph2_std,
+                                                            ", ph3_std = ", input$ph3_std,
+                                                            ", ph1_pre_val = ", input$ph1_pre_val,
+                                                            ", ph2_pre_val = ", input$ph2_pre_val,
+                                                            ", ph3_pre_val = ", input$ph3_pre_val,
+                                                            ", ph1_mv = ", input$ph1_mv,
+                                                            ", ph2_mv = ", input$ph2_mv,
+                                                            ", ph3_mv = ", input$ph3_mv,
+                                                            ", ph1_post_val = ", input$ph1_post_val,
+                                                            ", ph2_post_val = ", input$ph2_post_val,
+                                                            ", ph3_post_val = ", input$ph3_post_val,
+                                                            " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("pH calibration" %in% send_table$saved[ ,1] | "pH calibration" %in% send_table$restarted_cal[ ,1]) {
           alert(title = "pH calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
@@ -2501,9 +2433,9 @@ table.on("click", "tr", function() {
           shinyjs::show("delete_temp")
         } else {
           DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE calibrate_temperature SET temp_reference_desc = '", input$temp_reference_desc,
-                                      "', temp_reference = ", input$temp_reference,
-                                      ", temp_observed = ", input$temp_observed,
-                                      " WHERE calibration_id = ", calibration_data$next_id))
+                                                            "', temp_reference = ", input$temp_reference,
+                                                            ", temp_observed = ", input$temp_observed,
+                                                            " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("Temperature calibration" %in% send_table$saved[ ,1] | "Temperature calibration" %in% send_table$restarted_cal[ ,1]) {
           alert(title = "Temperature calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
@@ -2600,9 +2532,9 @@ table.on("click", "tr", function() {
           shinyjs::show("delete_orp")
         } else {
           DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE calibrate_orp SET orp_std = ", input$orp_std,
-                                      ", orp_pre_mv = ", input$orp_pre_mv,
-                                      ", orp_post_mv = ", input$orp_post_mv,
-                                      " WHERE calibration_id = ", calibration_data$next_id))
+                                                            ", orp_pre_mv = ", input$orp_pre_mv,
+                                                            ", orp_post_mv = ", input$orp_post_mv,
+                                                            " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("ORP calibration" %in% send_table$saved[ ,1] | "ORP calibration" %in% send_table$restarted_cal[ ,1]) {
           alert(title = "ORP calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
@@ -2784,12 +2716,12 @@ table.on("click", "tr", function() {
         } else {
           tryCatch({
             DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE calibrate_specific_conductance SET spc1_std = ", input$spc1_std,
-                                        ", spc1_pre = ", if (input$spc_or_not) input$spc1_pre/(1 + 0.02*(calibration_data$temp$temp_reference - 25)) else input$spc1_pre,
-                                        ", spc1_post = ", if (input$spc_or_not) input$spc1_post/(1 + 0.02*(calibration_data$temp$temp_reference - 25)) else input$spc1_post,
-                                        ", spc2_std = ", input$spc2_std,
-                                        ", spc2_pre = ", if (input$spc_or_not) input$spc2_pre/(1 + 0.02*(calibration_data$temp$temp_reference - 25)) else input$spc2_pre,
-                                        ", spc2_post = ", if (input$spc_or_not) input$spc2_post/(1 + 0.02*(calibration_data$temp$temp_reference - 25)) else input$spc2_post,
-                                        " WHERE calibration_id = ", calibration_data$next_id))
+                                                              ", spc1_pre = ", if (input$spc_or_not) input$spc1_pre/(1 + 0.02*(calibration_data$temp$temp_reference - 25)) else input$spc1_pre,
+                                                              ", spc1_post = ", if (input$spc_or_not) input$spc1_post/(1 + 0.02*(calibration_data$temp$temp_reference - 25)) else input$spc1_post,
+                                                              ", spc2_std = ", input$spc2_std,
+                                                              ", spc2_pre = ", if (input$spc_or_not) input$spc2_pre/(1 + 0.02*(calibration_data$temp$temp_reference - 25)) else input$spc2_pre,
+                                                              ", spc2_post = ", if (input$spc_or_not) input$spc2_post/(1 + 0.02*(calibration_data$temp$temp_reference - 25)) else input$spc2_post,
+                                                              " WHERE calibration_id = ", calibration_data$next_id))
             
             if ("Conductivity calibration" %in% send_table$saved[ ,1] | "Conductivity calibration" %in% send_table$restarted_cal[ ,1]) {
               alert(title = "Conductivity calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
@@ -2910,12 +2842,12 @@ table.on("click", "tr", function() {
           shinyjs::show("delete_turb")
         } else {
           DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE calibrate_turbidity SET turb1_std = ", input$turb1_std,
-                                      ", turb1_pre = ", input$turb1_pre,
-                                      ", turb1_post = ", input$turb1_post,
-                                      ", turb2_std = ", input$turb2_std,
-                                      ", turb2_pre = ", input$turb2_pre,
-                                      ", turb2_post = ", input$turb2_post,
-                                      " WHERE calibration_id = ", calibration_data$next_id))
+                                                            ", turb1_pre = ", input$turb1_pre,
+                                                            ", turb1_post = ", input$turb1_post,
+                                                            ", turb2_std = ", input$turb2_std,
+                                                            ", turb2_pre = ", input$turb2_pre,
+                                                            ", turb2_post = ", input$turb2_post,
+                                                            " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("Turbidity calibration" %in% send_table$saved[ ,1] | "Turbidity calibration" %in% send_table$restarted_cal[ ,1]) {
           alert(title = "Turbidity calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
@@ -3014,10 +2946,10 @@ table.on("click", "tr", function() {
           shinyjs::show("delete_do")
         } else {
           DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE calibrate_dissolved_oxygen SET baro_press_pre = ", input$baro_press_pre,
-                                      ", baro_press_post = ", input$baro_press_post,
-                                      ", do_pre_mgl = ", input$do_pre,
-                                      ", do_post_mgl = ", input$do_post,
-                                      " WHERE calibration_id = ", calibration_data$next_id))
+                                                            ", baro_press_post = ", input$baro_press_post,
+                                                            ", do_pre_mgl = ", input$do_pre,
+                                                            ", do_post_mgl = ", input$do_post,
+                                                            " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("DO calibration" %in% send_table$saved[ ,1] | "DO calibration" %in% send_table$restarted_cal[ ,1]) {
           alert(title = "DO calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
@@ -3214,6 +3146,5 @@ table.on("click", "tr", function() {
       #Get the next ID in case user is calibrating/working in app again
       calibration_data$next_id <- NULL
     }, ignoreInit = TRUE)
-    
   }) # End of moduleServer
 }
