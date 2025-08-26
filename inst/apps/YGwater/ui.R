@@ -99,7 +99,8 @@ app_ui <- function(request) {
         id = "navbar",
         window_title = NULL,
         navbar_options = navbar_options(bg = "#244C5A",
-                                        collapsible = TRUE),
+                                        collapsible = TRUE,
+                                        style = "z-index:1002"), # Just above any leaflet possibilities which only go up to 1000
         fluid = TRUE,
         lang = "en",
         theme = NULL, # Theme is set earlier by css file referene in globals (THIS IS NOT WORKING)
