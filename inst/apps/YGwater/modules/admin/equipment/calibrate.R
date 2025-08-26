@@ -369,21 +369,21 @@ table.on("click", "tr", function() {
     shinyjs::hide("delete_depth")
     # Buttons to show sensor information
     shinyjs::hide("sensor1_show")
-    shinyjs::addClass(ns("sensor1_show"), "hidden")
+    shinyjs::addClass("sensor1_show", "hidden")
     shinyjs::hide("sensor2_show")
-    shinyjs::addClass(ns("sensor2_show"), "hidden")
+    shinyjs::addClass("sensor2_show", "hidden")
     shinyjs::hide("sensor3_show")
-    shinyjs::addClass(ns("sensor3_show"), "hidden")
+    shinyjs::addClass("sensor3_show", "hidden")
     shinyjs::hide("sensor4_show")
-    shinyjs::addClass(ns("sensor4_show"), "hidden")
+    shinyjs::addClass("sensor4_show", "hidden")
     shinyjs::hide("sensor5_show")
-    shinyjs::addClass(ns("sensor5_show"), "hidden")
+    shinyjs::addClass("sensor5_show", "hidden")
     shinyjs::hide("sensor6_show")
-    shinyjs::addClass(ns("sensor6_show"), "hidden")
+    shinyjs::addClass("sensor6_show", "hidden")
     shinyjs::hide("sensor7_show")
-    shinyjs::addClass(ns("sensor7_show"), "hidden")
+    shinyjs::addClass("sensor7_show", "hidden")
     shinyjs::hide("sensor8_show")
-    shinyjs::addClass(ns("sensor8_show"), "hidden")
+    shinyjs::addClass("sensor8_show", "hidden")
     shinyjs::hide("add_sensor_slot")
     shinyjs::hide("new_sensor_serial")
     shinyjs::hide("add_sensor_note")
@@ -477,8 +477,8 @@ table.on("click", "tr", function() {
         
         # look for a cookie with the last observer ID
         shinyjs::runjs(sprintf(
-      "var lastObserverId = Cookies.get('last_observer_id');\n"
-      "Shiny.setInputValue('%s', lastObserverId);",
+      "var lastObserverId = Cookies.get('last_observer_id');
+      Shiny.setInputValue('%s', lastObserverId);",
       ns('last_observer_id')
     ))
         
@@ -875,18 +875,18 @@ table.on("click", "tr", function() {
       })
     }
     reset_ph <- function() {
-      updateNumericInput(session, "ph1_std", label = "Low pH solution value", value = "4")
-      updateNumericInput(session, "ph2_std", label = "Neutral pH solution value", value = "7")
-      updateNumericInput(session, "ph3_std", label = "High pH solution value", value = "10")
+      updateNumericInput(session, "ph1_std", label = "Low pH solution value", value = 4)
+      updateNumericInput(session, "ph2_std", label = "Neutral pH solution value", value = 7)
+      updateNumericInput(session, "ph3_std", label = "High pH solution value", value = 10)
       updateNumericInput(session, "ph1_pre_val", label = "pH 4 Pre-Cal Value", value = NA)
       updateNumericInput(session, "ph2_pre_val", label = "pH 7 Pre-Cal Value", value = NA)
       updateNumericInput(session, "ph3_pre_val", label = "pH 10 Pre-Cal Value", value = NA)
-      updateNumericInput(session, "ph1_post_val", label = "pH 4 Post-Cal Value", value = "4")
-      updateNumericInput(session, "ph1_mv", label = "pH 4 Post-Cal mV", value = NA)
-      updateNumericInput(session, "ph2_post_val", label = "pH 7 Post-Cal Value", value = "7")
-      updateNumericInput(session, "ph2_mv", label = "pH 7 Post-Cal mV", value = NA)
-      updateNumericInput(session, "ph3_post_val", label = "pH 10 Post-Cal Value", value = "10")
-      updateNumericInput(session, "ph3_mv", label = "pH 10 Post-Cal mV", value = NA)
+      updateNumericInput(session, "ph1_post_val", label = "pH 4 Post-Cal Value", value = 4)
+      updateNumericInput(session, "ph1_mv", label = "pH 4 mV", value = NA)
+      updateNumericInput(session, "ph2_post_val", label = "pH 7 Post-Cal Value", value = 7)
+      updateNumericInput(session, "ph2_mv", label = "pH 7 mV", value = NA)
+      updateNumericInput(session, "ph3_post_val", label = "pH 10 Post-Cal Value", value = 10)
+      updateNumericInput(session, "ph3_mv", label = "pH 10 mV", value = NA)
       shinyjs::hide("delete_ph")
     }
     reset_temp <- function() {
@@ -1158,21 +1158,21 @@ table.on("click", "tr", function() {
         shinyjs::show("submit_btn")
         shinyjs::hide("load_sensors")
         shinyjs::hide("sensor1_show")
-        shinyjs::addClass(ns("sensor1_show"), "hidden")
+        shinyjs::addClass("sensor1_show", "hidden")
         shinyjs::hide("sensor2_show")
-        shinyjs::addClass(ns("sensor2_show"), "hidden")
+        shinyjs::addClass("sensor2_show", "hidden")
         shinyjs::hide("sensor3_show")
-        shinyjs::addClass(ns("sensor3_show"), "hidden")
+        shinyjs::addClass("sensor3_show", "hidden")
         shinyjs::hide("sensor4_show")
-        shinyjs::addClass(ns("sensor4_show"), "hidden")
+        shinyjs::addClass("sensor4_show", "hidden")
         shinyjs::hide("sensor5_show")
-        shinyjs::addClass(ns("sensor5_show"), "hidden")
+        shinyjs::addClass("sensor5_show", "hidden")
         shinyjs::hide("sensor6_show")
-        shinyjs::addClass(ns("sensor6_show"), "hidden")
+        shinyjs::addClass("sensor6_show", "hidden")
         shinyjs::hide("sensor7_show")
-        shinyjs::addClass(ns("sensor7_show"), "hidden")
+        shinyjs::addClass("sensor7_show", "hidden")
         shinyjs::hide("sensor8_show")
-        shinyjs::addClass(ns("sensor8_show"), "hidden")
+        shinyjs::addClass("sensor8_show", "hidden")
         shinyjs::hide("add_sensor_slot")
         shinyjs::hide("add_sensor_note")
         shinyjs::hide("sensor_change_note")
@@ -1198,21 +1198,21 @@ table.on("click", "tr", function() {
       } else if (input$first_selection == "Add/modify instruments") {
         shinyjs::hide("submit_btn")
         shinyjs::hide("sensor1_show")
-        shinyjs::addClass(ns("sensor1_show"), "hidden")
+        shinyjs::addClass("sensor1_show", "hidden")
         shinyjs::hide("sensor2_show")
-        shinyjs::addClass(ns("sensor2_show"), "hidden")
+        shinyjs::addClass("sensor2_show", "hidden")
         shinyjs::hide("sensor3_show")
-        shinyjs::addClass(ns("sensor3_show"), "hidden")
+        shinyjs::addClass("sensor3_show", "hidden")
         shinyjs::hide("sensor4_show")
-        shinyjs::addClass(ns("sensor4_show"), "hidden")
+        shinyjs::addClass("sensor4_show", "hidden")
         shinyjs::hide("sensor5_show")
-        shinyjs::addClass(ns("sensor5_show"), "hidden")
+        shinyjs::addClass("sensor5_show", "hidden")
         shinyjs::hide("sensor6_show")
-        shinyjs::addClass(ns("sensor6_show"), "hidden")
+        shinyjs::addClass("sensor6_show", "hidden")
         shinyjs::hide("sensor7_show")
-        shinyjs::addClass(ns("sensor7_show"), "hidden")
+        shinyjs::addClass("sensor7_show", "hidden")
         shinyjs::hide("sensor8_show")
-        shinyjs::addClass(ns("sensor8_show"), "hidden")
+        shinyjs::addClass("sensor8_show", "hidden")
         shinyjs::hide("add_sensor_slot")
         shinyjs::hide("add_sensor_note")
         shinyjs::hide("sensor_change_note")
@@ -1279,21 +1279,21 @@ table.on("click", "tr", function() {
         shinyjs::hide("submit_btn")
         shinyjs::hide("load_sensors")
         shinyjs::hide("sensor1_show")
-        shinyjs::addClass(ns("sensor1_show"), "hidden")
+        shinyjs::addClass("sensor1_show", "hidden")
         shinyjs::hide("sensor2_show")
-        shinyjs::addClass(ns("sensor2_show"), "hidden")
+        shinyjs::addClass("sensor2_show", "hidden")
         shinyjs::hide("sensor3_show")
-        shinyjs::addClass(ns("sensor3_show"), "hidden")
+        shinyjs::addClass("sensor3_show", "hidden")
         shinyjs::hide("sensor4_show")
-        shinyjs::addClass(ns("sensor4_show"), "hidden")
+        shinyjs::addClass("sensor4_show", "hidden")
         shinyjs::hide("sensor5_show")
-        shinyjs::addClass(ns("sensor5_show"), "hidden")
+        shinyjs::addClass("sensor5_show", "hidden")
         shinyjs::hide("sensor6_show")
-        shinyjs::addClass(ns("sensor6_show"), "hidden")
+        shinyjs::addClass("sensor6_show", "hidden")
         shinyjs::hide("sensor7_show")
-        shinyjs::addClass(ns("sensor7_show"), "hidden")
+        shinyjs::addClass("sensor7_show", "hidden")
         shinyjs::hide("sensor8_show")
-        shinyjs::addClass(ns("sensor8_show"), "hidden")
+        shinyjs::addClass("sensor8_show", "hidden")
         shinyjs::hide("add_sensor_slot")
         shinyjs::hide("add_sensor_note")
         shinyjs::hide("sensor_change_note")
@@ -1321,21 +1321,21 @@ table.on("click", "tr", function() {
     observeEvent(input$maintain_serial, {
       shinyjs::show("load_sensors")
       shinyjs::hide("sensor1_show")
-      shinyjs::addClass(ns("sensor1_show"), "hidden")
+      shinyjs::addClass("sensor1_show", "hidden")
       shinyjs::hide("sensor2_show")
-      shinyjs::addClass(ns("sensor2_show"), "hidden")
+      shinyjs::addClass("sensor2_show", "hidden")
       shinyjs::hide("sensor3_show")
-      shinyjs::addClass(ns("sensor3_show"), "hidden")
+      shinyjs::addClass("sensor3_show", "hidden")
       shinyjs::hide("sensor4_show")
-      shinyjs::addClass(ns("sensor4_show"), "hidden")
+      shinyjs::addClass("sensor4_show", "hidden")
       shinyjs::hide("sensor5_show")
-      shinyjs::addClass(ns("sensor5_show"), "hidden")
+      shinyjs::addClass("sensor5_show", "hidden")
       shinyjs::hide("sensor6_show")
-      shinyjs::addClass(ns("sensor6_show"), "hidden")
+      shinyjs::addClass("sensor6_show", "hidden")
       shinyjs::hide("sensor7_show")
-      shinyjs::addClass(ns("sensor7_show"), "hidden")
+      shinyjs::addClass("sensor7_show", "hidden")
       shinyjs::hide("sensor8_show")
-      shinyjs::addClass(ns("sensor8_show"), "hidden")
+      shinyjs::addClass("sensor8_show", "hidden")
       shinyjs::hide("add_sensor_slot")
       shinyjs::hide("add_sensor_note")
       shinyjs::hide("sensor_change_note")
@@ -1363,21 +1363,21 @@ table.on("click", "tr", function() {
         shinyjs::show("manage_sensors_table")
         #Hide the extra buttons
         shinyjs::hide("sensor1_show")
-        shinyjs::addClass(ns("sensor1_show"), "hidden")
+        shinyjs::addClass("sensor1_show", "hidden")
         shinyjs::hide("sensor2_show")
-        shinyjs::addClass(ns("sensor2_show"), "hidden")
+        shinyjs::addClass("sensor2_show", "hidden")
         shinyjs::hide("sensor3_show")
-        shinyjs::addClass(ns("sensor3_show"), "hidden")
+        shinyjs::addClass("sensor3_show", "hidden")
         shinyjs::hide("sensor4_show")
-        shinyjs::addClass(ns("sensor4_show"), "hidden")
+        shinyjs::addClass("sensor4_show", "hidden")
         shinyjs::hide("sensor5_show")
-        shinyjs::addClass(ns("sensor5_show"), "hidden")
+        shinyjs::addClass("sensor5_show", "hidden")
         shinyjs::hide("sensor6_show")
-        shinyjs::addClass(ns("sensor6_show"), "hidden")
+        shinyjs::addClass("sensor6_show", "hidden")
         shinyjs::hide("sensor7_show")
-        shinyjs::addClass(ns("sensor7_show"), "hidden")
+        shinyjs::addClass("sensor7_show", "hidden")
         shinyjs::hide("sensor8_show")
-        shinyjs::addClass(ns("sensor8_show"), "hidden")
+        shinyjs::addClass("sensor8_show", "hidden")
         shinyjs::hide("add_sensor_slot")
         shinyjs::hide("add_sensor_note")
         shinyjs::hide("add_sensor_type_dropdown")
@@ -2104,30 +2104,18 @@ table.on("click", "tr", function() {
     # Update the spc and DO fields ##########################################
     observeEvent(input$spc_or_not, {
       if (input$spc_or_not) {
+        post_condy_val <- input$spc2_std/(1 + 0.02 * (calibration_data$temp$temp_reference - 25))
         updateNumericInput(session, "spc1_pre", label = "Conductivity Low-Range Pre-Cal Value")
         updateNumericInput(session, "spc1_post", label = "Conductivity Low-Range Post-Cal Value")
         updateNumericInput(session, "spc2_pre", label = "Conductivity High-Range Pre-Cal Value")
-        updateNumericInput(session, "spc2_post", label = "Conductivity High-Range Post-Cal Value")
+        updateNumericInput(session, "spc2_post", label = "Conductivity High-Range Post-Cal Value", value = round(post_condy_val, 0))
       } else {
         updateNumericInput(session, "spc1_pre", label = "SpC Low-Range Pre-Cal Value")
         updateNumericInput(session, "spc1_post", label = "SpC Low-Range Post-Cal Value")
         updateNumericInput(session, "spc2_pre", label = "SpC High-Range Pre-Cal Value")
-        updateNumericInput(session, "spc2_post", label = "SpC High-Range Post-Cal Value")
+        updateNumericInput(session, "spc2_post", label = "SpC High-Range Post-Cal Value", value = input$spc2_std)
       }
     }, ignoreInit = TRUE)
-    
-    observe( #Updates the SPC or non-spc values based on reference temperature input$spc_or_not changing
-      if (input$spc_or_not) {
-        post_condy_val <- input$spc2_std/(1 + 0.02 * (calibration_data$temp$temp_reference - 25))
-        updateNumericInput(session, 
-                           "spc2_post", 
-                           value = round(post_condy_val, 0))
-      } else {
-        updateNumericInput(session, 
-                           "spc2_post", 
-                           value = input$spc2_std)
-      }
-    )
     
     #Function to simplify DO calculated fields later on
     DO_calc <- function(pre_post, prct_abs, messages = TRUE) {
@@ -2287,21 +2275,18 @@ table.on("click", "tr", function() {
           warn_ph_std <- TRUE
         } else {
           shinyjs::js$backgroundCol("ph1_std", "white")
-          warn_ph_std <- FALSE
         }
         if (std2 != 7) {
           shinyjs::js$backgroundCol("ph2_std", "lemonchiffon")
           warn_ph_std <- TRUE
         } else {
           shinyjs::js$backgroundCol("ph2_std", "white")
-          warn_ph_std <- FALSE
         }
         if (std3 != 10) {
           shinyjs::js$backgroundCol("ph3_std", "lemonchiffon")
           warn_ph_std <- TRUE
         } else {
           shinyjs::js$backgroundCol("ph3_std", "white")
-          warn_ph_std <- FALSE
         }
         #Validate the pH measurements vs the standards
         value1 <- as.numeric(input$ph1_post_val)

@@ -3,7 +3,7 @@
   height: 60px;
   margin-bottom: 3px; /* Adjust spacing above navbar */
   position: relative;
-  z-index: 1; /* Higher than navbar */
+  z-index: 2200; /* Higher than navbar */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -11,8 +11,12 @@
   background-color: white; /* Ensures it's not transparent */
 }
 
-.navbar {
-  z-index: 2;
+#page_navbar {
+  z-index: 2000; /*ensure menus overlay module content */
+}
+
+#page_navbar .dropdown-menu {
+  z-index: 2100; /* keep dropdowns above other navbars and controls */
 }
 
 /* Styling for the logo container */
