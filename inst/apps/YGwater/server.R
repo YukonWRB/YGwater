@@ -57,6 +57,9 @@ app_server <- function(input, output, session) {
       nav_show(id = "navbar", target = "visit")
       nav_show(id = "navbar", target = "appTasks")
       nav_show(id = "navbar", target = "changePwd")
+      if (isTRUE(session$userData$can_create_role)) {
+        nav_show(id = "navbar", target = "manageUsers")
+      }
     } else {
       # Hide irrelevant tabs for viz mode
       nav_hide(id = "navbar", target = "dbAdmin")
@@ -68,6 +71,8 @@ app_server <- function(input, output, session) {
       nav_hide(id = "navbar", target = "visit")
       nav_hide(id = "navbar", target = "appTasks")
       nav_hide(id = "navbar", target = "changePwd")
+      nav_hide(id = "navbar", target = "manageUsers")
+
       if (logout) {
         shinyjs::hide("admin")
       }
@@ -155,7 +160,10 @@ app_server <- function(input, output, session) {
     
     ui_loaded$manageNewsContent <- FALSE
     ui_loaded$viewFeedback <- FALSE
+    
     ui_loaded$changePwd <- FALSE
+    ui_loaded$manageUsers <- FALSE
+
     ui_loaded$visit <- FALSE
   }
   
@@ -419,6 +427,7 @@ app_server <- function(input, output, session) {
   # Log in/out ##########################################
   log_attempts <- reactiveVal(0) # counter for login attempts - prevent brute force attacks
   session$userData$user_logged_in <- FALSE # value to track login status
+  session$userData$can_create_role <- FALSE # track CREATE ROLE privilege
   
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
@@ -492,6 +501,10 @@ $(document).keyup(function(event) {
         # Update the session with the new user's credentials
         session$userData$config$dbUser <- input$username
         session$userData$config$dbPass <- input$password
+        res <- DBI::dbGetQuery(session$userData$AquaCache,
+                                'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;')
+        session$userData$can_create_role <- isTRUE(res$rolcreaterole[1])
+
         
         session$userData$user_logged_in <- TRUE
         
@@ -549,6 +562,7 @@ $(document).keyup(function(event) {
   observeEvent(input$logoutBtn, {
     
     session$userData$user_logged_in <- FALSE  # Set login status to FALSE
+    session$userData$can_create_role <- FALSE
     
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
@@ -640,7 +654,8 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discPlot", "contPlot", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers")) {
+
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -973,6 +988,11 @@ $(document).keyup(function(event) {
         output$changePwd_ui <- renderUI(changePasswordUI("changePwd"))
         ui_loaded$changePwd <- TRUE
         changePassword("changePwd", language = languageSelection)
+    if (input$navbar == "manageUsers") {
+      if (!ui_loaded$manageUsers) {
+        output$manageUsers_ui <- renderUI(manageUsersUI("manageUsers"))
+        ui_loaded$manageUsers <- TRUE
+        manageUsers("manageUsers")
       }
     }
     if (input$navbar == "visit") {
