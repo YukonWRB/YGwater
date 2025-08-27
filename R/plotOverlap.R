@@ -106,7 +106,7 @@ plotOverlap <- function(location,
 {
   
   # Deal with non-standard evaluations from data.table to silence check() notes
-  date <- start_dt <- end_dt <- period <- NULL 
+  datetime <- date <- start_dt <- end_dt <- period <- NULL 
   
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)

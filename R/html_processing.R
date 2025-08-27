@@ -31,6 +31,8 @@ html_processing <- function(file,
     stop("The file must have the extension .html")
   }
   
+  rlang::check_installed("purrr", reason = "to use html_processing()")
+  
   # Read in reference sheets and logger drop folder
   master <- openxlsx::read.xlsx(master_sheet, sheet = "YOWN_MASTER")
   YOWNIDs <- master$YOWN.Code 

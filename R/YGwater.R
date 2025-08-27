@@ -31,6 +31,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   rlang::check_installed("leaflet", reason = "required to use YGwater app")
   rlang::check_installed("zip", reason = "required to use YGwater app")
   rlang::check_installed("htmlwidgets", reason = "required to use YGwater app")
+  rlang::check_installed("jsonlite", reason = "required to use YGwater app")
   if (rlang::is_installed("remotes")) {
     rlang::check_installed("AquaCache", reason = "required to use YGwater app", action = \(pkg, ...) remotes::install_github("YukonWRB/AquaCache"))
   } else {

@@ -27,6 +27,10 @@ aq_download <- function(loc_id,
 )
 {
 
+  # check if httr and jsonite are installed as it's needed by timeseries_client.R
+  rlang::check_installed("httr", reason = "to use the aq_download() function")
+  rlang::check_installed("jsonlite", reason = "to use the aq_download() function")
+  
   source(system.file("scripts",  "timeseries_client.R", package = "YGwater")) #This loads the code dependencies
 
   #Make a data.frame with grade numbers and meanings because AQ doesn't supply them
