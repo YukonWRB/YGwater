@@ -1927,15 +1927,16 @@ contPlot <- function(id, language, windowDims, inputs) {
                               rate = input$traceNew_rate,
                               parameter = input$traceNew_param,
                               lead_lag = input$traceNew_lead_lag)
+        
         button1Text <- HTML(paste0(
           "<b>Trace 1</b><br>",
-          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace1$parameter, "param_name"]),
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace1$parameter, tr("param_name_col", language$language)]),
           "<br>",
           moduleData$locs[moduleData$locs$location_id == traces$trace1$location_id, tr("generic_name_col", language$language)]
         ))
         button2Text <- HTML(paste0(
           "<b>Trace 2</b><br>",
-          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace2$parameter, "param_name"]),
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace2$parameter, tr("param_name_col", language$language)]),
           "<br>",
           moduleData$locs[moduleData$locs$location_id == traces$trace2$location_id, tr("generic_name_col", language$language)],
           "<br>Lead/lag ", traces$trace2$lead_lag, " hours"
@@ -1963,7 +1964,7 @@ contPlot <- function(id, language, windowDims, inputs) {
                               lead_lag = input$traceNew_lead_lag)
         button3Text <- HTML(paste0(
           "<b>Trace 3</b><br>",
-          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace3$parameter, "param_name"]),
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace3$parameter, tr("param_name_col", language$language)]),
           "<br>",
           moduleData$locs[moduleData$locs$location_id == traces$trace3$location_id, tr("generic_name_col", language$language)],
           "<br>Lead/lag ", traces$trace3$lead_lag, " hours"
@@ -1985,7 +1986,7 @@ contPlot <- function(id, language, windowDims, inputs) {
                               lead_lag = input$traceNew_lead_lag)
         button4Text <- HTML(paste0(
           "<b>Trace 4</b><br>",
-          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace4$parameter, "param_name"]),
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace4$parameter, tr("param_name_col", language$language)]),
           "<br>",
           moduleData$locs[moduleData$locs$location_id == traces$trace4$location_id, tr("generic_name_col", language$language)],
           "<br>Lead/lag ", traces$trace4$lead_lag, " hours"

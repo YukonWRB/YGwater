@@ -81,9 +81,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/client/reports/snowBulletin.R", package = "YGwater"))
   
   # Map modules
-  source(system.file("apps/YGwater/modules/client/map/params.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/map/raster.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/map/locations.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/paramsMap.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/rasterMap.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/locationsMap.R", package = "YGwater"))
   
   # Image modules
   source(system.file("apps/YGwater/modules/client/images/image_table_view.R", package = "YGwater"))

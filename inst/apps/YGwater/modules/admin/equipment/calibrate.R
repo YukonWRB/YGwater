@@ -17,7 +17,7 @@ calUI <- function(id) {
     }'
   
   tagList(
-    page_fluid(
+    div(
       tags$head(
         tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
         tags$link(rel = "apple-touch-icon", href = "app-icon.png"),
@@ -61,12 +61,8 @@ calUI <- function(id) {
       titlePanel("Instrument Calibration and Tracking"),
       
       # Tabs
-      navbarPage(
-        title = "",
-        collapsible = TRUE,
-        id = ns("first_selection"),
-        fluid = TRUE,
-        
+      tabsetPanel(
+        id = ns("tab_panel"),
         tabPanel(
           "Calibrate",
           sidebarLayout(
@@ -286,8 +282,8 @@ calUI <- function(id) {
             )
           )
         ) 
-      ) # End of navbarPage
-    ) # End of page_fluid
+      ) # End of tabsetPanel
+    ) # End of div
   ) # End of tagList
 }
 
@@ -298,13 +294,21 @@ cal <- function(id) {
     ns <- session$ns
     
     # Custom alert function using Shiny's showNotification (replaces old shinyAlert dependencies)
-    alert <- function(title, text = NULL, type = NULL, timer = NULL, ...) {
+    alert <- function(title, text = NULL, type = NULL, timer = 2000) {
       msg <- if (is.null(text)) title else paste(title, text, sep = ": ")
       if (!is.null(type) && type %in% c("success", "info")) {
         type <- "message"
       }
       duration <- if (is.null(timer)) NULL else timer / 1000
-      showNotification(msg, type = ifelse(is.null(type), "default", type), duration = duration)
+      id <- paste0("alert-", substr(gsub("[^A-Za-z0-9]", "-", msg), 1, 50))
+      removeNotification(id = id, session = session)
+      showNotification(
+        msg,
+        type = ifelse(is.null(type), "default", type),
+        duration = duration,
+        id = id,
+        session = session
+      )
     }
     
     table_reset <- sprintf('
@@ -515,7 +519,7 @@ table.on("click", "tr", function() {
         incomplete_calibrations <- calibrations$calibrations[calibrations$calibrations$complete == FALSE, ] # find out if any calibrations are labelled as incomplete
         calibrations$incomplete_calibrations <- incomplete_calibrations
         if (nrow(incomplete_calibrations) > 0) {
-          alert(title = "Incomplete calibrations found!", text = "Go to to the page 'View unfinished calibrations' to restart or delete them.")
+          alert(title = "Incomplete calibrations found!", text = "Go to to the page 'View unfinished calibrations' to restart or delete them.", type = "warning", timer = 4000)
           incomplete_calibrations <- dplyr::left_join(incomplete_calibrations, instruments_data$observers[, c("observer_id", "observer_string")], by = dplyr::join_by(observer == observer_id))
           complete$incomplete <- data.frame("Index" = seq_len(nrow(incomplete_calibrations)),
                                             "Calibrator" = as.vector(incomplete_calibrations$observer_string),
@@ -556,7 +560,7 @@ table.on("click", "tr", function() {
     observeEvent(input$add_new_observer, {
       # Ensure that a first and last name are entered
       if (input$new_observer_first == "" | input$new_observer_last == "" | input$new_observer_org == "") {
-        alert(title = "Error", text = "Please enter a first, last name, and organization.")
+        alert(title = "Error", text = "Please enter a first, last name, and organization.", type = "error", timer = 4000)
         return()
       }
       # Add the new observer to the database
@@ -598,7 +602,7 @@ table.on("click", "tr", function() {
     observeEvent(input$add_new_make, {
       # Ensure that a make and description are entered
       if (input$new_make == "") {
-        alert(title = "Error", text = "Please enter a make, description optional.")
+        alert(title = "Error", text = "Please enter a make, description optional.", type = "error", timer = 4000)
         return()
       }
       DBI::dbExecute(session$userData$AquaCache, paste0("INSERT INTO instrument_make (make, description) VALUES ('", input$new_make, "', '", input$new_make_desc, "')"))
@@ -622,7 +626,7 @@ table.on("click", "tr", function() {
     observeEvent(input$add_new_model, {
       # Ensure that a model and description are entered
       if (input$new_model == "") {
-        alert(title = "Error", text = "Please enter a model, description optional.")
+        alert(title = "Error", text = "Please enter a model, description optional.", type = "error", timer = 4000)
         return()
       }
       DBI::dbExecute(session$userData$AquaCache, paste0("INSERT INTO instrument_model (model, description) VALUES ('", input$new_model, "', '", input$new_model_desc, "')"))
@@ -646,7 +650,7 @@ table.on("click", "tr", function() {
     observeEvent(input$add_new_type, {
       # Ensure that a type and description are entered
       if (input$new_type == "") {
-        alert(title = "Error", text = "Please enter a type, description optional.")
+        alert(title = "Error", text = "Please enter a type, description optional.", type = "error", timer = 4000)
         return()
       }
       DBI::dbExecute(session$userData$AquaCache, paste0("INSERT INTO instrument_type (type, description) VALUES ('", input$new_type, "', '", input$new_type_desc, "')"))
@@ -660,7 +664,7 @@ table.on("click", "tr", function() {
     observeEvent(input$add_new_sensor_type, {
       # Ensure that a sensor type is entered
       if (input$new_sensor_type == "") {
-        alert(title = "Error", text = "Please enter a sensor type, description optional.")
+        alert(title = "Error", text = "Please enter a sensor type, description optional.", type = "error", timer = 4000)
         return()
       }
       if (input$new_sensor_desc == "") {
@@ -771,12 +775,12 @@ table.on("click", "tr", function() {
       } else {
         shinyjs::hide("calibration_instruments_table")
       }
-      if (input$selection == "pH calibration" & input$first_selection == "Calibrate") {
+      if (input$selection == "pH calibration" & input$tab_panel == "Calibrate") {
         shinyjs::show("ph_mV_note")
       } else {
         shinyjs::hide("ph_mV_note")
       }
-      if (input$selection == "ORP calibration" & input$first_selection == "Calibrate") {
+      if (input$selection == "ORP calibration" & input$tab_panel == "Calibrate") {
         shinyjs::show("ORP_molarity_note")
       } else {
         shinyjs::hide("ORP_molarity_note")
@@ -1028,14 +1032,14 @@ table.on("click", "tr", function() {
     observeEvent(input$submit_instr_maintain, {
       if (instruments_data$instrument_maintenance_update) { #Edit an existing record
         DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE instrument_maintenance SET observer = '", input$maintain_recorder, "', note = '", input$maintain_comment, "' WHERE instrument_id = ", instruments_data$instrument_maintenance_selected_id, " AND obs_datetime = '", instruments_data$instrument_maintenance_update_datetime, "'"))
-        alert(title = "Success", text = "Maintenance record updated successfully.", timer = 2000)
+        alert(title = "Success", text = "Maintenance record updated successfully.", timer = 2000, type = "success")
       } else { # Create a new record
         temp <- data.frame(instrument_id = instruments_data$instrument_maintenance_selected_id,
                            obs_datetime = .POSIXct(Sys.time(), tz = "UTC"),
                            observer = input$maintain_recorder,
                            note = input$maintain_comment)
         DBI::dbWriteTable(session$userData$AquaCache, "instrument_maintenance", temp, append = TRUE)
-        alert(title = "Success", text = "Maintenance record saved successfully.", timer = 2000)
+        alert(title = "Success", text = "Maintenance record saved successfully.", timer = 2000, type = "success")
       }
       updateTextAreaInput(session, "maintain_comment", value = "")
       instruments_data$instrument_maintenance <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM instrument_maintenance")
@@ -1082,8 +1086,8 @@ table.on("click", "tr", function() {
     }, ignoreInit = TRUE)
     
     #observeEvents for when the user selects a particular page ########################################
-    observeEvent(input$first_selection, {
-      if (input$first_selection == "Calibrate") {
+    observeEvent(input$tab_panel, {
+      if (input$tab_panel == "Calibrate") {
         shinyjs::show("calibration_instruments_table")
         shinyjs::show("submit_btn")
         shinyjs::hide("load_sensors")
@@ -1125,7 +1129,7 @@ table.on("click", "tr", function() {
         output$observer <- renderUI({
           selectizeInput(ns("observer"), label = "Calibrator name", choices = select_data$recorder)
         })
-      } else if (input$first_selection == "Add/modify instruments") {
+      } else if (input$tab_panel == "Add/modify instruments") {
         shinyjs::hide("submit_btn")
         shinyjs::hide("sensor1_show")
         shinyjs::addClass("sensor1_show", "hidden")
@@ -1178,14 +1182,14 @@ table.on("click", "tr", function() {
         updateDateInput(session, "date_purchased", value = NA)
         instruments_data$manage_instruments <- instruments_data$sheet[ , !colnames(instruments_data$sheet) %in% c("instrument_id", "observer", "obs_datetime")]
         output$manage_instruments_table <- DT::renderDataTable(instruments_data$manage_instruments, rownames = FALSE, selection = "single")
-      } else if (input$first_selection == "Maintain instruments") {
+      } else if (input$tab_panel == "Maintain instruments") {
         instruments_data$maintain_instruments <- instruments_data$sheet[ , !colnames(instruments_data$sheet) %in% c("observer", "obs_datetime", "retired_by", "date_retired", "asset_tag", "date_in_service", "date_purchased", "holds_replaceable_sensors")]
         temp_maintain <- instruments_data$maintain_instruments[, c("make", "model", "type", "serial_no", "owner")]
         output$maintain_instr_table <- DT::renderDataTable(temp_maintain, rownames = FALSE, selection = "single")  #Table is in the sidebar, for instrument selection
         temp <- data.frame("Observer" = "No one", "Date/Time" = "Never", "Maintenance note" = "Select an instrument first", check.names = FALSE)
         output$past_instr_maintenance <- DT::renderDataTable(temp, rownames = FALSE, selection = "none")  #Table is in the main panel, for maintenance history
         shinyjs::hide("clear_selection")
-      } else if (input$first_selection == "Change/maintain sensors") {
+      } else if (input$tab_panel == "Change/maintain sensors") {
         #reload instruments_data$sheet to mitigate conflicts
         instruments_data$sheet <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT i.instrument_id, i.obs_datetime, CONCAT(observers.observer_first, ' ', observers.observer_last, '(', observers.organization, ')') AS observer, i.holds_replaceable_sensors, i.serial_no, i.asset_tag, i.date_in_service, i.date_purchased, i.retired_by, i.date_retired, instrument_make.make, instrument_model.model, instrument_type.type, i.owner FROM instruments AS i LEFT JOIN instrument_make ON i.make = instrument_make.make_id LEFT JOIN instrument_model ON i.model = instrument_model.model_id LEFT JOIN instrument_type ON i.type = instrument_type.type_id LEFT JOIN observers ON i.observer = observers.observer_id ORDER BY i.instrument_id")
         instruments_data$maintainable_sensors <- instruments_data$sheet[instruments_data$sheet$holds_replaceable_sensors , ]
@@ -1202,9 +1206,9 @@ table.on("click", "tr", function() {
         shinyjs::show("load_sensors")
         shinyjs::show("manage_sensors_table")
         updateSelectizeInput(session, "add_sensor_name", choices = select_data$observer)
-      } else if (input$first_selection == "Deploy/Recover instruments") {
+      } else if (input$tab_panel == "Deploy/Recover instruments") {
         
-      } else if (input$first_selection == "View unfinished calibrations") {
+      } else if (input$tab_panel == "View unfinished calibrations") {
         output$incomplete_table <- DT::renderDataTable(complete$incomplete, rownames = FALSE, selection = "single")
         shinyjs::hide("submit_btn")
         shinyjs::hide("load_sensors")
@@ -1634,7 +1638,7 @@ table.on("click", "tr", function() {
     ## Save changes to a sensor's details ########################################
     observeEvent(input$submit_sensor_change, {
       if (nchar(input$sensor_change_name) <= 1 | nchar(input$add_comment) < 5 | nchar(input$add_sensor_serial) < 2) {
-        alert("Please fill in all fields!", "You might need a few more characters if you've already written something. Come on, make us a useful note!", type =  "error", timer = 3000)
+        alert("Please fill in all fields!", "You need a few more characters if you've already written something. Come on, make us a useful note!", type =  "error", timer = 3000)
       } else { #add the data to the array_maintenance_changes table
         # Check if the datetime exists in the instrument table, which means we're editing an entry from this same session
         sensors_data$datetime_exists <- if (max(sensors_data$instrument$obs_datetime) > (sensors_data$datetime - 5) | max(sensors_data$instrument$obs_datetime) > (sensors_data$datetime + 5)) TRUE else FALSE
@@ -1744,10 +1748,10 @@ table.on("click", "tr", function() {
       }
       if (input$existing_serial_no == "New record") { #add a new row with the next instrument_id
         if (check) {
-          alert("Serial number already exists!", text = "You selected 'New record' and then entered an existing serial number.", type = "error")
+          alert("Serial number already exists!", text = "You selected 'New record' and then entered an existing serial number.", type = "error", timer = 3000)
           new_entry <- FALSE
         } else if (nchar(input$recorder) < 1 | nchar(input$make) < 1 | nchar(input$model) < 1 | nchar(input$type) < 1 | (nchar(input$serial_no) < 4 | (grepl("Search", input$serial_no, ignore.case = TRUE)))) { #long statement to check if all entries are satisfactorily filled in.
-          alert("Unfilled mandatory entries!", text = "You need to provide your name, instrument make, model, type, and serial number of minimum 2 characters.", type = "error")
+          alert("Unfilled mandatory entries!", text = "You need to provide your name, instrument make, model, type, and serial number of minimum 2 characters.", type = "error", timer = 3000)
           new_entry <- FALSE
         } else { #Make a new entry
           instrument.df <- data.frame(observer = input$recorder,
@@ -1769,7 +1773,7 @@ table.on("click", "tr", function() {
         }
       } else { #Modify an existing entry
         if (nchar(input$recorder) < 1 | nchar(input$make) < 1 | nchar(input$model) < 1 | nchar(input$type) < 1 | (nchar(input$serial_no) < 4 | nchar(input$instrument_owner) < 1 | (grepl("Search", input$serial_no, ignore.case = TRUE)))) { #long statement to check if all entries are satisfactorily filled in.
-          alert("Unfilled mandatory entries!", text = "You need to provide your name, instrument make, model, type, and serial number of minimum 2 characters.", type = "error")
+          alert("Unfilled mandatory entries!", text = "You need to provide your name, instrument make, model, type, and serial number of minimum 2 characters.", type = "error", timer = 4000)
         } else {
           DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE instruments SET observer = ", input$recorder,
                                                             ", obs_datetime = '", as.character(.POSIXct(Sys.time(), tz = "UTC")),
@@ -1854,9 +1858,9 @@ table.on("click", "tr", function() {
     observeEvent(input$restart_calibration, {
       restart_value <- as.numeric(input$restart_index)
       if (restart_value == 0) {
-        alert("0 is not a valid selection!", type = "error")
+        alert("0 is not a valid selection!", type = "error", timer = 3000)
       } else if (!(restart_value %in% complete$incomplete$Index)) {
-        alert("The number you entered does not correspond to a row/index number", type = "error")
+        alert("The number you entered does not correspond to a row/index number", type = "error", timer = 3000)
       } else {
         shinyjs::show("restart_table")
         send_table$restarted_cal <- data.frame("Saved calibrations (recovered session)" = "Basic info", check.names = FALSE) #Set/reset here for if the user selects a different calibration in the same session
@@ -1974,7 +1978,7 @@ table.on("click", "tr", function() {
         })
         restarted$restarted <- TRUE
         updateCheckboxInput(session, "spc_or_not", value = FALSE) #Reset to FALSE since values are stored as spc; this makes it clear to the user.
-        updateSelectizeInput(session, "first_selection", selected = "Calibrate") # Changing this selection brings the user right to the calibration page
+        updateTabsetPanel(session, "tab_panel", selected = "Calibrate") # Changing this selection brings the user right to the calibration page
       }
     }, ignoreInit = TRUE)
     
@@ -1983,9 +1987,9 @@ table.on("click", "tr", function() {
     observeEvent(input$delete_calibration, {
       delete_value <- as.numeric(input$restart_index)
       if (delete_value == 0) {
-        alert("0 is not a valid selection!", type = "error")
+        alert("0 is not a valid selection!", type = "error", timer = 2000)
       } else if (!(delete_value %in% complete$incomplete$Index)) {
-        alert("The number you entered does not correspond to a row/index number", type = "error")
+        alert("The number you entered does not correspond to a row/index number", type = "error", timer = 2000)
       } else {
         delete_ID <- as.numeric(calibrations$incomplete_calibrations[delete_value , "calibration_id"])
         all_sheets <- DBI::dbListTables(session$userData$AquaCache)
@@ -2036,7 +2040,7 @@ table.on("click", "tr", function() {
           reset_do()
           reset_depth()
         }
-        alert("Deleted", type = "success", immediate = TRUE, timer = 2000)
+        alert("Deleted", type = "success", timer = 2000)
       }
     }, ignoreInit = TRUE)
     
@@ -2101,7 +2105,7 @@ table.on("click", "tr", function() {
         res <- suppressWarnings(respR::convert_DO(meas, from = if (grepl("prct", trigger_name)) "%Air" else "mg/l", to = if (grepl("prct", trigger_name)) "mg/l" else "%Air", S = 0, t = temp, P = baro_press / 750.06156130264))
         updateNumericInput(session, update_name, value = round(res, 2))
         if (messages) {
-          alert("You MUST recalculate if updating baro pressures or temperature", "Cannot auto-update without knowing which value (mg/l or %) to update", timer = 4000)
+          alert("You MUST recalculate if updating baro pressures or temperature", "Cannot auto-update without knowing which value (mg/l or %) to update", timer = 4000, type = "warning")
         }
         updateActionButton(session, "calc_abs_do", "Recalc mg/l values")
         updateActionButton(session, "calc_prct_do", "Recalc % values")
@@ -2137,11 +2141,11 @@ table.on("click", "tr", function() {
         return()
       }
       if (input$ID_handheld_meter == "NA" & instruments_data$others[instruments_data$others$serial_no == input$ID_sensor_holder, "type"] == "Bulkhead") {
-        alert(title = "Error: no handheld specified", text = "Handheld unit is integral to bulkhead calibrations and must be entered.", type = "error")
+        alert(title = "Error: no handheld specified", text = "Handheld unit is integral to bulkhead calibrations and must be entered.", type = "error", timer = 4000)
         return()
       }
       if (input$ID_handheld_meter != "NA" & !(instruments_data$others[instruments_data$others$serial_no == input$ID_sensor_holder, "type"] %in% c("Bulkhead", "Sonde"))) {
-        alert(title = "Error: You specified a handheld meter but your sensor holder is not a bulkhead or sonde.", text = "Only bulkheads and sondes should have associated handheld units.", type = "error")
+        alert(title = "Error: You specified a handheld meter but your sensor holder is not a bulkhead or sonde.", text = "Only bulkheads and sondes should have associated handheld units.", type = "error", timer = 4000)
         return()
       }
       if (nchar(input$observer) < 1) {
@@ -2177,9 +2181,9 @@ table.on("click", "tr", function() {
         }
       }
       if ("Basic info" %in% send_table$saved[ ,1] | "Basic info" %in% send_table$restarted_cal[ ,1]) {
-        alert(title = "Basic info overwritten", type = "success", timer = 2000, immediate = TRUE)
+        alert(title = "Basic info overwritten", type = "success", timer = 2000)
       } else {
-        alert(title = "Basic info saved", type = "success", timer = 2000, immediate = TRUE)
+        alert(title = "Basic info saved", type = "success", timer = 2000)
       }
       if (send_table$saved[1,1] == "Nothing saved yet") {
         send_table$saved[1,1] <- "Basic info"
@@ -2289,7 +2293,7 @@ table.on("click", "tr", function() {
           validation_check$ph <- TRUE
         }
       }, error = function(e) {
-        alert(title = "You have unfilled mandatory entries", text = "If doing a 2-point calibration enter 0 for the third solution values to pass this check.", type = "error")
+        alert(title = "You have unfilled mandatory entries", text = "If doing a 2-point calibration enter 0 for the third solution values to pass this check.", type = "error", timer = 4000)
       })
     }, ignoreInit = TRUE)
     
@@ -2336,9 +2340,9 @@ table.on("click", "tr", function() {
                                                             " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("pH calibration" %in% send_table$saved[ ,1] | "pH calibration" %in% send_table$restarted_cal[ ,1]) {
-          alert(title = "pH calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "pH calibration overwritten", type = "success", timer = 2000)
         } else {
-          alert(title = "pH calibration saved", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "pH calibration saved", type = "success", timer = 2000)
         }
         if (send_table$saved[1,1] == "Nothing saved yet") {
           send_table$saved[1,1] <- "pH calibration"
@@ -2366,7 +2370,7 @@ table.on("click", "tr", function() {
           send_table$saved <- data.frame("Saved calibrations (this session)" = "Nothing saved yet", check.names = FALSE)
         }
       }
-      alert("Deleted", type = "success", timer = 2000, immediate = TRUE)
+      alert("Deleted", type = "success", timer = 2000)
       output$saved <- renderTable({ # Display local calibrations table
         send_table$saved
       })
@@ -2438,9 +2442,9 @@ table.on("click", "tr", function() {
                                                             " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("Temperature calibration" %in% send_table$saved[ ,1] | "Temperature calibration" %in% send_table$restarted_cal[ ,1]) {
-          alert(title = "Temperature calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "Temperature calibration overwritten", type = "success", timer = 2000)
         } else {
-          alert(title = "Temperature calibration saved", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "Temperature calibration saved", type = "success", timer = 2000)
         }
         if (send_table$saved[1,1] == "Nothing saved yet") {
           send_table$saved[1,1] <- "Temperature calibration"
@@ -2467,7 +2471,7 @@ table.on("click", "tr", function() {
           send_table$saved <- data.frame("Saved calibrations (this session)" = "Nothing saved yet", check.names = FALSE)
         }
       }
-      alert("Deleted", type = "success", timer = 2000, immediate = TRUE)
+      alert("Deleted", type = "success", timer = 2000)
       output$saved <- renderTable({ # Display local calibrations table
         send_table$saved
       })
@@ -2537,9 +2541,9 @@ table.on("click", "tr", function() {
                                                             " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("ORP calibration" %in% send_table$saved[ ,1] | "ORP calibration" %in% send_table$restarted_cal[ ,1]) {
-          alert(title = "ORP calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "ORP calibration overwritten", type = "success", timer = 2000)
         } else {
-          alert(title = "ORP calibration saved", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "ORP calibration saved", type = "success", timer = 2000)
         }
         if (send_table$saved[1,1] == "Nothing saved yet") {
           send_table$saved[1,1] <- "ORP calibration"
@@ -2566,7 +2570,7 @@ table.on("click", "tr", function() {
           send_table$saved <- data.frame("Saved calibrations (this session)" = "Nothing saved yet", check.names = FALSE)
         }
       }
-      alert("Deleted", type = "success", timer = 2000, immediate = TRUE)
+      alert("Deleted", type = "success", timer = 2000)
       output$saved <- renderTable({ # Display local calibrations table
         send_table$saved
       })
@@ -2581,7 +2585,7 @@ table.on("click", "tr", function() {
     observeEvent(input$save_cal_spc, {
       validation_check$spc <- FALSE
       if (input$spc_or_not & is.null(calibration_data$temp)) {
-        alert("Calibrate temperature first!", "You must calibrate temperature first if entering non-specific conductivity")
+        alert("Calibrate temperature first!", "You must calibrate temperature first if entering non-specific conductivity", type = "error", timer = 3000)
         updateSelectizeInput(session, "selection", selected = "Temperature calibration")
         return()
       } else {
@@ -2592,11 +2596,11 @@ table.on("click", "tr", function() {
           updateNumericInput(session, "spc2_post", value = input$spc2_std)
         }
         if (is.na(input$spc1_pre)) {
-          alert("You must enter a pre-calibration value for the low-range conductivity/conductance", type = "error")
+          alert("You must enter a pre-calibration value for the low-range conductivity/conductance", type = "error", timer = 3000)
           return()
         }
         if (is.na(input$spc2_pre)) {
-          alert("You must enter a pre-calibration value for the high-range conductivity/conductance", type = "error")
+          alert("You must enter a pre-calibration value for the high-range conductivity/conductance", type = "error", timer = 3000)
           return()
         }
         
@@ -2695,9 +2699,9 @@ table.on("click", "tr", function() {
             DBI::dbAppendTable(session$userData$AquaCache, "calibrate_specific_conductance", calibration_data$spc)
             
             if ("Conductivity calibration" %in% send_table$saved[ ,1] | "Conductivity calibration" %in% send_table$restarted_cal[ ,1]) {
-              alert(title = "Conductivity calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
+              alert(title = "Conductivity calibration overwritten", type = "success", timer = 2000)
             } else {
-              alert(title = "Conductivity calibration saved", type = "success", timer = 2000, immediate = TRUE)
+              alert(title = "Conductivity calibration saved", type = "success", timer = 2000)
             }
             if (send_table$saved[1,1] == "Nothing saved yet") {
               send_table$saved[1,1] <- "Conductivity calibration"
@@ -2724,9 +2728,9 @@ table.on("click", "tr", function() {
                                                               " WHERE calibration_id = ", calibration_data$next_id))
             
             if ("Conductivity calibration" %in% send_table$saved[ ,1] | "Conductivity calibration" %in% send_table$restarted_cal[ ,1]) {
-              alert(title = "Conductivity calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
+              alert(title = "Conductivity calibration overwritten", type = "success", timer = 2000)
             } else {
-              alert(title = "Conductivity calibration saved", type = "success", timer = 2000, immediate = TRUE)
+              alert(title = "Conductivity calibration saved", type = "success", timer = 2000)
             }
             if (send_table$saved[1,1] == "Nothing saved yet") {
               send_table$saved[1,1] <- "Conductivity calibration"
@@ -2738,7 +2742,7 @@ table.on("click", "tr", function() {
             })
             
           }, error = function(e) {
-            alert(title = "Failed to edit existing database entry.", text = e$message, type = "error")
+            alert(title = "Failed to edit existing database entry.", text = e$message, type = "error", timer = 4000)
           })
         }
       }
@@ -2758,7 +2762,7 @@ table.on("click", "tr", function() {
           send_table$saved <- data.frame("Saved calibrations (this session)" = "Nothing saved yet", check.names = FALSE)
         }
       }
-      alert("Deleted", type = "success", timer = 2000, immediate = TRUE)
+      alert("Deleted", type = "success", timer = 2000)
       output$saved <- renderTable({ # Display local calibrations table
         send_table$saved
       })
@@ -2850,9 +2854,9 @@ table.on("click", "tr", function() {
                                                             " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("Turbidity calibration" %in% send_table$saved[ ,1] | "Turbidity calibration" %in% send_table$restarted_cal[ ,1]) {
-          alert(title = "Turbidity calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "Turbidity calibration overwritten", type = "success", timer = 2000)
         } else {
-          alert(title = "Turbidity calibration saved", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "Turbidity calibration saved", type = "success", timer = 2000)
         }
         if (send_table$saved[1,1] == "Nothing saved yet") {
           send_table$saved[1,1] <- "Turbidity calibration"
@@ -2879,7 +2883,7 @@ table.on("click", "tr", function() {
           send_table$saved <- data.frame("Saved calibrations (this session)" = "Nothing saved yet", check.names = FALSE)
         }
       }
-      alert("Deleted", type = "success", timer = 2000, immediate = TRUE)
+      alert("Deleted", type = "success", timer = 2000)
       output$saved <- renderTable({ # Display local calibrations table
         send_table$saved
       })
@@ -2952,9 +2956,9 @@ table.on("click", "tr", function() {
                                                             " WHERE calibration_id = ", calibration_data$next_id))
         }
         if ("DO calibration" %in% send_table$saved[ ,1] | "DO calibration" %in% send_table$restarted_cal[ ,1]) {
-          alert(title = "DO calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "DO calibration overwritten", type = "success", timer = 2000)
         } else {
-          alert(title = "DO calibration saved", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "DO calibration saved", type = "success", timer = 2000)
         }
         if (send_table$saved[1,1] == "Nothing saved yet") {
           send_table$saved[1,1] <- "DO calibration"
@@ -2981,7 +2985,7 @@ table.on("click", "tr", function() {
           send_table$saved <- data.frame("Saved calibrations (this session)" = "Nothing saved yet", check.names = FALSE)
         }
       }
-      alert("Deleted", type = "success", timer = 2000, immediate = TRUE)
+      alert("Deleted", type = "success", timer = 2000)
       output$saved <- renderTable({ # Display local calibrations table
         send_table$saved
       })
@@ -3039,9 +3043,9 @@ table.on("click", "tr", function() {
           }
         }
         if ("Depth calibration" %in% send_table$saved[ ,1] | "Depth calibration" %in% send_table$restarted_cal[ ,1]) {
-          alert(title = "Depth calibration overwritten", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "Depth calibration overwritten", type = "success", timer = 2000)
         } else {
-          alert(title = "Depth calibration saved", type = "success", timer = 2000, immediate = TRUE)
+          alert(title = "Depth calibration saved", type = "success", timer = 2000)
         }
         if (send_table$saved[1,1] == "Nothing saved yet") {
           send_table$saved[1,1] <- "Depth calibration"
@@ -3069,7 +3073,7 @@ table.on("click", "tr", function() {
           send_table$saved <- data.frame("Saved calibrations (this session)" = "Nothing saved yet", check.names = FALSE)
         }
       }
-      alert("Deleted", type = "success", timer = 2000, immediate = TRUE)
+      alert("Deleted", type = "success", timer = 2000)
       output$saved <- renderTable({ # Display local calibrations table
         send_table$saved
       })
@@ -3141,7 +3145,7 @@ table.on("click", "tr", function() {
       })
       shinyjs::hide("restart_table")
       updateNumericInput(session, "restart_index", value = 0) #in case the user was restarting an old calibration
-      updateSelectizeInput(session, "first_selection", selected = "Calibrate")
+      updateTabsetPanel(session, "tab_panel", selected = "Calibrate")
       updateSelectizeInput(session, "selection", selected = "Basic calibration info")
       #Get the next ID in case user is calibrating/working in app again
       calibration_data$next_id <- NULL
