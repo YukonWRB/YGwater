@@ -1,4 +1,4 @@
-continuousPlotUI <- function(id) {
+contPlotUI <- function(id) {
   ns <- NS(id)
   
   tagList(
@@ -29,7 +29,7 @@ continuousPlotUI <- function(id) {
   )
 }
 
-continuousPlot <- function(id, language, windowDims, inputs) {
+contPlot <- function(id, language, windowDims, inputs) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -317,7 +317,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
           ),
           # checkboxInput(ns("log_y"), "Log scale y-axis?"),
           uiOutput(ns("share_axes")),
-          checkboxInput(ns("historic_range"), tr("plot_hist_range", language$language))
+          checkboxInput(ns("historic_range"), 
+                        label = tr("plot_hist_range", language$language),
+                        value = TRUE)
         ),
         accordion(
           id = ns("accordion1"),
@@ -455,13 +457,18 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         return()
       }
       if (input$plot_type == "ts") {
-        updateDateRangeInput(session, "date_range",
-                             label = tr("date_range_lab", language$language))
-      } else if (input$plot_type == "over") {
-        print(input$param)
+        earliest <- filteredData$range$max_date - 366
+        if (earliest < filteredData$range$min_date) {
+          earliest <- filteredData$range$min_date
+        }
         
+        updateDateRangeInput(session, "date_range",
+                             min = as.Date(filteredData$range$min_date),
+                             max = as.Date(filteredData$range$max_date),
+                             start = earliest,
+                             end = as.Date(filteredData$range$max_date))
+      } else if (input$plot_type == "over") {
         if (!is.null(input$param) && length(input$param) == 1) {
-          print("WTF")
           if (input$param %in% c(values$swe, values$snow_depth)) {
             updateDateRangeInput(session, "date_range",
                                  min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
@@ -1157,7 +1164,6 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                            selected = max(possible_years))
       
       if (input$plot_type == "over") {
-        print(input$param)
         if (!is.null(input$param) && length(input$param) == 1) {
           if (input$param %in% c(values$swe, values$snow_depth)) {
             updateDateRangeInput(session, "date_range",
@@ -1317,6 +1323,51 @@ continuousPlot <- function(id, language, windowDims, inputs) {
     traceCount <- reactiveVal(1)
     subplots <- reactiveValues()
     subplotCount <- reactiveVal(1)
+
+    # Helper to determine the available date range for a given timeseries selection
+    ts_range <- function(sel) {
+      df <- moduleData$timeseries[
+        moduleData$timeseries$location_id == sel$location_id &
+          moduleData$timeseries$parameter_id == sel$parameter &
+          moduleData$timeseries$media_id == sel$media &
+          moduleData$timeseries$aggregation_type_id == sel$aggregation &
+          moduleData$timeseries$record_rate == sel$rate,
+        ]
+      if (!is.null(sel$sub_location_id) && !is.na(sel$sub_location_id)) {
+        df <- df[df$sub_location_id == sel$sub_location_id, ]
+      }
+      if (!is.null(sel$z) && !is.na(sel$z)) {
+        df <- df[df$z == sel$z, ]
+      }
+      calc_range(df)
+    }
+
+    # Update the date range input based on all selected traces and subplots
+    update_date_range <- function() {
+      ranges <- data.frame(min_date = as.Date(character()), max_date = as.Date(character()))
+      if (length(names(traces)) > 0) {
+        for (nm in names(traces)) {
+          ranges <- rbind(ranges, ts_range(traces[[nm]]))
+        }
+      }
+      if (length(names(subplots)) > 0) {
+        for (nm in names(subplots)) {
+          ranges <- rbind(ranges, ts_range(subplots[[nm]]))
+        }
+      }
+      if (nrow(ranges) == 0 || all(is.na(ranges$min_date)) || all(is.na(ranges$max_date))) return()
+      min_all <- min(ranges$min_date, na.rm = TRUE)
+      max_all <- max(ranges$max_date, na.rm = TRUE)
+      start <- as.Date(input$date_range[1])
+      end <- as.Date(input$date_range[2])
+      if (is.na(start) || start < min_all) start <- min_all
+      if (is.na(end) || end > max_all) end <- max_all
+      updateDateRangeInput(session, "date_range",
+                           min = min_all,
+                           max = max_all,
+                           start = start,
+                           end = end)
+    }
     
     # Function to create modals for adding new traces or subplots; one function for both, the only thing different in the produced modal is the add_new button
     trace_subplot_modal <- function(type) {
@@ -1876,15 +1927,16 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                               rate = input$traceNew_rate,
                               parameter = input$traceNew_param,
                               lead_lag = input$traceNew_lead_lag)
+        
         button1Text <- HTML(paste0(
           "<b>Trace 1</b><br>",
-          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace1$parameter, "param_name"]),
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace1$parameter, tr("param_name_col", language$language)]),
           "<br>",
           moduleData$locs[moduleData$locs$location_id == traces$trace1$location_id, tr("generic_name_col", language$language)]
         ))
         button2Text <- HTML(paste0(
           "<b>Trace 2</b><br>",
-          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace2$parameter, "param_name"]),
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace2$parameter, tr("param_name_col", language$language)]),
           "<br>",
           moduleData$locs[moduleData$locs$location_id == traces$trace2$location_id, tr("generic_name_col", language$language)],
           "<br>Lead/lag ", traces$trace2$lead_lag, " hours"
@@ -1912,7 +1964,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                               lead_lag = input$traceNew_lead_lag)
         button3Text <- HTML(paste0(
           "<b>Trace 3</b><br>",
-          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace3$parameter, "param_name"]),
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace3$parameter, tr("param_name_col", language$language)]),
           "<br>",
           moduleData$locs[moduleData$locs$location_id == traces$trace3$location_id, tr("generic_name_col", language$language)],
           "<br>Lead/lag ", traces$trace3$lead_lag, " hours"
@@ -1934,7 +1986,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
                               lead_lag = input$traceNew_lead_lag)
         button4Text <- HTML(paste0(
           "<b>Trace 4</b><br>",
-          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace4$parameter, "param_name"]),
+          titleCase(moduleData$params[moduleData$params$parameter_id == traces$trace4$parameter, tr("param_name_col", language$language)]),
           "<br>",
           moduleData$locs[moduleData$locs$location_id == traces$trace4$location_id, tr("generic_name_col", language$language)],
           "<br>Lead/lag ", traces$trace4$lead_lag, " hours"
@@ -1942,11 +1994,12 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         output$trace4_ui <- renderUI({
           actionButton(ns("trace4"), button4Text)
         })
-        
+
         traceCount(4)
         shinyjs::hide("add_trace")
       }
-      
+
+      update_date_range()
       removeModal()
     })
     
@@ -2049,6 +2102,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       output[[paste0(target_trace, "_ui")]] <- renderUI({
         actionButton(ns(paste0(target_trace)), button_text)
       })
+      update_date_range()
       removeModal()
     })
     
@@ -2117,8 +2171,9 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else {
         shinyjs::show("trace1_ui")
       }
+      update_date_range()
       removeModal()
-      
+
       traces$trace1$lead_lag <- 0
     })
     
@@ -2241,7 +2296,8 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         subplotCount(4)
         shinyjs::hide("add_subplot")
       }
-      
+
+      update_date_range()
       removeModal()
     })
     
@@ -2324,10 +2380,11 @@ continuousPlot <- function(id, language, windowDims, inputs) {
         "<br>",
         moduleData$locs[moduleData$locs$location_id == subplots[[target_subplot]]$location_id, tr("generic_name_col", language$language)]
       ))
-      
+
       output[[paste0(target_subplot, "_ui")]] <- renderUI({
         actionButton(ns(paste0(target_subplot)), button_text)
       })
+      update_date_range()
       removeModal()
     })
     
@@ -2397,6 +2454,7 @@ continuousPlot <- function(id, language, windowDims, inputs) {
       } else {
         shinyjs::show("subplot1_ui")
       }
+      update_date_range()
       removeModal()
     })
     

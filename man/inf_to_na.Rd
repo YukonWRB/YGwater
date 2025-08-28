@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{inf_to_na}
 \alias{inf_to_na}
-\title{Replace infinite values with NA}
+\title{Replace infinite and NaN values with NA}
 \usage{
 inf_to_na(x)
 }
@@ -13,6 +13,5 @@ inf_to_na(x)
 Numeric vector with infinite values converted to \code{NA}.
 }
 \description{
-Utility function to replace \code{Inf} and \code{-Inf} values with \code{NA}.
+Utility function to replace \code{Inf}, \code{-Inf}, and \code{NaN} values with \code{NA}.
 }
-\keyword{internal}

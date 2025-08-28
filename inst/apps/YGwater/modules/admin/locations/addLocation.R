@@ -35,7 +35,7 @@ addLocation <- function(id, inputs) {
       moduleData$datum_conversions = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM datum_conversions WHERE current IS TRUE")
       moduleData$networks = DBI::dbGetQuery(session$userData$AquaCache, "SELECT network_id, name FROM networks")
       moduleData$projects = DBI::dbGetQuery(session$userData$AquaCache, "SELECT project_id, name FROM projects")
-      moduleData$users = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM get_roles_with_select_on_locations();")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all users with select privileges on locations table
+      moduleData$users = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.get_shareable_principals_for('public.locations');")  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
     }
     
     getModuleData() # Initial data load

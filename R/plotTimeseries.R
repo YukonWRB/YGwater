@@ -79,8 +79,8 @@ plotTimeseries <- function(location,
   # location <- "29AB009"
   # sub_location <- NULL
   # parameter = 1165
-  # start_date <- "2024-01-01"
-  # end_date <- Sys.time()
+  # start_date <- "2024-08-12"
+  # end_date <- "2025-08-13"
   # record_rate = NULL
   # aggregation_type = NULL
   # z = NULL
@@ -89,10 +89,10 @@ plotTimeseries <- function(location,
   # slider = TRUE
   # datum = FALSE
   # title = TRUE
-  # unusable = TRUE
+  # unusable = FALSE
   # grades = TRUE
-  # approvals = TRUE
-  # qualifiers = TRUE
+  # approvals = FALSE
+  # qualifiers = FALSE
   # custom_title = NULL
   # filter = NULL
   # historic_range = TRUE
@@ -395,16 +395,15 @@ plotTimeseries <- function(location,
     grades_dt <- dbGetQueryDT(con, paste0("SELECT g.start_dt, g.end_dt, gt.grade_type_description, gt.grade_type_description_fr, gt.color_code FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ", tsid, " AND g.end_dt >= '", start_date, "' AND g.start_dt <= '", end_date, "' ORDER BY start_dt;"))
     
     # Many rows could be adjacent repeats of grade_type_description with different start_dt and end_dt, in which case these rows should be amalgamated
-    # create a run‐length grouping over the three columns that must stay identical
     grades_dt[, "run" := data.table::rleid(grades_dt$grade_type_description)]
     
     # now collapse each run into one interval
     grades_dt <- grades_dt[, .(
-      start_dt = data.table::first(grades_dt$start_dt),
-      end_dt = data.table::last(grades_dt$end_dt),
-      grade_type_description = data.table::first(grades_dt$grade_type_description),
-      grade_type_description_fr = data.table::first(grades_dt$grade_type_description_fr),
-      color_code = data.table::first(grades_dt$color_code)
+      start_dt = data.table::first(.SD$start_dt),
+      end_dt = data.table::last(.SD$end_dt),
+      grade_type_description = data.table::first(.SD$grade_type_description),
+      grade_type_description_fr = data.table::first(.SD$grade_type_description_fr),
+      color_code = data.table::first(.SD$color_code)
     ), by = "run"]
     # drop the helper
     grades_dt[, "run" := NULL]
@@ -414,11 +413,11 @@ plotTimeseries <- function(location,
     # amalgamate
     approvals_dt[, "run" := data.table::rleid(approvals_dt$approval_type_description)]
     approvals_dt <- approvals_dt[, .(
-      start_dt = data.table::first(approvals_dt$start_dt),
-      end_dt = data.table::last(approvals_dt$end_dt),
-      approval_type_description = data.table::first(approvals_dt$approval_type_description),
-      approval_type_description_fr = data.table::first(approvals_dt$approval_type_description_fr),
-      color_code = data.table::first(approvals_dt$color_code)
+      start_dt = data.table::first(.SD$start_dt),
+      end_dt = data.table::last(.SD$end_dt),
+      approval_type_description = data.table::first(.SD$approval_type_description),
+      approval_type_description_fr = data.table::first(.SD$approval_type_description_fr),
+      color_code = data.table::first(.SD$color_code)
     ), by = "run"]
     approvals_dt[, "run" := NULL]
   }
@@ -427,11 +426,11 @@ plotTimeseries <- function(location,
     # amalgamate
     qualifiers_dt[, "run" := data.table::rleid(qualifiers_dt$qualifier_type_description)]
     qualifiers_dt <- qualifiers_dt[, .(
-      start_dt = data.table::first(qualifiers_dt$start_dt),
-      end_dt = data.table::last(qualifiers_dt$end_dt),
-      qualifier_type_description = data.table::first(qualifiers_dt$qualifier_type_description),
-      qualifier_type_description_fr = data.table::first(qualifiers_dt$qualifier_type_description_fr),
-      color_code = data.table::first(qualifiers_dt$color_code)
+      start_dt = data.table::first(.SD$start_dt),
+      end_dt = data.table::last(.SD$end_dt),
+      qualifier_type_description = data.table::first(.SD$qualifier_type_description),
+      qualifier_type_description_fr = data.table::first(.SD$qualifier_type_description_fr),
+      color_code = data.table::first(.SD$color_code)
     ), by = "run"]
     qualifiers_dt[, "run" := NULL]
   }
@@ -505,15 +504,15 @@ plotTimeseries <- function(location,
     trace_data <- suppressWarnings(calculate_period(trace_data, timeseries_id = tsid, con = con))
     # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
     if ("period" %in% colnames(trace_data)) {
-      trace_data[, period_secs := as.numeric(lubridate::period(period))]
+      trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
       # Shift datetime and add period_secs to compute the 'expected' next datetime
-      trace_data[, expected := data.table::shift(datetime, type = "lead") - period_secs]
+      trace_data[, "expected" := data.table::shift(datetime, type = "lead") - period_secs]
       # Create 'gap_exists' column to identify where gaps are
-      trace_data[, gap_exists := datetime < expected & !is.na(expected)]
+      trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
       # Find indices where gaps exist
       gap_indices <- which(trace_data$gap_exists)
       # Create a data.table of NA rows to be inserted
-      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, datetime]  + 1,  # Add 1 second to place it at the start of the gap
+      na_rows <- data.table::data.table(datetime = trace_data[gap_indices, "datetime"][[1]]  + 1,  # Add 1 second to place it at the start of the gap
                                         value = NA)
       # Combine with NA rows
       trace_data <- data.table::rbindlist(list(trace_data[, c("datetime", "value")], na_rows), use.names = TRUE)
@@ -629,48 +628,48 @@ plotTimeseries <- function(location,
 
     if (approvals) {
       approvals_y_set <- if (grades & qualifiers) c(2.2, 3.2, 3.2, 2.2) else if (grades) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
-      approvals_dt[start_dt < mindt, "start_dt" := mindt]
-      approvals_dt[end_dt > maxdt, "end_dt" := maxdt]
+      approvals_dt[approvals_dt$start_dt < mindt, "start_dt" := mindt]
+      approvals_dt[approvals_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(approvals_dt) > 0) {
         approvals_dt[, "id" := paste0("approval_", .I)]
         poly_list[[length(poly_list) + 1]] <- approvals_dt[, .(
-          datetime = c(start_dt, start_dt, end_dt, end_dt),
+          datetime = c(.SD$start_dt[1L], .SD$start_dt[1L], .SD$end_dt[1L], .SD$end_dt[1L]),
           y = approvals_y_set,
-          color = approvals_dt$color_code,
-          text = if (lang == "en") paste0("Approval: ", approvals_dt[["approval_type_description"]]) else paste0("Approbation:", approvals_dt[["approval_type_description_fr"]]),
-          id = approvals_dt$id
+          color = .SD$color_code[1L], 4L,
+          text = if (lang == "en") paste0("Approval: ", .SD$approval_type_description[1L]) else paste0("Approbation:", .SD$approval_type_description_fr[1L]),
+          id = "id"
         ), by = "id"]
       }
     }
 
     if (grades) {
       grades_y_set <- if (qualifiers) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
-      grades_dt[start_dt < mindt, "start_dt" := mindt]
-      grades_dt[end_dt > maxdt, "end_dt" := maxdt]
+      grades_dt[grades_dt$start_dt < mindt, "start_dt" := mindt]
+      grades_dt[grades_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(grades_dt) > 0) {
         grades_dt[, "id" := paste0("grade_", .I)]
         poly_list[[length(poly_list) + 1]] <- grades_dt[, .(
-          datetime = c(start_dt, start_dt, end_dt, end_dt),
+          datetime = c(.SD$start_dt[1L], .SD$start_dt[1L], .SD$end_dt[1L], .SD$end_dt[1L]),
           y = grades_y_set,
-          color = grades_dt$color_code,
-          text = if (lang == "en") paste0("Grade: ", grades_dt[["grade_type_description"]]) else paste0("Cote:", grades_dt[["grade_type_description_fr"]]),
-          id = grades_dt$id
+          color = .SD$color_code[1L], 4L,
+          text = if (lang == "en") paste0("Grade: ", .SD$grade_type_description[1L]) else paste0("Cote:", .SD$grade_type_description_fr[1L]),
+          id = "id"
         ), by = "id"]
       }
     }
 
     if (qualifiers) {
       qualifiers_y_set <- c(0, 1, 1, 0)
-      qualifiers_dt[start_dt < mindt, "start_dt" := mindt]
-      qualifiers_dt[end_dt > maxdt, "end_dt" := maxdt]
+      qualifiers_dt[qualifiers_dt$start_dt < mindt, "start_dt" := mindt]
+      qualifiers_dt[qualifiers_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(qualifiers_dt) > 0) {
         qualifiers_dt[, "id" := paste0("qualifier_", .I)]
         poly_list[[length(poly_list) + 1]] <- qualifiers_dt[, .(
-          datetime = c(start_dt, start_dt, end_dt, end_dt),
+          datetime = c(.SD$start_dt[1L], .SD$start_dt[1L], .SD$end_dt[1L], .SD$end_dt[1L]),
           y = qualifiers_y_set,
-          color = qualifiers_dt$color_code,
-          text = if (lang == "en") paste0("Qualifier: ", qualifiers_dt[["qualifier_type_description"]]) else paste0("Qualificatif:", qualifiers_dt[["qualifier_type_description_fr"]]),
-          id =  qualifiers_dt$id
+          color = .SD$color_code[1L], 4L,
+          text = if (lang == "en") paste0("Qualifier: ", .SD$qualifier_type_description[1L]) else paste0("Qualificatif:", .SD$qualifier_type_description_fr[1L]),
+          id =  "id"
         ), by =  "id"]
       }
     }

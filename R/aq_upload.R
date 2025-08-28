@@ -41,6 +41,10 @@ aq_upload <- function(loc_id,
   if (!(all(c("Value", "Time") %in% names(data)))) {
     stop("Your data.frame must contain columns labelled Value and Time. Case sensitive.")
   }
+  
+  # check if httr and jsonlite are installed as it's needed by timeseries_client.R
+  rlang::check_installed("httr", reason = "to use the aq_upload() function")
+  rlang::check_installed("jsonlite", reason = "to use the aq_upload() function")
 
   data$Value[data$Value == ""] <- NA #Set blank spaces to NA
   data$Value[data$Value == " "] <- NA

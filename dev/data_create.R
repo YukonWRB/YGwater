@@ -18,4 +18,4 @@ eq_std_calc_CCME_NH4 <- read.csv("data-raw/eq_std_calc_CCME_NH4.csv", check.name
 
 data <- list(level_returns_max = level_returns_max, flow_returns_max = flow_returns_max, spatial_stns = spatial_stns, peaks = peaks, flow_level_flood = flow_level_flood, snowcourse_factors = snowcourse_factors, eq_std_calc_CCME_Mn = eq_std_calc_CCME_Mn, eq_std_calc_CCME_NH4 = eq_std_calc_CCME_NH4)
 
-usethis::use_data(data, internal=TRUE, overwrite=TRUE)
+usethis::use_data(data, internal = TRUE, overwrite = TRUE)

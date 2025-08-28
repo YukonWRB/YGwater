@@ -135,14 +135,18 @@ mapParams <- function(id, language) {
     
     # edit primary and secondary parameter options in a modal
     observeEvent(input$edit_primary_param, {
+      
+      # Order the parameters alphabetically by name (in the current language)
+      tmp <- moduleData$parameters[order(moduleData$parameters[[tr("param_name_col", language$language)]]), ]
+      
       showModal(modalDialog(
         title = NULL,
         selectizeInput(
           ns("param"),
           label = tr("parameter", language$language),
           choices = stats::setNames(
-            moduleData$parameters$parameter_id,
-            titleCase(moduleData$parameters[[tr("param_name_col", language$language)]], language$abbrev)
+            tmp$parameter_id,
+            titleCase(tmp[[tr("param_name_col", language$language)]], language$abbrev)
           ),
           selected = map_params$param1,
           multiple = FALSE
@@ -173,14 +177,18 @@ mapParams <- function(id, language) {
     })
     
     observeEvent(input$edit_secondary_param, {
+      
+      # Order the parameters alphabetically by name (in the current language)
+      tmp <- moduleData$parameters[order(moduleData$parameters[[tr("param_name_col", language$language)]]), ]
+      
       showModal(modalDialog(
         title = NULL,
         selectizeInput(
           ns("param"),
           label = tr("parameter", language$language),
           choices = stats::setNames(
-            moduleData$parameters$parameter_id,
-            titleCase(moduleData$parameters[[tr("param_name_col", language$language)]], language$abbrev)
+            tmp$parameter_id,
+            titleCase(tmp[[tr("param_name_col", language$language)]], language$abbrev)
           ),
           selected = map_params$param2,
           multiple = FALSE

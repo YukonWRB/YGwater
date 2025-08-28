@@ -30,11 +30,17 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   rlang::check_installed("exifr", reason = "required to use YGwater app")
   rlang::check_installed("leaflet", reason = "required to use YGwater app")
   rlang::check_installed("zip", reason = "required to use YGwater app")
-  if (rlang::is_installed("remotes")) {
-    rlang::check_installed("AquaCache", reason = "required to use YGwater app", action = \(pkg, ...) remotes::install_github("YukonWRB/AquaCache"))
-  } else {
+  rlang::check_installed("htmlwidgets", reason = "required to use YGwater app")
+  rlang::check_installed("jsonlite", reason = "required to use YGwater app")
+  
+  if (!rlang::is_installed("AquaCache")) {
     rlang::check_installed("remotes", reason = "required to install AquaCache from GitHub")
     rlang::check_installed("AquaCache", reason = "required to use YGwater app", action = \(pkg, ...) remotes::install_github("YukonWRB/AquaCache"))
+  }
+  
+  if (!public) {
+    rlang::check_installed("shinyWidgets", reason = "required to use YGwater app with public = FALSE")
+    rlang::check_installed("respR", reason = "required to use YGwater app with public = FALSE")
   }
   
   
@@ -59,7 +65,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   
   # Check that the DB has the 'application' schema
   if (!DBI::dbExistsTable(con, "page_content", schema = "application")) {
-    stop("The database does not have the required 'application' schema, or is at minimum missing the 'page_content' table. Refer to the script 'application_tables.R' in this application's folder to create this table. You'll find this cript at ", appDir, ".")
+    stop("The database does not have the required 'application' schema, or is at minimum missing the 'page_content' table. Refer to the script 'application_tables.R' in this application's folder to create this table. You'll find this script at ", appDir, ".")
   }
   
   # Check that the connection can see a few tables: 'timeseries', 'locations', 'parameters', 'measurements_continuous_calculated', 'samples', 'results'

@@ -267,7 +267,6 @@ manageNewsContent <- function(id) {
     
     observeEvent(input$save_image, {
       req(input$image_file, input$image_id)
-      print(input$image_file)
       bin <- hexView::readRaw(input$image_file$datapath)$fileRaw
       fmt <- tools::file_ext(input$image_file$name)
       tryCatch({

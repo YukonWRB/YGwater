@@ -58,37 +58,10 @@ floodReport <-
     
     #initial checks
     rlang::check_installed("imager", reason = "necessary for this function to download precip rasters.")
-    if (!rlang::is_installed("imager")) { #This is here because imager is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-      message("Installing dependency 'imager'...")
-      utils::install.packages("imager")
-      if (rlang::is_installed("imager")){
-        message("Package imager successfully installed.")
-      } else {
-        stop("Failed to install package imager. You could troubleshoot by running install.packages('imager') by itself.")
-      }
-    }
     
     rlang::check_installed("purrr", reason = "necessary for the report to run.")
-    if (!rlang::is_installed("purrr")) { #This is here because purrr is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-      message("Installing dependency 'purrr'...")
-      utils::install.packages("purrr")
-      if (rlang::is_installed("purrr")){
-        message("Package purrr successfully installed.")
-      } else {
-        stop("Failed to install package purrr. You could troubleshoot by running install.packages('purrr') by itself.")
-      }
-    }
-    
+    rlang::check_installed("httr", reason = "necessary for the report to run.")
     rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
-    if (!rlang::is_installed("knitr")) { #This is here because knitr is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-      message("Installing dependency 'knitr'...")
-      utils::install.packages("knitr")
-      if (rlang::is_installed("knitr")){
-        message("Package knitr successfully installed.")
-      } else {
-        stop("Failed to install package knitr. You could troubleshoot by running install.packages('knitr') by itself.")
-      }
-    }
     
     #####Selection of image path and save path#####
     if (!is.null(image_path)) {

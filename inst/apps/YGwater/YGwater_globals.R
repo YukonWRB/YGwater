@@ -55,6 +55,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     
     source(system.file("apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R", package = "YGwater"))
     source(system.file("apps/YGwater/modules/admin/applicationTasks/viewFeedback.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/users/manageUsers.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/users/changePassword.R", package = "YGwater"))
     
     # confirm G drive access for FOD reports
     g_drive <- dir.exists("//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/")
@@ -79,9 +81,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   source(system.file("apps/YGwater/modules/client/reports/snowBulletin.R", package = "YGwater"))
   
   # Map modules
-  source(system.file("apps/YGwater/modules/client/map/params.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/map/raster.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/map/locations.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/paramsMap.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/rasterMap.R", package = "YGwater"))
+  source(system.file("apps/YGwater/modules/client/map/locationsMap.R", package = "YGwater"))
   
   # Image modules
   source(system.file("apps/YGwater/modules/client/images/image_table_view.R", package = "YGwater"))
@@ -173,10 +175,4 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2" # Default background color for all main panels
   )
-  
-  # Load the YG BS 5 theme
-  # app_theme <<- bslib::bs_theme(version = 5) %>%
-  # bs_add_rules(paste(readLines(system.file("apps/YGwater/www/css/YG_bs5.css", package = "YGwater")), collapse = "\n"))
-  
 }
-

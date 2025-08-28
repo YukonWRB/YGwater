@@ -3,16 +3,12 @@
   height: 60px;
   margin-bottom: 3px; /* Adjust spacing above navbar */
   position: relative;
-  z-index: 1; /* Higher than navbar */
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
   background-color: white; /* Ensures it's not transparent */
-}
-
-.navbar {
-  z-index: 2;
 }
 
 /* Styling for the logo container */
@@ -92,20 +88,4 @@
   color: #ffffff !important;
   background-color: transparent !important;
 }
-
-/* not being used while an actionButton selects language instead
-/*.selectize-control, .selectize-dropdown {
-/*  width: auto !important; /* Auto-adjust the dropdown width */
-/*}
-/*.selectize-dropdown {
-/*  z-index: 1050 !important; /* Ensure the dropdown overlays other content */
-/*}
-
-/* Highlight selected language in the dropdown
-/*.dropdown-menu li.active a {
-/*    font-weight: bold;
-/*    background-color: #00454e !important; /* Bootstrap primary blue */
-/*    color: white !important; /* Ensures text is visible */
-/*    border-radius: 4px; /* Optional: smooth corners */
-/*}
 

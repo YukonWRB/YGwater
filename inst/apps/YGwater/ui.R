@@ -40,7 +40,7 @@ app_ui <- function(request) {
       Shiny.addCustomMessageHandler('updateLang', function(message) {
         $('html').attr('lang', message.lang);
       });"
-    )),
+      )),
       tags$script("Shiny.addCustomMessageHandler(
       'toggleDropdown',
           function toggleDropdown(msg) {
@@ -51,7 +51,7 @@ app_ui <- function(request) {
       tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc.
       tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
       tags$link(rel = "stylesheet", type = "text/css", href = "css/buttons.css"), # styling for hover effects on buttons with YG colors
-    
+      
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
       tags$style(HTML("
         a.dropdown-toggle > .shiny-html-output {
@@ -99,7 +99,8 @@ app_ui <- function(request) {
         id = "navbar",
         window_title = NULL,
         navbar_options = navbar_options(bg = "#244C5A",
-                                        collapsible = TRUE),
+                                        collapsible = TRUE,
+                                        style = "z-index:1002"), # Just above any leaflet possibilities which only go up to 1000
         fluid = TRUE,
         lang = "en",
         theme = NULL, # Theme is set earlier by css file referene in globals (THIS IS NOT WORKING)
@@ -111,18 +112,16 @@ app_ui <- function(request) {
                            uiOutput("mapLocs_ui")),
                  nav_panel(title = uiOutput("mapsNavParamsTitle"), value = "parameterValues",
                            uiOutput("mapParams_ui")),
-                  if (!config$public) {
-                      nav_panel(title = uiOutput("mapsNavRasterTitle"), value = "rasterValues",
-                           uiOutput("mapRaster_ui"))
-                  }
+                 if (!config$public) {
+                   nav_panel(title = uiOutput("mapsNavRasterTitle"), value = "rasterValues",
+                             uiOutput("mapRaster_ui"))
+                 }
         ),
         nav_menu(title = uiOutput("plotsNavMenuTitle"), value = "plot",
-                 nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discrete",
+                 nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discPlot",
                            uiOutput("plotDiscrete_ui")),
-                 nav_panel(title = uiOutput("plotsNavContTitle"), value = "continuous",
+                 nav_panel(title = uiOutput("plotsNavContTitle"), value = "contPlot",
                            uiOutput("plotContinuous_ui"))
-                 # nav_panel(title = uiOutput("plotsNavMixTitle"), value = "mix",
-                 # uiOutput("plotMix_ui"))
         ),
         if (!config$public) {
           nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
@@ -145,10 +144,10 @@ app_ui <- function(request) {
                            uiOutput("imgMapView_ui")),
         ),
         nav_menu(title = uiOutput("dataNavMenuTitle"), value = "data",
-                 nav_panel(title = uiOutput("dataNavContTitle"), value = "contData",
-                           uiOutput("contData_ui")),
                  nav_panel(title = uiOutput("dataNavDiscTitle"), value = "discData",
-                           uiOutput("discData_ui"))
+                           uiOutput("discData_ui")),
+                 nav_panel(title = uiOutput("dataNavContTitle"), value = "contData",
+                           uiOutput("contData_ui"))
         ), # End data nav_menu
         if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
           nav_panel(title = uiOutput("FODNavTitle"), value = "FOD",
@@ -161,19 +160,8 @@ app_ui <- function(request) {
                            uiOutput("about_ui"))
         ),
         if (!config$public) {
-          nav_menu(title = "Application tasks",
-                   value = "appTasks",
-                   nav_panel(title = "News page content",
-                             value = "manageNewsContent",
-                             uiOutput("manageNewsContent_ui")),
-                   nav_panel(title = "View feedback",
-                             value = "viewFeedback",
-                             uiOutput("viewFeedback_ui"))
-          )
-        },
-        if (!config$public) {
           nav_menu(title = "Continuous data", 
-                   value = "continuousData",
+                   value = "continuousDataTasks",
                    nav_panel(title = "Add continuous data",
                              value = "addContData",
                              uiOutput("addContData_ui")),
@@ -189,17 +177,17 @@ app_ui <- function(request) {
                    nav_panel(title = "Apply grades, approvals, qualifiers",
                              value = "grades_approvals_qualifiers",
                              uiOutput("grades_approvals_qualifiers_ui")),
-                   nav_panel(title = "Sync timeseries",
-                             value = "syncCont",
-                             uiOutput("syncCont_ui")),
                    nav_panel(title = "Add/edit timeseries",
                              value = "addTimeseries",
-                             uiOutput("addTimeseries_ui"))
+                             uiOutput("addTimeseries_ui")),
+                   nav_panel(title = "Sync timeseries",
+                             value = "syncCont",
+                             uiOutput("syncCont_ui"))
           )
         },
         if (!config$public) {
           nav_menu(title = "Discrete data", 
-                   value = "discreteData",
+                   value = "discreteDataTasks",
                    nav_panel(title = "Add discrete data",
                              value = "addDiscData",
                              uiOutput("addDiscData_ui")),
@@ -213,7 +201,7 @@ app_ui <- function(request) {
         },
         if (!config$public) {
           nav_menu(title = "Location tasks",
-                   value = "dbAdmin",
+                   value = "dbLocsTasks",
                    nav_panel(title = "Add/modify locations",
                              value = "addLocation",
                              uiOutput("addLocation_ui")
@@ -239,16 +227,33 @@ app_ui <- function(request) {
           nav_panel(title = "Add/modify field visit",
                     value = "visit",
                     uiOutput("visit_ui"))
-        }, 
+        },
         if (!config$public) {
           nav_menu(title = "Equipment/instruments",
-                   value = "equip",
+                   value = "equipTasks",
                    nav_panel(title = "Checks + calibrations",
                              value = "cal",
                              uiOutput("cal_ui")),
                    nav_panel(title = "Deploy/Recover", 
                              value = "deploy_recover",
                              uiOutput("deploy_recover_ui"))
+          )
+        },
+        if (!config$public) {
+          nav_menu(title = "Admin",
+                   value = "adminTasks",
+                   nav_panel(title = uiOutput("changePwdNavTitle"),
+                             value = "changePwd",
+                             uiOutput("changePwd_ui")),
+                   nav_panel(title = "Manage users",
+                             value = "manageUsers",
+                             uiOutput("manageUsers_ui")),
+                   nav_panel(title = "Update news page content",
+                             value = "manageNewsContent",
+                             uiOutput("manageNewsContent_ui")),
+                   nav_panel(title = "View feedback",
+                             value = "viewFeedback",
+                             uiOutput("viewFeedback_ui"))
           )
         },
         # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a drop-down menu instead.
@@ -266,65 +271,65 @@ app_ui <- function(request) {
     ), # End of page_fluid
     
     # Below is commented out because it is not used anymore. It was used to add a language selector drop-down to the navbar, but current implementation uses a button that toggles the language.
-#     # Insert language selector into the navbar
-#     HTML("<script>
-#   document.addEventListener('DOMContentLoaded', function() {
-#     var parent = document.getElementsByClassName('navbar-nav');
-#     
-#     if (parent.length > 0) {
-#       parent[0].insertAdjacentHTML('afterend', 
-#         '<ul class=\"navbar-nav ms-auto\">' +
-#         '<li class=\"nav-item dropdown\">' +
-#         '<a href=\"#\" class=\"nav-link dropdown-toggle\" data-bs-toggle=\"dropdown\" role=\"button\" aria-expanded=\"false\">' +
-#         'Language</a>' +
-#         '<ul class=\"dropdown-menu\" id=\"lang-dropdown\">' +
-#         '</ul>' +
-#         '</li>' +
-#         '</ul>'
-#       );
-#     }
-# 
-#     // Define the function globally so it can be used in the onclick event
-#     window.setLang = function(lang) {
-#       Shiny.setInputValue(\"langSelect\", lang, {priority: \"event\"});
-#       
-#       // Remove active class from all menu items
-#       var items = document.querySelectorAll('#lang-dropdown li');
-#       items.forEach(function(item) {
-#         item.classList.remove('active');
-#       });
-#     
-#       // Find and highlight the selected language
-#       var links = document.querySelectorAll('#lang-dropdown a');
-#       links.forEach(function(link) {
-#         if (link.textContent.trim() === lang) {
-#           link.parentElement.classList.add('active');
-#         }
-#       });
-#     };
-# 
-#     // Function to dynamically update the dropdown menu from Shiny
-#     Shiny.addCustomMessageHandler(\"updateLangMenu\", function(langs) {
-#       var dropdown = document.getElementById('lang-dropdown');
-#       dropdown.innerHTML = '';  // Clear existing options
-#       langs.forEach(function(lang) {
-#         var li = document.createElement('li');
-#         var a = document.createElement('a');
-#         a.href = '#';
-#         a.textContent = lang;
-#         a.setAttribute('onclick', \"setLang('\" + lang + \"')\");  // Attach function
-#         li.appendChild(a);
-#         dropdown.appendChild(li);
-#       });
-#     });
-#     
-#         // Function to set the initial selected language based on the user's browser language
-#     Shiny.addCustomMessageHandler('setSelectedLanguage', function(lang) {
-#       console.log('Setting initial language: ' + lang);
-#       Shiny.setInputValue('langSelect', lang, {priority: 'event'});
-#     });
-#   });
-# </script>")
+    #     # Insert language selector into the navbar
+    #     HTML("<script>
+    #   document.addEventListener('DOMContentLoaded', function() {
+    #     var parent = document.getElementsByClassName('navbar-nav');
+    #     
+    #     if (parent.length > 0) {
+    #       parent[0].insertAdjacentHTML('afterend', 
+    #         '<ul class=\"navbar-nav ms-auto\">' +
+    #         '<li class=\"nav-item dropdown\">' +
+    #         '<a href=\"#\" class=\"nav-link dropdown-toggle\" data-bs-toggle=\"dropdown\" role=\"button\" aria-expanded=\"false\">' +
+    #         'Language</a>' +
+    #         '<ul class=\"dropdown-menu\" id=\"lang-dropdown\">' +
+    #         '</ul>' +
+    #         '</li>' +
+    #         '</ul>'
+    #       );
+    #     }
+    # 
+    #     // Define the function globally so it can be used in the onclick event
+    #     window.setLang = function(lang) {
+    #       Shiny.setInputValue(\"langSelect\", lang, {priority: \"event\"});
+    #       
+    #       // Remove active class from all menu items
+    #       var items = document.querySelectorAll('#lang-dropdown li');
+    #       items.forEach(function(item) {
+    #         item.classList.remove('active');
+    #       });
+    #     
+    #       // Find and highlight the selected language
+    #       var links = document.querySelectorAll('#lang-dropdown a');
+    #       links.forEach(function(link) {
+    #         if (link.textContent.trim() === lang) {
+    #           link.parentElement.classList.add('active');
+    #         }
+    #       });
+    #     };
+    # 
+    #     // Function to dynamically update the dropdown menu from Shiny
+    #     Shiny.addCustomMessageHandler(\"updateLangMenu\", function(langs) {
+    #       var dropdown = document.getElementById('lang-dropdown');
+    #       dropdown.innerHTML = '';  // Clear existing options
+    #       langs.forEach(function(lang) {
+    #         var li = document.createElement('li');
+    #         var a = document.createElement('a');
+    #         a.href = '#';
+    #         a.textContent = lang;
+    #         a.setAttribute('onclick', \"setLang('\" + lang + \"')\");  // Attach function
+    #         li.appendChild(a);
+    #         dropdown.appendChild(li);
+    #       });
+    #     });
+    #     
+    #         // Function to set the initial selected language based on the user's browser language
+    #     Shiny.addCustomMessageHandler('setSelectedLanguage', function(lang) {
+    #       console.log('Setting initial language: ' + lang);
+    #       Shiny.setInputValue('langSelect', lang, {priority: 'event'});
+    #     });
+    #   });
+    # </script>")
   ) # End tagList
   
 }

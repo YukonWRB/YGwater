@@ -702,7 +702,6 @@ addImgs <- function(id) {
           out <- list()
           for (i in seq_len(nrow(df))) {
             tryCatch({
-              print(df$SourceFile[i])
               ret <- AquaCache::insertACImage(
                 object = df$SourceFile[i],
                 datetime = df$Datetime[i],

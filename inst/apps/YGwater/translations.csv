@@ -8,8 +8,8 @@ maps_locs,mapsNavLocsTitle,Monitoring locations,Emplacements de surveillance
 maps_params,mapsNavParamsTitle,Current/past conditions,Conditions présentes/historiques
 maps_raster,mapsNavRastersTitle,Rasters,Rasters
 plots,plotsNavMenuTitle,Plots ,Graphiques
-plots_discrete,plotsNavDiscTitle,Discrete data,Données discrètes
-plots_continuous,plotsNavContTitle,Continuous data,Données continues
+plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
+plots_continuous,plotsNavContTitle,Continuous,Continues
 plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
 reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
@@ -17,8 +17,8 @@ reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de n
 reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualitée de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
 data,dataNavMenuTitle,Data,Données
-data_discrete,dataNavDiscTitle,Discrete data,Données discrètes
-data_continuous,dataNavContTitle,Continuous data,Données continues
+data_discrete,dataNavDiscTitle,Discrete,Discrètes
+data_continuous,dataNavContTitle,Continuous,Continues
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,Sélection par tableau
 images_map,imagesNavMapTitle,Map selection,Sélection par carte
@@ -364,3 +364,12 @@ generic_name_col,DB column selection,name,name_fr
 sample_type_col,,sample_type,sample_type_fr
 sub_location_col,,sub_location_name,sub_location_name_fr
 aggregation_type_col,,aggregation_type,aggregation_type_fr
+changepwd_nav,nav panel title,Change password,Changer le mot de passe
+current_pw,label,Current password,Mot de passe actuel
+new_pw,label,New password,Nouveau mot de passe
+confirm_pw,label,Confirm new password,Confirmer le nouveau mot de passe
+pw_change_btn,button text,Change password,Modifier le mot de passe
+pw_change_success,modal text,Password updated successfully.,Mot de passe mis à jour avec succès.
+pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de passe ne correspondent pas.
+pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
+pw_change_title,modal title,Change password,Changer le mot de passe

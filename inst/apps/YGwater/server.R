@@ -22,7 +22,7 @@ app_server <- function(input, output, session) {
   showViz <- function(show = TRUE) {
     if (show) {
       nav_show(id = "navbar", target = "home")
-      nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
+      nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discPlot', 'contPlot' as well
       nav_show(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible. This will be removed once the FOD reports are integrated in the DB.
         nav_show(id = "navbar", target = "FOD")
@@ -34,7 +34,7 @@ app_server <- function(input, output, session) {
       nav_show(id = "navbar", target = "feedback")
     } else {
       nav_hide(id = "navbar", target = "home")
-      nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discrete', 'continuous', and 'mix' as well
+      nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discPlot', 'contPlot' as well
       nav_hide(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
       if (!config$public & config$g_drive) { # If not public AND g drive access is possible This will be removed once the FOD reports are integrated in the DB.
         nav_hide(id = "navbar", target = "FOD")
@@ -48,24 +48,23 @@ app_server <- function(input, output, session) {
   }
   showAdmin <- function(show = TRUE, logout = FALSE) {
     if (show) {
-      nav_show(id = "navbar", target = "dbAdmin") # Actually a nav_menu, and this targets the sync modules as well as timeeseries and locations add/edit modules
-      nav_show(id = "navbar", target = "equip")
-      nav_show(id = "navbar", target = "cal")
-      nav_show(id = "navbar", target = "continuousData") # Actually a nav_menu
-      nav_show(id = "navbar", target = "discreteData") # Actually a nav_menu
+      nav_show(id = "navbar", target = "dbLocsTasks") # Actually a nav_menu, and this targets the sync modules as well as timeeseries and locations add/edit modules
+      nav_show(id = "navbar", target = "equipTasks") # Actually a nav_menu
+      nav_show(id = "navbar", target = "continuousDataTasks") # Actually a nav_menu
+      nav_show(id = "navbar", target = "discreteDataTasks") # Actually a nav_menu
       nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_show(id = "navbar", target = "visit")
-      nav_show(id = "navbar", target = "appTasks")
+      nav_show(id = "navbar", target = "adminTasks")
     } else {
       # Hide irrelevant tabs for viz mode
-      nav_hide(id = "navbar", target = "dbAdmin")
-      nav_hide(id = "navbar", target = "equip")
-      nav_hide(id = "navbar", target = "cal")
-      nav_hide(id = "navbar", target = "continuousData") # Actually a nav_menu
-      nav_hide(id = "navbar", target = "discreteData") # Actually a nav_menu
+      nav_hide(id = "navbar", target = "dbLocsTasks")
+      nav_hide(id = "navbar", target = "equipTasks") # Actually a nav_menu
+      nav_hide(id = "navbar", target = "continuousDataTasks") # Actually a nav_menu
+      nav_hide(id = "navbar", target = "discreteDataTasks") # Actually a nav_menu
       nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_hide(id = "navbar", target = "visit")
-      nav_hide(id = "navbar", target = "appTasks")
+      nav_hide(id = "navbar", target = "adminTasks")
+
       if (logout) {
         shinyjs::hide("admin")
       }
@@ -78,7 +77,7 @@ app_server <- function(input, output, session) {
   }
   
   # Bookmarking and browser history navigation -------------------------------
-  bookmarkable_tabs <- c("home", "monitoringLocations", "parameterValues", "rasterValues", "discrete", "continuous", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "discData", "contData", "news", "about", "feedback")
+  bookmarkable_tabs <- c("home", "monitoringLocations", "parameterValues", "rasterValues", "discPlot", "contPlot", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "discData", "contData", "news", "about", "feedback")
   
   updating_from_url <- reactiveVal(FALSE)
   
@@ -114,8 +113,8 @@ app_server <- function(input, output, session) {
     ui_loaded$viz <- FALSE
     ui_loaded$admin <- FALSE
     ui_loaded$home <- FALSE
-    ui_loaded$discretePlot <- FALSE
-    ui_loaded$continuousPlot <- FALSE
+    ui_loaded$discPlot <- FALSE
+    ui_loaded$contPlot <- FALSE
     ui_loaded$mapParamValues <- FALSE
     ui_loaded$mapRasterValues <- FALSE
     ui_loaded$mapMonitoringLocations <- FALSE
@@ -132,7 +131,6 @@ app_server <- function(input, output, session) {
     ui_loaded$about <- FALSE
     ui_loaded$addLocation <- FALSE
     ui_loaded$addSubLocation <- FALSE
-    ui_loaded$equip <- FALSE
     ui_loaded$deploy_recover <- FALSE
     ui_loaded$cal <- FALSE
     
@@ -152,7 +150,11 @@ app_server <- function(input, output, session) {
     ui_loaded$addImgs <- FALSE
     
     ui_loaded$manageNewsContent <- FALSE
-    ui_loaded$viewFeedback <- FALSE 
+    ui_loaded$viewFeedback <- FALSE
+    
+    ui_loaded$changePwd <- FALSE
+    ui_loaded$manageUsers <- FALSE
+
     ui_loaded$visit <- FALSE
   }
   
@@ -192,9 +194,6 @@ app_server <- function(input, output, session) {
   languageSelection <- reactiveValues(language = NULL, abbrev = NULL) # holds language and abbreviation
   
   # Populate the language selection dropdown
-  # Commented out as using only French/english,
-  # session$sendCustomMessage("updateLangMenu", names(translation_cache))
-  
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
     shinyjs::runjs("
@@ -211,9 +210,6 @@ app_server <- function(input, output, session) {
     
     selected_lang <- if (lang_code == "fr") "Français" else "English"
     
-    # Send the selected language to JavaScript so it updates input$langSelect
-    # session$sendCustomMessage(type = 'setSelectedLanguage', message = selected_lang)
-    
     languageSelection$language <- selected_lang
     languageSelection$abbrev <- tr("titleCase", languageSelection$language)
     
@@ -227,76 +223,6 @@ app_server <- function(input, output, session) {
   }, ignoreInit = TRUE, ignoreNULL = TRUE, once = TRUE) # This observeEvent should only run once when the app is loaded.
   
   
-  # Below is commented out; it was used to work with a language selection drop-down menu but this is replaced by an actionButton
-  # # In contrast to input$userLang, input$langSelect is created in the UI and is the language selected by the user.
-  # # Observe user selection of language
-  # observeEvent(input$langSelect, { # Set the language based on the user's selection. This is done in an if statement in case the user types in something which isn't a language option.
-  #   if (input$langSelect %in% names(translation_cache)) {
-  #     languageSelection$language <- input$langSelect
-  #     languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-  #     
-  #     # Render the navigation bar titles based on the language
-  #     output$homeNavTitle <- renderUI({tr("home", languageSelection$language)})
-  #     output$mapsNavMenuTitle <- renderUI({tr("maps", languageSelection$language)})
-  #     output$mapsNavParamsTitle <- renderUI({tr("maps_params", languageSelection$language)})
-  #     output$mapsNavRasterTitle <- renderUI({tr("maps_raster", languageSelection$language)})
-  #     output$mapsNavLocsTitle <- renderUI({tr("maps_locs", languageSelection$language)})
-  #     
-  #     output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
-  #     output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
-  #     output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-  #     # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
-  #     
-  #     output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
-  #     output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
-  #     output$reportsNavWaterTitle <- renderUI({tr("reports_water", languageSelection$language)})
-  #     output$reportsNavWQTitle <- renderUI({tr("reports_wq", languageSelection$language)})
-  #     output$reportsNavSnowbullTitle <- renderUI({tr("reports_snowbull", languageSelection$language)})
-  #     
-  #     output$dataNavMenuTitle <- renderUI({tr("data", languageSelection$language)})
-  #     output$dataNavDiscTitle <- renderUI({tr("data_discrete", languageSelection$language)})
-  #     output$dataNavContTitle <- renderUI({tr("data_continuous", languageSelection$language)})
-  #     
-  #     output$imagesNavMenuTitle <- renderUI({tr("images", languageSelection$language)})
-  #     output$imagesNavTableTitle <- renderUI({tr("images_table", languageSelection$language)})
-  #     output$imagesNavMapTitle <- renderUI({tr("images_map", languageSelection$language)})
-  #     
-  #     output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
-  #     output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
-  #     output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
-  #     
-  #     session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
-  #     
-  #     # Render the footer based on the language
-  #     output$footer_ui <- renderUI({
-  #       div(
-  #         span("Was this page helpful?",
-  #              # Make 'buttons' that are bs_icons with a thumbs up and thumbs down and add a click event to them
-  #              actionButton(
-  #                "thumbs_up",
-  #                label = bsicons::bs_icon("hand-thumbs-up", 
-  #                                         size = "2em", 
-  #                                         fill = "#244C5A"),
-  #                class = "btn btn-link",
-  #                width = "50px"),
-  #              actionButton(
-  #                "thumbs_down",
-  #                label = bsicons::bs_icon("hand-thumbs-down", 
-  #                                         size = "2em", 
-  #                                         fill = "#244C5A"),
-  #                class = "btn btn-link",
-  #                width = "50px")
-  #         ),
-  #         # Set background color of div
-  #         style = "background-color: white; padding: 10px; text-align: left; margin-bottom: 5px;",
-  #         # Make a placeholder for feedback text and submit button
-  #         uiOutput("feedback_ui")
-  #       )
-  #     }) 
-  #   }
-  # })  # No need for a bindEvent as this rendering is trigered by a language change
-  
-  # Below code replaced the drop-down button selection
   # Toggle language when the button is pressed
   observeEvent(input$language_button, {
     new_lang <- if (languageSelection$language == "English") "Français" else "English"
@@ -325,7 +251,6 @@ app_server <- function(input, output, session) {
     output$plotsNavMenuTitle <- renderUI({tr("plots", languageSelection$language)})
     output$plotsNavDiscTitle <- renderUI({tr("plots_discrete", languageSelection$language)})
     output$plotsNavContTitle <- renderUI({tr("plots_continuous", languageSelection$language)})
-    # output$plotsNavMixTitle <- renderUI({tr("plots_mix", languageSelection$language)})
     
     output$reportsNavMenuTitle <- renderUI({tr("reports", languageSelection$language)})
     output$reportsNavSnowstatsTitle <- renderUI({tr("reports_snow", languageSelection$language)})
@@ -344,6 +269,7 @@ app_server <- function(input, output, session) {
     output$infoNavMenuTitle <- renderUI({tr("info", languageSelection$language)})
     output$infoNavNewsTitle <- renderUI({tr("info_news", languageSelection$language)})
     output$infoNavAboutTitle <- renderUI({tr("info_about", languageSelection$language)})
+    output$changePwdNavTitle <- renderUI({tr("changepwd_nav", languageSelection$language)})
     
     output$FODNavTitle <- renderUI({tr("fod_comments", languageSelection$language)})
     
@@ -486,6 +412,7 @@ app_server <- function(input, output, session) {
   # Log in/out ##########################################
   log_attempts <- reactiveVal(0) # counter for login attempts - prevent brute force attacks
   session$userData$user_logged_in <- FALSE # value to track login status
+  session$userData$can_create_role <- FALSE # track CREATE ROLE privilege
   
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
@@ -543,7 +470,7 @@ $(document).keyup(function(event) {
                                                     silent = TRUE)
       test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
       # Test the connection
-      if (nrow(test) > 0) {
+      if (nrow(test) > 0) {  # Means the connection was successful
         removeModal()
         showModal(modalDialog(
           title = tr("login_success", languageSelection$language),
@@ -560,21 +487,81 @@ $(document).keyup(function(event) {
         session$userData$config$dbUser <- input$username
         session$userData$config$dbPass <- input$password
         
+        # Check if the user has more than SELECT privileges on any tables in the public, continuous, discrete, or boreholes schemas, used to determine if the 'admin' tab should be shown
+        
+        # Below option yields TRUE/FALSE only:
+        sql <- "SELECT EXISTS (
+  SELECT 1
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relkind IN ('r','p')
+    AND n.nspname IN ('public','continuous','discrete','boreholes')
+    AND (
+      has_table_privilege($1, c.oid, 'INSERT') OR
+      has_table_privilege($1, c.oid, 'UPDATE') OR
+      has_table_privilege($1, c.oid, 'DELETE') OR
+      has_table_privilege($1, c.oid, 'TRUNCATE') OR
+      has_table_privilege($1, c.oid, 'REFERENCES') OR
+      has_table_privilege($1, c.oid, 'TRIGGER')
+    )
+) AS has_more_than_select;"
+        
+        not_select <- DBI::dbGetQuery(session$userData$AquaCache, sql,
+                               params = list(session$userData$config$dbUser))[1,1]
+        
+        
+        # Below option yields the list of tables the user has more than SELECT privileges on:
+#         sql <- "
+# WITH tbls AS (
+#   SELECT n.nspname AS schema, c.relname AS table_name, c.oid AS tbl_oid
+#   FROM pg_class c
+#   JOIN pg_namespace n ON n.oid = c.relnamespace
+#   WHERE c.relkind IN ('r','p')
+#     AND n.nspname IN ('public','continuous','discrete','boreholes')
+# )
+# SELECT t.schema,
+#        t.table_name,
+#        string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
+# FROM tbls t
+# CROSS JOIN LATERAL unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
+# WHERE has_table_privilege($1, t.tbl_oid, p.priv)
+# GROUP BY t.schema, t.table_name
+# ORDER BY t.schema, t.table_name;"
+#     
+#     res <- DBI::dbGetQuery(
+#       session$userData$AquaCache,
+#       sql,
+#       params = list(session$userData$config$dbUser)  # or any role name
+#     )
+        
+        # IF the user has more than SELECT privileges on any tables, show the 'admin' button
+        if (not_select) {
+          # Create the new element for the 'admin' mode
+          # Other tabs are created if/when the user clicks on the 'admin' actionButton
+          nav_insert("navbar",
+                     nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
+                     target = "home", position = "before")
+          
+          # Check if the user has CREATE ROLE privileges, used to determine if the 'manage users' tab should be shown in admin mode
+          res <- DBI::dbGetQuery(session$userData$AquaCache,
+                                 'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;')
+          session$userData$can_create_role <- isTRUE(res$rolcreaterole[1])
+        }  # else the button just won't be created/shown
+        
+        
+        # Set the login status to TRUE
         session$userData$user_logged_in <- TRUE
         
+        # change the 'Login' button to 'Logout'
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
-        # Create the new element for the 'admin' mode
-        # Other tabs are created if/when the user clicks on the 'admin' actionButton
-        nav_insert("navbar",
-                   nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
-                   target = "home", position = "before")
-        
         # Initialize a fresh cache environment for the session
         session$userData$app_cache <- new.env(parent = emptyenv())
+        
         # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
         reset_ui_loaded()
+        
         # Send the user back to the 'home' tab if they were elsewhere
         updateTabsetPanel(session, "navbar", selected = "home")
         
@@ -582,7 +569,7 @@ $(document).keyup(function(event) {
         updateTabsetPanel(session, "navbar", selected = last_viz_tab())
         
         return()
-      } else {
+      } else {  # Connection failed (without throwing an explicit error) or could not see any records
         removeModal()
         showModal(modalDialog(
           title = tr("login_fail", languageSelection$language),
@@ -596,7 +583,7 @@ $(document).keyup(function(event) {
         })
         return()
       }
-    }, error = function(e) {
+    }, error = function(e) { # Connection failed with error
       removeModal()
       showModal(modalDialog(
         title = tr("login_fail", languageSelection$language),
@@ -616,6 +603,7 @@ $(document).keyup(function(event) {
   observeEvent(input$logoutBtn, {
     
     session$userData$user_logged_in <- FALSE  # Set login status to FALSE
+    session$userData$can_create_role <- FALSE
     
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
@@ -704,10 +692,11 @@ $(document).keyup(function(event) {
       message = list(msg = "hide dropdown"))
     
     # When user selects any a tab, update the last active tab for the current mode
-    if (input$navbar %in% c("home", "discrete", "continuous", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
+    if (input$navbar %in% c("home", "discPlot", "contPlot", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers")) {
+
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -731,22 +720,22 @@ $(document).keyup(function(event) {
     }
     
     ### Plots nav_menu ##########################
-    if (input$navbar == "discrete") {  # This is reached through a nav_menu
-      if (!ui_loaded$discretePlot) {
-        output$plotDiscrete_ui <- renderUI(discretePlotUI("discretePlot"))
-        ui_loaded$discretePlot <- TRUE
-        discretePlot("discretePlot", config$mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+    if (input$navbar == "discPlot") {  # This is reached through a nav_menu
+      if (!ui_loaded$discPlot) {
+        output$plotDiscrete_ui <- renderUI(discPlotUI("discPlot"))
+        ui_loaded$discPlot <- TRUE
+        discPlot("discPlot", config$mdb_files, language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
       }
     }
-    if (input$navbar == "continuous") { # This is reached through a nav_menu
-      if (!ui_loaded$continuousPlot) {
-        output$plotContinuous_ui <- renderUI(continuousPlotUI("continuousPlot"))
-        ui_loaded$continuousPlot <- TRUE
-        continuousPlot("continuousPlot", language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
+    if (input$navbar == "contPlot") { # This is reached through a nav_menu
+      if (!ui_loaded$contPlot) {
+        output$plotContinuous_ui <- renderUI(contPlotUI("contPlot"))
+        ui_loaded$contPlot <- TRUE
+        contPlot("contPlot", language = languageSelection, windowDims, inputs = moduleOutputs$mapLocs) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
@@ -766,8 +755,8 @@ $(document).keyup(function(event) {
           target <- moduleOutputs$mapLocs$change_tab
           if (target == "discData") ui_loaded$discData <- FALSE
           if (target == "contData") ui_loaded$contData <- FALSE
-          if (target == "discrete") ui_loaded$discretePlot <- FALSE
-          if (target == "continuous") ui_loaded$continuousPlot <- FALSE
+          if (target == "discPlot") ui_loaded$discPlot <- FALSE
+          if (target == "contPlot") ui_loaded$contPlot <- FALSE
           nav_select(session = session, "navbar", selected = target) # Change tabs
           moduleOutputs$mapLocs$change_tab <- NULL
         }
@@ -1033,6 +1022,20 @@ $(document).keyup(function(event) {
         output$viewFeedback_ui <- renderUI(viewFeedbackUI("viewFeedback"))
         ui_loaded$viewFeedback <- TRUE
         viewFeedback("viewFeedback")
+      }
+    }
+    if (input$navbar == "changePwd") {
+      if (!ui_loaded$changePwd) {
+        output$changePwd_ui <- renderUI(changePasswordUI("changePwd"))
+        ui_loaded$changePwd <- TRUE
+        changePassword("changePwd", language = languageSelection)
+      }
+    }
+    if (input$navbar == "manageUsers") {
+      if (!ui_loaded$manageUsers) {
+        output$manageUsers_ui <- renderUI(manageUsersUI("manageUsers"))
+        ui_loaded$manageUsers <- TRUE
+        manageUsers("manageUsers")
       }
     }
     if (input$navbar == "visit") {
