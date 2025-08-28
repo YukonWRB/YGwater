@@ -22,11 +22,14 @@ get_cached <- function(key, fetch_fun, check_fun = NULL, ttl = 3600, env = .Glob
   if (exists(key, envir = cache_env, inherits = FALSE)) {
     entry <- get(key, envir = cache_env, inherits = FALSE)
     # If the entry exists and is still valid, return the cached value
-    if (difftime(Sys.time(), entry$timestamp, units = "secs") > ttl && !is.null(check_fun)) {
-      # If the entry is expired, check if it can be reused using 'check_fun'
-      if (check_fun()) {  # check_fun should return TRUE if the cached value is still valid
-        return(entry$value)
-      }
+    if (difftime(Sys.time(), entry$timestamp, units = "secs") > ttl) {
+      
+      if (!is.null(check_fun) && is.function(check_fun)) {
+        # If the entry is expired, check if it can be reused using 'check_fun'
+        if (check_fun()) {  # check_fun should return TRUE if the cached value is still valid
+          return(entry$value)
+        } # If check_fun returns FALSE, we fall through to fetch a new value
+      } # If check_fun is NULL, we fall through to fetch a new value
     } else { # If the entry is still valid or it's invalid and check_fun is NULL, return the cached value
       return(entry$value)
     }
