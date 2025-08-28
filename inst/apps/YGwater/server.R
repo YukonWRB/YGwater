@@ -48,30 +48,22 @@ app_server <- function(input, output, session) {
   }
   showAdmin <- function(show = TRUE, logout = FALSE) {
     if (show) {
-      nav_show(id = "navbar", target = "dbAdmin") # Actually a nav_menu, and this targets the sync modules as well as timeeseries and locations add/edit modules
-      nav_show(id = "navbar", target = "equip")
-      nav_show(id = "navbar", target = "cal")
-      nav_show(id = "navbar", target = "continuousData") # Actually a nav_menu
-      nav_show(id = "navbar", target = "discreteData") # Actually a nav_menu
+      nav_show(id = "navbar", target = "dbLocsTasks") # Actually a nav_menu, and this targets the sync modules as well as timeeseries and locations add/edit modules
+      nav_show(id = "navbar", target = "equipTasks") # Actually a nav_menu
+      nav_show(id = "navbar", target = "continuousDataTasks") # Actually a nav_menu
+      nav_show(id = "navbar", target = "discreteDataTasks") # Actually a nav_menu
       nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_show(id = "navbar", target = "visit")
-      nav_show(id = "navbar", target = "appTasks")
-      nav_show(id = "navbar", target = "changePwd")
-      if (isTRUE(session$userData$can_create_role)) {
-        nav_show(id = "navbar", target = "manageUsers")
-      }
+      nav_show(id = "navbar", target = "adminTasks")
     } else {
       # Hide irrelevant tabs for viz mode
-      nav_hide(id = "navbar", target = "dbAdmin")
-      nav_hide(id = "navbar", target = "equip")
-      nav_hide(id = "navbar", target = "cal")
-      nav_hide(id = "navbar", target = "continuousData") # Actually a nav_menu
-      nav_hide(id = "navbar", target = "discreteData") # Actually a nav_menu
+      nav_hide(id = "navbar", target = "dbLocsTasks")
+      nav_hide(id = "navbar", target = "equipTasks") # Actually a nav_menu
+      nav_hide(id = "navbar", target = "continuousDataTasks") # Actually a nav_menu
+      nav_hide(id = "navbar", target = "discreteDataTasks") # Actually a nav_menu
       nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_hide(id = "navbar", target = "visit")
-      nav_hide(id = "navbar", target = "appTasks")
-      nav_hide(id = "navbar", target = "changePwd")
-      nav_hide(id = "navbar", target = "manageUsers")
+      nav_hide(id = "navbar", target = "adminTasks")
 
       if (logout) {
         shinyjs::hide("admin")
@@ -139,7 +131,6 @@ app_server <- function(input, output, session) {
     ui_loaded$about <- FALSE
     ui_loaded$addLocation <- FALSE
     ui_loaded$addSubLocation <- FALSE
-    ui_loaded$equip <- FALSE
     ui_loaded$deploy_recover <- FALSE
     ui_loaded$cal <- FALSE
     
@@ -203,9 +194,6 @@ app_server <- function(input, output, session) {
   languageSelection <- reactiveValues(language = NULL, abbrev = NULL) # holds language and abbreviation
   
   # Populate the language selection dropdown
-  # Commented out as using only French/english,
-  # session$sendCustomMessage("updateLangMenu", names(translation_cache))
-  
   # Determine user's browser language. This should only run once when the app is loaded.
   observe({
     shinyjs::runjs("
@@ -221,9 +209,6 @@ app_server <- function(input, output, session) {
     lang_code <- substr(input$userLang, 1, 2)
     
     selected_lang <- if (lang_code == "fr") "Français" else "English"
-    
-    # Send the selected language to JavaScript so it updates input$langSelect
-    # session$sendCustomMessage(type = 'setSelectedLanguage', message = selected_lang)
     
     languageSelection$language <- selected_lang
     languageSelection$abbrev <- tr("titleCase", languageSelection$language)

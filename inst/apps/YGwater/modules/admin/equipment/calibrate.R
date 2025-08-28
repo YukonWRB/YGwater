@@ -1988,7 +1988,6 @@ table.on("click", "tr", function() {
         alert("The number you entered does not correspond to a row/index number", type = "error")
       } else {
         delete_ID <- as.numeric(calibrations$incomplete_calibrations[delete_value , "calibration_id"])
-        alert("Deleting old calibration", type = "info")
         all_sheets <- DBI::dbListTables(session$userData$AquaCache)
         calibration_sheets <- all_sheets[grepl("^calibrate_", all_sheets)]
         
@@ -1996,13 +1995,14 @@ table.on("click", "tr", function() {
         
         # Reload the calibrations table and re-create incomplete_calibrations
         calibrations$calibrations <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM calibrations")  # This will be used to check if there are any incomplete calibrations
-        incomplete_calibrations <- calibrations$calibrations[calibrations$calibrations$complete == FALSE, ] # find out if any calibrations are labelled as incomplete
-        calibrations$incomplete_calibrations <- incomplete_calibrations
+        calibrations$incomplete_calibrations <- calibrations$calibrations[calibrations$calibrations$complete == FALSE, ] # find out if any calibrations are labelled as incomplete
         
-        complete$incomplete <- data.frame("Index" = seq_len(nrow(incomplete_calibrations)),
-                                          "Calibrator" = as.vector(incomplete_calibrations$observer_string),
-                                          "Date/time UTC" = incomplete_calibrations$obs_datetime,
-                                          "Purpose" = incomplete_calibrations$purpose,
+        calibrations$incomplete_calibrations <- dplyr::left_join(calibrations$incomplete_calibrations, instruments_data$observers[, c("observer_id", "observer_string")], by = dplyr::join_by(observer == observer_id))
+        
+        complete$incomplete <- data.frame("Index" = seq_len(nrow(calibrations$incomplete_calibrations)),
+                                          "Calibrator" = as.vector(calibrations$incomplete_calibrations$observer_string),
+                                          "Date/time UTC" = calibrations$incomplete_calibrations$obs_datetime,
+                                          "Purpose" = calibrations$incomplete_calibrations$purpose,
                                           check.names = FALSE)
         
         if (nrow(complete$incomplete) == 0) {
