@@ -21,20 +21,17 @@ changePassword <- function(id, language) {
     })
     
     observeEvent(input$submit, ignoreInit = TRUE, {
-      # prevent double-clicks while processing (if shinyjs available)
-      if (requireNamespace("shinyjs", quietly = TRUE)) {
-        shinyjs::disable(ns("submit"))
-        on.exit(shinyjs::enable(ns("submit")), add = TRUE)
-      }
       
       req(input$current_pwd, input$new_pwd, input$confirm_pwd)
+      
+      req(nchar(input$current_pwd) > 0, nchar(input$new_pwd) > 0, nchar(input$confirm_pwd) > 0)
       
       if (!identical(input$new_pwd, input$confirm_pwd)) {
         showModal(modalDialog(
           title = trl("pw_change_title"),
           trl("pw_change_fail_match"),
           easyClose = TRUE,
-          footer = modalButton(trl("close"))
+          footer = actionButton(ns("close"), trl("close"))
         ))
         return(invisible(NULL))
       }
@@ -61,7 +58,7 @@ changePassword <- function(id, language) {
           title = trl("pw_change_title"),
           trl("pw_change_fail_current"),
           easyClose = TRUE,
-          footer = modalButton(trl("close"))
+          footer = actionButton(ns("close"), trl("close"))
         ))
         return(invisible(NULL))
       }
@@ -70,7 +67,7 @@ changePassword <- function(id, language) {
       sql <- DBI::SQL(sprintf(
         "ALTER ROLE %s WITH PASSWORD %s",
         DBI::dbQuoteIdentifier(session$userData$AquaCache, session$userData$config$dbUser),
-        DBI::dbQuoteString(    session$userData$AquaCache, input$new_pwd)
+        DBI::dbQuoteString(session$userData$AquaCache, input$new_pwd)
       ))
       
       res <- try(DBI::dbExecute(session$userData$AquaCache, sql), silent = TRUE)
@@ -79,7 +76,7 @@ changePassword <- function(id, language) {
           title = trl("error"),
           paste0(conditionMessage(attr(res, "condition"))),
           easyClose = TRUE,
-          footer = modalButton(trl("close"))
+          footer = actionButton(ns("close"), trl("close"))
         ))
         return(invisible(NULL))
       }
@@ -94,8 +91,13 @@ changePassword <- function(id, language) {
         title = trl("pw_change_title"),
         trl("pw_change_success"),
         easyClose = TRUE,
-        footer = modalButton(trl("close"))
+        footer = actionButton(ns("close"), trl("close"))
       ))
+    })
+    
+    # Observe close button in modal
+    observeEvent(input$close, {
+      removeModal()
     })
   })
 }

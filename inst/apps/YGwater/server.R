@@ -485,7 +485,7 @@ $(document).keyup(function(event) {
                                                     silent = TRUE)
       test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
       # Test the connection
-      if (nrow(test) > 0) {
+      if (nrow(test) > 0) {  # Means the connection was successful
         removeModal()
         showModal(modalDialog(
           title = tr("login_success", languageSelection$language),
@@ -501,26 +501,82 @@ $(document).keyup(function(event) {
         # Update the session with the new user's credentials
         session$userData$config$dbUser <- input$username
         session$userData$config$dbPass <- input$password
-        res <- DBI::dbGetQuery(session$userData$AquaCache,
-                                'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;')
-        session$userData$can_create_role <- isTRUE(res$rolcreaterole[1])
-
         
+        # Check if the user has more than SELECT privileges on any tables in the public, continuous, discrete, or boreholes schemas, used to determine if the 'admin' tab should be shown
+        
+        # Below option yields TRUE/FALSE only:
+        sql <- "SELECT EXISTS (
+  SELECT 1
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relkind IN ('r','p')
+    AND n.nspname IN ('public','continuous','discrete','boreholes')
+    AND (
+      has_table_privilege($1, c.oid, 'INSERT') OR
+      has_table_privilege($1, c.oid, 'UPDATE') OR
+      has_table_privilege($1, c.oid, 'DELETE') OR
+      has_table_privilege($1, c.oid, 'TRUNCATE') OR
+      has_table_privilege($1, c.oid, 'REFERENCES') OR
+      has_table_privilege($1, c.oid, 'TRIGGER')
+    )
+) AS has_more_than_select;"
+        
+        not_select <- DBI::dbGetQuery(session$userData$AquaCache, sql,
+                               params = list(session$userData$config$dbUser))[1,1]
+        
+        
+        # Below option yields the list of tables the user has more than SELECT privileges on:
+#         sql <- "
+# WITH tbls AS (
+#   SELECT n.nspname AS schema, c.relname AS table_name, c.oid AS tbl_oid
+#   FROM pg_class c
+#   JOIN pg_namespace n ON n.oid = c.relnamespace
+#   WHERE c.relkind IN ('r','p')
+#     AND n.nspname IN ('public','continuous','discrete','boreholes')
+# )
+# SELECT t.schema,
+#        t.table_name,
+#        string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
+# FROM tbls t
+# CROSS JOIN LATERAL unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
+# WHERE has_table_privilege($1, t.tbl_oid, p.priv)
+# GROUP BY t.schema, t.table_name
+# ORDER BY t.schema, t.table_name;"
+#     
+#     res <- DBI::dbGetQuery(
+#       session$userData$AquaCache,
+#       sql,
+#       params = list(session$userData$config$dbUser)  # or any role name
+#     )
+        
+        # IF the user has more than SELECT privileges on any tables, show the 'admin' button
+        if (not_select) {
+          # Create the new element for the 'admin' mode
+          # Other tabs are created if/when the user clicks on the 'admin' actionButton
+          nav_insert("navbar",
+                     nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
+                     target = "home", position = "before")
+          
+          # Check if the user has CREATE ROLE privileges, used to determine if the 'manage users' tab should be shown in admin mode
+          res <- DBI::dbGetQuery(session$userData$AquaCache,
+                                 'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;')
+          session$userData$can_create_role <- isTRUE(res$rolcreaterole[1])
+        }  # else the button just won't be created/shown
+        
+        
+        # Set the login status to TRUE
         session$userData$user_logged_in <- TRUE
         
+        # change the 'Login' button to 'Logout'
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
         
-        # Create the new element for the 'admin' mode
-        # Other tabs are created if/when the user clicks on the 'admin' actionButton
-        nav_insert("navbar",
-                   nav_item(tagList(actionButton("admin", "Switch to Admin mode", style = "color: #F2A900;"))),
-                   target = "home", position = "before")
-        
         # Initialize a fresh cache environment for the session
         session$userData$app_cache <- new.env(parent = emptyenv())
+        
         # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
         reset_ui_loaded()
+        
         # Send the user back to the 'home' tab if they were elsewhere
         updateTabsetPanel(session, "navbar", selected = "home")
         
@@ -528,7 +584,7 @@ $(document).keyup(function(event) {
         updateTabsetPanel(session, "navbar", selected = last_viz_tab())
         
         return()
-      } else {
+      } else {  # Connection failed (without throwing an explicit error) or could not see any records
         removeModal()
         showModal(modalDialog(
           title = tr("login_fail", languageSelection$language),
@@ -542,7 +598,7 @@ $(document).keyup(function(event) {
         })
         return()
       }
-    }, error = function(e) {
+    }, error = function(e) { # Connection failed with error
       removeModal()
       showModal(modalDialog(
         title = tr("login_fail", languageSelection$language),
