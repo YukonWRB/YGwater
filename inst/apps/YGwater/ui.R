@@ -235,8 +235,8 @@ app_ui <- function(request) {
           nav_menu(title = "Equipment",
                    value = "equipTasks",
                    nav_panel(title = "Checks + calibrations",
-                             value = "cal",
-                             uiOutput("cal_ui")),
+                             value = "calibrate",
+                             uiOutput("calibrate_ui")),
                    nav_panel(title = "Deploy/Recover", 
                              value = "deploy_recover",
                              uiOutput("deploy_recover_ui"))

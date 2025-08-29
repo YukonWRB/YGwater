@@ -48,83 +48,85 @@ app_server <- function(input, output, session) {
   }
   showAdmin <- function(show = TRUE, logout = FALSE) {
     if (show) {
-      privs <- session$userData$admin_privs
 
       # Location tasks -------------------------------------------------------
-      if (any(privs$addLocation, privs$addSubLocation)) {
+      if (any(session$userData$admin_privs$addLocation, session$userData$admin_privs$addSubLocation)) {
         nav_show(id = "navbar", target = "dbLocsTasks")
-        if (!isTRUE(privs$addLocation))   nav_hide(id = "navbar", target = "addLocation")
-        if (!isTRUE(privs$addSubLocation)) nav_hide(id = "navbar", target = "addSubLocation")
+        if (!isTRUE(session$userData$admin_privs$addLocation))   nav_hide(id = "navbar", target = "addLocation")
+        if (!isTRUE(session$userData$admin_privs$addSubLocation)) nav_hide(id = "navbar", target = "addSubLocation")
       } else {
         nav_hide(id = "navbar", target = "dbLocsTasks")
       }
 
       # Equipment tasks -----------------------------------------------------
-      if (any(privs$cal, privs$deploy_recover)) {
+      if (any(session$userData$admin_privs$calibrate, session$userData$admin_privs$deploy_recover)) {
         nav_show(id = "navbar", target = "equipTasks")
-        if (!isTRUE(privs$cal))            nav_hide(id = "navbar", target = "cal")
-        if (!isTRUE(privs$deploy_recover)) nav_hide(id = "navbar", target = "deploy_recover")
+        if (!isTRUE(session$userData$admin_privs$calibrate))            nav_hide(id = "navbar", target = "calibrate")
+        if (!isTRUE(session$userData$admin_privs$deploy_recover)) nav_hide(id = "navbar", target = "deploy_recover")
       } else {
         nav_hide(id = "navbar", target = "equipTasks")
       }
 
       # Continuous data tasks -----------------------------------------------
-      if (any(privs$addContData, privs$editContData, privs$continuousCorrections,
-              privs$imputeMissing, privs$grades_approvals_qualifiers,
-              privs$addTimeseries, privs$syncCont)) {
+      if (any(session$userData$admin_privs$addContData, session$userData$admin_privs$editContData, session$userData$admin_privs$continuousCorrections,
+              session$userData$admin_privs$imputeMissing, session$userData$admin_privs$grades_approvals_qualifiers,
+              session$userData$admin_privs$addTimeseries, session$userData$admin_privs$syncCont)) {
         nav_show(id = "navbar", target = "continuousDataTasks")
-        if (!isTRUE(privs$addContData))               nav_hide(id = "navbar", target = "addContData")
-        if (!isTRUE(privs$editContData))              nav_hide(id = "navbar", target = "editContData")
-        if (!isTRUE(privs$continuousCorrections))     nav_hide(id = "navbar", target = "continuousCorrections")
-        if (!isTRUE(privs$imputeMissing))             nav_hide(id = "navbar", target = "imputeMissing")
-        if (!isTRUE(privs$grades_approvals_qualifiers)) nav_hide(id = "navbar", target = "grades_approvals_qualifiers")
-        if (!isTRUE(privs$addTimeseries))             nav_hide(id = "navbar", target = "addTimeseries")
-        if (!isTRUE(privs$syncCont))                  nav_hide(id = "navbar", target = "syncCont")
+        if (!isTRUE(session$userData$admin_privs$addContData))               nav_hide(id = "navbar", target = "addContData")
+        if (!isTRUE(session$userData$admin_privs$editContData))              nav_hide(id = "navbar", target = "editContData")
+        if (!isTRUE(session$userData$admin_privs$continuousCorrections))     nav_hide(id = "navbar", target = "continuousCorrections")
+        if (!isTRUE(session$userData$admin_privs$imputeMissing))             nav_hide(id = "navbar", target = "imputeMissing")
+        if (!isTRUE(session$userData$admin_privs$grades_approvals_qualifiers)) nav_hide(id = "navbar", target = "grades_approvals_qualifiers")
+        if (!isTRUE(session$userData$admin_privs$addTimeseries))             nav_hide(id = "navbar", target = "addTimeseries")
+        if (!isTRUE(session$userData$admin_privs$syncCont))                  nav_hide(id = "navbar", target = "syncCont")
       } else {
         nav_hide(id = "navbar", target = "continuousDataTasks")
       }
 
       # Discrete data tasks --------------------------------------------------
-      if (any(privs$addDiscData, privs$editDiscData, privs$syncDisc)) {
+      if (any(session$userData$admin_privs$addDiscData, session$userData$admin_privs$editDiscData, session$userData$admin_privs$syncDisc)) {
         nav_show(id = "navbar", target = "discreteDataTasks")
-        if (!isTRUE(privs$addDiscData)) nav_hide(id = "navbar", target = "addDiscData")
-        if (!isTRUE(privs$editDiscData)) nav_hide(id = "navbar", target = "editDiscData")
-        if (!isTRUE(privs$syncDisc))     nav_hide(id = "navbar", target = "syncDisc")
+        if (!isTRUE(session$userData$admin_privs$addDiscData)) nav_hide(id = "navbar", target = "addDiscData")
+        if (!isTRUE(session$userData$admin_privs$editDiscData)) nav_hide(id = "navbar", target = "editDiscData")
+        if (!isTRUE(session$userData$admin_privs$syncDisc))     nav_hide(id = "navbar", target = "syncDisc")
       } else {
         nav_hide(id = "navbar", target = "discreteDataTasks")
       }
 
       # File tasks -----------------------------------------------------------
-      if (any(privs$addDocs, privs$addImgs)) {
+      if (any(session$userData$admin_privs$addDocs, session$userData$admin_privs$addImgs)) {
         nav_show(id = "navbar", target = "fileTasks")
-        if (!isTRUE(privs$addDocs)) nav_hide(id = "navbar", target = "addDocs")
-        if (!isTRUE(privs$addImgs)) nav_hide(id = "navbar", target = "addImgs")
+        if (!isTRUE(session$userData$admin_privs$addDocs)) nav_hide(id = "navbar", target = "addDocs")
+        if (!isTRUE(session$userData$admin_privs$addImgs)) nav_hide(id = "navbar", target = "addImgs")
       } else {
         nav_hide(id = "navbar", target = "fileTasks")
       }
 
       # Field visit ---------------------------------------------------------
-      if (isTRUE(privs$visit)) {
+      if (isTRUE(session$userData$admin_privs$visit)) {
         nav_show(id = "navbar", target = "visit")
       } else {
         nav_hide(id = "navbar", target = "visit")
       }
+      
+      # Simple Index
+      if (isTRUE(session$userData$admin_privs$boreholes)) {
+        nav_show(id = "navbar", target = "wellTasks")
+      } else {
+        nav_hide(id = "navbar", target = "wellTasks")
+      }
 
       # Admin menu ----------------------------------------------------------
+      # Admin menu is always shown because every user can change their own password
       nav_show(id = "navbar", target = "adminTasks")
+      nav_show(id = "navbar", target = "changePwd")
       if (!isTRUE(session$userData$can_create_role)) nav_hide(id = "navbar", target = "manageUsers")
-      if (!isTRUE(privs$manageNewsContent)) nav_hide(id = "navbar", target = "manageNewsContent")
-      if (!isTRUE(privs$viewFeedback))   nav_hide(id = "navbar", target = "viewFeedback")
+      if (!isTRUE(session$userData$admin_privs$manageNewsContent)) nav_hide(id = "navbar", target = "manageNewsContent")
+      if (!isTRUE(session$userData$admin_privs$viewFeedback))   nav_hide(id = "navbar", target = "viewFeedback")
 
-    } else {
+    } else {  # We're in visualize mode
       # Hide irrelevant tabs for viz mode
-      for (id in c("dbLocsTasks", "addLocation", "addSubLocation",
-                   "equipTasks", "cal", "deploy_recover",
-                   "continuousDataTasks", "addContData", "editContData", "continuousCorrections",
-                   "imputeMissing", "grades_approvals_qualifiers", "addTimeseries", "syncCont",
-                   "discreteDataTasks", "addDiscData", "editDiscData", "syncDisc",
-                   "fileTasks", "addDocs", "addImgs",
-                   "visit", "adminTasks", "manageUsers", "manageNewsContent", "viewFeedback")) {
+      for (id in c("dbLocsTasks", "equipTasks", "continuousDataTasks", "discreteDataTasks", "fileTasks", "visit", "adminTasks", "metadataTasks", "wellTasks")) {
         nav_hide(id = "navbar", target = id)
       }
 
@@ -242,8 +244,7 @@ app_server <- function(input, output, session) {
                                             password = config$dbPass,
                                             silent = TRUE)
   
-  print("Connected to AquaCache")
-  
+
   # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE) # This does not work with Shiny Server open source
   session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues from Shiny Server
   
@@ -254,7 +255,6 @@ app_server <- function(input, output, session) {
   
   session$onSessionEnded(function() {
     DBI::dbDisconnect(session$userData$AquaCache)
-    print("Disconnected from AquaCache after session end")
   })
   
   # Language selection ########################################################
@@ -584,16 +584,21 @@ $(document).keyup(function(event) {
           sql,
           params = list(session$userData$config$dbUser)  # or any role name
         )
+        
+        # If application.feedback is present but only has INSERT privileges, remove it
+        if ("application" %in% session$userData$table_privs$schema & "feedback" %in% session$userData$table_privs$table_name & all(session$userData$table_privs$extra_privileges[session$userData$table_privs$schema == "application" & session$userData$table_privs$table_name == "feedback"] == "INSERT")) {
+          session$userData$table_privs <- session$userData$table_privs[!(session$userData$table_privs$schema == "application" & session$userData$table_privs$table_name == "feedback"), ]
+        }
 
         # Derive privilege flags for each admin nav_panel
-        privs <- session$userData$table_privs
+        session$userData$table_privs <- session$userData$table_privs
         has_priv <- function(schema, tables) {
-          any(privs$schema == schema & privs$table_name %in% tables)
+          any(session$userData$table_privs$schema == schema & session$userData$table_privs$table_name %in% tables)
         }
         session$userData$admin_privs <- list(
           addLocation    = has_priv("public", "locations"),
           addSubLocation = has_priv("public", "sub_locations"),
-          cal            = has_priv("instruments", "calibrations"),
+          calibrate      = has_priv("instruments", "calibrations"),
           deploy_recover = has_priv("instruments", c("instruments","instrument_maintenance","array_maintenance_changes")),
           addContData    = has_priv("continuous", "measurements_continuous"),
           editContData   = has_priv("continuous", "measurements_continuous"),
@@ -605,12 +610,13 @@ $(document).keyup(function(event) {
           addDiscData    = has_priv("discrete", c("results","samples")),
           editDiscData   = has_priv("discrete", c("results","samples")),
           syncDisc       = has_priv("discrete", "sample_series"),
-          addDocs        = any(privs$schema == "files" & grepl("doc", privs$table_name, ignore.case = TRUE)),
-          addImgs        = any(privs$schema == "files" & grepl("img", privs$table_name, ignore.case = TRUE)),
-          visit          = any(grepl("visit", privs$table_name, ignore.case = TRUE)),
-          manageNewsContent = any(privs$schema == "application" & grepl("news", privs$table_name, ignore.case = TRUE)),
-          # viewFeedback is special, since everyone has 'insert' privileges on it, but only admins can view it. Need to make sure it has more than just INSERT.
-          viewFeedback   = any(privs$schema == "application" & grepl("feedback", privs$table_name, ignore.case = TRUE)) && privs[privs$table_name == "feedback", "extra_privileges"] != "INSERT"
+          addDocs        = has_priv("files", "documents"),
+          addImgs        = has_priv("files", "images"),
+          boreholes_wells = has_priv("boreholes", "boreholes"),
+          visit          = has_priv("public", c("locations_metadata_access", "locations_metadata_infrastructure")),
+          manageNewsContent = has_priv("application", c("images", "text", "page_content")),
+          viewFeedback   = has_priv("application", "feedback")
+          
         )
         
         # IF the user has more than SELECT privileges on any tables, show the 'admin' button
