@@ -295,14 +295,14 @@ simplerIndexUI <- function(id) {
     ),
     
     div(style = "display: flex; align-items: center; gap: 10px;",
-        div(id = "logo-container",
+        div(id = ns("logo-container"),
             # Try to load the logo image with error handling
             tags$img(src = "imgs/simplerIndex.png", 
                      style = "height: 40px; width: 60px; object-fit: contain; border-radius: 6px; background: #fff;",
                      srcset = "logo@2x.png 2x, logo@3x.png 3x",
-                     onerror = "this.onerror=null; this.style.display='none'; document.getElementById('text-logo').style.display='flex';"),
+                     onerror = sprintf("this.onerror=null; this.style.display='none'; document.getElementById('%s').style.display='flex';", ns("text-logo"))),
             # Fallback text logo that appears if image fails to load
-            div(id = "text-logo",
+            div(id = ns("text-logo"),
                 style = "width: 60px; height: 40px; background: linear-gradient(135deg, #007bff, #0056b3); border-radius: 6px; display: none; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;",
                 "YWRR"
             )
@@ -312,10 +312,10 @@ simplerIndexUI <- function(id) {
     ), 
     
     div(class = "sidebar-layout",
-        div(class = "sidebar-panel", id = "sidebar",
-            div(class = "resize-handle", id = "resize-handle"),
+        div(class = "sidebar-panel", id = ns("sidebar"),
+            div(class = "resize-handle", id = ns("resize-handle")),
             fileInput(
-              "pdf_file",
+              ns("pdf_file"),
               "Upload PDF(s)",
               accept = ".pdf",
               multiple = TRUE
@@ -323,27 +323,28 @@ simplerIndexUI <- function(id) {
             # Navigation buttons
             fluidRow(
               column(12,
-                     actionButton("prev_pdf", icon("arrow-left"), class = "nav-btn", title = "Previous"),
-                     actionButton("next_pdf", icon("arrow-right"), class = "nav-btn", title = "Next"),
-                     actionButton("remove_pdf", icon("trash"), title = "Remove Selected", class = "nav-btn")
+                     actionButton(ns("prev_pdf"), icon("arrow-left"), class = "nav-btn", title = "Previous"),
+                     actionButton(ns("next_pdf"), icon("arrow-right"), class = "nav-btn", title = "Next"),
+                     actionButton(ns("remove_pdf"), icon("trash"), title = "Remove Selected", class = "nav-btn")
               )
             ),
             br(),
-            dataTableOutput("pdf_table")
+            DT::DTOutput(ns("pdf_table"))
         ),
         div(class = "main-panel",
             # First row: select, redact, clear, save, zoom
             div(class = "control-row",
                 div(class = "control-group",
-                    actionButton("brush_select", "Select", icon("mouse-pointer"), class = "btn-toggle") %>% 
+                    actionButton(ns("brush_select"), "Select", icon("mouse-pointer"), class = "btn-toggle") %>% 
                       tooltip("Enable the selection tool for OCR and content redaction."),
-                    actionButton("draw_rectangle", "Redact", icon("rectangle-xmark"), class = "btn-toggle") %>%
+                    actionButton(ns("draw_rectangle"), "Redact", icon("rectangle-xmark"), class = "btn-toggle") %>%
                       tooltip("Redact the selected area. Boxes are transparent for usability but can be made opaque on upload."),
-                    actionButton("clear_rectangles", "Clear", icon("eraser"), class = "btn btn-outline-secondary", title = "Clear Rectangles"),
-                    downloadButton("save_image", "Export PDF", class = "btn btn-outline-primary", title = "Export PDF with redactions and OCR text"),
+                    actionButton(ns("clear_rectangles"), "Clear", icon("eraser"), class = "btn btn-outline-secondary", title = "Clear Rectangles"),
+                    downloadButton(ns("save_image"), "Export PDF", class = "btn btn-outline-primary", title = "Export PDF with redactions and OCR text"),
                     # Zoom control - wrap in a container div
                     div(class = "slider-container",
-                        sliderInput("zoom_level", "Zoom:",
+                        sliderInput(ns("zoom_level"),
+                                    "Zoom:",
                                     min = 0.5, max = 4.0, value = 1.0, step = 0.1,
                                     width = "150px"
                         )
@@ -353,13 +354,14 @@ simplerIndexUI <- function(id) {
             
             # Replace the Second row with simplified OCR controls
             bslib::accordion(
-              id = "ocr-controls-accordion",
+              id = ns("ocr-controls-accordion"),
               open = FALSE,
               bslib::accordion_panel(
                 title = "OCR Controls",
                 div(class = "control-row", style = "margin-top: 10px;",
                     div(class = "control-group",
-                        selectInput("ocr_display_mode", "OCR Display Mode:",
+                        selectInput(ns("ocr_display_mode"),
+                                    "OCR Display Mode:",
                                     choices = list(
                                       "None" = "none",
                                       "Highlight Boxes" = "highlight", 
@@ -368,7 +370,8 @@ simplerIndexUI <- function(id) {
                                     selected = "none"
                         ),
                         div(class = "slider-container",
-                            sliderInput("confidence_threshold", "OCR Confidence:",
+                            sliderInput(ns("confidence_threshold"),
+                                        "OCR Confidence:",
                                         min = 40, max = 100, value = 70, step = 10,
                                         width = "150px"
                             )
@@ -380,7 +383,7 @@ simplerIndexUI <- function(id) {
                           h6("Extracted Text:", style = "margin-bottom: 5px; color: #495057;"),
                           div(
                             style = "max-height: 120px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: white; font-family: monospace; font-size: 11px; font-weight: bold; color: #007bff;",
-                            verbatimTextOutput("ocr_text_display")
+                            verbatimTextOutput(ns("ocr_text_display"))
                           )
                         )
                     ),
@@ -389,20 +392,20 @@ simplerIndexUI <- function(id) {
             ),
             
             div(
-              id = "pdf-container",
+              id = ns("pdf-container"),
               style = "width:100%; max-width:100%; height:calc(100vh - 300px); min-height:500px; border:1px solid #ccc; margin:10px auto; overflow:auto; background:white; position:relative; display:block; padding:0;",
-              uiOutput("pdf_viewer")
+              uiOutput(ns("pdf_viewer"))
             )
         ),
-        div(class = "right-panel", id = "right-sidebar",
-            div(class = "resize-handle-right", id = "resize-handle-right"),
+        div(class = "right-panel", id = ns("right-sidebar"),
+            div(class = "resize-handle-right", id = ns("resize-handle-right")),
             # Navigation buttons in right panel
             div(style = "padding: 15px; border-bottom: 1px solid #dee2e6;",
                 fluidRow(
                   column(12,
-                         actionButton("prev_pdf_right", icon("arrow-left"), class = "nav-btn", title = "Previous"),
-                         actionButton("next_pdf_right", icon("arrow-right"), class = "nav-btn", title = "Next"),
-                         actionButton("remove_pdf_right", icon("trash"), title = "Remove Selected", class = "nav-btn")
+                         actionButton(ns("prev_pdf_right"), icon("arrow-left"), class = "nav-btn", title = "Previous"),
+                         actionButton(ns("next_pdf_right"), icon("arrow-right"), class = "nav-btn", title = "Next"),
+                         actionButton(ns("remove_pdf_right"), icon("trash"), title = "Remove Selected", class = "nav-btn")
                   )
                 )
             ),
@@ -411,7 +414,7 @@ simplerIndexUI <- function(id) {
                 tags$label("Borehole ID:", style = "font-weight: bold; display: block; margin-bottom: 5px;"),
                 div(
                   class = "borehole-id-display",
-                  textOutput("borehole_id_display")
+                  textOutput(ns("borehole_id_display"))
                 )
             ),
             # Scrollable content area
@@ -419,7 +422,7 @@ simplerIndexUI <- function(id) {
                 # Borehole linking controls in scrollable area
                 fluidRow(
                   column(12,
-                         selectizeInput("borehole_id_selector", "Link img to BH:",
+                         selectizeInput(ns("borehole_id_selector"), "Link img to BH:",
                                         choices = NULL,
                                         selected = NULL,
                                         options = list(
@@ -434,17 +437,17 @@ simplerIndexUI <- function(id) {
                          div(
                            class = "borehole-id-display",
                            style = "background: #e8f4fd; border-color: #007bff; color: #0056b3; margin-bottom: 15px;",
-                           textOutput("file_count_display")
+                           textOutput(ns("file_count_display"))
                          )
                   )
                 ),
                 br(),
                 
                 # Well identification
-                textInput("name", "Name:", placeholder = "Enter name"),
-                textInput("notes", "Notes:", placeholder = "Enter any notes"),
+                textInput(ns("name"), "Name:", placeholder = "Enter name"),
+                textInput(ns("notes"), "Notes:", placeholder = "Enter any notes"),
                 # Add 'drilled by' selectize input
-                selectizeInput("drilled_by", "Drilled By:",
+                selectizeInput(ns("drilled_by"), "Drilled By:",
                                choices = NULL,
                                selected = NULL,
                                options = list(
@@ -455,16 +458,19 @@ simplerIndexUI <- function(id) {
                 ),
                 
                 # Location information section - remove surveyed_location_top_casing field
-                radioButtons("coordinate_system", "Coordinate System:",
+                radioButtons(ns("coordinate_system"), 
+                             "Coordinate System:",
                              choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
                              selected = "utm",
                              inline = TRUE
                 ),
                 conditionalPanel(
                   condition = "input.coordinate_system == 'utm'",
-                  numericInput("easting", "Easting:", value = NULL, min = 0),
-                  numericInput("northing", "Northing:", value = NULL, min = 0),
-                  selectizeInput("utm_zone", "UTM Zone:",
+                  ns = ns,
+                  numericInput(ns("easting"), "Easting:", value = NULL, min = 0),
+                  numericInput(ns("northing"), "Northing:", value = NULL, min = 0),
+                  selectizeInput(ns("utm_zone"),
+                                 "UTM Zone:",
                                  choices = list(
                                    "7N" = "7N", "8N" = "8N", "9N" = "9N", "10N" = "10N",
                                    "11N" = "11N", "12N" = "12N", "13N" = "13N"
@@ -478,13 +484,14 @@ simplerIndexUI <- function(id) {
                 ),
                 conditionalPanel(
                   condition = "input.coordinate_system == 'latlon'",
-                  numericInput("latitude", "Latitude:", value = NULL, min = 40, max = 85, step = 0.000001),
-                  numericInput("longitude", "Longitude:", value = NULL, min = -141, max = -60, step = 0.000001)
+                  ns = ns,
+                  numericInput(ns("latitude"), "Latitude:", value = NULL, min = 40, max = 85, step = 0.000001),
+                  numericInput(ns("longitude"), "Longitude:", value = NULL, min = -141, max = -60, step = 0.000001)
                 ),
-                textInput("location_source", "Location Source:", placeholder = "GPS, Survey, etc."),
-                # Removed surveyed_location_top_casing field
-                
-                selectizeInput("purpose_of_well", "Purpose of Well:",
+                textInput(ns("location_source"), "Location Source:", placeholder = "GPS, Survey, etc."),
+
+                selectizeInput(ns("purpose_of_well"), 
+                               "Purpose of Well:",
                                choices = list(
                                  "Domestic" = "domestic",
                                  "Municipal" = "municipal",
@@ -503,70 +510,72 @@ simplerIndexUI <- function(id) {
                 
                 # Well construction details
                 fluidRow(
-                  column(8, numericInput("depth_to_bedrock", "Depth to Bedrock:", value = NULL, min = 0, step = 0.1)),
-                  column(4, radioButtons("depth_to_bedrock_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                  column(8, numericInput(ns("depth_to_bedrock"), "Depth to Bedrock:", value = NULL, min = 0, step = 0.1)),
+                  column(4, radioButtons(ns("depth_to_bedrock_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                 ),
                 
                 # Add permafrost checkbox and conditional inputs
-                checkboxInput("permafrost_present", "Permafrost Present", value = FALSE),
+                checkboxInput(ns("permafrost_present"), "Permafrost Present", value = FALSE),
                 
                 conditionalPanel(
                   condition = "input.permafrost_present == true",
+                  ns = ns,
                   fluidRow(
-                    column(8, numericInput("permafrost_top_depth", "Depth to Top of Permafrost:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons("permafrost_top_depth_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    column(8, numericInput(ns("permafrost_top_depth"), "Depth to Top of Permafrost:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("permafrost_top_depth_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   fluidRow(
-                    column(8, numericInput("permafrost_bottom_depth", "Depth to Bottom of Permafrost:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons("permafrost_bottom_depth_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    column(8, numericInput(ns("permafrost_bottom_depth"), "Depth to Bottom of Permafrost:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("permafrost_bottom_depth_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   )
                 ),
                 
-                dateInput("date_drilled", "Date Drilled:", value = NULL),
+                dateInput(ns("date_drilled"), "Date Drilled:", value = NULL),
                 
                 # Drill Depth and unit
                 fluidRow(
-                  column(8, numericInput("drill_depth", "Drill Depth:", value = NULL, min = 0, step = 0.1)),
-                  column(4, radioButtons("drill_depth_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                  column(8, numericInput(ns("drill_depth"), "Drill Depth:", value = NULL, min = 0, step = 0.1)),
+                  column(4, radioButtons(ns("drill_depth_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                 ),
                 fluidRow(
-                  column(8, numericInput("surveyed_ground_level_elevation", "Surveyed Ground Level Elevation:", value = NULL, step = 0.01)),
-                  column(4, radioButtons("surveyed_ground_level_elevation_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                  column(8, numericInput(ns("surveyed_ground_level_elevation"), "Surveyed Ground Level Elevation:", value = NULL, step = 0.01)),
+                  column(4, radioButtons(ns("surveyed_ground_level_elevation_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                 ),
-                checkboxInput("is_well", "Well Constructed", value = FALSE),
+                checkboxInput(ns("is_well"), "Well Constructed", value = FALSE),
                 
                 # Show well construction fields only if 'is_well' is checked
                 conditionalPanel(
                   condition = "input.is_well == true",
+                  ns = ns,
                   # Casing Outside Diameter
                   fluidRow(
-                    column(8, numericInput("casing_outside_diameter", "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
-                    column(4, radioButtons("casing_outside_diameter_unit", "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
+                    column(8, numericInput(ns("casing_outside_diameter"), "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
+                    column(4, radioButtons(ns("casing_outside_diameter_unit"), "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
                   ),
                   # Top of Screen
                   fluidRow(
-                    column(8, numericInput("top_of_screen", "Top of Screen:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons("top_of_screen_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    column(8, numericInput(ns("top_of_screen"), "Top of Screen:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("top_of_screen_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   # Bottom of Screen
                   fluidRow(
-                    column(8, numericInput("bottom_of_screen", "Bottom of Screen:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons("bottom_of_screen_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    column(8, numericInput(ns("bottom_of_screen"), "Bottom of Screen:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("bottom_of_screen_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   # Well Head Stick Up
                   fluidRow(
-                    column(8, numericInput("well_head_stick_up", "Well Head Stick Up:", value = NULL, step = 0.01)),
-                    column(4, radioButtons("well_head_stick_up_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    column(8, numericInput(ns("well_head_stick_up"), "Well Head Stick Up:", value = NULL, step = 0.01)),
+                    column(4, radioButtons(ns("well_head_stick_up_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   # Static Water Level
                   fluidRow(
-                    column(8, numericInput("static_water_level", "Static Water Level:", value = NULL, step = 0.01)),
-                    column(4, radioButtons("static_water_level_unit", "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    column(8, numericInput(ns("static_water_level"), "Static Water Level:", value = NULL, step = 0.01)),
+                    column(4, radioButtons(ns("static_water_level_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   # Estimated Yield
                   fluidRow(
-                    column(8, numericInput("estimated_yield", "Estimated Yield:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons("estimated_yield_unit", "", choices = list("L/s" = "L/s", "G/min" = "G/min"), selected = "G/min", inline = TRUE))
+                    column(8, numericInput(ns("estimated_yield"), "Estimated Yield:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("estimated_yield_unit"), "", choices = list("L/s" = "L/s", "G/min" = "G/min"), selected = "G/min", inline = TRUE))
                   )
                 ),
                 
@@ -575,12 +584,14 @@ simplerIndexUI <- function(id) {
                   style = "margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6;",
                   fluidRow(
                     column(6,
-                           actionButton("upload_selected", "Upload Selected", 
+                           actionButton(ns("upload_selected"),
+                                        "Upload Selected", 
                                         class = "btn btn-primary btn-block",
                                         icon = icon("upload"))
                     ),
                     column(6,
-                           actionButton("upload_all", "Upload All", 
+                           actionButton(ns("upload_all"),
+                                        "Upload All", 
                                         class = "btn btn-success btn-block",
                                         icon = icon("cloud-upload-alt"))
                     )
@@ -591,9 +602,9 @@ simplerIndexUI <- function(id) {
         )
     ),
     
-    # Replace previous resize script block with this one
-    tags$script(HTML("
-    $(function() {
+    # script to resize sidebars and reattach handlers after Shiny redraws UI
+    tags$script(HTML(sprintf(
+    "$(function() {
       const MIN_LEFT = 140;
       const MIN_RIGHT = 160;
       const MIN_MAIN = 300; // keep central workspace usable
@@ -601,8 +612,8 @@ simplerIndexUI <- function(id) {
       let startX = 0;
       let startWidth = 0;
       const $body = $('body');
-      const $left = $('#sidebar');
-      const $right = $('#right-sidebar');
+      const $left = $('#%s');
+      const $right = $('#%s');
 
       function viewportW(){ return $(window).width(); }
       function maxLeft(){ return Math.max(MIN_LEFT, viewportW() - $right.outerWidth() - MIN_MAIN); }
@@ -616,12 +627,12 @@ simplerIndexUI <- function(id) {
         e.preventDefault();
       }
 
-      $('#resize-handle').off('.rs').on('mousedown.rs', e => startResize('left', e));
-      $('#resize-handle-right').off('.rs').on('mousedown.rs', e => startResize('right', e));
+      $('#%s').off('.rs').on('mousedown.rs', e => startResize('left', e));
+      $('#%s').off('.rs').on('mousedown.rs', e => startResize('right', e));
 
       // Double-click reset
-      $('#resize-handle').off('dblclick.rs').on('dblclick.rs', () => $left.css('width', '300px'));
-      $('#resize-handle-right').off('dblclick.rs').on('dblclick.rs', () => $right.css('width', '400px'));
+      $('#%s').off('dblclick.rs').on('dblclick.rs', () => $left.css('width', '300px'));
+      $('#%s').off('dblclick.rs').on('dblclick.rs', () => $right.css('width', '400px'));
 
       $(document).off('.rsMove').on('mousemove.rsMove', function(e){
         if(!resizing) return;
@@ -649,21 +660,16 @@ simplerIndexUI <- function(id) {
       });
 
       /* Reattach existing focus/click handlers */
-      const ids = [
-        'name','notes','easting','northing','latitude','longitude',
-        'location_source','depth_to_bedrock','permafrost_top_depth',
-        'permafrost_bottom_depth','date_drilled','casing_outside_diameter',
-        'drill_depth','surveyed_ground_level_elevation','top_of_screen',
-        'bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield'
-      ];
+      const ids = [%s];
       ids.forEach(id => {
         $(document).off('focus.rs click.rs', '#' + id)
                    .on('focus.rs click.rs', '#' + id, function(){
                      Shiny.setInputValue(id + '_clicked', Math.random());
                    });
       });
-    });
-  "))
+    });",
+    ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'), ns('resize-handle'), ns('resize-handle-right'),
+    paste(sprintf("'%s'", ns(c('name','notes','easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top_depth','permafrost_bottom_depth','date_drilled','casing_outside_diameter','drill_depth','surveyed_ground_level_elevation','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield'))), collapse = ','))))
   )
 } # End of UI function
 
@@ -891,7 +897,7 @@ simplerIndex <- function(id) {
               img <- magick::image_read(img_path)
               
               # Apply selected preprocessing method
-              img <- preprocess_image(img, preprocessing_method)
+              img <- preprocess_image(img, pre_processing_method)
               
               # Create OCR engine options
               tessoptions <- list(
@@ -975,9 +981,9 @@ simplerIndex <- function(id) {
       
       # Update button appearance based on new state
       if (brush_enabled()) {
-        shinyjs::runjs("$('#brush_select').addClass('btn-active');")
+        shinyjs::runjs(sprintf("$('#%s').addClass('btn-active');", ns('brush_select')))
       } else {
-        shinyjs::runjs("$('#brush_select').removeClass('btn-active');")
+        shinyjs::runjs(sprintf("$('#%s').removeClass('btn-active');", ns('brush_select')))
       }
     })
     
@@ -1027,14 +1033,14 @@ simplerIndex <- function(id) {
         showModal(modalDialog(
           title = "New Driller Information",
           
-          textInput("new_driller_name", "Name", value = current_value),
-          textInput("new_driller_address", "Address"),
-          textInput("new_driller_phone", "Phone"),
-          textInput("new_driller_email", "Email"),
+          textInput(ns("new_driller_name"), "Name", value = current_value),
+          textInput(ns("new_driller_address"), "Address"),
+          textInput(ns("new_driller_phone"), "Phone"),
+          textInput(ns("new_driller_email"), "Email"),
           
           footer = tagList(
-            actionButton("cancel_new_driller", "Cancel"),
-            actionButton("save_new_driller", "Save", class = "btn-primary")
+            actionButton(ns("cancel_new_driller"), "Cancel"),
+            actionButton(ns("save_new_driller"), "Save", class = "btn-primary")
           )
         ))
       }
@@ -1207,7 +1213,7 @@ simplerIndex <- function(id) {
       }
       
       rv$pdf_index <- 1
-      DT::dataTableProxy("pdf_table") %>% DT::selectRows(1)
+      DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(1)
       
       rv$ocr_text <- vector("list", nrow(rv$files_df))
       rv$ocr_display_mode <- "none"
@@ -1216,7 +1222,7 @@ simplerIndex <- function(id) {
       brush_enabled(FALSE)
       updateSelectizeInput(session, "ocr_display_mode", selected = "none")
       
-      shinyjs::runjs("$('#brush_select').removeClass('btn-active');")
+      shinyjs::runjs(sprintf("$('#%s').removeClass('btn-active');", ns('brush_select')))
       
       # Show final completion notification
       total_pages <- nrow(rv$files_df)
@@ -1235,7 +1241,7 @@ simplerIndex <- function(id) {
       # Use isolate to prevent reactive feedback loop
       current_selection <- isolate(input$pdf_table_rows_selected)
       if (is.null(current_selection) || length(current_selection) == 0 || current_selection != rv$pdf_index) {
-        DT::dataTableProxy("pdf_table") %>% DT::selectRows(rv$pdf_index)
+        DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
       }
     })
     
@@ -1244,7 +1250,7 @@ simplerIndex <- function(id) {
       if (rv$pdf_index < nrow(rv$files_df)) {
         rv$pdf_index <- rv$pdf_index + 1
         # Ensure table selection follows
-        DT::dataTableProxy("pdf_table") %>% DT::selectRows(rv$pdf_index)
+        DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
       }
     })
     
@@ -1253,7 +1259,7 @@ simplerIndex <- function(id) {
       if (rv$pdf_index > 1) {
         rv$pdf_index <- rv$pdf_index - 1
         # Ensure table selection follows
-        DT::dataTableProxy("pdf_table") %>% DT::selectRows(rv$pdf_index)
+        DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
       }
     })
     
@@ -1302,7 +1308,7 @@ simplerIndex <- function(id) {
       if (rv$pdf_index < nrow(rv$files_df)) {
         rv$pdf_index <- rv$pdf_index + 1
         # Ensure table selection follows
-        DT::dataTableProxy("pdf_table") %>% DT::selectRows(rv$pdf_index)
+        DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
       }
     })
     
@@ -1311,7 +1317,7 @@ simplerIndex <- function(id) {
       if (rv$pdf_index > 1) {
         rv$pdf_index <- rv$pdf_index - 1
         # Ensure table selection follows
-        DT::dataTableProxy("pdf_table") %>% DT::selectRows(rv$pdf_index)
+        DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
       }
     })
     
@@ -1349,7 +1355,7 @@ simplerIndex <- function(id) {
     
     
     # Fix the PDF table rendering
-    output$pdf_table <- renderDataTable({
+    output$pdf_table <- DT::renderDT({
       req(rv$files_df)
       validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
       
@@ -1377,7 +1383,7 @@ simplerIndex <- function(id) {
         isolate({
           current_selection <- input$pdf_table_rows_selected
           if (is.null(current_selection) || length(current_selection) == 0 || current_selection != rv$pdf_index) {
-            DT::dataTableProxy("pdf_table") %>% DT::selectRows(rv$pdf_index)
+            DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
           }
         })
       }
@@ -1431,7 +1437,7 @@ simplerIndex <- function(id) {
       # Reset OCR mode selectize to "none" when switching pages
       #updateSelectizeInput(session, "ocr_display_mode", selected = "none")
       
-      plot_id <- paste0("pdf_plot_", rv$pdf_index)
+      plot_id <- ns(paste0("pdf_plot_", rv$pdf_index))
       output[[plot_id]] <- renderPlot({
         # Load and prepare the image
         img_path <- rv$files_df$Path[rv$pdf_index]
@@ -1818,14 +1824,14 @@ simplerIndex <- function(id) {
       # Use rectangles for this file path
       current_rectangles <- rv$rectangles[[file_path]]
       is_processing <- ocr_processing()
-      plot_id <- paste0("pdf_plot_", rv$pdf_index)
+      plot_id <- ns(paste0("pdf_plot_", rv$pdf_index))
       
       # Ensure that brush state is correctly reflected in UI when pdf_index changes
       isolate({
         if (brush_enabled()) {
-          shinyjs::runjs("$('#brush_select').addClass('btn-active');")
+          shinyjs::runjs(sprintf("$('#%s').addClass('btn-active');", ns('brush_select')))
         } else {
-          shinyjs::runjs("$('#brush_select').removeClass('btn-active');")
+          shinyjs::runjs(sprintf("$('#%s').removeClass('btn-active');", ns('brush_select')))
         }
       })
       
@@ -1846,7 +1852,7 @@ simplerIndex <- function(id) {
             height = paste0(display_height, "px"),
             brush = if (brush_enabled()) {
               brushOpts(
-                id = "pdf_brush",
+                id = ns("pdf_brush"),
                 resetOnNew = TRUE,
                 direction = "xy",
                 opacity = 0.3,
@@ -1973,18 +1979,18 @@ simplerIndex <- function(id) {
           most_recent <- clicked_inputs[max_index[1]]
           
           # Extract field name from clicked input name
-          field_name <- sub("_clicked$", "", most_recent)
+          field_name <- sub(paste0("^", ns("")), "", field_name)
           
           # Function to blur the input field after updating
           blur_field <- function(field_id) {
-            shinyjs::runjs(sprintf("document.getElementById('%s').blur();", 
-                                   field_id))
+            shinyjs::runjs(sprintf("document.getElementById('%s').blur();", ns(field_id)))
+            
           }
           
           # Update different field types appropriately
           if (field_name %in% c("name", "notes", "location_source")) {
             updateTextInput(session, field_name, value = selected_text)
-            shinyjs::runjs(sprintf("var el=$('#%s'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}", field_name))
+            shinyjs::runjs(sprintf("var el=$('#%s'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}", ns(field_name)))
             showNotification(paste("Updated", field_name, "with selected text"),
                              type = "message", duration = 5)
             # Blur the field
@@ -2004,7 +2010,7 @@ simplerIndex <- function(id) {
                   num_value <- as.numeric(num_text[1])
                   if (!is.na(num_value)) {
                     updateNumericInput(session, field_name, value = num_value)
-                    shinyjs::runjs(sprintf("var el=$('#%s'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}", field_name))
+                    shinyjs::runjs(sprintf("var el=$('#%s'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}", ns(field_name)))
                     showNotification(paste("Updated", field_name, 
                                            "with value", num_value),
                                      type = "message", duration = 2)
@@ -2053,13 +2059,13 @@ simplerIndex <- function(id) {
                     
                     if (!is.na(parsed_date)) {
                       updateDateInput(session, "date_drilled", value = parsed_date)
-                      shinyjs::runjs("var el=$('#date_drilled'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}")
+                      shinyjs::runjs(sprintf("var el=$('#%s'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}", ns('date_drilled')))
                       showNotification(paste("Updated date to", 
                                              format(parsed_date, "%Y-%m-%d")),
                                        type = "message", duration = 2)
                       # Date fields have complex structure, blur the input part
-                      shinyjs::runjs(
-                        "document.querySelector('#date_drilled input').blur();"
+                      shinyjs::runjs(sprintf("document.querySelector('#%s input').blur();", ns('date_drilled'))
+
                       )
                       break  # Exit the loop once we've found a valid date
                     }
@@ -2080,13 +2086,13 @@ simplerIndex <- function(id) {
           
           # For selectize inputs which need special handling (if any exist)
           if (field_name %in% c("drilled_by", "utm_zone", "purpose_of_well")) {
-            shinyjs::runjs(sprintf("$('#%s-selectized').blur();", field_name))
+            shinyjs::runjs(sprintf("$('#%s-selectized').blur();", ns(field_name)))
           }
           
           # Clear any brush selection
           if (brush_enabled()) {
             # This will remove the visual brush selection
-            shinyjs::runjs("Shiny.setInputValue('pdf_brush-clear', Math.random());")
+            shinyjs::runjs(sprintf("Shiny.setInputValue('%s', Math.random());", ns('pdf_brush-clear')))
           }
         }
       }
@@ -2401,7 +2407,7 @@ simplerIndex <- function(id) {
         }
         
         # Refresh the data table to show the updated borehole ID
-        DT::dataTableProxy("pdf_table") %>% 
+        DT::dataTableProxy("pdf_table", session = session) %>% 
           DT::replaceData(rv$files_df[, c("tag", "borehole_id")])
         
         # Clear the dropdown selection

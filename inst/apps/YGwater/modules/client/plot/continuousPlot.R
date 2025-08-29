@@ -3049,7 +3049,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     
     # Observe the full screen button and run the javascript function to make the plot full screen
     observeEvent(input$full_screen, {
-      shinyjs::runjs(paste0("toggleFullScreen('", session$ns("plot"), "');"))
+      shinyjs::runjs(paste0("toggleFullScreen('", ns("plot"), "');"))
       
       # Manually trigger a window resize event after some delay
       shinyjs::runjs("

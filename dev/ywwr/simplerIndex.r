@@ -904,7 +904,7 @@ server <- function(input, output, session) {
             img <- magick::image_read(img_path)
             
             # Apply selected preprocessing method
-            img <- preprocess_image(img, preprocessing_method)
+            img <- preprocess_image(img, pre_processing_method)
             
             # Create OCR engine options
             tessoptions <- list(
