@@ -603,8 +603,8 @@ $(document).keyup(function(event) {
           addImgs        = any(privs$schema == "files" & grepl("img", privs$table_name, ignore.case = TRUE)),
           visit          = any(grepl("visit", privs$table_name, ignore.case = TRUE)),
           manageNewsContent = any(privs$schema == "application" & grepl("news", privs$table_name, ignore.case = TRUE)),
-          # viewFeedback is special, since everyone has 'insert' privileges on it, but only admins can view it
-          viewFeedback   = any(privs$schema == "application" & grepl("feedback", privs$table_name, ignore.case = TRUE))
+          # viewFeedback is special, since everyone has 'insert' privileges on it, but only admins can view it. Need to make sure it has more than just INSERT.
+          viewFeedback   = any(privs$schema == "application" & grepl("feedback", privs$table_name, ignore.case = TRUE)) && privs[privs$table_name == "feedback", "extra_privileges"] != "INSERT"
         )
         
         # IF the user has more than SELECT privileges on any tables, show the 'admin' button
