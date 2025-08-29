@@ -508,16 +508,15 @@ $(document).keyup(function(event) {
         GROUP BY t.schema, t.table_name
         ORDER BY t.schema, t.table_name;"
         
-        res <- DBI::dbGetQuery(
+        # Store the table privileges in the session for use in other modules or to show/hide certain UI elements
+        session$userData$table_privs <- DBI::dbGetQuery(
           session$userData$AquaCache,
           sql,
           params = list(session$userData$config$dbUser)  # or any role name
         )
         
-        session$userData$table_privs <- res # Store the table privileges in the session for use in other modules or to show/hide certain UI elements
-        
         # IF the user has more than SELECT privileges on any tables, show the 'admin' button
-        if (nrow(res) > 0) {
+        if (nrow(session$userData$table_privs) > 0) {
           # Create the new element for the 'admin' mode
           # Other tabs are created if/when the user clicks on the 'admin' actionButton
           nav_insert("navbar",
@@ -525,9 +524,8 @@ $(document).keyup(function(event) {
                      target = "home", position = "before")
           
           # Check if the user has CREATE ROLE privileges, used to determine if the 'manage users' tab should be shown in admin mode
-          res <- DBI::dbGetQuery(session$userData$AquaCache,
-                                 'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;')
-          session$userData$can_create_role <- isTRUE(res$rolcreaterole[1])
+          session$userData$can_create_role <- DBI::dbGetQuery(session$userData$AquaCache,
+                                 'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;')[1,1]
         }  # else the button just won't be created/shown
         
         
