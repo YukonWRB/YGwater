@@ -52,7 +52,7 @@ app_server <- function(input, output, session) {
       nav_show(id = "navbar", target = "equipTasks") # Actually a nav_menu
       nav_show(id = "navbar", target = "continuousDataTasks") # Actually a nav_menu
       nav_show(id = "navbar", target = "discreteDataTasks") # Actually a nav_menu
-      nav_show(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
+      nav_show(id = "navbar", target = "fileTasks") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_show(id = "navbar", target = "visit")
       nav_show(id = "navbar", target = "adminTasks")
     } else {
@@ -61,10 +61,10 @@ app_server <- function(input, output, session) {
       nav_hide(id = "navbar", target = "equipTasks") # Actually a nav_menu
       nav_hide(id = "navbar", target = "continuousDataTasks") # Actually a nav_menu
       nav_hide(id = "navbar", target = "discreteDataTasks") # Actually a nav_menu
-      nav_hide(id = "navbar", target = "addFiles") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
+      nav_hide(id = "navbar", target = "fileTasks") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
       nav_hide(id = "navbar", target = "visit")
       nav_hide(id = "navbar", target = "adminTasks")
-
+      
       if (logout) {
         shinyjs::hide("admin")
       }
@@ -154,7 +154,7 @@ app_server <- function(input, output, session) {
     
     ui_loaded$changePwd <- FALSE
     ui_loaded$manageUsers <- FALSE
-
+    
     ui_loaded$visit <- FALSE
   }
   
@@ -413,6 +413,7 @@ app_server <- function(input, output, session) {
   log_attempts <- reactiveVal(0) # counter for login attempts - prevent brute force attacks
   session$userData$user_logged_in <- FALSE # value to track login status
   session$userData$can_create_role <- FALSE # track CREATE ROLE privilege
+  session$userData$table_privs <- data.frame() # track table privileges
   
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
@@ -489,53 +490,34 @@ $(document).keyup(function(event) {
         
         # Check if the user has more than SELECT privileges on any tables in the public, continuous, discrete, or boreholes schemas, used to determine if the 'admin' tab should be shown
         
-        # Below option yields TRUE/FALSE only:
-        sql <- "SELECT EXISTS (
-  SELECT 1
-  FROM pg_class c
-  JOIN pg_namespace n ON n.oid = c.relnamespace
-  WHERE c.relkind IN ('r','p')
-    AND n.nspname IN ('public','continuous','discrete','boreholes')
-    AND (
-      has_table_privilege($1, c.oid, 'INSERT') OR
-      has_table_privilege($1, c.oid, 'UPDATE') OR
-      has_table_privilege($1, c.oid, 'DELETE') OR
-      has_table_privilege($1, c.oid, 'TRUNCATE') OR
-      has_table_privilege($1, c.oid, 'REFERENCES') OR
-      has_table_privilege($1, c.oid, 'TRIGGER')
-    )
-) AS has_more_than_select;"
+        # Show list of tables that the user has more than SELECT privileges on:
+        sql <- "
+        WITH tbls AS (
+          SELECT n.nspname AS schema, c.relname AS table_name, c.oid AS tbl_oid
+          FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE c.relkind IN ('r','p')
+            AND n.nspname IN ('public','continuous','discrete','boreholes')
+        )
+        SELECT t.schema,
+               t.table_name,
+               string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
+        FROM tbls t
+        CROSS JOIN LATERAL unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
+        WHERE has_table_privilege($1, t.tbl_oid, p.priv)
+        GROUP BY t.schema, t.table_name
+        ORDER BY t.schema, t.table_name;"
         
-        not_select <- DBI::dbGetQuery(session$userData$AquaCache, sql,
-                               params = list(session$userData$config$dbUser))[1,1]
+        res <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          sql,
+          params = list(session$userData$config$dbUser)  # or any role name
+        )
         
-        
-        # Below option yields the list of tables the user has more than SELECT privileges on:
-#         sql <- "
-# WITH tbls AS (
-#   SELECT n.nspname AS schema, c.relname AS table_name, c.oid AS tbl_oid
-#   FROM pg_class c
-#   JOIN pg_namespace n ON n.oid = c.relnamespace
-#   WHERE c.relkind IN ('r','p')
-#     AND n.nspname IN ('public','continuous','discrete','boreholes')
-# )
-# SELECT t.schema,
-#        t.table_name,
-#        string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
-# FROM tbls t
-# CROSS JOIN LATERAL unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
-# WHERE has_table_privilege($1, t.tbl_oid, p.priv)
-# GROUP BY t.schema, t.table_name
-# ORDER BY t.schema, t.table_name;"
-#     
-#     res <- DBI::dbGetQuery(
-#       session$userData$AquaCache,
-#       sql,
-#       params = list(session$userData$config$dbUser)  # or any role name
-#     )
+        session$userData$table_privs <- res # Store the table privileges in the session for use in other modules or to show/hide certain UI elements
         
         # IF the user has more than SELECT privileges on any tables, show the 'admin' button
-        if (not_select) {
+        if (nrow(res) > 0) {
           # Create the new element for the 'admin' mode
           # Other tabs are created if/when the user clicks on the 'admin' actionButton
           nav_insert("navbar",
@@ -604,6 +586,7 @@ $(document).keyup(function(event) {
     
     session$userData$user_logged_in <- FALSE  # Set login status to FALSE
     session$userData$can_create_role <- FALSE
+    session$userData$table_privs <- data.frame() # Reset table privileges
     
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
@@ -696,7 +679,7 @@ $(document).keyup(function(event) {
       # User is in viz mode
       last_viz_tab(input$navbar)
     } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers")) {
-
+      
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -769,8 +752,8 @@ $(document).keyup(function(event) {
         mapParams("mapParams", language = languageSelection) # Call the server
       }
     }
-
-      if (input$navbar == "rasterValues") {
+    
+    if (input$navbar == "rasterValues") {
       if (!ui_loaded$mapRasterValues) {
         output$mapRaster_ui <- renderUI(mapRasterUI("mapRaster"))
         ui_loaded$mapRasterValues <- TRUE

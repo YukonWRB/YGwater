@@ -214,7 +214,7 @@ app_ui <- function(request) {
         },
         if (!config$public) {
           nav_menu(title = "Manage files/docs", 
-                   value = "addFiles",
+                   value = "fileTasks",
                    nav_panel(title = "Documents",
                              value = "addDocs",
                              uiOutput("addDocs_ui")),
