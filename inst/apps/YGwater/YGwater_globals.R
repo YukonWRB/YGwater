@@ -44,9 +44,13 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     # discrete data sub-modules
     source(system.file("apps/YGwater/modules/admin/discreteData/addDiscData.R", package = "YGwater"))
     source(system.file("apps/YGwater/modules/admin/discreteData/editDiscData.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/discreteData/addGuidelines.R", package = "YGwater"))
     source(system.file("apps/YGwater/modules/admin/discreteData/syncDisc.R", package = "YGwater"))
     
+    # Borehole/well modules
+    source(system.file("apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R", package = "YGwater"))
     
+    # Field visit modules
     source(system.file("apps/YGwater/modules/admin/field/field_main.R", package = "YGwater"))
     
     # Files/document/image sub-modules

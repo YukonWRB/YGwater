@@ -194,13 +194,16 @@ app_ui <- function(request) {
                    nav_panel(title = "Edit/delete discrete data",
                              value = "editDiscData",
                              uiOutput("editDiscData_ui")),
+                   nav_panel(title = "Add/modify guidelines",
+                             value = "addGuidelines",
+                             uiOutput("addGuidelines_ui")),
                    nav_panel(title = "Sync sample series",
                              value = "syncDisc",
                              uiOutput("syncDisc_ui"))
           )
         },
         if (!config$public) {
-          nav_menu(title = "Location tasks",
+          nav_menu(title = "Locations",
                    value = "dbLocsTasks",
                    nav_panel(title = "Add/modify locations",
                              value = "addLocation",
@@ -213,7 +216,7 @@ app_ui <- function(request) {
           )
         },
         if (!config$public) {
-          nav_menu(title = "Manage files/docs", 
+          nav_menu(title = "Files/Docs", 
                    value = "fileTasks",
                    nav_panel(title = "Documents",
                              value = "addDocs",
@@ -229,7 +232,7 @@ app_ui <- function(request) {
                     uiOutput("visit_ui"))
         },
         if (!config$public) {
-          nav_menu(title = "Equipment/instruments",
+          nav_menu(title = "Equipment",
                    value = "equipTasks",
                    nav_panel(title = "Checks + calibrations",
                              value = "cal",
@@ -239,6 +242,20 @@ app_ui <- function(request) {
                              uiOutput("deploy_recover_ui"))
           )
         },
+        if (!config$public) {
+          nav_menu(title = "Boreholes/wells",
+                   value = "wellTasks",
+                   nav_panel(title = "Simpler Index",
+                             value = "simplerIndex",
+                             uiOutput("simplerIndex_ui"))
+          )
+        },
+        if (!config$public) {
+          nav_menu(title = "Metadata",
+                   value = "metadataTasks"
+          )
+        },
+        
         if (!config$public) {
           nav_menu(title = "Admin",
                    value = "adminTasks",

@@ -1,6 +1,6 @@
 # UI and server code for main calibrations module
 
-calUI <- function(id) {
+calibrateUI <- function(id) {
   ns <- NS(id)
   
   # Set up for background color when validating calibrations
@@ -287,7 +287,7 @@ calUI <- function(id) {
   ) # End of tagList
 }
 
-cal <- function(id) {
+calibrate <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     

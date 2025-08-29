@@ -76,6 +76,19 @@ iso_period <- function(x) {
   paste0("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S")
 }
 
+#' Simple function to convert empty string to SQL NULL
+#' @param x Character string.
+#' @noRd
+
+nullIfEmpty <- function(x) {
+  if (is.null(x) || trimws(x) == "") {
+    return(DBI::SQL("NULL"))
+  } else if ( is.na(x)) {
+    return(DBI::SQL("NULL"))
+  } else {
+    return(x)
+  }
+}
 
 
 # Internal helper functions for default file paths

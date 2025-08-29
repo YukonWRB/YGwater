@@ -110,6 +110,7 @@ app_server <- function(input, output, session) {
   
   # Initialize reactive flags to track whether each UI has been loaded
   reset_ui_loaded <- function() {
+    # visualize-side modules
     ui_loaded$viz <- FALSE
     ui_loaded$admin <- FALSE
     ui_loaded$home <- FALSE
@@ -129,10 +130,13 @@ app_server <- function(input, output, session) {
     ui_loaded$contData <- FALSE
     ui_loaded$news <- FALSE
     ui_loaded$about <- FALSE
+    
+    # Admin side modules
     ui_loaded$addLocation <- FALSE
     ui_loaded$addSubLocation <- FALSE
+    
     ui_loaded$deploy_recover <- FALSE
-    ui_loaded$cal <- FALSE
+    ui_loaded$calibrate <- FALSE
     
     ui_loaded$addContData <- FALSE
     ui_loaded$continuousCorrections <- FALSE
@@ -144,16 +148,18 @@ app_server <- function(input, output, session) {
     
     ui_loaded$addDiscData <- FALSE
     ui_loaded$editDiscData <- FALSE
+    ui_loaded$addGuidelines <- FALSE
     ui_loaded$syncDisc <- FALSE
     
     ui_loaded$addDocs <- FALSE
     ui_loaded$addImgs <- FALSE
     
-    ui_loaded$manageNewsContent <- FALSE
-    ui_loaded$viewFeedback <- FALSE
+    ui_loaded$simplerIndex <- FALSE
     
     ui_loaded$changePwd <- FALSE
     ui_loaded$manageUsers <- FALSE
+    ui_loaded$manageNewsContent <- FALSE
+    ui_loaded$viewFeedback <- FALSE
     
     ui_loaded$visit <- FALSE
   }
@@ -525,7 +531,7 @@ $(document).keyup(function(event) {
           
           # Check if the user has CREATE ROLE privileges, used to determine if the 'manage users' tab should be shown in admin mode
           session$userData$can_create_role <- DBI::dbGetQuery(session$userData$AquaCache,
-                                 'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;')[1,1]
+                                                              'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;')[1,1]
         }  # else the button just won't be created/shown
         
         
@@ -676,7 +682,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discPlot", "contPlot", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "cal", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "calibrate", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addGuidelines", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers", "simplerIndex")) {
       
       # User is in admin mode
       last_admin_tab(input$navbar)
@@ -907,11 +913,11 @@ $(document).keyup(function(event) {
         deploy_recover("deploy_recover")  # Call the server
       }
     }
-    if (input$navbar == "cal") {
-      if (!ui_loaded$cal) {
-        output$cal_ui <- renderUI(calUI("cal"))  # Render the UI
-        ui_loaded$cal <- TRUE
-        cal("cal")  # Call the server
+    if (input$navbar == "calibrate") {
+      if (!ui_loaded$calibrate) {
+        output$calibrate_ui <- renderUI(calibrateUI("calibrate"))  # Render the UI
+        ui_loaded$calibrate <- TRUE
+        calibrate("calibrate")  # Call the server
       }
     }
     if (input$navbar == "addContData") {
@@ -977,6 +983,13 @@ $(document).keyup(function(event) {
         editDiscData("editDiscData")  # Call the server
       }
     }
+    if (input$navbar == "addGuidelines") {
+      if (!ui_loaded$addGuidelines) {
+        output$addGuidelines_ui <- renderUI(addGuidelinesUI("addGuidelines"))  # Render the UI
+        ui_loaded$addGuidelines <- TRUE
+        addGuidelines("addGuidelines")  # Call the server
+      }
+    }
     if (input$navbar == "addDocs") {
       if (!ui_loaded$addDocs) {
         output$addDocs_ui <- renderUI(addDocsUI("addDocs"))  # Render the UI
@@ -989,6 +1002,13 @@ $(document).keyup(function(event) {
         output$addImgs_ui <- renderUI(addImgsUI("addImgs"))  # Render the UI
         ui_loaded$addImgs <- TRUE
         addImgs("addImgs")  # Call the server
+      }
+    }
+    if (input$navbar == "simplerIndex") {
+      if (!ui_loaded$simplerIndex) {
+        output$simplerIndex_ui <- renderUI(simplerIndexUI("simplerIndex"))  # Render the UI
+        ui_loaded$simplerIndex <- TRUE
+        simplerIndex("simplerIndex")  # Call the server
       }
     }
     if (input$navbar == "manageNewsContent") {
