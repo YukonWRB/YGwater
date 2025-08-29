@@ -48,23 +48,86 @@ app_server <- function(input, output, session) {
   }
   showAdmin <- function(show = TRUE, logout = FALSE) {
     if (show) {
-      nav_show(id = "navbar", target = "dbLocsTasks") # Actually a nav_menu, and this targets the sync modules as well as timeeseries and locations add/edit modules
-      nav_show(id = "navbar", target = "equipTasks") # Actually a nav_menu
-      nav_show(id = "navbar", target = "continuousDataTasks") # Actually a nav_menu
-      nav_show(id = "navbar", target = "discreteDataTasks") # Actually a nav_menu
-      nav_show(id = "navbar", target = "fileTasks") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
-      nav_show(id = "navbar", target = "visit")
+      privs <- session$userData$admin_privs
+
+      # Location tasks -------------------------------------------------------
+      if (any(privs$addLocation, privs$addSubLocation)) {
+        nav_show(id = "navbar", target = "dbLocsTasks")
+        if (!isTRUE(privs$addLocation))   nav_hide(id = "navbar", target = "addLocation")
+        if (!isTRUE(privs$addSubLocation)) nav_hide(id = "navbar", target = "addSubLocation")
+      } else {
+        nav_hide(id = "navbar", target = "dbLocsTasks")
+      }
+
+      # Equipment tasks -----------------------------------------------------
+      if (any(privs$cal, privs$deploy_recover)) {
+        nav_show(id = "navbar", target = "equipTasks")
+        if (!isTRUE(privs$cal))            nav_hide(id = "navbar", target = "cal")
+        if (!isTRUE(privs$deploy_recover)) nav_hide(id = "navbar", target = "deploy_recover")
+      } else {
+        nav_hide(id = "navbar", target = "equipTasks")
+      }
+
+      # Continuous data tasks -----------------------------------------------
+      if (any(privs$addContData, privs$editContData, privs$continuousCorrections,
+              privs$imputeMissing, privs$grades_approvals_qualifiers,
+              privs$addTimeseries, privs$syncCont)) {
+        nav_show(id = "navbar", target = "continuousDataTasks")
+        if (!isTRUE(privs$addContData))               nav_hide(id = "navbar", target = "addContData")
+        if (!isTRUE(privs$editContData))              nav_hide(id = "navbar", target = "editContData")
+        if (!isTRUE(privs$continuousCorrections))     nav_hide(id = "navbar", target = "continuousCorrections")
+        if (!isTRUE(privs$imputeMissing))             nav_hide(id = "navbar", target = "imputeMissing")
+        if (!isTRUE(privs$grades_approvals_qualifiers)) nav_hide(id = "navbar", target = "grades_approvals_qualifiers")
+        if (!isTRUE(privs$addTimeseries))             nav_hide(id = "navbar", target = "addTimeseries")
+        if (!isTRUE(privs$syncCont))                  nav_hide(id = "navbar", target = "syncCont")
+      } else {
+        nav_hide(id = "navbar", target = "continuousDataTasks")
+      }
+
+      # Discrete data tasks --------------------------------------------------
+      if (any(privs$addDiscData, privs$editDiscData, privs$syncDisc)) {
+        nav_show(id = "navbar", target = "discreteDataTasks")
+        if (!isTRUE(privs$addDiscData)) nav_hide(id = "navbar", target = "addDiscData")
+        if (!isTRUE(privs$editDiscData)) nav_hide(id = "navbar", target = "editDiscData")
+        if (!isTRUE(privs$syncDisc))     nav_hide(id = "navbar", target = "syncDisc")
+      } else {
+        nav_hide(id = "navbar", target = "discreteDataTasks")
+      }
+
+      # File tasks -----------------------------------------------------------
+      if (any(privs$addDocs, privs$addImgs)) {
+        nav_show(id = "navbar", target = "fileTasks")
+        if (!isTRUE(privs$addDocs)) nav_hide(id = "navbar", target = "addDocs")
+        if (!isTRUE(privs$addImgs)) nav_hide(id = "navbar", target = "addImgs")
+      } else {
+        nav_hide(id = "navbar", target = "fileTasks")
+      }
+
+      # Field visit ---------------------------------------------------------
+      if (isTRUE(privs$visit)) {
+        nav_show(id = "navbar", target = "visit")
+      } else {
+        nav_hide(id = "navbar", target = "visit")
+      }
+
+      # Admin menu ----------------------------------------------------------
       nav_show(id = "navbar", target = "adminTasks")
+      if (!isTRUE(session$userData$can_create_role)) nav_hide(id = "navbar", target = "manageUsers")
+      if (!isTRUE(privs$manageNewsContent)) nav_hide(id = "navbar", target = "manageNewsContent")
+      if (!isTRUE(privs$viewFeedback))   nav_hide(id = "navbar", target = "viewFeedback")
+
     } else {
       # Hide irrelevant tabs for viz mode
-      nav_hide(id = "navbar", target = "dbLocsTasks")
-      nav_hide(id = "navbar", target = "equipTasks") # Actually a nav_menu
-      nav_hide(id = "navbar", target = "continuousDataTasks") # Actually a nav_menu
-      nav_hide(id = "navbar", target = "discreteDataTasks") # Actually a nav_menu
-      nav_hide(id = "navbar", target = "fileTasks") # Actually a nav_menu, and this targets the tabs 'addDocs' and 'addImgs' as well
-      nav_hide(id = "navbar", target = "visit")
-      nav_hide(id = "navbar", target = "adminTasks")
-      
+      for (id in c("dbLocsTasks", "addLocation", "addSubLocation",
+                   "equipTasks", "cal", "deploy_recover",
+                   "continuousDataTasks", "addContData", "editContData", "continuousCorrections",
+                   "imputeMissing", "grades_approvals_qualifiers", "addTimeseries", "syncCont",
+                   "discreteDataTasks", "addDiscData", "editDiscData", "syncDisc",
+                   "fileTasks", "addDocs", "addImgs",
+                   "visit", "adminTasks", "manageUsers", "manageNewsContent", "viewFeedback")) {
+        nav_hide(id = "navbar", target = id)
+      }
+
       if (logout) {
         shinyjs::hide("admin")
       }
@@ -420,6 +483,7 @@ app_server <- function(input, output, session) {
   session$userData$user_logged_in <- FALSE # value to track login status
   session$userData$can_create_role <- FALSE # track CREATE ROLE privilege
   session$userData$table_privs <- data.frame() # track table privileges
+  session$userData$admin_privs <- list() # store privilege flags for UI filtering
   
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
@@ -494,8 +558,8 @@ $(document).keyup(function(event) {
         session$userData$config$dbUser <- input$username
         session$userData$config$dbPass <- input$password
         
-        # Check if the user has more than SELECT privileges on any tables in the public, continuous, discrete, or boreholes schemas, used to determine if the 'admin' tab should be shown
-        
+        # Check if the user has more than SELECT privileges on relevant tables, used to determine if the 'admin' tab should be shown
+
         # Show list of tables that the user has more than SELECT privileges on:
         sql <- "
         WITH tbls AS (
@@ -503,7 +567,7 @@ $(document).keyup(function(event) {
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r','p')
-            AND n.nspname IN ('public','continuous','discrete','boreholes')
+            AND n.nspname IN ('public','continuous','discrete','boreholes','files','application','instruments')
         )
         SELECT t.schema,
                t.table_name,
@@ -519,6 +583,34 @@ $(document).keyup(function(event) {
           session$userData$AquaCache,
           sql,
           params = list(session$userData$config$dbUser)  # or any role name
+        )
+
+        # Derive privilege flags for each admin nav_panel
+        privs <- session$userData$table_privs
+        has_priv <- function(schema, tables) {
+          any(privs$schema == schema & privs$table_name %in% tables)
+        }
+        session$userData$admin_privs <- list(
+          addLocation    = has_priv("public", "locations"),
+          addSubLocation = has_priv("public", "sub_locations"),
+          cal            = has_priv("instruments", "calibrations"),
+          deploy_recover = has_priv("instruments", c("instruments","instrument_maintenance","array_maintenance_changes")),
+          addContData    = has_priv("continuous", "measurements_continuous"),
+          editContData   = has_priv("continuous", "measurements_continuous"),
+          continuousCorrections = has_priv("continuous", "corrections"),
+          imputeMissing  = has_priv("continuous", c("measurements_continuous","measurements_continuous_corrected")),
+          grades_approvals_qualifiers = has_priv("continuous", c("corrections","grades","approvals","qualifiers")),
+          addTimeseries  = has_priv("continuous", "timeseries"),
+          syncCont       = has_priv("continuous", "timeseries"),
+          addDiscData    = has_priv("discrete", c("results","samples")),
+          editDiscData   = has_priv("discrete", c("results","samples")),
+          syncDisc       = has_priv("discrete", "sample_series"),
+          addDocs        = any(privs$schema == "files" & grepl("doc", privs$table_name, ignore.case = TRUE)),
+          addImgs        = any(privs$schema == "files" & grepl("img", privs$table_name, ignore.case = TRUE)),
+          visit          = any(grepl("visit", privs$table_name, ignore.case = TRUE)),
+          manageNewsContent = any(privs$schema == "application" & grepl("news", privs$table_name, ignore.case = TRUE)),
+          # viewFeedback is special, since everyone has 'insert' privileges on it, but only admins can view it. Need to make sure it has more than just INSERT.
+          viewFeedback   = any(privs$schema == "application" & grepl("feedback", privs$table_name, ignore.case = TRUE)) && privs[privs$table_name == "feedback", "extra_privileges"] != "INSERT"
         )
         
         # IF the user has more than SELECT privileges on any tables, show the 'admin' button
@@ -587,10 +679,11 @@ $(document).keyup(function(event) {
   
   ## Log out #####################################################
   observeEvent(input$logoutBtn, {
-    
+
     session$userData$user_logged_in <- FALSE  # Set login status to FALSE
     session$userData$can_create_role <- FALSE
     session$userData$table_privs <- data.frame() # Reset table privileges
+    session$userData$admin_privs <- list()       # Reset privilege flags
     
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
