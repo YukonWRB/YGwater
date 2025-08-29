@@ -20,31 +20,10 @@ app_server <- function(input, output, session) {
   
   # Show relevant tabs for viz mode
   showViz <- function(show = TRUE) {
-    if (show) {
-      nav_show(id = "navbar", target = "home")
-      nav_show(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discPlot', 'contPlot' as well
-      nav_show(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
-      if (!config$public & config$g_drive) { # If not public AND g drive access is possible. This will be removed once the FOD reports are integrated in the DB.
-        nav_show(id = "navbar", target = "FOD")
-      }
-      nav_show(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
-      nav_show(id = "navbar", target = "images") # Actually a nav_menu, and this targets the tabs 'imgTableView' and 'imgMapView' as well
-      nav_show(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
-      nav_show(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
-      nav_show(id = "navbar", target = "feedback")
-    } else {
-      nav_hide(id = "navbar", target = "home")
-      nav_hide(id = "navbar", target = "plot") # Actually a nav_menu, and this targets the tabs 'discPlot', 'contPlot' as well
-      nav_hide(id = "navbar", target = "maps") # Actually a nav_menu, and this targets the tabs 'mapParamValues' and 'mapMonitoringLocations' as well
-      if (!config$public & config$g_drive) { # If not public AND g drive access is possible This will be removed once the FOD reports are integrated in the DB.
-        nav_hide(id = "navbar", target = "FOD")
-      }
-      nav_hide(id = "navbar", target = "reports") # Actually a nav_menu, and this targets the tabs 'snowInfo', 'waterInfo', 'WQReport', and 'snowBulletin' as well
-      nav_hide(id = "navbar", target = "images") # Actually a nav_menu, and this targets the tabs 'imgTableView' and 'imgMapView' as well
-      nav_hide(id = "navbar", target = "data") # Actually a nav_menu, and this targets the tabs 'discData' and 'contData' as well
-      nav_hide(id = "navbar", target = "info") # Actually a nav_menu, and this targets the tabs 'news' and 'about' as well
-      nav_hide(id = "navbar", target = "feedback")
-    }
+      nav_fun <- if (show) nav_show else nav_hide
+      tabs <- c("home", "plot", "maps", "reports", "images", "data", "info", "feedback")
+      for (tab in tabs) nav_fun(id = "navbar", target = tab)
+      if (!config$public & config$g_drive) nav_fun(id = "navbar", target = "FOD")
   }
   showAdmin <- function(show = TRUE, logout = FALSE) {
     if (show) {
@@ -348,8 +327,6 @@ app_server <- function(input, output, session) {
       updateActionButton(session, "loginBtn", label = tr("login", languageSelection$language))
       updateActionButton(session, "logoutBtn", label = tr("logout", languageSelection$language))
     }
-    
-    session$sendCustomMessage("updateTitle", tr("title", languageSelection$language)) # Update the browser title of the app based on the selected language
     
     # Render the footer based on the language
     output$footer_ui <- renderUI({
@@ -777,11 +754,11 @@ $(document).keyup(function(event) {
       type = "toggleDropdown",
       message = list(msg = "hide dropdown"))
     
-    # When user selects any a tab, update the last active tab for the current mode
+    # When user selects a tab, update the last active tab for the current mode
     if (input$navbar %in% c("home", "discPlot", "contPlot", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "equip", "calibrate", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addGuidelines", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers", "simplerIndex")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "deploy_recover", "calibrate", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addGuidelines", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers", "simplerIndex")) {
       
       # User is in admin mode
       last_admin_tab(input$navbar)
