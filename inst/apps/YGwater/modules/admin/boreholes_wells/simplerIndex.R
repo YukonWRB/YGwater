@@ -6,7 +6,7 @@ simplerIndexUI <- function(id) {
   css <- gsub("%1$s", ns("pdf-container"), readLines(css_file), fixed = TRUE)
   tmp_css <- tempfile(fileext = ".css")
   writeLines(css, tmp_css)
-
+  
   tagList(
     tags$head(
       htmltools::includeCSS(tmp_css)
@@ -78,13 +78,13 @@ simplerIndexUI <- function(id) {
                 div(class = "control-row", style = "margin-top: 10px;",
                     div(class = "control-group",
                         selectizeInput(ns("ocr_display_mode"),
-                                    "OCR Display Mode:",
-                                    choices = list(
-                                      "None" = "none",
-                                      "Highlight Boxes" = "highlight", 
-                                      "Text Overlay" = "text"
-                                    ),
-                                    selected = "none"
+                                       "OCR Display Mode:",
+                                       choices = list(
+                                         "None" = "none",
+                                         "Highlight Boxes" = "highlight", 
+                                         "Text Overlay" = "text"
+                                       ),
+                                       selected = "none"
                         ),
                         div(class = "slider-container",
                             sliderInput(ns("confidence_threshold"),
@@ -206,7 +206,7 @@ simplerIndexUI <- function(id) {
                   numericInput(ns("longitude"), "Longitude:", value = NULL, min = -141, max = -60, step = 0.000001)
                 ),
                 textInput(ns("location_source"), "Location Source:", placeholder = "GPS, Survey, etc."),
-
+                
                 selectizeInput(ns("purpose_of_well"), 
                                "Purpose of Well:",
                                choices = list(
@@ -321,7 +321,7 @@ simplerIndexUI <- function(id) {
     
     # script to resize sidebars and reattach handlers after Shiny redraws UI
     tags$script(HTML(sprintf(
-    "$(function() {
+      "$(function() {
       const MIN_LEFT = 140;
       const MIN_RIGHT = 160;
       const MIN_MAIN = 300; // keep central workspace usable
@@ -385,8 +385,8 @@ simplerIndexUI <- function(id) {
                    });
       });
     });",
-    ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'), ns('resize-handle'), ns('resize-handle-right'),
-    paste(sprintf("'%s'", ns(c('name','notes','easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top_depth','permafrost_bottom_depth','date_drilled','casing_outside_diameter','drill_depth','surveyed_ground_level_elevation','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield'))), collapse = ','))))
+      ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'), ns('resize-handle'), ns('resize-handle-right'),
+      paste(sprintf("'%s'", ns(c('name','notes','easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top_depth','permafrost_bottom_depth','date_drilled','casing_outside_diameter','drill_depth','surveyed_ground_level_elevation','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield'))), collapse = ','))))
   )
 } # End of UI function
 
@@ -872,7 +872,7 @@ simplerIndex <- function(id) {
                                            pages = seq_len(n_pages),
                                            format = "png",
                                            filenames = png_tpl
-                                           )
+        )
         
         file_info <- file.info(png_files)
         split_df <- data.frame(
@@ -1152,7 +1152,6 @@ simplerIndex <- function(id) {
       
       plot_id <- paste0("pdf_plot_", rv$pdf_index)
       output[[plot_id]] <- renderPlot({
-        print("Rendering plot within observeEvent")
         # Load and prepare the image
         img_path <- rv$files_df$Path[rv$pdf_index]
         img <- magick::image_read(img_path)
@@ -1587,7 +1586,6 @@ simplerIndex <- function(id) {
       })
       
       output[[plot_id]] <- renderPlot({
-        print("Rendering plot within observer")
         img_path <- rv$files_df$Path[rv$pdf_index]
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(NULL)
@@ -1704,7 +1702,7 @@ simplerIndex <- function(id) {
           most_recent <- clicked_inputs[max_index[1]]
           
           # Extract field name from clicked input name
-          field_name <- sub(paste0("^", ns("")), "", most_recent)
+          field_name <- sub("_clicked$", "", most_recent)
           
           # Function to blur the input field after updating
           blur_field <- function(field_id) {
@@ -1997,20 +1995,6 @@ simplerIndex <- function(id) {
       }
     })
     
-    # Add click handler for permafrost inputs
-    observeEvent(input$permafrost_present, {
-      if (input$permafrost_present) {
-        showNotification("Permafrost fields enabled", type = "message", duration = 2)
-      }
-    })
-    
-    # Add notification for 'is_well' input checked
-    observeEvent(input$is_well, {
-      if (isTRUE(input$is_well)) {
-        showNotification("Well construction fields enabled", type = "message", duration = 2)
-      }
-    })
-    
     # Add renderText outputs for borehole ID and file count displays
     output$borehole_id_display <- renderText({
       req(rv$files_df)
@@ -2279,7 +2263,7 @@ simplerIndex <- function(id) {
             
           }, error = function(e) {
             error_count <- error_count + 1
-            showNotification(paste0("Error uploading borehole", well_id, ":", e$message, "\n", type = "error", duration = 5))
+            showNotification(paste0("Error uploading borehole ", well_id, ":", e$message, "\n", type = "error", duration = 5))
           })
         }
       }
