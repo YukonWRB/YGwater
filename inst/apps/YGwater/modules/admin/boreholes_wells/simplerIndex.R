@@ -93,7 +93,35 @@ simplerIndexUI <- function(id) {
                                         width = "150px"
                             )
                         ),
-                        
+                        selectizeInput(ns("psm_mode"),
+                                       "PSM Mode:",
+                                       choices = list(
+                                         "Auto" = "3",
+                                         "Single Column" = "4",
+                                         "Single Block" = "6",
+                                         "Single Line" = "7",
+                                         "Single Word" = "8",
+                                         "Sparse Text" = "11"
+                                       ),
+                                       selected = "3"
+                        ),
+                        selectizeInput(ns("pre_processing_method"),
+                                       "Pre-processing:",
+                                       choices = list(
+                                         "Default" = "default",
+                                         "Enhance Dark" = "enhance_dark",
+                                         "Enhance Light" = "enhance_light",
+                                         "High Contrast" = "high_contrast",
+                                         "Denoise" = "denoise",
+                                         "Deskew" = "deskew"
+                                       ),
+                                       selected = "default"
+                        ),
+                        textInput(ns("ocr_whitelist"),
+                                  "Whitelist:",
+                                  placeholder = "Optional characters"
+                        ),
+
                         # OCR Text Display
                         div(
                           style = "margin-left: 20px; width: 300px;",
@@ -574,7 +602,7 @@ simplerIndex <- function(id) {
       )
     }
     
-    process_ocr_batch <- function(files_df, ocr_text_list, current_index = NULL) {
+    process_ocr_batch <- function(files_df, ocr_text_list, psm_mode, pre_processing_method, whitelist, current_index = NULL) {
       # Check if any OCR processing is needed
       needs_processing <- any(sapply(ocr_text_list, function(x) is.null(x)))
       
@@ -1108,37 +1136,32 @@ simplerIndex <- function(id) {
     observeEvent(input$ocr_display_mode, {
       req(rv$files_df)
       rv$ocr_display_mode <- input$ocr_display_mode
-      
+
       if (rv$ocr_display_mode %in% c("highlight", "text")) {
         # Set processing flag
         ocr_processing(TRUE)
-        # Process OCR for all images/pages
-        for (i in seq_len(nrow(rv$files_df))) {
-          if (is.null(rv$ocr_text[[i]]) || nrow(rv$ocr_text[[i]]) == 0) {
-            img_path <- rv$files_df$Path[i]
-            tryCatch({
-              img <- magick::image_read(img_path)
-              img <- img %>% magick::image_convert(colorspace = "gray") %>% magick::image_contrast(sharpen = 1) %>% magick::image_modulate(brightness = 110, saturation = 100, hue = 100) %>% magick::image_threshold(type = "black", threshold = "60%")
-              tessoptions <- list(
-                tessedit_create_hocr = 1,
-                tessedit_pageseg_mode = 3
-              )
-              ocr_result <- tesseract::ocr_data(img, engine = tesseract::tesseract(
-                options = tessoptions
-              ))
-              ocr_result <- filter_ocr_noise(ocr_result)
-              rv$ocr_text[[i]] <- ocr_result
-            }, error = function(e) {
-              rv$ocr_text[[i]] <- data.frame(
-                word = character(0),
-                confidence = numeric(0),
-                bbox = character(0),
-                stringsAsFactors = FALSE
-              )
-            })
-          }
-        }
+        rv$ocr_text <- process_ocr_batch(
+          rv$files_df,
+          rv$ocr_text,
+          as.integer(input$psm_mode),
+          input$pre_processing_method,
+          input$ocr_whitelist
+        )
         ocr_processing(FALSE)
+      }
+    })
+
+    observeEvent(list(input$psm_mode, input$pre_processing_method, input$ocr_whitelist), {
+      req(rv$files_df)
+      if (rv$ocr_display_mode %in% c("highlight", "text")) {
+        rv$ocr_text <- vector("list", nrow(rv$files_df))
+        rv$ocr_text <- process_ocr_batch(
+          rv$files_df,
+          rv$ocr_text,
+          as.integer(input$psm_mode),
+          input$pre_processing_method,
+          input$ocr_whitelist
+        )
       }
     })
     
