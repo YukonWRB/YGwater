@@ -1141,242 +1141,19 @@ simplerIndex <- function(id) {
         ocr_processing(FALSE)
       }
     })
-    
-    # Force plot re-render when pdf_index changes (to show OCR overlays)
-    observeEvent(rv$pdf_index, {
-      req(rv$files_df)
-      req(rv$pdf_index)
-      
-      # Reset OCR mode selectize to "none" when switching pages
-      #updateSelectizeInput(session, "ocr_display_mode", selected = "none")
-      
-      plot_id <- paste0("pdf_plot_", rv$pdf_index)
-      output[[plot_id]] <- renderPlot({
-        # Load and prepare the image
-        img_path <- rv$files_df$Path[rv$pdf_index]
-        img <- magick::image_read(img_path)
-        img <- img %>% magick::image_enhance()
-        info <- magick::image_info(img)
-        img_width <- info$width
-        img_height <- info$height
-        img_raster <- as.raster(img)
-        
-        # Set up the plot area
-        par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
-        plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height),
-             xlab = "", ylab = "", axes = FALSE, asp = 1)
-        
-        # Draw the image
-        rasterImage(img_raster, 0, 0, img_width, img_height)
-        
-        # Show processing indicator if OCR is running
-        if (ocr_processing()) {
-          rect(10, 10, 300, 50, col = "black", border = NA)
-          text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
-        }
-        
-        # Draw OCR overlay if in OCR mode and OCR data exists
-        if (input$ocr_display_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
-          ocr_df <- rv$ocr_text[[rv$pdf_index]]
-          
-          # Filter by confidence threshold
-          if (nrow(ocr_df) > 0) {
-            ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
-          }
-          
-          # Draw OCR boxes or text
-          if (nrow(ocr_df) > 0) {
-            for (i in seq_len(nrow(ocr_df))) {
-              tryCatch({
-                # Parse bbox coordinates and convert to plot coordinates
-                bbox <- strsplit(ocr_df$bbox[i], ",")[[1]]
-                if (length(bbox) == 4) {
-                  coords <- as.numeric(bbox)
-                  
-                  # Handle coordinate conversion correctly
-                  # Tesseract coordinates: (left, top, right, bottom) with origin at top-left
-                  # Plot coordinates: (left, bottom, right, top) with origin at bottom-left
-                  x1 <- coords[1]  # left
-                  y1 <- img_height - coords[4]  # bottom (inverted)
-                  x2 <- coords[3]  # right
-                  y2 <- img_height - coords[2]  # top (inverted)
-                  
-                  
-                  # Draw rectangle and/or text based on display mode
-                  if (input$ocr_display_mode == "text") {
-                    # Draw background for text
-                    rect(x1, y1, x2, y2, 
-                         col = rgb(1, 1, 1, 0.7), # semi-transparent white
-                         border = "darkgray", 
-                         lwd = 1)
-                    
-                    # Draw word on top
-                    text_x <- (x1 + x2) / 2
-                    text_y <- (y1 + y2) / 2
-                    text(text_x, text_y, 
-                         ocr_df$word[i],
-                         cex = 0.9, 
-                         col = "black", 
-                         font = 2)
-                  } else if (input$ocr_display_mode == "highlight") {
-                    # Draw highlight rectangle
-                    rect(x1, y1, x2, y2, 
-                         col = rgb(0, 0.48, 1, 0.3),  # Semi-transparent blue
-                         border = rgb(0, 0.48, 1, 0.8),  # Solid blue border
-                         lwd = 1)
-                  }
-                }
-              }, error = function(e) {
-                # Silently ignore errors in drawing individual words
-              })
-            }
-          } else {
-            # Show message if no text meets confidence threshold
-            text_width <- strwidth("No OCR text meets confidence threshold") * 1.2
-            rect(img_width/2 - text_width/2, img_height/2 - 15, 
-                 img_width/2 + text_width/2, img_height/2 + 15,
-                 col = "white", border = "black")
-            
-            text(img_width/2, img_height/2,
-                 paste("No OCR text meets confidence threshold (", input$confidence_threshold, "%)"),
-                 cex = 1, col = "red")
-          }
-        }
-        
-        # Draw user-defined redaction rectangles
-        if (!is.null(rv$rectangles[[img_path]]) && length(rv$rectangles[[img_path]]) > 0) {
-          for (rect_data in rv$rectangles[[img_path]]) {
-            rect(rect_data$xmin, rect_data$ymin, rect_data$xmax, rect_data$ymax,
-                 col = adjustcolor(rect_data$color, alpha.f = 0.3),
-                 border = rect_data$color,
-                 lwd = 2)
-          }
-        }
-      }, res = 96)  # Increased resolution for better text rendering
-    })
-    
-    # Observer for brush selection to extract text
-    observeEvent(input$pdf_brush, {
-      req(input$pdf_brush)
-      req(rv$files_df)
-      req(rv$pdf_index)
-      req(brush_enabled())
-      
-      # Get current OCR data
-      ocr_df <- rv$ocr_text[[rv$pdf_index]]
-      if (is.null(ocr_df) || nrow(ocr_df) == 0) {
-        rv$selected_text <- NULL
-        return()
-      }
-      
-      # Filter by confidence threshold to match what's displayed
-      # This is the key fix - apply the same confidence filter used for display
-      if (nrow(ocr_df) > 0) {
-        ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
-      }
-      
-      if (nrow(ocr_df) == 0) {
-        showNotification("No OCR text meets confidence threshold", type = "warning", duration = 2)
-        rv$selected_text <- NULL
-        return()
-      }
-      
-      # Get brush coordinates
-      brush <- input$pdf_brush
-      
-      # Get image dimensions for coordinate conversion
-      img_path <- rv$files_df$Path[rv$pdf_index]
-      img <- magick::image_read(img_path)
-      info <- magick::image_info(img)
-      img_width <- info$width
-      img_height <- info$height
-      
-      # Convert brush coordinates to image coordinates
-      # Note: brush coordinates are in plot space, need to convert to image space
-      brush_xmin <- brush$xmin
-      brush_xmax <- brush$xmax
-      brush_ymin <- img_height - brush$ymax  # Flip Y coordinates
-      brush_ymax <- img_height - brush$ymin  # Flip Y coordinates
-      
-      # Find OCR words within brush selection
-      selected_words <- character(0)
-      
-      for (i in seq_len(nrow(ocr_df))) {
-        # Parse bbox coordinates
-        coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
-        word_x1 <- coords[1]
-        word_y1 <- coords[2]
-        word_x2 <- coords[3]
-        word_y2 <- coords[4];
-        
-        # Check if word overlaps with brush selection
-        if (word_x2 >= brush_xmin && word_x1 <= brush_xmax &&
-            word_y2 >= brush_ymin && word_y1 <= brush_ymax) {
-          selected_words <- c(selected_words, ocr_df$word[i])
-        }
-      }
-      
-      # Update selected text
-      if (length(selected_words) > 0) {
-        rv$selected_text <- selected_words
-        
-        # Create notification with the actual text (limit to reasonable length)
-        selected_text <- paste(selected_words, collapse = " ")
-        if (nchar(selected_text) > 100) {
-          selected_text <- paste0(substr(selected_text, 1, 97), "...")
-        }
-        showNotification(paste("Selected:", selected_text), 
-                         type = "message", duration = 6)
-      } else {
-        rv$selected_text <- NULL
-        showNotification("No text found in selection", type = "warning", duration = 2)
-      }
-    })
-    
-    # --- Rectangle logic: modified to store by file path instead of borehole ID ---
-    observeEvent(input$draw_rectangle, {
-      # Make sure we have a brush selection
-      if (is.null(input$pdf_brush)) {
-        showNotification("Please make a selection first", type = "warning", duration = 2)
-        return()
-      }
-      req(rv$files_df)
-      req(rv$pdf_index)
-      
-      # Get file path as unique identifier
-      file_path <- rv$files_df$Path[rv$pdf_index]
-      
-      # Get brush coordinates (already in plot coordinates)
-      brush <- input$pdf_brush
-      
-      # Store rectangle data for this file path
-      if (is.null(rv$rectangles[[file_path]])) {
-        rv$rectangles[[file_path]] <- list()
-      }
-      
-      new_rect <- list(
-        xmin = brush$xmin,
-        xmax = brush$xmax,
-        ymin = brush$ymin,
-        ymax = brush$ymax,
-        color = "red"
-      )
-      rv$rectangles[[file_path]] <- append(rv$rectangles[[file_path]], list(new_rect))
-      showNotification("Selection redacted", type = "message", duration = 2)
-    })
-    
+
     observeEvent(input$clear_rectangles, {
       req(rv$files_df)
       req(rv$pdf_index)
-      
+
       # Get file path as unique identifier
       file_path <- rv$files_df$Path[rv$pdf_index]
-      
+
       # Clear rectangles for this file path only
       rv$rectangles[[file_path]] <- NULL
       showNotification("Rectangles cleared", type = "message", duration = 2)
     })
-    
+
     # Generalized function to create PDF with redactions
     create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
       req(rv$files_df)
@@ -1523,131 +1300,120 @@ simplerIndex <- function(id) {
         }
       }
     )
-    
-    
-    # Also update the rendering function to show file-specific rectangles
-    observe({
-      if (is.null(rv$files_df) || nrow(rv$files_df) == 0 || is.null(rv$pdf_index) ||
-          rv$pdf_index > nrow(rv$files_df)) {
-        output$pdf_viewer <- renderUI(NULL)
-        return()
+    output$pdf_viewer <- renderUI({
+      if (is.null(rv$files_df) || nrow(rv$files_df) == 0 ||
+          is.null(rv$pdf_index) || rv$pdf_index > nrow(rv$files_df)) {
+        return(NULL)
       }
-      
-      # Get required values
-      current_ocr_mode <- input$ocr_display_mode
-      current_confidence <- input$confidence_threshold
-      file_path <- rv$files_df$Path[rv$pdf_index]
-      # Use rectangles for this file path
-      current_rectangles <- rv$rectangles[[file_path]]
-      is_processing <- ocr_processing()
-      
-      plot_id <- paste0("pdf_plot_", rv$pdf_index)
-      
-      # Ensure that brush state is correctly reflected in UI when pdf_index changes
-      isolate({
-        if (brush_enabled()) {
-          shinyjs::runjs(sprintf("$('#%s').addClass('btn-active');", ns('brush_select')))
-        } else {
-          shinyjs::runjs(sprintf("$('#%s').removeClass('btn-active');", ns('brush_select')))
-        }
-      })
-      
-      output$pdf_viewer <- renderUI({
-        img_path <- rv$files_df$Path[rv$pdf_index]
-        if (is.null(img_path) || is.na(img_path) || !nzchar(img_path) || !file.exists(img_path)) {
-          return(NULL)
-        }
-        img <- magick::image_read(img_path)
-        info <- magick::image_info(img)
-        img_width <- info$width
-        img_height <- info$height
-        zoom <- input$zoom_level
-        display_width <- img_width * zoom
-        display_height <- img_height * zoom
-        tags$div(
-          style = "width: 100%; overflow: auto;",
-          plotOutput(
-            outputId = ns(plot_id),  # Namespaced id here because we're creating the element
-            width = paste0(display_width, "px"),
-            height = paste0(display_height, "px"),
-            brush = if (brush_enabled()) {
-              brushOpts(
-                id = ns("pdf_brush"),
-                resetOnNew = TRUE,
-                direction = "xy",
-                opacity = 0.3,
-                fill = "#007bff"
-              )
-            } else {
-              NULL
-            }
-          )
+      img_path <- rv$files_df$Path[rv$pdf_index]
+      if (is.null(img_path) || is.na(img_path) || !nzchar(img_path) || !file.exists(img_path)) {
+        return(NULL)
+      }
+      img <- magick::image_read(img_path)
+      info <- magick::image_info(img)
+      img_width <- info$width
+      img_height <- info$height
+      zoom <- input$zoom_level
+      display_width <- img_width * zoom
+      display_height <- img_height * zoom
+      tags$div(
+        style = "width: 100%; overflow: auto;",
+        plotOutput(
+          ns("pdf_plot"),
+          width = paste0(display_width, "px"),
+          height = paste0(display_height, "px"),
+          brush = if (brush_enabled()) {
+            brushOpts(
+              id = ns("pdf_brush"),
+              resetOnNew = TRUE,
+              direction = "xy",
+              opacity = 0.3,
+              fill = "#007bff"
+            )
+          } else {
+            NULL
+          }
         )
-      })
-      
-      output[[plot_id]] <- renderPlot({
-        img_path <- rv$files_df$Path[rv$pdf_index]
-        if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
-          return(NULL)
-        }
-        img <- magick::image_read(img_path)
-        img <- img %>% magick::image_enhance()
-        info <- magick::image_info(img)
-        img_width <- info$width
-        img_height <- info$height
-        img_raster <- as.raster(img)
-        par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
-        plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height),
-             xlab = "", ylab = "", axes = FALSE, asp = 1)
-        rasterImage(img_raster, 0, 0, img_width, img_height)
-        if (is_processing) {
-          rect(10, 10, 300, 50, col = "black", border = NA)
-          text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
-        }
-        if (current_ocr_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
-          ocr_df <- rv$ocr_text[[rv$pdf_index]]
-          if (nrow(ocr_df) > 0) {
-            ocr_df <- ocr_df[ocr_df$confidence >= current_confidence, , drop = FALSE]
-          }
-          if (nrow(ocr_df) > 0) {
-            for (i in seq_len(nrow(ocr_df))) {
-              tryCatch({
-                coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
-                if (length(coords) == 4) {
-                  x1 <- coords[1]
-                  y1 <- img_height - coords[4]
-                  x2 <- coords[3]
-                  y2 <- img_height - coords[2]
-                  if (current_ocr_mode == "text") {
-                    rect(x1, y1, x2, y2, col = "white", border = "black", lwd = 1)
-                    text((x1 + x2) / 2, (y1 + y2) / 2, ocr_df$word[i],
-                         cex = 1.2, col = "black", font = 2)
-                  } else {
-                    rect(x1, y1, x2, y2, col = rgb(0, 0.48, 1, 0.3),
-                         border = rgb(0, 0.48, 1, 0.8), lwd = 1)
-                  }
-                }
-              }, error = function(e) {})
-            }
-          } else if (current_ocr_mode != "none") {
-            rect(img_width/2 - 200, img_height/2 - 25, img_width/2 + 200, img_height/2 + 25,
-                 col = "white", border = "black")
-            text(img_width/2, img_height/2,
-                 paste("No OCR text meets confidence threshold (", current_confidence, "%)"),
-                 cex = 1.2, col = "red")
-          }
-        }
-        # Draw user-defined rectangles for this specific file
-        if (!is.null(current_rectangles) && length(current_rectangles) > 0) {
-          for (rect in current_rectangles) {
-            rect(rect$xmin, rect$ymin, rect$xmax, rect$ymax,
-                 col = adjustcolor(rect$color, alpha.f = 0.3),
-                 border = rect$color,
-                 lwd = 2)
-          }
-        }
-      }, res = 50)
+      )
     })
+
+    output$pdf_plot <- renderPlot({
+      req(rv$files_df)
+      req(rv$pdf_index)
+      img_path <- rv$files_df$Path[rv$pdf_index]
+      req(img_path, file.exists(img_path))
+      img <- magick::image_read(img_path)
+      img <- img %>% magick::image_enhance()
+      info <- magick::image_info(img)
+      img_width <- info$width
+      img_height <- info$height
+      img_raster <- as.raster(img)
+      par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+      plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height),
+           xlab = "", ylab = "", axes = FALSE, asp = 1)
+      rasterImage(img_raster, 0, 0, img_width, img_height)
+
+      if (ocr_processing()) {
+        rect(10, 10, 300, 50, col = "black", border = NA)
+        text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
+      }
+
+      if (input$ocr_display_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
+        ocr_df <- rv$ocr_text[[rv$pdf_index]]
+        if (nrow(ocr_df) > 0) {
+          ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
+        }
+        if (nrow(ocr_df) > 0) {
+          for (i in seq_len(nrow(ocr_df))) {
+            tryCatch({
+              coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
+              if (length(coords) == 4) {
+                x1 <- coords[1]
+                y1 <- img_height - coords[4]
+                x2 <- coords[3]
+                y2 <- img_height - coords[2]
+                if (input$ocr_display_mode == "text") {
+                  rect(x1, y1, x2, y2,
+                       col = rgb(1, 1, 1, 0.7),
+                       border = "darkgray",
+                       lwd = 1)
+                  text((x1 + x2) / 2, (y1 + y2) / 2,
+                       ocr_df$word[i],
+                       cex = 0.9,
+                       col = "black",
+                       font = 2)
+                } else if (input$ocr_display_mode == "highlight") {
+                  rect(x1, y1, x2, y2,
+                       col = rgb(0, 0.48, 1, 0.3),
+                       border = rgb(0, 0.48, 1, 0.8),
+                       lwd = 1)
+                }
+              }
+            }, error = function(e) {})
+          }
+        } else {
+          text_width <- strwidth("No OCR text meets confidence threshold") * 1.2
+          rect(img_width/2 - text_width/2, img_height/2 - 15,
+               img_width/2 + text_width/2, img_height/2 + 15,
+               col = "white", border = "black")
+          text(img_width/2, img_height/2,
+               paste("No OCR text meets confidence threshold (", input$confidence_threshold, "%)"),
+               cex = 1, col = "red")
+        }
+      }
+
+      rects <- rv$rectangles[[img_path]]
+      if (!is.null(rects) && length(rects) > 0) {
+        for (rect_data in rects) {
+          rect(rect_data$xmin, rect_data$ymin, rect_data$xmax, rect_data$ymax,
+               col = adjustcolor(rect_data$color, alpha.f = 0.3),
+               border = rect_data$color,
+               lwd = 2)
+        }
+      }
+    }, res = 96)
+    
+    
     
     
     
