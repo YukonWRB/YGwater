@@ -1152,7 +1152,6 @@ simplerIndex <- function(id) {
       
       plot_id <- paste0("pdf_plot_", rv$pdf_index)
       output[[plot_id]] <- renderPlot({
-        print("Rendering plot within observeEvent")
         # Load and prepare the image
         img_path <- rv$files_df$Path[rv$pdf_index]
         img <- magick::image_read(img_path)
@@ -1587,7 +1586,6 @@ simplerIndex <- function(id) {
       })
       
       output[[plot_id]] <- renderPlot({
-        print("Rendering plot within observer")
         img_path <- rv$files_df$Path[rv$pdf_index]
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(NULL)
@@ -1704,7 +1702,7 @@ simplerIndex <- function(id) {
           most_recent <- clicked_inputs[max_index[1]]
           
           # Extract field name from clicked input name
-          field_name <- sub(paste0("^", ns("")), "", most_recent)
+          field_name <- sub("_clicked$", "", most_recent)
           
           # Function to blur the input field after updating
           blur_field <- function(field_id) {
@@ -1997,20 +1995,6 @@ simplerIndex <- function(id) {
       }
     })
     
-    # Add click handler for permafrost inputs
-    observeEvent(input$permafrost_present, {
-      if (input$permafrost_present) {
-        showNotification("Permafrost fields enabled", type = "message", duration = 2)
-      }
-    })
-    
-    # Add notification for 'is_well' input checked
-    observeEvent(input$is_well, {
-      if (isTRUE(input$is_well)) {
-        showNotification("Well construction fields enabled", type = "message", duration = 2)
-      }
-    })
-    
     # Add renderText outputs for borehole ID and file count displays
     output$borehole_id_display <- renderText({
       req(rv$files_df)
@@ -2279,7 +2263,7 @@ simplerIndex <- function(id) {
             
           }, error = function(e) {
             error_count <- error_count + 1
-            showNotification(paste0("Error uploading borehole", well_id, ":", e$message, "\n", type = "error", duration = 5))
+            showNotification(paste0("Error uploading borehole ", well_id, ":", e$message, "\n", type = "error", duration = 5))
           })
         }
       }
