@@ -2,12 +2,12 @@
 
 simplerIndexUI <- function(id) {
   ns <- NS(id)
-  css_file <- system.file("apps/YGwater/www/simplerIndex.css", package = "YGwater")
+  css_file <- system.file("apps/YGwater/www/css/simplerIndex.css", package = "YGwater")
   css <- gsub("%1$s", ns("pdf-container"), readLines(css_file), fixed = TRUE)
   tmp_css <- tempfile(fileext = ".css")
   writeLines(css, tmp_css)
 
-  bslib::page_fluid(
+  tagList(
     tags$head(
       htmltools::includeCSS(tmp_css)
     ),
@@ -77,7 +77,7 @@ simplerIndexUI <- function(id) {
                 title = "OCR Controls",
                 div(class = "control-row", style = "margin-top: 10px;",
                     div(class = "control-group",
-                        selectInput(ns("ocr_display_mode"),
+                        selectizeInput(ns("ocr_display_mode"),
                                     "OCR Display Mode:",
                                     choices = list(
                                       "None" = "none",
@@ -834,17 +834,20 @@ simplerIndex <- function(id) {
     observeEvent(input$pdf_file, {
       
       uploaded_files <- input$pdf_file
-      # Rename uploaded files to their original names
+      # Rename uploaded files to their original names with robust path handling
       for (i in seq_len(nrow(uploaded_files))) {
         orig_name <- uploaded_files$name[i]
-        orig_path <- file.path(dirname(uploaded_files$datapath[i]), orig_name)
-        file.rename(uploaded_files$datapath[i], orig_path)
+        from_path <- normalizePath(uploaded_files$datapath[i], winslash = "/", mustWork = FALSE)
+        orig_path <- file.path(dirname(from_path), orig_name)
+        rename_success <- file.rename(from_path, orig_path)
+        if (!rename_success) {
+          file.copy(from_path, orig_path, overwrite = TRUE)
+          unlink(from_path)
+        }
         uploaded_files$datapath[i] <- orig_path
       }
       
       req(uploaded_files)
-      
-      rv$files_df <- uploaded_files
       
       # Show initial loading notification
       total_files <- nrow(uploaded_files)
@@ -860,7 +863,16 @@ simplerIndex <- function(id) {
                          type = "message", duration = 2)
         
         # Convert PDF to PNG files (one per page) and save to tempdir
-        png_files <- pdftools::pdf_convert(pdf_path, dpi = 150, filenames = file.path(tempdir(), sprintf("%s_page_%d.png", tools::file_path_sans_ext(basename(pdf_path)), seq_len(pdftools::pdf_info(pdf_path)$pages))))
+        n_pages <- pdftools::pdf_info(pdf_path)$pages
+        base    <- tools::file_path_sans_ext(basename(pdf_path))
+        png_tpl <- file.path(tempdir(), sprintf("%s_page_%%d.%%s", base))  # note %%d and %%s
+        
+        png_files <- pdftools::pdf_convert(pdf_path, 
+                                           dpi = 150,
+                                           pages = seq_len(n_pages),
+                                           format = "png",
+                                           filenames = png_tpl
+                                           )
         
         file_info <- file.info(png_files)
         split_df <- data.frame(
@@ -985,30 +997,18 @@ simplerIndex <- function(id) {
       if (nrow(rv$files_df) > 0) {
         selected_row <- rv$pdf_index
         
-        # Find which well this page belongs to
-        well_id_to_remove <- rv$files_df$borehole_id[selected_row]
-        if (!is.null(well_id_to_remove) && well_id_to_remove %in% names(rv$well_data)) {
-          rv$well_data[[well_id_to_remove]] <- NULL
-        }
+        fname <- rv$files_df$NewFilename[selected_row]
         
-        # Remove from files_df
+        # Remove from files_df and OCR text
         rv$files_df <- rv$files_df[-selected_row, ]
         rv$ocr_text <- rv$ocr_text[-selected_row]
         
-        # Update well_data structure - adjust file indices
+        # Update well_data structure by removing the filename
         for (well_id in names(rv$well_data)) {
-          file_index <- rv$well_data[[well_id]]$files
-          # Adjust the file index if it's greater than the removed row
-          if (file_index > selected_row) {
-            rv$well_data[[well_id]]$files <- file_index - 1
-          }
-          
-          
-          # store filenames only; remove if this page's filename is present
-          fname <- rv$files_df$NewFilename[selected_row]
           rv$well_data[[well_id]]$files <- setdiff(rv$well_data[[well_id]]$files, fname)
-          
-          
+          if (length(rv$well_data[[well_id]]$files) == 0) {
+            rv$well_data[[well_id]] <- NULL
+          }
         }
         
         if (nrow(rv$files_df) == 0) {
@@ -1043,22 +1043,17 @@ simplerIndex <- function(id) {
       if (nrow(rv$files_df) > 0) {
         selected_row <- rv$pdf_index
         
-        # Find which well this page belongs to
-        well_id_to_remove <- rv$files_df$borehole_id[selected_row]
-        if (!is.null(well_id_to_remove) && well_id_to_remove %in% names(rv$well_data)) {
-          rv$well_data[[well_id_to_remove]] <- NULL
-        }
+        fname <- rv$files_df$NewFilename[selected_row]
         
-        # Remove from files_df
+        # Remove from files_df and OCR text
         rv$files_df <- rv$files_df[-selected_row, ]
         rv$ocr_text <- rv$ocr_text[-selected_row]
         
-        # Update well_data structure - adjust file indices
+        # Update well_data structure by removing the filename
         for (well_id in names(rv$well_data)) {
-          file_index <- rv$well_data[[well_id]]$files
-          # Adjust the file index if it's greater than the removed row
-          if (file_index > selected_row) {
-            rv$well_data[[well_id]]$files <- file_index - 1
+          rv$well_data[[well_id]]$files <- setdiff(rv$well_data[[well_id]]$files, fname)
+          if (length(rv$well_data[[well_id]]$files) == 0) {
+            rv$well_data[[well_id]] <- NULL
           }
         }
         
@@ -1151,11 +1146,13 @@ simplerIndex <- function(id) {
     observeEvent(rv$pdf_index, {
       req(rv$files_df)
       req(rv$pdf_index)
+      
       # Reset OCR mode selectize to "none" when switching pages
       #updateSelectizeInput(session, "ocr_display_mode", selected = "none")
       
-      plot_id <- ns(paste0("pdf_plot_", rv$pdf_index))
+      plot_id <- paste0("pdf_plot_", rv$pdf_index)
       output[[plot_id]] <- renderPlot({
+        print("Rendering plot within observeEvent")
         # Load and prepare the image
         img_path <- rv$files_df$Path[rv$pdf_index]
         img <- magick::image_read(img_path)
@@ -1531,8 +1528,11 @@ simplerIndex <- function(id) {
     
     # Also update the rendering function to show file-specific rectangles
     observe({
-      req(rv$files_df)
-      req(rv$pdf_index)
+      if (is.null(rv$files_df) || nrow(rv$files_df) == 0 || is.null(rv$pdf_index) ||
+          rv$pdf_index > nrow(rv$files_df)) {
+        output$pdf_viewer <- renderUI(NULL)
+        return()
+      }
       
       # Get required values
       current_ocr_mode <- input$ocr_display_mode
@@ -1541,7 +1541,8 @@ simplerIndex <- function(id) {
       # Use rectangles for this file path
       current_rectangles <- rv$rectangles[[file_path]]
       is_processing <- ocr_processing()
-      plot_id <- ns(paste0("pdf_plot_", rv$pdf_index))
+      
+      plot_id <- paste0("pdf_plot_", rv$pdf_index)
       
       # Ensure that brush state is correctly reflected in UI when pdf_index changes
       isolate({
@@ -1553,7 +1554,10 @@ simplerIndex <- function(id) {
       })
       
       output$pdf_viewer <- renderUI({
-        img_path <- isolate(rv$files_df$Path[rv$pdf_index])
+        img_path <- rv$files_df$Path[rv$pdf_index]
+        if (is.null(img_path) || is.na(img_path) || !nzchar(img_path) || !file.exists(img_path)) {
+          return(NULL)
+        }
         img <- magick::image_read(img_path)
         info <- magick::image_info(img)
         img_width <- info$width
@@ -1564,7 +1568,7 @@ simplerIndex <- function(id) {
         tags$div(
           style = "width: 100%; overflow: auto;",
           plotOutput(
-            outputId = plot_id,
+            outputId = ns(plot_id),  # Namespaced id here because we're creating the element
             width = paste0(display_width, "px"),
             height = paste0(display_height, "px"),
             brush = if (brush_enabled()) {
@@ -1583,7 +1587,11 @@ simplerIndex <- function(id) {
       })
       
       output[[plot_id]] <- renderPlot({
+        print("Rendering plot within observer")
         img_path <- rv$files_df$Path[rv$pdf_index]
+        if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
+          return(NULL)
+        }
         img <- magick::image_read(img_path)
         img <- img %>% magick::image_enhance()
         info <- magick::image_info(img)
@@ -1696,7 +1704,7 @@ simplerIndex <- function(id) {
           most_recent <- clicked_inputs[max_index[1]]
           
           # Extract field name from clicked input name
-          field_name <- sub(paste0("^", ns("")), "", field_name)
+          field_name <- sub(paste0("^", ns("")), "", most_recent)
           
           # Function to blur the input field after updating
           blur_field <- function(field_id) {
@@ -1781,9 +1789,7 @@ simplerIndex <- function(id) {
                                              format(parsed_date, "%Y-%m-%d")),
                                        type = "message", duration = 2)
                       # Date fields have complex structure, blur the input part
-                      shinyjs::runjs(sprintf("document.querySelector('#%s input').blur();", ns('date_drilled'))
-
-                      )
+                      shinyjs::runjs(sprintf("document.querySelector('#%s input').blur();", ns('date_drilled')))
                       break  # Exit the loop once we've found a valid date
                     }
                   }
@@ -2292,6 +2298,8 @@ simplerIndex <- function(id) {
     output$ocr_text_display <- renderText({
       req(rv$files_df)
       req(rv$pdf_index)
+      
+      if (length(rv$ocr_text) == 0) return()
       # Show selected text if available
       if (!is.null(rv$selected_text) && length(rv$selected_text) > 0) {
         return(paste(rv$selected_text, collapse = " "))
@@ -2301,7 +2309,7 @@ simplerIndex <- function(id) {
       ocr_df <- rv$ocr_text[[rv$pdf_index]]
       if (is.null(ocr_df) || nrow(ocr_df) == 0) return("")
       # Filter by confidence threshold
-      conf <- input$confidence_threshold %||% 0
+      conf <- if (is.null(input$confidence_threshold)) 0 else input$confidence_threshold
       ocr_df <- ocr_df[ocr_df$confidence >= conf, , drop = FALSE]
       if (nrow(ocr_df) == 0) return("(no OCR text above threshold)")
       # Group words into lines
