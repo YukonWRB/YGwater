@@ -403,7 +403,11 @@ simplerIndexUI <- function(id) {
       ids.forEach(id => {
         $(document).off('focus.rs click.rs', '#' + id)
                    .on('focus.rs click.rs', '#' + id, function(){
-                     Shiny.setInputValue(id + '_clicked', Math.random());
+                     // Use a monotonically increasing timestamp so the most
+                     // recently focused element can be identified reliably.
+                     // priority:'event' forces Shiny to handle each click
+                     // immediately, avoiding dropped events.
+                     Shiny.setInputValue(id + '_clicked', Date.now(), {priority: 'event'});
                    });
       });
     });",
@@ -1585,33 +1589,20 @@ simplerIndex <- function(id) {
       # Get all inputs with "_clicked" suffix - force to character to prevent NA
       all_inputs <- as.character(names(reactiveValuesToList(input)))
       clicked_inputs <- all_inputs[grepl("_clicked$", all_inputs)]
-      print("Before for loop")
-      print(clicked_inputs)
       
       if (length(clicked_inputs) == 0) {
         return()  # Exit if no click events are registered
       }
       
       # Safely get the values for clicked inputs
-      clicked_values <- numeric(length(clicked_inputs))
-      names(clicked_values) <- clicked_inputs
-      print(clicked_values)
-      
-      for (i in seq_along(clicked_inputs)) {
-        name <- clicked_inputs[i]
-        print(name)
+      clicked_values <- sapply(clicked_inputs, function(name) {
         val <- input[[name]]
-        print(paste0("i == ", i))
-        print(val)
         if (!is.null(val) && length(val) == 1 && !is.na(val) && is.numeric(val)) {
-          clicked_values[i] <- val
+          val
         } else {
-          clicked_values[i] <- 0
+          0
         }
-      }
-      print("After for loop")
-      print(clicked_inputs)
-      print(clicked_values)
+      }, USE.NAMES = TRUE)
       
       # Find max value - only proceed if it's greater than 0
       max_value <- max(clicked_values, na.rm = TRUE)
