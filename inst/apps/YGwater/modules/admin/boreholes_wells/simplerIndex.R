@@ -97,13 +97,11 @@ simplerIndexUI <- function(id) {
                                        "PSM Mode:",
                                        choices = list(
                                          "Auto" = "3",
-                                         "Single Column" = "4",
-                                         "Single Block" = "6",
-                                         "Single Line" = "7",
-                                         "Single Word" = "8",
-                                         "Sparse Text" = "11"
+                                         "Auto + OSD" = "1",
+                                         "Sparse Text" = "11",
+                                         "Sparse Text + OSD" = "12"
                                        ),
-                                       selected = "3"
+                                       selected = "1"
                         ),
                         selectizeInput(ns("pre_processing_method"),
                                        "Pre-processing:",
@@ -117,11 +115,7 @@ simplerIndexUI <- function(id) {
                                        ),
                                        selected = "default"
                         ),
-                        textInput(ns("ocr_whitelist"),
-                                  "Whitelist:",
-                                  placeholder = "Optional characters"
-                        ),
-
+                        
                         # OCR Text Display
                         div(
                           style = "margin-left: 20px; width: 300px;",
@@ -138,7 +132,7 @@ simplerIndexUI <- function(id) {
             
             div(
               id = ns("pdf-container"),
-              style = "width:100%; max-width:100%; height:calc(100vh - 300px); min-height:500px; border:1px solid #ccc; margin:10px auto; overflow:auto; background:white; position:relative; display:block; padding:0;",
+              style = "width:100%; max-width:100%; height:calc(100vh - 300px); min-height:500px; border:1px solid #ccc; margin:10px auto; overflow-y: scroll;, overflow-x: scroll; background:white; position:relative; display:block; padding:0;",
               uiOutput(ns("pdf_viewer"))
             )
         ),
@@ -602,7 +596,7 @@ simplerIndex <- function(id) {
       )
     }
     
-    process_ocr_batch <- function(files_df, ocr_text_list, psm_mode, pre_processing_method, whitelist, current_index = NULL) {
+    process_ocr_batch <- function(files_df, ocr_text_list, psm_mode, pre_processing_method) {
       # Check if any OCR processing is needed
       needs_processing <- any(sapply(ocr_text_list, function(x) is.null(x)))
       
@@ -626,9 +620,6 @@ simplerIndex <- function(id) {
       pages_to_process <- sum(sapply(ocr_text_list, function(x) is.null(x)))
       
       if (pages_to_process > 0) {
-        showNotification(paste("Processing OCR for", pages_to_process, "pages using PSM mode", psm_mode, ". This may take a moment..."), 
-                         type = "warning", duration = 5)
-        
         # Loop through all images in files_df and run OCR
         for (i in seq_len(nrow(files_df))) {
           if (is.null(ocr_text_list[[i]])) {
@@ -649,11 +640,6 @@ simplerIndex <- function(id) {
                 tessedit_create_hocr = 1,
                 tessedit_pageseg_mode = psm_mode
               )
-              
-              # Add whitelist if provided
-              if (!is.null(whitelist) && whitelist != "") {
-                tessoptions$tessedit_char_whitelist <- whitelist
-              }
               
               # Perform OCR on the preprocessed image
               ocr_result <- tesseract::ocr_data(img, engine = tesseract::tesseract(
@@ -879,8 +865,6 @@ simplerIndex <- function(id) {
       
       # Show initial loading notification
       total_files <- nrow(uploaded_files)
-      showNotification(paste("Starting conversion of", total_files, "PDF file(s) to images..."), 
-                       type = "default", duration = 3)
       
       for (i in seq_len(nrow(uploaded_files))) {
         pdf_path <- uploaded_files$datapath[i][1]
@@ -896,7 +880,7 @@ simplerIndex <- function(id) {
         png_tpl <- file.path(tempdir(), sprintf("%s_page_%%d.%%s", base))  # note %%d and %%s
         
         png_files <- pdftools::pdf_convert(pdf_path, 
-                                           dpi = 150,
+                                           dpi = 300,
                                            pages = seq_len(n_pages),
                                            format = "png",
                                            filenames = png_tpl
@@ -1094,7 +1078,7 @@ simplerIndex <- function(id) {
     })
     
     
-    # Fix the PDF table rendering
+    # Render the data table of files
     output$pdf_table <- DT::renderDT({
       req(rv$files_df)
       validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
@@ -1133,10 +1117,10 @@ simplerIndex <- function(id) {
     ocr_processing <- reactiveVal(FALSE)
     
     # Modified observer for OCR display mode: process OCR for all images when mode is highlight/text
-    observeEvent(input$ocr_display_mode, {
+    observeEvent(list(input$psm_mode, input$pre_processing_method, input$ocr_display_mode), {
       req(rv$files_df)
       rv$ocr_display_mode <- input$ocr_display_mode
-
+      
       if (rv$ocr_display_mode %in% c("highlight", "text")) {
         # Set processing flag
         ocr_processing(TRUE)
@@ -1144,139 +1128,119 @@ simplerIndex <- function(id) {
           rv$files_df,
           rv$ocr_text,
           as.integer(input$psm_mode),
-          input$pre_processing_method,
-          input$ocr_whitelist
+          input$pre_processing_method
         )
         ocr_processing(FALSE)
       }
     })
-
-    observeEvent(list(input$psm_mode, input$pre_processing_method, input$ocr_whitelist), {
-      req(rv$files_df)
-      if (rv$ocr_display_mode %in% c("highlight", "text")) {
-        rv$ocr_text <- vector("list", nrow(rv$files_df))
-        rv$ocr_text <- process_ocr_batch(
-          rv$files_df,
-          rv$ocr_text,
-          as.integer(input$psm_mode),
-          input$pre_processing_method,
-          input$ocr_whitelist
-        )
-      }
-    })
     
-    # Force plot re-render when pdf_index changes (to show OCR overlays)
-    observeEvent(rv$pdf_index, {
-      req(rv$files_df)
-      req(rv$pdf_index)
+    
+    # Render the plot  
+    output$plot <- renderPlot(
+      expr = {
+      print("rendering the plot")
+      # Load and prepare the image
+      img_path <- rv$files_df$Path[rv$pdf_index]
+      img <- magick::image_read(img_path)
+      img <- img %>% magick::image_enhance()
+      info <- magick::image_info(img)
+      img_width <- info$width
+      img_height <- info$height
+      img_raster <- as.raster(img)
       
-      # Reset OCR mode selectize to "none" when switching pages
-      #updateSelectizeInput(session, "ocr_display_mode", selected = "none")
+      # Set up the plot area
+      par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
+      plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height),
+           xlab = "", ylab = "", axes = FALSE, asp = 1)
       
-      plot_id <- paste0("pdf_plot_", rv$pdf_index)
-      output[[plot_id]] <- renderPlot({
-        # Load and prepare the image
-        img_path <- rv$files_df$Path[rv$pdf_index]
-        img <- magick::image_read(img_path)
-        img <- img %>% magick::image_enhance()
-        info <- magick::image_info(img)
-        img_width <- info$width
-        img_height <- info$height
-        img_raster <- as.raster(img)
+      # Draw the image
+      rasterImage(img_raster, 0, 0, img_width, img_height)
+      
+      # Show processing indicator if OCR is running
+      if (ocr_processing()) {
+        rect(10, 10, 300, 50, col = "black", border = NA)
+        text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
+      }
+      
+      # Draw OCR overlay if in OCR mode and OCR data exists
+      if (input$ocr_display_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
+        ocr_df <- rv$ocr_text[[rv$pdf_index]]
         
-        # Set up the plot area
-        par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
-        plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height),
-             xlab = "", ylab = "", axes = FALSE, asp = 1)
-        
-        # Draw the image
-        rasterImage(img_raster, 0, 0, img_width, img_height)
-        
-        # Show processing indicator if OCR is running
-        if (ocr_processing()) {
-          rect(10, 10, 300, 50, col = "black", border = NA)
-          text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
+        # Filter by confidence threshold
+        if (nrow(ocr_df) > 0) {
+          ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
         }
         
-        # Draw OCR overlay if in OCR mode and OCR data exists
-        if (input$ocr_display_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
-          ocr_df <- rv$ocr_text[[rv$pdf_index]]
-          
-          # Filter by confidence threshold
-          if (nrow(ocr_df) > 0) {
-            ocr_df <- ocr_df[ocr_df$confidence >= input$confidence_threshold, , drop = FALSE]
-          }
-          
-          # Draw OCR boxes or text
-          if (nrow(ocr_df) > 0) {
-            for (i in seq_len(nrow(ocr_df))) {
-              tryCatch({
-                # Parse bbox coordinates and convert to plot coordinates
-                bbox <- strsplit(ocr_df$bbox[i], ",")[[1]]
-                if (length(bbox) == 4) {
-                  coords <- as.numeric(bbox)
+        # Draw OCR boxes or text
+        if (nrow(ocr_df) > 0) {
+          for (i in seq_len(nrow(ocr_df))) {
+            tryCatch({
+              # Parse bbox coordinates and convert to plot coordinates
+              bbox <- strsplit(ocr_df$bbox[i], ",")[[1]]
+              if (length(bbox) == 4) {
+                coords <- as.numeric(bbox)
+                
+                # Handle coordinate conversion correctly
+                # Tesseract coordinates: (left, top, right, bottom) with origin at top-left
+                # Plot coordinates: (left, bottom, right, top) with origin at bottom-left
+                x1 <- coords[1]  # left
+                y1 <- img_height - coords[4]  # bottom (inverted)
+                x2 <- coords[3]  # right
+                y2 <- img_height - coords[2]  # top (inverted)
+                
+                
+                # Draw rectangle and/or text based on display mode
+                if (input$ocr_display_mode == "text") {
+                  # Draw background for text
+                  rect(x1, y1, x2, y2, 
+                       col = rgb(1, 1, 1, 0.7), # semi-transparent white
+                       border = "darkgray", 
+                       lwd = 1)
                   
-                  # Handle coordinate conversion correctly
-                  # Tesseract coordinates: (left, top, right, bottom) with origin at top-left
-                  # Plot coordinates: (left, bottom, right, top) with origin at bottom-left
-                  x1 <- coords[1]  # left
-                  y1 <- img_height - coords[4]  # bottom (inverted)
-                  x2 <- coords[3]  # right
-                  y2 <- img_height - coords[2]  # top (inverted)
-                  
-                  
-                  # Draw rectangle and/or text based on display mode
-                  if (input$ocr_display_mode == "text") {
-                    # Draw background for text
-                    rect(x1, y1, x2, y2, 
-                         col = rgb(1, 1, 1, 0.7), # semi-transparent white
-                         border = "darkgray", 
-                         lwd = 1)
-                    
-                    # Draw word on top
-                    text_x <- (x1 + x2) / 2
-                    text_y <- (y1 + y2) / 2
-                    text(text_x, text_y, 
-                         ocr_df$word[i],
-                         cex = 0.9, 
-                         col = "black", 
-                         font = 2)
-                  } else if (input$ocr_display_mode == "highlight") {
-                    # Draw highlight rectangle
-                    rect(x1, y1, x2, y2, 
-                         col = rgb(0, 0.48, 1, 0.3),  # Semi-transparent blue
-                         border = rgb(0, 0.48, 1, 0.8),  # Solid blue border
-                         lwd = 1)
-                  }
+                  # Draw word on top
+                  text_x <- (x1 + x2) / 2
+                  text_y <- (y1 + y2) / 2
+                  text(text_x, text_y, 
+                       ocr_df$word[i],
+                       cex = 0.9, 
+                       col = "black", 
+                       font = 2)
+                } else if (input$ocr_display_mode == "highlight") {
+                  # Draw highlight rectangle
+                  rect(x1, y1, x2, y2, 
+                       col = rgb(0, 0.48, 1, 0.3),  # Semi-transparent blue
+                       border = rgb(0, 0.48, 1, 0.8),  # Solid blue border
+                       lwd = 1)
                 }
-              }, error = function(e) {
-                # Silently ignore errors in drawing individual words
-              })
-            }
-          } else {
-            # Show message if no text meets confidence threshold
-            text_width <- strwidth("No OCR text meets confidence threshold") * 1.2
-            rect(img_width/2 - text_width/2, img_height/2 - 15, 
-                 img_width/2 + text_width/2, img_height/2 + 15,
-                 col = "white", border = "black")
-            
-            text(img_width/2, img_height/2,
-                 paste("No OCR text meets confidence threshold (", input$confidence_threshold, "%)"),
-                 cex = 1, col = "red")
+              }
+            }, error = function(e) {
+              # Silently ignore errors in drawing individual words
+            })
           }
+        } else {
+          # Show message if no text meets confidence threshold
+          text_width <- strwidth("No OCR text meets confidence threshold") * 1.2
+          rect(img_width/2 - text_width/2, img_height/2 - 15, 
+               img_width/2 + text_width/2, img_height/2 + 15,
+               col = "white", border = "black")
+          
+          text(img_width/2, img_height/2,
+               paste("No OCR text meets confidence threshold (", input$confidence_threshold, "%)"),
+               cex = 1, col = "red")
         }
-        
-        # Draw user-defined redaction rectangles
-        if (!is.null(rv$rectangles[[img_path]]) && length(rv$rectangles[[img_path]]) > 0) {
-          for (rect_data in rv$rectangles[[img_path]]) {
-            rect(rect_data$xmin, rect_data$ymin, rect_data$xmax, rect_data$ymax,
-                 col = adjustcolor(rect_data$color, alpha.f = 0.3),
-                 border = rect_data$color,
-                 lwd = 2)
-          }
+      }
+      
+      # Draw user-defined redaction rectangles
+      if (!is.null(rv$rectangles[[img_path]]) && length(rv$rectangles[[img_path]]) > 0) {
+        for (rect_data in rv$rectangles[[img_path]]) {
+          rect(rect_data$xmin, rect_data$ymin, rect_data$xmax, rect_data$ymax,
+               col = adjustcolor(rect_data$color, alpha.f = 0.3),
+               border = rect_data$color,
+               lwd = 2)
         }
-      }, res = 96)  # Increased resolution for better text rendering
-    })
+      }
+    }, 
+    res = 96)  # Increased resolution for better text rendering
     
     # Observer for brush selection to extract text
     observeEvent(input$pdf_brush, {
@@ -1564,8 +1528,6 @@ simplerIndex <- function(id) {
       current_rectangles <- rv$rectangles[[file_path]]
       is_processing <- ocr_processing()
       
-      plot_id <- paste0("pdf_plot_", rv$pdf_index)
-      
       # Ensure that brush state is correctly reflected in UI when pdf_index changes
       isolate({
         if (brush_enabled()) {
@@ -1590,9 +1552,9 @@ simplerIndex <- function(id) {
         tags$div(
           style = "width: 100%; overflow: auto;",
           plotOutput(
-            outputId = ns(plot_id),  # Namespaced id here because we're creating the element
-            width = paste0(display_width, "px"),
-            height = paste0(display_height, "px"),
+            outputId = ns("plot"),  # Namespaced id here because we're creating the element
+            width = paste0(display_width/2, "px"),
+            height = paste0(display_height/2, "px"),
             brush = if (brush_enabled()) {
               brushOpts(
                 id = ns("pdf_brush"),
@@ -1607,79 +1569,8 @@ simplerIndex <- function(id) {
           )
         )
       })
-      
-      output[[plot_id]] <- renderPlot({
-        img_path <- rv$files_df$Path[rv$pdf_index]
-        if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
-          return(NULL)
-        }
-        img <- magick::image_read(img_path)
-        img <- img %>% magick::image_enhance()
-        info <- magick::image_info(img)
-        img_width <- info$width
-        img_height <- info$height
-        img_raster <- as.raster(img)
-        par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
-        plot(0, 0, type = "n", xlim = c(0, img_width), ylim = c(0, img_height),
-             xlab = "", ylab = "", axes = FALSE, asp = 1)
-        rasterImage(img_raster, 0, 0, img_width, img_height)
-        if (is_processing) {
-          rect(10, 10, 300, 50, col = "black", border = NA)
-          text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
-        }
-        if (current_ocr_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {
-          ocr_df <- rv$ocr_text[[rv$pdf_index]]
-          if (nrow(ocr_df) > 0) {
-            ocr_df <- ocr_df[ocr_df$confidence >= current_confidence, , drop = FALSE]
-          }
-          if (nrow(ocr_df) > 0) {
-            for (i in seq_len(nrow(ocr_df))) {
-              tryCatch({
-                coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
-                if (length(coords) == 4) {
-                  x1 <- coords[1]
-                  y1 <- img_height - coords[4]
-                  x2 <- coords[3]
-                  y2 <- img_height - coords[2]
-                  if (current_ocr_mode == "text") {
-                    rect(x1, y1, x2, y2, col = "white", border = "black", lwd = 1)
-                    text((x1 + x2) / 2, (y1 + y2) / 2, ocr_df$word[i],
-                         cex = 1.2, col = "black", font = 2)
-                  } else {
-                    rect(x1, y1, x2, y2, col = rgb(0, 0.48, 1, 0.3),
-                         border = rgb(0, 0.48, 1, 0.8), lwd = 1)
-                  }
-                }
-              }, error = function(e) {})
-            }
-          } else if (current_ocr_mode != "none") {
-            rect(img_width/2 - 200, img_height/2 - 25, img_width/2 + 200, img_height/2 + 25,
-                 col = "white", border = "black")
-            text(img_width/2, img_height/2,
-                 paste("No OCR text meets confidence threshold (", current_confidence, "%)"),
-                 cex = 1.2, col = "red")
-          }
-        }
-        # Draw user-defined rectangles for this specific file
-        if (!is.null(current_rectangles) && length(current_rectangles) > 0) {
-          for (rect in current_rectangles) {
-            rect(rect$xmin, rect$ymin, rect$xmax, rect$ymax,
-                 col = adjustcolor(rect$color, alpha.f = 0.3),
-                 border = rect$color,
-                 lwd = 2)
-          }
-        }
-      }, res = 50)
     })
     
-    
-    
-    # Observer to track clicks in the right panel inputs
-    observe({
-      # Get all inputs with "_clicked" suffix
-      all_inputs <- names(reactiveValuesToList(input))
-      clicked_inputs <- all_inputs[grepl("_clicked$", all_inputs)]
-    })
     
     # Observer to update input fields with selected OCR text when clicked
     observe({
@@ -1694,6 +1585,8 @@ simplerIndex <- function(id) {
       # Get all inputs with "_clicked" suffix - force to character to prevent NA
       all_inputs <- as.character(names(reactiveValuesToList(input)))
       clicked_inputs <- all_inputs[grepl("_clicked$", all_inputs)]
+      print("Before for loop")
+      print(clicked_inputs)
       
       if (length(clicked_inputs) == 0) {
         return()  # Exit if no click events are registered
@@ -1702,17 +1595,23 @@ simplerIndex <- function(id) {
       # Safely get the values for clicked inputs
       clicked_values <- numeric(length(clicked_inputs))
       names(clicked_values) <- clicked_inputs
+      print(clicked_values)
       
       for (i in seq_along(clicked_inputs)) {
         name <- clicked_inputs[i]
+        print(name)
         val <- input[[name]]
-        if (!is.null(val) && length(val) == 1 && !is.na(val) && 
-            is.numeric(val)) {
+        print(paste0("i == ", i))
+        print(val)
+        if (!is.null(val) && length(val) == 1 && !is.na(val) && is.numeric(val)) {
           clicked_values[i] <- val
         } else {
           clicked_values[i] <- 0
         }
       }
+      print("After for loop")
+      print(clicked_inputs)
+      print(clicked_values)
       
       # Find max value - only proceed if it's greater than 0
       max_value <- max(clicked_values, na.rm = TRUE)
@@ -1737,8 +1636,7 @@ simplerIndex <- function(id) {
           if (field_name %in% c("name", "notes", "location_source")) {
             updateTextInput(session, field_name, value = selected_text)
             shinyjs::runjs(sprintf("var el=$('#%s'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}", ns(field_name)))
-            showNotification(paste("Updated", field_name, "with selected text"),
-                             type = "message", duration = 5)
+            
             # Blur the field
             blur_field(field_name)
           } else if (field_name %in% c("easting","northing","latitude",
