@@ -132,7 +132,7 @@ simplerIndexUI <- function(id) {
             
             div(
               id = ns("pdf-container"),
-              style = "width:100%; max-width:100%; height:calc(100vh - 200px); min-height:500px; border:1px solid #ccc; margin:10px auto; overflow-y: scroll;, overflow-x: scroll; background:white; position:relative; display:block; padding:0;",
+              style = "width:100%; max-width:100%; height:calc(100vh - 200px); min-height:500px; border:1px solid #ccc; margin:10px auto; overflow-y: scroll; overflow-x: scroll; background:white; position:relative; display:block; padding:0;",
               
               plotOutput(
                 ns("plot"),
@@ -169,7 +169,7 @@ simplerIndexUI <- function(id) {
             ),
             # Scrollable content area
             div(class = "scrollable-content",
-                stype = "overflow-y: auto; padding: 15px;",
+                style = "overflow-y: auto; padding: 15px;",
                 # Borehole linking controls in scrollable area
                 fluidRow(
                   column(12,
