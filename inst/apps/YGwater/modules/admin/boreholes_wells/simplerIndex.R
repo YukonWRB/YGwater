@@ -149,16 +149,6 @@ simplerIndexUI <- function(id) {
         ),
         div(class = "right-panel", id = ns("right-sidebar"),
             div(class = "resize-handle-right", id = ns("resize-handle-right")),
-            # # Navigation buttons in right panel
-            # div(style = "padding: 15px; border-bottom: 1px solid #dee2e6;", 
-            #     fluidRow(
-            #       column(12,
-            #              actionButton(ns("prev_pdf_right"), icon("arrow-left"), class = "nav-btn", title = "Previous"),
-            #              actionButton(ns("next_pdf_right"), icon("arrow-right"), class = "nav-btn", title = "Next"),
-            #              actionButton(ns("remove_pdf_right"), icon("trash"), title = "Remove Selected", class = "nav-btn")
-            #       )
-            #     )
-            # ),
             # Fixed borehole ID header - only the ID display
             div(class = "borehole-header",
                 tags$label("Borehole ID:", style = "font-weight: bold; display: block; margin-bottom: 5px;"),
@@ -970,7 +960,7 @@ simplerIndex <- function(id) {
       }
       
       rv$pdf_index <- 1
-      DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(1)
+      DT::dataTableProxy("pdf_table", session = session)
       
       rv$ocr_text <- vector("list", nrow(rv$files_df))
       rv$ocr_display_mode <- "none"
@@ -988,19 +978,9 @@ simplerIndex <- function(id) {
     })
     
     observeEvent(input$pdf_table_rows_selected, {
-      req(input$pdf_table_rows_selected)
-      rv$pdf_index <- input$pdf_table_rows_selected
-    })
-    
-    observe({
-      req(rv$files_df)
-      req(rv$pdf_index)
-      # Use isolate to prevent reactive feedback loop
-      current_selection <- isolate(input$pdf_table_rows_selected)
-      if (is.null(current_selection) || length(current_selection) == 0 || current_selection != rv$pdf_index) {
-        DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
-      }
-    })
+      sel <- input$pdf_table_rows_selected
+      if (!is.null(sel) && !identical(sel, rv$pdf_index)) rv$pdf_index <- sel
+    }, ignoreInit = TRUE)
     
     observeEvent(input$next_pdf, {
       req(rv$files_df)
@@ -1047,53 +1027,6 @@ simplerIndex <- function(id) {
       }
     })
     
-    
-    # observeEvent(input$next_pdf_right, {
-    #   req(rv$files_df)
-    #   if (rv$pdf_index < nrow(rv$files_df)) {
-    #     rv$pdf_index <- rv$pdf_index + 1
-    #     # Ensure table selection follows
-    #     DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
-    #   }
-    # })
-    # 
-    # observeEvent(input$prev_pdf_right, {
-    #   req(rv$files_df)
-    #   if (rv$pdf_index > 1) {
-    #     rv$pdf_index <- rv$pdf_index - 1
-    #     # Ensure table selection follows
-    #     DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
-    #   }
-    # })
-    # 
-    # observeEvent(input$remove_pdf_right, {
-    #   req(rv$files_df)
-    #   if (nrow(rv$files_df) > 0) {
-    #     selected_row <- rv$pdf_index
-    #     
-    #     fname <- rv$files_df$NewFilename[selected_row]
-    #     
-    #     # Remove from files_df and OCR text
-    #     rv$files_df <- rv$files_df[-selected_row, ]
-    #     rv$ocr_text <- rv$ocr_text[-selected_row]
-    #     
-    #     # Update well_data structure by removing the filename
-    #     for (well_id in names(rv$well_data)) {
-    #       rv$well_data[[well_id]]$files <- setdiff(rv$well_data[[well_id]]$files, fname)
-    #       if (length(rv$well_data[[well_id]]$files) == 0) {
-    #         rv$well_data[[well_id]] <- NULL
-    #       }
-    #     }
-    #     
-    #     if (nrow(rv$files_df) == 0) {
-    #       rv$pdf_index <- 1
-    #     } else if (rv$pdf_index > nrow(rv$files_df)) {
-    #       rv$pdf_index <- nrow(rv$files_df)
-    #     }
-    #   }
-    # })
-    
-    
     # Render the data table of files
     output$pdf_table <- DT::renderDT({
       req(rv$files_df)
@@ -1103,7 +1036,7 @@ simplerIndex <- function(id) {
       
       DT::datatable(
         dat,
-        selection = "single",
+        selection = list(mode = "single", selected = 1),
         options = list(
           pageLength = 10, 
           dom = 'tip',  # table, information, pagination (no search)
@@ -1114,24 +1047,6 @@ simplerIndex <- function(id) {
       )
     })
     
-    # Ensure the table selection works properly
-    observe({
-      req(rv$files_df)
-      req(rv$pdf_index)
-      if (nrow(rv$files_df) > 0 && rv$pdf_index <= nrow(rv$files_df)) {
-        # Isolate to prevent circular reactivity
-        isolate({
-          current_selection <- input$pdf_table_rows_selected
-          if (is.null(current_selection) || length(current_selection) == 0 || current_selection != rv$pdf_index) {
-            DT::dataTableProxy("pdf_table", session = session) %>% DT::selectRows(rv$pdf_index)
-          }
-        })
-      }
-    })
-    
-    # Add a reactive value for OCR processing status
-    ocr_processing <- reactiveVal(FALSE)
-    
     # Modified observer for OCR display mode: process OCR for all images when mode is highlight/text
     observeEvent(list(input$psm_mode, input$pre_processing_method, input$ocr_display_mode), {
       req(rv$files_df)
@@ -1139,19 +1054,17 @@ simplerIndex <- function(id) {
       
       if (rv$ocr_display_mode %in% c("highlight", "text")) {
         # Set processing flag
-        ocr_processing(TRUE)
         rv$ocr_text <- process_ocr_batch(
           rv$files_df,
           rv$ocr_text,
           as.integer(input$psm_mode),
           input$pre_processing_method
         )
-        ocr_processing(FALSE)
       }
     })
     
     
-    # Render the plot  
+    # Render the plot
     output$plot <- renderPlot(
       expr = {
         print("rendering the plot")
@@ -1176,12 +1089,6 @@ simplerIndex <- function(id) {
         
         # Draw the image
         rasterImage(img_raster, 0, 0, img_width, img_height)
-        
-        # Show processing indicator if OCR is running
-        if (ocr_processing()) {
-          rect(10, 10, 300, 50, col = "black", border = NA)
-          text(150, 30, "OCR Processing...", col = "white", cex = 1.5)
-        }
         
         # Draw OCR overlay if in OCR mode and OCR data exists
         if (input$ocr_display_mode != "none" && !is.null(rv$ocr_text[[rv$pdf_index]])) {

@@ -141,7 +141,7 @@ app_ui <- function(request) {
                  nav_panel(title = uiOutput("imagesNavTableTitle"), value = "imgTableView",
                            uiOutput("imgTableView_ui")),
                  nav_panel(title = uiOutput("imagesNavMapTitle"), value = "imgMapView",
-                           uiOutput("imgMapView_ui")),
+                           uiOutput("imgMapView_ui"))
         ),
         nav_menu(title = uiOutput("dataNavMenuTitle"), value = "data",
                  nav_panel(title = uiOutput("dataNavDiscTitle"), value = "discData",

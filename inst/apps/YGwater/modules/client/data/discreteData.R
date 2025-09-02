@@ -156,7 +156,7 @@ discData <- function(id, language, inputs) {
                                                            paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
                                                                   paste(sub_groups, collapse = ", "), ");"))
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(),
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(),
                                                       sub_group_name_fr = character(), description = character(),
                                                       description_fr = character())
         }
@@ -557,7 +557,7 @@ discData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -640,7 +640,7 @@ discData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -715,7 +715,7 @@ discData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -784,7 +784,7 @@ discData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       
@@ -847,7 +847,7 @@ discData <- function(id, language, inputs) {
         if (length(sub_groups) > 0) {
           filteredData$param_sub_groups <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (", paste(sub_groups, collapse = ", "), ");"))
         } else {
-          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = numeric(), sub_group_name_fr = character(), description = character(), description_fr = character())
+          filteredData$param_sub_groups <- data.frame(sub_group_id = numeric(), sub_group_name = character(), sub_group_name_fr = character(), description = character(), description_fr = character())
         }
       }
       

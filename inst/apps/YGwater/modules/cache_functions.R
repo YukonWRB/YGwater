@@ -49,7 +49,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
                  projects <- DBI::dbGetQuery(con, paste0("SELECT project_id, name, name_fr FROM projects WHERE project_id IN (", paste(locations_projects$project_id, collapse = ", "), ");"))
                } else {
                  locations_projects <- data.frame(location_id = numeric(), project_id = numeric())
-                 projects <- data.frame(project_id = numeric(), name = character(), ame_fr = character())
+                 projects <- data.frame(project_id = numeric(), name = character(), name_fr = character())
                }
                
                locations_networks <- DBI::dbGetQuery(con, paste0("SELECT network_id, location_id FROM locations_networks WHERE location_id IN (", paste(locs$location_id, collapse = ", "), ");"))
