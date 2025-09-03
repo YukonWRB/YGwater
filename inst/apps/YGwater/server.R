@@ -118,6 +118,8 @@ app_server <- function(input, output, session) {
   # Hide all 'admin' side tabs if they were generated
   if (!config$public) { # Immediately run the showAdmin function to hide the admin tabs, they're only shown upon login
     showAdmin(show = FALSE)
+  } else {
+    nav_hide(id = "navbar", target = "changePwd")
   }
   
   # Bookmarking and browser history navigation -------------------------------
@@ -616,6 +618,7 @@ $(document).keyup(function(event) {
         # change the 'Login' button to 'Logout'
         shinyjs::hide("loginBtn")
         shinyjs::show("logoutBtn")
+        nav_show(id = "navbar", target = "changePwd")
         
         # Initialize a fresh cache environment for the session
         session$userData$app_cache <- new.env(parent = emptyenv())
@@ -689,6 +692,7 @@ $(document).keyup(function(event) {
     session$userData$config$dbPass <- config$dbPass
     
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
+    nav_hide(id = "navbar", target = "changePwd")
     
     # Clear the app_cache environment
     session$userData$app_cache <- new.env(parent = emptyenv())

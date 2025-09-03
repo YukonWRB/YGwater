@@ -272,6 +272,10 @@ app_ui <- function(request) {
                              value = "viewFeedback",
                              uiOutput("viewFeedback_ui"))
           )
+        } else {
+          nav_panel(title = uiOutput("changePwdNavTitle"),
+                    value = "changePwd",
+                    uiOutput("changePwd_ui"))
         },
         # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a drop-down menu instead.
         nav_spacer(),

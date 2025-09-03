@@ -60,7 +60,6 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     source(system.file("apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R", package = "YGwater"))
     source(system.file("apps/YGwater/modules/admin/applicationTasks/viewFeedback.R", package = "YGwater"))
     source(system.file("apps/YGwater/modules/admin/users/manageUsers.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/users/changePassword.R", package = "YGwater"))
     
     # confirm G drive access for FOD reports
     g_drive <- dir.exists("//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/")
@@ -70,6 +69,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
       source(system.file("apps/YGwater/modules/client/FOD/FOD_main.R", package = "YGwater"))
     }
   }
+
+  # Password change module is available to all users
+  source(system.file("apps/YGwater/modules/admin/users/changePassword.R", package = "YGwater"))
   
   
   # 'client' side modules #####
