@@ -1024,10 +1024,10 @@ discData <- function(id, language, inputs) {
         FROM results r
         JOIN parameters p ON r.parameter_id = p.parameter_id
         JOIN result_types rt ON r.result_type = rt.result_type_id
-        LEFT JOIN sample_fractions sf ON r.sample_fraction = sf.sample_fraction_id
+        LEFT JOIN sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
         LEFT JOIN result_conditions rc ON r.result_condition = rc.result_condition_id
         LEFT JOIN result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN result_speciations rs ON r.result_speciation = rs.result_speciation_id
+        LEFT JOIN result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
         LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN laboratories l ON r.laboratory = l.lab_id
         WHERE sample_id IN (", sample_ids_str, ")) sub WHERE rn <= 3;"
@@ -1063,7 +1063,10 @@ discData <- function(id, language, inputs) {
                           infoFiltered = "",
                           zeroRecords = tr("tbl_zero", language$language)
                         ),
-                        dom = 'rtip'
+                        layout = list(
+                          bottomStart = 'info',
+                          bottomEnd   = 'paging'
+                        )
                       )
         )
       }) # End of function creating data subset datatable
@@ -1107,7 +1110,6 @@ discData <- function(id, language, inputs) {
                           infoFiltered = "",
                           zeroRecords = tr("tbl_zero", language$language)
                         ),
-                        dom = 'rt',
                         scrollX = TRUE
                       )
         ) |>
@@ -1177,10 +1179,10 @@ discData <- function(id, language, inputs) {
         JOIN samples s ON r.sample_id = s.sample_id
         JOIN parameters p ON r.parameter_id = p.parameter_id
         JOIN result_types rt ON r.result_type = rt.result_type_id
-        LEFT JOIN sample_fractions sf ON r.sample_fraction = sf.sample_fraction_id
+        LEFT JOIN sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
         LEFT JOIN result_conditions rc ON r.result_condition = rc.result_condition_id
         LEFT JOIN result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN result_speciations rs ON r.result_speciation = rs.result_speciation_id
+        LEFT JOIN result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
         LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN laboratories l ON r.laboratory = l.lab_id
         WHERE r.sample_id IN (", paste(selected_sampleids, collapse = ","), ");"

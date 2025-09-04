@@ -21,7 +21,7 @@ app_server <- function(input, output, session) {
   # Show relevant tabs for viz mode
   showViz <- function(show = TRUE) {
       nav_fun <- if (show) nav_show else nav_hide
-      tabs <- c("home", "plot", "maps", "reports", "images", "data", "info", "feedback")
+      tabs <- c("home", "plot", "maps", "reports", "images", "data", "info")
       for (tab in tabs) nav_fun(id = "navbar", target = tab)
       if (!config$public & config$g_drive) nav_fun(id = "navbar", target = "FOD")
   }
@@ -96,7 +96,7 @@ app_server <- function(input, output, session) {
       }
 
       # Admin menu ----------------------------------------------------------
-      # Admin menu is always shown because every user can change their own password
+      # Admin menu is always shown because every logged in user can change their own password
       nav_show(id = "navbar", target = "adminTasks")
       nav_show(id = "navbar", target = "changePwd")
       if (!isTRUE(session$userData$can_create_role)) nav_hide(id = "navbar", target = "manageUsers")
@@ -121,7 +121,7 @@ app_server <- function(input, output, session) {
   }
   
   # Bookmarking and browser history navigation -------------------------------
-  bookmarkable_tabs <- c("home", "monitoringLocations", "parameterValues", "rasterValues", "discPlot", "contPlot", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "discData", "contData", "news", "about", "feedback")
+  bookmarkable_tabs <- c("home", "monitoringLocations", "parameterValues", "rasterValues", "discPlot", "contPlot", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "discData", "contData", "news", "about")
   
   updating_from_url <- reactiveVal(FALSE)
   
@@ -446,6 +446,10 @@ app_server <- function(input, output, session) {
                      comment = input$feedback_text,
                      page = input$navbar,
                      app_state = jsonlite::toJSON(reactiveValuesToList(input), auto_unbox = TRUE))
+    
+    # Drop the feedback_text portion from the app_sate column
+    # df$app_state <- gsub('"feedback_text":\\s*".*?"(,\\s*)?', '', df$app_state)
+    
     
     DBI::dbAppendTable(session$userData$AquaCache, "feedback", df)
     

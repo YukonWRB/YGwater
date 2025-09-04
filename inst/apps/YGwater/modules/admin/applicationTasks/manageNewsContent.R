@@ -99,7 +99,11 @@ manageNewsContent <- function(id) {
     load_images("image")
     
     output$text_table <- DT::renderDT({
-      DT::datatable(text_df(), selection = 'multiple', rownames = FALSE, editable = TRUE, options = list(scrollX = TRUE))
+      DT::datatable(text_df(), 
+                    selection = 'multiple', 
+                    rownames = FALSE, 
+                    editable = TRUE, 
+                    options = list(scrollX = TRUE))
     })
     
     output$image_table <- DT::renderDT({

@@ -122,7 +122,7 @@ addImgs <- function(id) {
           selection = list(mode = "multiple", target = "row"),
           editable = TRUE,
           options = list(
-            dom = "t",
+            layout = list(),
             paging = FALSE,
             ordering = FALSE,
             scrollX = TRUE,

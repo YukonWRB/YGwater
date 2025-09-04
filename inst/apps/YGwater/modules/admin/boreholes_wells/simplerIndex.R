@@ -231,22 +231,21 @@ simplerIndexUI <- function(id) {
                 ),
                 textInput(ns("location_source"), "Location Source:", placeholder = "GPS, Survey, etc."),
                 
-                selectizeInput(ns("purpose_of_well"), 
-                               "Purpose of Well:",
-                               choices = list(
-                                 "Domestic" = "domestic",
-                                 "Municipal" = "municipal",
-                                 "Industrial" = "industrial",
-                                 "Agricultural" = "agricultural",
-                                 "Monitoring" = "monitoring",
-                                 "Test Well" = "test_well",
-                                 "Other" = "other"
-                               ),
+                selectizeInput(ns("purpose_of_borehole"),
+                               "Purpose of Borehole:",
+                               choices = NULL, # Populated in server
                                selected = NULL,
+                               multiple = TRUE,
                                options = list(
                                  placeholder = "Select purpose",
                                  maxItems = 1
                                )
+                ),
+                radioButtons(ns("purpose_borehole_inferred"), 
+                             "Purpose inferred or explicit?",
+                             choices = list("Inferred" = TRUE, "Explicit" = FALSE),
+                             selected = TRUE,
+                             inline = TRUE
                 ),
                 
                 # Well construction details
@@ -318,6 +317,22 @@ simplerIndexUI <- function(id) {
                     column(8, numericInput(ns("estimated_yield"), "Estimated Yield:", value = NULL, min = 0, step = 0.1)),
                     column(4, radioButtons(ns("estimated_yield_unit"), "", choices = list("L/s" = "L/s", "G/min" = "G/min"), selected = "G/min", inline = TRUE))
                   )
+                ),
+                selectizeInput(ns("purpose_of_well"),
+                               "Purpose of Well:",
+                               choices = NULL, # Populated in server
+                               selected = NULL,
+                               multiple = TRUE,
+                               options = list(
+                                 placeholder = "Enter if different from borehole original purpose",
+                                 maxItems = 1
+                               )
+                ),
+                radioButtons(ns("purpose_well_inferred"), 
+                             "Purpose inferred or explicit?",
+                             choices = list("Inferred" = TRUE, "Explicit" = FALSE),
+                             selected = TRUE,
+                             inline = TRUE
                 ),
                 
                 # Add upload buttons at the bottom of the scrollable content
@@ -698,11 +713,13 @@ simplerIndex <- function(id) {
       ocr_display_mode = "none",
       selected_text = NULL,
       rectangles = list(),
-      selected_driller = NULL
+      selected_driller = NULL,
+      selected_purpose = NULL
     )
     
     moduleData <- reactiveValues(
-      drillers = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM boreholes.drillers")
+      drillers = DBI::dbGetQuery(session$userData$AquaCache, "SELECT driller_id, name FROM boreholes.drillers"),
+      purposes = DBI::dbGetQuery(session$userData$AquaCache, "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes")
     )
     
     # Reactive value to control brush mode
@@ -736,7 +753,7 @@ simplerIndex <- function(id) {
     
     
     
-    # Update the 'drillers' list based on the data loaded from Aquacache
+    # Update the 'drillers' and 'purpose' list based on the data loaded from Aquacache
     
     observe({
       updateSelectizeInput(
@@ -749,7 +766,29 @@ simplerIndex <- function(id) {
           create = TRUE,
           maxItems = 1
         )
-      ) 
+      )
+      updateSelectizeInput(
+        session, 
+        "purpose_of_borehole", 
+        choices = stats::setNames(moduleData$purposes$borehole_well_purpose_id, moduleData$purposes$purpose_name),
+        selected = rv$selected_purpose,
+        options = list(
+          placeholder = "Select purpose",
+          create = TRUE,
+          maxItems = 1
+        )
+      )
+      updateSelectizeInput(
+        session, 
+        "purpose_of_well", 
+        choices = stats::setNames(moduleData$purposes$borehole_well_purpose_id, moduleData$purposes$purpose_name),
+        selected = NULL,
+        options = list(
+          placeholder = "Enter if different from borehole original purpose",
+          create = TRUE,
+          maxItems = 1
+        )
+      )
     })
     
     
@@ -757,33 +796,26 @@ simplerIndex <- function(id) {
     observeEvent(input$drilled_by, {
       req(input$drilled_by)
       
-      # Get current value
-      current_value <- input$drilled_by
-      
-      # Check if this is a new driller
-      existing_driller_ids <- moduleData$drillers$driller_id
-      existing_driller_names <- moduleData$drillers$name
-      
       # If not in existing IDs or names, it's a new driller
-      if (!(current_value %in% existing_driller_ids) && !(current_value %in% existing_driller_names)) {
+      if (!(input$drilled_by %in%  moduleData$drillers$driller_id) && !(input$drilled_by %in% moduleData$drillers$name)) {
         # Create modal dialog
         showModal(modalDialog(
           title = "New Driller Information",
           
-          textInput(ns("new_driller_name"), "Name", value = current_value),
+          textInput(ns("new_driller_name"), "Name", value = input$drilled_by),
           textInput(ns("new_driller_address"), "Address"),
           textInput(ns("new_driller_phone"), "Phone"),
           textInput(ns("new_driller_email"), "Email"),
           
           footer = tagList(
-            actionButton(ns("cancel_new_driller"), "Cancel"),
+            modalButton("Cancel"),
             actionButton(ns("save_new_driller"), "Save", class = "btn-primary")
           )
         ))
       }
     })
     
-    # Handle the save button in the modal
+    # Handle the save button for new drillers in the modal
     observeEvent(input$save_new_driller, {
       # Generate a unique driller ID
       # Get values from the form
@@ -791,8 +823,6 @@ simplerIndex <- function(id) {
       new_driller_address <- input$new_driller_address
       new_driller_phone <- input$new_driller_phone
       new_driller_email <- input$new_driller_email
-      
-      
       
       # Validate phone number format
       if (!is.null(new_driller_phone) && trimws(new_driller_phone) != "") {
@@ -810,7 +840,6 @@ simplerIndex <- function(id) {
                                       substr(clean_phone, 7, 10))
         } else {
           showNotification("Invalid phone number format. Please use a 10-digit number.", type = "error", duration = 5)
-          #removeModal()
           return()  # Exit the function early
         }
       }
@@ -822,7 +851,6 @@ simplerIndex <- function(id) {
         if (!grepl(email_pattern, new_driller_email)) {
           showNotification("Invalid email format. Please enter a valid email address.", 
                            type = "error", duration = 5)
-          #removeModal()
           return()  # Exit the function early
         }
       }
@@ -838,15 +866,74 @@ simplerIndex <- function(id) {
         )
       )[1,1]
       
-      moduleData$drillers <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM boreholes.drillers")
+      moduleData$drillers <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT driller_id, name FROM boreholes.drillers")
       rv$selected_driller <- new_driller_id
       removeModal()
     })
     
-    # Handle modal cancel
-    observeEvent(input$cancel_new_driller, {
-      # If user cancels, revert to no selection
-      updateSelectizeInput(session, "drilled_by", selected = "")
+    # Observer for new purpose creation
+    observeEvent(input$purpose_of_borehole, {
+      req(input$purpose_of_borehole)
+      
+      # If not in existing IDs or names, it's a new driller
+      if (!(input$purpose_of_borehole %in%  moduleData$purposes$borehole_well_purpose_id) && !(input$purpose_of_borehole %in% moduleData$purposes$purpose_name)) {
+        # Create modal dialog
+        showModal(modalDialog(
+          title = "New Borehole/Well purpose",
+          textInput(ns("new_purpose_name"), "Purpose name", value = input$purpose_of_borehole),
+          textInput(ns("new_purpose_description"), "Description"),
+          
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(ns("save_new_purpose"), "Save", class = "btn-primary")
+          )
+        ))
+      }
+    })
+    
+    # Observer for new purpose creation
+    observeEvent(input$purpose_of_well, {
+      req(input$purpose_of_well)
+      
+      # If not in existing IDs or names, it's a new driller
+      if (!(input$purpose_of_well %in%  moduleData$purposes$borehole_well_purpose_id) && !(input$purpose_of_well %in% moduleData$purposes$purpose_name)) {
+        # Create modal dialog
+        showModal(modalDialog(
+          title = "New Borehole/Well purpose",
+          textInput(ns("new_purpose_name"), "Purpose name", value = input$purpose_of_well),
+          textInput(ns("new_purpose_description"), "Description"),
+          
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(ns("save_new_purpose"), "Save", class = "btn-primary")
+          )
+        ))
+      }
+    })
+    
+    # Handle the save button for new drillers in the modal
+    observeEvent(input$save_new_purpose, {
+      # Ensure that name and description but have at least 3 characters
+      if (nchar(trimws(input$new_purpose_name)) < 3) {
+        showNotification("Purpose name must be at least 3 characters long.", type = "error", duration = 5)
+        return()  # Exit the function early
+      }
+      if (nchar(trimws(input$new_purpose_description)) < 3) {
+        showNotification("Purpose description must be at least 3 characters long.", type = "error", duration = 5)
+        return()  # Exit the function early
+      }
+      
+      new_purpose_id <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "INSERT INTO boreholes.borehole_well_purpose_id (purpose_name, description)
++    VALUES ($1,$2) RETURNING borehole_well_purpose_id",
+        params = list(input$new_purpose_name, 
+                      input$new_purpose_description
+        )
+      )[1,1]
+      
+      moduleData$purposes <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes")
+      rv$selected_purpose <- new_purpose_id
       removeModal()
     })
     
@@ -924,7 +1011,7 @@ simplerIndex <- function(id) {
         "notes",  # Make sure notes is included
         "coordinate_system",
         "easting", "northing", "utm_zone", "latitude", "longitude",
-        "location_source", "purpose_of_well",
+        "location_source", "purpose_of_borehole", "purpose_borehole_inferred",
         "depth_to_bedrock", "depth_to_bedrock_unit", "date_drilled",
         "casing_outside_diameter", "casing_outside_diameter_unit",
         "drill_depth", "drill_depth_unit", "top_of_screen", "top_of_screen_unit",
@@ -934,7 +1021,8 @@ simplerIndex <- function(id) {
         "surveyed_ground_level_elevation_unit",
         "permafrost_present", "permafrost_top_depth", "permafrost_top_depth_unit",
         "permafrost_bottom_depth", "permafrost_bottom_depth_unit",
-        "is_well", "drilled_by"
+        "is_well", "drilled_by",
+        "purpose_of_well", "purpose_well_inferred"
       )
       
       # Initialize well_data as empty named list
@@ -1039,7 +1127,10 @@ simplerIndex <- function(id) {
         selection = list(mode = "single", selected = 1),
         options = list(
           pageLength = 10, 
-          dom = 'tip',  # table, information, pagination (no search)
+          layout = list(
+            bottomStart = 'info',
+            bottomEnd   = 'paging'
+          ),  # table, information, pagination (no search)
           ordering = FALSE,
           scrollY = "300px",
           scrollCollapse = TRUE
@@ -1067,7 +1158,6 @@ simplerIndex <- function(id) {
     # Render the plot
     output$plot <- renderPlot(
       expr = {
-        print("rendering the plot")
         zoom <- input$zoom_level
         req(rv$files_df)
         req(rv$pdf_index)
@@ -1609,7 +1699,7 @@ simplerIndex <- function(id) {
           rv$selected_text <- NULL
           
           # For selectize inputs which need special handling (if any exist)
-          if (field_name %in% c("drilled_by", "utm_zone", "purpose_of_well")) {
+          if (field_name %in% c("drilled_by", "utm_zone", "purpose_of_borehole", "purpose_of_well")) {
             shinyjs::runjs(sprintf("$('#%s-selectized').blur();", ns(field_name)))
           }
           
@@ -1646,7 +1736,8 @@ simplerIndex <- function(id) {
           latitude = input$latitude,
           longitude = input$longitude,
           location_source = input$location_source,
-          purpose_of_well = input$purpose_of_well,
+          purpose_of_borehole = if (nchar(input$purpose_of_borehole) == 0) NULL else input$purpose_of_borehole,
+          purpose_borehole_inferred = input$purpose_borehole_inferred,
           depth_to_bedrock = input$depth_to_bedrock,
           depth_to_bedrock_unit = input$depth_to_bedrock_unit,
           permafrost_present = input$permafrost_present,
@@ -1672,7 +1763,9 @@ simplerIndex <- function(id) {
           surveyed_ground_level_elevation = input$surveyed_ground_level_elevation,
           surveyed_ground_level_elevation_unit = input$surveyed_ground_level_elevation_unit,
           is_well = input$is_well,
-          drilled_by = input$drilled_by # <-- add drilled_by field
+          purpose_of_well = if (nchar(input$purpose_of_well) == 0) NULL else input$purpose_of_well,,
+          purpose_of_well_inferred = input$purpose_of_well_inferred,
+          drilled_by = input$drilled_by
         )
       }
     })
@@ -1721,6 +1814,7 @@ simplerIndex <- function(id) {
         
         # Update selectize inputs
         updateSelectizeInput(session, "utm_zone", selected = get_meta_value("utm_zone", "8N"))
+        updateSelectizeInput(session, "purpose_of_borehole", selected = get_meta_value("purpose_of_borehole"))
         updateSelectizeInput(session, "purpose_of_well", selected = get_meta_value("purpose_of_well"))
         updateSelectizeInput(session, "drilled_by", selected = get_meta_value("drilled_by"))
         
@@ -1737,6 +1831,8 @@ simplerIndex <- function(id) {
         updateRadioButtons(session, "surveyed_ground_level_elevation_unit", selected = get_meta_value("surveyed_ground_level_elevation_unit", "ft"))
         updateRadioButtons(session, "permafrost_top_depth_unit", selected = get_meta_value("permafrost_top_depth_unit", "ft"))
         updateRadioButtons(session, "permafrost_bottom_depth_unit", selected = get_meta_value("permafrost_bottom_depth_unit", "ft"))
+        updateRadioButtons(session, "purpose_borehole_inferred", selected = get_meta_value("purpose_borehole_inferred", TRUE))
+        updateRadioButtons(session, "purpose_well_inferred", selected = get_meta_value("purpose_well_inferred", TRUE))
         
         # Update numeric inputs
         updateNumericInput(session, "easting", value = get_meta_numeric("easting"))
@@ -1772,7 +1868,10 @@ simplerIndex <- function(id) {
         updateTextInput(session, "notes", value = "")
         updateTextInput(session, "location_source", value = "")
         updateSelectizeInput(session, "utm_zone", selected = "8N")
+        updateSelectizeInput(session, "purpose_of_borehole", selected = NULL)
+        updateRadioButtons(session, "purpose_borehole_inferred", selected = TRUE)
         updateSelectizeInput(session, "purpose_of_well", selected = NULL)
+        updateRadioButtons(session, "purpose_well_inferred", selected = TRUE)
         updateSelectizeInput(session, "drilled_by", selected = NULL)
         updateRadioButtons(session, "coordinate_system", selected = "utm")
         updateRadioButtons(session, "depth_to_bedrock_unit", selected = "ft")
@@ -1963,7 +2062,8 @@ simplerIndex <- function(id) {
             longitude = metadata$longitude,
             location_source = metadata$location_source,
             surveyed_ground_level_elevation = metadata$surveyed_ground_level_elevation,
-            purpose_of_well = metadata$purpose_of_well,
+            purpose_of_borehole = if (nchar(metadata$purpose_of_borehole) == 0) NULL else metadata$purpose_of_borehole,
+            purpose_borehole_inferred = metadata$purpose_borehole_inferred,
             depth_to_bedrock = metadata$depth_to_bedrock,
             permafrost_present = metadata$permafrost_present,
             permafrost_top_depth = metadata$permafrost_top_depth,
@@ -1982,7 +2082,9 @@ simplerIndex <- function(id) {
             share_with = "yg_reader",
             drilled_by = metadata$drilled_by,
             drill_method = NULL,
-            pdf_file_path = pdf_file_path
+            pdf_file_path = pdf_file_path,
+            purpose_of_well = if (nchar(metadata$purpose_of_well) == 0) NULL else metadata$purpose_of_well,
+            purpose_well_inferred = metadata$purpose_well_inferred
           )
           
           showNotification(paste("Successfully uploaded borehole:", current_well_id), 
@@ -2035,7 +2137,8 @@ simplerIndex <- function(id) {
               longitude = metadata$longitude,
               location_source = metadata$location_source,
               surveyed_ground_level_elevation = metadata$surveyed_ground_level_elevation,
-              purpose_of_well = metadata$purpose_of_well,
+              purpose_of_borehole = metadata$purpose_of_borehole,
+              purpose_inferred = metadata$purpose_borehole_inferred,
               depth_to_bedrock = metadata$depth_to_bedrock,
               permafrost_present = metadata$permafrost_present,
               permafrost_top_depth = metadata$permafrost_top_depth,
@@ -2055,7 +2158,9 @@ simplerIndex <- function(id) {
               share_with = "yg_reader",
               drilled_by = metadata$drilled_by,
               drill_method = NULL,
-              pdf_file_path = pdf_file_path
+              pdf_file_path = pdf_file_path,
+              purpose_of_well = metadata$purpose_of_well,
+              purpose_well_inferred = metadata$purpose_well_inferred
             )
             
             success_count <- success_count + 1

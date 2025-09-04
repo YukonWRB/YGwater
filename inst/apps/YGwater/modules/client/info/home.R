@@ -3,28 +3,27 @@ homeUI <- function(id) {
   ns <- NS(id)
   tagList()
   verticalLayout(
-    htmlOutput(ns("betaTitle")),
-    tags$div(style = "height: 10px;"),
-    htmlOutput(ns("betaText")),
-    tags$div(style = "height: 60px;"),
+    htmlOutput(ns("betaTitle")),   # TO BE REMOVED once testing is complete
+    tags$div(style = "height: 10px;"), # TO BE REMOVED once testing is complete
+    htmlOutput(ns("betaText")), # TO BE REMOVED once testing is complete
+    hr(), # TO BE REMOVED once testing is complete
+    
+    
+    tags$div(style = "height: 30px;"),  # ADJUST once testing is complete
     htmlOutput(ns("title")),
     tags$div(style = "height: 10px;"),
     htmlOutput(ns("main_text")),
-    hr(),
     tags$div(style = "height: 30px;"),
-    htmlOutput(ns("discrete_continuous_title")),
-    tags$div(style = "height: 10px;"),
-    htmlOutput(ns("discrete_continuous")),
-    tags$div(style = "height: 20px;"),
-    tags$div(style = "height: 10px;"),
     uiOutput(ns("map_buttons")),
     tags$div(style = "height: 20px;"),
-    tags$div(style = "height: 10px;"),
     uiOutput(ns("plot_buttons")),
     tags$div(style = "height: 20px;"),
-    tags$div(style = "height: 10px;"),
     uiOutput(ns("data_buttons")),
-    tags$div(style = "height: 40px;"),
+    tags$div(style = "height: 20px;"),
+    htmlOutput(ns("discrete_continuous_title")), # Title for discrete vs continuous data
+    tags$div(style = "height: 10px;"),
+    htmlOutput(ns("discrete_continuous")),  # Explanatory text about discrete vs continuous data
+    tags$div(style = "height: 10px;"),
   )
 }
 
@@ -63,80 +62,55 @@ home <- function(id, language) {
       })
       
       
-      output$discrete_continuous_title <- renderUI({
-        HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
-                    tr("home_discrete_continuous_title", language$language),
-                    '</div>'
-        ))
-      })
-      output$discrete_continuous <- renderUI({
-        HTML(paste0('<div class="montserrat" style="font-size: 16px; font-weight: 500; font-style: normal">',
-                    tr("home_discrete_continuous", language$language),
-                    '</div>'
-        ))
-      })
-      
-      output$mapButtonsTitle <- renderUI({
-        HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500;">',
-                    "You can explore the data in map form. This is the best option if you're not sure of what you want to do with the data, or if you just want to see where the monitoring locations are and which parameters are available.",
-                    '</div>'
-        ))
-      })
       output$map_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("map_locs"), tr("home_map_locs_btn", language$language),
                                  class = "btn-bar w-100 btn-bar-locs",
+                                 style = "padding: 14px",
                                  icon = icon("map-location"))),
           column(6, actionButton(ns("map_params"), tr("home_map_params_btn", language$language),
                                  class = "btn-bar w-100 btn-bar-params",
+                                 style = "padding: 14px",
                                  icon = icon("map-location")))
         )
-      })
-      output$plotButtonsTitle <- renderUI({
-        HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500;">',
-                    "If you know what you want to see you can plot the data directly. You can choose to plot continuous or discrete data:",
-                    '</div>'
-        ))
       })
       output$plot_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("plot_cont"), tr("view_plots_continuous", language$language),
                                  class = "btn-bar w-100 btn-bar-plot-c",
+                                 style = "padding: 14px",
                                  icon = icon("chart-simple"))),
           column(6, actionButton(ns("plot_disc"), tr("view_plots_discrete", language$language),
                                  class = "btn-bar w-100 btn-bar-plot-d",
+                                 style = "padding: 14px",
                                  icon = icon("chart-simple")))
         )
-      })
-      output$dataButtonsTitle <- renderUI({
-        HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500;">',
-                    "If you're interested in the data itself, you can download both types:",
-                    '</div>'
-        ))
       })
       output$data_buttons <- renderUI({
         fluidRow(
           column(6, actionButton(ns("dl_cont"), tr("dl_data_continuous", language$language),
                                  class = "btn-bar w-100 btn-bar-dl-c",
+                                 style = "padding: 14px",
                                  icon = icon("table"))),
           column(6, actionButton(ns("dl_disc"), tr("dl_data_discrete", language$language),
                                  class = "btn-bar w-100 btn-bar-dl-d",
+                                 style = "padding: 14px",
                                  icon = icon("table")))
         )
       })
-      
-      output$discTitle <- renderUI({
-        HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
-                    tr("disclaimer_title", language$language),
-                    '</div>'
-        ))
-      })
-      output$discBody <- renderUI({
-        HTML(paste0('<div class="nunito-sans" style="font-size: 14px; font-weight: 500; font-style: normal">',
-                    tr("disclaimer_body", language$language),
-                    '</div>'
-        ))
-      })
+    })
+    
+    output$discrete_continuous_title <- renderUI({
+      HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
+                  tr("home_discrete_continuous_title", language$language),
+                  '</div>'
+      ))
+    })
+    output$discrete_continuous <- renderUI({
+      HTML(paste0('<div class="montserrat" style="font-size: 16px; font-weight: 500; font-style: normal">',
+                  tr("home_discrete_continuous", language$language),
+                  '</div>'
+      ))
     })
 
     observeEvent(input$plot_disc, {
