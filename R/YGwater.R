@@ -24,6 +24,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   rlang::check_installed("shinyjs", reason = "required to use YGwater app")
   rlang::check_installed("DT", reason = "required to use YGwater app")
   rlang::check_installed("tidyhydat", reason = "required to use YGwater app")
+  rlang::check_installed("htmltools", reason = "required to use YGwater app")
   rlang::check_installed("future", reason = "required to enable asynchronous operations in YGwater apps")
   rlang::check_installed("bslib", reason = "required to enable bootstrap 5 themes and elements in YGwater apps")
   rlang::check_installed("bsicons", reason = "required to use YGwater app")
@@ -43,6 +44,7 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
     rlang::check_installed("respR", reason = "required to use YGwater app with public = FALSE")
     rlang::check_installed("pdftools", reason = "required to use YGwater app with public = FALSE")
     rlang::check_installed("tesseract", reason = "required to use Simpler Index in the app")
+    rlang::check_installed("magick", reason = "required to use Simpler Index in the app")
   }
   
   

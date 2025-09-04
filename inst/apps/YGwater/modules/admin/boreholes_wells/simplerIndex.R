@@ -1,6 +1,7 @@
 # UI and server code for simplerIndex
 
 simplerIndexUI <- function(id) {
+  
   ns <- NS(id)
   css_file <- system.file("apps/YGwater/www/css/simplerIndex.css", package = "YGwater")
   css <- gsub("%1$s", ns("pdf-container"), readLines(css_file), fixed = TRUE)
@@ -1736,7 +1737,7 @@ simplerIndex <- function(id) {
           latitude = input$latitude,
           longitude = input$longitude,
           location_source = input$location_source,
-          purpose_of_borehole = if (nchar(input$purpose_of_borehole) == 0) NULL else input$purpose_of_borehole,
+          purpose_of_borehole = input$purpose_of_borehole,
           purpose_borehole_inferred = input$purpose_borehole_inferred,
           depth_to_bedrock = input$depth_to_bedrock,
           depth_to_bedrock_unit = input$depth_to_bedrock_unit,
@@ -1763,7 +1764,7 @@ simplerIndex <- function(id) {
           surveyed_ground_level_elevation = input$surveyed_ground_level_elevation,
           surveyed_ground_level_elevation_unit = input$surveyed_ground_level_elevation_unit,
           is_well = input$is_well,
-          purpose_of_well = if (nchar(input$purpose_of_well) == 0) NULL else input$purpose_of_well,,
+          purpose_of_well = input$purpose_of_well,
           purpose_of_well_inferred = input$purpose_of_well_inferred,
           drilled_by = input$drilled_by
         )

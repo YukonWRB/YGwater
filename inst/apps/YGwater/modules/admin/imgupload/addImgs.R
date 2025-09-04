@@ -320,9 +320,6 @@ addImgs <- function(id) {
     
     # Setup and validation tasks #####
     
-    # Increase the maximum upload size to 100 MB
-    options(shiny.maxRequestSize = 100 * 1024^2)
-    
     # issue warning if user does not have write privileges
     check <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT has_table_privilege(current_user, 'files.images', 'INSERT') AS can_insert")
     
