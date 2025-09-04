@@ -77,7 +77,6 @@ iso_period <- function(x) {
 }
 
 
-
 # Internal helper functions for default file paths
 
 #' @noRd

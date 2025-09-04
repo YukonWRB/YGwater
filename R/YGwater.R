@@ -41,6 +41,8 @@ YGwater <- function(host = getOption("shiny.host", "127.0.0.1"), port = getOptio
   if (!public) {
     rlang::check_installed("shinyWidgets", reason = "required to use YGwater app with public = FALSE")
     rlang::check_installed("respR", reason = "required to use YGwater app with public = FALSE")
+    rlang::check_installed("pdftools", reason = "required to use YGwater app with public = FALSE")
+    rlang::check_installed("tesseract", reason = "required to use Simpler Index in the app")
   }
   
   

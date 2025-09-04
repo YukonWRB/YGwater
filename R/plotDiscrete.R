@@ -674,9 +674,9 @@ AND s.datetime > '", start, "' AND s.datetime < '", end, "';
     FROM 
         results AS r
     LEFT JOIN 
-        sample_fractions AS sf ON r.sample_fraction = sf.sample_fraction_id
+        sample_fractions AS sf ON r.sample_fraction_id = sf.sample_fraction_id
     LEFT JOIN 
-        result_speciations AS rs ON r.result_speciation = rs.result_speciation_id
+        result_speciations AS rs ON r.result_speciation_id = rs.result_speciation_id
     LEFT JOIN
         result_value_types AS rvt ON r.result_value_type = rvt.result_value_type_id
     WHERE 

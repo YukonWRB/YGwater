@@ -141,7 +141,7 @@ app_ui <- function(request) {
                  nav_panel(title = uiOutput("imagesNavTableTitle"), value = "imgTableView",
                            uiOutput("imgTableView_ui")),
                  nav_panel(title = uiOutput("imagesNavMapTitle"), value = "imgMapView",
-                           uiOutput("imgMapView_ui")),
+                           uiOutput("imgMapView_ui"))
         ),
         nav_menu(title = uiOutput("dataNavMenuTitle"), value = "data",
                  nav_panel(title = uiOutput("dataNavDiscTitle"), value = "discData",
@@ -194,13 +194,16 @@ app_ui <- function(request) {
                    nav_panel(title = "Edit/delete discrete data",
                              value = "editDiscData",
                              uiOutput("editDiscData_ui")),
+                   nav_panel(title = "Add/modify guidelines",
+                             value = "addGuidelines",
+                             uiOutput("addGuidelines_ui")),
                    nav_panel(title = "Sync sample series",
                              value = "syncDisc",
                              uiOutput("syncDisc_ui"))
           )
         },
         if (!config$public) {
-          nav_menu(title = "Location tasks",
+          nav_menu(title = "Locations",
                    value = "dbLocsTasks",
                    nav_panel(title = "Add/modify locations",
                              value = "addLocation",
@@ -213,8 +216,8 @@ app_ui <- function(request) {
           )
         },
         if (!config$public) {
-          nav_menu(title = "Manage files/docs", 
-                   value = "addFiles",
+          nav_menu(title = "Files/Docs", 
+                   value = "fileTasks",
                    nav_panel(title = "Documents",
                              value = "addDocs",
                              uiOutput("addDocs_ui")),
@@ -229,16 +232,30 @@ app_ui <- function(request) {
                     uiOutput("visit_ui"))
         },
         if (!config$public) {
-          nav_menu(title = "Equipment/instruments",
+          nav_menu(title = "Equipment",
                    value = "equipTasks",
                    nav_panel(title = "Checks + calibrations",
-                             value = "cal",
-                             uiOutput("cal_ui")),
+                             value = "calibrate",
+                             uiOutput("calibrate_ui")),
                    nav_panel(title = "Deploy/Recover", 
                              value = "deploy_recover",
                              uiOutput("deploy_recover_ui"))
           )
         },
+        if (!config$public) {
+          nav_menu(title = "Boreholes/wells",
+                   value = "wellTasks",
+                   nav_panel(title = "Simpler Index",
+                             value = "simplerIndex",
+                             uiOutput("simplerIndex_ui"))
+          )
+        },
+        if (!config$public) {
+          nav_menu(title = "Metadata",
+                   value = "metadataTasks"
+          )
+        },
+        
         if (!config$public) {
           nav_menu(title = "Admin",
                    value = "adminTasks",
@@ -269,67 +286,5 @@ app_ui <- function(request) {
         uiOutput("footer_ui"),
       )
     ), # End of page_fluid
-    
-    # Below is commented out because it is not used anymore. It was used to add a language selector drop-down to the navbar, but current implementation uses a button that toggles the language.
-    #     # Insert language selector into the navbar
-    #     HTML("<script>
-    #   document.addEventListener('DOMContentLoaded', function() {
-    #     var parent = document.getElementsByClassName('navbar-nav');
-    #     
-    #     if (parent.length > 0) {
-    #       parent[0].insertAdjacentHTML('afterend', 
-    #         '<ul class=\"navbar-nav ms-auto\">' +
-    #         '<li class=\"nav-item dropdown\">' +
-    #         '<a href=\"#\" class=\"nav-link dropdown-toggle\" data-bs-toggle=\"dropdown\" role=\"button\" aria-expanded=\"false\">' +
-    #         'Language</a>' +
-    #         '<ul class=\"dropdown-menu\" id=\"lang-dropdown\">' +
-    #         '</ul>' +
-    #         '</li>' +
-    #         '</ul>'
-    #       );
-    #     }
-    # 
-    #     // Define the function globally so it can be used in the onclick event
-    #     window.setLang = function(lang) {
-    #       Shiny.setInputValue(\"langSelect\", lang, {priority: \"event\"});
-    #       
-    #       // Remove active class from all menu items
-    #       var items = document.querySelectorAll('#lang-dropdown li');
-    #       items.forEach(function(item) {
-    #         item.classList.remove('active');
-    #       });
-    #     
-    #       // Find and highlight the selected language
-    #       var links = document.querySelectorAll('#lang-dropdown a');
-    #       links.forEach(function(link) {
-    #         if (link.textContent.trim() === lang) {
-    #           link.parentElement.classList.add('active');
-    #         }
-    #       });
-    #     };
-    # 
-    #     // Function to dynamically update the dropdown menu from Shiny
-    #     Shiny.addCustomMessageHandler(\"updateLangMenu\", function(langs) {
-    #       var dropdown = document.getElementById('lang-dropdown');
-    #       dropdown.innerHTML = '';  // Clear existing options
-    #       langs.forEach(function(lang) {
-    #         var li = document.createElement('li');
-    #         var a = document.createElement('a');
-    #         a.href = '#';
-    #         a.textContent = lang;
-    #         a.setAttribute('onclick', \"setLang('\" + lang + \"')\");  // Attach function
-    #         li.appendChild(a);
-    #         dropdown.appendChild(li);
-    #       });
-    #     });
-    #     
-    #         // Function to set the initial selected language based on the user's browser language
-    #     Shiny.addCustomMessageHandler('setSelectedLanguage', function(lang) {
-    #       console.log('Setting initial language: ' + lang);
-    #       Shiny.setInputValue('langSelect', lang, {priority: 'event'});
-    #     });
-    #   });
-    # </script>")
   ) # End tagList
-  
 }

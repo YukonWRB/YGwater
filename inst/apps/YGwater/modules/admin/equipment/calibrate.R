@@ -1,6 +1,6 @@
 # UI and server code for main calibrations module
 
-calUI <- function(id) {
+calibrateUI <- function(id) {
   ns <- NS(id)
   
   # Set up for background color when validating calibrations
@@ -287,7 +287,7 @@ calUI <- function(id) {
   ) # End of tagList
 }
 
-cal <- function(id) {
+calibrate <- function(id) {
   
   moduleServer(id, function(input, output, session) {
     
@@ -442,7 +442,9 @@ table.on("click", "tr", function() {
     # Create initial tables for managing instruments
     initial_manage_instruments_table <- instruments_sheet[ , !colnames(instruments_sheet) %in% c("instrument_id", "observer", "obs_datetime")]
     initial_calibrate_instruments_table <- instruments_sheet[is.na(instruments_sheet$date_retired), !colnames(instruments_sheet) %in% c("instrument_id", "observer", "obs_datetime", "retired_by", "date_retired", "date_purchased", "date_in_service")]
-    output$manage_instruments_table <- DT::renderDataTable(initial_manage_instruments_table, rownames = FALSE, selection = "single")
+    output$manage_instruments_table <- DT::renderDataTable(initial_manage_instruments_table, 
+                                                           rownames = FALSE, 
+                                                           selection = "single")
     output$calibration_instruments_table <- DT::renderDataTable({
       DT::datatable(
         initial_calibrate_instruments_table,

@@ -1337,7 +1337,10 @@ contData <- function(id, language, inputs) {
                           infoFiltered = "",
                           zeroRecords = tr("tbl_zero", language$language)
                         ),
-                        dom = 'rtip'
+                        layout = list(
+                          bottomStart = 'info',
+                          bottomEnd   = 'paging'
+                        )
                       )
         )
       }) # End of function creating data subset datatable
@@ -1381,7 +1384,6 @@ contData <- function(id, language, inputs) {
                           infoFiltered = "",
                           zeroRecords = tr("tbl_zero", language$language)
                         ),
-                        dom = 'rt',
                         scrollX = TRUE
                       )
         ) |>
@@ -1603,7 +1605,10 @@ contData <- function(id, language, inputs) {
                             infoFiltered = "",
                             zeroRecords = tr("tbl_zero", language$language)
                           ),
-                          dom = 'rtip'
+                          layout = list(
+                            bottomStart = 'info',
+                            bottomEnd   = 'paging'
+                          )
                         )
           )
         }) # End of function creating data subset datatable
