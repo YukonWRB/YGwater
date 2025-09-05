@@ -412,60 +412,40 @@ addGuidelines <- function(id) {
     # Reusable functions to help extract parameters from guidelines for testing
     # 1) Extract unique (parameter_id, sample_fraction_id, result_speciation_id?) triples
     extract_guideline_combos <- function(sql) {
-      
-      # Strategy A: look inside each FILTER (WHERE ...) block (most precise)
-      filter_blocks <- stringr::str_match_all(sql, "FILTER\\s*\\(\\s*WHERE\\s*([^\\)]*)\\)")[[1]]
-      if (nrow(filter_blocks) == 0) {
-        return(NULL)
-      }
-      combos_a <- lapply(seq_len(nrow(filter_blocks)), function(i) {
-        block <- filter_blocks[i, 2]
+
+      # Locate all parameter_id occurrences
+      locs <- stringr::str_locate_all(sql, "parameter_id\\s*=\\s*(\\d+)")[[1]]
+      ids  <- stringr::str_match_all(sql, "parameter_id\\s*=\\s*(\\d+)")[[1]][,2]
+      if (length(ids) == 0) return(NULL)
+
+      combos <- lapply(seq_len(length(ids)), function(i) {
+        pid <- as.integer(ids[i])
+        start <- locs[i, 1]
+        end <- locs[i, 2]
+        window <- substr(sql,
+                         max(1, start - 160),
+                         min(nchar(sql), end + 160))
+
+        sfid <- suppressWarnings(as.integer(stringr::str_match(window, "sample_fraction_id\\s*=\\s*(\\d+)")[,2]))
+        rsid <- suppressWarnings(as.integer(stringr::str_match(window, "result_speciation_id\\s*=\\s*(\\d+)")[,2]))
+
         data.frame(
-          parameter_id         = suppressWarnings(as.integer(stringr::str_match(block, "parameter_id\\s*=\\s*(\\d+)")[,2])),
-          sample_fraction_id   = suppressWarnings(as.integer(stringr::str_match(block, "sample_fraction_id\\s*=\\s*(\\d+)")[,2])),
-          result_speciation_id = suppressWarnings(as.integer(stringr::str_match(block, "result_speciation_id\\s*=\\s*(\\d+)")[,2]))
+          parameter_id = pid,
+          sample_fraction_id = sfid,
+          result_speciation_id = rsid
         )
-      }) |> dplyr::bind_rows()
-      
-      # Strategy B (fallback): co-occurrence within a short window (either order)
-      # param then fraction (optional speciation)
-      pairs1 <- stringr::str_match_all(
-        sql,
-        "parameter_id\\s*=\\s*(\\d+)[^\\)]{0,160}?sample_fraction_id\\s*=\\s*(\\d+)(?:[^\\)]{0,160}?result_speciation_id\\s*=\\s*(\\d+))?"
-      )[[1]]
-      # fraction then param (optional speciation)
-      pairs2 <- stringr::str_match_all(
-        sql,
-        "sample_fraction_id\\s*=\\s*(\\d+)[^\\)]{0,160}?parameter_id\\s*=\\s*(\\d+)(?:[^\\)]{0,160}?result_speciation_id\\s*=\\s*(\\d+))?"
-      )[[1]]
-      
-      combos_b <- data.frame()
-      if (nrow(pairs1) > 0) {
-        combos_b <- dplyr::bind_rows(combos_b, data.frame(
-          parameter_id         = as.integer(pairs1[,2]),
-          sample_fraction_id   = as.integer(pairs1[,3]),
-          result_speciation_id = suppressWarnings(as.integer(pairs1[,4]))
-        ))
-      }
-      if (nrow(pairs2) > 0) {
-        combos_b <- dplyr::bind_rows(combos_b, data.frame(
-          parameter_id         = as.integer(pairs2[,3]),
-          sample_fraction_id   = as.integer(pairs2[,2]),
-          result_speciation_id = suppressWarnings(as.integer(pairs2[,4]))
-        ))
-      }
-      
-      # Combine, drop rows missing param or fraction, make unique & sorted
-      dplyr::bind_rows(combos_a, combos_b) |>
-        filter(!is.na(parameter_id), !is.na(sample_fraction_id)) |>
+      }) |>
+        dplyr::bind_rows() |>
         dplyr::distinct() |>
-        dplyr::arrange("parameter_id", "sample_fraction_id", "result_speciation_id")
+        dplyr::arrange(parameter_id, sample_fraction_id, result_speciation_id)
+
+      combos
     }
     
     # 2) Build numericInputs with descriptive labels
     make_test_inputs <- function(ns, sql, parameters_df, fractions_df, speciations_df) {
       combos <- extract_guideline_combos(sql)
-      
+
       # map IDs -> names
       pname <- function(pid) {
         parameters_df$param_name[match(pid, parameters_df$parameter_id)]
@@ -485,16 +465,23 @@ addGuidelines <- function(id) {
         pid <- combos$parameter_id[i]
         fid <- combos$sample_fraction_id[i]
         sid <- combos$result_speciation_id[i]
-        
+
+        frac_part <- if (!is.na(fid)) paste0(" (", fracname(fid), ")") else ""
+        spec_part <- if (!is.na(sid)) paste0(" ", specname(sid)) else ""
+
         label <- paste0(
-          pname(pid), " (", fracname(fid), ")",
-          if (!is.na(sid)) specname(sid) else "",
+          pname(pid), frac_part, spec_part,
           " [", units(pid), "]"
         )
-        
-        # include sid (or 0) in id to make it unique & deterministic
-        inputId <- paste0("test_val_", pid, "_", fid, "_", ifelse(is.na(sid), 0L, sid))
-        
+
+        # include fid/sid (or 0) in id to make it unique & deterministic
+        inputId <- paste0(
+          "test_val_",
+          pid, "_",
+          ifelse(is.na(fid), 0L, fid), "_",
+          ifelse(is.na(sid), 0L, sid)
+        )
+
         numericInput(
           ns(inputId),
           label = label,
@@ -536,7 +523,7 @@ addGuidelines <- function(id) {
         ))
       }
       
-      # For SQL that requires parameter_id and sample_fraction_id, extract these pairs from the SQL
+      # Identify parameter/sample-fraction/speciation combinations referenced by the SQL
       sql <- input$guideline_sql
       
       # Example SQL:
@@ -623,10 +610,14 @@ addGuidelines <- function(id) {
         pairs <- moduleData$test_pairs
         values <- lapply(seq_len(nrow(pairs)), function(i) {
           pid <- as.integer(pairs$parameter_id[i])
-          sfid <- as.integer(pairs$sample_fraction_id[i])
-          val <- input[[paste0("test_val_", pid, "_", sfid)]]
+          fid <- ifelse(is.na(pairs$sample_fraction_id[i]), NA_integer_, as.integer(pairs$sample_fraction_id[i]))
+          sid <- ifelse(is.na(pairs$result_speciation_id[i]), NA_integer_, as.integer(pairs$result_speciation_id[i]))
+          val <- input[[paste0("test_val_", pid, "_", ifelse(is.na(fid), 0L, fid), "_", ifelse(is.na(sid), 0L, sid))]]
           if (is.null(val) || is.na(val)) return(NULL)
-          list(parameter_id = pid, sample_fraction = sfid, value = val)
+          list(parameter_id = pid,
+               sample_fraction_id = fid,
+               result_speciation_id = sid,
+               value = val)
         })
         values <- values[!vapply(values, is.null, logical(1))]
         
@@ -647,9 +638,9 @@ addGuidelines <- function(id) {
           sample_id <- DBI::dbGetQuery(session$userData$AquaCache,
                                        "INSERT INTO discrete.samples DEFAULT VALUES RETURNING sample_id")$sample_id
           for (v in values) {
-            DBI::dbExecute(session$userData$AquaCache,
-                           "INSERT INTO discrete.results (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result) VALUES ($1,1,$2,$3,$4)",
-                           params = list(sample_id, v$parameter_id, v$sample_fraction_id, v$result_speciation_id, v$value))
+          DBI::dbExecute(session$userData$AquaCache,
+                         "INSERT INTO discrete.results (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result) VALUES ($1,1,$2,$3,$4,$5)",
+                         params = list(sample_id, v$parameter_id, v$sample_fraction_id, v$result_speciation_id, v$value))
           }
           gid <- NA
           if (!is.null(input$guidelines_table_rows_selected)) {
