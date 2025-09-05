@@ -137,7 +137,7 @@ EQWinStd <- function(CalcIds, SampleIds, con = NULL) {
         if (condition_result) {
           true_value_quoted <- regmatches(true_value, gregexpr('"[^"]*"', true_value))[[1]]
           true_value <- gsub('".*?"', '', true_value)  # Remove the quoted part temporarily
-          if (nchar(true_value) > 0) {
+          if (nzchar(true_value)) {
             true_value <- replace_vars(true_value, variables)
             true_value <- format_expression(true_value)
           }
@@ -151,7 +151,7 @@ EQWinStd <- function(CalcIds, SampleIds, con = NULL) {
           if (!is.na(false_value)) {
             false_value_quoted <- regmatches(false_value, gregexpr('"[^"]*"', false_value))[[1]]
             false_value <- gsub('".*?"', '', false_value)  # Remove the quoted part temporarily
-            if (nchar(false_value) > 0) {
+            if (nzchar(false_value)) {
               false_value <- replace_vars(false_value, variables)
               false_value <- format_expression(false_value)
             }

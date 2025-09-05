@@ -321,7 +321,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
         min <- stdivals[j, "display_min"]
         max <- stdivals[j, "display_max"]
         string <- paste0(if (is.na(min)) "" else paste0("Min: ", min, " - "), if (is.na(max)) "" else paste0("Max: ", max))
-        tbl[j, standards$StdCode[i]] <- if (nchar(string) > 0) string else string
+        tbl[j, standards$StdCode[i]] <- if (nzchar(string)) string else string
       }
       if (i == 1) {
         std_table <- tbl
@@ -373,7 +373,7 @@ EQWinReport <- function(date, date_approx = 0, stations = NULL, stnGrp = NULL, p
           min <- station_stdVals[j, "display_min"]
           max <- station_stdVals[j, "display_max"]
           string <- paste0(if (is.na(min)) "" else paste0("Min: ", min, " - "), if (is.na(max)) "" else paste0("Max: ", max))
-          station_stdVals[j, "string"] <- if (nchar(string) > 0) string else string
+          station_stdVals[j, "string"] <- if (nzchar(string)) string else string
         }
         station_stdVals <- merge(station_stdVals, params, all.x = TRUE)
       } else {

@@ -142,15 +142,15 @@ FROM ph;</code></pre>
   <pre><code>WITH vals AS (
   SELECT
     -- dissolved Ca/Mg (preferred)
-    MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 19) AS ca_d,
-    MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 19) AS mg_d,
+    MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 19) AS ca_d, -- calcium dissolved
+    MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 19) AS mg_d, -- magnesium dissolved
     -- reported dissolved hardness (as CaCO3 - fallback 1)
-    MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 19) AS hard_d,
+    MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 19 AND result_speciation_id = 3) AS hard_d, -- hardness dissolved as CaCO3
     -- total Ca/Mg (fallback 2)
-    MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 5)  AS ca_t,
-    MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 5)  AS mg_t,
+    MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 5)  AS ca_t, -- calcium total
+    MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 5)  AS mg_t, -- magnesium total
     -- reported total hardness (fallback 3)
-    MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 5)  AS hard_t
+    MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 5 AND result_speciation_id = 3)  AS hard_t -- hardness total as CaCO3
   FROM discrete.results
   WHERE sample_id = $1::integer
 ),

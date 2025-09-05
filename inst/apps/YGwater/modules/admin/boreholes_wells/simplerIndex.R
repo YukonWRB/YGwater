@@ -58,7 +58,7 @@ simplerIndexUI <- function(id) {
                     actionButton(ns("draw_rectangle"), "Redact", icon("rectangle-xmark"), class = "btn-toggle") %>%
                       tooltip("Redact the selected area. Boxes are transparent for usability but will be made opaque on upload."),
                     actionButton(ns("clear_rectangles"), "Clear", icon("eraser"), class = "btn btn-outline-secondary", title = "Clear Rectangles"),
-                    downloadButton(ns("save_image"), "Export PDF", class = "btn btn-outline-primary", title = "Export PDF with redactions and OCR text"), %>%
+                    downloadButton(ns("save_image"), "Export PDF", class = "btn btn-outline-primary", title = "Export PDF with redactions and OCR text") %>%
                       tooltip("Download a redacted copy for your records (does not send the PDF to the database)"),
                     # Zoom control - wrap in a container div
                     div(class = "slider-container",
