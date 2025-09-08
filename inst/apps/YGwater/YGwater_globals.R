@@ -69,6 +69,9 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
       # FOD module (only visible internally)
       source(system.file("apps/YGwater/modules/client/FOD/FOD_main.R", package = "YGwater"))
     }
+    
+    # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
+    options(shiny.maxRequestSize = 100 * 1024^2)
   }
   
   

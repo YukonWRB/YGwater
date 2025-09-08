@@ -219,7 +219,7 @@ addDiscData <- function(id) {
       df <- if (ext %in% c("xls", "xlsx")) {
         openxlsx::read.xlsx(input$file$datapath)
       } else {
-        utils::read_csv(input$file$datapath)
+        utils::read.csv(input$file$datapath)
       }
       file_data(df)
     })

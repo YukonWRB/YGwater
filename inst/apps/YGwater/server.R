@@ -572,7 +572,6 @@ $(document).keyup(function(event) {
         }
 
         # Derive privilege flags for each admin nav_panel
-        session$userData$table_privs <- session$userData$table_privs
         has_priv <- function(schema, tables) {
           any(session$userData$table_privs$schema == schema & session$userData$table_privs$table_name %in% tables)
         }
@@ -580,24 +579,23 @@ $(document).keyup(function(event) {
           addLocation    = has_priv("public", "locations"),
           addSubLocation = has_priv("public", "sub_locations"),
           calibrate      = has_priv("instruments", "calibrations"),
-          deploy_recover = has_priv("instruments", c("instruments","instrument_maintenance","array_maintenance_changes")),
-          addContData    = has_priv("continuous", "measurements_continuous"),
-          editContData   = has_priv("continuous", "measurements_continuous"),
+          deploy_recover = has_priv("instruments", c("instruments", "instrument_maintenance", "array_maintenance_changes")),
+          addContData    = has_priv("continuous", c("measurements_continuous", "timeseries")),
+          editContData   = has_priv("continuous", c("measurements_continuous", "timeseries")),
           continuousCorrections = has_priv("continuous", "corrections"),
-          imputeMissing  = has_priv("continuous", c("measurements_continuous","measurements_continuous_corrected")),
-          grades_approvals_qualifiers = has_priv("continuous", c("corrections","grades","approvals","qualifiers")),
+          imputeMissing  = has_priv("continuous", c("measurements_continuous")),
+          grades_approvals_qualifiers = has_priv("continuous", c("grades","approvals","qualifiers")),
           addTimeseries  = has_priv("continuous", "timeseries"),
-          syncCont       = has_priv("continuous", "timeseries"),
+          syncCont       = has_priv("continuous", c("measurents_continuous", "measurements_calculated_daily", "timeseries")),
           addDiscData    = has_priv("discrete", c("results","samples")),
           editDiscData   = has_priv("discrete", c("results","samples")),
-          syncDisc       = has_priv("discrete", "sample_series"),
+          syncDisc       = has_priv("discrete", c("results","samples", "sample_series")),
           addDocs        = has_priv("files", "documents"),
           addImgs        = has_priv("files", "images"),
-          boreholes_wells = has_priv("boreholes", "boreholes"),
+          boreholes_wells = has_priv("boreholes", c("boreholes", "wells")),
           visit          = has_priv("public", c("locations_metadata_access", "locations_metadata_infrastructure")),
           manageNewsContent = has_priv("application", c("images", "text", "page_content")),
           viewFeedback   = has_priv("application", "feedback")
-          
         )
         
         # IF the user has more than SELECT privileges on any tables, show the 'admin' button

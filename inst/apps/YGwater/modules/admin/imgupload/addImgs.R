@@ -5,8 +5,8 @@ addImgsUI <- function(id) {
   
   share_list <- list("Private", "Public")
   
-  # Define a list of UTC timezone corrections
-  tz_corrections <- list(-12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+  # Define a vector of UTC timezone corrections
+  tz_corrections <- -12:14
   
   ns <- NS(id)
   
@@ -319,9 +319,6 @@ addImgs <- function(id) {
     
     
     # Setup and validation tasks #####
-    
-    # Increase the maximum upload size to 100 MB
-    options(shiny.maxRequestSize = 100 * 1024^2)
     
     # issue warning if user does not have write privileges
     check <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT has_table_privilege(current_user, 'files.images', 'INSERT') AS can_insert")

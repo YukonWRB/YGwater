@@ -1,6 +1,7 @@
 # UI and server code for simplerIndex
 
 simplerIndexUI <- function(id) {
+  
   ns <- NS(id)
   css_file <- system.file("apps/YGwater/www/css/simplerIndex.css", package = "YGwater")
   css <- gsub("%1$s", ns("pdf-container"), readLines(css_file), fixed = TRUE)
@@ -55,9 +56,10 @@ simplerIndexUI <- function(id) {
                     actionButton(ns("brush_select"), "Select", icon("mouse-pointer"), class = "btn-toggle") %>% 
                       tooltip("Enable the selection tool for OCR and content redaction."),
                     actionButton(ns("draw_rectangle"), "Redact", icon("rectangle-xmark"), class = "btn-toggle") %>%
-                      tooltip("Redact the selected area. Boxes are transparent for usability but can be made opaque on upload."),
+                      tooltip("Redact the selected area. Boxes are transparent for usability but will be made opaque on upload."),
                     actionButton(ns("clear_rectangles"), "Clear", icon("eraser"), class = "btn btn-outline-secondary", title = "Clear Rectangles"),
-                    downloadButton(ns("save_image"), "Export PDF", class = "btn btn-outline-primary", title = "Export PDF with redactions and OCR text"),
+                    downloadButton(ns("save_image"), "Export PDF", class = "btn btn-outline-primary", title = "Export PDF with redactions and OCR text") %>%
+                      tooltip("Download a redacted copy for your records (does not send the PDF to the database)"),
                     # Zoom control - wrap in a container div
                     div(class = "slider-container",
                         sliderInput(ns("zoom_level"),
@@ -1736,7 +1738,7 @@ simplerIndex <- function(id) {
           latitude = input$latitude,
           longitude = input$longitude,
           location_source = input$location_source,
-          purpose_of_borehole = if (nchar(input$purpose_of_borehole) == 0) NULL else input$purpose_of_borehole,
+          purpose_of_borehole = input$purpose_of_borehole,
           purpose_borehole_inferred = input$purpose_borehole_inferred,
           depth_to_bedrock = input$depth_to_bedrock,
           depth_to_bedrock_unit = input$depth_to_bedrock_unit,
@@ -1763,7 +1765,7 @@ simplerIndex <- function(id) {
           surveyed_ground_level_elevation = input$surveyed_ground_level_elevation,
           surveyed_ground_level_elevation_unit = input$surveyed_ground_level_elevation_unit,
           is_well = input$is_well,
-          purpose_of_well = if (nchar(input$purpose_of_well) == 0) NULL else input$purpose_of_well,,
+          purpose_of_well = input$purpose_of_well,
           purpose_of_well_inferred = input$purpose_of_well_inferred,
           drilled_by = input$drilled_by
         )

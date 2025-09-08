@@ -48,7 +48,7 @@ addContDataUI <- function(id) {
           conditionalPanel(
             condition = "input.entry_mode == 'file'",
             ns = ns,
-            fileInput(ns("file"), "Upload .csv or Excel", accept = c(".csv", ".xls", ".xlsx"))
+            fileInput(ns("file"), "Upload .csv or .xlsx", accept = c(".csv", ".xlsx"))
           ),
           conditionalPanel(
             condition = "input.entry_mode == 'manual'",
@@ -136,6 +136,7 @@ addContData <- function(id) {
                     rownames = FALSE)
     })
     
+    # Observe timeseries selection and assign to reactiveVal
     timeseries <- reactiveVal(NULL)
     observeEvent(input$ts_table_rows_selected, {
       sel <- input$ts_table_rows_selected
@@ -146,18 +147,49 @@ addContData <- function(id) {
       }
     })
     
-    data <- reactiveValues(df = data.frame(datetime = as.POSIXct(character()), value = numeric()))
+    data <- reactiveValues(df = data.frame(datetime = as.POSIXct(character()), 
+                                           value = numeric()),
+                           upload_raw = NULL)
     
     observeEvent(input$file, {
       req(input$file)
       ext <- tools::file_ext(input$file$name)
-      df <- if (ext %in% c('xls', 'xlsx')) {
-        openxlsx::read.xlsx(input$file$datapath)
+      if (ext == 'xlsx') {
+        data$upload_raw <- openxlsx::read.xlsx(input$file$datapath, sheet = 1)
       } else {
-        readr::read_csv(input$file$datapath, show_col_types = FALSE)
+        data$upload_raw <- utils::read.csv(input$file$datapath, show_col_types = FALSE)
+      } else {
+        showNotification('Invalid file; please upload a .csv or .xlsx file', type = 'error')
+        return(NULL)
       }
-      data$df <- df
+      
+      # If the file does not have columns 'datetime' and 'value', show a modal dialog to allow the user to map columns
+      if (!all(c('datetime', 'value') %in% names(data$upload_raw))) {
+        showModal(modalDialog(
+          title = 'Map Columns',
+          'The uploaded file does not contain the required columns "datetime" and "value". Please map the columns below:',
+          selectizeInput(ns('upload_datetime_col'), 'Select the column for datetime:', choices = names(df), selected = names(df)[1]),
+          selectizeInput(ns('upload_value_col'), 'Select the column for value:', choices = names(df), selected = names(df)[2]),
+          easyClose = FALSE,
+          footer = tagList(
+            modalButton('Cancel'),
+            actionButton(ns('confirm_mapping'), 'Confirm Mapping')
+          )
+        ))
+        # data$df is is this case assigned by observing input$confirm_mapping below
+      } else {
+        # If the required columns are present, just use them
+        data$df <- data$upload_raw
+      }
     })
+    
+    observeEvent(input$confirm_mapping, {
+      removeModal()  # Close the modal dialog
+      req(input$datetime_col, input$value_col)
+      df_mapped <- data.frame(datetime = data$upload_raw[[input$datetime_col]], value = data$upload_raw[[input$value_col]])
+      data$df <- df_mapped
+    }, ignoreInit = TRUE, once = TRUE)
+    
     
     observeEvent(input$add_row, {
       data$df <- rbind(data$df, data.frame(datetime = .POSIXct(Sys.time(), tz = "UTC"), value = NA))

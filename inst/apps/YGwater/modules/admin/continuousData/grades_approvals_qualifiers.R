@@ -13,7 +13,7 @@ grades_approvals_qualifiers <- function(id) {
     
     ns <- session$ns
     
-    output$placeholder <- renderText("Placeholder for continuous grade/approval/qualifier application/edit module")
+    output$placeholder <- renderText("Placeholder for continuous grade/approval/qualifier application/ + edit module")
     
     
   }) # End of moduleServer

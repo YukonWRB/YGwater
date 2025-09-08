@@ -294,7 +294,7 @@ addTimeseries <- function(id) {
           
           if (is.null(sub_loc)) {
             sub_loc <- NA
-          } else if (nchar(sub_loc) > 0) {
+          } else if (nzchar(sub_loc)) {
             sub_loc <- as.numeric(sub_loc)
           } else {
             sub_loc <- NA
@@ -304,7 +304,7 @@ addTimeseries <- function(id) {
           loc_code <- data$locations[data$locations$location_id == loc, "location"]
           
           if (!is.null(source_fx_args)) {
-            if (nchar(source_fx_args) > 0) {
+            if (nzchar(source_fx_args)) {
               # Make the json object for source_fx_args
               # Make the source_fx_args a json object
               args <- source_fx_args
@@ -329,7 +329,7 @@ addTimeseries <- function(id) {
           }
           
           if (!is.null(source_fx)) {
-            if (nchar(source_fx) > 0) {
+            if (nzchar(source_fx)) {
               source_fx <- source_fx 
             } else {
               source_fx <- NA
@@ -357,7 +357,7 @@ addTimeseries <- function(id) {
                            default_owner = as.numeric(owner),
                            source_fx = source_fx,
                            source_fx_args = args,
-                           note = if (nchar(note) > 0) note else NA,
+                           note = if (nzchar(note)) note else NA,
                            end_datetime = end_datetime)
           
           DBI::dbAppendTable(con, "timeseries", df)
@@ -589,7 +589,7 @@ addTimeseries <- function(id) {
         
         
         if (!is.na(selected_timeseries$source_fx_args)) {
-          if (nchar(input$source_fx_args) == 0) {
+          if (!nchar(input$source_fx_args)) {
             DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE timeseries SET source_fx_args = NULL WHERE timeseries_id = ", selected_timeseries$timeseries_id))
             return()
           }
@@ -629,7 +629,7 @@ addTimeseries <- function(id) {
             DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE timeseries SET source_fx_args = '", args, "' WHERE timeseries_id = ", selected_timeseries$timeseries_id))
           }
         } else {
-          if (nchar(input$source_fx_args) == 0) {
+          if (!nzchar(input$source_fx_args)) {
             DBI::dbExecute(session$userData$AquaCache, paste0("UPDATE timeseries SET source_fx_args = NULL WHERE timeseries_id = ", selected_timeseries$timeseries_id))
             return()
           }
