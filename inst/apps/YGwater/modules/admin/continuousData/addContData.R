@@ -156,7 +156,7 @@ addContData <- function(id) {
       ext <- tools::file_ext(input$file$name)
       if (ext == 'xlsx') {
         data$upload_raw <- openxlsx::read.xlsx(input$file$datapath, sheet = 1)
-      } else {
+      } else if (ext == "csv") {
         data$upload_raw <- utils::read.csv(input$file$datapath, show_col_types = FALSE)
       } else {
         showNotification('Invalid file; please upload a .csv or .xlsx file', type = 'error')
