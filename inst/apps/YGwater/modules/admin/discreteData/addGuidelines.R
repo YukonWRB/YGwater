@@ -310,9 +310,9 @@ addGuidelines <- function(id) {
       moduleData$guidelines_temp[selected_row, "publisher"] <- if (nchar(input$publisher) == 0) NA else input$publisher
       moduleData$guidelines_temp[selected_row, "reference"] <- if (nchar(input$reference) == 0) NA else input$reference
       moduleData$guidelines_temp[selected_row, "note"] <- if (nchar(input$note) == 0) NA else input$note
-      moduleData$guidelines_temp[selected_row, "parameter_id"] <- if (is.null(input$parameter_id)) NA else input$parameter_id
-      moduleData$guidelines_temp[selected_row, "sample_fraction_id"] <- if (is.null(input$sample_fraction)) NA else input$sample_fraction
-      moduleData$guidelines_temp[selected_row, "result_speciation_id"] <- if (is.null(input$result_speciation)) NA else input$result_speciation
+      moduleData$guidelines_temp[selected_row, "parameter_id"] <- if (is.null(input$parameter_id)) NA else as.integer(input$parameter_id)
+      moduleData$guidelines_temp[selected_row, "sample_fraction_id"] <- if (is.null(input$sample_fraction)) NA else as.integer(input$sample_fraction)
+      moduleData$guidelines_temp[selected_row, "result_speciation_id"] <- if (is.null(input$result_speciation)) NA else as.integer(input$result_speciation)
       moduleData$guidelines_temp[selected_row, "guideline_sql"] <- if (nchar(input$guideline_sql) == 0) NA else input$guideline_sql
     })
     
@@ -412,55 +412,60 @@ addGuidelines <- function(id) {
     # Reusable functions to help extract parameters from guidelines for testing
     # 1) Extract unique (parameter_id, sample_fraction_id, result_speciation_id?) triples
     extract_guideline_combos <- function(sql) {
+      s <- sql
       
-      # Strategy A: look inside each FILTER (WHERE ...) block (most precise)
-      filter_blocks <- stringr::str_match_all(sql, "FILTER\\s*\\(\\s*WHERE\\s*([^\\)]*)\\)")[[1]]
-      if (nrow(filter_blocks) == 0) {
-        return(NULL)
-      }
-      combos_a <- lapply(seq_len(nrow(filter_blocks)), function(i) {
-        block <- filter_blocks[i, 2]
+      pull_ids <- function(block) {
         data.frame(
-          parameter_id         = suppressWarnings(as.integer(stringr::str_match(block, "parameter_id\\s*=\\s*(\\d+)")[,2])),
-          sample_fraction_id   = suppressWarnings(as.integer(stringr::str_match(block, "sample_fraction_id\\s*=\\s*(\\d+)")[,2])),
-          result_speciation_id = suppressWarnings(as.integer(stringr::str_match(block, "result_speciation_id\\s*=\\s*(\\d+)")[,2]))
+          parameter_id         = suppressWarnings(as.integer(stringr::str_match(block, "\\bparameter_id\\s*=\\s*(\\d+)")[, 2])),
+          sample_fraction_id   = suppressWarnings(as.integer(stringr::str_match(block, "\\bsample_fraction_id\\s*=\\s*(\\d+)")[, 2])),
+          result_speciation_id = suppressWarnings(as.integer(stringr::str_match(block, "\\bresult_speciation_id\\s*=\\s*(\\d+)")[, 2]))
         )
-      }) |> dplyr::bind_rows()
-      
-      # Strategy B (fallback): co-occurrence within a short window (either order)
-      # param then fraction (optional speciation)
-      pairs1 <- stringr::str_match_all(
-        sql,
-        "parameter_id\\s*=\\s*(\\d+)[^\\)]{0,160}?sample_fraction_id\\s*=\\s*(\\d+)(?:[^\\)]{0,160}?result_speciation_id\\s*=\\s*(\\d+))?"
-      )[[1]]
-      # fraction then param (optional speciation)
-      pairs2 <- stringr::str_match_all(
-        sql,
-        "sample_fraction_id\\s*=\\s*(\\d+)[^\\)]{0,160}?parameter_id\\s*=\\s*(\\d+)(?:[^\\)]{0,160}?result_speciation_id\\s*=\\s*(\\d+))?"
-      )[[1]]
-      
-      combos_b <- data.frame()
-      if (nrow(pairs1) > 0) {
-        combos_b <- dplyr::bind_rows(combos_b, data.frame(
-          parameter_id         = as.integer(pairs1[,2]),
-          sample_fraction_id   = as.integer(pairs1[,3]),
-          result_speciation_id = suppressWarnings(as.integer(pairs1[,4]))
-        ))
-      }
-      if (nrow(pairs2) > 0) {
-        combos_b <- dplyr::bind_rows(combos_b, data.frame(
-          parameter_id         = as.integer(pairs2[,3]),
-          sample_fraction_id   = as.integer(pairs2[,2]),
-          result_speciation_id = suppressWarnings(as.integer(pairs2[,4]))
-        ))
       }
       
-      # Combine, drop rows missing param or fraction, make unique & sorted
-      dplyr::bind_rows(combos_a, combos_b) |>
-        filter(!is.na(parameter_id), !is.na(sample_fraction_id)) |>
-        dplyr::distinct() |>
-        dplyr::arrange("parameter_id", "sample_fraction_id", "result_speciation_id")
+      # 1) FILTER (WHERE ...)
+      filt <- stringr::str_match_all(s, "(?is)FILTER\\s*\\(\\s*WHERE\\s*([^\\)]*)\\)")[[1]]
+      a <- if (nrow(filt)) apply(filt, 1, function(r) pull_ids(r[2])) |> dplyr::bind_rows() else
+        data.frame(parameter_id = integer(), sample_fraction_id = integer(), result_speciation_id = integer())
+      
+      # 2) FROM discrete.results [AS alias] ... WHERE <slice> ...
+      where_slices <- stringr::str_match_all(
+        s,
+        "(?is)\\bfrom\\s+discrete\\.results\\b(?:\\s+(?:as\\s+)?[a-zA-Z_][a-zA-Z_0-9]*)?[\\s\\S]*?\\bwhere\\b([\\s\\S]*?)(?=(\\)|\\bgroup\\b|\\border\\b|\\blimit\\b|\\bunion\\b|\\boffset\\b|\\breturning\\b|;))"
+      )[[1]]
+      b <- if (nrow(where_slices)) apply(where_slices, 1, function(r) pull_ids(r[2])) |> dplyr::bind_rows() else
+        data.frame(parameter_id = integer(), sample_fraction_id = integer(), result_speciation_id = integer())
+      
+      # 3) Tiny fallback only if nothing found above (param … neighbor within short window)
+      c <- data.frame()
+      if (nrow(a) + nrow(b) == 0) {
+        p1 <- stringr::str_match_all(
+          s, "(?is)\\bparameter_id\\s*=\\s*(\\d+)[^\\)]{0,160}?\\bsample_fraction_id\\s*=\\s*(\\d+)(?:[^\\)]{0,160}?\\bresult_speciation_id\\s*=\\s*(\\d+))?"
+        )[[1]]
+        if (nrow(p1)) {
+          c <- dplyr::bind_rows(c, data.frame(
+            parameter_id         = as.integer(p1[, 2]),
+            sample_fraction_id   = as.integer(p1[, 3]),
+            result_speciation_id = suppressWarnings(as.integer(p1[, 4]))
+          ))
+        }
+        p2 <- stringr::str_match_all(
+          s, "(?is)\\bsample_fraction_id\\s*=\\s*(\\d+)[^\\)]{0,160}?\\bparameter_id\\s*=\\s*(\\d+)(?:[^\\)]{0,160}?\\bresult_speciation_id\\s*=\\s*(\\d+))?"
+        )[[1]]
+        if (nrow(p2)) {
+          c <- dplyr::bind_rows(c, data.frame(
+            parameter_id         = as.integer(p2[, 3]),
+            sample_fraction_id   = as.integer(p2[, 2]),
+            result_speciation_id = suppressWarnings(as.integer(p2[, 4]))
+          ))
+        }
+      }
+      
+      dplyr::bind_rows(a, b, c) |>
+        dplyr::filter(!is.na(parameter_id)) |>
+        dplyr::distinct()
     }
+    
+    
     
     # 2) Build numericInputs with descriptive labels
     make_test_inputs <- function(ns, sql, parameters_df, fractions_df, speciations_df) {
@@ -486,14 +491,23 @@ addGuidelines <- function(id) {
         fid <- combos$sample_fraction_id[i]
         sid <- combos$result_speciation_id[i]
         
+        frac_part <- if (!is.na(fid)) paste0(" (", fracname(fid), ")") else ""
+        spec_part <- if (!is.na(sid)) paste0(" ", specname(sid)) else ""
+        
         label <- paste0(
-          pname(pid), " (", fracname(fid), ")",
-          if (!is.na(sid)) specname(sid) else "",
+          pname(pid), frac_part, spec_part,
           " [", units(pid), "]"
         )
         
-        # include sid (or 0) in id to make it unique & deterministic
-        inputId <- paste0("test_val_", pid, "_", fid, "_", ifelse(is.na(sid), 0L, sid))
+        # include fid/sid (or 0) in id to make it unique & deterministic
+        inputId <- paste0(
+          "test_val_",
+          pid, "_",
+          ifelse(is.na(fid), 0L, fid), "_",
+          ifelse(is.na(sid), 0L, sid)
+        )
+        
+        print(paste0("Making input ", inputId, " with label '", label, "'"))
         
         numericInput(
           ns(inputId),
@@ -512,7 +526,6 @@ addGuidelines <- function(id) {
       if (!is.null(input$guidelines_table_rows_selected)) {
         selected_row <- input$guidelines_table_rows_selected
         # Check to see if guideline_id is -1 (new guideline not yet saved) or if the selected row isn't an exact match between moduleData$guidelines and moduleData$guidelines_temp
-        
         if (moduleData$guidelines$guideline_id[selected_row] == -1 ||
             !identical(moduleData$guidelines[selected_row, ], moduleData$guidelines_temp[selected_row, ])) {
           showModal(modalDialog(
@@ -534,10 +547,10 @@ addGuidelines <- function(id) {
             modalButton("Close")
           )
         ))
+        return()
       }
       
-      # For SQL that requires parameter_id and sample_fraction_id, extract these pairs from the SQL
-      sql <- input$guideline_sql
+      # Identify parameter/sample-fraction/speciation combinations referenced by the SQL
       
       # Example SQL:
       # sql <- "WITH vals AS (
@@ -591,17 +604,25 @@ addGuidelines <- function(id) {
           fractions_df  = moduleData$sample_fractions,
           speciations_df = moduleData$result_speciations
         )
+        removeModal()
+        output$test_guideline_result <- renderUI({""})
         showModal(modalDialog(
           title = "Test guideline",
+          "Provide TEMPORARY values for the following parameters to test the guideline",
           do.call(tagList, guideline_inputs),
           actionButton(ns("run_test_guideline"), "Run"),
           uiOutput(ns("test_guideline_result")),
-          footer = tagList(modalButton("Cancel")),
+          footer = tagList(
+            modalButton("Cancel")
+          ),
           size = "xl"
         ))
       } else {  # No parameters required, just show the Run button
+        removeModal()
+        output$test_guideline_result <- renderUI({""})
         showModal(modalDialog(
           title = "Test guideline",
+          "This guideline does not reference any parameters, so no input values are required.",
           actionButton(ns("run_test_guideline"), "Run"),
           uiOutput(ns("test_guideline_result")),
           footer = tagList(
@@ -623,39 +644,42 @@ addGuidelines <- function(id) {
         pairs <- moduleData$test_pairs
         values <- lapply(seq_len(nrow(pairs)), function(i) {
           pid <- as.integer(pairs$parameter_id[i])
-          sfid <- as.integer(pairs$sample_fraction_id[i])
-          val <- input[[paste0("test_val_", pid, "_", sfid)]]
+          fid <- ifelse(is.na(pairs$sample_fraction_id[i]), NA_integer_, as.integer(pairs$sample_fraction_id[i]))
+          sid <- ifelse(is.na(pairs$result_speciation_id[i]), NA_integer_, as.integer(pairs$result_speciation_id[i]))
+          val <- input[[paste0("test_val_", pid, "_", ifelse(is.na(fid), 0L, fid), "_", ifelse(is.na(sid), 0L, sid))]]
           if (is.null(val) || is.na(val)) return(NULL)
-          list(parameter_id = pid, sample_fraction = sfid, value = val)
+          list(parameter_id = pid,
+               sample_fraction_id = fid,
+               result_speciation_id = sid,
+               value = val)
         })
         values <- values[!vapply(values, is.null, logical(1))]
-        
+        print(values)
         
         # Tell the user they need to provide values if none were given
         if (length(values) == 0) {
           output$test_guideline_result <- renderUI({
             div(
-              style = "color: red; font-weight: bold;",
+              style = "color: red; font-weight: bold; font-size: 120%; margin-top: 10px;",
               "No values provided. Please enter at least one value to test the guideline."
             )
           })
+          return()
         }
+        
         
         # Run the guideline
         tryCatch({
           DBI::dbExecute(session$userData$AquaCache, "BEGIN")
           sample_id <- DBI::dbGetQuery(session$userData$AquaCache,
-                                       "INSERT INTO discrete.samples DEFAULT VALUES RETURNING sample_id")$sample_id
+                                       "INSERT INTO discrete.samples (location_id, media_id, datetime, collection_method, sample_type, owner) VALUES (100, 1, '1800-01-01 00:00', 1, 1, 2) RETURNING sample_id")$sample_id
           for (v in values) {
             DBI::dbExecute(session$userData$AquaCache,
-                           "INSERT INTO discrete.results (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result) VALUES ($1,1,$2,$3,$4)",
-                           params = list(sample_id, v$parameter_id, v$sample_fraction_id, v$result_speciation_id, v$value))
+                           "INSERT INTO discrete.results (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result) VALUES ($1,$2,$3,$4,$5,$6)",
+                           params = list(sample_id, 2, v$parameter_id, v$sample_fraction_id, v$result_speciation_id, v$value))
           }
-          gid <- NA
-          if (!is.null(input$guidelines_table_rows_selected)) {
-            gid <- moduleData$guidelines$guideline_id[input$guidelines_table_rows_selected]
-          }
-          gval <- if (!is.na(gid) && gid != -1) gid else input$guideline_sql
+          gval <- moduleData$guidelines$guideline_id[input$guidelines_table_rows_selected]
+          
           res <- DBI::dbGetQuery(session$userData$AquaCache,
                                  "SELECT get_guideline_value($1, $2) AS value",
                                  params = list(gval, sample_id))
@@ -671,10 +695,7 @@ addGuidelines <- function(id) {
       } else {  # No test pairs provided, simple guideline calculation required.
         tryCatch({
           gid <- NA
-          if (!is.null(input$guidelines_table_rows_selected)) {
-            gid <- moduleData$guidelines$guideline_id[input$guidelines_table_rows_selected]
-          }
-          gval <- if (!is.na(gid) && gid != -1) gid else input$guideline_sql
+          gval <- moduleData$guidelines$guideline_id[input$guidelines_table_rows_selected]
           res <- DBI::dbGetQuery(session$userData$AquaCache,
                                  "SELECT get_guideline_value($1, NULL) AS value",
                                  params = list(gval))
@@ -690,22 +711,22 @@ addGuidelines <- function(id) {
       if (!is.null(err)) {       # If there was an error, show it:
         output$test_guideline_result <- renderUI({
           div(
-            style = "color: red; font-weight: bold;",
+            style = "color: red; font-weight: bold;, font-size: 120%; margin-top: 10px;",
             paste("Error:", err)
           )
         })
       } else if (is.null(result) || is.na(result)) { # If the result is NULL or NA
         output$test_guideline_result <- renderUI({
           div(
-            style = "color: orange; font-weight: bold;",
+            style = "color: orange; font-weight: bold; font-size: 120%; margin-top: 10px;",
             "The guideline returned NULL or NA. This may indicate an issue with the SQL or that no applicable guideline was found."
           )
         })
       } else {  # Otherwise show the result
         output$test_guideline_result <- renderUI({
           div(
-            style = "color: green; font-weight: bold;",
-            paste("Guideline value:", result)
+            style = "color: green; font-weight: bold; font-size: 120%; margin-top: 10px;",
+            paste("Returned guideline value:", result)
           )
         })
       }
@@ -830,7 +851,6 @@ addGuidelines <- function(id) {
         ))
       }) # End of tryCatch
     }) # End of observeEvent for confirm_delete
-    
     
   }) # End of moduleServer
 }

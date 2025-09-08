@@ -207,7 +207,7 @@ plotTimeseries <- function(location,
   
   # Determine the timeseries and adjust the date range #################
   location_txt <- as.character(location)
-  location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;", .con = con))[1, 1]
+  location_id <- DBI::dbGetQuery(con, glue::glue_sql("SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;", .con = con))[1,1]
   if (is.na(location_id)) {
     stop("The location you entered does not exist in the database.")
   }
@@ -250,7 +250,7 @@ plotTimeseries <- function(location,
   } else {  #sub location was specified
     # Find the sub location_id
     sub_loc_txt <- as.character(sub_location)
-    sub_location_id <- DBI::dbGetQuery( con, glue::glue_sql( "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;", .con = con))[[1]]
+    sub_location_id <- DBI::dbGetQuery( con, glue::glue_sql( "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;", .con = con))[1,1]
     if (is.na(sub_location_id)) {
       stop("The sub-location you entered does not exist in the database.")
     }

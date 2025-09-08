@@ -5,9 +5,9 @@ aboutUI <- function(id) {
     tags$div(style = "height: 10px;"),
     htmlOutput(ns("licence_body")),
     tags$div(style = "height: 30px;"),
-    htmlOutput(ns("title_about")),
-    tags$div(style = "height: 10px;"),
-    htmlOutput(ns("content_about")),
+    # htmlOutput(ns("title_about")),
+    # tags$div(style = "height: 10px;"),
+    # htmlOutput(ns("content_about")),
     tags$div(style = "height: 30px;"),
     htmlOutput(ns("title_web_page")),
     tags$div(style = "height: 10px;"),
@@ -30,23 +30,23 @@ about <- function(id, language) {
       })
       output$licence_body <- renderUI({
         HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
-                    tr("licence1", language$language), "<a href='", tr("licence_url", language$language), "' target='_blank'>", tr("licence2", language$language), "</a>.",
-                    '</div>'
+                    tr("licence1", language$language), "<a href='", tr("licence_url", language$language), "' target='_blank'>", tr("licence2", language$language), "</a>.<br><br>", tr("licence3", language$language),'</div>'
         ))
       })
       
-      output$title_about <- renderUI({
-        HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
-                    tr("about_title1", language$language),
-                    '</div>'
-        ))
-      })
-      output$content_about <- renderUI({
-        HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
-                    tr("about_content1", language$language),
-                    '</div>'
-        ))
-      })
+      # output$title_about <- renderUI({
+      #   HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
+      #               tr("about_title1", language$language),
+      #               '</div>'
+      #   ))
+      # })
+      # output$content_about <- renderUI({
+      #   HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
+      #               tr("about_content1", language$language),
+      #               '</div>'
+      #   ))
+      # })
+      
       output$title_web_page <- renderUI({
         HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
                     tr("about_title2", language$language),
