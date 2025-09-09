@@ -63,11 +63,12 @@ app_server <- function(input, output, session) {
       }
 
       # Discrete data tasks --------------------------------------------------
-      if (any(session$userData$admin_privs$addDiscData, session$userData$admin_privs$editDiscData, session$userData$admin_privs$syncDisc)) {
+      if (any(session$userData$admin_privs$addDiscData, session$userData$admin_privs$editDiscData, session$userData$admin_privs$syncDisc, session$userData$admin_privs$addGuidelines)) {
         nav_show(id = "navbar", target = "discreteDataTasks")
         if (!isTRUE(session$userData$admin_privs$addDiscData)) nav_hide(id = "navbar", target = "addDiscData")
         if (!isTRUE(session$userData$admin_privs$editDiscData)) nav_hide(id = "navbar", target = "editDiscData")
         if (!isTRUE(session$userData$admin_privs$syncDisc))     nav_hide(id = "navbar", target = "syncDisc")
+        if (!isTRUE(session$userData$admin_privs$addGuidelines)) nav_hide(id = "navbar", target = "addGuidelines")
       } else {
         nav_hide(id = "navbar", target = "discreteDataTasks")
       }
@@ -590,6 +591,7 @@ $(document).keyup(function(event) {
           addDiscData    = has_priv("discrete", c("results","samples")),
           editDiscData   = has_priv("discrete", c("results","samples")),
           syncDisc       = has_priv("discrete", c("results","samples", "sample_series")),
+          addGuidelines  = has_priv("discrete", c("guidelines")),
           addDocs        = has_priv("files", "documents"),
           addImgs        = has_priv("files", "images"),
           boreholes_wells = has_priv("boreholes", c("boreholes", "wells")),

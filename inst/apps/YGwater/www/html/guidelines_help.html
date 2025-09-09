@@ -135,117 +135,97 @@ FROM ph;</code></pre>
   <pre><code>SELECT 0.015::numeric</code></pre>
   <p>This very simple guideline returns a fixed value, 0.015; units should be the database standard units for the relevant parameter. Of course, since the database entry (record) for this SQL statement is on a common row with the target parameter_id, we can find out the target parameter and its units by consulting the 'parameters' table. Note that there is no dependency here on a sample_id!</p>
 
-  <h4>Sample-Dependent (<a href="https://ccme.ca/en/chemical/71">CCME PAL long term for copper</a>)</h4>
-  
+  <h4>Sample-Dependent Example 1 (<a href="https://ccme.ca/en/chemical/71">CCME PAL long term for copper</a>)</h4>
   <p>Note: it's better (and called for in some guideline documents) to calculate hardness from calcium and magnesium concentrations rather than use the reported hardness. This bypasses the ambiguity in how hardness can be reported, since that value varies according to the methodology used. Hardness is still coded in as a backup in case either calcium or magnesium concentrations are missing.</p>
   
-  <pre><code>WITH vals AS (
-  SELECT
-    -- dissolved Ca/Mg (preferred)
-    MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 5) AS ca_d, -- calcium dissolved
-    MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 5) AS mg_d, -- magnesium dissolved
-    -- reported dissolved hardness (as CaCO3 - fallback 1)
-    MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 5 AND result_speciation_id = 3) AS hard_d, -- hardness dissolved as CaCO3
-    -- total Ca/Mg (fallback 2)
-    MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 19)  AS ca_t, -- calcium total
-    MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 19)  AS mg_t, -- magnesium total
-    -- reported total hardness (fallback 3)
-    MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 19 AND result_speciation_id = 3)  AS hard_t -- hardness total as CaCO3
-  FROM discrete.results
-  WHERE sample_id = $1::integer
-),
-hardness AS (
-  -- Compute hardness as CaCO3 (mg/L) where possible; otherwise use reported hardness
-  SELECT CASE
-    WHEN ca_d IS NOT NULL AND mg_d IS NOT NULL AND ca_d > 0 AND mg_d > 0
-      THEN 2.497*ca_d + 4.118*mg_d
-    WHEN hard_d IS NOT NULL AND hard_d > 0
-      THEN hard_d
-    WHEN ca_t IS NOT NULL AND mg_t IS NOT NULL AND ca_t > 0 AND mg_t > 0
-      THEN 2.497*ca_t + 4.118*mg_t
-    WHEN hard_t IS NOT NULL AND hard_t > 0
-      THEN hard_t
-    ELSE NULL
-  END AS h
-  FROM vals
+  <pre><code>-- get_sample_hardness() calculates hardness using preferred variable order
+WITH vals AS (
+SELECT discrete.get_sample_hardness($1::integer) AS h
 )
--- Return Copper CWQG in mg/L (convert µg/L thresholds by /1000)
+-- Return Copper CWQG in mg/L
 SELECT CASE
   WHEN h IS NULL OR h < 82
-    THEN 0.002::numeric                          -- 2 µg/L, the minimum and fallback value
+    THEN 0.002::numeric -- 2 µg/L, the minimum and fallback value
   WHEN h <= 180
     THEN (0.2 * exp(0.8545*ln(h) - 1.465) / 1000)::numeric  -- convert µg/L → mg/L
   ELSE
-    0.004::numeric                          -- 4 µg/L, the maximum value which is only ever valid if the calculations could be run
+    0.004::numeric  -- 4 µg/L, the maximum value which is only ever valid if the calculations could be run
 END
-FROM hardness;
+FROM vals
 </code></pre>
 
-<p>This (much) more complex guideline can be broken down into three parts:
+<p>This guideline can be broken down into two parts:
 <ol>
-<li>The <code>WITH vals AS (...)</code> portion fetches results from the database's 'discrete.results' table</li>
-<li>The <code>hardness AS (...)</code> portion calculates the hardness using the preferred, descending order of variables.</li>
-<li>The final <code>SELECT CASE ...</code> portion returns the appropriate guideline value based on the calculated hardness OR a fallback value if hardness could not be calculated.</li>
+<li>The <code>WITH vals AS (...)</code> portion fetches results from the database's 'discrete.results' table using a special function that searches for several parameters and calculates hardness using a prefered order of available variables (see Appendix for the function's definition).</li>
+<li>The <code>SELECT CASE ...</code> portion returns the appropriate guideline value based on the calculated hardness OR a fallback value if hardness could not be calculated.</li>
 </ol>
 <p>There are several things of note:</p>
 <ul>
-<li>Parameters are referenced by their parameter_ids</li>
-<li>Sample fractions are referenced by their sample_fraction_idss</li>
 <li>The sample_id is passed in as <code>$1</code> and cast to an integer</li>
 <li>The SQL returns a single numeric value, explicitly cast as numeric.</li>
 <li>The returned value is converted to mg/l to align with database units for copper.</li>
 </ul>
 
-<h3>Secret sauce for generating calculated guideline SQL</h3>
+<h4>Sample-Dependent Example 2 (<a href="https://ccme.ca/en/chemical/4">CCME PAL long term for aluminium</a>)</h4>
+  <p>Note: it's better (and called for in some guideline documents) to calculate hardness from calcium and magnesium concentrations rather than use the reported hardness. This bypasses the ambiguity in how hardness can be reported, since that value varies according to the methodology used. Hardness is still coded in as a backup in case either calcium or magnesium concentrations are missing.</p>
+  
+  <pre><code>-- get_sample_val() fetches parameter values
+WITH vals AS (
+SELECT discrete.get_sample_val(
+  sample_id = $1,
+  parameter_id = 1189,
+  sample_fraction_id = NULL) AS ph_field
+SELECT discrete.get_sample_val(
+  sample_id = $1,
+  parameter_id = 1190,
+  sample_fraction_id = NULL) AS ph_lab
+)
+-- Return aluminium CWQG in mg/L
+SELECT CASE
+  WHEN ph_field IS NOT NULL
+    IF ph_field < 6.5 THEN 0.005::numeric
+    ELSE 0.1::numeric
+  WHEN IF ph_lab IS NOT NULL
+    IF ph_lab < 6.5 THEN 0.005::numeric
+    ELSE 0.1::numeric
+  ELSE
+    NULL::numeric  -- no pH available, cannot calculate guideline
+END
+FROM vals
+</code></pre>
 
+<p>This guideline can be broken down into two parts:
+<ol>
+<li>The <code>WITH vals AS (...)</code> portion fetches results from the database's 'discrete.results' table using the helper function get_sample_val() (see Appendix for more details)</li>
+<li>The <code>SELECT CASE ...</code> portion returns the appropriate guideline value based on the pH with a preference for field pH, returning a fallback NULL if neither pH values are available.</li>
+</ol>
+<p>There are several things of note:</p>
+<ul>
+<li>The sample_id is passed in as <code>$1</code> and cast to an integer</li>
+<li>The SQL returns a single numeric value, explicitly cast as numeric.</li>
+<li>The returned value is in mg/L to align with the database units for aluminium.</li>
+</ul>
+<br>
+<h3>Secret sauce for generating calculated guideline SQL</h3>
 <p>
 It can seem daunting to translate CCME (or other) guidelines into SQL, but you don’t have to start from scratch. 
 Large Language Models (LLMs) like ChatGPT can generate valid SQL if you give them the right instructions. 
 Below is a “prompt template” you can use when asking an LLM to draft guideline SQL for this database.
 </p>
-
-<h4>What the LLM needs to know</h4>
-<ul>
-  <li><strong>Goal:</strong> Write one PostgreSQL <code>SELECT</code> (or <code>WITH … SELECT</code>) that returns a single numeric guideline in <em>mg/L</em>.</li>
-  <li><strong>Sample filtering:</strong> Use <code>WHERE sample_id = $1::integer</code> when results depend on a sample.</li>
-  <li><strong>Constraints:</strong>
-    <ul>
-      <li>One statement only, no semicolons, no data modification.</li>
-      <li>Return exactly one numeric value, explicitly cast with <code>::numeric</code>.</li>
-      <li>Only allowed schemas: <code>discrete</code>, <code>public</code>.</li>
-    </ul>
-  </li>
-  <li><strong>Hardness calculations (mg/L as CaCO₃):</strong> 
-    <code>2.497*Ca + 4.118*Mg</code>.
-    <br/>Use this order of preference:
-    <ol>
-      <li>Dissolved Ca + Mg</li>
-      <li>Reported dissolved hardness</li>
-      <li>Total Ca + Mg </li>
-      <li>Reported total hardness</li>
-    </ol>
-  </li>
-  <li><strong>Parameter IDs (adjust for your needs):</strong>
-    Calcium = 1061, Magnesium = 1103, Hardness as CaCO₃ = 100.  
-  </li>
-  <li><strong>Sample fractions (adjust for your needs):</strong>
-  Dissolved = 19, Total = 5.
-  </li>
-  <li><strong>Units:</strong> The returned guideline must be in mg/L <strong>(Adjust for your needs)</strong>. If the published formula is in µg/L, divide by 1000.</li>
-</ul>
-
 <h4>Prompt template</h4>
 <pre><code>Write a single PostgreSQL SELECT (or WITH … SELECT) that returns one numeric guideline value 
-in mg/L for a given sample_id.
+in mg/L for a given sample_id. This SQL will be stored in a database table and called using a function as needed.
 
 Constraints you MUST follow:
-- Use WHERE sample_id = $1::integer (cast required).
+- Functions will be called using function get_guideline_value(guideline_id, sample_id DEFAULT NULL)
+- guideline_id is auto-generated when the function is saved to the database
+- Guidelines which do not require values from a sample do not use sample_id, they are only called using the guideline_id
+- Use $1 as the sample_id placeholder.
+- fetch sample result values using function discrete.get_param_val(sample_id, parameter_id, sample_fraction_id, result_speciation_id)
+  *sample_fraction_id might be NULL and result_speciation_id is default NULL
+- Special case: fetch hardness using discrete.get_sample_hardness(sample_id)
 - One statement only, no semicolons, no data modification.
 - Return exactly one numeric.
-- Prefer calculating hardness (as CaCO3, mg/L) from dissolved Ca and Mg:
-  hardness = 2.497*Ca + 4.118*Mg
-  Use dissolved first, else reported dissolved Hardness, else total Ca+Mg (fraction_id=5), 
-  else reported total Hardness.
 - The returned value MUST be in mg/L.
 - Relevant IDs: <strong>ADJUST FOR YOUR NEEDS</strong> Calcium=1061, Magnesium=1103, Hardness=100; 
 - Relevant fractions: <strong>ADJUST FOR YOUR NEEDS</strong> Dissolved=19, Total=5.
@@ -257,7 +237,66 @@ Return an SQL statement that computes the guideline for
 <p>
 👉 With this context, an LLM can usually draft valid guideline SQL. Always review the SQL for accuracy and  test the generated query against real data.
 </p>
-  <div class="tip"><strong>Tip:</strong> If you enter guidelines using the Shiny application, make use of the helper buttons to insert your desired parameters and sample fractions into the SQL text</div>
+  <div class="tip"><strong>Tip:</strong> If you enter guidelines using the Shiny application, make use of the helper buttons to insert your desired parameters and sample fractions into the SQL text. You also insert a function skeleton to help you write your guideline faster!</div>
 
+<br>
+<h2>Appendix</h2>
+<h3>Hardness calculation function</h3>
+<p>Hardness can be measured using a variety of different means and reported in several different ways. For guideline calculations, we usually want hardness as mg/L CaCO3 equivalent, but sometimes we have not way of knowing exactly how hardness was measured. Also, if the measurement was to a titration end point (common), some user interpretation of the end true end point can always skew results. A safer way to achieve a hardness value is to use the measured calcium and magnesium concentrations - dissolved if possible since that's what matters to aquatic toxicity. A full SQL expression to achieve this value looks like this:</p>
+<pre><code>
+WITH vals AS (
+SELECT
+  MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 5)  AS ca_d,
+  MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 5)  AS mg_d,
+  MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 5  AND result_speciation_id = 3) AS hard_d,
+  MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 19) AS ca_t,
+  MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 19) AS mg_t,
+  MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 19 AND result_speciation_id = 3) AS hard_t
+FROM discrete.results
+WHERE sample_id = $1
+)
+SELECT CASE
+  WHEN ca_d IS NOT NULL AND mg_d IS NOT NULL AND ca_d > 0 AND mg_d > 0 
+    THEN 2.497*ca_d + 4.118*mg_d
+  WHEN hard_d IS NOT NULL AND hard_d > 0 
+    THEN hard_d
+  WHEN ca_t IS NOT NULL AND mg_t IS NOT NULL AND ca_t > 0 AND mg_t > 0 
+    THEN 2.497*ca_t + 4.118*mg_t
+  WHEN hard_t IS NOT NULL AND hard_t > 0 
+    THEN hard_t
+END
+FROM vals;
+)</code></pre>
+<p>This would be tedious and repetitive to call each time hardness is needed in a guideline calculation, and it's also advantageous to always have a common way to get hardness to prevent typos or other variations on this calculation. Therefore, an SQL function was created in the database that can be used directly in your guideline SQL code and called as such:</p>
+<code>SELECT discrete.get_sample_hardness($1::integer);</code>
+<p>Usage of this function is show in the calculated guideline example above.</p>
+<h3>Value fetching function</h3>
+<p>Fetching values typically takes the form of:</p>
+<pre><code>
+SELECT 
+  MAX(result) FILTER (WHERE parameter_id = 100 AND sample_fraction_id = 5 AND result_speciation_id = 3)  AS hard_d
+FROM discrete.results
+WHERE sample_id = $1;
+</code></pre>
+<p>This is also tedious and repetitive to write each time a value is needed in a guideline calculation, and it's also advantageous to always have a common way to get values to prevent typos or other variations on this calculation. Therefore, an SQL function was created in the database to keep things clean:</p>
+<pre><code>
+discrete.get_sample_val(
+  sample_id INTEGER,
+  parameter_id INTEGER,
+  sample_fraction_id INTEGER,
+  result_speciation_id INTEGER DEFAULT NULL
+) RETURNS numeric
+LANGUAGE sql STABLE SET search_path = discrete, public AS $$
+SELECT MAX(result)::numeric
+FROM discrete.results
+WHERE sample_id = $1
+  AND parameter_id = $2
+  AND sample_fraction_id IS NOT DISTINCT FROM $3 -- allows match on NULL
+  AND result_speciation_id IS NOT DISTINCT FROM $4; -- allows match on NULL
+$$;
+</code></pre>
+<p>This function can be used directly in your guideline SQL code and called as such:</p>
+<code>SELECT discrete.get_sample_val(sample_id, parameter_id, sample_fraction_id, result_speciation_id);</code>
+<p>Note that sample_fraction_id can be NULL (though it's usually needed) and result_speciation_id is by default NULL.</p>
 </body>
 </html>

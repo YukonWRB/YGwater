@@ -125,12 +125,19 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
             textAreaInput(ns("guideline_sql"),
                           "Guideline SQL",
                           width = "100%",
-                          height = "300px") %>%
+                          height = "350px") %>%
               tooltip("The SQL code that defines how the guideline value is calculated. See the help file for details and examples."),
           ),
           column(
             width = 3,
-            div(style = "display: flex; flex-direction: column; gap: 10px; margin-top: 70px;",
+            div(style = "display: flex; flex-direction: column; gap: 10px; margin-top: 10px;",
+                selectizeInput(ns("templates"),
+                               "Insert template",
+                               choices = stats::setNames(c("fixed", "calc", "calc_hard"), c("Fixed guideline", "Calculated guideline no hardness", "Calculated guideline with hardness")),
+                               multiple = TRUE,
+                               options = list(maxItems = 1),
+                               width = "100%") %>%
+                  tooltip("Insert a template for common guideline SQL patterns."),
                 actionButton(ns("insert_parameter"), 
                              "Insert parameter", 
                              width = "100%") %>%
@@ -406,452 +413,541 @@ addGuidelines <- function(id) {
       ))
     })
     
-    
-    
-    
-    # Reusable functions to help extract parameters from guidelines for testing
-    # 1) Extract unique (parameter_id, sample_fraction_id, result_speciation_id?) triples
-    extract_guideline_combos <- function(sql) {
-      s <- sql
-      
-      pull_ids <- function(block) {
-        data.frame(
-          parameter_id         = suppressWarnings(as.integer(stringr::str_match(block, "\\bparameter_id\\s*=\\s*(\\d+)")[, 2])),
-          sample_fraction_id   = suppressWarnings(as.integer(stringr::str_match(block, "\\bsample_fraction_id\\s*=\\s*(\\d+)")[, 2])),
-          result_speciation_id = suppressWarnings(as.integer(stringr::str_match(block, "\\bresult_speciation_id\\s*=\\s*(\\d+)")[, 2]))
-        )
-      }
-      
-      # 1) FILTER (WHERE ...)
-      filt <- stringr::str_match_all(s, "(?is)FILTER\\s*\\(\\s*WHERE\\s*([^\\)]*)\\)")[[1]]
-      a <- if (nrow(filt)) apply(filt, 1, function(r) pull_ids(r[2])) |> dplyr::bind_rows() else
-        data.frame(parameter_id = integer(), sample_fraction_id = integer(), result_speciation_id = integer())
-      
-      # 2) FROM discrete.results [AS alias] ... WHERE <slice> ...
-      where_slices <- stringr::str_match_all(
-        s,
-        "(?is)\\bfrom\\s+discrete\\.results\\b(?:\\s+(?:as\\s+)?[a-zA-Z_][a-zA-Z_0-9]*)?[\\s\\S]*?\\bwhere\\b([\\s\\S]*?)(?=(\\)|\\bgroup\\b|\\border\\b|\\blimit\\b|\\bunion\\b|\\boffset\\b|\\breturning\\b|;))"
-      )[[1]]
-      b <- if (nrow(where_slices)) apply(where_slices, 1, function(r) pull_ids(r[2])) |> dplyr::bind_rows() else
-        data.frame(parameter_id = integer(), sample_fraction_id = integer(), result_speciation_id = integer())
-      
-      # 3) Tiny fallback only if nothing found above (param … neighbor within short window)
-      c <- data.frame()
-      if (nrow(a) + nrow(b) == 0) {
-        p1 <- stringr::str_match_all(
-          s, "(?is)\\bparameter_id\\s*=\\s*(\\d+)[^\\)]{0,160}?\\bsample_fraction_id\\s*=\\s*(\\d+)(?:[^\\)]{0,160}?\\bresult_speciation_id\\s*=\\s*(\\d+))?"
-        )[[1]]
-        if (nrow(p1)) {
-          c <- dplyr::bind_rows(c, data.frame(
-            parameter_id         = as.integer(p1[, 2]),
-            sample_fraction_id   = as.integer(p1[, 3]),
-            result_speciation_id = suppressWarnings(as.integer(p1[, 4]))
-          ))
-        }
-        p2 <- stringr::str_match_all(
-          s, "(?is)\\bsample_fraction_id\\s*=\\s*(\\d+)[^\\)]{0,160}?\\bparameter_id\\s*=\\s*(\\d+)(?:[^\\)]{0,160}?\\bresult_speciation_id\\s*=\\s*(\\d+))?"
-        )[[1]]
-        if (nrow(p2)) {
-          c <- dplyr::bind_rows(c, data.frame(
-            parameter_id         = as.integer(p2[, 3]),
-            sample_fraction_id   = as.integer(p2[, 2]),
-            result_speciation_id = suppressWarnings(as.integer(p2[, 4]))
-          ))
-        }
-      }
-      
-      dplyr::bind_rows(a, b, c) |>
-        dplyr::filter(!is.na(parameter_id)) |>
-        dplyr::distinct()
-    }
-    
-    
-    
-    # 2) Build numericInputs with descriptive labels
-    make_test_inputs <- function(ns, sql, parameters_df, fractions_df, speciations_df) {
-      combos <- extract_guideline_combos(sql)
-      
-      # map IDs -> names
-      pname <- function(pid) {
-        parameters_df$param_name[match(pid, parameters_df$parameter_id)]
-      }
-      units <- function(pid) {
-        parameters_df$unit_default[match(pid, parameters_df$parameter_id)]
-      }
-      fracname <- function(fid) {
-        fractions_df$sample_fraction[match(fid, fractions_df$sample_fraction_id)]
-      }
-      specname <- function(sid) {
-        if (is.na(sid)) NA_character_ else speciations_df$result_speciation[match(sid, speciations_df$result_speciation_id)]
-      }
-      
-      # stable inputId, readable label
-      lapply(seq_len(nrow(combos)), function(i) {
-        pid <- combos$parameter_id[i]
-        fid <- combos$sample_fraction_id[i]
-        sid <- combos$result_speciation_id[i]
-        
-        frac_part <- if (!is.na(fid)) paste0(" (", fracname(fid), ")") else ""
-        spec_part <- if (!is.na(sid)) paste0(" ", specname(sid)) else ""
-        
-        label <- paste0(
-          pname(pid), frac_part, spec_part,
-          " [", units(pid), "]"
-        )
-        
-        # include fid/sid (or 0) in id to make it unique & deterministic
-        inputId <- paste0(
-          "test_val_",
-          pid, "_",
-          ifelse(is.na(fid), 0L, fid), "_",
-          ifelse(is.na(sid), 0L, sid)
-        )
-        
-        print(paste0("Making input ", inputId, " with label '", label, "'"))
-        
-        numericInput(
-          ns(inputId),
-          label = label,
-          value = NA_real_
-        )
-      })
-    }
-    
-    
-    # Test a guideline by inserting temporary sample/results and evaluating
-    observeEvent(input$test_guideline, {
-      req(nzchar(input$guideline_sql))
-      
-      # Make sure the user has saved their guideline first if there's anything pending
-      if (!is.null(input$guidelines_table_rows_selected)) {
-        selected_row <- input$guidelines_table_rows_selected
-        # Check to see if guideline_id is -1 (new guideline not yet saved) or if the selected row isn't an exact match between moduleData$guidelines and moduleData$guidelines_temp
-        if (moduleData$guidelines$guideline_id[selected_row] == -1 ||
-            !identical(moduleData$guidelines[selected_row, ], moduleData$guidelines_temp[selected_row, ])) {
-          showModal(modalDialog(
-            title = "Save guideline first",
-            "Please save your guideline first before testing it. Click 'Save Guideline' in the sidebar after making any changes or entering a new guideline, then try testing again.",
-            easyClose = TRUE,
-            footer = tagList(
-              modalButton("Close")
-            )
-          ))
-          return()
-        }
-      } else {
-        showModal(modalDialog(
-          title = "Select or add a guideline first",
-          "Please select an existing guideline from the table or add a new one (and make sure it's selected in the table) before testing.",
-          easyClose = TRUE,
-          footer = tagList(
-            modalButton("Close")
-          )
-        ))
-        return()
-      }
-      
-      # Identify parameter/sample-fraction/speciation combinations referenced by the SQL
-      
-      # Example SQL:
-      # sql <- "WITH vals AS (
-      #   SELECT
-      #   -- dissolved Ca/Mg (preferred)
-      #   MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 19) AS ca_d,
-      #   MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 19) AS mg_d,
-      #   -- reported dissolved hardness (as CaCO3 - fallback 1)
-      #   MAX(result) FILTER (WHERE parameter_id = 100 AND sample_fraction_id = 19 AND result_speciation_id = 3) AS hard_d,  -- as CaCO3
-      #   -- total Ca/Mg (fallback 2)
-      #   MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 5)  AS ca_t,
-      #   MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 5)  AS mg_t,
-      #   -- reported total hardness (fallback 3)
-      #   MAX(result) FILTER (WHERE parameter_id = 100 AND sample_fraction_id = 5 AND result_speciation_id = 3)  AS hard_t  -- as CaCO3
-      #   FROM discrete.results
-      #   WHERE sample_id = $1::integer
-      # ),
-      # hardness AS (
-      #   -- Compute hardness as CaCO3 (mg/L) where possible; otherwise use reported hardness
-      #   SELECT CASE
-      #   WHEN ca_d IS NOT NULL AND mg_d IS NOT NULL AND ca_d > 0 AND mg_d > 0
-      #   THEN 2.497*ca_d + 4.118*mg_d
-      #   WHEN hard_d IS NOT NULL AND hard_d > 0
-      #   THEN hard_d
-      #   WHEN ca_t IS NOT NULL AND mg_t IS NOT NULL AND ca_t > 0 AND mg_t > 0
-      #   THEN 2.497*ca_t + 4.118*mg_t
-      #   WHEN hard_t IS NOT NULL AND hard_t > 0
-      #   THEN hard_t
-      #   ELSE NULL
-      #   END AS h
-      #   FROM vals
-      # )
-      # -- Return Copper CWQG in mg/L (convert µg/L thresholds by /1000)
-      # SELECT CASE
-      # WHEN h IS NULL OR h < 82
-      # THEN 0.002::numeric                          -- 2 µg/L, the minimum and fallback value
-      # WHEN h <= 180
-      # THEN (0.2 * exp(0.8545*ln(h) - 1.465) / 1000)::numeric  -- convert µg/L → mg/L
-      # ELSE
-      # 0.004::numeric                          -- 4 µg/L, the maximum value which is only ever valid if the calculations could be run
-      # END
-      # FROM hardness;"
-      
-      moduleData$test_pairs <- extract_guideline_combos(input$guideline_sql)  # Will return NULL if no parameters found
-      
-      if (!is.null(moduleData$test_pairs)) { # Parameters required, show inputs
-        guideline_inputs <- make_test_inputs(
-          ns,
-          sql = input$guideline_sql,
-          parameters_df = moduleData$parameters,
-          fractions_df  = moduleData$sample_fractions,
-          speciations_df = moduleData$result_speciations
-        )
-        removeModal()
-        output$test_guideline_result <- renderUI({""})
-        showModal(modalDialog(
-          title = "Test guideline",
-          "Provide TEMPORARY values for the following parameters to test the guideline",
-          do.call(tagList, guideline_inputs),
-          actionButton(ns("run_test_guideline"), "Run"),
-          uiOutput(ns("test_guideline_result")),
-          footer = tagList(
-            modalButton("Cancel")
-          ),
-          size = "xl"
-        ))
-      } else {  # No parameters required, just show the Run button
-        removeModal()
-        output$test_guideline_result <- renderUI({""})
-        showModal(modalDialog(
-          title = "Test guideline",
-          "This guideline does not reference any parameters, so no input values are required.",
-          actionButton(ns("run_test_guideline"), "Run"),
-          uiOutput(ns("test_guideline_result")),
-          footer = tagList(
-            modalButton("Cancel")
-          ),
-          size = "xl"
-        ))
-      }
-      
-    })
-    
-    observeEvent(input$run_test_guideline, {
-      
-      # Initialize result and error variables
-      result <- NULL
-      err <- NULL
-      
-      if (!is.null(moduleData$test_pairs)) {
-        pairs <- moduleData$test_pairs
-        values <- lapply(seq_len(nrow(pairs)), function(i) {
-          pid <- as.integer(pairs$parameter_id[i])
-          fid <- ifelse(is.na(pairs$sample_fraction_id[i]), NA_integer_, as.integer(pairs$sample_fraction_id[i]))
-          sid <- ifelse(is.na(pairs$result_speciation_id[i]), NA_integer_, as.integer(pairs$result_speciation_id[i]))
-          val <- input[[paste0("test_val_", pid, "_", ifelse(is.na(fid), 0L, fid), "_", ifelse(is.na(sid), 0L, sid))]]
-          if (is.null(val) || is.na(val)) return(NULL)
-          list(parameter_id = pid,
-               sample_fraction_id = fid,
-               result_speciation_id = sid,
-               value = val)
-        })
-        values <- values[!vapply(values, is.null, logical(1))]
-        print(values)
-        
-        # Tell the user they need to provide values if none were given
-        if (length(values) == 0) {
-          output$test_guideline_result <- renderUI({
-            div(
-              style = "color: red; font-weight: bold; font-size: 120%; margin-top: 10px;",
-              "No values provided. Please enter at least one value to test the guideline."
-            )
-          })
-          return()
-        }
-        
-        
-        # Run the guideline
-        tryCatch({
-          DBI::dbExecute(session$userData$AquaCache, "BEGIN")
-          sample_id <- DBI::dbGetQuery(session$userData$AquaCache,
-                                       "INSERT INTO discrete.samples (location_id, media_id, datetime, collection_method, sample_type, owner) VALUES (100, 1, '1800-01-01 00:00', 1, 1, 2) RETURNING sample_id")$sample_id
-          for (v in values) {
-            DBI::dbExecute(session$userData$AquaCache,
-                           "INSERT INTO discrete.results (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result) VALUES ($1,$2,$3,$4,$5,$6)",
-                           params = list(sample_id, 2, v$parameter_id, v$sample_fraction_id, v$result_speciation_id, v$value))
-          }
-          gval <- moduleData$guidelines$guideline_id[input$guidelines_table_rows_selected]
-          
-          res <- DBI::dbGetQuery(session$userData$AquaCache,
-                                 "SELECT get_guideline_value($1, $2) AS value",
-                                 params = list(gval, sample_id))
-          result <- res$value[1]
-          DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
-        }, error = function(e) {
-          DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
-          err <<- conditionMessage(e)
-        }, warning = function(w) {
-          DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
-          err <<- conditionMessage(w)
-        })
-      } else {  # No test pairs provided, simple guideline calculation required.
-        tryCatch({
-          gid <- NA
-          gval <- moduleData$guidelines$guideline_id[input$guidelines_table_rows_selected]
-          res <- DBI::dbGetQuery(session$userData$AquaCache,
-                                 "SELECT get_guideline_value($1, NULL) AS value",
-                                 params = list(gval))
-          result <- res$value[1]
-        }, error = function(e) {
-          err <<- conditionMessage(e)
-        }, warning = function(w) {
-          err <<- conditionMessage(w)
-        })
-      }
-      
-      # Show the user diagnostic information
-      if (!is.null(err)) {       # If there was an error, show it:
-        output$test_guideline_result <- renderUI({
-          div(
-            style = "color: red; font-weight: bold;, font-size: 120%; margin-top: 10px;",
-            paste("Error:", err)
-          )
-        })
-      } else if (is.null(result) || is.na(result)) { # If the result is NULL or NA
-        output$test_guideline_result <- renderUI({
-          div(
-            style = "color: orange; font-weight: bold; font-size: 120%; margin-top: 10px;",
-            "The guideline returned NULL or NA. This may indicate an issue with the SQL or that no applicable guideline was found."
-          )
-        })
-      } else {  # Otherwise show the result
-        output$test_guideline_result <- renderUI({
-          div(
-            style = "color: green; font-weight: bold; font-size: 120%; margin-top: 10px;",
-            paste("Returned guideline value:", result)
-          )
-        })
-      }
-    })
-    
-    
-    # Save changes to the database when 'Save Guideline' is clicked
-    observeEvent(input$save_guideline, {
-      req(input$guidelines_table_rows_selected)
-      selected_row <- input$guidelines_table_rows_selected
-      guideline <- moduleData$guidelines_temp[selected_row, ]
-      
-      # Basic validation
-      if (is.na(guideline$guideline_name) || is.na(guideline$parameter_id) || is.na(guideline$publisher) || is.na(guideline$guideline_sql)) {
-        showModal(modalDialog(
-          title = "Error",
-          "Please fill in all required fields: Guideline Name, Publisher, Parameter, and Guideline SQL.",
-          easyClose = TRUE,
-          footer = tagList(
-            modalButton("Close")
-          )
-        ))
-        return()
-      }
-      
-      tryCatch({
-        
-        sf <- if (is.null(guideline$sample_fraction_id) || is.na(guideline$sample_fraction_id) || guideline$sample_fraction_id == "")
-          NA_integer_ else as.integer(guideline$sample_fraction_id)
-        rs <- if (is.null(guideline$result_speciation_id) || is.na(guideline$result_speciation_id) || guideline$result_speciation_id == "")
-          NA_integer_ else as.integer(guideline$result_speciation_id)
-        ref <- if (is.null(guideline$reference) || is.na(guideline$reference) || guideline$reference == "")
-          NA_character_ else guideline$reference
-        
-        if (guideline$guideline_id == -1) {
-          # New guideline - perform INSERT
-          DBI::dbExecute(session$userData$AquaCache, 
-                         "INSERT INTO discrete.guidelines (guideline_name, publisher, reference, note, parameter_id, sample_fraction_id, result_speciation_id, guideline_sql) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-                         params = list(guideline$guideline_name, guideline$publisher, guideline$reference, guideline$note, guideline$parameter_id, sf, rs, guideline$guideline_sql))
-        } else {
-          # Existing guideline - perform UPDATE
-          DBI::dbExecute(session$userData$AquaCache, 
-                         "UPDATE discrete.guidelines SET guideline_name = $1, publisher = $2, reference = $3, note = $4, parameter_id = $5, sample_fraction_id = $6, result_speciation_id = $7, guideline_sql = $8 WHERE guideline_id = $9",
-                         params = list(guideline$guideline_name, guideline$publisher, guideline$reference, guideline$note, guideline$parameter_id, sf, rs, guideline$guideline_sql, guideline$guideline_id))
-        }
-        
-        # Refresh the guidelines data from the database
-        moduleData$guidelines <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id")
-        moduleData$guidelines_temp <- moduleData$guidelines
-        
-        # Clear selection and hide save button
-        DT::dataTableProxy("guidelines_table") %>% DT::selectRows(NULL)
-        shinyjs::hide("save_guideline")
-        showModal(modalDialog(
-          title = "Success",
-          "Guideline saved successfully.",
-          easyClose = TRUE,
-          footer = tagList(
-            modalButton("Close")
-          )
-        ))
-      }, error = function(e) {
-        showModal(modalDialog(
-          title = "Error",
-          paste("An error occurred while saving the guideline: ", e$message),
-          easyClose = TRUE,
-          footer = tagList(
-            modalButton("Close")
-          )
-        ))
-      })
-    })
-    
-    # Observe a request to delete a guideline
-    observeEvent(input$delete_guideline, {
-      req(input$guidelines_table_rows_selected)
-      
-      guideline <- moduleData$guidelines[input$guidelines_table_rows_selected, ]
-      
+    # ----- Insert TEMPLATE -----
+    observeEvent(input$templates, ignoreInit = TRUE, {
       showModal(modalDialog(
-        title = "Confirm Deletion",
-        paste("Are you sure you want to delete the guideline '", guideline$guideline_name, "'? This action cannot be undone.", sep = ""),
+        "Inserting a template will overwrite any existing text in the SQL box. You can then edit the template as needed.",
         easyClose = TRUE,
         footer = tagList(
           modalButton("Cancel"),
-          actionButton(ns("confirm_delete"), "Delete", class = "btn btn-danger")
+          actionButton(ns("confirm_template"), "Insert template", class = "btn-primary")
         )
       ))
     })
     
-    observeEvent(input$confirm_delete, {
+    observeEvent(input$confirm_template, {
       removeModal()
-      
-      guideline <- moduleData$guidelines[input$guidelines_table_rows_selected, ]
-      
-      tryCatch({
-        if (guideline$guideline_id != -1) {  # Only attempt to delete if it's not a new unsaved guideline
-          DBI::dbExecute(session$userData$AquaCache, "DELETE FROM discrete.guidelines WHERE guideline_id = $1", params = list(guideline$guideline_id))
-        }
-        
-        # Refresh the data, which will re-render the datatable without the deleted row
-        moduleData$guidelines <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id")
-        moduleData$guidelines_temp <- moduleData$guidelines
-        
-        # Clear table selection and hide save button
-        DT::dataTableProxy("guidelines_table") %>% DT::selectRows(NULL)
-        shinyjs::hide("save_guideline")
+      req(input$templates)
+      if (input$templates == "fixed") {
+        updateTextAreaInput(session,
+                            "guideline_sql", 
+                            value = "SELECT ***!value!***")
         showModal(modalDialog(
-          title = "Success",
-          "Guideline deleted successfully.",
-          footer = tagList(
-            modalButton("Close")
-          )
+          "Template inserted with placeholder denoted by ***!value!***. Replace this with the fixed guideline value in the database's units for your target parameter.", 
+          easyClose = TRUE,
+          footer = modalButton("Close")
         ))
-      }, error = function(e) {
+      } else if (input$templates == "calc") {
+        updateTextAreaInput(session, 
+                            "guideline_sql",
+                            value = 
+"WITH vals AS (  -- create a CTE of relevant parameters
+  SELECT discrete.get_param_val(
+    sample_id = $1,
+    ***!parameter_id = xxx!***,
+    ***!sample_fraction_id = xxx!***, -- set NULL if not required
+    -- add result_speciation_id = xxx if needed (default NULL)
+  ) AS v1 -- change 'v1' (optional)
+      
+  -- repeat for other parameters
+)
+-- Calculate guideline value
+SELECT CASE
+-- Replace with your logic
+-- use value names from the vals CTE
+    WHEN ***! enter condition here !***
+      THEN ***! value or equation !***
+    ELSE   ***! enter second condition here !***
+      THEN ***! value or equation !***
+    ELSE
+      ***! fallback value !***
+END
+FROM vals -- from the 'vals' CTE"
+        )
         showModal(modalDialog(
-          title = "Error",
-          paste("An error occurred while deleting the guideline:", e$message),
-          footer = tagList(
-            modalButton("Close")
-          )
+          "Template inserted with placeholders denoted by ***!some_text!***. Use the buttons to the left to insert parameters_ids and other necessary text and replace these placeholders. Remember to return values in the database's units for your target parameter.", 
+          easyClose = TRUE,
+          footer = modalButton("Close")
         ))
-      }) # End of tryCatch
-    }) # End of observeEvent for confirm_delete
+      } else if (input$templates == "calc_hard") {
+        updateTextAreaInput(session, 
+                            "guideline_sql",
+                            value = 
+"WITH vals AS ( -- create a CTE of relevant parameters
+  -- special function for calculating hardness
+  SELECT discrete.get_guideline_hardness($1) 
+  AS h  -- value name 'h'
     
+  -- add other parameters as needed
+  -- delete if no other params needed
+  SELECT discrete.get_param_val(
+    sample_id = $1,
+    ***!parameter_id = xxx!***,
+    ***!sample_fraction_id = xxx!***, -- set NULL if not required
+  )  -- add result_speciation_id if needed (default NULL)
+  AS v1 -- change 'v1' (optional)
+      
+  -- repeat for other parameters
+)
+  -- Calculate guideline value
+SELECT CASE
+-- Replace with your logic
+-- use value names from the vals CTE
+  WHEN h IS NULL OR h < ***!value!***  
+    THEN ***!value!***::numeric
+  WHEN h <= ***!value!**
+    THEN ***!value or equation!***::numeric
+  ELSE
+  ***!fallback value!***::numeric
+END
+FROM vals -- from the 'vals' CTE"
+        )
+    showModal(modalDialog(
+      "Template inserted with placeholders denoted by ***!some_text!***. Use the buttons to the left to insert parameters_ids and other necessary text and replace these placeholders. Remember to return values in the database's units for your target parameter.",
+      easyClose = TRUE,
+      footer = modalButton("Close")
+    ))
+      }
+    })
+  
+#   
+# sql <- "
+# -- get_sample_val() fetches parameter values
+# WITH vals AS (
+# SELECT discrete.get_sample_val(
+#   sample_id = $1,
+#   parameter_id = 1189,
+#   sample_fraction_id = NULL) AS ph_field
+# SELECT discrete.get_sample_val(
+#   sample_id = $1,
+#   parameter_id = 1190,
+#   sample_fraction_id = NULL) AS ph_lab
+# SELECT discrete.get_sample_hardness($1) AS hardness
+# )
+# -- Return aluminium CWQG in mg/L
+# SELECT CASE
+#   WHEN ph_field IS NOT NULL
+#     IF ph_field < 6.5 THEN 0.005::numeric
+#     ELSE 0.1::numeric
+#   WHEN IF ph_lab IS NOT NULL
+#     IF ph_lab < 6.5 THEN 0.005::numeric
+#     ELSE 0.1::numeric
+#   ELSE
+#     NULL::numeric  -- no pH available, cannot calculate guideline
+# END
+# FROM vals"
+  
+  
+  # Reusable functions to help extract parameters from guidelines for testing
+  # 1) Extract unique (parameter_id, sample_fraction_id, result_speciation_id?) triples
+  extract_guideline_combos <- function(sql) {
+    s <- sql
+    
+    # Strip out any comments -- to avoid confusion
+    s <- gsub("(?s)/\\*.*?\\*/", "", s, perl = TRUE) # remove /* ... */ comments
+    s <- gsub("(?m)--.*$",       "", s,   perl = TRUE)  # remove -- comments
+
+    
+    # Pull out get_sample_hardness(...) calls
+    hardness <- stringr::str_extract_all(s, "get_sample_hardness\\s*\\([^)]*\\)")[[1]]
+    # strip out \n and spaces
+    hardness <- gsub("[\\n]", "", hardness)
+    hardness <- gsub(" ", "", hardness)
+    
+    # Pull out get_sample_val(...) calls
+    vals <- stringr::str_extract_all(s, "get_sample_val\\s*\\([^)]*\\)")[[1]]
+    vals <- gsub("[\r\n]", "", vals)
+    vals <- gsub(" ", "", vals)
+    
+    return(list(hardness = hardness[1], values = vals))
+  }
+  
+  
+  
+  # 2) Build numericInputs with descriptive labels
+  make_test_inputs <- function(ns, sql, parameters_df, fractions_df, speciations_df) {
+    combos <- extract_guideline_combos(sql)
+    
+    if (length(combos$hardness) == 0 && length(combos$values) == 0) {
+      return(NULL)  # No parameters needed
+    }
+    
+    # Build a data.frame of unique (parameter_id, sample_fraction_id, result_speciation_id) combos
+    df <- data.frame(
+      parameter_id = integer(0),
+      sample_fraction_id = integer(0),
+      result_speciation_id = integer(0)
+    )
+    if (length(combos$hardness) > 0) {
+      df_hard <- data.frame(
+        parameter_id = c(1061, 1103, 100, 1061, 1103, 100),  # Ca, Mg, CaCO3
+        sample_fraction_id = c(5,5,5,19,19,19),  # total and dissolved
+        result_speciation_id = c(NA,NA,3,NA,NA,3)  # speciation only for CaCO3
+      )
+    } else {
+      df_hard <- data.frame(
+        parameter_id = integer(0),
+        sample_fraction_id = integer(0),
+        result_speciation_id = integer(0)
+      )
+    }
+    
+    if (length(combos$values) > 0) {
+      for (i in 1:length(combos$values)) {
+        v <- combos$values[i]
+        # Extract parameter_id, sample_fraction_id, result_speciation_id
+        pid <- as.integer(stringr::str_match(v, "parameter_id\\s*=\\s*(\\d+)")[,2])
+        fid <- suppressWarnings(as.integer(stringr::str_match(v, "sample_fraction_id\\s*=\\s*(\\d+|NULL)")[,2]))
+        sid <- suppressWarnings(as.integer(stringr::str_match(v, "result_speciation_id\\s*=\\s*(\\d+|NULL)")[,2]))
+        
+        if (!is.na(pid)) {
+          df <- rbind(df, data.frame(
+            parameter_id = pid,
+            sample_fraction_id = fid,
+            result_speciation_id = sid
+          ))
+        }
+      }
+    }
+    
+    # Now combine with hardness first
+    df <- rbind(df_hard, df)
+    
+    
+    # map IDs -> names
+    pname <- function(pid) {
+      parameters_df$param_name[match(pid, parameters_df$parameter_id)]
+    }
+    units <- function(pid) {
+      parameters_df$unit_default[match(pid, parameters_df$parameter_id)]
+    }
+    fracname <- function(fid) {
+      fractions_df$sample_fraction[match(fid, fractions_df$sample_fraction_id)]
+    }
+    specname <- function(sid) {
+      if (is.na(sid)) NA_character_ else speciations_df$result_speciation[match(sid, speciations_df$result_speciation_id)]
+    }
+    
+    # stable inputId, readable label
+    lapply(seq_len(nrow(df)), function(i) {
+      pid <- df$parameter_id[i]
+      fid <- df$sample_fraction_id[i]
+      sid <- df$result_speciation_id[i]
+      
+      frac_part <- if (!is.na(fid)) paste0(" (", fracname(fid), ")") else ""
+      spec_part <- if (!is.na(sid)) paste0(" ", specname(sid)) else ""
+      
+      label <- paste0(
+        pname(pid), frac_part, spec_part,
+        " [", units(pid), "]"
+      )
+      
+      # include fid/sid (or 0) in id to make it unique & deterministic
+      inputId <- paste0(
+        "test_val_",
+        pid, "_",
+        ifelse(is.na(fid), 0L, fid), "_",
+        ifelse(is.na(sid), 0L, sid)
+      )
+      
+      numericInput(
+        ns(inputId),
+        label = label,
+        value = NA_real_
+      )
+    })
+  }
+  
+  
+  # Test a guideline by inserting temporary sample/results and evaluating
+  observeEvent(input$test_guideline, {
+    req(nzchar(input$guideline_sql))
+    
+    # Make sure the user has saved their guideline first if there's anything pending
+    if (!is.null(input$guidelines_table_rows_selected)) {
+      selected_row <- input$guidelines_table_rows_selected
+      # Check to see if guideline_id is -1 (new guideline not yet saved) or if the selected row isn't an exact match between moduleData$guidelines and moduleData$guidelines_temp
+      if (moduleData$guidelines$guideline_id[selected_row] == -1 ||
+          !identical(moduleData$guidelines[selected_row, ], moduleData$guidelines_temp[selected_row, ])) {
+        showModal(modalDialog(
+          title = "Save guideline first",
+          "Please save your guideline first before testing it. Click 'Save Guideline' in the sidebar after making any changes or entering a new guideline, then try testing again.",
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Close")
+          )
+        ))
+        return()
+      }
+    } else {
+      showModal(modalDialog(
+        title = "Select or add a guideline first",
+        "Please select an existing guideline from the table or add a new one (and make sure it's selected in the table) before testing.",
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
+      return()
+    }
+    
+    moduleData$test_pairs <- extract_guideline_combos(input$guideline_sql)  # Will return NULL if no parameters found
+    
+    if (!is.null(moduleData$test_pairs)) { # Parameters required, show inputs
+      guideline_inputs <- make_test_inputs(
+        ns,
+        sql = input$guideline_sql,
+        parameters_df = moduleData$parameters,
+        fractions_df  = moduleData$sample_fractions,
+        speciations_df = moduleData$result_speciations
+      )
+      removeModal()
+      output$test_guideline_result <- renderUI({""})
+      showModal(modalDialog(
+        title = "Test guideline",
+        "Provide TEMPORARY values for the following parameters to test the guideline",
+        do.call(tagList, guideline_inputs),
+        actionButton(ns("run_test_guideline"), "Run"),
+        uiOutput(ns("test_guideline_result")),
+        footer = tagList(
+          modalButton("Cancel")
+        ),
+        size = "xl"
+      ))
+    } else {  # No parameters required, just show the Run button
+      removeModal()
+      output$test_guideline_result <- renderUI({""})
+      showModal(modalDialog(
+        title = "Test guideline",
+        "This guideline does not reference any parameters, so no input values are required.",
+        actionButton(ns("run_test_guideline"), "Run"),
+        uiOutput(ns("test_guideline_result")),
+        footer = tagList(
+          modalButton("Cancel")
+        ),
+        size = "xl"
+      ))
+    }
+  })
+  
+  observeEvent(input$run_test_guideline, {
+    
+    # Initialize result and error variables
+    result <- NULL
+    err <- NULL
+    
+    if (!is.null(moduleData$test_pairs)) {
+      pairs <- moduleData$test_pairs
+      values <- lapply(seq_len(nrow(pairs)), function(i) {
+        pid <- as.integer(pairs$parameter_id[i])
+        fid <- ifelse(is.na(pairs$sample_fraction_id[i]), NA_integer_, as.integer(pairs$sample_fraction_id[i]))
+        sid <- ifelse(is.na(pairs$result_speciation_id[i]), NA_integer_, as.integer(pairs$result_speciation_id[i]))
+        val <- input[[paste0("test_val_", pid, "_", ifelse(is.na(fid), 0L, fid), "_", ifelse(is.na(sid), 0L, sid))]]
+        if (is.null(val) || is.na(val)) return(NULL)
+        list(parameter_id = pid,
+             sample_fraction_id = fid,
+             result_speciation_id = sid,
+             value = val)
+      })
+      values <- values[!vapply(values, is.null, logical(1))]
+      print(values)
+      
+      # Tell the user they need to provide values if none were given
+      if (length(values) == 0) {
+        output$test_guideline_result <- renderUI({
+          div(
+            style = "color: red; font-weight: bold; font-size: 120%; margin-top: 10px;",
+            "No values provided. Please enter at least one value to test the guideline."
+          )
+        })
+        return()
+      }
+      
+      
+      # Run the guideline
+      tryCatch({
+        DBI::dbExecute(session$userData$AquaCache, "BEGIN")
+        sample_id <- DBI::dbGetQuery(session$userData$AquaCache,
+                                     "INSERT INTO discrete.samples (location_id, media_id, datetime, collection_method, sample_type, owner) VALUES (100, 1, '1800-01-01 00:00', 1, 1, 2) RETURNING sample_id")$sample_id
+        for (v in values) {
+          DBI::dbExecute(session$userData$AquaCache,
+                         "INSERT INTO discrete.results (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result) VALUES ($1,$2,$3,$4,$5,$6)",
+                         params = list(sample_id, 2, v$parameter_id, v$sample_fraction_id, v$result_speciation_id, v$value))
+        }
+        gval <- moduleData$guidelines$guideline_id[input$guidelines_table_rows_selected]
+        
+        res <- DBI::dbGetQuery(session$userData$AquaCache,
+                               "SELECT get_guideline_value($1, $2) AS value",
+                               params = list(gval, sample_id))
+        result <- res$value[1]
+        DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
+      }, error = function(e) {
+        DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
+        err <<- conditionMessage(e)
+      }, warning = function(w) {
+        DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
+        err <<- conditionMessage(w)
+      })
+    } else {  # No test pairs provided, simple guideline calculation required.
+      tryCatch({
+        gid <- NA
+        gval <- moduleData$guidelines$guideline_id[input$guidelines_table_rows_selected]
+        res <- DBI::dbGetQuery(session$userData$AquaCache,
+                               "SELECT get_guideline_value($1, NULL) AS value",
+                               params = list(gval))
+        result <- res$value[1]
+      }, error = function(e) {
+        err <<- conditionMessage(e)
+      }, warning = function(w) {
+        err <<- conditionMessage(w)
+      })
+    }
+    
+    # Show the user diagnostic information
+    if (!is.null(err)) {       # If there was an error, show it:
+      output$test_guideline_result <- renderUI({
+        div(
+          style = "color: red; font-weight: bold;, font-size: 120%; margin-top: 10px;",
+          paste("Error:", err)
+        )
+      })
+    } else if (is.null(result) || is.na(result)) { # If the result is NULL or NA
+      output$test_guideline_result <- renderUI({
+        div(
+          style = "color: orange; font-weight: bold; font-size: 120%; margin-top: 10px;",
+          "The guideline returned NULL or NA. This may indicate an issue with the SQL or that no applicable guideline was found."
+        )
+      })
+    } else {  # Otherwise show the result
+      output$test_guideline_result <- renderUI({
+        div(
+          style = "color: green; font-weight: bold; font-size: 120%; margin-top: 10px;",
+          paste("Returned guideline value:", result)
+        )
+      })
+    }
+  })
+  
+  
+  # Save changes to the database when 'Save Guideline' is clicked
+  observeEvent(input$save_guideline, {
+    req(input$guidelines_table_rows_selected)
+    selected_row <- input$guidelines_table_rows_selected
+    guideline <- moduleData$guidelines_temp[selected_row, ]
+    
+    # Basic validation
+    if (is.na(guideline$guideline_name) || is.na(guideline$parameter_id) || is.na(guideline$publisher) || is.na(guideline$guideline_sql)) {
+      showModal(modalDialog(
+        title = "Error",
+        "Please fill in all required fields: Guideline Name, Publisher, Parameter, and Guideline SQL.",
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
+      return()
+    }
+    
+    tryCatch({
+      
+      sf <- if (is.null(guideline$sample_fraction_id) || is.na(guideline$sample_fraction_id) || guideline$sample_fraction_id == "")
+        NA_integer_ else as.integer(guideline$sample_fraction_id)
+      rs <- if (is.null(guideline$result_speciation_id) || is.na(guideline$result_speciation_id) || guideline$result_speciation_id == "")
+        NA_integer_ else as.integer(guideline$result_speciation_id)
+      ref <- if (is.null(guideline$reference) || is.na(guideline$reference) || guideline$reference == "")
+        NA_character_ else guideline$reference
+      
+      if (guideline$guideline_id == -1) {
+        # New guideline - perform INSERT
+        DBI::dbExecute(session$userData$AquaCache, 
+                       "INSERT INTO discrete.guidelines (guideline_name, publisher, reference, note, parameter_id, sample_fraction_id, result_speciation_id, guideline_sql) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                       params = list(guideline$guideline_name, guideline$publisher, guideline$reference, guideline$note, guideline$parameter_id, sf, rs, guideline$guideline_sql))
+      } else {
+        # Existing guideline - perform UPDATE
+        DBI::dbExecute(session$userData$AquaCache, 
+                       "UPDATE discrete.guidelines SET guideline_name = $1, publisher = $2, reference = $3, note = $4, parameter_id = $5, sample_fraction_id = $6, result_speciation_id = $7, guideline_sql = $8 WHERE guideline_id = $9",
+                       params = list(guideline$guideline_name, guideline$publisher, guideline$reference, guideline$note, guideline$parameter_id, sf, rs, guideline$guideline_sql, guideline$guideline_id))
+      }
+      
+      # Refresh the guidelines data from the database
+      moduleData$guidelines <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id")
+      moduleData$guidelines_temp <- moduleData$guidelines
+      
+      # Clear selection and hide save button
+      DT::dataTableProxy("guidelines_table") %>% DT::selectRows(NULL)
+      shinyjs::hide("save_guideline")
+      showModal(modalDialog(
+        title = "Success",
+        "Guideline saved successfully.",
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
+    }, error = function(e) {
+      showModal(modalDialog(
+        title = "Error",
+        paste("An error occurred while saving the guideline: ", e$message),
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
+    })
+  })
+  
+  # Observe a request to delete a guideline
+  observeEvent(input$delete_guideline, {
+    req(input$guidelines_table_rows_selected)
+    
+    guideline <- moduleData$guidelines[input$guidelines_table_rows_selected, ]
+    
+    showModal(modalDialog(
+      title = "Confirm Deletion",
+      paste("Are you sure you want to delete the guideline '", guideline$guideline_name, "'? This action cannot be undone.", sep = ""),
+      easyClose = TRUE,
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton(ns("confirm_delete"), "Delete", class = "btn btn-danger")
+      )
+    ))
+  })
+  
+  observeEvent(input$confirm_delete, {
+    removeModal()
+    
+    guideline <- moduleData$guidelines[input$guidelines_table_rows_selected, ]
+    
+    tryCatch({
+      if (guideline$guideline_id != -1) {  # Only attempt to delete if it's not a new unsaved guideline
+        DBI::dbExecute(session$userData$AquaCache, "DELETE FROM discrete.guidelines WHERE guideline_id = $1", params = list(guideline$guideline_id))
+      }
+      
+      # Refresh the data, which will re-render the datatable without the deleted row
+      moduleData$guidelines <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id")
+      moduleData$guidelines_temp <- moduleData$guidelines
+      
+      # Clear table selection and hide save button
+      DT::dataTableProxy("guidelines_table") %>% DT::selectRows(NULL)
+      shinyjs::hide("save_guideline")
+      showModal(modalDialog(
+        title = "Success",
+        "Guideline deleted successfully.",
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
+    }, error = function(e) {
+      showModal(modalDialog(
+        title = "Error",
+        paste("An error occurred while deleting the guideline:", e$message),
+        footer = tagList(
+          modalButton("Close")
+        )
+      ))
+    }) # End of tryCatch
+  }) # End of observeEvent for confirm_delete
+  
   }) # End of moduleServer
 }
 
