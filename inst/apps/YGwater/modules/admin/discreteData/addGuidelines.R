@@ -364,7 +364,7 @@ addGuidelines <- function(id) {
       
       session$sendCustomMessage("insertAtCursor", list(
         target     = ns("guideline_sql"),
-        text       = paste0("parameter_id = ", input$pick_param),
+        text       = paste0("parameter_id := ", input$pick_param),
         eolComment = label
       ))
     })
@@ -386,7 +386,7 @@ addGuidelines <- function(id) {
       
       session$sendCustomMessage("insertAtCursor", list(
         target     = ns("guideline_sql"),
-        text       = paste0("sample_fraction_id = ", input$pick_frac),
+        text       = paste0("sample_fraction_id := ", input$pick_frac),
         eolComment = label
       ))
     })
@@ -408,7 +408,7 @@ addGuidelines <- function(id) {
       
       session$sendCustomMessage("insertAtCursor", list(
         target     = ns("guideline_sql"),
-        text       = paste0("result_speciation_id = ", input$pick_spec),
+        text       = paste0("result_speciation_id := ", input$pick_spec),
         eolComment = label
       ))
     })
@@ -431,7 +431,9 @@ addGuidelines <- function(id) {
       if (input$templates == "fixed") {
         updateTextAreaInput(session,
                             "guideline_sql", 
-                            value = "SELECT ***!value!***")
+                            value = 
+"-- Replace ***!value!*** with the fixed guideline value in the database's units for your target parameter
+SELECT ***!value!***::INT")
         showModal(modalDialog(
           "Template inserted with placeholder denoted by ***!value!***. Replace this with the fixed guideline value in the database's units for your target parameter.", 
           easyClose = TRUE,
@@ -442,23 +444,31 @@ addGuidelines <- function(id) {
                             "guideline_sql",
                             value = 
 "WITH vals AS (  -- create a CTE of relevant parameters
-  SELECT discrete.get_param_val(
-    sample_id = $1,
-    ***!parameter_id = xxx!***,
-    ***!sample_fraction_id = xxx!***, -- set NULL if not required
-    -- add result_speciation_id = xxx if needed (default NULL)
+  SELECT 
+  discrete.get_sample_val(
+    sample_id := $1::INT, -- sample_id placeholder, leave
+    ***!parameter_id := xxx::INT!***,
+    ***!sample_fraction_id := xxx::INT!***, -- remove if not required
+    ***!result_speciation_id := xxx::INT!*** --remove if not required
   ) AS v1 -- change 'v1' (optional)
       
-  -- repeat for other parameters
+  -- repeat get_sample_val for other parameters if needed
+  -- delete block if not needed
+  discrete.get_sample_val(
+    sample_id := $1::INT, -- sample_id placeholder, leave
+    ***!parameter_id := xxx::INT!***,
+    ***!sample_fraction_id := xxx::INT!***, -- remove if not required
+    ***!result_speciation_id := xxx::INT!*** --remove if not required
+  ) AS v2 -- change 'v2'
 )
 -- Calculate guideline value
 SELECT CASE
 -- Replace with your logic
 -- use value names from the vals CTE
-    WHEN ***! enter condition here !***
-      THEN ***! value or equation !***
-    ELSE   ***! enter second condition here !***
-      THEN ***! value or equation !***
+    WHEN ***! enter condition here !*** THEN
+      ***! value or equation !*** END
+    WHEN ***! enter second condition here !*** THEN
+      ***! value or equation !*** END
     ELSE
       ***! fallback value !***
 END
@@ -475,17 +485,18 @@ FROM vals -- from the 'vals' CTE"
                             value = 
 "WITH vals AS ( -- create a CTE of relevant parameters
   -- special function for calculating hardness
-  SELECT discrete.get_guideline_hardness($1) 
+  SELECT 
+  discrete.get_guideline_hardness($1) -- sample_id placeholder, leave
   AS h  -- value name 'h'
-    
+  
   -- add other parameters as needed
-  -- delete if no other params needed
-  SELECT discrete.get_param_val(
-    sample_id = $1,
-    ***!parameter_id = xxx!***,
-    ***!sample_fraction_id = xxx!***, -- set NULL if not required
-  )  -- add result_speciation_id if needed (default NULL)
-  AS v1 -- change 'v1' (optional)
+  -- delete block if no other params needed
+  discrete.get_sample_val(
+    sample_id := $1, -- sample_id placeholder, leave
+    ***!parameter_id := xxx!***,
+    ***!sample_fraction_id := xxx!***, -- remove if not required
+    ***!result_speciation_id := xxx!*** --remove if not required
+  ) AS v1 -- change 'v1' (optional)
       
   -- repeat for other parameters
 )
@@ -493,10 +504,10 @@ FROM vals -- from the 'vals' CTE"
 SELECT CASE
 -- Replace with your logic
 -- use value names from the vals CTE
-  WHEN h IS NULL OR h < ***!value!***  
-    THEN ***!value!***::numeric
-  WHEN h <= ***!value!**
-    THEN ***!value or equation!***::numeric
+  WHEN h IS NULL OR h < ***!value!*** THEN
+    ***!value!***::numeric END
+  WHEN h <= ***!value!** THEN
+    ***!value or equation!***::numeric END
   ELSE
   ***!fallback value!***::numeric
 END
@@ -510,43 +521,13 @@ FROM vals -- from the 'vals' CTE"
       }
     })
   
-#   
-# sql <- "
-# -- get_sample_val() fetches parameter values
-# WITH vals AS (
-# SELECT discrete.get_sample_val(
-#   sample_id = $1,
-#   parameter_id = 1189,
-#   sample_fraction_id = NULL) AS ph_field
-# SELECT discrete.get_sample_val(
-#   sample_id = $1,
-#   parameter_id = 1190,
-#   sample_fraction_id = NULL) AS ph_lab
-# SELECT discrete.get_sample_hardness($1) AS hardness
-# )
-# -- Return aluminium CWQG in mg/L
-# SELECT CASE
-#   WHEN ph_field IS NOT NULL
-#     IF ph_field < 6.5 THEN 0.005::numeric
-#     ELSE 0.1::numeric
-#   WHEN IF ph_lab IS NOT NULL
-#     IF ph_lab < 6.5 THEN 0.005::numeric
-#     ELSE 0.1::numeric
-#   ELSE
-#     NULL::numeric  -- no pH available, cannot calculate guideline
-# END
-# FROM vals"
-  
-  
   # Reusable functions to help extract parameters from guidelines for testing
   # 1) Extract unique (parameter_id, sample_fraction_id, result_speciation_id?) triples
   extract_guideline_combos <- function(sql) {
     s <- sql
-    
     # Strip out any comments -- to avoid confusion
     s <- gsub("(?s)/\\*.*?\\*/", "", s, perl = TRUE) # remove /* ... */ comments
     s <- gsub("(?m)--.*$",       "", s,   perl = TRUE)  # remove -- comments
-
     
     # Pull out get_sample_hardness(...) calls
     hardness <- stringr::str_extract_all(s, "get_sample_hardness\\s*\\([^)]*\\)")[[1]]
@@ -559,16 +540,19 @@ FROM vals -- from the 'vals' CTE"
     vals <- gsub("[\r\n]", "", vals)
     vals <- gsub(" ", "", vals)
     
-    return(list(hardness = hardness[1], values = vals))
+    if (length(hardness) == 0 && length(vals) == 0) {
+      return(NULL)  # No parameters found
+    }
+    
+    return(list(hardness = length(hardness) > 0, 
+                values = vals))
   }
-  
-  
   
   # 2) Build numericInputs with descriptive labels
   make_test_inputs <- function(ns, sql, parameters_df, fractions_df, speciations_df) {
     combos <- extract_guideline_combos(sql)
     
-    if (length(combos$hardness) == 0 && length(combos$values) == 0) {
+    if (!combos$hardness && length(combos$values) == 0) {
       return(NULL)  # No parameters needed
     }
     
@@ -578,7 +562,7 @@ FROM vals -- from the 'vals' CTE"
       sample_fraction_id = integer(0),
       result_speciation_id = integer(0)
     )
-    if (length(combos$hardness) > 0) {
+    if (combos$hardness) {
       df_hard <- data.frame(
         parameter_id = c(1061, 1103, 100, 1061, 1103, 100),  # Ca, Mg, CaCO3
         sample_fraction_id = c(5,5,5,19,19,19),  # total and dissolved
@@ -596,9 +580,9 @@ FROM vals -- from the 'vals' CTE"
       for (i in 1:length(combos$values)) {
         v <- combos$values[i]
         # Extract parameter_id, sample_fraction_id, result_speciation_id
-        pid <- as.integer(stringr::str_match(v, "parameter_id\\s*=\\s*(\\d+)")[,2])
-        fid <- suppressWarnings(as.integer(stringr::str_match(v, "sample_fraction_id\\s*=\\s*(\\d+|NULL)")[,2]))
-        sid <- suppressWarnings(as.integer(stringr::str_match(v, "result_speciation_id\\s*=\\s*(\\d+|NULL)")[,2]))
+        pid <- as.integer(stringr::str_match(v, "parameter_id\\s*:=\\s*(\\d+)")[,2])
+        fid <- suppressWarnings(as.integer(stringr::str_match(v, "sample_fraction_id\\s*:=\\s*(\\d+|NULL)")[,2]))
+        sid <- suppressWarnings(as.integer(stringr::str_match(v, "result_speciation_id\\s*:=\\s*(\\d+|NULL)")[,2]))
         
         if (!is.na(pid)) {
           df <- rbind(df, data.frame(
@@ -695,7 +679,7 @@ FROM vals -- from the 'vals' CTE"
     
     if (!is.null(moduleData$test_pairs)) { # Parameters required, show inputs
       guideline_inputs <- make_test_inputs(
-        ns,
+        ns = ns,
         sql = input$guideline_sql,
         parameters_df = moduleData$parameters,
         fractions_df  = moduleData$sample_fractions,

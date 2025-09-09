@@ -140,7 +140,7 @@ FROM ph;</code></pre>
   
   <pre><code>-- get_sample_hardness() calculates hardness using preferred variable order
 WITH vals AS (
-SELECT discrete.get_sample_hardness($1::integer) AS h
+SELECT discrete.get_sample_hardness($1::INTEGER) AS h
 )
 -- Return Copper CWQG in mg/L
 SELECT CASE
@@ -162,6 +162,7 @@ FROM vals
 <p>There are several things of note:</p>
 <ul>
 <li>The sample_id is passed in as <code>$1</code> and cast to an integer</li>
+<li>get_sample_hardness uses := as an assignment opsrator, not =, and input values must be cast as INTEGER types to match the function's inputs</li>
 <li>The SQL returns a single numeric value, explicitly cast as numeric.</li>
 <li>The returned value is converted to mg/l to align with database units for copper.</li>
 </ul>
@@ -172,22 +173,20 @@ FROM vals
   <pre><code>-- get_sample_val() fetches parameter values
 WITH vals AS (
 SELECT discrete.get_sample_val(
-  sample_id = $1,
-  parameter_id = 1189,
-  sample_fraction_id = NULL) AS ph_field
+  sample_id := $1::INTEGER,
+  parameter_id := 1189::INTEGER,
+  sample_fraction_id := NULL::INTEGER) AS ph_field
 SELECT discrete.get_sample_val(
-  sample_id = $1,
-  parameter_id = 1190,
-  sample_fraction_id = NULL) AS ph_lab
+  sample_id := $1::INTEGER,
+  parameter_id := 1190::INTEGER,
+  sample_fraction_id := NULL::INTEGER) AS ph_lab
 )
 -- Return aluminium CWQG in mg/L
 SELECT CASE
-  WHEN ph_field IS NOT NULL
-    IF ph_field < 6.5 THEN 0.005::numeric
-    ELSE 0.1::numeric
+  WHEN ph_field IS NOT NULL THEN
+    CASE WHEN ph_field < 6.5 THEN 0.005::numeric ELSE 0.1::numeric
   WHEN IF ph_lab IS NOT NULL
-    IF ph_lab < 6.5 THEN 0.005::numeric
-    ELSE 0.1::numeric
+    CASE WHEN ph_field < 6.5 THEN 0.005::numeric ELSE 0.1::numeric
   ELSE
     NULL::numeric  -- no pH available, cannot calculate guideline
 END
@@ -202,6 +201,7 @@ FROM vals
 <p>There are several things of note:</p>
 <ul>
 <li>The sample_id is passed in as <code>$1</code> and cast to an integer</li>
+<li>get_sample_val uses := as an assignment operator, not =, and input values must be cast as INTEGER types to match the function's inputs</li>
 <li>The SQL returns a single numeric value, explicitly cast as numeric.</li>
 <li>The returned value is in mg/L to align with the database units for aluminium.</li>
 </ul>
