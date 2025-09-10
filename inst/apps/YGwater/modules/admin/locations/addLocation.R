@@ -26,7 +26,7 @@ addLocation <- function(id, inputs) {
     moduleData <- reactiveValues()
     
     getModuleData <- function() {
-      moduleData$exist_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, visibility_public, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations")
+      moduleData$exist_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations")
       moduleData$loc_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM location_types")
       moduleData$organizations = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM organizations")
       # limit documents to those that are data sharing agreements, which requires a join on table document_types
@@ -96,16 +96,6 @@ addLocation <- function(id, inputs) {
                        options = list(maxItems = 1),
                        width = "100%"
         ),
-        
-        splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}"))),
-          selectizeInput(ns("viz"), 
-                         "Public visibility", 
-                         choices = stats::setNames(c("exact", "region", "jitter"), 
-                                                   c("Exact", "Within general region", "At random within a 5 km radius of true location")),
-                         width = "100%"
-          ),
           selectizeInput(ns("share_with"), 
                          "Share with groups (1 or more, type your own if not in list)", 
                          choices = moduleData$users$role_name,
@@ -113,8 +103,7 @@ addLocation <- function(id, inputs) {
                          multiple = TRUE,
                          options = list(create = TRUE),
                          width = "100%"
-          )
-        ),
+          ),
         
         splitLayout(
           cellWidths = c("0%", "50%", "50%"),
@@ -268,7 +257,6 @@ addLocation <- function(id, inputs) {
           updateSelectizeInput(session, "loc_type", selected = details$location_type)
           updateNumericInput(session, "lat", value = details$latitude)
           updateNumericInput(session, "lon", value = details$longitude)
-          updateSelectizeInput(session, "viz", selected = details$visibility_public)
           updateSelectizeInput(session, "share_with", selected = details$share_with)
           updateSelectizeInput(session, "loc_owner", selected = details$owner)
           updateTextInput(session, "loc_contact", value = details$contact)
@@ -789,17 +777,6 @@ addLocation <- function(id, inputs) {
             )
           }
           
-          # Changes to visibility
-          if (input$viz != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "visibility_public"]) {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              glue::glue_sql(
-                "UPDATE locations SET visibility_public = {input$viz} WHERE location_id = {selected_loc()};",
-                .con = session$userData$AquaCache
-              )
-            )
-          }
-          
           # Changes to share_with
           if (!paste0("{", paste(input$share_with, collapse = ","), "}") == moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"]) {
             share_with_sql <- DBI::SQL(paste0("{", paste(input$share_with, collapse = ", "), "}"))
@@ -1019,7 +996,6 @@ addLocation <- function(id, inputs) {
                        name_fr = input$loc_name_fr,
                        latitude = input$lat,
                        longitude = input$lon,
-                       visibility_public = input$viz,
                        share_with = input$share_with,
                        owner = if (isTruthy(input$loc_owner)) as.numeric(input$loc_owner) else NA,
                        data_sharing_agreement_id = if (isTruthy(input$data_sharing_agreement)) as.numeric(input$data_sharing_agreement) else NA,
