@@ -456,7 +456,6 @@ addTimeseries <- function(id) {
             stop("Could not find any data for this timeseries. Try different parameters.")
           }
           
-          
           # Now calculate stats
           if (lubridate::period(df$record_rate) <= lubridate::period("1 day")) {
             AquaCache::calculate_stats(timeseries_id = new_timeseries_id, con = con, start_recalc = NULL)

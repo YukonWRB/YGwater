@@ -45,13 +45,6 @@ addImgSeries <- function(id) {
           ns = ns,
           DT::DTOutput(ns("series_table"))
         ),
-        conditionalPanel(
-          condition = "input.mode == 'add'",
-          ns = ns,
-          tags$div(
-            class = "alert alert-info",
-            "Tip: when you add a new image series, images will automatically be fetched using the source_fx as far back as the start datetime you specify."),
-        ),
         tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}"))),
         selectizeInput(ns("location"), "Location (add new under the 'locations' menu)", 
                        choices = stats::setNames(moduleData$locations$location_id, 
@@ -290,7 +283,7 @@ addImgSeries <- function(id) {
             source_fx = source_fx,
             source_fx_args = args,
             active = TRUE,
-            first_img = start
+            last_img = start
           )
           DBI::dbAppendTable(con, "image_series", df)
           
@@ -299,6 +292,16 @@ addImgSeries <- function(id) {
           
           # fetch images
           AquaCache::getNewImages(image_meta_ids = new_id, con = con)
+          
+          # Find the actual earliest found image and update image_series$first_img with that datetime
+          earliest <- DBI::dbGetQuery(con, paste0("SELECT MIN(datetime) FROM images WHERE img_series_id = ", new_id))[1,1]
+          
+          if (is.na(earliest)) {
+            stop("No images could be found")
+          } else {
+            DBI::dbExecute(con, paste0("UPDATE image_series SET first_img = '", earliest, "' WHERE img_series_id = ", new_id))
+          }
+          
           DBI::dbCommit(con)
           return("success")
           
@@ -328,6 +331,8 @@ addImgSeries <- function(id) {
         showNotification("Please select 'Add new' mode to add a timeseries.", type = "error")
         return()
       }
+      
+      showNotification
       
       # Call the extendedTask to add new image series
       addNewSeries$invoke(
