@@ -449,8 +449,8 @@ addTimeseries <- function(id) {
           }
           
           # Ensure that there are records in measurements_continuous and/or measurements_calculated_daily
-          mcd <- DBI::dbExecute(con, paste0("SELECT MIN(date) FROM measurements_calculated_daily WHERE timeseries_id = ", new_timeseries_id))[1,1]
-          mc <- DBI::dbExecute(con, paste0("SELECT MIN(datetime) FROM measurements_calculated_daily WHERE timeseries_id = ", new_timeseries_id))[1,1]
+          mcd <- DBI::dbGetQuery(con, paste0("SELECT MIN(date) FROM measurements_calculated_daily WHERE timeseries_id = ", new_timeseries_id))[1,1]
+          mc <- DBI::dbGetQuery(con, paste0("SELECT MIN(datetime) FROM measurements_continuous WHERE timeseries_id = ", new_timeseries_id))[1,1]
           
           if (is.na(mcd) && is.na(mc)) {
             stop("Could not find any data for this timeseries. Try different parameters.")
