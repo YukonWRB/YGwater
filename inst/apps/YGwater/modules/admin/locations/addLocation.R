@@ -57,8 +57,7 @@ addLocation <- function(id, inputs) {
                   width = "100%"
                   
         ),
-        actionButton(ns("hydat_fill"), "Auto-fill from HYDAT",
-                     width = "100%"
+        actionButton(ns("hydat_fill"), "Auto-fill from HYDAT"
         ),
         splitLayout(
           cellWidths = c("50%", "50%"),
@@ -96,14 +95,14 @@ addLocation <- function(id, inputs) {
                        options = list(maxItems = 1),
                        width = "100%"
         ),
-          selectizeInput(ns("share_with"), 
-                         "Share with groups (1 or more, type your own if not in list)", 
-                         choices = moduleData$users$role_name,
-                         selected = "public_reader",
-                         multiple = TRUE,
-                         options = list(create = TRUE),
-                         width = "100%"
-          ),
+        selectizeInput(ns("share_with"), 
+                       "Share with groups (1 or more, type your own if not in list)", 
+                       choices = moduleData$users$role_name,
+                       selected = "public_reader",
+                       multiple = TRUE,
+                       options = list(create = TRUE),
+                       width = "100%"
+        ),
         
         splitLayout(
           cellWidths = c("0%", "50%", "50%"),
@@ -361,24 +360,14 @@ addLocation <- function(id, inputs) {
     
     observeEvent(input$hydat_fill, {
       req(input$loc_code)
+      showNotification("hydat_fill clicked", type = "message")
       # Get the station info from hydat
       stn <- tidyhydat::hy_stations(input$loc_code)
+      showNotification("stn was fetched", type = "message")
       if (nrow(stn) == 0) {
         return()
       }
       datum <- tidyhydat::hy_stn_datum_conv(input$loc_code)
-      datum_list <- tidyhydat::hy_datum_list()
-      # Replace DATUM_FROM with DATUM_ID
-      datum$DATUM_FROM_ID <- datum_list$DATUM_ID[match(datum$DATUM_FROM, datum_list$DATUM_EN)]
-      # Replace DATUM_TO with DATUM_ID
-      datum$DATUM_TO_ID <- datum_list$DATUM_ID[match(datum$DATUM_TO, datum_list$DATUM_EN)]
-      
-      # Drop original DATUM_FROM and DATUM_TO columns
-      datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
-      
-      updateTextInput(session, "loc_name", value = titleCase(stn$STATION_NAME, "en"))
-      updateNumericInput(session, "lat", value = stn$LATITUDE)
-      updateNumericInput(session, "lon", value = stn$LONGITUDE)
       if (nrow(datum) == 0) {
         showModal(modalDialog(
           "No datum conversion found for this station in HYDAT."
@@ -387,6 +376,19 @@ addLocation <- function(id, inputs) {
         updateSelectizeInput(session, "datum_id_to", selected = 10)
         updateNumericInput(session, "elev", value = 0)
       } else {
+        datum_list <- tidyhydat::hy_datum_list()
+        # Replace DATUM_FROM with DATUM_ID
+        datum$DATUM_FROM_ID <- datum_list$DATUM_ID[match(datum$DATUM_FROM, datum_list$DATUM_EN)]
+        # Replace DATUM_TO with DATUM_ID
+        datum$DATUM_TO_ID <- datum_list$DATUM_ID[match(datum$DATUM_TO, datum_list$DATUM_EN)]
+        
+        # Drop original DATUM_FROM and DATUM_TO columns
+        datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
+        
+        updateTextInput(session, "loc_name", value = titleCase(stn$STATION_NAME, "en"))
+        updateNumericInput(session, "lat", value = stn$LATITUDE)
+        updateNumericInput(session, "lon", value = stn$LONGITUDE)
+        
         updateSelectizeInput(session, "datum_id_from", selected = datum$DATUM_FROM_ID[nrow(datum)])
         updateSelectizeInput(session, "datum_id_to", selected = datum$DATUM_TO_ID[nrow(datum)])
         updateNumericInput(session, "elev", value = datum$CONVERSION_FACTOR[nrow(datum)])
