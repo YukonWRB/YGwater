@@ -2,8 +2,11 @@
 
 addImgSeriesUI <- function(id) {
   ns <- NS(id)
-  page_fluid(
-    uiOutput(ns("ui"))
+  
+  tagList(
+    page_fluid(
+      uiOutput(ns("ui"))
+    )
   )
 }
 
@@ -29,7 +32,7 @@ addImgSeries <- function(id) {
     getModuleData()  # Initial data load
     
     choices <- ls(getNamespace("AquaCache"))
-    moduleData$source_fx <- choices[gepl("^download", choices)]
+    moduleData$source_fx <- choices[grepl("^download", choices)]
     
     output$ui <- renderUI({
       tagList(
@@ -164,9 +167,10 @@ addImgSeries <- function(id) {
                            choices = moduleData$users$role_name)
       updateSelectizeInput(session, "source_fx",
                            choices = moduleData$source_fx)
+      showNotification("Module reloaded", type = "message")
     })
     
-    observEvent(input$series_table_rows_selected, {
+    observeEvent(input$series_table_rows_selected, {
       sel <- input$series_table_rows_selected
       if (length(sel) > 0) {
         selected_series(moduleData$image_series_display[sel, ])
@@ -326,7 +330,7 @@ addImgSeries <- function(id) {
       }
       
       # Call the extendedTask to add new image series
-      addNewTimeseries$invoke(
+      addNewSeries$invoke(
         config = session$userData$config,
         loc = input$location,
         owner = input$owner,

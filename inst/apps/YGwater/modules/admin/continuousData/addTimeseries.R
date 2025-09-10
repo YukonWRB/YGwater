@@ -218,9 +218,10 @@ addTimeseries <- function(id) {
       updateSelectizeInput(session, "location",
                            choices = stats::setNames(moduleData$locations$location_id,
                                                      moduleData$locations$name))
-      updateSelectizeInput(session, "sub_location",
-                           choices = stats::setNames(moduleData$sub_locations$sub_location_id,
-                                                     moduleData$sub_locations$sub_location_name))
+      # gets updated by the observer for input$location
+      # updateSelectizeInput(session, "sub_location",
+      #                      choices = stats::setNames(moduleData$sub_locations$sub_location_id,
+      #                                                moduleData$sub_locations$sub_location_name))
       updateSelectizeInput(session, "parameter",
                            choices = stats::setNames(moduleData$parameters$parameter_id,
                                                      moduleData$parameters$param_name))
@@ -245,6 +246,14 @@ addTimeseries <- function(id) {
         shinyjs::hide("z")
       }
     })
+    
+    # observe the location and limit the sub-locations based on those already existing
+    observeEvent(input$location, {
+      possibilities <- moduleData$sub_locations[moduleData$sub_locations$location_id == input$location ,]
+      updateSelectizeInput(session, "sub_location",
+                           choices = stats::setNames(possibilities$sub_location_id,
+                                                     possibilities$sub_location_name))
+    }, ignoreInit = TRUE)
     
     # Observe row selection and update inputs accordingly
     observeEvent(input$ts_table_rows_selected, {
@@ -425,7 +434,10 @@ addTimeseries <- function(id) {
           if (!is.na(source_fx)) {
             AquaCache::getNewContinuous(con = con, timeseries_id = new_timeseries_id)
             new_start <- DBI::dbGetQuery(con, paste0("SELECT MIN(datetime) FROM measurements_continuous WHERE timeseries_id = ", new_timeseries_id, ";"))[1,1]
-            DBI::dbExecute(con, paste0("UPDATE timeseries SET start_datetime = '", new_start, "' WHERE timeseries_id = ", new_timeseries_id, ";"))
+            # If new_start is NA if means there's no data, so set it to end_datetime
+            if (!is.na(new_start)) {
+              DBI::dbExecute(con, paste0("UPDATE timeseries SET start_datetime = '", new_start, "' WHERE timeseries_id = ", new_timeseries_id, ";"))
+            }
             
             # Now conditionally check for HYDAT historical data
             if (source_fx == "downloadWSC" ) {
@@ -435,6 +447,15 @@ addTimeseries <- function(id) {
               }
             }
           }
+          
+          # Ensure that there are records in measurements_continuous and/or measurements_calculated_daily
+          mcd <- DBI::dbExecute(con, paste0("SELECT MIN(date) FROM measurements_calculated_daily WHERE timeseries_id = ", new_timeseries_id))[1,1]
+          mc <- DBI::dbExecute(con, paste0("SELECT MIN(datetime) FROM measurements_calculated_daily WHERE timeseries_id = ", new_timeseries_id))[1,1]
+          
+          if (is.na(mcd) && is.na(mc)) {
+            stop("Could not find any data for this timeseries. Try different parameters.")
+          }
+          
           
           # Now calculate stats
           if (lubridate::period(df$record_rate) <= lubridate::period("1 day")) {
