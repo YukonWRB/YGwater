@@ -300,17 +300,45 @@ addLocation <- function(id, inputs) {
     output$hydat_note <- renderUI({HTML("<b>Entering a WSC code will allow you to auto-populate fields with HYDAT information.</b><br>")})
     hydat <- reactiveValues(exists = FALSE,
                             stns = NULL)
+    
+    
     if ((file.exists(tidyhydat::hy_downloaded_db()))) {
+      # Check the age of the hydat database
+      hydat_path <- tidyhydat::hy_downloaded_db()
+      local_hydat <- as.Date(tidyhydat::hy_version(hydat_path)$Date)
+      local_hydat <- gsub("-", "", as.character(local_hydat))
+      remote_hydat <- tidyhydat::hy_remote()
+      if (local_hydat != remote_hydat) { #if remote version is not the same, download new version
+        showNotification("A newer version of the HYDAT database is available. Attempting to update the local copy now.", type = "warning")
+        try(tidyhydat::download_hydat(ask = FALSE))
+        hydat_path <- tidyhydat::hy_downloaded_db() #reset the hydat path just in case the new DB is not named exactly as the old one (guard against tidyhydat package changes in future)
+        local_hydat <- as.Date(tidyhydat::hy_version(hydat_path)$Date) #check the HYDAT version again just in case. It can fail to update without actually creating an error and stopping.
+        local_hydat <- gsub("-", "", as.character(local_hydat))
+        if (local_hydat == remote_hydat) {
+          new_hydat <- TRUE
+          showNotification("The local WSC HYDAT database was updated.", type = "message")
+        } else {
+          showNotification("The local WSC HYDAT database could not be updated. Continuing to use the existing local copy.", type = "error")
+        }
+      }
       hydat$exists <- TRUE
       showNotification("HYDAT database found. You can auto-populate fields for WSC stations.", type = "message")
       hydat$stns <- tidyhydat::hy_stations()$STATION_NUMBER
     } else {
-      showNotification("HYDAT database not found. You will need to fill in all fields manually.", type = "warning", duration = 10)
+      showNotification("HYDAT database not found, attempting to download it.", type = "warning")
+      tidyhydat::hy_download_db()
+      if (file.exists(tidyhydat::hy_downloaded_db())) {
+        hydat$exists <- TRUE
+        showNotification("HYDAT database successfully downloaded. You can auto-populate fields for WSC stations.", type = "message")
+        hydat$stns <- tidyhydat::hy_stations()$STATION_NUMBER
+      } else {
+        showNotification("HYDAT database still not found. You will not be able to auto-populate fields for WSC stations.", type = "error")
+      }
       shinyjs::hide("hydat_note")
     }
     
     observeEvent(input$loc_code, {# Observe loc_code inputs and, if possible, show the button to auto-populate fields
-      req(input$loc_code, hydat$exists)
+      req(input$loc_code)
       if (hydat$exists) {
         if (input$loc_code %in% hydat$stns) {
           shinyjs::show("hydat_fill")
@@ -362,14 +390,16 @@ addLocation <- function(id, inputs) {
     
     observeEvent(input$hydat_fill, {
       req(input$loc_code)
-      showNotification("hydat_fill clicked", type = "message")
       # Get the station info from hydat
       stn <- tidyhydat::hy_stations(input$loc_code)
-      showNotification("stn was fetched", type = "message")
       if (nrow(stn) == 0) {
         return()
       }
-      datum <- tidyhydat::hy_stn_datum_conv(input$loc_code)
+      if (hydat$exists) {
+        datum <- tidyhydat::hy_stn_datum_conv(input$loc_code)
+      } else {
+        datum <- data.frame()
+      }
       if (nrow(datum) == 0) {
         showModal(modalDialog(
           "No datum conversion found for this station in HYDAT."
