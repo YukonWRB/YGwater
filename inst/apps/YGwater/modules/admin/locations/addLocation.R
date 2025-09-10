@@ -302,8 +302,10 @@ addLocation <- function(id, inputs) {
                             stns = NULL)
     if ((file.exists(tidyhydat::hy_downloaded_db()))) {
       hydat$exists <- TRUE
+      showNotification("HYDAT database found. You can auto-populate fields for WSC stations.", type = "message")
       hydat$stns <- tidyhydat::hy_stations()$STATION_NUMBER
     } else {
+      showNotification("HYDAT database not found. You will need to fill in all fields manually.", type = "warning", duration = 10)
       shinyjs::hide("hydat_note")
     }
     
