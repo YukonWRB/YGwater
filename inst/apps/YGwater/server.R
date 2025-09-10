@@ -74,10 +74,12 @@ app_server <- function(input, output, session) {
       }
 
       # File tasks -----------------------------------------------------------
-      if (any(session$userData$admin_privs$addDocs, session$userData$admin_privs$addImgs)) {
+      if (any(session$userData$admin_privs$addDocs, session$userData$admin_privs$addImgs, session$userData$admin_privs$addImgSeries)) {
         nav_show(id = "navbar", target = "fileTasks")
         if (!isTRUE(session$userData$admin_privs$addDocs)) nav_hide(id = "navbar", target = "addDocs")
         if (!isTRUE(session$userData$admin_privs$addImgs)) nav_hide(id = "navbar", target = "addImgs")
+        if (!isTRUE(session$userData$admin_privs$addImgSeries)) nav_hide(id = "navbar", target = "addImgSeries")
+        
       } else {
         nav_hide(id = "navbar", target = "fileTasks")
       }
@@ -198,6 +200,7 @@ app_server <- function(input, output, session) {
     
     ui_loaded$addDocs <- FALSE
     ui_loaded$addImgs <- FALSE
+    ui_loaded$addImgSeries <- FALSE
     
     ui_loaded$simplerIndex <- FALSE
     
@@ -594,6 +597,7 @@ $(document).keyup(function(event) {
           addGuidelines  = has_priv("discrete", c("guidelines")),
           addDocs        = has_priv("files", "documents"),
           addImgs        = has_priv("files", "images"),
+          addImgSeries   = has_priv("files", "image_series"),
           boreholes_wells = has_priv("boreholes", c("boreholes", "wells")),
           visit          = has_priv("public", c("locations_metadata_access", "locations_metadata_infrastructure")),
           manageNewsContent = has_priv("application", c("images", "text", "page_content")),
@@ -762,7 +766,7 @@ $(document).keyup(function(event) {
     if (input$navbar %in% c("home", "discPlot", "contPlot", "mix", "map", "FOD", "snowInfo", "waterInfo", "WQReport", "snowBulletin", "imgTableView", "imgMapView", "about", "news", "discData", "contData", "feedback")) { # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "deploy_recover", "calibrate", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addGuidelines", "addDocs", "addImgs", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers", "simplerIndex")) {
+    } else if (input$navbar %in% c("syncCont", "syncDisc", "addLocation", "addSubLocation", "addTimeseries", "deploy_recover", "calibrate", "addContData", "continuousCorrections", "imputeMissing", "editContData", "grades_approvals_qualifiers", "addDiscData", "editDiscData", "addGuidelines", "addDocs", "addImgs", "addImgSeries", "manageNewsContent", "viewFeedback", "visit", "changePwd", "manageUsers", "simplerIndex")) {
       
       # User is in admin mode
       last_admin_tab(input$navbar)
@@ -1082,6 +1086,13 @@ $(document).keyup(function(event) {
         output$addImgs_ui <- renderUI(addImgsUI("addImgs"))  # Render the UI
         ui_loaded$addImgs <- TRUE
         addImgs("addImgs")  # Call the server
+      }
+    }
+    if (input$navbar == "addImgSeries") {
+      if (!ui_loaded$addImgSeries) {
+        output$addImgSeries_ui <- renderUI(addImgSeriesUI("addImgSeries"))  # Render the UI
+        ui_loaded$addImgSeries <- TRUE
+        addImgSeries("addImgSeries")  # Call the server
       }
     }
     if (input$navbar == "simplerIndex") {

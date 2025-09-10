@@ -223,7 +223,10 @@ app_ui <- function(request) {
                              uiOutput("addDocs_ui")),
                    nav_panel(title = "Images",
                              value = "addImgs",
-                             uiOutput("addImgs_ui"))
+                             uiOutput("addImgs_ui")),
+                   nav_panel(title = "Image series",
+                             value = "addImgSeries",
+                             uiOutput("addImgSeries_ui"))
           )
         },
         if (!config$public) {

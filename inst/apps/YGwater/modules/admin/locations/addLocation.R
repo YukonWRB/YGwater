@@ -801,7 +801,7 @@ addLocation <- function(id, inputs) {
           }
           
           # Changes to share_with
-          if (!all(input$share_with %in% moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"])) {
+          if (!paste0("{", paste(input$share_with, collapse = ","), "}") == moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"]) {
             share_with_sql <- DBI::SQL(paste0("{", paste(input$share_with, collapse = ", "), "}"))
             DBI::dbExecute(
               session$userData$AquaCache,

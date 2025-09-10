@@ -108,14 +108,14 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
                        width = "100%",
                        multiple = TRUE,
                        options = list(maxItems = 1)) %>%
-          tooltip("Required for most parameters."),
+          tooltip("Required for most parameters. If visible after selecting a parameter, it's required."),
         selectizeInput(ns("result_speciation"),
                        "Result Speciation", 
                        choices = NULL, 
                        width = "100%",
                        multiple = TRUE,
                        options = list(maxItems = 1)) %>%
-          tooltip("Only required for some parameters, e.g. hardness as CaCO3. Leave blank if not applicable."),
+          tooltip("Only required for some parameters, e.g. hardness as CaCO3. If visible after selecting a parameter, it's requird."),
         actionLink(ns("open_guideline_help"), 
                    label = "Guideline SQL help", 
                    icon = icon("book")),
@@ -125,7 +125,8 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
             textAreaInput(ns("guideline_sql"),
                           "Guideline SQL",
                           width = "100%",
-                          height = "350px") %>%
+                          height = "400px") %>%
+              tagAppendAttributes(spellcheck = "false") %>%
               tooltip("The SQL code that defines how the guideline value is calculated. See the help file for details and examples."),
           ),
           column(
@@ -155,11 +156,15 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
         ),
         actionButton(ns("save_guideline"), 
                      "Update/save guideline", 
-                     width = "100%", ) %>%
+                     width = "100%",
+                     style = "font-size: 14px;", 
+                     class = "btn btn-primary") %>%
           tooltip("Save changes to the selected guideline. This will update the database if successful, otherwise an error message will be shown to help you fix the issue."),
         actionButton(ns("test_guideline"),
                      "Test guideline",
-                     width = "100%") %>%
+                     width = "100%",
+                     style = "font-size: 14px;", 
+                     class = "btn btn-primary") %>%
           tooltip("Test the guideline SQL by providing temporary sample results.")
       ),
       
@@ -192,7 +197,7 @@ addGuidelines <- function(id) {
     
     moduleData <- reactiveValues(
       guidelines = DBI::dbGetQuery(session$userData$AquaCache, "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id"),
-      parameters = DBI::dbGetQuery(session$userData$AquaCache, "SELECT parameter_id, param_name, unit_default FROM public.parameters ORDER BY param_name"),
+      parameters = DBI::dbGetQuery(session$userData$AquaCache, "SELECT parameter_id, param_name, unit_default,result_speciation, sample_fraction FROM public.parameters ORDER BY param_name"),
       sample_fractions = DBI::dbGetQuery(session$userData$AquaCache, "SELECT sample_fraction_id, sample_fraction FROM discrete.sample_fractions ORDER BY sample_fraction"),
       result_speciations = DBI::dbGetQuery(session$userData$AquaCache, "SELECT result_speciation_id, result_speciation FROM discrete.result_speciations ORDER BY result_speciation"),
       test_pairs = NULL
@@ -234,7 +239,7 @@ addGuidelines <- function(id) {
     }, server = TRUE)
     
     # Update parameter and sample fraction choices when moduleData changes
-    observe({
+    observeEvent(list(moduleData$parameters, moduleData$sample_fractions, moduleData$result_speciation), {
       updateSelectizeInput(session, "parameter_id", 
                            choices = setNames(moduleData$parameters$parameter_id, 
                                               paste0(moduleData$parameters$param_name,
@@ -249,6 +254,23 @@ addGuidelines <- function(id) {
                            choices = setNames(moduleData$result_speciations$result_speciation_id, 
                                               moduleData$result_speciations$result_speciation),
                            selected = NULL)
+    })
+    
+    # Show/hide sample_fraction and result_speciation if they're required for the selected parameter
+    observeEvent(list(input$parameter_id), {
+      req(input$parameter_id)
+      param <- moduleData$parameters[moduleData$parameters$parameter_id == input$parameter_id, ]
+      if (param$result_speciation) {
+        shinyjs::show("result_speciation")
+      } else {
+        shinyjs::hide("result_speciation")
+      }
+      
+      if (param$sample_fraction) {
+        shinyjs::show("sample_fraction")
+      } else {
+        shinyjs::hide("sample_fraction")
+      }
     })
     
     # Show the user help file as a new html document:
@@ -798,9 +820,6 @@ observeEvent(input$save_guideline, {
     moduleData$guidelines <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id")
     moduleData$guidelines_temp <- moduleData$guidelines
     
-    # Clear selection and hide save button
-    DT::dataTableProxy("guidelines_table") %>% DT::selectRows(NULL)
-    shinyjs::hide("save_guideline")
     showModal(modalDialog(
       title = "Success",
       "Guideline saved successfully.",
@@ -855,6 +874,16 @@ observeEvent(input$confirm_delete, {
     # Clear table selection and hide save button
     DT::dataTableProxy("guidelines_table") %>% DT::selectRows(NULL)
     shinyjs::hide("save_guideline")
+    # Reset inputs
+    updateTextInput(session, "guideline_name", value = "")
+    updateTextInput(session, "publisher", value = "")
+    updateTextInput(session, "reference", value = "")
+    updateTextAreaInput(session, "note", value = "")
+    updateSelectizeInput(session, "parameter_id", selected = NULL)
+    updateSelectizeInput(session, "sample_fraction", selected = NULL)
+    updateSelectizeInput(session, "result_speciation", selected = NULL)
+    updateTextAreaInput(session, "guideline_sql", value = "")
+    
     showModal(modalDialog(
       title = "Success",
       "Guideline deleted successfully.",
