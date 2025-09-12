@@ -237,6 +237,7 @@ addLocation <- function(id, inputs) {
                         "}"
                       )
                     ),
+                    filter = 'top',
                     rownames = FALSE)
     }) |> bindEvent(moduleData$exist_locs)
     
@@ -304,31 +305,31 @@ addLocation <- function(id, inputs) {
     
     # Download hydat from Shiny, bypassing tidyhydat downloader because it's blocked on a HEAD request
     download_hydat <- function() {
-        dest_dir <- tidyhydat::hy_dir()
-        dir.create(dest_dir, showWarnings = FALSE, recursive = TRUE)
-        remote_ver <- tidyhydat::hy_remote()  # e.g. "20250701"
-        # hy_base_url() is internal; fetch it safely
-        hy_base_url <- get("hy_base_url", asNamespace("tidyhydat"))()
-        url <- paste0(hy_base_url, "Hydat_sqlite3_", remote_ver, ".zip")
-        
-        tmp_zip <- tempfile("hydat_", fileext = ".zip")
-        ex_dir  <- file.path(tempdir(), "hydat_extracted")
-        dir.create(ex_dir, showWarnings = FALSE)
-        
-        # Use GET (works when HEAD is blocked)
-        curl::curl_download(url, destfile = tmp_zip,
-                            handle = curl::new_handle(
-                              useragent = "Mozilla/5.0",
-                              followlocation = TRUE
-                            ))
-        utils::unzip(tmp_zip, exdir = ex_dir, overwrite = TRUE)
-        
-        # Copy the sqlite DB into place (name inside the zip can vary)
-        sqlite_src <- list.files(ex_dir, pattern = "\\.sqlite3$", full.names = TRUE)
-        if (length(sqlite_src) == 0) stop("HYDAT zip did not contain a .sqlite3 file")
-        hydat_path <- file.path(dest_dir, "Hydat.sqlite3")
-        file.copy(sqlite_src[1], hydat_path, overwrite = TRUE)
-        unlink(c(tmp_zip, ex_dir), recursive = TRUE) 
+      dest_dir <- tidyhydat::hy_dir()
+      dir.create(dest_dir, showWarnings = FALSE, recursive = TRUE)
+      remote_ver <- tidyhydat::hy_remote()  # e.g. "20250701"
+      # hy_base_url() is internal; fetch it safely
+      hy_base_url <- get("hy_base_url", asNamespace("tidyhydat"))()
+      url <- paste0(hy_base_url, "Hydat_sqlite3_", remote_ver, ".zip")
+      
+      tmp_zip <- tempfile("hydat_", fileext = ".zip")
+      ex_dir  <- file.path(tempdir(), "hydat_extracted")
+      dir.create(ex_dir, showWarnings = FALSE)
+      
+      # Use GET (works when HEAD is blocked)
+      curl::curl_download(url, destfile = tmp_zip,
+                          handle = curl::new_handle(
+                            useragent = "Mozilla/5.0",
+                            followlocation = TRUE
+                          ))
+      utils::unzip(tmp_zip, exdir = ex_dir, overwrite = TRUE)
+      
+      # Copy the sqlite DB into place (name inside the zip can vary)
+      sqlite_src <- list.files(ex_dir, pattern = "\\.sqlite3$", full.names = TRUE)
+      if (length(sqlite_src) == 0) stop("HYDAT zip did not contain a .sqlite3 file")
+      hydat_path <- file.path(dest_dir, "Hydat.sqlite3")
+      file.copy(sqlite_src[1], hydat_path, overwrite = TRUE)
+      unlink(c(tmp_zip, ex_dir), recursive = TRUE) 
     }
     
     
@@ -455,7 +456,7 @@ addLocation <- function(id, inputs) {
     }, ignoreInit = TRUE)
     
     observeEvent(input$hydat_fill, {
-      req(input$loc_code)
+      req(input$loc_code, hydat$exists)
       # Get the station info from hydat
       stn <- tidyhydat::hy_stations(input$loc_code)
       if (nrow(stn) == 0) {
@@ -482,15 +483,14 @@ addLocation <- function(id, inputs) {
         
         # Drop original DATUM_FROM and DATUM_TO columns
         datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
-        
-        updateTextInput(session, "loc_name", value = titleCase(stn$STATION_NAME, "en"))
-        updateNumericInput(session, "lat", value = stn$LATITUDE)
-        updateNumericInput(session, "lon", value = stn$LONGITUDE)
-        
         updateSelectizeInput(session, "datum_id_from", selected = datum$DATUM_FROM_ID[nrow(datum)])
         updateSelectizeInput(session, "datum_id_to", selected = datum$DATUM_TO_ID[nrow(datum)])
         updateNumericInput(session, "elev", value = datum$CONVERSION_FACTOR[nrow(datum)])
       }
+      
+      updateTextInput(session, "loc_name", value = titleCase(stn$STATION_NAME, "en"))
+      updateNumericInput(session, "lat", value = stn$LATITUDE)
+      updateNumericInput(session, "lon", value = stn$LONGITUDE)
       
       updateSelectizeInput(session, "loc_owner", selected = moduleData$organizations[moduleData$organizations$name == "Water Survey of Canada", "organization_id"])
       updateTextInput(session, "loc_note", value = paste0("Station metadata from HYDAT version ", substr(tidyhydat::hy_version()$Date[1], 1, 10)))

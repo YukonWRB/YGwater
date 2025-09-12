@@ -186,8 +186,16 @@ addTimeseries <- function(id) {
     
     # Render the timeseries table for modification
     output$ts_table <- DT::renderDT({
+      
+      # Convert some data types to factors for better filtering in DT
+      df <- moduleData$timeseries_display
+      df$record_rate_minutes <- as.factor(df$record_rate)
+      df$media <- as.factor(df$media_type)
+      df$aggregation <- as.factor(df$aggregation_type)
+      df$parameter <- as.factor(df$param_name)
+      
       DT::datatable(
-        moduleData$timeseries_display,
+        df,
         selection = "single",
         options = list(
           columnDefs = list(list(targets = 0, visible = FALSE)), # hide the id column
@@ -205,6 +213,7 @@ addTimeseries <- function(id) {
             "}"
           )
         ),
+        filter = 'top',
         rownames = FALSE)
     }) |> bindEvent(moduleData$timeseries_display)
     

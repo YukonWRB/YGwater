@@ -232,7 +232,8 @@ addGuidelines <- function(id) {
                                      list(
                                        targets = c(0,9:12),  # guideline_id and SQL columns; index starts at 0
                                        visible = FALSE
-                                     )
+                                     ),
+                                     filter = 'top'
                                    )
                     )
       )

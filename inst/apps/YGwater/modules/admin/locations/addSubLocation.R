@@ -121,6 +121,7 @@ addSubLocation <- function(id, inputs) {
                         "}"
                       )
                     ),
+                    filter = 'top',
                     rownames = FALSE)
     }) |> bindEvent(moduleData$exist_sub_locs)
     
