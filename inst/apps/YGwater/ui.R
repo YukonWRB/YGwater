@@ -149,6 +149,27 @@ app_ui <- function(request) {
                  nav_panel(title = uiOutput("dataNavContTitle"), value = "contData",
                            uiOutput("contData_ui"))
         ), # End data nav_menu
+        
+        
+        
+        
+        
+        
+        
+        
+        nav_menu(title = uiOutput("WaterWellRegTitle"), value = "waterWells",
+                 nav_panel(title = uiOutput("waterWellNavSearchTitle"), value = "wellSearch",
+                           uiOutput("wellSearch_ui")),
+                 nav_panel(title = uiOutput("waterWellNavMapTitle"), value = "wellMap",
+                           uiOutput("wellMap_ui"))
+        ),
+        
+        
+        
+        
+        
+        
+        
         if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
           nav_panel(title = uiOutput("FODNavTitle"), value = "FOD",
                     uiOutput("fod_ui"))
