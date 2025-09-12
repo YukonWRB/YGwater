@@ -5,12 +5,11 @@ simplerIndexUI <- function(id) {
   ns <- NS(id)
   css_file <- system.file("apps/YGwater/www/css/simplerIndex.css", package = "YGwater")
   css <- gsub("%1$s", ns("pdf-container"), readLines(css_file), fixed = TRUE)
-  tmp_css <- tempfile(fileext = ".css")
-  writeLines(css, tmp_css)
   
   tagList(
     tags$head(
-      htmltools::includeCSS(tmp_css)
+      tags$style(HTML(paste(css, collapse = "\n"))),
+      tags$script(src = "js/sidebar_resize.js")
     ),
     div(style = "display: flex; align-items: center; gap: 10px;",
         div(id = ns("logo-container"),
@@ -95,7 +94,7 @@ simplerIndexUI <- function(id) {
                                         width = "150px"
                             )
                         ) %>%
-                          tooltip("Set the minimum confidence level for displaying OCR results. Higher values show only the most certain text."),,
+                          tooltip("Set the minimum confidence level for displaying OCR results. Higher values show only the most certain text."),
                         selectizeInput(ns("psm_mode"),
                                        "PSM Mode",
                                        choices = list(
@@ -391,75 +390,9 @@ simplerIndexUI <- function(id) {
     
     # script to resize sidebars and reattach handlers after Shiny redraws UI
     tags$script(HTML(sprintf(
-      "$(function() {
-      const MIN_LEFT = 140;
-      const MIN_RIGHT = 160;
-      const MIN_MAIN = 300; // keep central workspace usable
-      let resizing = '';
-      let startX = 0;
-      let startWidth = 0;
-      const $body = $('body');
-      const $left = $('#%s');
-      const $right = $('#%s');
 
-      function viewportW(){ return $(window).width(); }
-      function maxLeft(){ return Math.max(MIN_LEFT, viewportW() - $right.outerWidth() - MIN_MAIN); }
-      function maxRight(){ return Math.max(MIN_RIGHT, viewportW() - $left.outerWidth() - MIN_MAIN); }
-
-      function startResize(side, e){
-        resizing = side;
-        startX = e.clientX;
-        startWidth = (side === 'left' ? $left.outerWidth() : $right.outerWidth());
-        $body.addClass('resizing-col');
-        e.preventDefault();
-      }
-
-      $('#%s').off('.rs').on('mousedown.rs', e => startResize('left', e));
-      $('#%s').off('.rs').on('mousedown.rs', e => startResize('right', e));
-
-      // Double-click reset
-      $('#%s').off('dblclick.rs').on('dblclick.rs', () => $left.css('width', '300px'));
-      $('#%s').off('dblclick.rs').on('dblclick.rs', () => $right.css('width', '400px'));
-
-      $(document).off('.rsMove').on('mousemove.rsMove', function(e){
-        if(!resizing) return;
-        if(resizing === 'left'){
-          let w = startWidth + (e.clientX - startX);
-          w = Math.min(maxLeft(), Math.max(MIN_LEFT, w));
-          $left.css('width', w + 'px');
-        } else if(resizing === 'right'){
-          let w = startWidth - (e.clientX - startX);
-          w = Math.min(maxRight(), Math.max(MIN_RIGHT, w));
-          $right.css('width', w + 'px');
-        }
-      });
-
-      $(document).off('.rsUp').on('mouseup.rsUp', function(){
-        if(resizing){
-          resizing = '';
-          $body.removeClass('resizing-col');
-        }
-      });
-
-      $(window).off('.rsWin').on('resize.rsWin', function(){
-        if($left.outerWidth() > maxLeft()) $left.css('width', maxLeft() + 'px');
-        if($right.outerWidth() > maxRight()) $right.css('width', maxRight() + 'px');
-      });
-
-      /* Reattach existing focus/click handlers */
-      const ids = [%s];
-      ids.forEach(id => {
-        $(document).off('focus.rs click.rs', '#' + id)
-                   .on('focus.rs click.rs', '#' + id, function(){
-                     // Use a monotonically increasing timestamp so the most
-                     // recently focused element can be identified reliably.
-                     // priority:'event' forces Shiny to handle each click
-                     // immediately, avoiding dropped events.
-                     Shiny.setInputValue(id + '_clicked', Date.now(), {priority: 'event'});
-                   });
-      });
-    });",
-      ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'), ns('resize-handle'), ns('resize-handle-right'),
+      "$(function(){ initSidebarResize({leftId:'%s', rightId:'%s', leftHandle:'%s', rightHandle:'%s', ids:[%s]}); });",
+      ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'),
       paste(sprintf("'%s'", ns(c('name','notes_borehole', 'share_with_borehole', 'easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top','permafrost_bot','date_drilled','casing_od','drill_depth','surveyed_ground_elev','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield', 'notes_well', 'share_with_well'))), collapse = ','))))
   )
 } # End of UI function
