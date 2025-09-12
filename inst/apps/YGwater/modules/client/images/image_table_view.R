@@ -41,9 +41,9 @@ imgTableView <- function(id, language) {
     ns <- session$ns
     
     # Load info about last two weeks of images. More is loaded later if the user goes back further.
-    imgs <- reactiveValues(imgs = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
+    imgs <- reactiveValues(imgs = dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_series_id = ii.img_series_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", Sys.Date() - 14, "' ORDER BY datetime DESC;")),  # Note that this is added to later on if the user's date range is beyond 2 weeks ago; propagate any edits done to this query!
                            img_min = Sys.Date() - 14,
-                           img_meta = dbGetQueryDT(session$userData$AquaCache, "SELECT a.img_meta_id, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM image_series AS a JOIN locations AS l ON a.location_id = l.location_id;"),
+                           img_meta = dbGetQueryDT(session$userData$AquaCache, "SELECT a.img_series_id, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM image_series AS a JOIN locations AS l ON a.location_id = l.location_id;"),
                            imgs_types = dbGetQueryDT(session$userData$AquaCache, "SELECT image_type_id, image_type, description FROM image_types;"))
     
     tables <- reactiveValues()
@@ -101,10 +101,10 @@ imgTableView <- function(id, language) {
     observeEvent(input$dates, {
       if (input$dates[1] < imgs$img_min) {
         if (nrow(imgs$imgs) == 0) {
-          imgs$imgs <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "';"))
+          imgs$imgs <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_series_id = ii.img_series_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "';"))
           imgs$img_min <- min(imgs$imgs$datetime, na.rm = TRUE)
         } else {
-          extra <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_meta_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_meta_id = ii.img_meta_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime, na.rm = TRUE), "';"))
+          extra <- dbGetQueryDT(session$userData$AquaCache, paste0("SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_series_id = ii.img_series_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '", input$dates[1], "' AND i.datetime < '", min(imgs$imgs$datetime, na.rm = TRUE), "';"))
           imgs$img_min <- min(extra$datetime, na.rm = TRUE)
           imgs$imgs <- rbind(imgs$imgs, extra)
         }

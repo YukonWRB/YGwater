@@ -442,13 +442,14 @@ table.on("click", "tr", function() {
     # Create initial tables for managing instruments
     initial_manage_instruments_table <- instruments_sheet[ , !colnames(instruments_sheet) %in% c("instrument_id", "observer", "obs_datetime")]
     initial_calibrate_instruments_table <- instruments_sheet[is.na(instruments_sheet$date_retired), !colnames(instruments_sheet) %in% c("instrument_id", "observer", "obs_datetime", "retired_by", "date_retired", "date_purchased", "date_in_service")]
-    output$manage_instruments_table <- DT::renderDataTable(initial_manage_instruments_table, 
+    output$manage_instruments_table <- DT::renderDT(initial_manage_instruments_table, 
                                                            rownames = FALSE, 
                                                            selection = "single")
-    output$calibration_instruments_table <- DT::renderDataTable({
+    output$calibration_instruments_table <- DT::renderDT({
       DT::datatable(
         initial_calibrate_instruments_table,
         rownames = FALSE,
+        filter = 'top',
         selection = "multiple",
         callback = htmlwidgets::JS(table_reset)
       )
@@ -954,6 +955,7 @@ table.on("click", "tr", function() {
             DT::datatable(
               initial_calibrate_instruments_table,
               rownames = FALSE,
+              filter = 'top',
               selection = "multiple",
               callback = htmlwidgets::JS(table_reset)
             )
@@ -963,6 +965,7 @@ table.on("click", "tr", function() {
             DT::datatable(
               instruments_data$calibrate_instruments,
               rownames = FALSE,
+              filter = 'top',
               selection = "multiple",
               callback = htmlwidgets::JS(table_reset)
             )
@@ -995,7 +998,7 @@ table.on("click", "tr", function() {
       instruments_data$instrument_maintenance_selected_id <- instr_id
       temp <- instruments_data$instrument_maintenance[instruments_data$instrument_maintenance$instrument_id == instr_id, !colnames(instruments_data$instrument_maintenance) %in% c("instrument_id", "event_id")]
       names(temp) <- c("Observer", "Date/Time", "Maintenance note")
-      output$past_instr_maintenance <- DT::renderDataTable(temp, rownames = FALSE, selection = "single")  #Table is in the main panel, for maintenance history
+      output$past_instr_maintenance <- DT::renderDT(temp, rownames = FALSE, selection = "single")  #Table is in the main panel, for maintenance history
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
     
@@ -1027,7 +1030,7 @@ table.on("click", "tr", function() {
       # Re-render the table to clear the selection
       temp <- instruments_data$instrument_maintenance[instruments_data$instrument_maintenance$instrument_id == instruments_data$instrument_maintenance_selected_id, !colnames(instruments_data$instrument_maintenance) %in% c("instrument_id", "event_id")]
       names(temp) <- c("Observer", "Date/Time", "Maintenance note")
-      output$past_instr_maintenance <- DT::renderDataTable(temp, rownames = FALSE, selection = "single")
+      output$past_instr_maintenance <- DT::renderDT(temp, rownames = FALSE, selection = "single")
       
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
     
@@ -1047,7 +1050,7 @@ table.on("click", "tr", function() {
       instruments_data$instrument_maintenance <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM instrument_maintenance")
       temp <- instruments_data$instrument_maintenance[instruments_data$instrument_maintenance$instrument_id == instruments_data$instrument_maintenance_selected_id, !colnames(instruments_data$instrument_maintenance) %in% c("instrument_id", "event_id")]
       names(temp) <- c("Observer", "Date/Time", "Maintenance note")
-      output$past_instr_maintenance <- DT::renderDataTable(temp, rownames = FALSE, selection = "single")
+      output$past_instr_maintenance <- DT::renderDT(temp, rownames = FALSE, selection = "single")
       shinyjs::hide("clear_selection")
       updateActionButton(session, "submit_instr_maintain", label = "Save new maintenance event")
       instruments_data$instrument_maintenance_update <- FALSE
@@ -1183,20 +1186,20 @@ table.on("click", "tr", function() {
         updateDateInput(session, "date_in_service", value = NA)
         updateDateInput(session, "date_purchased", value = NA)
         instruments_data$manage_instruments <- instruments_data$sheet[ , !colnames(instruments_data$sheet) %in% c("instrument_id", "observer", "obs_datetime")]
-        output$manage_instruments_table <- DT::renderDataTable(instruments_data$manage_instruments, rownames = FALSE, selection = "single")
+        output$manage_instruments_table <- DT::renderDT(instruments_data$manage_instruments, rownames = FALSE, selection = "single")
       } else if (input$tab_panel == "Maintain instruments") {
         instruments_data$maintain_instruments <- instruments_data$sheet[ , !colnames(instruments_data$sheet) %in% c("observer", "obs_datetime", "retired_by", "date_retired", "asset_tag", "date_in_service", "date_purchased", "holds_replaceable_sensors")]
         temp_maintain <- instruments_data$maintain_instruments[, c("make", "model", "type", "serial_no", "owner")]
-        output$maintain_instr_table <- DT::renderDataTable(temp_maintain, rownames = FALSE, selection = "single")  #Table is in the sidebar, for instrument selection
+        output$maintain_instr_table <- DT::renderDT(temp_maintain, rownames = FALSE, selection = "single")  #Table is in the sidebar, for instrument selection
         temp <- data.frame("Observer" = "No one", "Date/Time" = "Never", "Maintenance note" = "Select an instrument first", check.names = FALSE)
-        output$past_instr_maintenance <- DT::renderDataTable(temp, rownames = FALSE, selection = "none")  #Table is in the main panel, for maintenance history
+        output$past_instr_maintenance <- DT::renderDT(temp, rownames = FALSE, selection = "none")  #Table is in the main panel, for maintenance history
         shinyjs::hide("clear_selection")
       } else if (input$tab_panel == "Change/maintain sensors") {
         #reload instruments_data$sheet to mitigate conflicts
         instruments_data$sheet <- DBI::dbGetQuery(session$userData$AquaCache, "SELECT i.instrument_id, i.obs_datetime, CONCAT(observers.observer_first, ' ', observers.observer_last, '(', observers.organization, ')') AS observer, i.holds_replaceable_sensors, i.serial_no, i.asset_tag, i.date_in_service, i.date_purchased, i.retired_by, i.date_retired, instrument_make.make, instrument_model.model, instrument_type.type, i.owner FROM instruments AS i LEFT JOIN instrument_make ON i.make = instrument_make.make_id LEFT JOIN instrument_model ON i.model = instrument_model.model_id LEFT JOIN instrument_type ON i.type = instrument_type.type_id LEFT JOIN observers ON i.observer = observers.observer_id ORDER BY i.instrument_id")
         instruments_data$maintainable_sensors <- instruments_data$sheet[instruments_data$sheet$holds_replaceable_sensors , ]
         temp_table <- instruments_data$maintainable_sensors[, c("make", "model", "type", "serial_no", "owner")]
-        output$manage_sensors_table <- DT::renderDataTable(temp_table, rownames = FALSE, selection = "single")
+        output$manage_sensors_table <- DT::renderDT(temp_table, rownames = FALSE, selection = "single")
         updateSelectizeInput(session, "maintain_serial", choices = c("", instruments_data$maintainable_sensors$serial_no))
         shinyjs::hide("submit_btn")
         shinyjs::hide("add_sensor_slot")
@@ -1211,7 +1214,7 @@ table.on("click", "tr", function() {
       } else if (input$tab_panel == "Deploy/Recover instruments") {
         
       } else if (input$tab_panel == "View unfinished calibrations") {
-        output$incomplete_table <- DT::renderDataTable(complete$incomplete, rownames = FALSE, selection = "single")
+        output$incomplete_table <- DT::renderDT(complete$incomplete, rownames = FALSE, selection = "single")
         shinyjs::hide("submit_btn")
         shinyjs::hide("load_sensors")
         shinyjs::hide("sensor1_show")
@@ -1586,7 +1589,7 @@ table.on("click", "tr", function() {
       
       sensors_data[[sensor_details_name]] <- df
       
-      output[[sensor_details_name]] <- DT::renderDataTable(df, rownames = FALSE)
+      output[[sensor_details_name]] <- DT::renderDT(df, rownames = FALSE)
       
       # Update inputs with the sensor's *current* details
       updateSelectizeInput(session, "change_sensor", selected = sub[nrow(sub), "sensor_type"])
@@ -1839,10 +1842,10 @@ table.on("click", "tr", function() {
       
       #Re-render the tables
       instruments_data$manage_instruments <- instruments_data$sheet[ , !colnames(instruments_data$sheet) %in% c("instrument_id", "observer", "obs_datetime")]
-      output$manage_instruments_table <- DT::renderDataTable(instruments_data$manage_instruments, rownames = FALSE, selection = "single")
+      output$manage_instruments_table <- DT::renderDT(instruments_data$manage_instruments, rownames = FALSE, selection = "single")
       temp_table <- instruments_data$maintainable_sensors[, c("make", "model", "type", "serial_no", "owner")]
       temp_table$type <- gsub(" .*", "", temp_table$type)
-      output$manage_sensors_table <- DT::renderDataTable(temp_table, rownames = FALSE, selection = "single")
+      output$manage_sensors_table <- DT::renderDT(temp_table, rownames = FALSE, selection = "single")
       
       instruments_data$calibrate_instruments <- instruments_data$sheet[ , !colnames(instruments_data$sheet) %in% c("instrument_id", "observer", "obs_datetime", "retired_by", "date_retired", "date_purchased", "date_in_service")]
       output$calibration_instruments_table <- DT::renderDT({
@@ -2018,7 +2021,7 @@ table.on("click", "tr", function() {
                                             "Purpose" = "No unsaved calibrations!",
                                             check.names = FALSE)
         }
-        output$incomplete_table <- DT::renderDataTable(complete$incomplete, rownames = FALSE, selection = "single")
+        output$incomplete_table <- DT::renderDT(complete$incomplete, rownames = FALSE, selection = "single")
         updateNumericInput(session, "restart_index", min = 0, max = nrow(calibrations$incomplete_calibrations), value = 0)
         
         calibrations$incomplete_calibrations <- calibrations$incomplete_calibrations[!calibrations$incomplete_calibrations$calibration_id == delete_ID ,]

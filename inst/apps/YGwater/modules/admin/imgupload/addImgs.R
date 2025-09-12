@@ -109,8 +109,6 @@ addImgs <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    
-    
     # Define custom functions  #######
     # Render the data table
     renderDataTable <- function() {

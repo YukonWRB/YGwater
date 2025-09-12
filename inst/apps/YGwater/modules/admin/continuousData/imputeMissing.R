@@ -95,7 +95,16 @@ imputeMissing <- function(id) {
     })
     
     output$ts_table <- DT::renderDT({
-      DT::datatable(ts_meta(), selection = 'single',
+      
+      # Convert some data types to factors for better filtering in DT
+      df <- ts_meta()
+      df$record_rate_minutes <- as.factor(df$record_rate_minutes)
+      df$media <- as.factor(df$media)
+      df$aggregation <- as.factor(df$aggregation)
+      df$parameter <- as.factor(df$parameter)
+      
+      DT::datatable(df, 
+                    selection = 'single',
                     options = list(
                       columnDefs = list(
                         list(targets = 0, 
@@ -113,7 +122,8 @@ imputeMissing <- function(id) {
                         "});",
                         "}"
                       )
-                    )
+                    ),
+                    filter = 'top'
       )
     })
     
@@ -184,7 +194,10 @@ imputeMissing <- function(id) {
     })
     output$candidates <- DT::renderDT({
       req(candidates())
-      DT::datatable(candidates(), selection = 'single', options = list(scrollX = TRUE))
+      DT::datatable(candidates(), 
+                    selection = 'single', 
+                    options = list(scrollX = TRUE),
+                    filter = 'top')
     })
     
     perform_impute <- function(df, method, cand = NULL) {

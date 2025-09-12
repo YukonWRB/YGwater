@@ -32,7 +32,7 @@ imgMapView <- function(id, language) {
     images <- reactiveValues(
       images = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE i.datetime > NOW() - INTERVAL '7 days'"
+        "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE i.datetime > NOW() - INTERVAL '7 days'"
       )
     )
     images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
@@ -384,7 +384,7 @@ imgMapView <- function(id, language) {
     observeEvent(input$refresh_images, {
       images$images <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        paste0("SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';")
+        paste0("SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';")
       )
       attr(images$images$datetime, "tzone") <- "MST"
       images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
@@ -406,7 +406,7 @@ imgMapView <- function(id, language) {
       if (as.POSIXct(input$dates[1], tz = "MST") - 7*60 < min(images$images$datetime, na.rm = TRUE)) {
         images$images <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          paste0("SELECT i.image_id, i.img_meta_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';")
+          paste0("SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';")
         )
         attr(images$images$datetime, "tzone") <- "MST"
         images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]

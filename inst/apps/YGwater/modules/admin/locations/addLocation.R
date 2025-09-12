@@ -26,7 +26,7 @@ addLocation <- function(id, inputs) {
     moduleData <- reactiveValues()
     
     getModuleData <- function() {
-      moduleData$exist_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, visibility_public, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations")
+      moduleData$exist_locs = DBI::dbGetQuery(session$userData$AquaCache, "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations")
       moduleData$loc_types = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM location_types")
       moduleData$organizations = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM organizations")
       # limit documents to those that are data sharing agreements, which requires a join on table document_types
@@ -57,8 +57,7 @@ addLocation <- function(id, inputs) {
                   width = "100%"
                   
         ),
-        actionButton(ns("hydat_fill"), "Auto-fill from HYDAT",
-                     width = "100%"
+        actionButton(ns("hydat_fill"), "Auto-fill from HYDAT"
         ),
         splitLayout(
           cellWidths = c("50%", "50%"),
@@ -96,24 +95,13 @@ addLocation <- function(id, inputs) {
                        options = list(maxItems = 1),
                        width = "100%"
         ),
-        
-        splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}"))),
-          selectizeInput(ns("viz"), 
-                         "Public visibility", 
-                         choices = stats::setNames(c("exact", "region", "jitter"), 
-                                                   c("Exact", "Within general region", "At random within a 5 km radius of true location")),
-                         width = "100%"
-          ),
-          selectizeInput(ns("share_with"), 
-                         "Share with groups (1 or more, type your own if not in list)", 
-                         choices = moduleData$users$role_name,
-                         selected = "public_reader",
-                         multiple = TRUE,
-                         options = list(create = TRUE),
-                         width = "100%"
-          )
+        selectizeInput(ns("share_with"), 
+                       "Share with groups (1 or more, type your own if not in list)", 
+                       choices = moduleData$users$role_name,
+                       selected = "public_reader",
+                       multiple = TRUE,
+                       options = list(create = TRUE),
+                       width = "100%"
         ),
         
         splitLayout(
@@ -249,6 +237,7 @@ addLocation <- function(id, inputs) {
                         "}"
                       )
                     ),
+                    filter = 'top',
                     rownames = FALSE)
     }) |> bindEvent(moduleData$exist_locs)
     
@@ -268,7 +257,6 @@ addLocation <- function(id, inputs) {
           updateSelectizeInput(session, "loc_type", selected = details$location_type)
           updateNumericInput(session, "lat", value = details$latitude)
           updateNumericInput(session, "lon", value = details$longitude)
-          updateSelectizeInput(session, "viz", selected = details$visibility_public)
           updateSelectizeInput(session, "share_with", selected = details$share_with)
           updateSelectizeInput(session, "loc_owner", selected = details$owner)
           updateTextInput(session, "loc_contact", value = details$contact)
@@ -310,18 +298,113 @@ addLocation <- function(id, inputs) {
     
     ## Hydat fill ###############################################################
     # Detect if the user's location code is present in hydat. If so, show a button to enable them to auto-populate fields with hydat info
-    output$hydat_note <- renderUI({HTML("<b>Entering a WSC code will allow you to auto-populate fields with HYDAT information.</b><br>")})
-    hydat <- reactiveValues(exists = FALSE,
-                            stns = NULL)
-    if ((file.exists(tidyhydat::hy_downloaded_db()))) {
-      hydat$exists <- TRUE
-      hydat$stns <- tidyhydat::hy_stations()$STATION_NUMBER
-    } else {
-      shinyjs::hide("hydat_note")
+    hydat <- reactiveValues(exists = FALSE, stns = NULL)
+    shinyjs::hide("hydat_fill")
+    
+    safe <- function(expr) tryCatch(expr, error = function(e) NULL)
+    
+    # Download hydat from Shiny, bypassing tidyhydat downloader because it's blocked on a HEAD request
+    download_hydat <- function() {
+      dest_dir <- tidyhydat::hy_dir()
+      dir.create(dest_dir, showWarnings = FALSE, recursive = TRUE)
+      remote_ver <- tidyhydat::hy_remote()  # e.g. "20250701"
+      # hy_base_url() is internal; fetch it safely
+      hy_base_url <- get("hy_base_url", asNamespace("tidyhydat"))()
+      url <- paste0(hy_base_url, "Hydat_sqlite3_", remote_ver, ".zip")
+      
+      tmp_zip <- tempfile("hydat_", fileext = ".zip")
+      ex_dir  <- file.path(tempdir(), "hydat_extracted")
+      dir.create(ex_dir, showWarnings = FALSE)
+      
+      # Use GET (works when HEAD is blocked)
+      curl::curl_download(url, destfile = tmp_zip,
+                          handle = curl::new_handle(
+                            useragent = "Mozilla/5.0",
+                            followlocation = TRUE
+                          ))
+      utils::unzip(tmp_zip, exdir = ex_dir, overwrite = TRUE)
+      
+      # Copy the sqlite DB into place (name inside the zip can vary)
+      sqlite_src <- list.files(ex_dir, pattern = "\\.sqlite3$", full.names = TRUE)
+      if (length(sqlite_src) == 0) stop("HYDAT zip did not contain a .sqlite3 file")
+      hydat_path <- file.path(dest_dir, "Hydat.sqlite3")
+      file.copy(sqlite_src[1], hydat_path, overwrite = TRUE)
+      unlink(c(tmp_zip, ex_dir), recursive = TRUE) 
     }
     
+    
+    db_path <- safe(tidyhydat::hy_downloaded_db())
+    download_new_hydat <- FALSE
+    if (!is.null(db_path)) {
+      if (file.exists(db_path)) {
+        # Compare versions safely
+        local_ver <- safe(as.Date(tidyhydat::hy_version(db_path)$Date))
+        local_ver <- gsub("-", "", as.character(local_ver))
+        remote_ver <- safe(tidyhydat::hy_remote())
+        if (!is.null(local_ver) && !is.null(remote_ver)) {
+          if (local_ver != remote_ver) {
+            showNotification("A newer HYDAT is available. Attempting update, please be patient. A success message will appear once the download is complete.", type = "warning", duration = 20)
+            safe(download_hydat())  # Download new version
+            # try to refresh version
+            db_path <- safe(tidyhydat::hy_downloaded_db())
+            local_ver <- if (!is.null(db_path)) safe(as.Date(tidyhydat::hy_version(db_path)$Date)) else NULL
+            if (!is.null(local_ver) && !is.null(remote_ver)) {
+              if (identical(local_ver, remote_ver)) {
+                showNotification("HYDAT updated.", type = "message")
+              } else {
+                showNotification("HYDAT update failed; using existing local copy.", type = "error")
+              }
+            } else {
+              showNotification("HYDAT update failed; using existing local copy.", type = "error")
+            }
+          } 
+        }
+        stns <- safe(tidyhydat::hy_stations())
+        if (!is.null(stns)) {
+          hydat$stns <- stns$STATION_NUMBER
+          hydat$exists <- TRUE
+        } else {
+          hydat$stns <- character(0)
+          hydat$exists <- TRUE
+        }
+      } else {
+        download_new_hydat <- TRUE
+      }
+    } else {
+      download_new_hydat <- TRUE
+    }
+    
+    if (download_new_hydat) {
+      showNotification("No local HYDAT found. Attempting download, please be patient. A success message will appear once the download is complete.", type = "warning", duration = 20)
+      safe(download_hydat())  # Download new version
+      db_path <- safe(tidyhydat::hy_downloaded_db())
+      if (!is.null(db_path)) {
+        if (file.exists(db_path)) {
+          stns <- safe(tidyhydat::hy_stations())
+          if (!is.null(stns)) {
+            hydat$stns <- stns$STATION_NUMBER
+            hydat$exists <- TRUE
+            showNotification("HYDAT downloaded.", type = "message")
+          } else {
+            hydat$stns <- character(0)
+            hydat$exists <- TRUE
+            showNotification("HYDAT download failed; HYDAT functions will not be available.", type = "error")
+          }
+        }
+      } else {
+        hydat$stns <- character(0)
+        hydat$exists <- FALSE
+        showNotification("HYDAT download failed; HYDAT functions will not be available.", type = "error")
+      }
+    }
+    
+    if (hydat$exists) {
+      output$hydat_note <- renderUI({HTML("<b>Entering a WSC code will allow you to auto-populate fields with HYDAT information.</b><br>")})
+    }
+    
+    
     observeEvent(input$loc_code, {# Observe loc_code inputs and, if possible, show the button to auto-populate fields
-      req(input$loc_code, hydat$exists)
+      req(input$loc_code)
       if (hydat$exists) {
         if (input$loc_code %in% hydat$stns) {
           shinyjs::show("hydat_fill")
@@ -338,6 +421,7 @@ addLocation <- function(id, inputs) {
       } else {
         if (input$loc_code %in% moduleData$exist_locs$location) {
           shinyjs::js$backgroundCol(ns("loc_code"), "#fdd")
+          showNotification("This location code already exists and you're on the 'add new timeseries' mode.", type = "warning", duration = 10)
         } else {
           shinyjs::js$backgroundCol(ns("loc_code"), "#fff")
         }
@@ -372,25 +456,17 @@ addLocation <- function(id, inputs) {
     }, ignoreInit = TRUE)
     
     observeEvent(input$hydat_fill, {
-      req(input$loc_code)
+      req(input$loc_code, hydat$exists)
       # Get the station info from hydat
       stn <- tidyhydat::hy_stations(input$loc_code)
       if (nrow(stn) == 0) {
         return()
       }
-      datum <- tidyhydat::hy_stn_datum_conv(input$loc_code)
-      datum_list <- tidyhydat::hy_datum_list()
-      # Replace DATUM_FROM with DATUM_ID
-      datum$DATUM_FROM_ID <- datum_list$DATUM_ID[match(datum$DATUM_FROM, datum_list$DATUM_EN)]
-      # Replace DATUM_TO with DATUM_ID
-      datum$DATUM_TO_ID <- datum_list$DATUM_ID[match(datum$DATUM_TO, datum_list$DATUM_EN)]
-      
-      # Drop original DATUM_FROM and DATUM_TO columns
-      datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
-      
-      updateTextInput(session, "loc_name", value = titleCase(stn$STATION_NAME, "en"))
-      updateNumericInput(session, "lat", value = stn$LATITUDE)
-      updateNumericInput(session, "lon", value = stn$LONGITUDE)
+      if (hydat$exists) {
+        datum <- tidyhydat::hy_stn_datum_conv(input$loc_code)
+      } else {
+        datum <- data.frame()
+      }
       if (nrow(datum) == 0) {
         showModal(modalDialog(
           "No datum conversion found for this station in HYDAT."
@@ -399,10 +475,22 @@ addLocation <- function(id, inputs) {
         updateSelectizeInput(session, "datum_id_to", selected = 10)
         updateNumericInput(session, "elev", value = 0)
       } else {
+        datum_list <- tidyhydat::hy_datum_list()
+        # Replace DATUM_FROM with DATUM_ID
+        datum$DATUM_FROM_ID <- datum_list$DATUM_ID[match(datum$DATUM_FROM, datum_list$DATUM_EN)]
+        # Replace DATUM_TO with DATUM_ID
+        datum$DATUM_TO_ID <- datum_list$DATUM_ID[match(datum$DATUM_TO, datum_list$DATUM_EN)]
+        
+        # Drop original DATUM_FROM and DATUM_TO columns
+        datum <- datum[, c("STATION_NUMBER", "DATUM_FROM_ID", "DATUM_TO_ID", "CONVERSION_FACTOR")]
         updateSelectizeInput(session, "datum_id_from", selected = datum$DATUM_FROM_ID[nrow(datum)])
         updateSelectizeInput(session, "datum_id_to", selected = datum$DATUM_TO_ID[nrow(datum)])
         updateNumericInput(session, "elev", value = datum$CONVERSION_FACTOR[nrow(datum)])
       }
+      
+      updateTextInput(session, "loc_name", value = titleCase(stn$STATION_NAME, "en"))
+      updateNumericInput(session, "lat", value = stn$LATITUDE)
+      updateNumericInput(session, "lon", value = stn$LONGITUDE)
       
       updateSelectizeInput(session, "loc_owner", selected = moduleData$organizations[moduleData$organizations$name == "Water Survey of Canada", "organization_id"])
       updateTextInput(session, "loc_note", value = paste0("Station metadata from HYDAT version ", substr(tidyhydat::hy_version()$Date[1], 1, 10)))
@@ -789,19 +877,8 @@ addLocation <- function(id, inputs) {
             )
           }
           
-          # Changes to visibility
-          if (input$viz != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "visibility_public"]) {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              glue::glue_sql(
-                "UPDATE locations SET visibility_public = {input$viz} WHERE location_id = {selected_loc()};",
-                .con = session$userData$AquaCache
-              )
-            )
-          }
-          
           # Changes to share_with
-          if (!all(input$share_with %in% moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"])) {
+          if (!paste0("{", paste(input$share_with, collapse = ","), "}") == moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "share_with"]) {
             share_with_sql <- DBI::SQL(paste0("{", paste(input$share_with, collapse = ", "), "}"))
             DBI::dbExecute(
               session$userData$AquaCache,
@@ -1019,7 +1096,6 @@ addLocation <- function(id, inputs) {
                        name_fr = input$loc_name_fr,
                        latitude = input$lat,
                        longitude = input$lon,
-                       visibility_public = input$viz,
                        share_with = input$share_with,
                        owner = if (isTruthy(input$loc_owner)) as.numeric(input$loc_owner) else NA,
                        data_sharing_agreement_id = if (isTruthy(input$data_sharing_agreement)) as.numeric(input$data_sharing_agreement) else NA,

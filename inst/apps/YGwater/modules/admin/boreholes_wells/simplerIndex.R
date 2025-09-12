@@ -263,12 +263,12 @@ simplerIndexUI <- function(id) {
                   condition = "input.permafrost_present == true",
                   ns = ns,
                   fluidRow(
-                    column(8, numericInput(ns("permafrost_top_depth"), "Depth to Top of Permafrost:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("permafrost_top_depth_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    column(8, numericInput(ns("permafrost_top"), "Depth to Top of Permafrost:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("permafrost_top_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   fluidRow(
-                    column(8, numericInput(ns("permafrost_bottom_depth"), "Depth to Bottom of Permafrost:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("permafrost_bottom_depth_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                    column(8, numericInput(ns("permafrost_bot"), "Depth to Bottom of Permafrost:", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("permafrost_bot_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   )
                 ),
                 
@@ -280,8 +280,8 @@ simplerIndexUI <- function(id) {
                   column(4, radioButtons(ns("drill_depth_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                 ),
                 fluidRow(
-                  column(8, numericInput(ns("surveyed_ground_level_elevation"), "Surveyed Ground Level Elevation:", value = NULL, step = 0.01)),
-                  column(4, radioButtons(ns("surveyed_ground_level_elevation_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                  column(8, numericInput(ns("surveyed_ground_elev"), "Surveyed Ground Elevation", value = NULL, step = 0.01)),
+                  column(4, radioButtons(ns("surveyed_ground_elev_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                 ),
                 checkboxInput(ns("is_well"), "Well Constructed", value = FALSE),
                 
@@ -291,8 +291,8 @@ simplerIndexUI <- function(id) {
                   ns = ns,
                   # Casing Outside Diameter
                   fluidRow(
-                    column(8, numericInput(ns("casing_outside_diameter"), "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
-                    column(4, radioButtons(ns("casing_outside_diameter_unit"), "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
+                    column(8, numericInput(ns("casing_od"), "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
+                    column(4, radioButtons(ns("casing_od_unit"), "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
                   ),
                   # Top of Screen
                   fluidRow(
@@ -431,7 +431,7 @@ simplerIndexUI <- function(id) {
       });
     });",
       ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'), ns('resize-handle'), ns('resize-handle-right'),
-      paste(sprintf("'%s'", ns(c('name','notes','easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top_depth','permafrost_bottom_depth','date_drilled','casing_outside_diameter','drill_depth','surveyed_ground_level_elevation','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield'))), collapse = ','))))
+      paste(sprintf("'%s'", ns(c('name','notes','easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top','permafrost_bot','date_drilled','casing_od','drill_depth','surveyed_ground_elev','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield'))), collapse = ','))))
   )
 } # End of UI function
 
@@ -1015,14 +1015,14 @@ simplerIndex <- function(id) {
         "easting", "northing", "utm_zone", "latitude", "longitude",
         "location_source", "purpose_of_borehole", "purpose_borehole_inferred",
         "depth_to_bedrock", "depth_to_bedrock_unit", "date_drilled",
-        "casing_outside_diameter", "casing_outside_diameter_unit",
+        "casing_od", "casing_od_unit",
         "drill_depth", "drill_depth_unit", "top_of_screen", "top_of_screen_unit",
         "bottom_of_screen", "bottom_of_screen_unit", "well_head_stick_up",
         "well_head_stick_up_unit", "static_water_level", "static_water_level_unit",
-        "estimated_yield", "estimated_yield_unit", "surveyed_ground_level_elevation",
-        "surveyed_ground_level_elevation_unit",
-        "permafrost_present", "permafrost_top_depth", "permafrost_top_depth_unit",
-        "permafrost_bottom_depth", "permafrost_bottom_depth_unit",
+        "estimated_yield", "estimated_yield_unit", "surveyed_ground_elev",
+        "surveyed_ground_elev_unit",
+        "permafrost_present", "permafrost_top", "permafrost_top_unit",
+        "permafrost_bot", "permafrost_bot_unit",
         "is_well", "drilled_by",
         "purpose_of_well", "purpose_well_inferred"
       )
@@ -1615,8 +1615,8 @@ simplerIndex <- function(id) {
             blur_field(field_name)
           } else if (field_name %in% c("easting","northing","latitude",
                                        "longitude","depth_to_bedrock",
-                                       "permafrost_top_depth","permafrost_bottom_depth",
-                                       "casing_outside_diameter","drill_depth","top_of_screen",
+                                       "permafrost_top","permafrost_bot",
+                                       "casing_od","drill_depth","top_of_screen",
                                        "bottom_of_screen","well_head_stick_up","static_water_level","estimated_yield")) {
             # Numeric inputs - extract numbers
             tryCatch({
@@ -1743,13 +1743,13 @@ simplerIndex <- function(id) {
           depth_to_bedrock = input$depth_to_bedrock,
           depth_to_bedrock_unit = input$depth_to_bedrock_unit,
           permafrost_present = input$permafrost_present,
-          permafrost_top_depth = input$permafrost_top_depth,
-          permafrost_top_depth_unit = input$permafrost_top_depth_unit,
-          permafrost_bottom_depth = input$permafrost_bottom_depth,
-          permafrost_bottom_depth_unit = input$permafrost_bottom_depth_unit,
+          permafrost_top = input$permafrost_top,
+          permafrost_top_unit = input$permafrost_top_unit,
+          permafrost_bot = input$permafrost_bot,
+          permafrost_bot_unit = input$permafrost_bot_unit,
           date_drilled = input$date_drilled,
-          casing_outside_diameter = input$casing_outside_diameter,
-          casing_outside_diameter_unit = input$casing_outside_diameter_unit,
+          casing_od = input$casing_od,
+          casing_od_unit = input$casing_od_unit,
           drill_depth = input$drill_depth,
           drill_depth_unit = input$drill_depth_unit,
           top_of_screen = input$top_of_screen,
@@ -1762,8 +1762,8 @@ simplerIndex <- function(id) {
           static_water_level_unit = input$static_water_level_unit,
           estimated_yield = input$estimated_yield,
           estimated_yield_unit = input$estimated_yield_unit,
-          surveyed_ground_level_elevation = input$surveyed_ground_level_elevation,
-          surveyed_ground_level_elevation_unit = input$surveyed_ground_level_elevation_unit,
+          surveyed_ground_elev = input$surveyed_ground_elev,
+          surveyed_ground_elev_unit = input$surveyed_ground_elev_unit,
           is_well = input$is_well,
           purpose_of_well = input$purpose_of_well,
           purpose_of_well_inferred = input$purpose_of_well_inferred,
@@ -1823,16 +1823,16 @@ simplerIndex <- function(id) {
         # Update radio buttons
         updateRadioButtons(session, "coordinate_system", selected = get_meta_value("coordinate_system", "utm"))
         updateRadioButtons(session, "depth_to_bedrock_unit", selected = get_meta_value("depth_to_bedrock_unit", "ft"))
-        updateRadioButtons(session, "casing_outside_diameter_unit", selected = get_meta_value("casing_outside_diameter_unit", "inch"))
+        updateRadioButtons(session, "casing_od_unit", selected = get_meta_value("casing_od_unit", "inch"))
         updateRadioButtons(session, "drill_depth_unit", selected = get_meta_value("drill_depth_unit", "ft"))
         updateRadioButtons(session, "top_of_screen_unit", selected = get_meta_value("top_of_screen_unit", "ft"))
         updateRadioButtons(session, "bottom_of_screen_unit", selected = get_meta_value("bottom_of_screen_unit", "ft"))
         updateRadioButtons(session, "well_head_stick_up_unit", selected = get_meta_value("well_head_stick_up_unit", "ft"))
         updateRadioButtons(session, "static_water_level_unit", selected = get_meta_value("static_water_level_unit", "ft"))
         updateRadioButtons(session, "estimated_yield_unit", selected = get_meta_value("estimated_yield_unit", "G/min"))
-        updateRadioButtons(session, "surveyed_ground_level_elevation_unit", selected = get_meta_value("surveyed_ground_level_elevation_unit", "ft"))
-        updateRadioButtons(session, "permafrost_top_depth_unit", selected = get_meta_value("permafrost_top_depth_unit", "ft"))
-        updateRadioButtons(session, "permafrost_bottom_depth_unit", selected = get_meta_value("permafrost_bottom_depth_unit", "ft"))
+        updateRadioButtons(session, "surveyed_ground_elev_unit", selected = get_meta_value("surveyed_ground_elev_unit", "ft"))
+        updateRadioButtons(session, "permafrost_top_unit", selected = get_meta_value("permafrost_top_unit", "ft"))
+        updateRadioButtons(session, "permafrost_bot_unit", selected = get_meta_value("permafrost_bot_unit", "ft"))
         updateRadioButtons(session, "purpose_borehole_inferred", selected = get_meta_value("purpose_borehole_inferred", TRUE))
         updateRadioButtons(session, "purpose_well_inferred", selected = get_meta_value("purpose_well_inferred", TRUE))
         
@@ -1842,11 +1842,11 @@ simplerIndex <- function(id) {
         updateNumericInput(session, "latitude", value = get_meta_numeric("latitude"))
         updateNumericInput(session, "longitude", value = get_meta_numeric("longitude"))
         updateNumericInput(session, "depth_to_bedrock", value = get_meta_numeric("depth_to_bedrock"))
-        updateNumericInput(session, "permafrost_top_depth", value = get_meta_numeric("permafrost_top_depth"))
-        updateNumericInput(session, "permafrost_bottom_depth", value = get_meta_numeric("permafrost_bottom_depth"))
-        updateNumericInput(session, "casing_outside_diameter", value = get_meta_numeric("casing_outside_diameter"))
+        updateNumericInput(session, "permafrost_top", value = get_meta_numeric("permafrost_top"))
+        updateNumericInput(session, "permafrost_bot", value = get_meta_numeric("permafrost_bot"))
+        updateNumericInput(session, "casing_od", value = get_meta_numeric("casing_od"))
         updateNumericInput(session, "drill_depth", value = get_meta_numeric("drill_depth"))
-        updateNumericInput(session, "surveyed_ground_level_elevation", value = get_meta_numeric("surveyed_ground_level_elevation"))
+        updateNumericInput(session, "surveyed_ground_elev", value = get_meta_numeric("surveyed_ground_elev"))
         updateNumericInput(session, "top_of_screen", value = get_meta_numeric("top_of_screen"))
         updateNumericInput(session, "bottom_of_screen", value = get_meta_numeric("bottom_of_screen"))
         updateNumericInput(session, "well_head_stick_up", value = get_meta_numeric("well_head_stick_up"))
@@ -1877,15 +1877,15 @@ simplerIndex <- function(id) {
         updateSelectizeInput(session, "drilled_by", selected = NULL)
         updateRadioButtons(session, "coordinate_system", selected = "utm")
         updateRadioButtons(session, "depth_to_bedrock_unit", selected = "ft")
-        updateRadioButtons(session, "casing_outside_diameter_unit", selected = "inch")
+        updateRadioButtons(session, "casing_od_unit", selected = "inch")
         updateRadioButtons(session, "drill_depth_unit", selected = "ft")
         updateRadioButtons(session, "estimated_yield_unit", selected = "G/min")
-        updateRadioButtons(session, "surveyed_ground_level_elevation_unit", selected = "ft")
+        updateRadioButtons(session, "surveyed_ground_elev_unit", selected = "ft")
         
         # Clear all numeric inputs
         for (field in c("easting", "northing", "latitude", "longitude", "depth_to_bedrock",
-                        "permafrost_top_depth", "permafrost_bottom_depth", "casing_outside_diameter",
-                        "drill_depth", "surveyed_ground_level_elevation", "top_of_screen",
+                        "permafrost_top", "permafrost_bot", "casing_od",
+                        "drill_depth", "surveyed_ground_elev", "top_of_screen",
                         "bottom_of_screen", "well_head_stick_up", "static_water_level", "estimated_yield")) {
           updateNumericInput(session, field, value = NULL)
         }
@@ -2063,15 +2063,15 @@ simplerIndex <- function(id) {
             latitude = metadata$latitude,
             longitude = metadata$longitude,
             location_source = metadata$location_source,
-            surveyed_ground_level_elevation = metadata$surveyed_ground_level_elevation,
+            surveyed_ground_elev = metadata$surveyed_ground_elev,
             purpose_of_borehole = if (nchar(metadata$purpose_of_borehole) == 0) NULL else metadata$purpose_of_borehole,
             purpose_borehole_inferred = metadata$purpose_borehole_inferred,
             depth_to_bedrock = metadata$depth_to_bedrock,
             permafrost_present = metadata$permafrost_present,
-            permafrost_top_depth = metadata$permafrost_top_depth,
-            permafrost_bottom_depth = metadata$permafrost_bottom_depth,
+            permafrost_top = metadata$permafrost_top,
+            permafrost_bot = metadata$permafrost_bot,
             date_drilled = metadata$date_drilled,
-            casing_outside_diameter = metadata$casing_outside_diameter,
+            casing_od = metadata$casing_od,
             is_well = metadata$is_well,
             well_depth = metadata$drill_depth,
             top_of_screen = metadata$top_of_screen,
@@ -2079,9 +2079,8 @@ simplerIndex <- function(id) {
             well_head_stick_up = metadata$well_head_stick_up,
             static_water_level = metadata$static_water_level,
             estimated_yield = metadata$estimated_yield,
-            ground_elev_m = metadata$surveyed_ground_level_elevation,
             notes = metadata$notes,
-            share_with = "yg_reader",
+            share_with = "public_reader",
             drilled_by = metadata$drilled_by,
             drill_method = NULL,
             pdf_file_path = pdf_file_path,
@@ -2138,15 +2137,15 @@ simplerIndex <- function(id) {
               latitude = metadata$latitude,
               longitude = metadata$longitude,
               location_source = metadata$location_source,
-              surveyed_ground_level_elevation = metadata$surveyed_ground_level_elevation,
+              surveyed_ground_elev = metadata$surveyed_ground_elev,
               purpose_of_borehole = metadata$purpose_of_borehole,
-              purpose_inferred = metadata$purpose_borehole_inferred,
+              purpose_borehole_inferred = metadata$purpose_borehole_inferred,
               depth_to_bedrock = metadata$depth_to_bedrock,
               permafrost_present = metadata$permafrost_present,
-              permafrost_top_depth = metadata$permafrost_top_depth,
-              permafrost_bottom_depth = metadata$permafrost_bottom_depth,
+              permafrost_top = metadata$permafrost_top,
+              permafrost_bot = metadata$permafrost_bot,
               date_drilled = metadata$date_drilled,
-              casing_outside_diameter = metadata$casing_outside_diameter,
+              casing_od = metadata$casing_od,
               is_well = metadata$is_well,
               well_depth = metadata$drill_depth,
               top_of_screen = metadata$top_of_screen,
@@ -2154,10 +2153,9 @@ simplerIndex <- function(id) {
               well_head_stick_up = metadata$well_head_stick_up,
               static_water_level = metadata$static_water_level,
               estimated_yield = metadata$estimated_yield,
-              ground_elev_m = metadata$surveyed_ground_level_elevation,
               notes = metadata$notes,
               con = session$userData$AquaCache,
-              share_with = "yg_reader",
+              share_with = "public_reader",
               drilled_by = metadata$drilled_by,
               drill_method = NULL,
               pdf_file_path = pdf_file_path,

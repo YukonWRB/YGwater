@@ -56,6 +56,8 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     # Files/document/image sub-modules
     source(system.file("apps/YGwater/modules/admin/documents/addDocs.R", package = "YGwater"))
     source(system.file("apps/YGwater/modules/admin/imgupload/addImgs.R", package = "YGwater"))
+    source(system.file("apps/YGwater/modules/admin/imgupload/addImgSeries.R", package = "YGwater"))
+    
     
     source(system.file("apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R", package = "YGwater"))
     source(system.file("apps/YGwater/modules/admin/applicationTasks/viewFeedback.R", package = "YGwater"))
@@ -71,7 +73,7 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
     }
     
     # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
-    options(shiny.maxRequestSize = 100 * 1024^2)
+    options(shiny.maxRequestSize = 1024 * 1024^2)
   }
   
   

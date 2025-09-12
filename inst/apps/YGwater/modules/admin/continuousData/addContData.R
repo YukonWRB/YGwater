@@ -28,6 +28,7 @@ addContDataUI <- function(id) {
     ", ns("accordion2")))),
     
     page_fluid(
+      actionButton(ns("reload_module"), "Reload module data", icon = icon("refresh")),
       accordion(
         id = ns("accordion1"),
         open = "ts_panel",
@@ -64,9 +65,10 @@ addContDataUI <- function(id) {
           tags$div("Hint: double click on a cell to edit its value."),
           tags$br(),
           DT::DTOutput(ns("data_table")),
-          selectizeInput(ns("UTC_offset"), "UTC offset (in hours)", choices = seq(-12, 12, by = 1), selected = 0, multiple = FALSE),
-          radioButtons(ns("no_update"), "Prevent update to new data by automatic processes?", 
+          selectizeInput(ns("UTC_offset"), "UTC offset of data", choices = seq(-12, 12, by = 1), selected = 0, multiple = FALSE),
+          radioButtons(ns("no_update"), "Prevent update to this data by automatic processes?", 
                        choices = c("Yes" = "yes", "No" = "no"), inline = TRUE, selected = "no"),
+          tags$div("Note: data visibility is controlled by the timeseries parameters."),
           div(
             actionButton(ns("upload"), "Upload to AquaCache (no overwrite)",
                          style = "font-size: 14px;"),
@@ -105,9 +107,14 @@ addContData <- function(id) {
       shinyjs::disable('upload_overwrite_some')
     }
     
-    ts_meta <- reactive({
+    ts_meta <- reactiveVal({
       dbGetQueryDT(session$userData$AquaCache,
-                   "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS nominal_record_rate, note FROM continuous.timeseries_metadata_en")
+                   "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en")
+    })
+    
+    observeEvent(input$reload_module, {
+      ts_meta(dbGetQueryDT(session$userData$AquaCache,
+                     "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en"))
     })
     
     observeEvent(input$addNewTS, {
@@ -115,7 +122,13 @@ addContData <- function(id) {
     })
     
     output$ts_table <- DT::renderDT({
-      DT::datatable(ts_meta(),
+      # Convert some data types to factors for better filtering in DT
+      df <- ts_meta()
+      df$record_rate_minutes <- as.factor(df$record_rate_minutes)
+      df$media <- as.factor(df$media)
+      df$aggregation <- as.factor(df$aggregation)
+      df$parameter <- as.factor(df$parameter)
+      DT::datatable(df,
                     selection = 'single',
                     options = list(
                       columnDefs = list(list(targets = 0, visible = FALSE)),
@@ -133,6 +146,7 @@ addContData <- function(id) {
                         "}"
                       )
                     ),
+                    filter = 'top',
                     rownames = FALSE)
     })
     
@@ -156,7 +170,7 @@ addContData <- function(id) {
       ext <- tools::file_ext(input$file$name)
       if (ext == 'xlsx') {
         data$upload_raw <- openxlsx::read.xlsx(input$file$datapath, sheet = 1)
-      } else {
+      } else if (ext == "csv") {
         data$upload_raw <- utils::read.csv(input$file$datapath, show_col_types = FALSE)
       } else {
         showNotification('Invalid file; please upload a .csv or .xlsx file', type = 'error')
