@@ -63,7 +63,7 @@ simplerIndexUI <- function(id) {
                     # Zoom control - wrap in a container div
                     div(class = "slider-container",
                         sliderInput(ns("zoom_level"),
-                                    "Zoom:",
+                                    "Zoom",
                                     min = 0.5, max = 4.0, value = 1.0, step = 0.1,
                                     width = "150px"
                         )
@@ -72,15 +72,15 @@ simplerIndexUI <- function(id) {
             ),
             
             # Replace the Second row with simplified OCR controls
-            bslib::accordion(
+            accordion(
               id = ns("ocr-controls-accordion"),
               open = FALSE,
-              bslib::accordion_panel(
+              accordion_panel(
                 title = "OCR Controls",
                 div(class = "control-row", style = "margin-top: 10px;",
                     div(class = "control-group",
                         selectizeInput(ns("ocr_display_mode"),
-                                       "OCR Display Mode:",
+                                       "OCR Display Mode",
                                        choices = list(
                                          "None" = "none",
                                          "Highlight Boxes" = "highlight", 
@@ -90,13 +90,14 @@ simplerIndexUI <- function(id) {
                         ),
                         div(class = "slider-container",
                             sliderInput(ns("confidence_threshold"),
-                                        "OCR Confidence:",
+                                        "Confidence %",
                                         min = 40, max = 100, value = 70, step = 10,
                                         width = "150px"
                             )
-                        ),
+                        ) %>%
+                          tooltip("Set the minimum confidence level for displaying OCR results. Higher values show only the most certain text."),,
                         selectizeInput(ns("psm_mode"),
-                                       "PSM Mode:",
+                                       "PSM Mode",
                                        choices = list(
                                          "Auto" = "3",
                                          "Auto + OSD" = "1",
@@ -104,9 +105,10 @@ simplerIndexUI <- function(id) {
                                          "Sparse Text + OSD" = "12"
                                        ),
                                        selected = "1"
-                        ),
+                        ) %>%
+                          tooltip("Page Segmentation Mode (PSM) controls how Tesseract splits the image into text blocks. 'Auto + OSD' is a good general choice for documents with mixed layouts."),
                         selectizeInput(ns("pre_processing_method"),
-                                       "Pre-processing:",
+                                       "Pre-processing",
                                        choices = list(
                                          "Default" = "default",
                                          "Enhance Dark" = "enhance_dark",
@@ -121,7 +123,7 @@ simplerIndexUI <- function(id) {
                         # OCR Text Display
                         div(
                           style = "margin-left: 20px; width: 300px;",
-                          h6("Extracted Text:", style = "margin-bottom: 5px; color: #495057;"),
+                          h6("Extracted Text", style = "margin-bottom: 5px; color: #495057;"),
                           div(
                             style = "max-height: 120px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: white; font-family: monospace; font-size: 11px; font-weight: bold; color: #007bff;",
                             verbatimTextOutput(ns("ocr_text_display"))
@@ -153,7 +155,7 @@ simplerIndexUI <- function(id) {
             div(class = "resize-handle-right", id = ns("resize-handle-right")),
             # Fixed borehole ID header - only the ID display
             div(class = "borehole-header",
-                tags$label("Borehole ID:", style = "font-weight: bold; display: block; margin-bottom: 5px;"),
+                tags$label("Borehole ID", style = "font-weight: bold; display: block; margin-bottom: 5px;"),
                 div(
                   class = "borehole-id-display",
                   textOutput(ns("borehole_id_display"))
@@ -187,12 +189,20 @@ simplerIndexUI <- function(id) {
                 br(),
                 
                 # Well identification
-                textInput(ns("name"), "Name:", placeholder = "Enter name"),
-                textInput(ns("notes"), "Notes:", placeholder = "Enter any notes"),
+                textInput(ns("name"), "Borehole/well name", placeholder = "Enter name"),
+                textInput(ns("notes_borehole"), "Boreholes notes", placeholder = "Enter borehole-specific notes"),
+                selectizeInput(ns("share_with_borehole"), 
+                               "Share borehole with groups", 
+                               choices = "public_reader", # Rest populated in server
+                               selected = "public_reader",
+                               multiple = TRUE,
+                               width = "100%"
+                ),
                 # Add 'drilled by' selectize input
-                selectizeInput(ns("drilled_by"), "Drilled By:",
-                               choices = NULL,
+                selectizeInput(ns("drilled_by"), "Driller",
+                               choices = NULL, # Populated in server
                                selected = NULL,
+                               multiple = TRUE,
                                options = list(
                                  create = TRUE,
                                  placeholder = "Select or enter driller",
@@ -202,7 +212,7 @@ simplerIndexUI <- function(id) {
                 
                 # Location information section - remove surveyed_location_top_casing field
                 radioButtons(ns("coordinate_system"), 
-                             "Coordinate System:",
+                             "Coordinate System",
                              choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
                              selected = "utm",
                              inline = TRUE
@@ -213,7 +223,7 @@ simplerIndexUI <- function(id) {
                   numericInput(ns("easting"), "Easting:", value = NULL, min = 0),
                   numericInput(ns("northing"), "Northing:", value = NULL, min = 0),
                   selectizeInput(ns("utm_zone"),
-                                 "UTM Zone:",
+                                 "UTM Zone",
                                  choices = list(
                                    "7N" = "7N", "8N" = "8N", "9N" = "9N", "10N" = "10N",
                                    "11N" = "11N", "12N" = "12N", "13N" = "13N"
@@ -228,13 +238,20 @@ simplerIndexUI <- function(id) {
                 conditionalPanel(
                   condition = "input.coordinate_system == 'latlon'",
                   ns = ns,
-                  numericInput(ns("latitude"), "Latitude:", value = NULL, min = 40, max = 85, step = 0.000001),
-                  numericInput(ns("longitude"), "Longitude:", value = NULL, min = -141, max = -60, step = 0.000001)
+                  numericInput(ns("latitude"), "Latitude *", value = NULL, min = 40, max = 85, step = 0.000001),
+                  numericInput(ns("longitude"), "Longitude *", value = NULL, min = -141, max = -60, step = 0.000001)
                 ),
-                textInput(ns("location_source"), "Location Source:", placeholder = "GPS, Survey, etc."),
-                
+                selectizeInput(ns("location_source"), "Location Source *", 
+                               choices = c("GPS, uncorrected", "GPS, corrected", "Optical survey (benchmark)", "Map", "Satellite imagery", "Unknown"), 
+                               selected = NULL,
+                               multiple = TRUE,
+                               options = list(
+                                 placeholder = "Select location source",
+                                 maxItems = 1
+                               )
+                ),
                 selectizeInput(ns("purpose_of_borehole"),
-                               "Purpose of Borehole:",
+                               "Purpose of Borehole",
                                choices = NULL, # Populated in server
                                selected = NULL,
                                multiple = TRUE,
@@ -251,91 +268,103 @@ simplerIndexUI <- function(id) {
                 ),
                 
                 # Well construction details
-                fluidRow(
-                  column(8, numericInput(ns("depth_to_bedrock"), "Depth to Bedrock:", value = NULL, min = 0, step = 0.1)),
-                  column(4, radioButtons(ns("depth_to_bedrock_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                ),
-                
-                # Add permafrost checkbox and conditional inputs
-                checkboxInput(ns("permafrost_present"), "Permafrost Present", value = FALSE),
-                
-                conditionalPanel(
-                  condition = "input.permafrost_present == true",
-                  ns = ns,
-                  fluidRow(
-                    column(8, numericInput(ns("permafrost_top"), "Depth to Top of Permafrost:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("permafrost_top_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                  ),
-                  fluidRow(
-                    column(8, numericInput(ns("permafrost_bot"), "Depth to Bottom of Permafrost:", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("permafrost_bot_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                  )
-                ),
-                
-                dateInput(ns("date_drilled"), "Date Drilled:", value = NULL),
-                
                 # Drill Depth and unit
                 fluidRow(
-                  column(8, numericInput(ns("drill_depth"), "Drill Depth:", value = NULL, min = 0, step = 0.1)),
+                  column(8, numericInput(ns("drill_depth"), "Drill Depth *", value = NULL, min = 0, step = 0.1)),
                   column(4, radioButtons(ns("drill_depth_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                 ),
                 fluidRow(
                   column(8, numericInput(ns("surveyed_ground_elev"), "Surveyed Ground Elevation", value = NULL, step = 0.01)),
                   column(4, radioButtons(ns("surveyed_ground_elev_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                 ),
-                checkboxInput(ns("is_well"), "Well Constructed", value = FALSE),
+                fluidRow(
+                  column(8, numericInput(ns("depth_to_bedrock"), "Depth to Bedrock", value = NULL, min = 0, step = 0.1)),
+                  column(4, radioButtons(ns("depth_to_bedrock_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                ),
+                
+                # Add permafrost checkbox and conditional inputs
+                checkboxInput(ns("permafrost_present"), "Permafrost Present", value = FALSE),
+                
+                ## IS PERMAFROST present conditional panel ##################
+                conditionalPanel(
+                  condition = "input.permafrost_present == true",
+                  ns = ns,
+                  fluidRow(
+                    column(8, numericInput(ns("permafrost_top"), "Depth to Top of Permafrost", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("permafrost_top_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                  ),
+                  fluidRow(
+                    column(8, numericInput(ns("permafrost_bot"), "Depth to Bottom of Permafrost", value = NULL, min = 0, step = 0.1)),
+                    column(4, radioButtons(ns("permafrost_bot_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
+                  )
+                ),
+                
+                dateInput(ns("date_drilled"), "Date Drilled *", value = NULL),
+                
+                
+                ## IS WELL conditional panel ##################
+                checkboxInput(ns("is_well"), "Well Constructed *", value = FALSE),
                 
                 # Show well construction fields only if 'is_well' is checked
                 conditionalPanel(
                   condition = "input.is_well == true",
                   ns = ns,
+                  textInput(ns("notes_well"), "Well notes", placeholder = "Enter well-specific notes"),
+                  selectizeInput(ns("share_with_well"), 
+                                 "Share well with groups", 
+                                 choices = "public_reader", # Rest populated in server
+                                 selected = "public_reader",
+                                 multiple = TRUE,
+                                 width = "100%"
+                  ),
                   # Casing Outside Diameter
                   fluidRow(
-                    column(8, numericInput(ns("casing_od"), "Casing Outside Diameter:", value = NULL, min = 0, step = 1)),
+                    column(8, numericInput(ns("casing_od"), "Casing Outside Diameter", value = NULL, min = 0, step = 1)),
                     column(4, radioButtons(ns("casing_od_unit"), "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
                   ),
                   # Top of Screen
                   fluidRow(
-                    column(8, numericInput(ns("top_of_screen"), "Top of Screen:", value = NULL, min = 0, step = 0.1)),
+                    column(8, numericInput(ns("top_of_screen"), "Top of Screen", value = NULL, min = 0, step = 0.1)),
                     column(4, radioButtons(ns("top_of_screen_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   # Bottom of Screen
                   fluidRow(
-                    column(8, numericInput(ns("bottom_of_screen"), "Bottom of Screen:", value = NULL, min = 0, step = 0.1)),
+                    column(8, numericInput(ns("bottom_of_screen"), "Bottom of Screen", value = NULL, min = 0, step = 0.1)),
                     column(4, radioButtons(ns("bottom_of_screen_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   # Well Head Stick Up
                   fluidRow(
-                    column(8, numericInput(ns("well_head_stick_up"), "Well Head Stick Up:", value = NULL, step = 0.01)),
+                    column(8, numericInput(ns("well_head_stick_up"), "Well Stick Up", value = NULL, step = 0.01)),
                     column(4, radioButtons(ns("well_head_stick_up_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   # Static Water Level
                   fluidRow(
-                    column(8, numericInput(ns("static_water_level"), "Static Water Level:", value = NULL, step = 0.01)),
+                    column(8, numericInput(ns("static_water_level"), "Static Water Level", value = NULL, step = 0.01)),
                     column(4, radioButtons(ns("static_water_level_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
                   ),
                   # Estimated Yield
                   fluidRow(
-                    column(8, numericInput(ns("estimated_yield"), "Estimated Yield:", value = NULL, min = 0, step = 0.1)),
+                    column(8, numericInput(ns("estimated_yield"), "Estimated Yield", value = NULL, min = 0, step = 0.1)),
                     column(4, radioButtons(ns("estimated_yield_unit"), "", choices = list("L/s" = "L/s", "G/min" = "G/min"), selected = "G/min", inline = TRUE))
+                  ),
+                  
+                  selectizeInput(ns("purpose_of_well"),
+                                 "Purpose of Well",
+                                 choices = NULL, # Populated in server
+                                 selected = NULL,
+                                 multiple = TRUE,
+                                 options = list(
+                                   placeholder = "Enter if different from borehole purpose",
+                                   maxItems = 1
+                                 )
+                  ),
+                  radioButtons(ns("purpose_well_inferred"), 
+                               "Purpose inferred or explicit?",
+                               choices = list("Inferred" = TRUE, "Explicit" = FALSE),
+                               selected = TRUE,
+                               inline = TRUE
                   )
-                ),
-                selectizeInput(ns("purpose_of_well"),
-                               "Purpose of Well:",
-                               choices = NULL, # Populated in server
-                               selected = NULL,
-                               multiple = TRUE,
-                               options = list(
-                                 placeholder = "Enter if different from borehole original purpose",
-                                 maxItems = 1
-                               )
-                ),
-                radioButtons(ns("purpose_well_inferred"), 
-                             "Purpose inferred or explicit?",
-                             choices = list("Inferred" = TRUE, "Explicit" = FALSE),
-                             selected = TRUE,
-                             inline = TRUE
-                ),
+                ), # End of is_well conditional panel
                 
                 # Add upload buttons at the bottom of the scrollable content
                 div(
@@ -431,7 +460,7 @@ simplerIndexUI <- function(id) {
       });
     });",
       ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'), ns('resize-handle'), ns('resize-handle-right'),
-      paste(sprintf("'%s'", ns(c('name','notes','easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top','permafrost_bot','date_drilled','casing_od','drill_depth','surveyed_ground_elev','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield'))), collapse = ','))))
+      paste(sprintf("'%s'", ns(c('name','notes_borehole', 'share_with_borehole', 'easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top','permafrost_bot','date_drilled','casing_od','drill_depth','surveyed_ground_elev','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield', 'notes_well', 'share_with_well'))), collapse = ','))))
   )
 } # End of UI function
 
@@ -721,7 +750,9 @@ simplerIndex <- function(id) {
     
     moduleData <- reactiveValues(
       drillers = DBI::dbGetQuery(session$userData$AquaCache, "SELECT driller_id, name FROM boreholes.drillers"),
-      purposes = DBI::dbGetQuery(session$userData$AquaCache, "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes")
+      purposes = DBI::dbGetQuery(session$userData$AquaCache, "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes"),
+      share_with_boreholes = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.get_shareable_principals_for('boreholes.boreholes');"),  # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
+      share_with_wells = DBI::dbGetQuery(session$userData$AquaCache, "SELECT * FROM public.get_shareable_principals_for('boreholes.wells');"),
     )
     
     # Reactive value to control brush mode
@@ -755,44 +786,85 @@ simplerIndex <- function(id) {
     
     
     
-    # Update the 'drillers' and 'purpose' list based on the data loaded from Aquacache
+    # Update the 'drillers', 'purpose', and 'share_with' list based on the data loaded from Aquacache
     
-    observe({
+    observeEvent(moduleData, {
+      req(moduleData$drillers, moduleData$purposes, moduleData$share_with_boreholes, moduleData$share_with_wells)
       updateSelectizeInput(
         session, 
         "drilled_by", 
         choices = stats::setNames(moduleData$drillers$driller_id, moduleData$drillers$name),
-        selected = rv$selected_driller,
-        options = list(
-          placeholder = "Select or enter driller",
-          create = TRUE,
-          maxItems = 1
-        )
+        selected = NULL
       )
       updateSelectizeInput(
         session, 
         "purpose_of_borehole", 
         choices = stats::setNames(moduleData$purposes$borehole_well_purpose_id, moduleData$purposes$purpose_name),
-        selected = rv$selected_purpose,
-        options = list(
-          placeholder = "Select purpose",
-          create = TRUE,
-          maxItems = 1
-        )
+        selected = NULL,
       )
       updateSelectizeInput(
         session, 
         "purpose_of_well", 
         choices = stats::setNames(moduleData$purposes$borehole_well_purpose_id, moduleData$purposes$purpose_name),
-        selected = NULL,
-        options = list(
-          placeholder = "Enter if different from borehole original purpose",
-          create = TRUE,
-          maxItems = 1
-        )
+        selected = NULL
+      )
+      updateSelectizeInput(
+        session, 
+        "share_with_borehole", 
+        choices = moduleData$share_with_boreholes$role_name,
+        selected = "public_reader"
+      )
+      updateSelectizeInput(
+        session, 
+        "share_with_well", 
+        choices = moduleData$share_with_wells$role_name,
+        selected = "public_reader"
       )
     })
     
+    # Observe change to share_with_borehole and update share_with_well to match if it doesn't already. Give user a notification that they can change it back if needed
+    observeEvent(input$share_with_borehole, {
+      req(input$share_with_borehole)
+      # Reset it to 'public_reader' if length 0
+      if (is.null(input$share_with_borehole) || length(input$share_with_borehole) == 0) {
+        updateSelectizeInput(
+          session, 
+          "share_with_borehole", 
+          selected = 'public_reader'
+        )
+        return()
+      }
+      # Only update well share with if it doesn't already match
+      if (!setequal(input$share_with_borehole, input$share_with_well)) {
+        updateSelectizeInput(
+          session, 
+          "share_with_well", 
+          selected = input$share_with_borehole
+        )
+        showNotification("Well sharing options updated to match borehole sharing. You can change well sharing separately if needed.", type = "message", duration = 10)
+      }
+    }, ignoreInit = TRUE)
+    
+    # Enfore minimum 1 selection for well_share_with
+    observeEvent(input$share_with_well, {
+      req(input$share_with_well)
+      if (is.null(input$share_with_well) || length(input$share_with_well) == 0) {
+        updateSelectizeInput(
+          session, 
+          "share_with_well", 
+          selected = 'public_reader'
+        )
+      }
+    }, ignoreInit = TRUE)
+    
+    # Enforce drill_depth > depth_to_bedrock
+    observeEvent(list(input$depth_to_bedrock, input$drill_depth), {
+      req(input$depth_to_bedrock, input$drill_depth)
+      if (input$depth_to_bedrock > input$drill_depth) {
+        showNotification("Depth to bedrock cannot be greater than drill depth", type = "error", duration = 5)
+        updateNumericInput(session, "depth_to_bedrock", value = NA)
+      }
+    })
     
     # Observer for new driller creation
     observeEvent(input$drilled_by, {
@@ -1010,7 +1082,8 @@ simplerIndex <- function(id) {
       # Initialize well information as named list organized by borehole ID
       well_fields <- c(
         "name", 
-        "notes",  # Make sure notes is included
+        "notes_well", "notes_borehole",
+        "share_with_well", "share_with_borehole",
         "coordinate_system",
         "easting", "northing", "utm_zone", "latitude", "longitude",
         "location_source", "purpose_of_borehole", "purpose_borehole_inferred",
@@ -1607,7 +1680,7 @@ simplerIndex <- function(id) {
           }
           
           # Update different field types appropriately
-          if (field_name %in% c("name", "notes", "location_source")) {
+          if (field_name %in% c("name", "notes_borehole", "notes_well")) {
             updateTextInput(session, field_name, value = selected_text)
             shinyjs::runjs(sprintf("var el=$('#%s'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}", ns(field_name)))
             
@@ -1730,7 +1803,8 @@ simplerIndex <- function(id) {
         rv$well_data[[well_id]]$metadata <- list(
           borehole_id = well_id,
           name = input$name,
-          notes = input$notes,  # <-- add notes field
+          notes_borehole = input$notes_borehole,
+          notes_well = input$notes_well,
           coordinate_system = input$coordinate_system,
           easting = input$easting,
           northing = input$northing,
@@ -1767,12 +1841,14 @@ simplerIndex <- function(id) {
           is_well = input$is_well,
           purpose_of_well = input$purpose_of_well,
           purpose_of_well_inferred = input$purpose_of_well_inferred,
-          drilled_by = input$drilled_by
+          drilled_by = input$drilled_by,
+          share_with_borehole = input$share_with_borehole,
+          share_with_well = input$share_with_well
         )
       }
     })
     
-    # Metadata loader - fix the loading to properly update all inputs including notes
+    # Metadata loader
     observeEvent(rv$pdf_index, {
       req(rv$files_df)
       req(rv$pdf_index)
@@ -1784,41 +1860,51 @@ simplerIndex <- function(id) {
         loading_metadata(TRUE)
         metadata <- rv$well_data[[well_id]]$metadata
         
-        # Helper function to safely get metadata values
+        # Helper functions to safely get metadata values
+        # Text or selectizeInput multiple = FALSE
         get_meta_value <- function(field, default = "") {
           val <- metadata[[field]]
-          if (is.null(val) || identical(val, NA) || is.na(val)) return(default)
+          if (is.null(val) || is.na(val)) return(default)
           return(val)
         }
-        
+        # For selectize that can return vector length > 1 (like share_with)
+        get_meta_value_multiple <- function(field, default = "") {
+          val <- metadata[[field]]
+          if (is.null(val) || all(is.na(val))) return(default)
+          return(val)
+        }
+        # Numeric inputs
         get_meta_numeric <- function(field) {
           val <- metadata[[field]]
-          if (is.null(val) || identical(val, NA) || is.na(val)) return(NULL)
+          if (is.null(val) || is.na(val)) return(NULL)
           return(val)
         }
-        
+        # Date inputs
         get_meta_date <- function(field) {
           val <- metadata[[field]]
-          if (is.null(val) || identical(val, NA) || is.na(val)) return(NULL)
+          if (is.null(val) || is.na(val)) return(NULL)
           return(val)
         }
-        
+        # boolean inputs
         get_meta_boolean <- function(field, default = FALSE) {
           val <- metadata[[field]]
-          if (is.null(val) || identical(val, NA) || is.na(val)) return(default)
+          if (is.null(val) || is.na(val)) return(default)
           return(as.logical(val))
         }
         
         # Update text inputs - make sure notes is included
         updateTextInput(session, "name", value = get_meta_value("name"))
-        updateTextInput(session, "notes", value = get_meta_value("notes"))
-        updateTextInput(session, "location_source", value = get_meta_value("location_source"))
+        updateTextInput(session, "notes_borehole", value = get_meta_value("notes_borehole"))
+        updateTextInput(session, "notes_well", value = get_meta_value("notes_well"))
+        updateSelectizeInput(session, "location_source", selected = get_meta_value("location_source"))
         
         # Update selectize inputs
         updateSelectizeInput(session, "utm_zone", selected = get_meta_value("utm_zone", "8N"))
         updateSelectizeInput(session, "purpose_of_borehole", selected = get_meta_value("purpose_of_borehole"))
         updateSelectizeInput(session, "purpose_of_well", selected = get_meta_value("purpose_of_well"))
         updateSelectizeInput(session, "drilled_by", selected = get_meta_value("drilled_by"))
+        updateSelectizeInput(session, "share_with_borehole", selected = get_meta_value_multiple("share_with_borehole"))
+        updateSelectizeInput(session, "share_with_well", selected = get_meta_value_multiple("share_with_well"))
         
         # Update radio buttons
         updateRadioButtons(session, "coordinate_system", selected = get_meta_value("coordinate_system", "utm"))
@@ -1867,14 +1953,17 @@ simplerIndex <- function(id) {
         loading_metadata(TRUE)
         
         updateTextInput(session, "name", value = "")
-        updateTextInput(session, "notes", value = "")
-        updateTextInput(session, "location_source", value = "")
+        updateTextInput(session, "notes_borehole", value = "")
+        updateTextInput(session, "notes_well", value = "")
+        updateSelectizeInput(session, "location_source", selected = "GPS")
         updateSelectizeInput(session, "utm_zone", selected = "8N")
         updateSelectizeInput(session, "purpose_of_borehole", selected = NULL)
         updateRadioButtons(session, "purpose_borehole_inferred", selected = TRUE)
         updateSelectizeInput(session, "purpose_of_well", selected = NULL)
         updateRadioButtons(session, "purpose_well_inferred", selected = TRUE)
         updateSelectizeInput(session, "drilled_by", selected = NULL)
+        updateSelectizeInput(session, "share_with_borehole", selected = NULL)
+        updateSelectizeInput(session, "share_with_well", selected = NULL)
         updateRadioButtons(session, "coordinate_system", selected = "utm")
         updateRadioButtons(session, "depth_to_bedrock_unit", selected = "ft")
         updateRadioButtons(session, "casing_od_unit", selected = "inch")
@@ -2079,13 +2168,15 @@ simplerIndex <- function(id) {
             well_head_stick_up = metadata$well_head_stick_up,
             static_water_level = metadata$static_water_level,
             estimated_yield = metadata$estimated_yield,
-            notes = metadata$notes,
-            share_with = "public_reader",
+            notes_borehole = metadata$notes_borehole,
+            notes_Well = metadata$notes_well,
+            share_with_borehole = metadata$share_with_borehole,
             drilled_by = metadata$drilled_by,
             drill_method = NULL,
             pdf_file_path = pdf_file_path,
             purpose_of_well = if (nchar(metadata$purpose_of_well) == 0) NULL else metadata$purpose_of_well,
-            purpose_well_inferred = metadata$purpose_well_inferred
+            purpose_well_inferred = metadata$purpose_well_inferred,
+            share_with_well = metadata$share_with_well
           )
           
           showNotification(paste("Successfully uploaded borehole:", current_well_id), 
@@ -2153,14 +2244,16 @@ simplerIndex <- function(id) {
               well_head_stick_up = metadata$well_head_stick_up,
               static_water_level = metadata$static_water_level,
               estimated_yield = metadata$estimated_yield,
-              notes = metadata$notes,
+              notes_borehole = metadata$notes_borehole,
+              notes_Well = metadata$notes_well,
               con = session$userData$AquaCache,
-              share_with = "public_reader",
+              share_with_borehole = metadata$share_with_borehole,
               drilled_by = metadata$drilled_by,
               drill_method = NULL,
               pdf_file_path = pdf_file_path,
               purpose_of_well = metadata$purpose_of_well,
-              purpose_well_inferred = metadata$purpose_well_inferred
+              purpose_well_inferred = metadata$purpose_well_inferred,
+              share_with_well = metadata$share_with_well
             )
             
             success_count <- success_count + 1
