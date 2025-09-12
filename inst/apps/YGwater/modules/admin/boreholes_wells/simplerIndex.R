@@ -1,16 +1,25 @@
 # UI and server code for simplerIndex
 
+source(system.file("apps/YGwater/modules/admin/boreholes_wells/ocr_helpers.R", package = "YGwater"), local = TRUE)
+
 simplerIndexUI <- function(id) {
-  
+
   ns <- NS(id)
   css_file <- system.file("apps/YGwater/www/css/simplerIndex.css", package = "YGwater")
   css <- gsub("%1$s", ns("pdf-container"), readLines(css_file), fixed = TRUE)
-  tmp_css <- tempfile(fileext = ".css")
-  writeLines(css, tmp_css)
-  
+
+  numericInputWithUnits <- function(num_id, label, unit_id, unit_choices, selected,
+                                    value = NULL, min = NULL, step = NULL) {
+    fluidRow(
+      column(8, numericInput(ns(num_id), label, value = value, min = min, step = step)),
+      column(4, radioButtons(ns(unit_id), "", choices = unit_choices, selected = selected, inline = TRUE))
+    )
+  }
+
   tagList(
     tags$head(
-      htmltools::includeCSS(tmp_css)
+      tags$style(HTML(paste(css, collapse = "\n"))),
+      tags$script(src = "js/sidebar_resize.js")
     ),
     div(style = "display: flex; align-items: center; gap: 10px;",
         div(id = ns("logo-container"),
@@ -268,19 +277,12 @@ simplerIndexUI <- function(id) {
                 ),
                 
                 # Well construction details
-                # Drill Depth and unit
-                fluidRow(
-                  column(8, numericInput(ns("drill_depth"), "Drill Depth *", value = NULL, min = 0, step = 0.1)),
-                  column(4, radioButtons(ns("drill_depth_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                ),
-                fluidRow(
-                  column(8, numericInput(ns("surveyed_ground_elev"), "Surveyed Ground Elevation", value = NULL, step = 0.01)),
-                  column(4, radioButtons(ns("surveyed_ground_elev_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                ),
-                fluidRow(
-                  column(8, numericInput(ns("depth_to_bedrock"), "Depth to Bedrock", value = NULL, min = 0, step = 0.1)),
-                  column(4, radioButtons(ns("depth_to_bedrock_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                ),
+                numericInputWithUnits("drill_depth", "Drill Depth *", "drill_depth_unit",
+                                      c(m = "m", ft = "ft"), "ft", min = 0, step = 0.1),
+                numericInputWithUnits("surveyed_ground_elev", "Surveyed Ground Elevation",
+                                      "surveyed_ground_elev_unit", c(m = "m", ft = "ft"), "ft", step = 0.01),
+                numericInputWithUnits("depth_to_bedrock", "Depth to Bedrock",
+                                      "depth_to_bedrock_unit", c(m = "m", ft = "ft"), "ft", min = 0, step = 0.1),
                 
                 # Add permafrost checkbox and conditional inputs
                 checkboxInput(ns("permafrost_present"), "Permafrost Present", value = FALSE),
@@ -289,14 +291,10 @@ simplerIndexUI <- function(id) {
                 conditionalPanel(
                   condition = "input.permafrost_present == true",
                   ns = ns,
-                  fluidRow(
-                    column(8, numericInput(ns("permafrost_top"), "Depth to Top of Permafrost", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("permafrost_top_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                  ),
-                  fluidRow(
-                    column(8, numericInput(ns("permafrost_bot"), "Depth to Bottom of Permafrost", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("permafrost_bot_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                  )
+                  numericInputWithUnits("permafrost_top", "Depth to Top of Permafrost",
+                                        "permafrost_top_unit", c(m = "m", ft = "ft"), "ft", min = 0, step = 0.1),
+                  numericInputWithUnits("permafrost_bot", "Depth to Bottom of Permafrost",
+                                        "permafrost_bot_unit", c(m = "m", ft = "ft"), "ft", min = 0, step = 0.1)
                 ),
                 
                 dateInput(ns("date_drilled"), "Date Drilled *", value = NULL),
@@ -318,35 +316,23 @@ simplerIndexUI <- function(id) {
                                  width = "100%"
                   ),
                   # Casing Outside Diameter
-                  fluidRow(
-                    column(8, numericInput(ns("casing_od"), "Casing Outside Diameter", value = NULL, min = 0, step = 1)),
-                    column(4, radioButtons(ns("casing_od_unit"), "", choices = list("mm" = "mm", "inch" = "inch"), selected = "inch", inline = TRUE))
-                  ),
+                  numericInputWithUnits("casing_od", "Casing Outside Diameter", "casing_od_unit",
+                                        c(mm = "mm", inch = "inch"), "inch", min = 0, step = 1),
                   # Top of Screen
-                  fluidRow(
-                    column(8, numericInput(ns("top_of_screen"), "Top of Screen", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("top_of_screen_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                  ),
+                  numericInputWithUnits("top_of_screen", "Top of Screen", "top_of_screen_unit",
+                                        c(m = "m", ft = "ft"), "ft", min = 0, step = 0.1),
                   # Bottom of Screen
-                  fluidRow(
-                    column(8, numericInput(ns("bottom_of_screen"), "Bottom of Screen", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("bottom_of_screen_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                  ),
+                  numericInputWithUnits("bottom_of_screen", "Bottom of Screen", "bottom_of_screen_unit",
+                                        c(m = "m", ft = "ft"), "ft", min = 0, step = 0.1),
                   # Well Head Stick Up
-                  fluidRow(
-                    column(8, numericInput(ns("well_head_stick_up"), "Well Stick Up", value = NULL, step = 0.01)),
-                    column(4, radioButtons(ns("well_head_stick_up_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                  ),
+                  numericInputWithUnits("well_head_stick_up", "Well Stick Up", "well_head_stick_up_unit",
+                                        c(m = "m", ft = "ft"), "ft", step = 0.01),
                   # Static Water Level
-                  fluidRow(
-                    column(8, numericInput(ns("static_water_level"), "Static Water Level", value = NULL, step = 0.01)),
-                    column(4, radioButtons(ns("static_water_level_unit"), "", choices = list("m" = "m", "ft" = "ft"), selected = "ft", inline = TRUE))
-                  ),
+                  numericInputWithUnits("static_water_level", "Static Water Level", "static_water_level_unit",
+                                        c(m = "m", ft = "ft"), "ft", step = 0.01),
                   # Estimated Yield
-                  fluidRow(
-                    column(8, numericInput(ns("estimated_yield"), "Estimated Yield", value = NULL, min = 0, step = 0.1)),
-                    column(4, radioButtons(ns("estimated_yield_unit"), "", choices = list("L/s" = "L/s", "G/min" = "G/min"), selected = "G/min", inline = TRUE))
-                  ),
+                  numericInputWithUnits("estimated_yield", "Estimated Yield", "estimated_yield_unit",
+                                        c("L/s" = "L/s", "G/min" = "G/min"), "G/min", min = 0, step = 0.1),
                   
                   selectizeInput(ns("purpose_of_well"),
                                  "Purpose of Well",
@@ -389,211 +375,20 @@ simplerIndexUI <- function(id) {
         )
     ),
     
-    # script to resize sidebars and reattach handlers after Shiny redraws UI
+    # Initialize sidebar resizing
     tags$script(HTML(sprintf(
-      "$(function() {
-      const MIN_LEFT = 140;
-      const MIN_RIGHT = 160;
-      const MIN_MAIN = 300; // keep central workspace usable
-      let resizing = '';
-      let startX = 0;
-      let startWidth = 0;
-      const $body = $('body');
-      const $left = $('#%s');
-      const $right = $('#%s');
-
-      function viewportW(){ return $(window).width(); }
-      function maxLeft(){ return Math.max(MIN_LEFT, viewportW() - $right.outerWidth() - MIN_MAIN); }
-      function maxRight(){ return Math.max(MIN_RIGHT, viewportW() - $left.outerWidth() - MIN_MAIN); }
-
-      function startResize(side, e){
-        resizing = side;
-        startX = e.clientX;
-        startWidth = (side === 'left' ? $left.outerWidth() : $right.outerWidth());
-        $body.addClass('resizing-col');
-        e.preventDefault();
-      }
-
-      $('#%s').off('.rs').on('mousedown.rs', e => startResize('left', e));
-      $('#%s').off('.rs').on('mousedown.rs', e => startResize('right', e));
-
-      // Double-click reset
-      $('#%s').off('dblclick.rs').on('dblclick.rs', () => $left.css('width', '300px'));
-      $('#%s').off('dblclick.rs').on('dblclick.rs', () => $right.css('width', '400px'));
-
-      $(document).off('.rsMove').on('mousemove.rsMove', function(e){
-        if(!resizing) return;
-        if(resizing === 'left'){
-          let w = startWidth + (e.clientX - startX);
-          w = Math.min(maxLeft(), Math.max(MIN_LEFT, w));
-          $left.css('width', w + 'px');
-        } else if(resizing === 'right'){
-          let w = startWidth - (e.clientX - startX);
-          w = Math.min(maxRight(), Math.max(MIN_RIGHT, w));
-          $right.css('width', w + 'px');
-        }
-      });
-
-      $(document).off('.rsUp').on('mouseup.rsUp', function(){
-        if(resizing){
-          resizing = '';
-          $body.removeClass('resizing-col');
-        }
-      });
-
-      $(window).off('.rsWin').on('resize.rsWin', function(){
-        if($left.outerWidth() > maxLeft()) $left.css('width', maxLeft() + 'px');
-        if($right.outerWidth() > maxRight()) $right.css('width', maxRight() + 'px');
-      });
-
-      /* Reattach existing focus/click handlers */
-      const ids = [%s];
-      ids.forEach(id => {
-        $(document).off('focus.rs click.rs', '#' + id)
-                   .on('focus.rs click.rs', '#' + id, function(){
-                     // Use a monotonically increasing timestamp so the most
-                     // recently focused element can be identified reliably.
-                     // priority:'event' forces Shiny to handle each click
-                     // immediately, avoiding dropped events.
-                     Shiny.setInputValue(id + '_clicked', Date.now(), {priority: 'event'});
-                   });
-      });
-    });",
-      ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'), ns('resize-handle'), ns('resize-handle-right'),
+      "$(function(){ initSidebarResize({leftId:'%s', rightId:'%s', leftHandle:'%s', rightHandle:'%s', ids:[%s]}); });",
+      ns('sidebar'), ns('right-sidebar'), ns('resize-handle'), ns('resize-handle-right'),
       paste(sprintf("'%s'", ns(c('name','notes_borehole', 'share_with_borehole', 'easting','northing','latitude','longitude','location_source','depth_to_bedrock','permafrost_top','permafrost_bot','date_drilled','casing_od','drill_depth','surveyed_ground_elev','top_of_screen','bottom_of_screen','well_head_stick_up','static_water_level','estimated_yield', 'notes_well', 'share_with_well'))), collapse = ','))))
   )
 } # End of UI function
 
-simplerIndex <- function(id) {
-  
-  moduleServer(id, function(input, output, session) {
-    
-    ns <- session$ns
-    
-    concat_ocr_words_by_row <- function(ocr_df) {
-      if (is.null(ocr_df) || nrow(ocr_df) == 0) return(character(0))
-      # Parse bbox coordinates
-      coords <- do.call(rbind, lapply(ocr_df$bbox, function(b) as.numeric(strsplit(b, ",")[[1]])))
-      ymin <- coords[,2]
-      ymax <- coords[,4]
-      words <- ocr_df$word
-      
-      result <- character(0)
-      current_line <- ""
-      prev_ymin <- ymin[1]
-      prev_ymax <- ymax[1]
-      
-      for (i in seq_along(words)) {
-        if (i == 1) {
-          current_line <- words[i]
-        } else {
-          # If current ymax < previous ymin, start new line
-          if (ymax[i] < prev_ymin) {
-            result <- c(result, current_line)
-            current_line <- words[i]
-          } else {
-            current_line <- paste(current_line, words[i], sep = " ")
-          }
-          prev_ymin <- ymin[i]
-          prev_ymax <- ymax[i]
-        }
-      }
-      result <- c(result, current_line)
-      return(result)
-    }
-    
-    filter_ocr_noise <- function(ocr_df) {
-      if (is.null(ocr_df) || nrow(ocr_df) == 0) return(ocr_df)
-      
-      # Define common OCR error patterns and noise words
-      noise_patterns <- c(
-        # Empty strings and whitespace
-        "^$",            # Empty string
-        "^\\s*$",        # Only whitespace (spaces, tabs, newlines)
-        "^\\s+$",        # One or more whitespace characters
-        
-        # Single characters that are often OCR errors
-        "^-+$",          # Only dashes
-        "^=+$",          # Only equals signs
-        "^\\|+$",        # Only vertical bars/pipes
-        "^_+$",          # Only underscores
-        "^\\++$",        # Only plus signs
-        "^\\*+$",        # Only asterisks
-        "^#+$",          # Only hash symbols
-        "^~+$",          # Only tildes
-        "^`+$",          # Only backticks
-        "^'+$",          # Only single quotes
-        "^\"+$",         # Only double quotes
-        "^\\^+$",        # Only carets
-        "^&+$",          # Only ampersands
-        "^%+$",          # Only percent signs
-        "^@+$",          # Only at symbols
-        "^\\$+$",        # Only dollar signs
-        
-        # Common OCR misreads
-        "^[\\|Il1]{1,3}$",  # Vertical bars, I, l, 1 confusion (1-3 chars)
-        "^[oO0]{1,2}$",     # o, O, 0 confusion (1-2 chars)
-        "^[cC]{1}$",        # Single c or C
-        "^[rR]{1}$",        # Single r or R
-        "^[nN]{1}$",        # Single n or N
-        "^[mM]{1}$",        # Single m or M
-        "^[uU]{1}$",        # Single u or U
-        "^[vV]{1}$",        # Single v or V
-        "^[wW]{1}$",        # Single w or W
-        "^[iI]{1,2}$",      # Single i or ii (common OCR noise)
-        
-        # Repeated characters (likely errors)
-        "^([a-zA-Z])\\1{3,}$",  # Same letter repeated 4+ times
-        
-        # Pure punctuation strings
-        "^[[:punct:]]+$",   # Only punctuation marks
-        
-        # Very short meaningless combinations
-        "^[a-zA-Z]{1}[0-9]{1}$",  # Single letter + single digit
-        "^[0-9]{1}[a-zA-Z]{1}$",  # Single digit + single letter
-        
-        # Common OCR artifacts
-        "^\\.[a-zA-Z]{1,2}$",     # Dot followed by 1-2 letters
-        "^[a-zA-Z]{1,2}\\.$",     # 1-2 letters followed by dot
-        "^[\\(\\)\\[\\]\\{\\}]+$" # Only brackets/parentheses
-      )
-      
-      # Additional filter: words that are too short and likely meaningless
-      # Keep single letters that could be meaningful (like "A", "I", etc.)
-      meaningful_single_chars <- c("A", "a", "O", "o")
-      
-      # Create filter condition - first remove empty/whitespace strings
-      keep_word <- rep(TRUE, nrow(ocr_df))
-      
-      # Remove empty strings and whitespace-only strings
-      keep_word <- keep_word & !is.na(ocr_df$word) & 
-        ocr_df$word != "" & 
-        trimws(ocr_df$word) != ""
-      
-      for (pattern in noise_patterns) {
-        keep_word <- keep_word & !grepl(pattern, ocr_df$word, perl = TRUE)
-      }
-      
-      # Additional filters
-      # Remove very short words that aren't meaningful single characters
-      short_and_meaningless <- nchar(trimws(ocr_df$word)) == 1 & 
-        !trimws(ocr_df$word) %in% meaningful_single_chars &
-        !grepl("^[0-9]$", trimws(ocr_df$word))  # Keep single digits
-      
-      keep_word <- keep_word & !short_and_meaningless
-      
-      # Remove words with very low confidence that are also short
-      low_conf_short <- ocr_df$confidence < 30 & nchar(trimws(ocr_df$word)) <= 2
-      keep_word <- keep_word & !low_conf_short
-      
-      # Filter the dataframe
-      filtered_df <- ocr_df[keep_word, ]
-      
-      return(filtered_df)
-    }
-    
-    # Helper function to apply different preprocessing methods
-    preprocess_image <- function(img, method = "default") {
+  simplerIndex <- function(id) {
+
+    moduleServer(id, function(input, output, session) {
+
+      # Helper function to apply different preprocessing methods
+      preprocess_image <- function(img, method = "default") {
       switch(method,
              "default" = {
                img %>%
@@ -790,36 +585,18 @@ simplerIndex <- function(id) {
     
     observeEvent(moduleData, {
       req(moduleData$drillers, moduleData$purposes, moduleData$share_with_boreholes, moduleData$share_with_wells)
-      updateSelectizeInput(
-        session, 
-        "drilled_by", 
-        choices = stats::setNames(moduleData$drillers$driller_id, moduleData$drillers$name),
-        selected = NULL
+      updates <- list(
+        drilled_by = list(choices = stats::setNames(moduleData$drillers$driller_id, moduleData$drillers$name), selected = NULL),
+        purpose_of_borehole = list(choices = stats::setNames(moduleData$purposes$borehole_well_purpose_id, moduleData$purposes$purpose_name), selected = NULL),
+        purpose_of_well = list(choices = stats::setNames(moduleData$purposes$borehole_well_purpose_id, moduleData$purposes$purpose_name), selected = NULL),
+        share_with_borehole = list(choices = moduleData$share_with_boreholes$role_name, selected = "public_reader"),
+        share_with_well = list(choices = moduleData$share_with_wells$role_name, selected = "public_reader")
       )
-      updateSelectizeInput(
-        session, 
-        "purpose_of_borehole", 
-        choices = stats::setNames(moduleData$purposes$borehole_well_purpose_id, moduleData$purposes$purpose_name),
-        selected = NULL,
-      )
-      updateSelectizeInput(
-        session, 
-        "purpose_of_well", 
-        choices = stats::setNames(moduleData$purposes$borehole_well_purpose_id, moduleData$purposes$purpose_name),
-        selected = NULL
-      )
-      updateSelectizeInput(
-        session, 
-        "share_with_borehole", 
-        choices = moduleData$share_with_boreholes$role_name,
-        selected = "public_reader"
-      )
-      updateSelectizeInput(
-        session, 
-        "share_with_well", 
-        choices = moduleData$share_with_wells$role_name,
-        selected = "public_reader"
-      )
+      lapply(names(updates), function(id) {
+        updateSelectizeInput(session, id,
+                             choices = updates[[id]]$choices,
+                             selected = updates[[id]]$selected)
+      })
     })
     
     # Observe change to share_with_borehole and update share_with_well to match if it doesn't already. Give user a notification that they can change it back if needed
