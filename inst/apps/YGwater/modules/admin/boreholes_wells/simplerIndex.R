@@ -38,6 +38,12 @@ simplerIndexUI <- function(id) {
               accept = ".pdf",
               multiple = TRUE
             ),
+            numericInput(
+              ns("num_boreholes"),
+              "Number of boreholes",
+              value = 1,
+              min = 1
+            ),
             # Navigation buttons
             fluidRow(
               column(12,
@@ -745,9 +751,10 @@ simplerIndex <- function(id) {
       selected_text = NULL,
       rectangles = list(),
       selected_driller = NULL,
-      selected_purpose = NULL
+      selected_purpose = NULL,
+      assign_observers = list()
     )
-    
+
     moduleData <- reactiveValues(
       drillers = DBI::dbGetQuery(session$userData$AquaCache, "SELECT driller_id, name FROM boreholes.drillers"),
       purposes = DBI::dbGetQuery(session$userData$AquaCache, "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes"),
@@ -757,9 +764,37 @@ simplerIndex <- function(id) {
     
     # Reactive value to control brush mode
     brush_enabled <- reactiveVal(FALSE)
-    
+
     # Flag to prevent circular updates when loading metadata
     loading_metadata <- reactiveVal(FALSE)
+
+    sort_files_df <- function() {
+      if (is.null(rv$files_df)) return()
+      current_tag <- if (!is.null(rv$pdf_index) && nrow(rv$files_df) >= rv$pdf_index) rv$files_df$tag[rv$pdf_index] else NULL
+      assigned_flag <- ifelse(is.na(rv$files_df$borehole_id) | rv$files_df$borehole_id == "", 1, 0)
+      rv$files_df <- rv$files_df[order(assigned_flag, rv$files_df$borehole_id, decreasing = TRUE), ]
+      if (!is.null(current_tag)) rv$pdf_index <- match(current_tag, rv$files_df$tag)
+    }
+
+    well_fields <- c(
+      "name",
+      "notes_well", "notes_borehole",
+      "share_with_well", "share_with_borehole",
+      "coordinate_system",
+      "easting", "northing", "utm_zone", "latitude", "longitude",
+      "location_source", "purpose_of_borehole", "purpose_borehole_inferred",
+      "depth_to_bedrock", "depth_to_bedrock_unit", "date_drilled",
+      "casing_od", "casing_od_unit",
+      "drill_depth", "drill_depth_unit", "top_of_screen", "top_of_screen_unit",
+      "bottom_of_screen", "bottom_of_screen_unit", "well_head_stick_up",
+      "well_head_stick_up_unit", "static_water_level", "static_water_level_unit",
+      "estimated_yield", "estimated_yield_unit", "surveyed_ground_elev",
+      "surveyed_ground_elev_unit",
+      "permafrost_present", "permafrost_top", "permafrost_top_unit",
+      "permafrost_bot", "permafrost_bot_unit",
+      "is_well", "drilled_by",
+      "purpose_of_well", "purpose_well_inferred"
+    )
     
     # Add observer for brush_select button
     observeEvent(input$brush_select, {
@@ -779,10 +814,24 @@ simplerIndex <- function(id) {
       req(rv$files_df)
       req(rv$pdf_index)
       req(nrow(rv$files_df) >= rv$pdf_index)
-      
+
       # Since each row has its own unique well ID, just return it directly
       return(rv$files_df$borehole_id[rv$pdf_index])
     })
+
+    observeEvent(input$num_boreholes, {
+      num <- input$num_boreholes
+      borehole_ids <- paste0("BH", sprintf("%04d", seq_len(num)))
+      rv$well_data <- lapply(borehole_ids, function(id) {
+        metadata <- setNames(as.list(rep(NA, length(well_fields))), well_fields)
+        list(files = character(), metadata = metadata)
+      })
+      names(rv$well_data) <- borehole_ids
+      if (!is.null(rv$files_df)) {
+        rv$files_df$borehole_id <- NA
+        sort_files_df()
+      }
+    }, ignoreNULL = FALSE)
     
     
     
@@ -1065,6 +1114,7 @@ simplerIndex <- function(id) {
         )
         split_df$NewFilename <- file.path(basename(split_df$Path))
         split_df$tag <- paste0(split_df$Name, "-", split_df$Page)
+        split_df$borehole_id <- NA
         
         if (i == 1) {
           all_split_files <- split_df
@@ -1078,54 +1128,22 @@ simplerIndex <- function(id) {
         
       }
       
-      rv$files_df <- all_split_files
-      # Initialize well information as named list organized by borehole ID
-      well_fields <- c(
-        "name", 
-        "notes_well", "notes_borehole",
-        "share_with_well", "share_with_borehole",
-        "coordinate_system",
-        "easting", "northing", "utm_zone", "latitude", "longitude",
-        "location_source", "purpose_of_borehole", "purpose_borehole_inferred",
-        "depth_to_bedrock", "depth_to_bedrock_unit", "date_drilled",
-        "casing_od", "casing_od_unit",
-        "drill_depth", "drill_depth_unit", "top_of_screen", "top_of_screen_unit",
-        "bottom_of_screen", "bottom_of_screen_unit", "well_head_stick_up",
-        "well_head_stick_up_unit", "static_water_level", "static_water_level_unit",
-        "estimated_yield", "estimated_yield_unit", "surveyed_ground_elev",
-        "surveyed_ground_elev_unit",
-        "permafrost_present", "permafrost_top", "permafrost_top_unit",
-        "permafrost_bot", "permafrost_bot_unit",
-        "is_well", "drilled_by",
-        "purpose_of_well", "purpose_well_inferred"
-      )
-      
-      # Initialize well_data as empty named list
-      rv$well_data <- list()
-      
-      # Assign unique borehole IDs to each row (page) in files_df
-      for (i in seq_len(nrow(rv$files_df))) {
-        # Generate unique ID for each page
-        borehole_id <- paste0("BH", sprintf("%04d", i))
-        rv$files_df$borehole_id[i] <- borehole_id
-        
-        # Create metadata list with NA values for all fields
-        metadata <- list()
-        for (field in well_fields) {
-          metadata[[field]] <- NA
-        }
-        
-        # Create well_data entry for this individual page/well
-        rv$well_data[[borehole_id]] <- list(
-          files = rv$files_df$NewFilename[i],  # Add filename for this well
-          metadata = metadata  # Named list of well metadata
-        )
+      if (is.null(rv$files_df)) {
+        rv$files_df <- all_split_files
+      } else {
+        rv$files_df <- rbind(rv$files_df, all_split_files)
       }
-      
+      rv$files_df$borehole_id <- as.character(rv$files_df$borehole_id)
+      sort_files_df()
+
       rv$pdf_index <- 1
       DT::dataTableProxy("pdf_table", session = session)
-      
-      rv$ocr_text <- vector("list", nrow(rv$files_df))
+
+      if (length(rv$ocr_text) == 0) {
+        rv$ocr_text <- vector("list", nrow(rv$files_df))
+      } else {
+        rv$ocr_text <- c(rv$ocr_text, vector("list", nrow(all_split_files)))
+      }
       rv$ocr_display_mode <- "none"
       
       # Reset button states on upload
@@ -1177,16 +1195,14 @@ simplerIndex <- function(id) {
         # Update well_data structure by removing the filename
         for (well_id in names(rv$well_data)) {
           rv$well_data[[well_id]]$files <- setdiff(rv$well_data[[well_id]]$files, fname)
-          if (length(rv$well_data[[well_id]]$files) == 0) {
-            rv$well_data[[well_id]] <- NULL
-          }
         }
-        
+
         if (nrow(rv$files_df) == 0) {
           rv$pdf_index <- 1
         } else if (rv$pdf_index > nrow(rv$files_df)) {
           rv$pdf_index <- nrow(rv$files_df)
         }
+        sort_files_df()
       }
     })
     
@@ -1194,23 +1210,52 @@ simplerIndex <- function(id) {
     output$pdf_table <- DT::renderDT({
       req(rv$files_df)
       validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
-      
-      dat <- rv$files_df[, c("tag", "borehole_id")]
-      
+
+      borehole_choices <- names(rv$well_data)
+      select_inputs <- vapply(seq_len(nrow(rv$files_df)), function(i) {
+        as.character(selectInput(ns(paste0("bh_select_", i)), NULL,
+                                 choices = c("" = "", borehole_choices),
+                                 selected = rv$files_df$borehole_id[i], width = "100px"))
+      }, character(1))
+
+      dat <- data.frame(tag = rv$files_df$tag, borehole = select_inputs, stringsAsFactors = FALSE)
+
       DT::datatable(
         dat,
-        selection = list(mode = "single", selected = 1),
+        selection = list(mode = "single", selected = rv$pdf_index),
+        escape = FALSE,
         options = list(
-          pageLength = 10, 
+          pageLength = 10,
           layout = list(
             bottomStart = 'info',
             bottomEnd   = 'paging'
-          ),  # table, information, pagination (no search)
+          ),
           ordering = FALSE,
           scrollY = "300px",
           scrollCollapse = TRUE
         )
       )
+    })
+
+    observeEvent(rv$files_df, {
+      lapply(rv$assign_observers, function(obs) obs$destroy())
+      rv$assign_observers <- list()
+      for (i in seq_len(nrow(rv$files_df))) {
+        rv$assign_observers[[i]] <- observeEvent(input[[paste0("bh_select_", i)]], {
+          new_id <- input[[paste0("bh_select_", i)]]
+          prev_id <- rv$files_df$borehole_id[i]
+          if (identical(prev_id, new_id)) return()
+          fname <- rv$files_df$NewFilename[i]
+          if (!is.na(prev_id) && prev_id != "") {
+            rv$well_data[[prev_id]]$files <- setdiff(rv$well_data[[prev_id]]$files, fname)
+          }
+          if (!is.na(new_id) && new_id != "") {
+            rv$well_data[[new_id]]$files <- unique(c(rv$well_data[[new_id]]$files, fname))
+          }
+          rv$files_df$borehole_id[i] <- new_id
+          sort_files_df()
+        }, ignoreNULL = TRUE)
+      }
     })
     
     # Modified observer for OCR display mode: process OCR for all images when mode is highlight/text
@@ -1475,7 +1520,7 @@ simplerIndex <- function(id) {
     
     # Generalized function to create PDF with redactions
     create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
-      req(rv$files_df)
+      if (is.null(rv$files_df)) return(NULL)
       
       # Find all rows for this borehole_id
       same_bh_rows <- which(rv$files_df$borehole_id == borehole_id)
@@ -2024,105 +2069,32 @@ simplerIndex <- function(id) {
     observe({
       req(rv$files_df)
       req(rv$pdf_index)
-      
-      # Get current borehole ID
-      current_id <- rv$files_df$borehole_id[rv$pdf_index]
-      
-      # Get all available borehole IDs except the current one
-      all_borehole_ids <- rv$files_df$borehole_id
-      borehole_choices <- setdiff(all_borehole_ids, current_id)
-      
-      # Create named list for dropdown with descriptive labels
-      names(borehole_choices) <- sapply(borehole_choices, function(id) {
-        idx <- which(rv$files_df$borehole_id == id)
-        if(length(idx) > 0) {
-          idx <- idx[1]  # Use first instance if multiple matches
-          file_name <- rv$files_df$Name[idx]
-          page_num <- rv$files_df$Page[idx]
-          return(paste0(id, " - ", file_name, " (Page ", page_num, ")"))
-        } else {
-          return(id)
-        }
-      })
-      
-      # Update the dropdown with all other borehole IDs
-      updateSelectizeInput(session, "borehole_id_selector", 
-                           choices = as.list(borehole_choices),
-                           selected = "",
+      choices <- names(rv$well_data)
+      selected <- if (nrow(rv$files_df) >= rv$pdf_index && !is.na(rv$files_df$borehole_id[rv$pdf_index])) rv$files_df$borehole_id[rv$pdf_index] else ""
+      updateSelectizeInput(session, "borehole_id_selector",
+                           choices = choices,
+                           selected = selected,
                            options = list(
-                             placeholder = "Select borehole to link to",
+                             placeholder = "Select borehole",
                              maxItems = 1
                            ))
     })
-    
-    # Handle linking to another borehole when selection is made
+
     observeEvent(input$borehole_id_selector, {
-      req(input$borehole_id_selector != "")
       req(rv$files_df)
       req(rv$pdf_index)
-      
-      # Get the selected borehole ID
       target_borehole_id <- input$borehole_id_selector
-      
-      # Get the current borehole ID
-      current_borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
-      
-      # Make sure we're not linking to the same ID
-      if (target_borehole_id != current_borehole_id) {
-        # Show confirmation message
-        showNotification(
-          paste("Linking current page to", target_borehole_id), 
-          type = "message", 
-          duration = 3
-        )
-        
-        # Keep track of current metadata before changing borehole ID
-        current_metadata <- NULL
-        if (current_borehole_id %in% names(rv$well_data)) {
-          current_metadata <- rv$well_data[[current_borehole_id]]$metadata
-        }
-        
-        # Update the borehole_id in files_df
-        rv$files_df$borehole_id[rv$pdf_index] <- target_borehole_id
-        
-        # If target borehole doesn't exist in well_data, create it
-        if (!target_borehole_id %in% names(rv$well_data)) {
-          # Initialize with metadata from current borehole (if available)
-          rv$well_data[[target_borehole_id]] <- list(
-            files = list(),
-            metadata = current_metadata
-          )
-        }
-        
-        # Add current file to target borehole's files
-        current_file <- rv$files_df$NewFilename[rv$pdf_index]
-        if (!is.null(rv$well_data[[target_borehole_id]]$files)) {
-          if (is.list(rv$well_data[[target_borehole_id]]$files)) {
-            rv$well_data[[target_borehole_id]]$files <- c(rv$well_data[[target_borehole_id]]$files, current_file)
-          } else {
-            rv$well_data[[target_borehole_id]]$files <- c(rv$well_data[[target_borehole_id]]$files, current_file)
-          }
-        } else {
-          rv$well_data[[target_borehole_id]]$files <- current_file
-        }
-        
-        # Refresh the data table to show the updated borehole ID
-        DT::dataTableProxy("pdf_table", session = session) %>% 
-          DT::replaceData(rv$files_df[, c("tag", "borehole_id")])
-        
-        # Clear the dropdown selection
-        updateSelectizeInput(session, "borehole_id_selector", selected = "")
-        
-        # Show success message
-        showNotification(
-          paste("Successfully linked to", target_borehole_id), 
-          type = "message", 
-          duration = 3
-        )
-        
-        # Force metadata update for the new borehole ID
-        loading_metadata(FALSE)
+      prev_id <- rv$files_df$borehole_id[rv$pdf_index]
+      if (identical(prev_id, target_borehole_id)) return()
+      fname <- rv$files_df$NewFilename[rv$pdf_index]
+      if (!is.na(prev_id) && prev_id != "") {
+        rv$well_data[[prev_id]]$files <- setdiff(rv$well_data[[prev_id]]$files, fname)
       }
+      if (!is.na(target_borehole_id) && target_borehole_id != "") {
+        rv$well_data[[target_borehole_id]]$files <- unique(c(rv$well_data[[target_borehole_id]]$files, fname))
+      }
+      rv$files_df$borehole_id[rv$pdf_index] <- target_borehole_id
+      sort_files_df()
     })
     
     
@@ -2192,37 +2164,29 @@ simplerIndex <- function(id) {
     })
     
     observeEvent(input$upload_all, {
-      req(rv$files_df)
       req(rv$well_data)
-      
-      # Count total boreholes to upload
-      total_boreholes <- length(unique(rv$files_df$borehole_id))
-      
+
+      total_boreholes <- length(rv$well_data)
+
       if (total_boreholes == 0) {
         showNotification("No boreholes to upload", type = "warning", duration = 3)
         return()
       }
-      
-      # Show processing notification
-      showNotification(paste("Starting upload of", total_boreholes, "boreholes..."), 
+
+      showNotification(paste("Starting upload of", total_boreholes, "boreholes..."),
                        type = "message", duration = 3)
-      
-      # Track success and errors
+
       success_count <- 0
       error_count <- 0
-      
-      # Loop through each unique borehole ID
-      unique_borehole_ids <- unique(rv$files_df$borehole_id)
-      
+
+      unique_borehole_ids <- names(rv$well_data)
+
       for (well_id in unique_borehole_ids) {
-        if (well_id %in% names(rv$well_data)) {
-          metadata <- rv$well_data[[well_id]]$metadata
-          
-          tryCatch({
-            # Create PDF with redactions for this borehole
+        metadata <- rv$well_data[[well_id]]$metadata
+
+        tryCatch({
             pdf_file_path <- create_pdf_with_redactions(well_id, return_path = TRUE)
-            
-            # Call AquaCache function with the metadata
+
             result <- AquaCache::insertACBorehole(
               well_name = metadata$name,
               latitude = metadata$latitude,
@@ -2257,16 +2221,14 @@ simplerIndex <- function(id) {
             )
             
             success_count <- success_count + 1
-            
-            # Show progress notification
-            showNotification(paste("Uploaded", success_count, "of", total_boreholes, "boreholes"), 
+
+            showNotification(paste("Uploaded", success_count, "of", total_boreholes, "boreholes"),
                              type = "message", duration = 1)
-            
+
           }, error = function(e) {
             error_count <- error_count + 1
             showNotification(paste0("Error uploading borehole ", well_id, ":", e$message, "\n", type = "error", duration = 5))
           })
-        }
       }
       
       # Show final summary
