@@ -297,45 +297,110 @@ addLocation <- function(id, inputs) {
     
     ## Hydat fill ###############################################################
     # Detect if the user's location code is present in hydat. If so, show a button to enable them to auto-populate fields with hydat info
-    output$hydat_note <- renderUI({HTML("<b>Entering a WSC code will allow you to auto-populate fields with HYDAT information.</b><br>")})
-    hydat <- reactiveValues(exists = FALSE,
-                            stns = NULL)
+    hydat <- reactiveValues(exists = FALSE, stns = NULL)
+    shinyjs::hide("hydat_fill")
     
+    safe <- function(expr) tryCatch(expr, error = function(e) NULL)
     
-    if ((file.exists(tidyhydat::hy_downloaded_db()))) {
-      # Check the age of the hydat database
-      hydat_path <- tidyhydat::hy_downloaded_db()
-      local_hydat <- as.Date(tidyhydat::hy_version(hydat_path)$Date)
-      local_hydat <- gsub("-", "", as.character(local_hydat))
-      remote_hydat <- tidyhydat::hy_remote()
-      if (local_hydat != remote_hydat) { #if remote version is not the same, download new version
-        showNotification("A newer version of the HYDAT database is available. Attempting to update the local copy now.", type = "warning")
-        try(tidyhydat::download_hydat(ask = FALSE))
-        hydat_path <- tidyhydat::hy_downloaded_db() #reset the hydat path just in case the new DB is not named exactly as the old one (guard against tidyhydat package changes in future)
-        local_hydat <- as.Date(tidyhydat::hy_version(hydat_path)$Date) #check the HYDAT version again just in case. It can fail to update without actually creating an error and stopping.
-        local_hydat <- gsub("-", "", as.character(local_hydat))
-        if (local_hydat == remote_hydat) {
-          new_hydat <- TRUE
-          showNotification("The local WSC HYDAT database was updated.", type = "message")
-        } else {
-          showNotification("The local WSC HYDAT database could not be updated. Continuing to use the existing local copy.", type = "error")
-        }
-      }
-      hydat$exists <- TRUE
-      showNotification("HYDAT database found. You can auto-populate fields for WSC stations.", type = "message")
-      hydat$stns <- tidyhydat::hy_stations()$STATION_NUMBER
-    } else {
-      showNotification("HYDAT database not found, attempting to download it.", type = "warning")
-      tidyhydat::hy_download_db()
-      if (file.exists(tidyhydat::hy_downloaded_db())) {
-        hydat$exists <- TRUE
-        showNotification("HYDAT database successfully downloaded. You can auto-populate fields for WSC stations.", type = "message")
-        hydat$stns <- tidyhydat::hy_stations()$STATION_NUMBER
-      } else {
-        showNotification("HYDAT database still not found. You will not be able to auto-populate fields for WSC stations.", type = "error")
-      }
-      shinyjs::hide("hydat_note")
+    # Download hydat from Shiny, bypassing tidyhydat downloader because it's blocked on a HEAD request
+    download_hydat <- function() {
+        dest_dir <- tidyhydat::hy_dir()
+        dir.create(dest_dir, showWarnings = FALSE, recursive = TRUE)
+        remote_ver <- tidyhydat::hy_remote()  # e.g. "20250701"
+        # hy_base_url() is internal; fetch it safely
+        hy_base_url <- get("hy_base_url", asNamespace("tidyhydat"))()
+        url <- paste0(hy_base_url, "Hydat_sqlite3_", remote_ver, ".zip")
+        
+        tmp_zip <- tempfile("hydat_", fileext = ".zip")
+        ex_dir  <- file.path(tempdir(), "hydat_extracted")
+        dir.create(ex_dir, showWarnings = FALSE)
+        
+        # Use GET (works when HEAD is blocked)
+        curl::curl_download(url, destfile = tmp_zip,
+                            handle = curl::new_handle(
+                              useragent = "Mozilla/5.0",
+                              followlocation = TRUE
+                            ))
+        utils::unzip(tmp_zip, exdir = ex_dir, overwrite = TRUE)
+        
+        # Copy the sqlite DB into place (name inside the zip can vary)
+        sqlite_src <- list.files(ex_dir, pattern = "\\.sqlite3$", full.names = TRUE)
+        if (length(sqlite_src) == 0) stop("HYDAT zip did not contain a .sqlite3 file")
+        hydat_path <- file.path(dest_dir, "Hydat.sqlite3")
+        file.copy(sqlite_src[1], hydat_path, overwrite = TRUE)
+        unlink(c(tmp_zip, ex_dir), recursive = TRUE) 
     }
+    
+    
+    db_path <- safe(tidyhydat::hy_downloaded_db())
+    download_new_hydat <- FALSE
+    if (!is.null(db_path)) {
+      if (file.exists(db_path)) {
+        # Compare versions safely
+        local_ver <- safe(as.Date(tidyhydat::hy_version(db_path)$Date))
+        local_ver <- gsub("-", "", as.character(local_ver))
+        remote_ver <- safe(tidyhydat::hy_remote())
+        if (!is.null(local_ver) && !is.null(remote_ver)) {
+          if (local_ver != remote_ver) {
+            showNotification("A newer HYDAT is available. Attempting update, please be patient. A success message will appear once the download is complete.", type = "warning", duration = 20)
+            safe(download_hydat())  # Download new version
+            # try to refresh version
+            db_path <- safe(tidyhydat::hy_downloaded_db())
+            local_ver <- if (!is.null(db_path)) safe(as.Date(tidyhydat::hy_version(db_path)$Date)) else NULL
+            if (!is.null(local_ver) && !is.null(remote_ver)) {
+              if (identical(local_ver, remote_ver)) {
+                showNotification("HYDAT updated.", type = "message")
+              } else {
+                showNotification("HYDAT update failed; using existing local copy.", type = "error")
+              }
+            } else {
+              showNotification("HYDAT update failed; using existing local copy.", type = "error")
+            }
+          } 
+        }
+        stns <- safe(tidyhydat::hy_stations())
+        if (!is.null(stns)) {
+          hydat$stns <- stns$STATION_NUMBER
+          hydat$exists <- TRUE
+        } else {
+          hydat$stns <- character(0)
+          hydat$exists <- TRUE
+        }
+      } else {
+        download_new_hydat <- TRUE
+      }
+    } else {
+      download_new_hydat <- TRUE
+    }
+    
+    if (download_new_hydat) {
+      showNotification("No local HYDAT found. Attempting download, please be patient. A success message will appear once the download is complete.", type = "warning", duration = 20)
+      safe(download_hydat())  # Download new version
+      db_path <- safe(tidyhydat::hy_downloaded_db())
+      if (!is.null(db_path)) {
+        if (file.exists(db_path)) {
+          stns <- safe(tidyhydat::hy_stations())
+          if (!is.null(stns)) {
+            hydat$stns <- stns$STATION_NUMBER
+            hydat$exists <- TRUE
+            showNotification("HYDAT downloaded.", type = "message")
+          } else {
+            hydat$stns <- character(0)
+            hydat$exists <- TRUE
+            showNotification("HYDAT download failed; HYDAT functions will not be available.", type = "error")
+          }
+        }
+      } else {
+        hydat$stns <- character(0)
+        hydat$exists <- FALSE
+        showNotification("HYDAT download failed; HYDAT functions will not be available.", type = "error")
+      }
+    }
+    
+    if (hydat$exists) {
+      output$hydat_note <- renderUI({HTML("<b>Entering a WSC code will allow you to auto-populate fields with HYDAT information.</b><br>")})
+    }
+    
     
     observeEvent(input$loc_code, {# Observe loc_code inputs and, if possible, show the button to auto-populate fields
       req(input$loc_code)
@@ -355,6 +420,7 @@ addLocation <- function(id, inputs) {
       } else {
         if (input$loc_code %in% moduleData$exist_locs$location) {
           shinyjs::js$backgroundCol(ns("loc_code"), "#fdd")
+          showNotification("This location code already exists and you're on the 'add new timeseries' mode.", type = "warning", duration = 10)
         } else {
           shinyjs::js$backgroundCol(ns("loc_code"), "#fff")
         }
