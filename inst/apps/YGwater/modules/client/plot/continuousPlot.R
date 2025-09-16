@@ -941,7 +941,6 @@ contPlot <- function(id, language, windowDims, inputs) {
     
     ## Filter based on the media ##########################
     observeEvent(input$media, {
-      
       # Filter the data based on the selected media
       if (is.null(input$media) || length(input$media) != 1) return()
       
