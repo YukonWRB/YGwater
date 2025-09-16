@@ -456,7 +456,7 @@ create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
 # Other helper function #############
 # Helper functions to safely get metadata values ##
 # Text or selectizeInput multiple = FALSE
-get_meta_value <- function(field, default = "") {
+get_meta_value <- function(field, metadata, default = "") {
   val <- metadata[[field]]
   if (is.null(val) || is.na(val)) {
     return(default)
@@ -464,7 +464,7 @@ get_meta_value <- function(field, default = "") {
   return(val)
 }
 # For selectize that can return vector length > 1 (like share_with)
-get_meta_value_multiple <- function(field, default = "") {
+get_meta_value_multiple <- function(field, metadata, default = "") {
   val <- metadata[[field]]
   if (is.null(val) || all(is.na(val))) {
     return(default)
@@ -472,7 +472,7 @@ get_meta_value_multiple <- function(field, default = "") {
   return(val)
 }
 # Numeric inputs
-get_meta_numeric <- function(field) {
+get_meta_numeric <- function(field, metadata) {
   val <- metadata[[field]]
   if (is.null(val) || is.na(val)) {
     return(NULL)
@@ -480,7 +480,7 @@ get_meta_numeric <- function(field) {
   return(val)
 }
 # Date inputs
-get_meta_date <- function(field) {
+get_meta_date <- function(field, metadata) {
   val <- metadata[[field]]
   if (is.null(val) || is.na(val)) {
     return(NULL)
@@ -488,7 +488,7 @@ get_meta_date <- function(field) {
   return(val)
 }
 # boolean inputs
-get_meta_boolean <- function(field, default = FALSE) {
+get_meta_boolean <- function(field, metadata, default = FALSE) {
   val <- metadata[[field]]
   if (is.null(val) || is.na(val)) {
     return(default)

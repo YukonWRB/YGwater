@@ -906,6 +906,22 @@ simplerIndex <- function(id) {
       "purpose_well_inferred"
     )
 
+    empty_well_entry <- function() {
+      metadata <- setNames(as.list(rep(NA, length(well_fields))), well_fields)
+      list(files = character(), metadata = metadata)
+    }
+
+    all_pages_assigned <- function() {
+      if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
+        return(TRUE)
+      }
+      assigned <- rv$files_df$borehole_id
+      if (length(assigned) == 0) {
+        return(TRUE)
+      }
+      all(!is.na(assigned) & nzchar(assigned))
+    }
+
     # Add observer for brush_select button
     observeEvent(input$brush_select, {
       # Toggle brush_enabled value
@@ -929,10 +945,17 @@ simplerIndex <- function(id) {
     current_well_id <- reactive({
       req(rv$files_df)
       req(rv$pdf_index)
-      req(nrow(rv$files_df) >= rv$pdf_index)
 
-      # Since each row has its own unique well ID, just return it directly
-      return(rv$files_df$borehole_id[rv$pdf_index])
+      if (nrow(rv$files_df) == 0 || nrow(rv$files_df) < rv$pdf_index) {
+        return(NULL)
+      }
+
+      well_id <- rv$files_df$borehole_id[rv$pdf_index]
+      if (length(well_id) == 0 || is.na(well_id) || well_id == "") {
+        return(NULL)
+      }
+
+      well_id
     })
 
     observeEvent(
@@ -940,22 +963,49 @@ simplerIndex <- function(id) {
       {
         req(input$num_boreholes > 0)
         num <- input$num_boreholes
-        borehole_ids <- paste0("BH", sprintf("%04d", seq_len(num)))
-        rv$well_data <- lapply(borehole_ids, function(id) {
-          metadata <- setNames(
-            as.list(rep(NA, length(well_fields))),
-            well_fields
-          )
-          list(files = character(), metadata = metadata)
+        new_ids <- as.character(seq_len(num))
+        existing <- rv$well_data
+        existing_files <- if (!is.null(rv$files_df)) {
+          rv$files_df$NewFilename
+        } else {
+          character()
+        }
+
+        new_well_data <- lapply(new_ids, function(id) {
+          if (!is.null(existing) && id %in% names(existing)) {
+            entry <- existing[[id]]
+            if (is.null(entry$files)) {
+              entry$files <- character()
+            }
+            if (length(existing_files) > 0) {
+              entry$files <- intersect(entry$files, existing_files)
+            }
+            if (is.null(entry$metadata)) {
+              entry$metadata <- empty_well_entry()$metadata
+            }
+            entry$metadata$borehole_id <- id
+            entry
+          } else {
+            entry <- empty_well_entry()
+            entry$metadata$borehole_id <- id
+            entry
+          }
         })
-        names(rv$well_data) <- borehole_ids
+        names(new_well_data) <- new_ids
+        rv$well_data <- new_well_data
+
         if (!is.null(rv$files_df)) {
-          rv$files_df$borehole_id <- NA
+          rv$files_df$borehole_id <- ifelse(
+            rv$files_df$borehole_id %in% new_ids,
+            rv$files_df$borehole_id,
+            NA_character_
+          )
+          rv$files_df$borehole_id <- as.character(rv$files_df$borehole_id)
           sort_files_df()
         }
       },
       ignoreNULL = FALSE,
-      ignoreInit = TRUE
+      ignoreInit = FALSE
     )
 
     # Update the 'drillers', 'purpose', and 'share_with' list based on the data loaded from Aquacache
@@ -1458,12 +1508,24 @@ simplerIndex <- function(id) {
       select_inputs <- vapply(
         seq_len(nrow(rv$files_df)),
         function(i) {
+          selected_value <- rv$files_df$borehole_id[i]
+          if (length(selected_value) == 0 || is.na(selected_value)) {
+            selected_value <- ""
+          }
+          labelled_choices <- if (length(borehole_choices) > 0) {
+            stats::setNames(
+              borehole_choices,
+              paste("Borehole", borehole_choices)
+            )
+          } else {
+            NULL
+          }
           as.character(selectInput(
             ns(paste0("bh_select_", i)),
             NULL,
-            choices = 1:input$num_boreholes,
-            selected = rv$files_df$borehole_id[i],
-            width = "100px"
+            choices = c("Unassigned" = "", labelled_choices),
+            selected = selected_value,
+            width = "130px"
           ))
         },
         character(1)
@@ -1500,24 +1562,38 @@ simplerIndex <- function(id) {
           input[[paste0("bh_select_", i)]],
           {
             new_id <- input[[paste0("bh_select_", i)]]
+            if (is.null(new_id)) {
+              new_id <- ""
+            } else {
+              new_id <- as.character(new_id)
+            }
             prev_id <- rv$files_df$borehole_id[i]
-            if (identical(prev_id, new_id)) {
+            prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
+            if (identical(prev_id_normalized, new_id)) {
               return()
             }
             fname <- rv$files_df$NewFilename[i]
-            if (!is.na(prev_id) && prev_id != "") {
+            if (
+              !is.na(prev_id) &&
+                nzchar(prev_id) &&
+                prev_id %in% names(rv$well_data)
+            ) {
               rv$well_data[[prev_id]]$files <- setdiff(
                 rv$well_data[[prev_id]]$files,
                 fname
               )
             }
-            if (!is.na(new_id) && new_id != "") {
+            if (nzchar(new_id) && new_id %in% names(rv$well_data)) {
               rv$well_data[[new_id]]$files <- unique(c(
                 rv$well_data[[new_id]]$files,
                 fname
               ))
             }
-            rv$files_df$borehole_id[i] <- new_id
+            rv$files_df$borehole_id[i] <- if (nzchar(new_id)) {
+              new_id
+            } else {
+              NA_character_
+            }
             sort_files_df()
           },
           ignoreNULL = TRUE
@@ -2235,6 +2311,7 @@ simplerIndex <- function(id) {
       req(rv$files_df)
       req(rv$pdf_index)
       req(nrow(rv$files_df) >= rv$pdf_index)
+      req(rv$well_data)
 
       well_id <- current_well_id()
 
@@ -2243,221 +2320,295 @@ simplerIndex <- function(id) {
         metadata <- rv$well_data[[well_id]]$metadata
 
         # Update text inputs - make sure notes is included
-        updateTextInput(session, "name", value = get_meta_value("name"))
+        updateTextInput(
+          session,
+          "name",
+          value = get_meta_value("name", metadata = metadata)
+        )
         updateTextInput(
           session,
           "notes_borehole",
-          value = get_meta_value("notes_borehole")
+          value = get_meta_value("notes_borehole", metadata = metadata)
         )
         updateTextInput(
           session,
           "notes_well",
-          value = get_meta_value("notes_well")
+          value = get_meta_value("notes_well", metadata = metadata)
         )
         updateSelectizeInput(
           session,
           "location_source",
-          selected = get_meta_value("location_source")
+          selected = get_meta_value("location_source", metadata = metadata)
         )
 
         # Update selectize inputs
         updateSelectizeInput(
           session,
           "utm_zone",
-          selected = get_meta_value("utm_zone", "8N")
+          selected = get_meta_value(
+            "utm_zone",
+            metadata = metadata,
+            default = "8N"
+          )
         )
         updateSelectizeInput(
           session,
           "purpose_of_borehole",
-          selected = get_meta_value("purpose_of_borehole")
+          selected = get_meta_value("purpose_of_borehole", metadata = metadata)
         )
         updateSelectizeInput(
           session,
           "purpose_of_well",
-          selected = get_meta_value("purpose_of_well")
+          selected = get_meta_value("purpose_of_well", metadata = metadata)
         )
         updateSelectizeInput(
           session,
           "drilled_by",
-          selected = get_meta_value("drilled_by")
+          selected = get_meta_value("drilled_by", metadata = metadata)
         )
         updateSelectizeInput(
           session,
           "share_with_borehole",
-          selected = get_meta_value_multiple("share_with_borehole")
+          selected = get_meta_value_multiple(
+            "share_with_borehole",
+            metadata = metadata
+          )
         )
         updateSelectizeInput(
           session,
           "share_with_well",
-          selected = get_meta_value_multiple("share_with_well")
+          selected = get_meta_value_multiple(
+            "share_with_well",
+            metadata = metadata
+          )
         )
 
         # Update radio buttons
         updateRadioButtons(
           session,
           "coordinate_system",
-          selected = get_meta_value("coordinate_system", "utm")
+          selected = get_meta_value(
+            "coordinate_system",
+            metadata = metadata,
+            default = "utm"
+          )
         )
         updateRadioButtons(
           session,
           "depth_to_bedrock_unit",
-          selected = get_meta_value("depth_to_bedrock_unit", "ft")
+          selected = get_meta_value(
+            "depth_to_bedrock_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "casing_od_unit",
-          selected = get_meta_value("casing_od_unit", "inch")
+          selected = get_meta_value(
+            "casing_od_unit",
+            metadata = metadata,
+            default = "inch"
+          )
         )
         updateRadioButtons(
           session,
           "drill_depth_unit",
-          selected = get_meta_value("drill_depth_unit", "ft")
+          selected = get_meta_value(
+            "drill_depth_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "top_of_screen_unit",
-          selected = get_meta_value("top_of_screen_unit", "ft")
+          selected = get_meta_value(
+            "top_of_screen_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "bottom_of_screen_unit",
-          selected = get_meta_value("bottom_of_screen_unit", "ft")
+          selected = get_meta_value(
+            "bottom_of_screen_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "well_head_stick_up_unit",
-          selected = get_meta_value("well_head_stick_up_unit", "ft")
+          selected = get_meta_value(
+            "well_head_stick_up_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "static_water_level_unit",
-          selected = get_meta_value("static_water_level_unit", "ft")
+          selected = get_meta_value(
+            "static_water_level_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "estimated_yield_unit",
-          selected = get_meta_value("estimated_yield_unit", "G/min")
+          selected = get_meta_value(
+            "estimated_yield_unit",
+            metadata = metadata,
+            default = "G/min"
+          )
         )
         updateRadioButtons(
           session,
           "surveyed_ground_elev_unit",
-          selected = get_meta_value("surveyed_ground_elev_unit", "ft")
+          selected = get_meta_value(
+            "surveyed_ground_elev_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "permafrost_top_unit",
-          selected = get_meta_value("permafrost_top_unit", "ft")
+          selected = get_meta_value(
+            "permafrost_top_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "permafrost_bot_unit",
-          selected = get_meta_value("permafrost_bot_unit", "ft")
+          selected = get_meta_value(
+            "permafrost_bot_unit",
+            metadata = metadata,
+            default = "ft"
+          )
         )
         updateRadioButtons(
           session,
           "purpose_borehole_inferred",
-          selected = get_meta_value("purpose_borehole_inferred", TRUE)
+          selected = get_meta_boolean(
+            "purpose_borehole_inferred",
+            metadata = metadata,
+            default = TRUE
+          )
         )
         updateRadioButtons(
           session,
           "purpose_well_inferred",
-          selected = get_meta_value("purpose_well_inferred", TRUE)
+          selected = get_meta_boolean(
+            "purpose_well_inferred",
+            metadata = metadata,
+            default = TRUE
+          )
         )
 
         # Update numeric inputs
         updateNumericInput(
           session,
           "easting",
-          value = get_meta_numeric("easting")
+          value = get_meta_numeric("easting", metadata = metadata)
         )
         updateNumericInput(
           session,
           "northing",
-          value = get_meta_numeric("northing")
+          value = get_meta_numeric("northing", metadata = metadata)
         )
         updateNumericInput(
           session,
           "latitude",
-          value = get_meta_numeric("latitude")
+          value = get_meta_numeric("latitude", metadata = metadata)
         )
         updateNumericInput(
           session,
           "longitude",
-          value = get_meta_numeric("longitude")
+          value = get_meta_numeric("longitude", metadata = metadata)
         )
         updateNumericInput(
           session,
           "depth_to_bedrock",
-          value = get_meta_numeric("depth_to_bedrock")
+          value = get_meta_numeric("depth_to_bedrock", metadata = metadata)
         )
         updateNumericInput(
           session,
           "permafrost_top",
-          value = get_meta_numeric("permafrost_top")
+          value = get_meta_numeric("permafrost_top", metadata = metadata)
         )
         updateNumericInput(
           session,
           "permafrost_bot",
-          value = get_meta_numeric("permafrost_bot")
+          value = get_meta_numeric("permafrost_bot", metadata = metadata)
         )
         updateNumericInput(
           session,
           "casing_od",
-          value = get_meta_numeric("casing_od")
+          value = get_meta_numeric("casing_od", metadata = metadata)
         )
         updateNumericInput(
           session,
           "drill_depth",
-          value = get_meta_numeric("drill_depth")
+          value = get_meta_numeric("drill_depth", metadata = metadata)
         )
         updateNumericInput(
           session,
           "surveyed_ground_elev",
-          value = get_meta_numeric("surveyed_ground_elev")
+          value = get_meta_numeric("surveyed_ground_elev", metadata = metadata)
         )
         updateNumericInput(
           session,
           "top_of_screen",
-          value = get_meta_numeric("top_of_screen")
+          value = get_meta_numeric("top_of_screen", metadata = metadata)
         )
         updateNumericInput(
           session,
           "bottom_of_screen",
-          value = get_meta_numeric("bottom_of_screen")
+          value = get_meta_numeric("bottom_of_screen", metadata = metadata)
         )
         updateNumericInput(
           session,
           "well_head_stick_up",
-          value = get_meta_numeric("well_head_stick_up")
+          value = get_meta_numeric("well_head_stick_up", metadata = metadata)
         )
         updateNumericInput(
           session,
           "static_water_level",
-          value = get_meta_numeric("static_water_level")
+          value = get_meta_numeric("static_water_level", metadata = metadata)
         )
         updateNumericInput(
           session,
           "estimated_yield",
-          value = get_meta_numeric("estimated_yield")
+          value = get_meta_numeric("estimated_yield", metadata = metadata)
         )
 
         # Update checkbox inputs
         updateCheckboxInput(
           session,
           "permafrost_present",
-          value = get_meta_boolean("permafrost_present")
+          value = get_meta_boolean("permafrost_present", metadata = metadata)
         )
         updateCheckboxInput(
           session,
           "is_well",
-          value = get_meta_boolean("is_well")
+          value = get_meta_boolean(
+            "is_well",
+            metadata = metadata,
+            default = FALSE
+          )
         )
 
         # Update date input
         updateDateInput(
           session,
           "date_drilled",
-          value = get_meta_date("date_drilled")
+          value = get_meta_date("date_drilled", metadata = metadata)
         )
 
         # Re-enable metadata saving after all updates are complete
@@ -2528,8 +2679,16 @@ simplerIndex <- function(id) {
       req(rv$files_df)
       req(rv$pdf_index)
 
-      # Return the current borehole ID
-      return(rv$files_df$borehole_id[rv$pdf_index])
+      if (nrow(rv$files_df) < rv$pdf_index) {
+        return("")
+      }
+
+      current_id <- rv$files_df$borehole_id[rv$pdf_index]
+      if (length(current_id) == 0 || is.na(current_id) || current_id == "") {
+        return("Unassigned")
+      }
+
+      paste("Borehole", current_id)
     })
 
     output$file_count_display <- renderText({
@@ -2565,18 +2724,30 @@ simplerIndex <- function(id) {
       req(rv$pdf_index)
 
       choices <- names(rv$well_data)
-      selected <- if (
-        nrow(rv$files_df) >= rv$pdf_index &&
-          !is.na(rv$files_df$borehole_id[rv$pdf_index])
-      ) {
+      labelled_choices <- if (length(choices) > 0) {
+        stats::setNames(choices, paste("Borehole", choices))
+      } else {
+        NULL
+      }
+      current_value <- if (nrow(rv$files_df) >= rv$pdf_index) {
         rv$files_df$borehole_id[rv$pdf_index]
       } else {
-        ""
+        NA_character_
+      }
+      selected <- if (
+        !is.null(current_value) &&
+          length(current_value) > 0 &&
+          !is.na(current_value) &&
+          current_value != ""
+      ) {
+        current_value
+      } else {
+        NULL
       }
       updateSelectizeInput(
         session,
         "borehole_id_selector",
-        choices = choices,
+        choices = labelled_choices,
         selected = selected,
         options = list(
           placeholder = "Select borehole",
@@ -2590,25 +2761,40 @@ simplerIndex <- function(id) {
       req(rv$pdf_index)
 
       target_borehole_id <- input$borehole_id_selector
+      if (is.null(target_borehole_id)) {
+        target_borehole_id <- ""
+      } else {
+        target_borehole_id <- as.character(target_borehole_id)
+      }
 
       prev_id <- rv$files_df$borehole_id[rv$pdf_index]
-      if (identical(prev_id, target_borehole_id)) {
+      prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
+      if (identical(prev_id_normalized, target_borehole_id)) {
         return()
       }
       fname <- rv$files_df$NewFilename[rv$pdf_index]
-      if (!is.na(prev_id) && prev_id != "") {
+      if (
+        !is.na(prev_id) && nzchar(prev_id) && prev_id %in% names(rv$well_data)
+      ) {
         rv$well_data[[prev_id]]$files <- setdiff(
           rv$well_data[[prev_id]]$files,
           fname
         )
       }
-      if (!is.na(target_borehole_id) && target_borehole_id != "") {
+      if (
+        nzchar(target_borehole_id) &&
+          target_borehole_id %in% names(rv$well_data)
+      ) {
         rv$well_data[[target_borehole_id]]$files <- unique(c(
           rv$well_data[[target_borehole_id]]$files,
           fname
         ))
       }
-      rv$files_df$borehole_id[rv$pdf_index] <- target_borehole_id
+      rv$files_df$borehole_id[rv$pdf_index] <- if (nzchar(target_borehole_id)) {
+        target_borehole_id
+      } else {
+        NA_character_
+      }
       sort_files_df()
     })
 
@@ -2617,13 +2803,41 @@ simplerIndex <- function(id) {
       req(rv$files_df)
       req(rv$pdf_index)
 
+      if (nrow(rv$files_df) == 0) {
+        showNotification(
+          "No PDF pages available to upload.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+
+      if (!all_pages_assigned()) {
+        showNotification(
+          "Please assign every document page to a borehole before uploading.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+
       # Get the current well ID
       current_well_id <- current_well_id()
 
-      if (
-        !is.null(current_well_id) && current_well_id %in% names(rv$well_data)
-      ) {
+      if (is.null(current_well_id)) {
+        showNotification(
+          "Assign the current page to a borehole before uploading.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+
+      if (current_well_id %in% names(rv$well_data)) {
         metadata <- rv$well_data[[current_well_id]]$metadata
+        if (is.null(metadata)) {
+          metadata <- empty_well_entry()$metadata
+        }
 
         # Show processing notification
         showNotification(
@@ -2710,8 +2924,21 @@ simplerIndex <- function(id) {
 
     observeEvent(input$upload_all, {
       req(rv$well_data)
+      req(rv$files_df)
 
-      total_boreholes <- length(rv$well_data)
+      if (!all_pages_assigned()) {
+        showNotification(
+          "Please assign every document page to a borehole before uploading.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+
+      assigned_ids <- rv$files_df$borehole_id
+      assigned_ids <- assigned_ids[!is.na(assigned_ids) & nzchar(assigned_ids)]
+      unique_borehole_ids <- unique(assigned_ids)
+      total_boreholes <- length(unique_borehole_ids)
 
       if (total_boreholes == 0) {
         showNotification(
@@ -2734,10 +2961,14 @@ simplerIndex <- function(id) {
       error_count <- 0
 
       # Loop through each unique borehole ID
-      unique_borehole_ids <- unique(rv$files_df$borehole_id)
-
       for (well_id in unique_borehole_ids) {
+        if (!(well_id %in% names(rv$well_data))) {
+          next
+        }
         metadata <- rv$well_data[[well_id]]$metadata
+        if (is.null(metadata)) {
+          metadata <- empty_well_entry()$metadata
+        }
 
         tryCatch(
           {
@@ -2802,7 +3033,7 @@ simplerIndex <- function(id) {
               paste0(
                 "Error uploading borehole ",
                 well_id,
-                ":",
+                ": ",
                 e$message,
                 "\n"
               ),
