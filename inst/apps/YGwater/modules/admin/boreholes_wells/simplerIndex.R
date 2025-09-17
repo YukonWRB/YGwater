@@ -812,6 +812,46 @@ simplerIndex <- function(id) {
       assign_observers = list()
     )
 
+    page_assignments <- reactiveVal(list())
+
+    normalize_assignment <- function(value) {
+      if (length(value) == 0 || is.null(value) || is.na(value) || !nzchar(value)) {
+        ""
+      } else {
+        as.character(value)
+      }
+    }
+
+    sync_page_assignments <- function() {
+      if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
+        page_assignments(list())
+        return()
+      }
+
+      assignments <- page_assignments()
+      if (is.null(assignments)) {
+        assignments <- list()
+      }
+
+      current_tags <- rv$files_df$tag
+      if (!is.null(names(assignments))) {
+        assignments <- assignments[names(assignments) %in% current_tags]
+      } else {
+        assignments <- list()
+      }
+
+      for (idx in seq_len(nrow(rv$files_df))) {
+        tag <- rv$files_df$tag[idx]
+        current_value <- normalize_assignment(rv$files_df$borehole_id[idx])
+        stored_value <- assignments[[tag]]
+        if (is.null(stored_value) || !identical(stored_value, current_value)) {
+          assignments[[tag]] <- current_value
+        }
+      }
+
+      page_assignments(assignments)
+    }
+
     moduleData <- reactiveValues(
       drillers = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -859,6 +899,7 @@ simplerIndex <- function(id) {
       if (!is.null(current_tag)) {
         rv$pdf_index <- match(current_tag, rv$files_df$tag)
       }
+      sync_page_assignments()
     }
 
     well_fields <- c(
@@ -1477,10 +1518,17 @@ simplerIndex <- function(id) {
         selected_row <- rv$pdf_index
 
         fname <- rv$files_df$NewFilename[selected_row]
+        removed_tag <- rv$files_df$tag[selected_row]
 
         # Remove from files_df and OCR text
         rv$files_df <- rv$files_df[-selected_row, ]
         rv$ocr_text <- rv$ocr_text[-selected_row]
+
+        assignments <- page_assignments()
+        if (!is.null(assignments) && length(assignments) > 0) {
+          assignments[[removed_tag]] <- NULL
+          page_assignments(assignments)
+        }
 
         # Update well_data structure by removing the filename
         for (well_id in names(rv$well_data)) {
@@ -1504,13 +1552,19 @@ simplerIndex <- function(id) {
       req(rv$files_df)
       validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
 
+      assignments <- page_assignments()
+      if (is.null(assignments)) {
+        assignments <- list()
+      }
+
       borehole_choices <- names(rv$well_data)
       select_inputs <- vapply(
         seq_len(nrow(rv$files_df)),
         function(i) {
-          selected_value <- rv$files_df$borehole_id[i]
-          if (length(selected_value) == 0 || is.na(selected_value)) {
-            selected_value <- ""
+          tag <- rv$files_df$tag[i]
+          selected_value <- assignments[[tag]]
+          if (is.null(selected_value)) {
+            selected_value <- normalize_assignment(rv$files_df$borehole_id[i])
           }
           labelled_choices <- if (length(borehole_choices) > 0) {
             stats::setNames(
@@ -1555,49 +1609,67 @@ simplerIndex <- function(id) {
     })
 
     observeEvent(rv$files_df, {
+      sync_page_assignments()
+
       lapply(rv$assign_observers, function(obs) obs$destroy())
       rv$assign_observers <- list()
+
+      if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
+        return()
+      }
+
       for (i in seq_len(nrow(rv$files_df))) {
-        rv$assign_observers[[i]] <- observeEvent(
-          input[[paste0("bh_select_", i)]],
-          {
-            new_id <- input[[paste0("bh_select_", i)]]
-            if (is.null(new_id)) {
-              new_id <- ""
-            } else {
-              new_id <- as.character(new_id)
-            }
-            prev_id <- rv$files_df$borehole_id[i]
-            prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
-            if (identical(prev_id_normalized, new_id)) {
-              return()
-            }
-            fname <- rv$files_df$NewFilename[i]
-            if (
-              !is.na(prev_id) &&
-                nzchar(prev_id) &&
-                prev_id %in% names(rv$well_data)
-            ) {
-              rv$well_data[[prev_id]]$files <- setdiff(
-                rv$well_data[[prev_id]]$files,
-                fname
-              )
-            }
-            if (nzchar(new_id) && new_id %in% names(rv$well_data)) {
-              rv$well_data[[new_id]]$files <- unique(c(
-                rv$well_data[[new_id]]$files,
-                fname
-              ))
-            }
-            rv$files_df$borehole_id[i] <- if (nzchar(new_id)) {
-              new_id
-            } else {
-              NA_character_
-            }
-            sort_files_df()
-          },
-          ignoreNULL = TRUE
-        )
+        local({
+          idx <- i
+          current_tag <- rv$files_df$tag[idx]
+          rv$assign_observers[[idx]] <- observeEvent(
+            input[[paste0("bh_select_", idx)]],
+            {
+              new_id <- input[[paste0("bh_select_", idx)]]
+              if (is.null(new_id)) {
+                new_id <- ""
+              } else {
+                new_id <- as.character(new_id)
+              }
+              normalized_new <- normalize_assignment(new_id)
+              prev_id <- rv$files_df$borehole_id[idx]
+              prev_id_normalized <- normalize_assignment(prev_id)
+              if (identical(prev_id_normalized, normalized_new)) {
+                assignments <- page_assignments()
+                assignments[[current_tag]] <- normalized_new
+                page_assignments(assignments)
+                return()
+              }
+              fname <- rv$files_df$NewFilename[idx]
+              if (
+                !is.na(prev_id) &&
+                  nzchar(prev_id) &&
+                  prev_id %in% names(rv$well_data)
+              ) {
+                rv$well_data[[prev_id]]$files <- setdiff(
+                  rv$well_data[[prev_id]]$files,
+                  fname
+                )
+              }
+              if (nzchar(normalized_new) && normalized_new %in% names(rv$well_data)) {
+                rv$well_data[[normalized_new]]$files <- unique(c(
+                  rv$well_data[[normalized_new]]$files,
+                  fname
+                ))
+              }
+              rv$files_df$borehole_id[idx] <- if (nzchar(normalized_new)) {
+                normalized_new
+              } else {
+                NA_character_
+              }
+              assignments <- page_assignments()
+              assignments[[current_tag]] <- normalized_new
+              page_assignments(assignments)
+              sort_files_df()
+            },
+            ignoreNULL = TRUE
+          )
+        })
       }
     })
 
@@ -2760,16 +2832,21 @@ simplerIndex <- function(id) {
       req(rv$files_df)
       req(rv$pdf_index)
 
+      current_tag <- rv$files_df$tag[rv$pdf_index]
       target_borehole_id <- input$borehole_id_selector
       if (is.null(target_borehole_id)) {
         target_borehole_id <- ""
       } else {
         target_borehole_id <- as.character(target_borehole_id)
       }
+      normalized_target <- normalize_assignment(target_borehole_id)
 
       prev_id <- rv$files_df$borehole_id[rv$pdf_index]
-      prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
-      if (identical(prev_id_normalized, target_borehole_id)) {
+      prev_id_normalized <- normalize_assignment(prev_id)
+      if (identical(prev_id_normalized, normalized_target)) {
+        assignments <- page_assignments()
+        assignments[[current_tag]] <- normalized_target
+        page_assignments(assignments)
         return()
       }
       fname <- rv$files_df$NewFilename[rv$pdf_index]
@@ -2782,19 +2859,22 @@ simplerIndex <- function(id) {
         )
       }
       if (
-        nzchar(target_borehole_id) &&
-          target_borehole_id %in% names(rv$well_data)
+        nzchar(normalized_target) &&
+          normalized_target %in% names(rv$well_data)
       ) {
-        rv$well_data[[target_borehole_id]]$files <- unique(c(
-          rv$well_data[[target_borehole_id]]$files,
+        rv$well_data[[normalized_target]]$files <- unique(c(
+          rv$well_data[[normalized_target]]$files,
           fname
         ))
       }
-      rv$files_df$borehole_id[rv$pdf_index] <- if (nzchar(target_borehole_id)) {
-        target_borehole_id
+      rv$files_df$borehole_id[rv$pdf_index] <- if (nzchar(normalized_target)) {
+        normalized_target
       } else {
         NA_character_
       }
+      assignments <- page_assignments()
+      assignments[[current_tag]] <- normalized_target
+      page_assignments(assignments)
       sort_files_df()
     })
 
