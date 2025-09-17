@@ -766,7 +766,7 @@ simplerIndex <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    # Load the OCR helper functions
+    # Load the helper functions
     # local = TRUE ensures the functions are loaded into this module's environment only
     source(
       system.file(
@@ -776,20 +776,37 @@ simplerIndex <- function(id) {
       local = TRUE
     )
 
-    # Store split PDF info
+    # Create reactiveValues to store data input by user or derived during session #################
+    # reactiveValues to store data input by user or derived during session
     rv <- reactiveValues(
-      files_df = NULL,
-      well_data = list(), # Named list organized by borehole ID
-      pdf_index = 1,
+      files_df = NULL, # Data frame with one row per uploaded PDF page
+      borehole_data = list(), # Named list organized by borehole ID
+      pdf_index = 1, # Index of currently viewed PDF page
       ocr_text = list(),
       ocr_display_mode = "none",
       selected_text = NULL,
       rectangles = list(),
-      selected_driller = NULL,
-      selected_purpose = NULL,
       assign_observers = list()
     )
 
+    # Reactive expression to get the borehole selected for editing
+    current_borehole_id <- reactive({
+      selection <- input$borehole_details_selector
+      if (is.null(selection) || length(selection) == 0) {
+        return(NULL)
+      }
+      selection <- as.character(selection)[1]
+      if (!nzchar(selection) || !selection %in% names(rv$borehole_data)) {
+        return(NULL)
+      }
+      selection
+    })
+    # Reactive value to control brush mode
+    brush_enabled <- reactiveVal(FALSE)
+    # Flag to prevent circular updates when loading metadata
+    loading_metadata <- reactiveVal(FALSE)
+
+    # Module data loaded from Aquacache
     moduleData <- reactiveValues(
       drillers = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -809,11 +826,54 @@ simplerIndex <- function(id) {
       )
     )
 
-    # Reactive value to control brush mode
-    brush_enabled <- reactiveVal(FALSE)
-
-    # Flag to prevent circular updates when loading metadata
-    loading_metadata <- reactiveVal(FALSE)
+    # Update the 'drillers', 'purpose', and 'share_with' list based on the data loaded from Aquacache
+    observeEvent(moduleData, {
+      req(
+        moduleData$drillers,
+        moduleData$purposes,
+        moduleData$share_with_boreholes,
+        moduleData$share_with_wells
+      )
+      updateSelectizeInput(
+        session,
+        "drilled_by",
+        choices = stats::setNames(
+          moduleData$drillers$driller_id,
+          moduleData$drillers$name
+        ),
+        selected = NULL
+      )
+      updateSelectizeInput(
+        session,
+        "purpose_of_borehole",
+        choices = stats::setNames(
+          moduleData$purposes$borehole_well_purpose_id,
+          moduleData$purposes$purpose_name
+        ),
+        selected = NULL
+      )
+      updateSelectizeInput(
+        session,
+        "purpose_of_well",
+        choices = stats::setNames(
+          moduleData$purposes$borehole_well_purpose_id,
+          moduleData$purposes$purpose_name
+        ),
+        selected = NULL
+      )
+      updateSelectizeInput(
+        session,
+        "share_with_borehole",
+        choices = moduleData$share_with_boreholes$role_name,
+        selected = "public_reader"
+      )
+      updateSelectizeInput(
+        session,
+        "share_with_well",
+        choices = moduleData$share_with_wells$role_name,
+        selected = "public_reader"
+      )
+    })
 
     sort_files_df <- function() {
       if (is.null(rv$files_df)) {
@@ -890,7 +950,7 @@ simplerIndex <- function(id) {
     }
 
     update_borehole_details_selector <- function(preferred = NULL) {
-      choices <- names(rv$well_data)
+      choices <- names(rv$borehole_data)
       labelled_choices <- if (length(choices) > 0) {
         stats::setNames(choices, paste("Borehole", choices))
       } else {
@@ -946,27 +1006,22 @@ simplerIndex <- function(id) {
           "$('#%s').addClass('btn-active');",
           ns('brush_select')
         ))
+
+        shinyjs::runjs(sprintf(
+          "$('#%s').css('pointer-events', 'auto');",
+          ns('plot')
+        ))
       } else {
         shinyjs::runjs(sprintf(
           "$('#%s').removeClass('btn-active');",
           ns('brush_select')
         ))
-      }
-    })
 
-    # Reactive expression to get the borehole selected for editing
-    current_well_id <- reactive({
-      selection <- input$borehole_details_selector
-      if (is.null(selection) || length(selection) == 0) {
-        return(NULL)
+        shinyjs::runjs(sprintf(
+          "$('#%s').css('pointer-events', 'none');",
+          ns('plot')
+        ))
       }
-
-      selection <- as.character(selection)[1]
-      if (!nzchar(selection) || !selection %in% names(rv$well_data)) {
-        return(NULL)
-      }
-
-      selection
     })
 
     observeEvent(
@@ -975,7 +1030,7 @@ simplerIndex <- function(id) {
         req(input$num_boreholes > 0)
         num <- input$num_boreholes
         new_ids <- as.character(seq_len(num))
-        existing <- rv$well_data
+        existing <- rv$borehole_data
         existing_files <- if (!is.null(rv$files_df)) {
           rv$files_df$NewFilename
         } else {
@@ -1003,7 +1058,7 @@ simplerIndex <- function(id) {
           }
         })
         names(new_well_data) <- new_ids
-        rv$well_data <- new_well_data
+        rv$borehole_data <- new_well_data
 
         if (!is.null(rv$files_df)) {
           rv$files_df$borehole_id <- ifelse(
@@ -1021,56 +1076,6 @@ simplerIndex <- function(id) {
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
-
-    # Update the 'drillers', 'purpose', and 'share_with' list based on the data loaded from Aquacache
-
-    observeEvent(moduleData, {
-      req(
-        moduleData$drillers,
-        moduleData$purposes,
-        moduleData$share_with_boreholes,
-        moduleData$share_with_wells
-      )
-      updateSelectizeInput(
-        session,
-        "drilled_by",
-        choices = stats::setNames(
-          moduleData$drillers$driller_id,
-          moduleData$drillers$name
-        ),
-        selected = NULL
-      )
-      updateSelectizeInput(
-        session,
-        "purpose_of_borehole",
-        choices = stats::setNames(
-          moduleData$purposes$borehole_well_purpose_id,
-          moduleData$purposes$purpose_name
-        ),
-        selected = NULL
-      )
-      updateSelectizeInput(
-        session,
-        "purpose_of_well",
-        choices = stats::setNames(
-          moduleData$purposes$borehole_well_purpose_id,
-          moduleData$purposes$purpose_name
-        ),
-        selected = NULL
-      )
-      updateSelectizeInput(
-        session,
-        "share_with_borehole",
-        choices = moduleData$share_with_boreholes$role_name,
-        selected = "public_reader"
-      )
-      updateSelectizeInput(
-        session,
-        "share_with_well",
-        choices = moduleData$share_with_wells$role_name,
-        selected = "public_reader"
-      )
-    })
 
     # Observe change to share_with_borehole and update share_with_well to match if it doesn't already. Give user a notification that they can change it back if needed
     observeEvent(
@@ -1238,7 +1243,15 @@ simplerIndex <- function(id) {
         session$userData$AquaCache,
         "SELECT driller_id, name FROM boreholes.drillers"
       )
-      rv$selected_driller <- new_driller_id
+      updateSelectizeInput(
+        session,
+        "drilled_by",
+        choices = stats::setNames(
+          moduleData$drillers$driller_id,
+          moduleData$drillers$name
+        ),
+        selected = new_driller_id
+      )
       removeModal()
     })
 
@@ -1329,7 +1342,16 @@ simplerIndex <- function(id) {
         session$userData$AquaCache,
         "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes"
       )
-      rv$selected_purpose <- new_purpose_id
+
+      updateSelectizeInput(
+        session,
+        "purpose_of_borehole",
+        choices = stats::setNames(
+          moduleData$purposes$borehole_well_purpose_id,
+          moduleData$purposes$purpose_name
+        ),
+        selected = new_purpose_id
+      )
       removeModal()
     })
 
@@ -1425,7 +1447,6 @@ simplerIndex <- function(id) {
       sort_files_df()
 
       rv$pdf_index <- 1
-      DT::dataTableProxy("pdf_table", session = session)
 
       if (length(rv$ocr_text) == 0) {
         rv$ocr_text <- vector("list", nrow(rv$files_df))
@@ -1465,23 +1486,33 @@ simplerIndex <- function(id) {
       ignoreInit = TRUE
     )
 
+    # Observe changes to pdf_index and update table selection
+    observeEvent(rv$pdf_index, {
+      req(rv$files_df)
+      if (rv$pdf_index < 1) {
+        return()
+      }
+      if (rv$pdf_index > nrow(rv$files_df)) {
+        rv$pdf_index <- nrow(rv$files_df)
+      }
+      # Ensure table selection follows
+      DT::dataTableProxy("pdf_table", session = session) %>%
+        DT::selectRows(rv$pdf_index)
+    })
+
     observeEvent(input$next_pdf, {
       req(rv$files_df)
       if (rv$pdf_index < nrow(rv$files_df)) {
         rv$pdf_index <- rv$pdf_index + 1
-        # Ensure table selection follows
-        DT::dataTableProxy("pdf_table", session = session) %>%
-          DT::selectRows(rv$pdf_index)
       }
     })
 
     observeEvent(input$prev_pdf, {
       req(rv$files_df)
-      if (rv$pdf_index > 1) {
+      if (rv$pdf_index >= 2) {
         rv$pdf_index <- rv$pdf_index - 1
-        # Ensure table selection follows
-        DT::dataTableProxy("pdf_table", session = session) %>%
-          DT::selectRows(rv$pdf_index)
+      } else {
+        rv$pdf_index <- 1
       }
     })
 
@@ -1497,9 +1528,9 @@ simplerIndex <- function(id) {
         rv$ocr_text <- rv$ocr_text[-selected_row]
 
         # Update well_data structure by removing the filename
-        for (well_id in names(rv$well_data)) {
-          rv$well_data[[well_id]]$files <- setdiff(
-            rv$well_data[[well_id]]$files,
+        for (well_id in names(rv$borehole_data)) {
+          rv$borehole_data[[well_id]]$files <- setdiff(
+            rv$borehole_data[[well_id]]$files,
             fname
           )
         }
@@ -1518,7 +1549,8 @@ simplerIndex <- function(id) {
       req(rv$files_df)
       validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
 
-      borehole_choices <- names(rv$well_data)
+      borehole_choices <- names(rv$borehole_data) # Fetch current borehole IDs
+      # Generate selectInput for each row to assign pages to boreholes
       select_inputs <- vapply(
         seq_len(nrow(rv$files_df)),
         function(i) {
@@ -1605,16 +1637,16 @@ simplerIndex <- function(id) {
               if (
                 !is.na(prev_id) &&
                   nzchar(prev_id) &&
-                  prev_id %in% names(rv$well_data)
+                  prev_id %in% names(rv$borehole_data)
               ) {
-                rv$well_data[[prev_id]]$files <- setdiff(
-                  rv$well_data[[prev_id]]$files,
+                rv$borehole_data[[prev_id]]$files <- setdiff(
+                  rv$borehole_data[[prev_id]]$files,
                   fname
                 )
               }
-              if (nzchar(new_id) && new_id %in% names(rv$well_data)) {
-                rv$well_data[[new_id]]$files <- unique(c(
-                  rv$well_data[[new_id]]$files,
+              if (nzchar(new_id) && new_id %in% names(rv$borehole_data)) {
+                rv$borehole_data[[new_id]]$files <- unique(c(
+                  rv$borehole_data[[new_id]]$files,
                   fname
                 ))
               }
@@ -2030,22 +2062,6 @@ simplerIndex <- function(id) {
       }
     )
 
-    # Also update the rendering function to show file-specific rectangles
-    observe({
-      rv$pdf_index
-      if (brush_enabled()) {
-        shinyjs::runjs(sprintf(
-          "$('#%s').css('pointer-events', 'auto');",
-          ns('plot')
-        ))
-      } else {
-        shinyjs::runjs(sprintf(
-          "$('#%s').css('pointer-events', 'none');",
-          ns('plot')
-        ))
-      }
-    })
-
     # Observer to update input fields with selected OCR text when clicked
     observe({
       # First check if we have any selected text
@@ -2280,13 +2296,13 @@ simplerIndex <- function(id) {
         return()
       }
 
-      well_id <- current_well_id()
+      well_id <- current_borehole_id()
 
-      if (is.null(well_id) || !well_id %in% names(rv$well_data)) {
+      if (is.null(well_id) || !well_id %in% names(rv$borehole_data)) {
         return()
       }
       # Update metadata with current input values for the correct well
-      rv$well_data[[well_id]]$metadata <- list(
+      rv$borehole_data[[well_id]]$metadata <- list(
         borehole_id = well_id,
         name = input$name,
         notes_borehole = input$notes_borehole,
@@ -2337,11 +2353,11 @@ simplerIndex <- function(id) {
     observeEvent(
       input$borehole_details_selector,
       {
-        well_id <- current_well_id()
+        well_id <- current_borehole_id()
 
-        if (!is.null(well_id) && well_id %in% names(rv$well_data)) {
+        if (!is.null(well_id) && well_id %in% names(rv$borehole_data)) {
           loading_metadata(TRUE)
-          metadata <- rv$well_data[[well_id]]$metadata
+          metadata <- rv$borehole_data[[well_id]]$metadata
 
           # Update text inputs - make sure notes is included
           updateTextInput(
@@ -2734,9 +2750,9 @@ simplerIndex <- function(id) {
       }
 
       # Get the current well ID
-      current_well_id <- current_well_id()
+      current_borehole_id <- current_borehole_id()
 
-      if (is.null(current_well_id)) {
+      if (is.null(current_borehole_id)) {
         showNotification(
           "Assign a borehole to upload before proceeding",
           type = "error",
@@ -2745,8 +2761,8 @@ simplerIndex <- function(id) {
         return()
       }
 
-      if (current_well_id %in% names(rv$well_data)) {
-        metadata <- rv$well_data[[current_well_id]]$metadata
+      if (current_borehole_id %in% names(rv$borehole_data)) {
+        metadata <- rv$borehole_data[[current_borehole_id]]$metadata
         if (is.null(metadata)) {
           metadata <- empty_well_entry()$metadata
         }
@@ -2762,7 +2778,7 @@ simplerIndex <- function(id) {
           {
             # Create PDF with redactions for this borehole
             pdf_file_path <- create_pdf_with_redactions(
-              current_well_id,
+              current_borehole_id,
               return_path = TRUE
             )
 
@@ -2812,7 +2828,7 @@ simplerIndex <- function(id) {
             )
 
             showNotification(
-              paste("Successfully uploaded borehole:", current_well_id),
+              paste("Successfully uploaded borehole", current_borehole_id),
               type = "message",
               duration = 5
             )
@@ -2835,7 +2851,7 @@ simplerIndex <- function(id) {
     })
 
     observeEvent(input$upload_all, {
-      req(rv$well_data)
+      req(rv$borehole_data)
       req(rv$files_df)
 
       if (!all_pages_assigned()) {
@@ -2874,10 +2890,10 @@ simplerIndex <- function(id) {
 
       # Loop through each unique borehole ID
       for (well_id in unique_borehole_ids) {
-        if (!(well_id %in% names(rv$well_data))) {
+        if (!(well_id %in% names(rv$borehole_data))) {
           next
         }
-        metadata <- rv$well_data[[well_id]]$metadata
+        metadata <- rv$borehole_data[[well_id]]$metadata
         if (is.null(metadata)) {
           metadata <- empty_well_entry()$metadata
         }
