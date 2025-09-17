@@ -481,14 +481,14 @@ mapLocs <- function(id, language) {
     })
     observeEvent(input$clicked_view_plots_discrete, {
       if (!is.null(input$clicked_view_plots_discrete)) {
-        outputs$change_tab <- "discrete"
+        outputs$change_tab <- "discPlot"
         outputs$location_id <- input$clicked_view_plots_discrete
         shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_plots_discrete'})"))  # Reset the value to NULL to prevent an endless loop
       }
     })
     observeEvent(input$clicked_view_plots_continuous, {
       if (!is.null(input$clicked_view_plots_continuous)) {
-        outputs$change_tab <- "continuous"
+        outputs$change_tab <- "contPlot"
         outputs$location_id <- input$clicked_view_plots_continuous
         shinyjs::runjs(sprintf("shinyjs.resetInput({name: 'map-clicked_view_plots_continuous'})"))  # Reset the value to NULL to prevent an endless loop
       }
