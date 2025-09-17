@@ -787,7 +787,8 @@ simplerIndex <- function(id) {
       rectangles = list(),
       selected_driller = NULL,
       selected_purpose = NULL,
-      assign_observers = list()
+      assign_observers = list(),
+      select_input_counter = 0
     )
 
     moduleData <- reactiveValues(
@@ -1395,6 +1396,7 @@ simplerIndex <- function(id) {
         split_df$NewFilename <- file.path(basename(split_df$Path))
         split_df$tag <- paste0(split_df$Name, "-", split_df$Page)
         split_df$borehole_id <- NA
+        split_df$input_id <- NA_character_
 
         if (i == 1) {
           all_split_files <- split_df
@@ -1416,12 +1418,33 @@ simplerIndex <- function(id) {
         )
       }
 
+      if (!is.null(all_split_files) && nrow(all_split_files) > 0) {
+        start_counter <- rv$select_input_counter
+        new_ids <- seq_len(nrow(all_split_files)) + start_counter
+        all_split_files$input_id <- paste0("bh_select_", new_ids)
+        rv$select_input_counter <- start_counter + nrow(all_split_files)
+      }
+
+      if (!is.null(rv$files_df) && !"input_id" %in% names(rv$files_df)) {
+        rv$files_df$input_id <- paste0("bh_select_", seq_len(nrow(rv$files_df)))
+        rv$select_input_counter <- max(
+          rv$select_input_counter,
+          length(rv$files_df$input_id)
+        )
+      }
+
       if (is.null(rv$files_df)) {
         rv$files_df <- all_split_files
       } else {
         rv$files_df <- rbind(rv$files_df, all_split_files)
       }
       rv$files_df$borehole_id <- as.character(rv$files_df$borehole_id)
+      if (!"input_id" %in% names(rv$files_df)) {
+        rv$files_df$input_id <- paste0("bh_select_", seq_len(nrow(rv$files_df)))
+      }
+      if (!is.character(rv$files_df$input_id)) {
+        rv$files_df$input_id <- as.character(rv$files_df$input_id)
+      }
       sort_files_df()
 
       rv$pdf_index <- 1
@@ -1517,6 +1540,8 @@ simplerIndex <- function(id) {
     output$pdf_table <- DT::renderDT({
       req(rv$files_df)
       validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
+      req("input_id" %in% names(rv$files_df))
+      req(all(!is.na(rv$files_df$input_id) & nzchar(rv$files_df$input_id)))
 
       borehole_choices <- names(rv$well_data)
       select_inputs <- vapply(
@@ -1526,6 +1551,7 @@ simplerIndex <- function(id) {
           if (length(selected_value) == 0 || is.na(selected_value)) {
             selected_value <- ""
           }
+          input_id <- rv$files_df$input_id[i]
           labelled_choices <- if (length(borehole_choices) > 0) {
             stats::setNames(
               borehole_choices,
@@ -1535,7 +1561,7 @@ simplerIndex <- function(id) {
             NULL
           }
           as.character(selectInput(
-            ns(paste0("bh_select_", i)),
+            ns(input_id),
             NULL,
             choices = c("Unassigned" = "", labelled_choices),
             selected = selected_value,
@@ -1582,15 +1608,55 @@ simplerIndex <- function(id) {
         rv$assign_observers <- list()
         return()
       }
+
+      if (!"input_id" %in% names(rv$files_df)) {
+        rv$files_df$input_id <- paste0("bh_select_", seq_len(nrow(rv$files_df)))
+        rv$select_input_counter <- max(
+          rv$select_input_counter,
+          length(rv$files_df$input_id)
+        )
+      }
+
+      missing_ids <- which(
+        is.na(rv$files_df$input_id) |
+          !nzchar(rv$files_df$input_id)
+      )
+      if (length(missing_ids) > 0) {
+        start_counter <- rv$select_input_counter
+        new_ids <- seq_len(length(missing_ids)) + start_counter
+        rv$files_df$input_id[missing_ids] <- paste0("bh_select_", new_ids)
+        rv$select_input_counter <- start_counter + length(missing_ids)
+      }
+
+      dup_indices <- which(duplicated(rv$files_df$input_id))
+      if (length(dup_indices) > 0) {
+        start_counter <- rv$select_input_counter
+        new_ids <- seq_len(length(dup_indices)) + start_counter
+        rv$files_df$input_id[dup_indices] <- paste0("bh_select_", new_ids)
+        rv$select_input_counter <- start_counter + length(dup_indices)
+      }
+
+      if (!is.character(rv$files_df$input_id)) {
+        rv$files_df$input_id <- as.character(rv$files_df$input_id)
+      }
+
       lapply(rv$assign_observers, function(obs) obs$destroy())
       rv$assign_observers <- list()
       for (i in seq_len(nrow(rv$files_df))) {
         local({
-          row_index <- i
-          rv$assign_observers[[row_index]] <- observeEvent(
-            input[[paste0("bh_select_", row_index)]],
+          input_id <- rv$files_df$input_id[i]
+          if (is.null(input_id) || is.na(input_id) || !nzchar(input_id)) {
+            return(NULL)
+          }
+          rv$assign_observers[[input_id]] <- observeEvent(
+            input[[input_id]],
             {
-              new_id <- input[[paste0("bh_select_", row_index)]]
+              req(!is.null(rv$files_df))
+              row_index <- match(input_id, rv$files_df$input_id)
+              if (is.na(row_index)) {
+                return()
+              }
+              new_id <- input[[input_id]]
               if (is.null(new_id)) {
                 new_id <- ""
               } else {
