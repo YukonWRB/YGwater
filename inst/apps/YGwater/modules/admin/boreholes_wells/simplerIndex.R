@@ -1555,6 +1555,14 @@ simplerIndex <- function(id) {
         dat,
         selection = list(mode = "single", selected = rv$pdf_index),
         escape = FALSE,
+        callback = DT::JS(
+          # Disable row selection when clicking on selectize inputs, to allow users to assign pages to boreholes without changing selection and re-rendering the document
+          "table.on('user-select.dt', function (e, dt, type, cell, originalEvent) {",
+          "  if ($(originalEvent.target).closest('select, .selectize-input').length) {",
+          "    originalEvent.preventDefault();",
+          "  }",
+          "});"
+        ),
         options = list(
           pageLength = 10,
           layout = list(
@@ -1569,49 +1577,57 @@ simplerIndex <- function(id) {
     })
 
     observeEvent(rv$files_df, {
+      if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
+        lapply(rv$assign_observers, function(obs) obs$destroy())
+        rv$assign_observers <- list()
+        return()
+      }
       lapply(rv$assign_observers, function(obs) obs$destroy())
       rv$assign_observers <- list()
       for (i in seq_len(nrow(rv$files_df))) {
-        rv$assign_observers[[i]] <- observeEvent(
-          input[[paste0("bh_select_", i)]],
-          {
-            new_id <- input[[paste0("bh_select_", i)]]
-            if (is.null(new_id)) {
-              new_id <- ""
-            } else {
-              new_id <- as.character(new_id)
-            }
-            prev_id <- rv$files_df$borehole_id[i]
-            prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
-            if (identical(prev_id_normalized, new_id)) {
-              return()
-            }
-            fname <- rv$files_df$NewFilename[i]
-            if (
-              !is.na(prev_id) &&
-                nzchar(prev_id) &&
-                prev_id %in% names(rv$well_data)
-            ) {
-              rv$well_data[[prev_id]]$files <- setdiff(
-                rv$well_data[[prev_id]]$files,
-                fname
-              )
-            }
-            if (nzchar(new_id) && new_id %in% names(rv$well_data)) {
-              rv$well_data[[new_id]]$files <- unique(c(
-                rv$well_data[[new_id]]$files,
-                fname
-              ))
-            }
-            rv$files_df$borehole_id[i] <- if (nzchar(new_id)) {
-              new_id
-            } else {
-              NA_character_
-            }
-            sort_files_df()
-          },
-          ignoreNULL = TRUE
-        )
+        local({
+          row_index <- i
+          rv$assign_observers[[row_index]] <- observeEvent(
+            input[[paste0("bh_select_", row_index)]],
+            {
+              new_id <- input[[paste0("bh_select_", row_index)]]
+              if (is.null(new_id)) {
+                new_id <- ""
+              } else {
+                new_id <- as.character(new_id)
+              }
+              prev_id <- rv$files_df$borehole_id[row_index]
+              prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
+              if (identical(prev_id_normalized, new_id)) {
+                return()
+              }
+              fname <- rv$files_df$NewFilename[row_index]
+              if (
+                !is.na(prev_id) &&
+                  nzchar(prev_id) &&
+                  prev_id %in% names(rv$well_data)
+              ) {
+                rv$well_data[[prev_id]]$files <- setdiff(
+                  rv$well_data[[prev_id]]$files,
+                  fname
+                )
+              }
+              if (nzchar(new_id) && new_id %in% names(rv$well_data)) {
+                rv$well_data[[new_id]]$files <- unique(c(
+                  rv$well_data[[new_id]]$files,
+                  fname
+                ))
+              }
+              rv$files_df$borehole_id[row_index] <- if (nzchar(new_id)) {
+                new_id
+              } else {
+                NA_character_
+              }
+              sort_files_df()
+            },
+            ignoreNULL = TRUE
+          )
+        })
       }
     })
 
