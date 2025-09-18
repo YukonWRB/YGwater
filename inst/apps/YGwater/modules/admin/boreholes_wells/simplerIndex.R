@@ -1375,8 +1375,6 @@ simplerIndex <- function(id) {
         uploaded_files$datapath[i] <- orig_path
       }
 
-      req(uploaded_files)
-
       # Show initial loading notification
       total_files <- nrow(uploaded_files)
 
@@ -1388,7 +1386,7 @@ simplerIndex <- function(id) {
         showNotification(
           paste("Converting", orig_name, "- File", i, "of", total_files),
           type = "message",
-          duration = 2
+          duration = 4
         )
 
         # Convert PDF to PNG files (one per page) and save to tempdir
@@ -1434,7 +1432,7 @@ simplerIndex <- function(id) {
             "page(s)"
           ),
           type = "message",
-          duration = 1.5
+          duration = 5
         )
       }
 
@@ -1477,72 +1475,146 @@ simplerIndex <- function(id) {
       )
     })
 
+    # Observe table row selection and update pdf_index
     observeEvent(
       input$pdf_table_rows_selected,
       {
         sel <- input$pdf_table_rows_selected
-        if (!is.null(sel) && !identical(sel, rv$pdf_index)) rv$pdf_index <- sel
+        if (!is.null(sel) && !identical(sel, rv$pdf_index)) {
+          rv$pdf_index <- sel
+        }
       },
       ignoreInit = TRUE
     )
 
-    # Observe changes to pdf_index and update table selection
-    observeEvent(rv$pdf_index, {
-      req(rv$files_df)
-      if (rv$pdf_index < 1) {
-        return()
-      }
-      if (rv$pdf_index > nrow(rv$files_df)) {
-        rv$pdf_index <- nrow(rv$files_df)
-      }
-      # Ensure table selection follows
-      DT::dataTableProxy("pdf_table", session = session) %>%
-        DT::selectRows(rv$pdf_index)
-    })
+    # Observe forward/back buttons and update table selection
+    observeEvent(
+      input$next_pdf,
+      {
+        req(rv$files_df)
+        if (rv$pdf_index < nrow(rv$files_df)) {
+          rv$pdf_index <- rv$pdf_index + 1
+          # Ensure table selection follows
+          DT::dataTableProxy("pdf_table", session = session) %>%
+            DT::selectRows(rv$pdf_index)
+        }
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$next_pdf, {
-      req(rv$files_df)
-      if (rv$pdf_index < nrow(rv$files_df)) {
-        rv$pdf_index <- rv$pdf_index + 1
-      }
-    })
+    observeEvent(
+      input$prev_pdf,
+      {
+        req(rv$files_df)
+        if (rv$pdf_index >= 2) {
+          rv$pdf_index <- rv$pdf_index - 1
+          # Ensure table selection follows
+          DT::dataTableProxy("pdf_table", session = session) %>%
+            DT::selectRows(rv$pdf_index)
+        } else {
+          rv$pdf_index <- 1
+        }
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$prev_pdf, {
-      req(rv$files_df)
-      if (rv$pdf_index >= 2) {
-        rv$pdf_index <- rv$pdf_index - 1
-      } else {
-        rv$pdf_index <- 1
-      }
-    })
+    # Observe remove button and delete selected page, updating pdf_index and table selection as needed
+    observeEvent(
+      input$remove_pdf,
+      {
+        req(rv$files_df)
+        if (nrow(rv$files_df) > 0) {
+          selected_row <- rv$pdf_index
 
-    observeEvent(input$remove_pdf, {
-      req(rv$files_df)
-      if (nrow(rv$files_df) > 0) {
-        selected_row <- rv$pdf_index
+          fname <- rv$files_df$NewFilename[selected_row]
 
-        fname <- rv$files_df$NewFilename[selected_row]
+          # Remove from files_df and OCR text
+          rv$files_df <- rv$files_df[-selected_row, ]
+          rv$ocr_text <- rv$ocr_text[-selected_row]
 
-        # Remove from files_df and OCR text
-        rv$files_df <- rv$files_df[-selected_row, ]
-        rv$ocr_text <- rv$ocr_text[-selected_row]
+          # Update well_data structure by removing the filename
+          for (well_id in names(rv$borehole_data)) {
+            rv$borehole_data[[well_id]]$files <- setdiff(
+              rv$borehole_data[[well_id]]$files,
+              fname
+            )
+          }
 
-        # Update well_data structure by removing the filename
-        for (well_id in names(rv$borehole_data)) {
-          rv$borehole_data[[well_id]]$files <- setdiff(
-            rv$borehole_data[[well_id]]$files,
-            fname
+          if (nrow(rv$files_df) == 0) {
+            rv$pdf_index <- 1
+          } else if (rv$pdf_index > nrow(rv$files_df)) {
+            rv$pdf_index <- nrow(rv$files_df)
+            # Ensure table selection follows
+            DT::dataTableProxy("pdf_table", session = session) %>%
+              DT::selectRows(rv$pdf_index)
+          }
+          sort_files_df()
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    # Observe changes to files_df and set up observers for each select input, which are created dynamically on table render
+    observeEvent(
+      rv$files_df,
+      {
+        if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
+          # No files, destroy all observers and exit
+          lapply(rv$assign_observers, function(obs) obs$destroy())
+          rv$assign_observers <- list()
+          return()
+        }
+        # Destroy existing observers first
+        lapply(rv$assign_observers, function(obs) obs$destroy())
+        rv$assign_observers <- list()
+        # Set up new observers for each row
+        for (i in seq_len(nrow(rv$files_df))) {
+          row_index <- i
+          observeEvent(
+            input[[paste0("bh_select_", row_index)]],
+            {
+              new_id <- input[[paste0("bh_select_", row_index)]]
+              if (is.null(new_id)) {
+                new_id <- ""
+              } else {
+                new_id <- as.character(new_id)
+              }
+              prev_id <- rv$files_df$borehole_id[row_index]
+              prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
+              if (identical(prev_id_normalized, new_id)) {
+                return()
+              }
+              fname <- rv$files_df$NewFilename[row_index]
+              if (
+                !is.na(prev_id) &&
+                  nzchar(prev_id) &&
+                  prev_id %in% names(rv$borehole_data)
+              ) {
+                rv$borehole_data[[prev_id]]$files <- setdiff(
+                  rv$borehole_data[[prev_id]]$files,
+                  fname
+                )
+              }
+              if (nzchar(new_id) && new_id %in% names(rv$borehole_data)) {
+                rv$borehole_data[[new_id]]$files <- unique(c(
+                  rv$borehole_data[[new_id]]$files,
+                  fname
+                ))
+              }
+              rv$files_df$borehole_id[row_index] <- if (nzchar(new_id)) {
+                new_id
+              } else {
+                NA_character_
+              }
+            },
+            ignoreNULL = TRUE,
+            ignoreInit = TRUE
           )
         }
-
-        if (nrow(rv$files_df) == 0) {
-          rv$pdf_index <- 1
-        } else if (rv$pdf_index > nrow(rv$files_df)) {
-          rv$pdf_index <- nrow(rv$files_df)
-        }
-        sort_files_df()
-      }
-    })
+      },
+      ignoreNULL = TRUE,
+      ignoreInit = TRUE
+    )
 
     # Render the data table of files
     output$pdf_table <- DT::renderDT({
@@ -1606,60 +1678,6 @@ simplerIndex <- function(id) {
       )
     })
 
-    #Observe changes to files_df and set up observers for each select input, which are created dynamically
-    observeEvent(rv$files_df, {
-      if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
-        lapply(rv$assign_observers, function(obs) obs$destroy())
-        rv$assign_observers <- list()
-        return()
-      }
-      lapply(rv$assign_observers, function(obs) obs$destroy())
-      rv$assign_observers <- list()
-      for (i in seq_len(nrow(rv$files_df))) {
-        row_index <- i
-        observeEvent(
-          input[[paste0("bh_select_", row_index)]],
-          {
-            new_id <- input[[paste0("bh_select_", row_index)]]
-            if (is.null(new_id)) {
-              new_id <- ""
-            } else {
-              new_id <- as.character(new_id)
-            }
-            prev_id <- rv$files_df$borehole_id[row_index]
-            prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
-            if (identical(prev_id_normalized, new_id)) {
-              return()
-            }
-            fname <- rv$files_df$NewFilename[row_index]
-            if (
-              !is.na(prev_id) &&
-                nzchar(prev_id) &&
-                prev_id %in% names(rv$borehole_data)
-            ) {
-              rv$borehole_data[[prev_id]]$files <- setdiff(
-                rv$borehole_data[[prev_id]]$files,
-                fname
-              )
-            }
-            if (nzchar(new_id) && new_id %in% names(rv$borehole_data)) {
-              rv$borehole_data[[new_id]]$files <- unique(c(
-                rv$borehole_data[[new_id]]$files,
-                fname
-              ))
-            }
-            rv$files_df$borehole_id[row_index] <- if (nzchar(new_id)) {
-              new_id
-            } else {
-              NA_character_
-            }
-            sort_files_df()
-          },
-          ignoreNULL = TRUE
-        )
-      }
-    })
-
     # Modified observer for OCR display mode: process OCR for all images when mode is highlight/text
     observeEvent(
       list(input$psm_mode, input$pre_processing_method, input$ocr_display_mode),
@@ -1679,18 +1697,20 @@ simplerIndex <- function(id) {
       }
     )
 
-    # Render the plot
+    # Render the plot, making sure not to re-render the same plot twice
+    rendered_plot <- reactiveVal(NULL)
     output$plot <- renderPlot(
       expr = {
-        zoom <- input$zoom_level
         req(rv$files_df)
         req(rv$pdf_index)
         req(nrow(rv$files_df) >= rv$pdf_index)
+        zoom <- input$zoom_level
         # Load and prepare the image
         img_path <- rv$files_df$Path[rv$pdf_index]
         req(file.exists(img_path))
-        img <- magick::image_read(img_path)
-        img <- img %>% magick::image_enhance()
+
+        img <- magick::image_read(img_path) %>%
+          magick::image_enhance()
         info <- magick::image_info(img)
         img_width <- info$width
         img_height <- info$height
@@ -2346,7 +2366,7 @@ simplerIndex <- function(id) {
       )
     })
 
-    # Metadata loader
+    # Metadata loader. Update input fields when a new borehole is selected
     observeEvent(
       input$borehole_details_selector,
       {
@@ -2674,8 +2694,16 @@ simplerIndex <- function(id) {
           updateSelectizeInput(session, "purpose_of_well", selected = NULL)
           updateRadioButtons(session, "purpose_well_inferred", selected = TRUE)
           updateSelectizeInput(session, "drilled_by", selected = NULL)
-          updateSelectizeInput(session, "share_with_borehole", selected = NULL)
-          updateSelectizeInput(session, "share_with_well", selected = NULL)
+          updateSelectizeInput(
+            session,
+            "share_with_borehole",
+            selected = "public_reader"
+          )
+          updateSelectizeInput(
+            session,
+            "share_with_well",
+            selected = "public_reader"
+          )
           updateRadioButtons(session, "coordinate_system", selected = "utm")
           updateRadioButtons(session, "depth_to_bedrock_unit", selected = "ft")
           updateRadioButtons(session, "casing_od_unit", selected = "inch")
