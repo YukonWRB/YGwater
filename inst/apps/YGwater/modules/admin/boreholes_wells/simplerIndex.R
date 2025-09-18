@@ -1560,56 +1560,75 @@ simplerIndex <- function(id) {
       {
         if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
           # No files, destroy all observers and exit
-          lapply(rv$assign_observers, function(obs) obs$destroy())
+          lapply(
+            rv$assign_observers,
+            function(obs) {
+              if (!is.null(obs)) {
+                obs$destroy()
+              }
+            }
+          )
           rv$assign_observers <- list()
           return()
         }
         # Destroy existing observers first
-        lapply(rv$assign_observers, function(obs) obs$destroy())
-        rv$assign_observers <- list()
+        lapply(
+          rv$assign_observers,
+          function(obs) {
+            if (!is.null(obs)) {
+              obs$destroy()
+            }
+          }
+        )
+        rv$assign_observers <- vector("list", length = nrow(rv$files_df))
         # Set up new observers for each row
         for (i in seq_len(nrow(rv$files_df))) {
-          row_index <- i
-          observeEvent(
-            input[[paste0("bh_select_", row_index)]],
-            {
-              new_id <- input[[paste0("bh_select_", row_index)]]
-              if (is.null(new_id)) {
-                new_id <- ""
-              } else {
-                new_id <- as.character(new_id)
-              }
-              prev_id <- rv$files_df$borehole_id[row_index]
-              prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
-              if (identical(prev_id_normalized, new_id)) {
-                return()
-              }
-              fname <- rv$files_df$NewFilename[row_index]
-              if (
-                !is.na(prev_id) &&
-                  nzchar(prev_id) &&
-                  prev_id %in% names(rv$borehole_data)
-              ) {
-                rv$borehole_data[[prev_id]]$files <- setdiff(
-                  rv$borehole_data[[prev_id]]$files,
-                  fname
-                )
-              }
-              if (nzchar(new_id) && new_id %in% names(rv$borehole_data)) {
-                rv$borehole_data[[new_id]]$files <- unique(c(
-                  rv$borehole_data[[new_id]]$files,
-                  fname
-                ))
-              }
-              rv$files_df$borehole_id[row_index] <- if (nzchar(new_id)) {
-                new_id
-              } else {
-                NA_character_
-              }
-            },
-            ignoreNULL = TRUE,
-            ignoreInit = TRUE
-          )
+          rv$assign_observers[[i]] <- local({
+            row_index <- i
+            observeEvent(
+              input[[paste0("bh_select_", row_index)]],
+              {
+                if (row_index > nrow(rv$files_df)) {
+                  return()
+                }
+                new_id <- input[[paste0("bh_select_", row_index)]]
+                if (is.null(new_id)) {
+                  new_id <- ""
+                } else {
+                  new_id <- as.character(new_id)
+                }
+                prev_id <- rv$files_df$borehole_id[row_index]
+                prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
+                if (identical(prev_id_normalized, new_id)) {
+                  return()
+                }
+                fname <- rv$files_df$NewFilename[row_index]
+                if (
+                  !is.na(prev_id) &&
+                    nzchar(prev_id) &&
+                    prev_id %in% names(rv$borehole_data)
+                ) {
+                  rv$borehole_data[[prev_id]]$files <- setdiff(
+                    rv$borehole_data[[prev_id]]$files,
+                    fname
+                  )
+                }
+                if (nzchar(new_id) && new_id %in% names(rv$borehole_data)) {
+                  rv$borehole_data[[new_id]]$files <- unique(c(
+                    rv$borehole_data[[new_id]]$files,
+                    fname
+                  ))
+                }
+                rv$files_df$borehole_id[row_index] <- if (nzchar(new_id)) {
+                  new_id
+                } else {
+                  NA_character_
+                }
+              },
+              ignoreNULL = TRUE,
+              ignoreInit = TRUE
+            )
+          })
         }
       },
       ignoreNULL = TRUE,
