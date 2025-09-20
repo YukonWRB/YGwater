@@ -9,11 +9,10 @@
 #' @noRd
 
 app_ui <- function(request) {
-  
   tagList(
     shinyjs::useShinyjs(),
     div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")), # Used for a heartbeat every 5 seconds to keep app alive, which occasionally gives issues on mobile devices.
-    
+
     # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
     # Uses two parameters: 'id' for the element ID and 'col' for the color. Color can be R-recognized color name or hex code.
     shinyjs::extendShinyjs(
@@ -25,42 +24,61 @@ app_ui <- function(request) {
       params = shinyjs.getParams(params, defaultParams);
       var el = $("#" + params.id);
                          el.css("background-color", params.col);
-}', functions = c("backgroundCol")),
-    
+}',
+      functions = c("backgroundCol")
+    ),
+
     tags$head(
-      tags$script(src = "js/fullscreen.js"),  # JS to handle full screen button
-      tags$script(src = "js/window_resize.js"),  # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
+      tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
+      tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
       # JS below is for updating the title of the page from the server, when the user changes language
-      tags$script(HTML("
+      tags$script(HTML(
+        "
       Shiny.addCustomMessageHandler('updateTitle', function(newTitle) {
         document.title = newTitle;
       });
-    ")),
-      tags$script(HTML("
+    "
+      )),
+      tags$script(HTML(
+        "
       Shiny.addCustomMessageHandler('updateLang', function(message) {
         $('html').attr('lang', message.lang);
       });"
       )),
-      tags$script("Shiny.addCustomMessageHandler(
+      tags$script(
+        "Shiny.addCustomMessageHandler(
       'toggleDropdown',
           function toggleDropdown(msg) {
             $('.dropdown-menu').removeClass('show')
           });
-        "),
+        "
+      ),
       tags$link(rel = "stylesheet", type = "text/css", href = "css/fonts.css"), # Fonts
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/top-bar.css"), # Top bar size, position, etc.
+      tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "css/top-bar.css"
+      ), # Top bar size, position, etc.
       tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/buttons.css"), # styling for hover effects on buttons with YG colors
-      
+      tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "css/buttons.css"
+      ), # styling for hover effects on buttons with YG colors
+
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
-      tags$style(HTML("
+      tags$style(HTML(
+        "
         a.dropdown-toggle > .shiny-html-output {
         display: inline;
         }
-      ")),
-      tags$style(HTML("
+      "
+      )),
+      tags$style(HTML(
+        "
     .alert { white-space: normal !important; }
-  "))
+  "
+      ))
     ),
     # page_fluid is the main container for the app, which contains the top bar, nav bar, content, and footer.
     page_fluid(
@@ -69,24 +87,41 @@ app_ui <- function(request) {
         class = "top-bar-container d-none d-md-block",
         style = "background-color: #244C5A; margin-bottom: 0; border-bottom: none",
         fluidRow(
-          column(3,
-                 div(class = "logo",
-                     htmltools::img(src = "imgs/Yukon_logo_white-min.png", .noWS = "outside", alt = "Yukon Government logo")
-                     
-                 ),
-                 class = "logo-container"),
-          column(9,
-                 div(class = "aurora",
-                     htmltools::img(src = "imgs/YG_Aurora_resized_flipped-min.png", .noWS = "outside", alt = "Aurora")
-                 ),
-                 div(class = "login-container",
-                     if (!config$public) { # 'public' is a global variable established in the globals file
-                       div(class = "login-btn-container",
-                           actionButton("loginBtn", "Login"),
-                           actionButton("logoutBtn", "Logout", style = "display: none;")) # Initially hidden
-                     }
-                 ),
-                 class = "aurora-login-container"),
+          column(
+            3,
+            div(
+              class = "logo",
+              htmltools::img(
+                src = "imgs/Yukon_logo_white-min.png",
+                .noWS = "outside",
+                alt = "Yukon Government logo"
+              )
+            ),
+            class = "logo-container"
+          ),
+          column(
+            9,
+            div(
+              class = "aurora",
+              htmltools::img(
+                src = "imgs/YG_Aurora_resized_flipped-min.png",
+                .noWS = "outside",
+                alt = "Aurora"
+              )
+            ),
+            div(
+              class = "login-container",
+              if (!config$public) {
+                # 'public' is a global variable established in the globals file
+                div(
+                  class = "login-btn-container",
+                  actionButton("loginBtn", "Login"),
+                  actionButton("logoutBtn", "Logout", style = "display: none;")
+                ) # Initially hidden
+              }
+            ),
+            class = "aurora-login-container"
+          ),
         )
       ),
       # And now the navbar itself
@@ -94,195 +129,322 @@ app_ui <- function(request) {
         title = tags$a(
           class = "d-md-none",
           href = "#",
-          tags$img(src = "imgs/Yukon_logo_white-min.png", style = "height: 50px; margin-right: 10px; margin-top: -15px;")
+          tags$img(
+            src = "imgs/Yukon_logo_white-min.png",
+            style = "height: 50px; margin-right: 10px; margin-top: -15px;"
+          )
         ),
         id = "navbar",
         window_title = NULL,
-        navbar_options = navbar_options(bg = "#244C5A",
-                                        collapsible = TRUE,
-                                        style = "z-index:1002"), # Just above any leaflet possibilities which only go up to 1000
+        navbar_options = navbar_options(
+          bg = "#244C5A",
+          collapsible = TRUE,
+          style = "z-index:1002"
+        ), # Just above any leaflet possibilities which only go up to 1000
         fluid = TRUE,
         lang = "en",
         theme = NULL, # Theme is set earlier by css file referene in globals (THIS IS NOT WORKING)
         gap = "10px",
-        nav_panel(title = uiOutput("homeNavTitle"), value = "home",
-                  uiOutput("home_ui")),
-        nav_menu(title = uiOutput("mapsNavMenuTitle"), value = "maps",
-                 nav_panel(title = uiOutput("mapsNavLocsTitle"), value = "monitoringLocations",
-                           uiOutput("mapLocs_ui")),
-                 nav_panel(title = uiOutput("mapsNavParamsTitle"), value = "parameterValues",
-                           uiOutput("mapParams_ui")),
-                 if (!config$public) {
-                   nav_panel(title = uiOutput("mapsNavRasterTitle"), value = "rasterValues",
-                             uiOutput("mapRaster_ui"))
-                 }
+        nav_panel(
+          title = uiOutput("homeNavTitle"),
+          value = "home",
+          uiOutput("home_ui")
         ),
-        nav_menu(title = uiOutput("plotsNavMenuTitle"), value = "plot",
-                 nav_panel(title = uiOutput("plotsNavDiscTitle"), value = "discPlot",
-                           uiOutput("plotDiscrete_ui")),
-                 nav_panel(title = uiOutput("plotsNavContTitle"), value = "contPlot",
-                           uiOutput("plotContinuous_ui"))
+        nav_menu(
+          title = uiOutput("mapsNavMenuTitle"),
+          value = "maps",
+          nav_panel(
+            title = uiOutput("mapsNavLocsTitle"),
+            value = "monitoringLocations",
+            uiOutput("mapLocs_ui")
+          ),
+          nav_panel(
+            title = uiOutput("mapsNavParamsTitle"),
+            value = "parameterValues",
+            uiOutput("mapParams_ui")
+          ),
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("mapsNavRasterTitle"),
+              value = "rasterValues",
+              uiOutput("mapRaster_ui")
+            )
+          }
+        ),
+        nav_menu(
+          title = uiOutput("plotsNavMenuTitle"),
+          value = "plot",
+          nav_panel(
+            title = uiOutput("plotsNavDiscTitle"),
+            value = "discPlot",
+            uiOutput("plotDiscrete_ui")
+          ),
+          nav_panel(
+            title = uiOutput("plotsNavContTitle"),
+            value = "contPlot",
+            uiOutput("plotContinuous_ui")
+          )
         ),
         if (!config$public) {
-          nav_menu(title = uiOutput("reportsNavMenuTitle"), value = "reports",
-                   nav_panel(title = uiOutput("reportsNavSnowstatsTitle"), value = "snowInfo",
-                             uiOutput("snowInfo_ui")),
-                   nav_panel(title = uiOutput("reportsNavWaterTitle"), value = "waterInfo",
-                             uiOutput("waterInfo_ui")),
-                   nav_panel(title = uiOutput("reportsNavWQTitle"), value = "WQReport",
-                             uiOutput("WQReport_ui")),
-                   if (!config$public) {
-                     nav_panel(title = uiOutput("reportsNavSnowbullTitle"), value = "snowBulletin",
-                               uiOutput("snowBulletin_ui"))
-                   }
+          nav_menu(
+            title = uiOutput("reportsNavMenuTitle"),
+            value = "reports",
+            nav_panel(
+              title = uiOutput("reportsNavSnowstatsTitle"),
+              value = "snowInfo",
+              uiOutput("snowInfo_ui")
+            ),
+            nav_panel(
+              title = uiOutput("reportsNavWaterTitle"),
+              value = "waterInfo",
+              uiOutput("waterInfo_ui")
+            ),
+            nav_panel(
+              title = uiOutput("reportsNavWQTitle"),
+              value = "WQReport",
+              uiOutput("WQReport_ui")
+            ),
+            if (!config$public) {
+              nav_panel(
+                title = uiOutput("reportsNavSnowbullTitle"),
+                value = "snowBulletin",
+                uiOutput("snowBulletin_ui")
+              )
+            }
           ) # End reports nav_menu
         }, # End if !config$public
-        nav_menu(title = uiOutput("imagesNavMenuTitle"), value = "images",
-                 nav_panel(title = uiOutput("imagesNavTableTitle"), value = "imgTableView",
-                           uiOutput("imgTableView_ui")),
-                 nav_panel(title = uiOutput("imagesNavMapTitle"), value = "imgMapView",
-                           uiOutput("imgMapView_ui"))
+        nav_menu(
+          title = uiOutput("imagesNavMenuTitle"),
+          value = "images",
+          nav_panel(
+            title = uiOutput("imagesNavTableTitle"),
+            value = "imgTableView",
+            uiOutput("imgTableView_ui")
+          ),
+          nav_panel(
+            title = uiOutput("imagesNavMapTitle"),
+            value = "imgMapView",
+            uiOutput("imgMapView_ui")
+          )
         ),
-        nav_menu(title = uiOutput("dataNavMenuTitle"), value = "data",
-                 nav_panel(title = uiOutput("dataNavDiscTitle"), value = "discData",
-                           uiOutput("discData_ui")),
-                 nav_panel(title = uiOutput("dataNavContTitle"), value = "contData",
-                           uiOutput("contData_ui"))
+        nav_menu(
+          title = uiOutput("dataNavMenuTitle"),
+          value = "data",
+          nav_panel(
+            title = uiOutput("dataNavDiscTitle"),
+            value = "discData",
+            uiOutput("discData_ui")
+          ),
+          nav_panel(
+            title = uiOutput("dataNavContTitle"),
+            value = "contData",
+            uiOutput("contData_ui")
+          )
         ), # End data nav_menu
-        if (!config$public & config$g_drive) { # if public or if g drive access is not possible, don't show the tab
-          nav_panel(title = uiOutput("FODNavTitle"), value = "FOD",
-                    uiOutput("fod_ui"))
+        if (!config$public & config$g_drive) {
+          # if public or if g drive access is not possible, don't show the tab
+          nav_panel(
+            title = uiOutput("FODNavTitle"),
+            value = "FOD",
+            uiOutput("fod_ui")
+          )
         },
-        nav_menu(title = uiOutput("infoNavMenuTitle"), value = "info",
-                 nav_panel(title = uiOutput("infoNavNewsTitle"), value = "news",
-                           uiOutput("news_ui")),
-                 nav_panel(title = uiOutput("infoNavAboutTitle"), value = "about",
-                           uiOutput("about_ui"))
+        nav_menu(
+          title = uiOutput("infoNavMenuTitle"),
+          value = "info",
+          nav_panel(
+            title = uiOutput("infoNavNewsTitle"),
+            value = "news",
+            uiOutput("news_ui")
+          ),
+          nav_panel(
+            title = uiOutput("infoNavAboutTitle"),
+            value = "about",
+            uiOutput("about_ui")
+          )
         ),
         if (!config$public) {
-          nav_menu(title = "Continuous data", 
-                   value = "continuousDataTasks",
-                   nav_panel(title = "Add continuous data",
-                             value = "addContData",
-                             uiOutput("addContData_ui")),
-                   nav_panel(title = "Edit/delete continuous data",
-                             value = "editContData",
-                             uiOutput("editContData_ui")),
-                   nav_panel(title = "Add/modify timeseries corrections",
-                             value = "continuousCorrections",
-                             uiOutput("continuousCorrections_ui")),
-                   nav_panel(title = "Impute missing values",
-                             value = "imputeMissing",
-                             uiOutput("imputeMissing_ui")),
-                   nav_panel(title = "Apply grades, approvals, qualifiers",
-                             value = "grades_approvals_qualifiers",
-                             uiOutput("grades_approvals_qualifiers_ui")),
-                   nav_panel(title = "Add/edit timeseries",
-                             value = "addTimeseries",
-                             uiOutput("addTimeseries_ui")),
-                   nav_panel(title = "Sync timeseries",
-                             value = "syncCont",
-                             uiOutput("syncCont_ui"))
+          nav_menu(
+            title = "Continuous data",
+            value = "continuousDataTasks",
+            nav_panel(
+              title = "Add continuous data",
+              value = "addContData",
+              uiOutput("addContData_ui")
+            ),
+            nav_panel(
+              title = "Edit/delete continuous data",
+              value = "editContData",
+              uiOutput("editContData_ui")
+            ),
+            nav_panel(
+              title = "Add/modify timeseries corrections",
+              value = "continuousCorrections",
+              uiOutput("continuousCorrections_ui")
+            ),
+            nav_panel(
+              title = "Impute missing values",
+              value = "imputeMissing",
+              uiOutput("imputeMissing_ui")
+            ),
+            nav_panel(
+              title = "Apply grades, approvals, qualifiers",
+              value = "grades_approvals_qualifiers",
+              uiOutput("grades_approvals_qualifiers_ui")
+            ),
+            nav_panel(
+              title = "Add/edit timeseries",
+              value = "addTimeseries",
+              uiOutput("addTimeseries_ui")
+            ),
+            nav_panel(
+              title = "Sync timeseries",
+              value = "syncCont",
+              uiOutput("syncCont_ui")
+            )
           )
         },
         if (!config$public) {
-          nav_menu(title = "Discrete data", 
-                   value = "discreteDataTasks",
-                   nav_panel(title = "Add discrete data",
-                             value = "addDiscData",
-                             uiOutput("addDiscData_ui")),
-                   nav_panel(title = "Edit/delete discrete data",
-                             value = "editDiscData",
-                             uiOutput("editDiscData_ui")),
-                   nav_panel(title = "Add/modify guidelines",
-                             value = "addGuidelines",
-                             uiOutput("addGuidelines_ui")),
-                   nav_panel(title = "Sync sample series",
-                             value = "syncDisc",
-                             uiOutput("syncDisc_ui"))
+          nav_menu(
+            title = "Discrete data",
+            value = "discreteDataTasks",
+            nav_panel(
+              title = "Add discrete data",
+              value = "addDiscData",
+              uiOutput("addDiscData_ui")
+            ),
+            nav_panel(
+              title = "Edit/delete discrete data",
+              value = "editDiscData",
+              uiOutput("editDiscData_ui")
+            ),
+            nav_panel(
+              title = "Add/modify guidelines",
+              value = "addGuidelines",
+              uiOutput("addGuidelines_ui")
+            ),
+            nav_panel(
+              title = "Sync sample series",
+              value = "syncDisc",
+              uiOutput("syncDisc_ui")
+            )
           )
         },
         if (!config$public) {
-          nav_menu(title = "Locations",
-                   value = "dbLocsTasks",
-                   nav_panel(title = "Add/modify locations",
-                             value = "addLocation",
-                             uiOutput("addLocation_ui")
-                   ),
-                   nav_panel(title = "Add/modify sub-locations",
-                             value = "addSubLocation",
-                             uiOutput("addSubLocation_ui")
-                   )
+          nav_menu(
+            title = "Locations",
+            value = "dbLocsTasks",
+            nav_panel(
+              title = "Add/modify locations",
+              value = "addLocation",
+              uiOutput("addLocation_ui")
+            ),
+            nav_panel(
+              title = "Add/modify sub-locations",
+              value = "addSubLocation",
+              uiOutput("addSubLocation_ui")
+            )
           )
         },
         if (!config$public) {
-          nav_menu(title = "Files/Docs", 
-                   value = "fileTasks",
-                   nav_panel(title = "Documents",
-                             value = "addDocs",
-                             uiOutput("addDocs_ui")),
-                   nav_panel(title = "Images",
-                             value = "addImgs",
-                             uiOutput("addImgs_ui")),
-                   nav_panel(title = "Image series",
-                             value = "addImgSeries",
-                             uiOutput("addImgSeries_ui"))
+          nav_menu(
+            title = "Files/Docs",
+            value = "fileTasks",
+            nav_panel(
+              title = "Documents",
+              value = "addDocs",
+              uiOutput("addDocs_ui")
+            ),
+            nav_panel(
+              title = "Images",
+              value = "addImgs",
+              uiOutput("addImgs_ui")
+            ),
+            nav_panel(
+              title = "Image series",
+              value = "addImgSeries",
+              uiOutput("addImgSeries_ui")
+            )
           )
         },
         if (!config$public) {
-          nav_panel(title = "Add/modify field visit",
-                    value = "visit",
-                    uiOutput("visit_ui"))
-        },
-        if (!config$public) {
-          nav_menu(title = "Equipment",
-                   value = "equipTasks",
-                   nav_panel(title = "Checks + calibrations",
-                             value = "calibrate",
-                             uiOutput("calibrate_ui")),
-                   nav_panel(title = "Deploy/Recover", 
-                             value = "deploy_recover",
-                             uiOutput("deploy_recover_ui"))
+          nav_menu(
+            title = "Field",
+            value = "fieldTasks",
+            nav_panel(
+              title = "Add/modify field visit",
+              value = "visit",
+              uiOutput("visit_ui")
+            ),
+            nav_panel(
+              title = "Deploy/recover instruments",
+              value = "deploy_recover",
+              uiOutput("deploy_recover_ui"), # points to the same module as in Equipment
+            )
           )
         },
         if (!config$public) {
-          nav_menu(title = "Boreholes/wells",
-                   value = "wellTasks",
-                   nav_panel(title = "Simpler Index",
-                             value = "simplerIndex",
-                             uiOutput("simplerIndex_ui"))
+          nav_menu(
+            title = "Equipment",
+            value = "equipTasks",
+            nav_panel(
+              title = "Checks + calibrations",
+              value = "calibrate",
+              uiOutput("calibrate_ui")
+            )
           )
         },
         if (!config$public) {
-          nav_menu(title = "Metadata",
-                   value = "metadataTasks"
+          nav_menu(
+            title = "Boreholes/wells",
+            value = "wellTasks",
+            nav_panel(
+              title = "Simpler Index",
+              value = "simplerIndex",
+              uiOutput("simplerIndex_ui")
+            )
           )
         },
-        
         if (!config$public) {
-          nav_menu(title = "Admin",
-                   value = "adminTasks",
-                   nav_panel(title = uiOutput("changePwdNavTitle"),
-                             value = "changePwd",
-                             uiOutput("changePwd_ui")),
-                   nav_panel(title = "Manage users",
-                             value = "manageUsers",
-                             uiOutput("manageUsers_ui")),
-                   nav_panel(title = "Update news page content",
-                             value = "manageNewsContent",
-                             uiOutput("manageNewsContent_ui")),
-                   nav_panel(title = "View feedback",
-                             value = "viewFeedback",
-                             uiOutput("viewFeedback_ui"))
+          nav_menu(title = "Metadata", value = "metadataTasks")
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Admin",
+            value = "adminTasks",
+            nav_panel(
+              title = uiOutput("changePwdNavTitle"),
+              value = "changePwd",
+              uiOutput("changePwd_ui")
+            ),
+            nav_panel(
+              title = "Manage users",
+              value = "manageUsers",
+              uiOutput("manageUsers_ui")
+            ),
+            nav_panel(
+              title = "Update news page content",
+              value = "manageNewsContent",
+              uiOutput("manageNewsContent_ui")
+            ),
+            nav_panel(
+              title = "View feedback",
+              value = "viewFeedback",
+              uiOutput("viewFeedback_ui")
+            )
           )
         },
         # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a drop-down menu instead.
         nav_spacer(),
         # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover
-        nav_item(actionButton("language_button", NULL, 
-                              class = "language-button")),
+        nav_item(actionButton(
+          "language_button",
+          NULL,
+          class = "language-button"
+        )),
       ), # End page_navbar
-      
+
       # Now a footer, rendered in the server for language support
       div(
         hr(),

@@ -1,142 +1,290 @@
-YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RLS_pass, accessPath1, accessPath2, public) {
-  
+YGwater_globals <- function(
+  dbName,
+  dbHost,
+  dbPort,
+  dbUser,
+  dbPass,
+  RLS_user,
+  RLS_pass,
+  accessPath1,
+  accessPath2,
+  public
+) {
   library(shiny)
   library(shinyjs)
   library(bslib)
-  
+
   # Use a user-writable cache directory for sass
   cache_dir <- tools::R_user_dir("YGwater", "cache")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
   options(bslib.sass.cache = cache_dir)
-  
+
   # Initialize a shared cache environment available to all sessions
   if (!exists("app_cache", envir = .GlobalEnv)) {
     assign("app_cache", new.env(parent = emptyenv()), envir = .GlobalEnv)
   }
-  
+
   # Load the cache functions (in a file so they can be used across a few modules)
-  source(system.file("apps/YGwater/modules/cache_functions.R", package = "YGwater"))
-  
+  source(system.file(
+    "apps/YGwater/modules/cache_functions.R",
+    package = "YGwater"
+  ))
+
   g_drive <- FALSE
-  
+
   if (!public) {
     # 'Admin' side modules #####
     # database admin modules
-    source(system.file("apps/YGwater/modules/admin/locations/locationMetadata.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/locations/addLocation.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/locations/addSubLocation.R", package = "YGwater"))
-    
+    source(system.file(
+      "apps/YGwater/modules/admin/locations/locationMetadata.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/locations/addLocation.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/locations/addSubLocation.R",
+      package = "YGwater"
+    ))
+
     # equipment sub-modules
-    source(system.file("apps/YGwater/modules/admin/equipment/deploy_recover.R", package = "YGwater"))
-    
-    # calibration sub-modules
-    source(system.file("apps/YGwater/modules/admin/equipment/calibrate.R", package = "YGwater"))
-    
+    source(system.file(
+      "apps/YGwater/modules/admin/equipment/calibrate.R",
+      package = "YGwater"
+    ))
+
     # continuous data sub-modules
-    source(system.file("apps/YGwater/modules/admin/continuousData/addContData.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/continuousData/continuousCorrections.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/continuousData/imputeMissing.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/continuousData/editContData.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/continuousData/grades_approvals_qualifiers.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/continuousData/addTimeseries.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/continuousData/syncCont.R", package = "YGwater"))
-    
+    source(system.file(
+      "apps/YGwater/modules/admin/continuousData/addContData.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/continuousData/continuousCorrections.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/continuousData/imputeMissing.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/continuousData/editContData.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/continuousData/grades_approvals_qualifiers.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/continuousData/syncCont.R",
+      package = "YGwater"
+    ))
+
     # discrete data sub-modules
-    source(system.file("apps/YGwater/modules/admin/discreteData/addDiscData.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/discreteData/editDiscData.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/discreteData/addGuidelines.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/discreteData/syncDisc.R", package = "YGwater"))
-    
+    source(system.file(
+      "apps/YGwater/modules/admin/discreteData/addDiscData.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/discreteData/editDiscData.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/discreteData/addGuidelines.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/discreteData/syncDisc.R",
+      package = "YGwater"
+    ))
+
     # Borehole/well modules
-    source(system.file("apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R", package = "YGwater"))
-    
+    source(system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+      package = "YGwater"
+    ))
+
     # Field visit modules
-    source(system.file("apps/YGwater/modules/admin/field/field_main.R", package = "YGwater"))
-    
+    source(system.file(
+      "apps/YGwater/modules/admin/field/field_visit.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/field/deploy_recover.R",
+      package = "YGwater"
+    ))
+
     # Files/document/image sub-modules
-    source(system.file("apps/YGwater/modules/admin/documents/addDocs.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/imgupload/addImgs.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/imgupload/addImgSeries.R", package = "YGwater"))
-    
-    
-    source(system.file("apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/applicationTasks/viewFeedback.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/users/manageUsers.R", package = "YGwater"))
-    source(system.file("apps/YGwater/modules/admin/users/changePassword.R", package = "YGwater"))
-    
+    source(system.file(
+      "apps/YGwater/modules/admin/documents/addDocs.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/imgupload/addImgs.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/imgupload/addImgSeries.R",
+      package = "YGwater"
+    ))
+
+    source(system.file(
+      "apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/applicationTasks/viewFeedback.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/users/manageUsers.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/users/changePassword.R",
+      package = "YGwater"
+    ))
+
     # confirm G drive access for FOD reports
-    g_drive <- dir.exists("//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/")
-    
+    g_drive <- dir.exists(
+      "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
+    )
+
     if (g_drive) {
       # FOD module (only visible internally)
-      source(system.file("apps/YGwater/modules/client/FOD/FOD_main.R", package = "YGwater"))
+      source(system.file(
+        "apps/YGwater/modules/client/FOD/FOD_main.R",
+        package = "YGwater"
+      ))
     }
-    
+
     # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
     options(shiny.maxRequestSize = 1024 * 1024^2)
   }
-  
-  
+
   # 'client' side modules #####
   # Plot modules
-  source(system.file("apps/YGwater/modules/client/plot/discretePlot.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/plot/continuousPlot.R", package = "YGwater"))
+  source(system.file(
+    "apps/YGwater/modules/client/plot/discretePlot.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/plot/continuousPlot.R",
+    package = "YGwater"
+  ))
 
   # Report modules
-  source(system.file("apps/YGwater/modules/client/reports/basins.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/reports/WQReport.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/reports/snowInfo.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/reports/waterInfo.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/reports/snowBulletin.R", package = "YGwater"))
-  
+  source(system.file(
+    "apps/YGwater/modules/client/reports/basins.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/reports/WQReport.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/reports/snowInfo.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/reports/waterInfo.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/reports/snowBulletin.R",
+    package = "YGwater"
+  ))
+
   # Map modules
-  source(system.file("apps/YGwater/modules/client/map/paramsMap.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/map/rasterMap.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/map/locationsMap.R", package = "YGwater"))
-  
+  source(system.file(
+    "apps/YGwater/modules/client/map/paramsMap.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/map/rasterMap.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/map/locationsMap.R",
+    package = "YGwater"
+  ))
+
   # Image modules
-  source(system.file("apps/YGwater/modules/client/images/image_table_view.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/images/image_map_view.R", package = "YGwater"))
-  
+  source(system.file(
+    "apps/YGwater/modules/client/images/image_table_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/images/image_map_view.R",
+    package = "YGwater"
+  ))
+
   # Data modules
-  source(system.file("apps/YGwater/modules/client/data/continuousData.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/data/discreteData.R", package = "YGwater"))
-  
+  source(system.file(
+    "apps/YGwater/modules/client/data/continuousData.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/data/discreteData.R",
+    package = "YGwater"
+  ))
+
   # Info modules
-  source(system.file("apps/YGwater/modules/client/info/home.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/info/news.R", package = "YGwater"))
-  source(system.file("apps/YGwater/modules/client/info/about.R", package = "YGwater"))
-  
-  
-  
+  source(system.file(
+    "apps/YGwater/modules/client/info/home.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/info/news.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/info/about.R",
+    package = "YGwater"
+  ))
+
   # Load translations infrastructure to the global environment
-  
-  translations <- data.table::fread(system.file("apps/YGwater/translations.csv", package = "YGwater"))
+
+  translations <- data.table::fread(system.file(
+    "apps/YGwater/translations.csv",
+    package = "YGwater"
+  ))
   # Build a list from the data.frame
-  translation_cache <<- lapply(setdiff(names(translations[, -2]), "id"), function(lang) { # Removes the second, "description" column, builds lists for each language
-    setNames(translations[[lang]], translations$id)
-  })
+  translation_cache <<- lapply(
+    setdiff(names(translations[, -2]), "id"),
+    function(lang) {
+      # Removes the second, "description" column, builds lists for each language
+      setNames(translations[[lang]], translations$id)
+    }
+  )
   names(translation_cache) <<- setdiff(names(translations)[-2], "id")
-  
+
   # Make a helper function, send to global environment
   tr <<- function(key, lang) {
     # Ensure that 'key' is a value in the 'id' column of the translations data.frame
     if (!key %in% translations$id) {
       stop(paste("Translation key", key, "not found in translations data."))
     }
-    translation_cache[[lang]][[key]]  # list 'lang', item 'key'
+    translation_cache[[lang]][[key]] # list 'lang', item 'key'
   }
-  
-  
+
   # Establish database connection parameters
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
-  
+
   ## Access database connections ###########
   # Look for .mdb files in the AccessPath directories
   if (!is.null(accessPath1)) {
     if (dir.exists(accessPath1) & !public) {
       # List the *.mdb files in the directory
-      mdb_files1 <- list.files(accessPath1, pattern = "*.mdb", full.names = TRUE)
+      mdb_files1 <- list.files(
+        accessPath1,
+        pattern = "*.mdb",
+        full.names = TRUE
+      )
       if (length(mdb_files1) == 0) {
         mdb_files1 <- NULL
       }
@@ -149,7 +297,11 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   if (!is.null(accessPath2)) {
     if (dir.exists(accessPath2) & !public) {
       # List the *.mdb files in the directory
-      mdb_files2 <- list.files(accessPath2, pattern = "*.mdb", full.names = TRUE)
+      mdb_files2 <- list.files(
+        accessPath2,
+        pattern = "*.mdb",
+        full.names = TRUE
+      )
       if (length(mdb_files2) == 0) {
         mdb_files2 <- NULL
       }
@@ -159,18 +311,16 @@ YGwater_globals <- function(dbName, dbHost, dbPort, dbUser, dbPass, RLS_user, RL
   } else {
     mdb_files2 <- NULL
   }
-  
-  
+
   mdb_files <- c(mdb_files1, mdb_files2)
-  
+
   if (is.null(mdb_files) & !public) {
     print("No .mdb files found in the accessPath directories.")
   }
-  
-  
+
   # Make the configuration list available globally
   # double assignment creates a global variable that can be accessed by all UI and server functions
-  
+
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,
