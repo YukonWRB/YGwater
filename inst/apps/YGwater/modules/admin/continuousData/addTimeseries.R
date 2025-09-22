@@ -126,6 +126,7 @@ addTimeseries <- function(id) {
             )
           ),
           column(
+            4,
             selectizeInput(
               ns("tz"),
               "Timezone for daily aggregation",
@@ -1118,6 +1119,8 @@ addTimeseries <- function(id) {
               }
             }
 
+            # If a change is made to tz, AquaCache::calculate_stats will need to be rerun from the beginning of the timeseries
+            recalc_stats <- FALSE
             if (input$tz != selected_timeseries$timezone_daily_calc) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -1128,6 +1131,7 @@ addTimeseries <- function(id) {
                   selected_timeseries$timeseries_id
                 )
               )
+              recalc_stats <- TRUE
             }
 
             if (input$z_specify) {
@@ -1394,39 +1398,6 @@ addTimeseries <- function(id) {
                   )
                 )
               }
-            } else {
-              if (!nzchar(input$source_fx_args)) {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  paste0(
-                    "UPDATE timeseries SET source_fx_args = NULL WHERE timeseries_id = ",
-                    selected_timeseries$timeseries_id
-                  )
-                )
-                return()
-              }
-              # Make the source_fx_args a json object
-              args <- input$source_fx_args
-              # split into "argument1: value1" etc.
-              args <- strsplit(args, ",\\s*")[[1]]
-              # split each pair on ":" and trim whitespace
-              args <- strsplit(args, ":\\s*")
-              # build a named list: names = keys, values = values
-              args <- stats::setNames(
-                lapply(args, function(x) x[2]),
-                sapply(args, function(x) x[1])
-              )
-              # convert to JSON
-              args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                paste0(
-                  "UPDATE timeseries SET source_fx_args = '",
-                  args,
-                  "' WHERE timeseries_id = ",
-                  selected_timeseries$timeseries_id
-                )
-              )
             }
 
             if (!is.na(selected_timeseries$note)) {
@@ -1450,6 +1421,25 @@ addTimeseries <- function(id) {
                   "' WHERE timeseries_id = ",
                   selected_timeseries$timeseries_id
                 )
+              )
+            }
+
+            # If recalc_stats is TRUE, we need to recalculate stats from the beginning of the timeseries
+            if (recalc_stats) {
+              showNotification(
+                "Recalculating statistics from the beginning of the timeseries due to timezone change. Please be patient.",
+                type = "message",
+                duration = 8,
+              )
+              earliest <- DBI::dbGetQuery(
+                con,
+                "SELECT MIN(datetime) FROM measurements_continuous WHERE timeseries_id = $1",
+                params = selected_timeseries$timeseries_id
+              )[1, 1]
+              AquaCache::calculate_stats(
+                timeseries_id = selected_timeseries$timeseries_id,
+                con = session$userData$AquaCache,
+                start_recalc = earliest
               )
             }
 
