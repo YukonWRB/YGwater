@@ -17,11 +17,123 @@ visit <- function(id) {
 
     moduleData <- reactiveValues()
     visitData <- reactiveValues(
-      instruments_chosen = NULL,
-      images_taken = NULL,
+      instruments = NULL,
+      images = NULL,
       field_measurements = NULL,
       samples = NULL
     )
+
+    # Functions for reuse within the module
+    format_share_with <- function(groups) {
+      if (is.null(groups) || length(groups) == 0) {
+        groups <- "public_reader"
+      }
+      groups <- gsub('"', '\\"', groups, fixed = TRUE)
+      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
+    }
+
+    parse_share_with <- function(value) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
+        return(character())
+      }
+      value <- gsub("[{}\"]", "", value)
+      out <- trimws(unlist(strsplit(value, ",")))
+      out[nzchar(out)]
+    }
+
+    convert_to_utc <- function(datetime_value, tz_offset) {
+      if (is.null(datetime_value) || all(is.na(datetime_value))) {
+        return(NA)
+      }
+      tz_offset <- as.numeric(tz_offset)
+      if (!length(tz_offset) || is.na(tz_offset)) {
+        tz_offset <- 0
+      }
+      converted <- datetime_value - tz_offset * 60 * 60
+      attr(converted, "tzone") <- "UTC"
+      converted
+    }
+
+    collect_visit_inputs <- function() {
+      start_utc <- convert_to_utc(input$visit_datetime_start, input$timezone)
+      end_utc <- convert_to_utc(input$visit_datetime_end, input$timezone)
+      location_id <- as.integer(input$location)
+      sub_location_id <- as.integer(input$sub_location)
+      purpose <- if (isTruthy(input$visit_purpose)) {
+        input$visit_purpose
+      } else {
+        NA_character_
+      }
+      precip_type <- if (nchar(input$precip > 0) && !is.na(input$precip)) {
+        input$precip
+      } else {
+        "None"
+      }
+      precip_rate <- if (
+        !is.null(input$precip_rate) &&
+          !is.na(precip_rate) &&
+          !identical(precip_type, "None")
+      ) {
+        input$precip_rate
+      } else {
+        "None"
+      }
+      note <- if (isTruthy(input$visit_notes)) {
+        input$visit_notes
+      } else {
+        NA_character_
+      }
+      list(
+        start_utc = start_utc,
+        end_utc = end_utc,
+        location_id = location_id,
+        sub_location_id = sub_location_id,
+        purpose = purpose,
+        precip_current_type = precip_type,
+        precip_current_rate = precip_rate,
+        precip_24 = input$precip_24,
+        precip_48 = as.numeric(input$precip_48),
+        air_temp = as.numeric(input$air_temp),
+        wind = input$weather_wind,
+        note = note,
+        share_with = format_share_with(input$share_with)
+      )
+    }
+
+    reset_visit_form <- function() {
+      tz_offset <- as.numeric(input$timezone)
+      if (!length(tz_offset) || is.na(tz_offset)) {
+        tz_offset <- 0
+      }
+      now_utc <- .POSIXct(Sys.time(), tz = "UTC")
+      display_time <- now_utc
+      display_time <- display_time + tz_offset * 3600
+      shinyWidgets::updateAirDateInput(
+        session,
+        "visit_datetime_start",
+        value = display_time
+      )
+      shinyWidgets::updateAirDateInput(
+        session,
+        "visit_datetime_end",
+        value = display_time
+      )
+      updateSelectizeInput(session, "location", selected = character(0))
+      updateSelectizeInput(session, "sub_location", selected = character(0))
+      updateTextInput(session, "visit_purpose", value = "")
+      updateNumericInput(session, "air_temp", value = NA)
+      updateSelectizeInput(session, "weather_wind", selected = character(0))
+      updateSelectizeInput(session, "precip", selected = "None")
+      updateSelectizeInput(session, "precip_rate", selected = "None")
+      updateNumericInput(session, "precip_24", value = 0)
+      updateNumericInput(session, "precip_48", value = 0)
+      updateTextAreaInput(session, "visit_notes", value = "")
+      updateSelectizeInput(session, "share_with", selected = "public_reader")
+      visitData$instruments <- NULL
+      visitData$images <- NULL
+      visitData$samples <- NULL
+      output$exist_sample_ui <- renderUI({})
+    }
 
     getModuleData <- function() {
       moduleData$locations <- DBI::dbGetQuery(
@@ -63,8 +175,10 @@ visit <- function(id) {
       )
     }
 
+    # Initial data load
     getModuleData() # Initial data load
 
+    # Main UI rendering ###############
     output$ui <- renderUI({
       tagList(
         actionButton(
@@ -100,8 +214,8 @@ visit <- function(id) {
             5,
             shinyWidgets::airDatepickerInput(
               ns("visit_datetime_start"),
-              label = "Visit start MST",
-              value = .POSIXct(Sys.time(), tz = "MST"),
+              label = "Visit start",
+              value = .POSIXct(Sys.time(), tz = "UTC") - 7 * 3600, # Default to current time UTC-7
               range = FALSE,
               multiple = FALSE,
               timepicker = TRUE,
@@ -119,8 +233,8 @@ visit <- function(id) {
             5,
             shinyWidgets::airDatepickerInput(
               ns("visit_datetime_end"),
-              label = "Visit end MST (optional)",
-              value = .POSIXct(Sys.time(), tz = "MST"),
+              label = "Visit end (optional)",
+              value = .POSIXct(Sys.time(), tz = "UTC") - 7 * 3600, # Default to current time UTC-7
               range = FALSE,
               multiple = FALSE,
               timepicker = TRUE,
@@ -200,12 +314,16 @@ visit <- function(id) {
             selectizeInput(
               ns("precip"),
               "Precipitation during visit",
-              choices = c("None", "Rain", "Snow", "Mixed"),
-              multiple = TRUE,
-              options = list(
-                maxItems = 1,
-                placeholder = 'Select precip conditions'
-              )
+              choices = c(
+                "None",
+                "Rain",
+                "Snow",
+                "Mixed",
+                "Hail",
+                "Freezing rain"
+              ),
+              multiple = FALSE,
+              selected = "None",
             )
           ),
           column(
@@ -216,12 +334,9 @@ visit <- function(id) {
               selectizeInput(
                 ns("precip_rate"),
                 "Precip rate",
-                choices = c("Light", "Moderate", "Heavy"),
-                multiple = TRUE,
-                options = list(
-                  maxItems = 1,
-                  placeholder = 'Select precip rate'
-                )
+                choices = c("None", "Light", "Moderate", "Heavy"),
+                multiple = FALSE,
+                selected = "None",
               )
             )
           )
@@ -233,7 +348,7 @@ visit <- function(id) {
             numericInput(
               ns("precip_24"),
               "24-hr precip (mm)",
-              value = NA,
+              value = 0,
               step = 0.1
             )
           ),
@@ -242,7 +357,7 @@ visit <- function(id) {
             numericInput(
               ns("precip_48"),
               "48-hr precip (mm)",
-              value = NA,
+              value = 0,
               step = 0.1
             )
           )
@@ -350,8 +465,24 @@ visit <- function(id) {
     }) |>
       bindEvent(moduleData$visit_display)
 
+    # Worker observers and reactives ##################
     # Keep track of the currently selected visit ID
     selected_visit <- reactiveVal(NULL)
+
+    observeEvent(
+      input$mode,
+      {
+        if (identical(input$mode, "add")) {
+          selected_visit(NULL)
+          reset_visit_form()
+          DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+        } else if (identical(input$mode, "modify")) {
+          selected_visit(NULL)
+          DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+        }
+      },
+      ignoreNULL = TRUE
+    )
 
     observeEvent(
       input$reload_module,
@@ -359,7 +490,8 @@ visit <- function(id) {
         getModuleData()
         selected_visit(NULL)
         # Clear table row selection
-        DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
+        DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+        reset_visit_form()
         updateSelectizeInput(
           session,
           "location",
@@ -421,6 +553,19 @@ visit <- function(id) {
       ignoreNULL = TRUE
     )
 
+    observeEvent(
+      input$precip,
+      {
+        if (nchar(input$precip) == 0) {
+          return()
+        }
+        if (identical(input$precip, "None")) {
+          updateSelectizeInput(session, "precip_rate", selected = "None")
+        }
+      },
+      ignoreNULL = TRUE
+    )
+
     # Observe visit table row selection and populate inputs for modification
     observeEvent(
       input$visit_table_rows_selected,
@@ -456,7 +601,7 @@ visit <- function(id) {
 
           # Populate inputs with data from selected visit
           visit_data <- DBI::dbGetQuery(
-            con,
+            session$userData$AquaCache,
             "SELECT * FROM field.field_visits WHERE field_visit_id = $1",
             params = list(visit_id)
           )
@@ -470,18 +615,30 @@ visit <- function(id) {
             "sub_location",
             selected = visit_data$sub_location_id
           )
+
+          tz_offset <- as.numeric(input$timezone)
+          if (!length(tz_offset) || is.na(tz_offset)) {
+            tz_offset <- 0
+          }
+          start_value <- .POSIXct(visit_data$start_datetime, tz = "UTC")
+          if (!all(is.na(start_value))) {
+            start_value <- start_value + tz_offset * 3600
+          }
           shinyWidgets::updateAirDateInput(
             session,
             "visit_datetime_start",
-            value = .POSIXct(visit_data$start_datetime, tz = "UTC") +
-              as.integer(input$timezone * 3600)
+            value = start_value
           )
+          end_value <- .POSIXct(visit_data$end_datetime, tz = "UTC")
+          if (!all(is.na(end_value))) {
+            end_value <- end_value + tz_offset * 3600
+          }
           shinyWidgets::updateAirDateInput(
             session,
             "visit_datetime_end",
-            value = .POSIXct(visit_data$end_datetime, tz = "UTC") +
-              as.integer(input$timezone * 3600)
+            value = end_value
           )
+
           updateTextInput(
             session,
             "visit_purpose",
@@ -490,7 +647,7 @@ visit <- function(id) {
           updateNumericInput(
             session,
             "air_temp",
-            value = visit_data$air_temp
+            value = visit_data$air_temp_c
           )
           updateSelectizeInput(
             session,
@@ -500,12 +657,12 @@ visit <- function(id) {
           updateSelectizeInput(
             session,
             "precip",
-            selected = visit_data$precip
+            selected = visit_data$precip_current_type
           )
           updateSelectizeInput(
             session,
             "precip_rate",
-            selected = visit_data$precip_rate
+            selected = visit_data$precip_current_rate
           )
           updateNumericInput(
             session,
@@ -517,9 +674,25 @@ visit <- function(id) {
             "precip_48",
             value = visit_data$precip_48h_mm
           )
-          if (
-            nrow(visitData$samples) > 0 || length(visitData$instruments) > 0
-          ) {
+          updateTextAreaInput(
+            session,
+            "visit_notes",
+            value = visit_data$note
+          )
+          share_groups <- parse_share_with(visit_data$share_with)
+          if (!length(share_groups)) {
+            share_groups <- "public_reader"
+          }
+          updateSelectizeInput(
+            session,
+            "share_with",
+            selected = share_groups
+          )
+          has_samples <- !is.null(visitData$samples) &&
+            nrow(visitData$samples) > 0
+          has_instruments <- !is.null(visitData$instruments) &&
+            length(visitData$instruments) > 0
+          if (has_samples || has_instruments) {
             updateRadioButtons(
               session,
               "field_measurements",
@@ -527,53 +700,66 @@ visit <- function(id) {
             )
             # Populate measurements UI with existing sample data
             output$exist_sample_ui <- renderUI({
-              tagList(
-                h4("Existing samples associated with this visit"),
-                DT::datatable(
-                  visitData$samples[, c("sample_id", "datetime", "note")],
-                  options = list(
-                    scrollX = TRUE,
-                    initComplete = htmlwidgets::JS(
-                      "function(settings, json) {",
-                      "$(this.api().table().header()).css({",
-                      "  'background-color': '#079',",
-                      "  'color': '#fff',",
-                      "  'font-size': '100%',",
-                      "});",
-                      "$(this.api().table().body()).css({",
-                      "  'font-size': '90%',",
-                      "});",
-                      "}"
-                    )
-                  ),
-                  filter = "none",
-                  selection = "single",
-                  rownames = FALSE
-                ),
-                fluidRow(
-                  column(
-                    4,
-                    actionButton(
-                      ns("view_sample"),
-                      "View sample details"
-                    )
-                  ),
-                  column(
-                    4,
-                    actionButton(
-                      ns("remove_sample"),
-                      "Remove association with this visit"
-                    )
-                  ),
-                  column(
-                    4,
-                    actionButton(
-                      ns("delete_sample"),
-                      "Delete sample (cannot be undone)",
+              ui <- list(h4("Existing samples associated with this visit"))
+              if (has_samples) {
+                ui <- append(
+                  ui,
+                  list(
+                    DT::datatable(
+                      visitData$samples[, c("sample_id", "datetime", "note")],
+                      options = list(
+                        scrollX = TRUE,
+                        initComplete = htmlwidgets::JS(
+                          "function(settings, json) {",
+                          "$(this.api().table().header()).css({",
+                          "  'background-color': '#079',",
+                          "  'color': '#fff',",
+                          "  'font-size': '100%',",
+                          "});",
+                          "$(this.api().table().body()).css({",
+                          "  'font-size': '90%',",
+                          "});",
+                          "}"
+                        )
+                      ),
+                      filter = "none",
+                      selection = "single",
+                      rownames = FALSE
+                    ),
+                    fluidRow(
+                      column(
+                        4,
+                        actionButton(
+                          ns("view_sample"),
+                          "View sample details"
+                        )
+                      ),
+                      column(
+                        4,
+                        actionButton(
+                          ns("remove_sample"),
+                          "Remove association with this visit"
+                        )
+                      ),
+                      column(
+                        4,
+                        actionButton(
+                          ns("delete_sample"),
+                          "Delete sample (cannot be undone)",
+                        )
+                      )
                     )
                   )
                 )
-              )
+              } else {
+                ui <- append(
+                  ui,
+                  list(p(
+                    "No samples are currently associated with this visit."
+                  ))
+                )
+              }
+              do.call(tagList, ui)
             })
           } else {
             updateRadioButtons(
@@ -585,6 +771,241 @@ visit <- function(id) {
         }
       },
       ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$add_visit,
+      {
+        if (input$mode != "add") {
+          showNotification(
+            "Switch to 'Add new' mode to create a field visit.",
+            type = "error"
+          )
+          return()
+        }
+
+        form <- collect_visit_inputs()
+
+        if (is.na(form$start_utc)) {
+          showNotification("Visit start date/time is required.", type = "error")
+          return()
+        }
+
+        if (!is.na(form$end_utc) && form$end_utc <= form$start_utc) {
+          showNotification(
+            "End date/time must be after the start date/time.",
+            type = "error"
+          )
+          return()
+        }
+
+        if (is.na(form$location_id)) {
+          showNotification(
+            "Please select a location for the visit.",
+            type = "error"
+          )
+          return()
+        }
+
+        params <- list(
+          form$start_utc,
+          form$end_utc,
+          form$location_id,
+          form$sub_location_id,
+          form$purpose,
+          form$precip_current_type,
+          form$precip_current_rate,
+          form$precip_24,
+          form$precip_48,
+          form$air_temp,
+          form$wind,
+          form$note,
+          form$share_with
+        )
+
+        insert_sql <- "
+          INSERT INTO field.field_visits (
+            start_datetime,
+            end_datetime,
+            location_id,
+            sub_location_id,
+            purpose,
+            precip_current_type,
+            precip_current_rate,
+            precip_24h_mm,
+            precip_48h_mm,
+            air_temp_c,
+            wind,
+            note,
+            share_with
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6 $7, $8, $9, $10, $11, $12, $13::text[]
+          )
+          RETURNING field_visit_id;
+        "
+
+        tryCatch(
+          {
+            DBI::dbWithTransaction(
+              con,
+              {
+                res <- DBI::dbGetQuery(con, insert_sql, params = params)
+                visit_id <- res$field_visit_id[1]
+                if (length(visitData$instruments) > 0) {
+                  for (instrument_id in visitData$instruments) {
+                    DBI::dbExecute(
+                      con,
+                      "INSERT INTO field.field_visit_instruments (field_visit_id, instrument_id) VALUES ($1, $2)",
+                      params = list(visit_id, instrument_id)
+                    )
+                  }
+                }
+                visit_id
+              }
+            )
+
+            showNotification(
+              "Field visit added successfully.",
+              type = "message"
+            )
+            getModuleData()
+            selected_visit(NULL)
+            reset_visit_form()
+            DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+          },
+          error = function(e) {
+            showNotification(
+              paste("Failed to add field visit:", e$message),
+              type = "error"
+            )
+          }
+        )
+      },
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$modify_visit,
+      {
+        if (input$mode != "modify") {
+          showNotification(
+            "Switch to 'Modify existing' mode to update a visit.",
+            type = "error"
+          )
+          return()
+        }
+
+        visit_id <- selected_visit()
+        if (is.null(visit_id)) {
+          showNotification("Select a field visit to modify.", type = "error")
+          return()
+        }
+
+        form <- collect_visit_inputs()
+
+        if (is.na(form$start_utc)) {
+          showNotification("Visit start date/time is required.", type = "error")
+          return()
+        }
+
+        if (!is.na(form$end_utc) && form$end_utc <= form$start_utc) {
+          showNotification(
+            "End date/time must be after the start date/time.",
+            type = "error"
+          )
+          return()
+        }
+
+        if (is.na(form$location_id)) {
+          showNotification(
+            "Please select a location for the visit.",
+            type = "error"
+          )
+          return()
+        }
+
+        update_sql <- "
+          UPDATE field.field_visits
+          SET
+            start_datetime = $1,
+            end_datetime = $2,
+            location_id = $3,
+            sub_location_id = $4,
+            purpose = $5,
+            precip_current_type = $6,
+            precip_current_rate = $7
+            precip_24h_mm = $7,
+            precip_48h_mm = $8,
+            air_temp_c = $9,
+            wind = $10,
+            note = $11,
+            share_with = $12::text[]
+          WHERE field_visit_id = $13;
+        "
+
+        params <- list(
+          form$start_utc,
+          form$end_utc,
+          form$location_id,
+          form$sub_location_id,
+          form$purpose,
+          form$current_precip,
+          form$precip_24,
+          form$precip_48,
+          form$air_temp,
+          form$wind,
+          form$note,
+          form$share_with,
+          visit_id
+        )
+
+        tryCatch(
+          {
+            DBI::dbWithTransaction(
+              con,
+              {
+                DBI::dbExecute(con, update_sql, params = params)
+                DBI::dbExecute(
+                  con,
+                  "DELETE FROM field.field_visit_instruments WHERE field_visit_id = $1",
+                  params = list(visit_id)
+                )
+                if (length(visitData$instruments) > 0) {
+                  for (instrument_id in visitData$instruments) {
+                    DBI::dbExecute(
+                      con,
+                      "INSERT INTO field.field_visit_instruments (field_visit_id, instrument_id) VALUES ($1, $2)",
+                      params = list(visit_id, instrument_id)
+                    )
+                  }
+                }
+              }
+            )
+
+            showNotification(
+              "Field visit updated successfully.",
+              type = "message"
+            )
+            getModuleData()
+            if (nrow(moduleData$visit_display) > 0) {
+              row_index <- which(
+                moduleData$visit_display$field_visit_id == visit_id
+              )
+              if (length(row_index) == 1) {
+                DT::dataTableProxy(ns("visit_table")) |>
+                  DT::selectRows(row_index)
+              }
+            }
+          },
+          error = function(e) {
+            showNotification(
+              paste("Failed to update field visit:", e$message),
+              type = "error"
+            )
+          }
+        )
+      },
+      ignoreNULL = TRUE
     )
 
     # Observe instrument selection button and show modal
@@ -639,7 +1060,6 @@ visit <- function(id) {
       input$instruments_chosen,
       {
         selected <- input$instruments_table_rows_selected
-        print(selected)
         if (length(selected) == 0) {
           visitData$instruments <- NULL
         } else {
@@ -653,7 +1073,6 @@ visit <- function(id) {
 
     # Render the chosen instruments below the button
     output$instruments_chosen_ui <- renderUI({
-      print("Rendering chosen instruments UI")
       if (is.null(visitData$instruments)) {
         return()
       } else {

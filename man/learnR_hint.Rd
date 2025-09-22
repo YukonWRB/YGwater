@@ -18,7 +18,7 @@ A hint for the specified lesson.
 Hints for the learnR lessons
 }
 \examples{
-\dontshow{if (interactive()) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 
 learnR_hint(1)
 \dontshow{\}) # examplesIf}

@@ -270,7 +270,7 @@ simplerIndexUI <- function(id) {
           # Well identification
           textInput(
             ns("name"),
-            "Borehole/well name",
+            "Borehole/well name *",
             placeholder = "Enter name"
           ),
           textInput(
@@ -289,7 +289,7 @@ simplerIndexUI <- function(id) {
           # Add 'drilled by' selectize input
           selectizeInput(
             ns("drilled_by"),
-            "Driller",
+            "Driller *",
             choices = NULL, # Populated in server
             selected = NULL,
             multiple = TRUE,
@@ -303,7 +303,7 @@ simplerIndexUI <- function(id) {
           # Location information section - remove surveyed_location_top_casing field
           radioButtons(
             ns("coordinate_system"),
-            "Coordinate System",
+            "Coordinate System *",
             choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
             selected = "utm",
             inline = TRUE
@@ -311,11 +311,11 @@ simplerIndexUI <- function(id) {
           conditionalPanel(
             condition = "input.coordinate_system == 'utm'",
             ns = ns,
-            numericInput(ns("easting"), "Easting:", value = NULL, min = 0),
-            numericInput(ns("northing"), "Northing:", value = NULL, min = 0),
+            numericInput(ns("easting"), "Easting *", value = NULL, min = 0),
+            numericInput(ns("northing"), "Northing *", value = NULL, min = 0),
             selectizeInput(
               ns("utm_zone"),
-              "UTM Zone",
+              "UTM Zone*",
               choices = list(
                 "7N" = "7N",
                 "8N" = "8N",
@@ -517,7 +517,7 @@ simplerIndexUI <- function(id) {
           dateInput(ns("date_drilled"), "Date Drilled *", value = NULL),
 
           ## IS WELL conditional panel ##################
-          checkboxInput(ns("is_well"), "Well Constructed *", value = FALSE),
+          checkboxInput(ns("is_well"), "Well Constructed", value = FALSE),
 
           # Show well construction fields only if 'is_well' is checked
           conditionalPanel(
@@ -2820,6 +2820,8 @@ simplerIndex <- function(id) {
 
         tryCatch(
           {
+            AquaCache::dbTransBegin(session$userData$AquaCache)
+
             # Create PDF with redactions for this borehole
             pdf_file_path <- create_pdf_with_redactions(
               current_borehole_id,
@@ -2857,11 +2859,10 @@ simplerIndex <- function(id) {
               static_water_level = metadata$static_water_level,
               estimated_yield = metadata$estimated_yield,
               notes_borehole = metadata$notes_borehole,
-              notes_Well = metadata$notes_well,
+              notes_well = metadata$notes_well,
               share_with_borehole = metadata$share_with_borehole,
               drilled_by = metadata$drilled_by,
               drill_method = NULL,
-              pdf_file_path = pdf_file_path,
               purpose_of_well = if (nchar(metadata$purpose_of_well) == 0) {
                 NULL
               } else {
@@ -2876,10 +2877,20 @@ simplerIndex <- function(id) {
               type = "message",
               duration = 5
             )
+            DBI::dbExecute(session$userData$AquaCache, "COMMIT")
           },
           error = function(e) {
+            DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
             showNotification(
               paste("Error uploading borehole:", e$message),
+              type = "error",
+              duration = 5
+            )
+          },
+          warning = function(w) {
+            DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
+            showNotification(
+              paste("Error uploading borehole:", w$message),
               type = "error",
               duration = 5
             )
@@ -2944,6 +2955,7 @@ simplerIndex <- function(id) {
 
         tryCatch(
           {
+            AquaCache::dbTransBegin(session$userData$AquaCache)
             # Create PDF with redactions for this borehole
             pdf_file_path <- create_pdf_with_redactions(
               well_id,
@@ -2957,7 +2969,13 @@ simplerIndex <- function(id) {
               longitude = metadata$longitude,
               location_source = metadata$location_source,
               surveyed_ground_elev = metadata$surveyed_ground_elev,
-              purpose_of_borehole = metadata$purpose_of_borehole,
+              purpose_of_borehole = if (
+                nchar(metadata$purpose_of_borehole) == 0
+              ) {
+                NULL
+              } else {
+                metadata$purpose_of_borehole
+              },
               purpose_borehole_inferred = metadata$purpose_borehole_inferred,
               depth_to_bedrock = metadata$depth_to_bedrock,
               permafrost_present = metadata$permafrost_present,
@@ -2973,13 +2991,17 @@ simplerIndex <- function(id) {
               static_water_level = metadata$static_water_level,
               estimated_yield = metadata$estimated_yield,
               notes_borehole = metadata$notes_borehole,
-              notes_Well = metadata$notes_well,
+              notes_well = metadata$notes_well,
               con = session$userData$AquaCache,
               share_with_borehole = metadata$share_with_borehole,
               drilled_by = metadata$drilled_by,
               drill_method = NULL,
-              pdf_file_path = pdf_file_path,
-              purpose_of_well = metadata$purpose_of_well,
+              path = pdf_file_path,
+              purpose_of_well = if (nchar(metadata$purpose_of_well) == 0) {
+                NULL
+              } else {
+                metadata$purpose_of_well
+              },
               purpose_well_inferred = metadata$purpose_well_inferred,
               share_with_well = metadata$share_with_well
             )
@@ -2998,15 +3020,32 @@ simplerIndex <- function(id) {
               type = "message",
               duration = 7
             )
+            DBI::dbExecute(session$userData$AquaCache, "COMMIT")
           },
           error = function(e) {
-            error_count <- error_count + 1
+            DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
+            error_count <<- error_count + 1
             showNotification(
               paste0(
                 "Error uploading borehole ",
                 well_id,
                 ": ",
                 e$message,
+                "\n"
+              ),
+              type = "error",
+              duration = 10
+            )
+          },
+          warning = function(w) {
+            DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
+            error_count <<- error_count + 1
+            showNotification(
+              paste0(
+                "Error uploading borehole ",
+                well_id,
+                ": ",
+                w$message,
                 "\n"
               ),
               type = "error",
@@ -3070,7 +3109,7 @@ simplerIndex <- function(id) {
       }
       # Group words into lines
       lines <- tryCatch(concat_ocr_words_by_row(ocr_df), error = function(e) {
-        ocr_df$word
+        return(ocr_df$word)
       })
       if (length(lines) == 0) {
         return("")
