@@ -19,7 +19,7 @@ addTimeseries <- function(id) {
     getModuleData <- function() {
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT timeseries_id, location_id, sub_location_id, z, media_id, parameter_id, aggregation_type_id, sensor_priority, default_owner, record_rate, source_fx, source_fx_args, note FROM timeseries"
+        "SELECT timeseries_id, location_id, sub_location_id, timezone_daily_calc, z, media_id, parameter_id, aggregation_type_id, sensor_priority, default_owner, record_rate, source_fx, source_fx_args, note FROM timeseries"
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -53,7 +53,7 @@ addTimeseries <- function(id) {
       moduleData$timeseries_display <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "
-        SELECT ts.timeseries_id, l.name AS location_name, sl.sub_location_name, p.param_name, m.media_type, at.aggregation_type, ts.z AS depth_height_m, ts.sensor_priority, o.name AS owner, ts.record_rate
+        SELECT ts.timeseries_id, l.name AS location_name, sl.sub_location_name, ts.timezone_daily_calc AS time_zone, p.param_name, m.media_type, at.aggregation_type, ts.z AS depth_height_m, ts.sensor_priority, o.name AS owner, ts.record_rate
         FROM timeseries ts
         INNER JOIN locations l ON ts.location_id = l.location_id
         LEFT JOIN sub_locations sl ON ts.sub_location_id = sl.sub_location_id
@@ -96,32 +96,42 @@ addTimeseries <- function(id) {
             "Tip: if you add a new timeseries with a source_fx and appropriate arguments, data will automatically be fetched from the source when you click 'Add timeseries'. If you leave the source_fx blank, you can enter data manually or use other methods. Note that WSC timeseries will get daily mean measurements as well as realtime measurements as far back as exist."
           ),
         ),
-        splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
-          selectizeInput(
-            ns("location"),
-            "Location (add new under the 'locations' menu)",
-            choices = stats::setNames(
-              moduleData$locations$location_id,
-              moduleData$locations$name
-            ),
-            multiple = TRUE,
-            options = list(maxItems = 1, placeholder = 'Select a location'),
-            width = "100%"
+        fluidRow(
+          column(
+            4,
+            selectizeInput(
+              ns("location"),
+              "Location (add new under the 'locations' menu)",
+              choices = stats::setNames(
+                moduleData$locations$location_id,
+                moduleData$locations$name
+              ),
+              multiple = TRUE,
+              options = list(maxItems = 1, placeholder = 'Select a location'),
+              width = "100%"
+            )
           ),
-          selectizeInput(
-            ns("sub_location"),
-            "Sub-location (add new under the 'locations' menu)",
-            choices = stats::setNames(
-              moduleData$sub_locations$sub_location_id,
-              moduleData$sub_locations$sub_location_name
-            ),
-            multiple = TRUE,
-            options = list(maxItems = 1, placeholder = 'Optional'),
-            width = "100%"
+          column(
+            4,
+            selectizeInput(
+              ns("sub_location"),
+              "Sub-location (add new under the 'locations' menu)",
+              choices = stats::setNames(
+                moduleData$sub_locations$sub_location_id,
+                moduleData$sub_locations$sub_location_name
+              ),
+              multiple = TRUE,
+              options = list(maxItems = 1, placeholder = 'Optional'),
+              width = "100%"
+            )
+          ),
+          column(
+            selectizeInput(
+              ns("tz"),
+              "Timezone for daily aggregation",
+              choices = c(-12:14),
+              selected = -7 # Default to MST (UTC-7)
+            )
           )
         ),
         checkboxInput(
@@ -345,10 +355,6 @@ addTimeseries <- function(id) {
             moduleData$locations$name
           )
         )
-        # gets updated by the observer for input$location
-        # updateSelectizeInput(session, "sub_location",
-        #                      choices = stats::setNames(moduleData$sub_locations$sub_location_id,
-        #                                                moduleData$sub_locations$sub_location_name))
         updateSelectizeInput(
           session,
           "parameter",
@@ -522,6 +528,11 @@ addTimeseries <- function(id) {
             session,
             "sub_location",
             selected = details$sub_location_id
+          )
+          updateSelectizeInput(
+            session,
+            "tz",
+            selected = details$timezone_daily_calc
           )
           updateCheckboxInput(
             session,
@@ -697,6 +708,7 @@ addTimeseries <- function(id) {
         config,
         loc,
         sub_loc,
+        tz,
         z,
         z_specify,
         parameter,
@@ -789,6 +801,7 @@ addTimeseries <- function(id) {
                 location = loc_code,
                 location_id = as.numeric(loc),
                 sub_location_id = sub_loc,
+                timezone_daily_calc = as.numeric(tz),
                 z = if (z_specify) as.numeric(z) else NA,
                 parameter_id = as.numeric(parameter),
                 media_id = as.numeric(media),
@@ -965,6 +978,7 @@ addTimeseries <- function(id) {
         config = session$userData$config,
         loc = input$location,
         sub_loc = input$sub_location,
+        tz = input$tz,
         z = input$z,
         z_specify = input$z_specify,
         parameter = input$parameter,
@@ -1001,6 +1015,7 @@ addTimeseries <- function(id) {
         # Reset all fields
         updateSelectizeInput(session, "location", selected = character(0))
         updateSelectizeInput(session, "sub_location", selected = character(0))
+        updateSelectizeInput(session, "tz", selected = -7)
         updateCheckboxInput(session, "z_specify", value = FALSE)
         updateNumericInput(session, "z", value = NA)
         updateSelectizeInput(session, "parameter", selected = character(0))
@@ -1103,6 +1118,18 @@ addTimeseries <- function(id) {
               }
             }
 
+            if (input$tz != selected_timeseries$timezone_daily_calc) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                paste0(
+                  "UPDATE timeseries SET timezone_daily_calc = ",
+                  input$tz,
+                  " WHERE timeseries_id = ",
+                  selected_timeseries$timeseries_id
+                )
+              )
+            }
+
             if (input$z_specify) {
               if (!is.na(selected_timeseries$z)) {
                 if (input$z != selected_timeseries$z) {
@@ -1115,22 +1142,12 @@ addTimeseries <- function(id) {
                       selected_timeseries$timeseries_id
                     )
                   )
-                } else if (!input$z_specify) {
-                  DBI::dbExecute(
-                    session$userData$AquaCache,
-                    paste0(
-                      "UPDATE timeseries SET z = NULL WHERE timeseries_id = ",
-                      selected_timeseries$timeseries_id
-                    )
-                  )
                 }
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   paste0(
-                    "UPDATE timeseries SET z = ",
-                    input$z,
-                    " WHERE timeseries_id = ",
+                    "UPDATE timeseries SET z = NULL WHERE timeseries_id = ",
                     selected_timeseries$timeseries_id
                   )
                 )
