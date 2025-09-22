@@ -318,6 +318,11 @@ YGwater_globals <- function(
     print("No .mdb files found in the accessPath directories.")
   }
 
+  # Set up a temporary directory for storing R documentation files during app runtime
+  .rd_dir <<- file.path(tempdir(), "rdocs")
+  dir.create(.rd_dir, showWarnings = FALSE, recursive = TRUE)
+  shiny::addResourcePath("rdocs", .rd_dir)
+
   # Make the configuration list available globally
   # double assignment creates a global variable that can be accessed by all UI and server functions
 

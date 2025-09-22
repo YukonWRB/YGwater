@@ -16,6 +16,12 @@ visit <- function(id) {
     ns <- session$ns
 
     moduleData <- reactiveValues()
+    visitData <- reactiveValues(
+      instruments_chosen = NULL,
+      images_taken = NULL,
+      field_measurements = NULL,
+      samples = NULL
+    )
 
     getModuleData <- function() {
       moduleData$locations <- DBI::dbGetQuery(
@@ -41,10 +47,6 @@ visit <- function(id) {
       moduleData$instruments <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT i.instrument_id, i.serial_no, instrument_make.make, instrument_model.model, instrument_type.type, i.owner FROM instruments AS i LEFT JOIN instrument_make ON i.make = instrument_make.make_id LEFT JOIN instrument_model ON i.model = instrument_model.model_id LEFT JOIN instrument_type ON i.type = instrument_type.type_id ORDER BY i.instrument_id"
-      )
-      moduleData$visits <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT * FROM field.field_visits"
       )
       moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -83,76 +85,83 @@ visit <- function(id) {
           DT::DTOutput(ns("visit_table"))
         ),
         h3("Basic field visit information"),
-        splitLayout(
-          cellWidths = c("0%", "20%", "40%", "40%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
-          selectizeInput(
-            ns("timezone"),
-            "Timezone",
-            choices = c(-12:12),
-            selected = -7,
-            multiple = FALSE,
-          ),
-          shinyWidgets::airDatepickerInput(
-            ns("visit_datetime_start"),
-            label = "Visit start MST",
-            value = .POSIXct(Sys.time(), tz = "MST"),
-            range = FALSE,
-            multiple = FALSE,
-            timepicker = TRUE,
-            maxDate = Sys.Date() + 1,
-            startView = Sys.Date(),
-            update_on = "change",
-            tz = -7,
-            timepickerOpts = shinyWidgets::timepickerOptions(
-              minutesStep = 15,
-              timeFormat = "HH:mm"
+        fluidRow(
+          column(
+            2,
+            selectizeInput(
+              ns("timezone"),
+              "Timezone",
+              choices = c(-12:12),
+              selected = -7,
+              multiple = FALSE,
             )
           ),
-          shinyWidgets::airDatepickerInput(
-            ns("visit_datetime_end"),
-            label = "Visit end MST (optional)",
-            value = .POSIXct(Sys.time(), tz = "MST"),
-            range = FALSE,
-            multiple = FALSE,
-            timepicker = TRUE,
-            maxDate = Sys.Date() + 1,
-            startView = Sys.Date(),
-            update_on = "change",
-            tz = -7,
-            timepickerOpts = shinyWidgets::timepickerOptions(
-              minutesStep = 15,
-              timeFormat = "HH:mm"
+          column(
+            5,
+            shinyWidgets::airDatepickerInput(
+              ns("visit_datetime_start"),
+              label = "Visit start MST",
+              value = .POSIXct(Sys.time(), tz = "MST"),
+              range = FALSE,
+              multiple = FALSE,
+              timepicker = TRUE,
+              maxDate = Sys.Date() + 1,
+              startView = Sys.Date(),
+              update_on = "change",
+              tz = "UTC",
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 15,
+                timeFormat = "HH:mm"
+              )
+            )
+          ),
+          column(
+            5,
+            shinyWidgets::airDatepickerInput(
+              ns("visit_datetime_end"),
+              label = "Visit end MST (optional)",
+              value = .POSIXct(Sys.time(), tz = "MST"),
+              range = FALSE,
+              multiple = FALSE,
+              timepicker = TRUE,
+              maxDate = Sys.Date() + 1,
+              startView = Sys.Date(),
+              update_on = "change",
+              tz = "UTC",
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 15,
+                timeFormat = "HH:mm"
+              )
             )
           )
-        ), # End of data/time splitLayout
-        splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
-          selectizeInput(
-            ns("location"),
-            "Location (add new in 'locations' menu)",
-            choices = stats::setNames(
-              moduleData$locations$location_id,
-              moduleData$locations$name
-            ),
-            multiple = TRUE,
-            options = list(maxItems = 1, placeholder = 'Select a location'),
-            width = "100%"
+        ), # End of data/time fluidRow
+        fluidRow(
+          column(
+            6,
+            selectizeInput(
+              ns("location"),
+              "Location (add new in 'locations' menu)",
+              choices = stats::setNames(
+                moduleData$locations$location_id,
+                moduleData$locations$name
+              ),
+              multiple = TRUE,
+              options = list(maxItems = 1, placeholder = 'Select a location'),
+              width = "100%"
+            )
           ),
-          selectizeInput(
-            ns("sub_location"),
-            "Sub-location (add new in 'locations' menu)",
-            choices = NULL, # Populated by observer when location is selected
-            multiple = TRUE,
-            options = list(maxItems = 1, placeholder = 'Optional'),
-            width = "100%"
+          column(
+            6,
+            selectizeInput(
+              ns("sub_location"),
+              "Sub-location (add new in 'locations' menu)",
+              choices = NULL, # Populated by observer when location is selected
+              multiple = TRUE,
+              options = list(maxItems = 1, placeholder = 'Optional'),
+              width = "100%"
+            )
           )
-        ), # End of location/sub-location splitLayout
+        ), # End of location/sub-location fluidRow
         textInput(
           ns("visit_purpose"),
           "Purpose of visit",
@@ -161,70 +170,83 @@ visit <- function(id) {
         ),
         hr(),
         h3("Weather conditions during visit"),
-        splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
-          numericInput(
-            ns("air_temp"),
-            "Air temperature (°C)",
-            value = NA,
-            step = 0.1
+        fluidRow(
+          column(
+            6,
+            numericInput(
+              ns("air_temp"),
+              "Air temperature (°C)",
+              value = NA,
+              step = 0.1
+            )
           ),
-          selectizeInput(
-            ns("weather_wind"),
-            "Wind",
-            choices = c("Calm", "Breezy", "Windy", "Very windy"),
-            multiple = TRUE,
-            options = list(
-              maxItems = 1,
-              placeholder = 'Select wind conditions'
+          column(
+            6,
+            selectizeInput(
+              ns("weather_wind"),
+              "Wind",
+              choices = c("Calm", "Breezy", "Windy", "Very windy"),
+              multiple = TRUE,
+              options = list(
+                maxItems = 1,
+                placeholder = 'Select wind conditions'
+              )
             )
           )
         ),
-        selectizeInput(
-          ns("precip"),
-          "Precipitation during visit",
-          choices = c("None", "Rain", "Snow", "Mixed"),
-          multiple = TRUE,
-          options = list(
-            maxItems = 1,
-            placeholder = 'Select precip conditions'
-          )
-        ),
-        conditionalPanel(
-          condition = "input.precip != 'None' && input.precip != ''",
-          ns = ns,
-          selectizeInput(
-            ns("precip_rate"),
-            "Precip rate",
-            choices = c("Light", "Moderate", "Heavy"),
-            multiple = TRUE,
-            options = list(
-              maxItems = 1,
-              placeholder = 'Select precip rate'
+        fluidRow(
+          column(
+            6,
+            selectizeInput(
+              ns("precip"),
+              "Precipitation during visit",
+              choices = c("None", "Rain", "Snow", "Mixed"),
+              multiple = TRUE,
+              options = list(
+                maxItems = 1,
+                placeholder = 'Select precip conditions'
+              )
+            )
+          ),
+          column(
+            6,
+            conditionalPanel(
+              condition = "input.precip != 'None' && input.precip != ''",
+              ns = ns,
+              selectizeInput(
+                ns("precip_rate"),
+                "Precip rate",
+                choices = c("Light", "Moderate", "Heavy"),
+                multiple = TRUE,
+                options = list(
+                  maxItems = 1,
+                  placeholder = 'Select precip rate'
+                )
+              )
             )
           )
         ),
-        splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
-          numericInput(
-            ns("precip_24"),
-            "24-hr precip (mm)",
-            value = NA,
-            step = 0.1
+        h3("Recent precipitation"),
+        fluidRow(
+          column(
+            6,
+            numericInput(
+              ns("precip_24"),
+              "24-hr precip (mm)",
+              value = NA,
+              step = 0.1
+            )
           ),
-          numericInput(
-            ns("precip_48"),
-            "48-hr precip (mm)",
-            value = NA,
-            step = 0.1
+          column(
+            6,
+            numericInput(
+              ns("precip_48"),
+              "48-hr precip (mm)",
+              value = NA,
+              step = 0.1
+            )
           )
-        ), # End of precip splitLayout
+        ), # End of precip fluidRow
         hr(),
         radioButtons(
           ns("field_measurements"),
@@ -235,36 +257,29 @@ visit <- function(id) {
         conditionalPanel(
           condition = "input.field_measurements == 'yes'",
           ns = ns,
-          selectizeInput(
-            ns("media"),
-            "Media type",
-            choices = stats::setNames(
-              moduleData$media$media_id,
-              moduleData$media$media_type
-            ),
-            multiple = TRUE,
-            options = list(maxItems = 1, placeholder = 'Select media type'),
-            width = "100%"
+          # Let the user associate the visit with an existing sample via a modal
+          actionButton(
+            ns("exist_sample"),
+            "Associate with existing sample"
           ),
+          uiOutput(ns("exist_sample_ui")), # Defaults to telling user a new sample will be created, changes if they associate to show the sample details
+
           # Actionbutton linking to modal to choose instrument
           actionButton(
-            ns("choose_instrument"),
+            ns("choose_instruments"),
             "Select instruments used",
           ),
           # Show the chosen instruments here
           uiOutput(ns("instruments_chosen_ui")),
-          selectizeInput(
-            ns("parameters"),
-            "Parameters measured",
-            choices = stats::setNames(
-              moduleData$parameters$parameter_id,
-              moduleData$parameters$param_name
-            ),
-            multiple = TRUE,
-            options = list(placeholder = 'Select parameters'),
-            width = "100%"
-          )
+          # Actionbutton linking to modal to input measurements
+
+          actionButton(
+            ns("add_measurements"),
+            "Add field measurements"
+          ),
+          uiOutput(ns("measurements_ui"))
         ), # End of conditionalPanel for field measurements
+
         radioButtons(
           ns("photos_taken"),
           "Were photos taken?",
@@ -276,6 +291,7 @@ visit <- function(id) {
           ns = ns,
           p("This functionality is being built.")
         ),
+
         textAreaInput(
           ns("visit_notes"),
           "Notes (optional)",
@@ -302,7 +318,7 @@ visit <- function(id) {
           bslib::input_task_button(ns("modify_visit"), label = "Modify visit")
         )
       )
-    })
+    }) # End of main renderUI
 
     # Render the timeseries table for modification
     output$visit_table <- DT::renderDT({
@@ -334,6 +350,7 @@ visit <- function(id) {
     }) |>
       bindEvent(moduleData$visit_display)
 
+    # Keep track of the currently selected visit ID
     selected_visit <- reactiveVal(NULL)
 
     observeEvent(
@@ -363,25 +380,6 @@ visit <- function(id) {
       ignoreInit = TRUE
     )
 
-    # Observe timezone changes and update date inputs accordingly
-    observeEvent(
-      input$timezone,
-      {
-        tz_offset <- as.integer(input$timezone)
-        shinyWidgets::updateAirDateInput(
-          session,
-          "visit_datetime_start",
-          tz = tz_offset
-        )
-        shinyWidgets::updateAirDateInput(
-          session,
-          "visit_datetime_end",
-          tz = tz_offset
-        )
-      },
-      ignoreInit = TRUE
-    )
-
     # observe the location and limit the sub-locations based on those already existing
     observeEvent(
       input$location,
@@ -401,9 +399,197 @@ visit <- function(id) {
       ignoreInit = TRUE
     )
 
+    # Ensure that if public_reader is selected in share_with it is the only option selected
+    observeEvent(
+      input$share_with,
+      {
+        if (
+          length(input$share_with) > 1 & 'public_reader' %in% input$share_with
+        ) {
+          showModal(modalDialog(
+            "If public_reader is selected it must be the only group selected.",
+            easyClose = TRUE
+          ))
+          updateSelectizeInput(
+            session,
+            "share_with",
+            selected = "public_reader"
+          )
+        }
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    # Observe visit table row selection and populate inputs for modification
+    observeEvent(
+      input$visit_table_rows_selected,
+      {
+        selected <- input$visit_table_rows_selected
+        if (length(selected) == 0) {
+          selected_visit(NULL)
+        } else {
+          visit_id <- moduleData$visit_display$field_visit_id[selected]
+          selected_visit(visit_id)
+
+          # Find the instruments used in this visit, if any
+          visitData$instruments <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT instrument_id FROM field.field_visit_instruments WHERE field_visit_id = $1",
+            params = list(visit_id)
+          )$instrument_id
+          # This will update the data.table below the button to show the instruments used
+
+          # Find the images taken in this visit, if any
+          visitData$images <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT image_id FROM field.field_visit_images WHERE field_visit_id = $1",
+            params = list(visit_id)
+          )$image_id
+
+          # Find any existing sample associated with this visit
+          visitData$samples <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT * FROM discrete.samples WHERE field_visit_id = $1",
+            params = list(visit_id)
+          )
+
+          # Populate inputs with data from selected visit
+          visit_data <- DBI::dbGetQuery(
+            con,
+            "SELECT * FROM field.field_visits WHERE field_visit_id = $1",
+            params = list(visit_id)
+          )
+          updateSelectizeInput(
+            session,
+            "location",
+            selected = visit_data$location_id
+          )
+          updateSelectizeInput(
+            session,
+            "sub_location",
+            selected = visit_data$sub_location_id
+          )
+          shinyWidgets::updateAirDateInput(
+            session,
+            "visit_datetime_start",
+            value = .POSIXct(visit_data$start_datetime, tz = "UTC") +
+              as.integer(input$timezone * 3600)
+          )
+          shinyWidgets::updateAirDateInput(
+            session,
+            "visit_datetime_end",
+            value = .POSIXct(visit_data$end_datetime, tz = "UTC") +
+              as.integer(input$timezone * 3600)
+          )
+          updateTextInput(
+            session,
+            "visit_purpose",
+            value = visit_data$purpose
+          )
+          updateNumericInput(
+            session,
+            "air_temp",
+            value = visit_data$air_temp
+          )
+          updateSelectizeInput(
+            session,
+            "weather_wind",
+            selected = visit_data$wind
+          )
+          updateSelectizeInput(
+            session,
+            "precip",
+            selected = visit_data$precip
+          )
+          updateSelectizeInput(
+            session,
+            "precip_rate",
+            selected = visit_data$precip_rate
+          )
+          updateNumericInput(
+            session,
+            "precip_24",
+            value = visit_data$precip_24h_mm
+          )
+          updateNumericInput(
+            session,
+            "precip_48",
+            value = visit_data$precip_48h_mm
+          )
+          if (
+            nrow(visitData$samples) > 0 || length(visitData$instruments) > 0
+          ) {
+            updateRadioButtons(
+              session,
+              "field_measurements",
+              selected = "yes"
+            )
+            # Populate measurements UI with existing sample data
+            output$exist_sample_ui <- renderUI({
+              tagList(
+                h4("Existing samples associated with this visit"),
+                DT::datatable(
+                  visitData$samples[, c("sample_id", "datetime", "note")],
+                  options = list(
+                    scrollX = TRUE,
+                    initComplete = htmlwidgets::JS(
+                      "function(settings, json) {",
+                      "$(this.api().table().header()).css({",
+                      "  'background-color': '#079',",
+                      "  'color': '#fff',",
+                      "  'font-size': '100%',",
+                      "});",
+                      "$(this.api().table().body()).css({",
+                      "  'font-size': '90%',",
+                      "});",
+                      "}"
+                    )
+                  ),
+                  filter = "none",
+                  selection = "single",
+                  rownames = FALSE
+                ),
+                fluidRow(
+                  column(
+                    4,
+                    actionButton(
+                      ns("view_sample"),
+                      "View sample details"
+                    )
+                  ),
+                  column(
+                    4,
+                    actionButton(
+                      ns("remove_sample"),
+                      "Remove association with this visit"
+                    )
+                  ),
+                  column(
+                    4,
+                    actionButton(
+                      ns("delete_sample"),
+                      "Delete sample (cannot be undone)",
+                    )
+                  )
+                )
+              )
+            })
+          } else {
+            updateRadioButtons(
+              session,
+              "field_measurements",
+              selected = "no"
+            )
+          }
+        }
+      },
+      ignoreInit = TRUE
+    )
+
     # Observe instrument selection button and show modal
     observeEvent(
-      input$choose_instrument,
+      input$choose_instruments,
       {
         showModal(modalDialog(
           title = "Select instruments used",
@@ -445,20 +631,20 @@ visit <- function(id) {
         rownames = FALSE
       )
     }) |>
-      bindEvent(input$choose_instrument)
+      bindEvent(input$choose_instruments)
     # When done choosing instruments, save selection and close modal
 
     # Observe row selection in instruments table and save selected instrument IDs
-    instruments_chosen <- reactiveVal(NULL)
     observeEvent(
       input$instruments_chosen,
       {
         selected <- input$instruments_table_rows_selected
+        print(selected)
         if (length(selected) == 0) {
-          instruments_chosen(NULL)
+          visitData$instruments <- NULL
         } else {
           instrument_ids <- moduleData$instruments$instrument_id[selected]
-          instruments_chosen(instrument_ids)
+          visitData$instruments <- instrument_ids
         }
         removeModal()
       },
@@ -467,16 +653,17 @@ visit <- function(id) {
 
     # Render the chosen instruments below the button
     output$instruments_chosen_ui <- renderUI({
-      if (is.null(instruments_chosen())) {
-        p("No instruments selected")
+      print("Rendering chosen instruments UI")
+      if (is.null(visitData$instruments)) {
+        return()
       } else {
         chosen <- moduleData$instruments[
           moduleData$instruments$instrument_id %in%
-            instruments_chosen(),
+            visitData$instruments,
           c("serial_no", "make", "model")
         ]
         tagList(
-          h4("Instruments selected:"),
+          h4("Instruments used for field visit"),
           DT::datatable(
             chosen,
             options = list(
@@ -494,48 +681,13 @@ visit <- function(id) {
                 "}"
               )
             ),
+            filter = "none",
+            selection = "none",
             rownames = FALSE
           )
         )
       }
     }) |>
-      bindEvent(instruments_chosen)
-
-    # Observe visit table row selection and populate inputs for modification
-    observeEvent(
-      input$visit_table_rows_selected,
-      {
-        selected <- input$visit_table_rows_selected
-        if (length(selected) == 0) {
-          selected_visit(NULL)
-        } else {
-          visit_id <- moduleData$visit_display$field_visit_id[selected]
-          selected_visit(visit_id)
-
-          # Find the instruments used in this visit, if any
-          instruments_used <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            "SELECT instrument_id FROM field.field_visit_instruments WHERE field_visit_id = $1",
-            params = list(visit_id)
-          )$instrument_id
-          instruments_chosen(instruments_used) # Updates the chosen instruments because of bindEvent
-
-          # Find the images taken in this visit, if any
-          images_taken <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            "SELECT image_id, FROM field.field_visit_images WHERE field_visit_id = $1",
-            params = list(visit_id)
-          )$image_id
-          images_chosen(images_taken) # Placeholder until image functionality is built
-
-          # Populate inputs with data from selected visit
-          showNotification(
-            "Populating inputs for modification is not yet implemented.",
-            type = "warning"
-          )
-        }
-      },
-      ignoreInit = TRUE
-    )
+      bindEvent(visitData$instruments)
   }) # End of moduleServer
 }
