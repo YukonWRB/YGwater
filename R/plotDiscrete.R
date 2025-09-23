@@ -66,10 +66,10 @@ plotDiscrete <- function(
   data = FALSE
 ) {
   # testing parameters for EQWIN direct
-  # start <- "2024-06-24"
+  # start <- "2005-06-24"
   # end <- "2025-03-13"
-  # locations <- c("(EG)W29")
-  # parameters <- c("CN-WAD", "Co-T", "Cu-T")
+  # locations <- c("(AGS)MW-10", "(AGS)MW-5")
+  # parameters <- c("Al-T", "Cd-T")
   # locGrp <- NULL
   # paramGrp <- NULL
   # standard = "CCME_LT"
@@ -92,6 +92,7 @@ plotDiscrete <- function(
   # lang = "en"
   # dbCon = NULL
   # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResourcesEG.mdb"
+  # dbPath = "X:\\EQWin\\WaterResources.mdb"
 
   # start <- "2024-06-09"
   # end <- "2024-10-09"
@@ -427,10 +428,19 @@ plotDiscrete <- function(
         ");"
       )
     )
+    if (nrow(results) == 0) {
+      stop(
+        "No results found for the date range, locations, and parameters specified."
+      )
+    }
 
     params <- DBI::dbGetQuery(
       EQWin,
-      paste0("SELECT ParamId, ParamName, Units FROM eqparams;")
+      paste0(
+        "SELECT ParamId, ParamName, Units FROM eqparams WHERE ParamId IN (",
+        paste0(results$ParamId, collapse = ", "),
+        ");"
+      )
     )
 
     samps <- sampleIds[sampleIds$SampleId %in% results$SampleId, ]
@@ -1129,7 +1139,6 @@ AND s.datetime > '",
         "#984EA3"
       )
     } else {
-      # palette <- c("#A6CEE3", "#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6", "#6A3D9A", "#FFFF99", "#B15928")
       palette <- c(
         "#FF0000",
         "#00FF00",
