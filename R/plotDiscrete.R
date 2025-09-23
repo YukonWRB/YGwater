@@ -1103,14 +1103,17 @@ AND s.datetime > '",
   }
 
   create_facet_plot <- function(data, facet_by, targ_dt, loc_code) {
-    # Split data based on the facet_by column
-    df_list <- split(data, data[[facet_by]])
-
     color_by <- if (facet_by == "param_name") {
       if (loc_code %in% c('code', 'codeName')) "location" else "location_name"
     } else {
       "param_name"
     }
+
+    color_levels <- unique(as.character(data[[color_by]]))
+    data[[color_by]] <- factor(data[[color_by]], levels = color_levels)
+
+    # Split data based on the facet_by column
+    df_list <- split(data, data[[facet_by]])
 
     # Define custom color scale
     if (colorblind) {
@@ -1146,21 +1149,21 @@ AND s.datetime > '",
       )
     }
 
-    custom_colors <- grDevices::colorRampPalette(palette)(length(unique(data[[
-      color_by
-    ]])))
+    custom_colors <- grDevices::colorRampPalette(palette)(length(color_levels))
 
     # Create a plot for each facet
     plots <- lapply(seq_along(df_list), function(i) {
       facet_value <- names(df_list)[i]
       df <- df_list[[facet_value]]
+      df[[color_by]] <- factor(df[[color_by]], levels = color_levels)
       conditions <- df[is.na(df$result), ] # Isolate the rows that are < DL or > DL
       df <- df[!is.na(df$result), ]
 
       if (i == 1) {
         # Add entries for parameter/location_name which show up elsewhere in 'data' but not in facet 1
-        missing <- setdiff(unique(data[[color_by]]), unique(df[[color_by]]))
+        missing <- setdiff(color_levels, unique(as.character(df[[color_by]])))
         for (m in missing) {
+          m_val <- as.character(m)
           if (color_by %in% c("location", "location_name")) {
             unit_text <- if (nrow(df) == 0) {
               unique(conditions$units)
@@ -1177,22 +1180,27 @@ AND s.datetime > '",
               datetime = min_dt,
               param_name = NA,
               units = unit_text,
-              location = m,
-              location_name = m,
+              location = m_val,
+              location_name = m_val,
               result_condition = NA,
               result_condition_value = NA
             )
             df <- dplyr::bind_rows(df, to_bind) # used instead of rbind because it automatically adds columns with NA values
           } else {
-            unit_text <- unique(data[data$param_name == m, "units"])
+            unit_text <- unique(data[data$param_name == m_val, "units"])
             loc_text <- unique(data[
               data$location_name == facet_value,
               "location"
             ])
+            ref_datetime <- if (nrow(df) == 0) {
+              if (nrow(conditions) == 0) NA else min(conditions$datetime)
+            } else {
+              min(df$datetime)
+            }
             to_bind <- data.frame(
               result = -Inf,
-              datetime = min(df$datetime),
-              param_name = m,
+              datetime = ref_datetime,
+              param_name = m_val,
               units = unit_text,
               location = loc_text,
               location_name = facet_value,
@@ -1202,6 +1210,11 @@ AND s.datetime > '",
             df <- dplyr::bind_rows(df, to_bind)
           }
         }
+      }
+
+      df[[color_by]] <- factor(df[[color_by]], levels = color_levels)
+      if (nrow(conditions) > 0) {
+        conditions[[color_by]] <- factor(conditions[[color_by]], levels = color_levels)
       }
 
       # Determine y-axis label based on parameter and units
@@ -1311,6 +1324,7 @@ AND s.datetime > '",
           mode = 'markers',
           color = ~ get(color_by),
           colors = custom_colors,
+          legendgroup = ~ get(color_by),
           marker = list(
             opacity = 1,
             # symbol = "circle-open-dot",
