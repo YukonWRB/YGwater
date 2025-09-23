@@ -16,7 +16,8 @@
       [1] "markers"
       
       [[1]]$legendgroup
-      [1] "Haggart Ck Below Eagle Ck"
+      [1] Haggart Ck Below Eagle Ck
+      Levels: Haggart Ck Below Eagle Ck
       
       [[1]]$showlegend
       [1] TRUE
@@ -113,7 +114,8 @@
       [1] "markers"
       
       [[2]]$legendgroup
-      [1] "Haggart Ck Below Eagle Ck"
+      [1] Haggart Ck Below Eagle Ck
+      Levels: Haggart Ck Below Eagle Ck
       
       [[2]]$showlegend
       [1] FALSE
@@ -234,7 +236,8 @@
       [1] "markers"
       
       [[3]]$legendgroup
-      [1] "Haggart Ck Below Eagle Ck"
+      [1] Haggart Ck Below Eagle Ck
+      Levels: Haggart Ck Below Eagle Ck
       
       [[3]]$showlegend
       [1] FALSE
@@ -329,7 +332,8 @@
       [1] "markers"
       
       [[4]]$legendgroup
-      [1] "Haggart Ck Below Eagle Ck"
+      [1] Haggart Ck Below Eagle Ck
+      Levels: Haggart Ck Below Eagle Ck
       
       [[4]]$showlegend
       [1] FALSE
