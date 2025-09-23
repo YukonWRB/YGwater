@@ -19,7 +19,7 @@ addTimeseries <- function(id) {
     getModuleData <- function() {
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT timeseries_id, location_id, sub_location_id, timezone_daily_calc, z, media_id, parameter_id, aggregation_type_id, sensor_priority, default_owner, record_rate, source_fx, source_fx_args, note FROM timeseries"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.source_fx, ts.source_fx_args, ts.note FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.location_id = lz.location_id"
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -313,6 +313,7 @@ addTimeseries <- function(id) {
       df$media <- as.factor(df$media_type)
       df$aggregation <- as.factor(df$aggregation_type)
       df$parameter <- as.factor(df$param_name)
+      df$z_id <- NULL # remove z_id as it's not useful to the user
 
       DT::datatable(
         df,
@@ -797,13 +798,40 @@ addTimeseries <- function(id) {
                 end_datetime <- NA
               }
 
+              existing_z <- NA
+              if (z_specify) {
+                # Create a new entry in locations_z if needed
+                existing_z <- DBI::dbGetQuery(
+                  con,
+                  paste0(
+                    "SELECT * FROM locations_z WHERE location_id = ",
+                    loc,
+                    " AND sub_location_id ",
+                    ifelse(
+                      is.na(sub_loc),
+                      "IS NULL",
+                      paste0("= ", sub_loc)
+                    ),
+                    " AND z_meters = ",
+                    z
+                  )
+                )[1, 1]
+                if (length(existing_z) == 0) {
+                  existing_z <- DBI::dbGetQuery(
+                    con,
+                    "INSERT INTO locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
+                    params = list(loc, sub_loc, z)
+                  )[1, 1]
+                }
+              }
+
               # Make a new entry to the timeseries table
               df <- data.frame(
                 location = loc_code,
                 location_id = as.numeric(loc),
                 sub_location_id = sub_loc,
                 timezone_daily_calc = as.numeric(tz),
-                z = if (z_specify) as.numeric(z) else NA,
+                z = existing_z,
                 parameter_id = as.numeric(parameter),
                 media_id = as.numeric(media),
                 sensor_priority = as.numeric(priority),
@@ -1135,34 +1163,49 @@ addTimeseries <- function(id) {
             }
 
             if (input$z_specify) {
-              if (!is.na(selected_timeseries$z)) {
+              if (!is.na(selected_timeseries$z_id)) {
                 if (input$z != selected_timeseries$z) {
-                  DBI::dbExecute(
-                    session$userData$AquaCache,
-                    paste0(
-                      "UPDATE timeseries SET z = ",
-                      input$z,
-                      " WHERE timeseries_id = ",
-                      selected_timeseries$timeseries_id
-                    )
-                  )
+                  # Update the entry in table locations_z
                 }
               } else {
+                # No existing entry
+                # Create a new entry in locations_z
+                df <- data.frame(
+                  location_id = as.numeric(input$location),
+                  sub_location_id = if (
+                    !is.na(input$sub_location) && nzchar(input$sub_location)
+                  ) {
+                    as.numeric(input$sub_location)
+                  } else {
+                    NA
+                  },
+                  z_meters = input$z
+                )
+                new_z_id <- DBI::dbGetQuery(
+                  session$userData$AquaCache,
+                  "INSERT INTO locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
+                  params = list(
+                    df$location_id,
+                    df$sub_location_id,
+                    df$z_meters
+                  )
+                )[1, 1]
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   paste0(
-                    "UPDATE timeseries SET z = NULL WHERE timeseries_id = ",
+                    "UPDATE timeseries SET z = ",
+                    new_z_id,
+                    " WHERE timeseries_id = ",
                     selected_timeseries$timeseries_id
                   )
                 )
               }
             } else {
+              # Delete the entry in table locations_z if it exists, which will cascade delete the z reference in timeseries
               DBI::dbExecute(
-                session$userData$AquaCache,
-                paste0(
-                  "UPDATE timeseries SET z = NULL WHERE timeseries_id = ",
-                  selected_timeseries$timeseries_id
-                )
+                con,
+                "DELETE FROM locations_z WHERE z_id = ",
+                selected_timeseries$z_id
               )
             }
 
