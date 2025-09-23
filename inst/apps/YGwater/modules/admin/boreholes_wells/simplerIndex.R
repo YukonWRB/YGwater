@@ -1155,7 +1155,27 @@ simplerIndex <- function(id) {
         return(FALSE)
       }
 
-      TRUE
+      # Check to ensure that the well name does not already exist in the database
+      existing_names <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT borehole_name FROM boreholes.boreholes WHERE name = $1;",
+        params = list(metadata$name)
+      )$name
+
+      if (length(existing_names) > 0) {
+        showNotification(
+          sprintf(
+            "A borehole or well with the name '%s' already exists in the database. Please choose a different name.",
+            metadata$name
+          ),
+          type = "error",
+          duration = 10
+        )
+        return(FALSE)
+      }
+
+      # If we got to here, return TRUE
+      return(TRUE)
     }
 
     update_borehole_details_selector <- function(preferred = NULL) {

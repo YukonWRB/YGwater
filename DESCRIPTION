@@ -1,6 +1,5 @@
 Package: YGwater
-Title: Utility functions for the Yukon Water Science and Stewardship
-    Branch
+Title: R functions and applications for the Yukon Water Science and Stewardship Branch
 Version: 1.7.2
 Authors@R: c(
     person("Ghislain", "de Laplante", , email = "ghislaindel@gmail.com", role = c("aut", "cre"),

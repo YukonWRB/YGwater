@@ -3,7 +3,7 @@
 \docType{package}
 \name{YGwater-package}
 \alias{YGwater-package}
-\title{YGwater: Utility functions for the Yukon Water Science and Stewardship Branch}
+\title{YGwater: R functions and applications for the Yukon Water Science and Stewardship Branch}
 \description{
 Stores various functions for use across the Water Science and Stweardship Branch disciplines, including for generating reports, gathering and processing data, and creating plots.
 }
@@ -18,9 +18,13 @@ Useful links:
 \author{
 \strong{Maintainer}: Ghislain de Laplante \email{ghislaindel@gmail.com} (\href{https://orcid.org/0000-0002-5093-9185}{ORCID})
 
-Other contributors:
+Authors:
 \itemize{
   \item Cole Fischer \email{cole.fischer@hotmail.com} (\href{https://orcid.org/0000-0002-7266-5760}{ORCID}) [contributor]
+}
+
+Other contributors:
+\itemize{
   \item Emilie Stewart-Jones \email{emilie.stewart-jones@yukon.ca} [contributor]
   \item Everett Snieder \email{everett.snieder@gmail.com} (\href{https://orcid.org/0000-0003-4997-3404}{ORCID}) [contributor]
 }
