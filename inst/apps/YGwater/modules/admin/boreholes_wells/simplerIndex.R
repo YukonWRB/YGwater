@@ -303,7 +303,7 @@ simplerIndexUI <- function(id) {
           # Location information section - remove surveyed_location_top_casing field
           radioButtons(
             ns("coordinate_system"),
-            "Coordinate System *",
+            "Coordinate system *",
             choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
             selected = "utm",
             inline = TRUE
@@ -354,7 +354,7 @@ simplerIndexUI <- function(id) {
           ),
           selectizeInput(
             ns("location_source"),
-            "Location Source *",
+            "Location source *",
             choices = c(
               "GPS, uncorrected",
               "GPS, corrected",
@@ -372,7 +372,7 @@ simplerIndexUI <- function(id) {
           ),
           selectizeInput(
             ns("purpose_of_borehole"),
-            "Purpose of Borehole",
+            "Purpose of borehole",
             choices = NULL, # Populated in server
             selected = NULL,
             multiple = TRUE,
@@ -396,7 +396,7 @@ simplerIndexUI <- function(id) {
               8,
               numericInput(
                 ns("drill_depth"),
-                "Drill Depth *",
+                "Drill depth *",
                 value = NULL,
                 min = 0,
                 step = 0.1
@@ -418,7 +418,7 @@ simplerIndexUI <- function(id) {
               8,
               numericInput(
                 ns("surveyed_ground_elev"),
-                "Surveyed Ground Elevation",
+                "Surveyed ground elevation",
                 value = NULL,
                 step = 0.01
               )
@@ -439,7 +439,7 @@ simplerIndexUI <- function(id) {
               8,
               numericInput(
                 ns("depth_to_bedrock"),
-                "Depth to Bedrock",
+                "Depth to bedrock",
                 value = NULL,
                 min = 0,
                 step = 0.1
@@ -460,7 +460,7 @@ simplerIndexUI <- function(id) {
           # Add permafrost checkbox and conditional inputs
           checkboxInput(
             ns("permafrost_present"),
-            "Permafrost Present",
+            "Permafrost present",
             value = FALSE
           ),
 
@@ -473,7 +473,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("permafrost_top"),
-                  "Depth to Top of Permafrost",
+                  "Depth to top of permafrost",
                   value = NULL,
                   min = 0,
                   step = 0.1
@@ -495,7 +495,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("permafrost_bot"),
-                  "Depth to Bottom of Permafrost",
+                  "Depth to bottom of permafrost",
                   value = NULL,
                   min = 0,
                   step = 0.1
@@ -514,10 +514,10 @@ simplerIndexUI <- function(id) {
             )
           ),
 
-          dateInput(ns("date_drilled"), "Date Drilled *", value = NULL),
+          dateInput(ns("date_drilled"), "Date drilled *", value = NULL),
 
           ## IS WELL conditional panel ##################
-          checkboxInput(ns("is_well"), "Well Constructed", value = FALSE),
+          checkboxInput(ns("is_well"), "Well constructed", value = FALSE),
 
           # Show well construction fields only if 'is_well' is checked
           conditionalPanel(
@@ -542,7 +542,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("casing_od"),
-                  "Casing Outside Diameter",
+                  "Casing outside diameter",
                   value = NULL,
                   min = 0,
                   step = 1
@@ -565,7 +565,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("top_of_screen"),
-                  "Top of Screen",
+                  "Top of screen",
                   value = NULL,
                   min = 0,
                   step = 0.1
@@ -588,7 +588,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("bottom_of_screen"),
-                  "Bottom of Screen",
+                  "Bottom of screen",
                   value = NULL,
                   min = 0,
                   step = 0.1
@@ -611,7 +611,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("well_head_stick_up"),
-                  "Well Stick Up",
+                  "Well stick up",
                   value = NULL,
                   step = 0.01
                 )
@@ -633,7 +633,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("static_water_level"),
-                  "Static Water Level",
+                  "Static water level",
                   value = NULL,
                   step = 0.01
                 )
@@ -655,7 +655,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("estimated_yield"),
-                  "Estimated Yield",
+                  "Estimated yield",
                   value = NULL,
                   min = 0,
                   step = 0.1
@@ -675,7 +675,7 @@ simplerIndexUI <- function(id) {
 
             selectizeInput(
               ns("purpose_of_well"),
-              "Purpose of Well",
+              "Purpose of well",
               choices = NULL, # Populated in server
               selected = NULL,
               multiple = TRUE,
@@ -701,7 +701,7 @@ simplerIndexUI <- function(id) {
                 6,
                 actionButton(
                   ns("upload_selected"),
-                  "Upload Selected",
+                  "Upload selected",
                   class = "btn btn-primary btn-block",
                   icon = icon("upload")
                 )
@@ -710,7 +710,7 @@ simplerIndexUI <- function(id) {
                 6,
                 actionButton(
                   ns("upload_all"),
-                  "Upload All",
+                  "Upload sll",
                   class = "btn btn-success btn-block",
                   icon = icon("cloud-upload-alt")
                 )
@@ -947,6 +947,215 @@ simplerIndex <- function(id) {
     empty_well_entry <- function() {
       metadata <- setNames(as.list(rep(NA, length(well_fields))), well_fields)
       list(files = character(), metadata = metadata)
+    }
+
+    sanitize_metadata_for_insert <- function(metadata) {
+      if (is.null(metadata) || !is.list(metadata)) {
+        metadata <- empty_well_entry()$metadata
+      }
+
+      null_if_empty <- function(x) {
+        if (is.null(x) || length(x) == 0) {
+          return(NULL)
+        }
+        if (all(is.na(x))) {
+          return(NULL)
+        }
+        x
+      }
+
+      parse_numeric <- function(x) {
+        x <- null_if_empty(x)
+        if (is.null(x)) {
+          return(NULL)
+        }
+        out <- suppressWarnings(as.numeric(x[1]))
+        if (length(out) == 0 || is.na(out)) {
+          return(NULL)
+        }
+        out
+      }
+
+      parse_character_scalar <- function(x, empty_to_null = TRUE) {
+        x <- null_if_empty(x)
+        if (is.null(x)) {
+          return(if (empty_to_null) NULL else "")
+        }
+        val <- as.character(x[1])
+        if (empty_to_null) {
+          val <- trimws(val)
+          if (!nzchar(val)) {
+            return(NULL)
+          }
+        }
+        val
+      }
+
+      parse_character_vector <- function(x, default = NULL) {
+        x <- null_if_empty(x)
+        if (is.null(x)) {
+          if (is.null(default)) {
+            return(character(0))
+          }
+          return(as.character(default))
+        }
+        out <- as.character(x)
+        out <- trimws(out)
+        out <- out[nzchar(out)]
+        if (length(out) == 0) {
+          if (is.null(default)) {
+            return(character(0))
+          }
+          return(as.character(default))
+        }
+        out
+      }
+
+      parse_logical <- function(x, default = FALSE) {
+        x <- null_if_empty(x)
+        if (is.null(x)) {
+          return(default)
+        }
+        if (is.logical(x)) {
+          return(isTRUE(x))
+        }
+        if (is.numeric(x)) {
+          return(!is.na(x[1]) && x[1] != 0)
+        }
+        if (is.character(x)) {
+          val <- trimws(tolower(x[1]))
+          if (!nzchar(val)) {
+            return(default)
+          }
+          return(val %in% c("true", "t", "1", "yes", "y"))
+        }
+        default
+      }
+
+      parse_date <- function(x) {
+        x <- null_if_empty(x)
+        if (is.null(x)) {
+          return(NULL)
+        }
+        if (inherits(x, "Date")) {
+          return(x[1])
+        }
+        if (inherits(x, "POSIXt")) {
+          return(as.Date(x[1]))
+        }
+        if (is.character(x)) {
+          val <- trimws(x[1])
+          if (!nzchar(val)) {
+            return(NULL)
+          }
+          parsed <- try(as.Date(val), silent = TRUE)
+          if (inherits(parsed, "try-error") || is.na(parsed)) {
+            return(NULL)
+          }
+          return(parsed)
+        }
+        NULL
+      }
+
+      sanitized <- metadata
+      sanitized$name <- parse_character_scalar(
+        metadata$name,
+        empty_to_null = TRUE
+      )
+      sanitized$notes_borehole <- parse_character_scalar(
+        metadata$notes_borehole,
+        empty_to_null = TRUE
+      )
+      sanitized$notes_well <- parse_character_scalar(
+        metadata$notes_well,
+        empty_to_null = TRUE
+      )
+      sanitized$location_source <- parse_character_scalar(
+        metadata$location_source,
+        empty_to_null = TRUE
+      )
+
+      sanitized$share_with_borehole <- parse_character_vector(
+        metadata$share_with_borehole,
+        default = "public_reader"
+      )
+      sanitized$share_with_well <- parse_character_vector(
+        metadata$share_with_well,
+        default = sanitized$share_with_borehole
+      )
+      if (length(sanitized$share_with_well) == 0) {
+        sanitized$share_with_well <- sanitized$share_with_borehole
+      }
+
+      sanitized$drilled_by <- parse_numeric(metadata$drilled_by)
+      sanitized$purpose_of_borehole <- parse_numeric(
+        metadata$purpose_of_borehole
+      )
+      sanitized$purpose_of_well <- parse_numeric(metadata$purpose_of_well)
+
+      sanitized$purpose_borehole_inferred <- parse_logical(
+        metadata$purpose_borehole_inferred,
+        default = TRUE
+      )
+      inferred_well <- metadata$purpose_well_inferred
+      if (is.null(inferred_well)) {
+        inferred_well <- metadata$purpose_of_well_inferred
+      }
+      sanitized$purpose_well_inferred <- parse_logical(
+        inferred_well,
+        default = sanitized$purpose_borehole_inferred
+      )
+
+      sanitized$permafrost_present <- parse_logical(
+        metadata$permafrost_present,
+        default = FALSE
+      )
+      sanitized$is_well <- parse_logical(metadata$is_well, default = FALSE)
+
+      sanitized$date_drilled <- parse_date(metadata$date_drilled)
+
+      numeric_fields <- c(
+        "latitude",
+        "longitude",
+        "surveyed_ground_elev",
+        "depth_to_bedrock",
+        "permafrost_top",
+        "permafrost_bot",
+        "casing_od",
+        "drill_depth",
+        "top_of_screen",
+        "bottom_of_screen",
+        "well_head_stick_up",
+        "static_water_level",
+        "estimated_yield"
+      )
+      for (field in numeric_fields) {
+        sanitized[[field]] <- parse_numeric(metadata[[field]])
+      }
+
+      sanitized
+    }
+
+    validate_metadata_for_upload <- function(metadata) {
+      if (is.null(metadata$name)) {
+        showNotification(
+          "Please provide a borehole or well name before uploading.",
+          type = "error",
+          duration = 5
+        )
+        return(FALSE)
+      }
+
+      if (is.null(metadata$latitude) || is.null(metadata$longitude)) {
+        showNotification(
+          "Latitude and longitude are required before uploading a borehole.",
+          type = "error",
+          duration = 5
+        )
+        return(FALSE)
+      }
+
+      TRUE
     }
 
     update_borehole_details_selector <- function(preferred = NULL) {
@@ -2378,7 +2587,7 @@ simplerIndex <- function(id) {
         surveyed_ground_elev_unit = input$surveyed_ground_elev_unit,
         is_well = input$is_well,
         purpose_of_well = input$purpose_of_well,
-        purpose_of_well_inferred = input$purpose_of_well_inferred,
+        purpose_well_inferred = input$purpose_well_inferred,
         drilled_by = input$drilled_by,
         share_with_borehole = input$share_with_borehole,
         share_with_well = input$share_with_well
@@ -2811,6 +3020,11 @@ simplerIndex <- function(id) {
           metadata <- empty_well_entry()$metadata
         }
 
+        metadata <- sanitize_metadata_for_insert(metadata)
+        if (!validate_metadata_for_upload(metadata)) {
+          return()
+        }
+
         # Show processing notification
         showNotification(
           "Uploading selected borehole...",
@@ -2833,41 +3047,31 @@ simplerIndex <- function(id) {
               con = session$userData$AquaCache,
               path = pdf_file_path,
               well_name = metadata$name,
-              latitude = metadata$latitude,
-              longitude = metadata$longitude,
+              latitude = as.numeric(metadata$latitude),
+              longitude = as.numeric(metadata$longitude),
               location_source = metadata$location_source,
-              surveyed_ground_elev = metadata$surveyed_ground_elev,
-              purpose_of_borehole = if (
-                nchar(metadata$purpose_of_borehole) == 0
-              ) {
-                NULL
-              } else {
-                metadata$purpose_of_borehole
-              },
+              surveyed_ground_elev = as.numeric(metadata$surveyed_ground_elev),
+              purpose_of_borehole = metadata$purpose_of_borehole,
               purpose_borehole_inferred = metadata$purpose_borehole_inferred,
-              depth_to_bedrock = metadata$depth_to_bedrock,
+              depth_to_bedrock = as.numeric(metadata$depth_to_bedrock),
               permafrost_present = metadata$permafrost_present,
-              permafrost_top = metadata$permafrost_top,
-              permafrost_bot = metadata$permafrost_bot,
+              permafrost_top = as.numeric(metadata$permafrost_top),
+              permafrost_bot = as.numeric(metadata$permafrost_bot),
               date_drilled = metadata$date_drilled,
-              casing_od = metadata$casing_od,
+              casing_od = as.numeric(metadata$casing_od),
               is_well = metadata$is_well,
-              well_depth = metadata$drill_depth,
-              top_of_screen = metadata$top_of_screen,
-              bottom_of_screen = metadata$bottom_of_screen,
-              well_head_stick_up = metadata$well_head_stick_up,
-              static_water_level = metadata$static_water_level,
-              estimated_yield = metadata$estimated_yield,
+              well_depth = as.numeric(metadata$drill_depth),
+              top_of_screen = as.numeric(metadata$top_of_screen),
+              bottom_of_screen = as.numeric(metadata$bottom_of_screen),
+              well_head_stick_up = as.numeric(metadata$well_head_stick_up),
+              static_water_level = as.numeric(metadata$static_water_level),
+              estimated_yield = as.numeric(metadata$estimated_yield),
               notes_borehole = metadata$notes_borehole,
               notes_well = metadata$notes_well,
               share_with_borehole = metadata$share_with_borehole,
               drilled_by = metadata$drilled_by,
               drill_method = NULL,
-              purpose_of_well = if (nchar(metadata$purpose_of_well) == 0) {
-                NULL
-              } else {
-                metadata$purpose_of_well
-              },
+              purpose_of_well = metadata$purpose_of_well,
               purpose_well_inferred = metadata$purpose_well_inferred,
               share_with_well = metadata$share_with_well
             )
@@ -2883,14 +3087,6 @@ simplerIndex <- function(id) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
             showNotification(
               paste("Error uploading borehole:", e$message),
-              type = "error",
-              duration = 5
-            )
-          },
-          warning = function(w) {
-            DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
-            showNotification(
-              paste("Error uploading borehole:", w$message),
               type = "error",
               duration = 5
             )
@@ -2953,6 +3149,12 @@ simplerIndex <- function(id) {
           metadata <- empty_well_entry()$metadata
         }
 
+        metadata <- sanitize_metadata_for_insert(metadata)
+        if (!validate_metadata_for_upload(metadata)) {
+          error_count <- error_count + 1
+          next
+        }
+
         tryCatch(
           {
             AquaCache::dbTransBegin(session$userData$AquaCache)
@@ -2965,31 +3167,25 @@ simplerIndex <- function(id) {
             # Call AquaCache function with the metadata
             result <- AquaCache::insertACBorehole(
               well_name = metadata$name,
-              latitude = metadata$latitude,
-              longitude = metadata$longitude,
+              latitude = as.numeric(metadata$latitude),
+              longitude = as.numeric(metadata$longitude),
               location_source = metadata$location_source,
-              surveyed_ground_elev = metadata$surveyed_ground_elev,
-              purpose_of_borehole = if (
-                nchar(metadata$purpose_of_borehole) == 0
-              ) {
-                NULL
-              } else {
-                metadata$purpose_of_borehole
-              },
+              surveyed_ground_elev = as.numeric(metadata$surveyed_ground_elev),
+              purpose_of_borehole = metadata$purpose_of_borehole,
               purpose_borehole_inferred = metadata$purpose_borehole_inferred,
-              depth_to_bedrock = metadata$depth_to_bedrock,
+              depth_to_bedrock = as.numeric(metadata$depth_to_bedrock),
               permafrost_present = metadata$permafrost_present,
-              permafrost_top = metadata$permafrost_top,
-              permafrost_bot = metadata$permafrost_bot,
+              permafrost_top = as.numeric(metadata$permafrost_top),
+              permafrost_bot = as.numeric(metadata$permafrost_bot),
               date_drilled = metadata$date_drilled,
-              casing_od = metadata$casing_od,
+              casing_od = as.numeric(metadata$casing_od),
               is_well = metadata$is_well,
-              well_depth = metadata$drill_depth,
-              top_of_screen = metadata$top_of_screen,
-              bottom_of_screen = metadata$bottom_of_screen,
-              well_head_stick_up = metadata$well_head_stick_up,
-              static_water_level = metadata$static_water_level,
-              estimated_yield = metadata$estimated_yield,
+              well_depth = as.numeric(metadata$drill_depth),
+              top_of_screen = as.numeric(metadata$top_of_screen),
+              bottom_of_screen = as.numeric(metadata$bottom_of_screen),
+              well_head_stick_up = as.numeric(metadata$well_head_stick_up),
+              static_water_level = as.numeric(metadata$static_water_level),
+              estimated_yield = as.numeric(metadata$estimated_yield),
               notes_borehole = metadata$notes_borehole,
               notes_well = metadata$notes_well,
               con = session$userData$AquaCache,
@@ -2997,11 +3193,7 @@ simplerIndex <- function(id) {
               drilled_by = metadata$drilled_by,
               drill_method = NULL,
               path = pdf_file_path,
-              purpose_of_well = if (nchar(metadata$purpose_of_well) == 0) {
-                NULL
-              } else {
-                metadata$purpose_of_well
-              },
+              purpose_of_well = metadata$purpose_of_well,
               purpose_well_inferred = metadata$purpose_well_inferred,
               share_with_well = metadata$share_with_well
             )
@@ -3031,21 +3223,6 @@ simplerIndex <- function(id) {
                 well_id,
                 ": ",
                 e$message,
-                "\n"
-              ),
-              type = "error",
-              duration = 10
-            )
-          },
-          warning = function(w) {
-            DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
-            error_count <<- error_count + 1
-            showNotification(
-              paste0(
-                "Error uploading borehole ",
-                well_id,
-                ": ",
-                w$message,
                 "\n"
               ),
               type = "error",

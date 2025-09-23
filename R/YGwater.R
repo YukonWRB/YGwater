@@ -158,17 +158,17 @@ YGwater <- function(
   #... there are other necessary tables, but if the user has access to the ones listed above everything is probably fine.
 
   # Check the necessary DB version number
-  ver <- as.numeric(DBI::dbGetQuery(
-    con,
-    "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
-  )[1, 1])
-  if (ver < 27) {
-    stop(
-      "The aquacache database version is too old. Please update to at least version 27. Current version is ",
-      ver,
-      ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache documentation for more details."
-    )
-  }
+  # ver <- as.numeric(DBI::dbGetQuery(
+  #   con,
+  #   "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
+  # )[1, 1])
+  # if (ver < 27) {
+  #   stop(
+  #     "The aquacache database version is too old. Please update to at least version 27. Current version is ",
+  #     ver,
+  #     ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache documentation for more details."
+  #   )
+  # }
 
   # Disconnect from the database
   DBI::dbDisconnect(con)
