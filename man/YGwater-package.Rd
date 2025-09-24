@@ -18,13 +18,9 @@ Useful links:
 \author{
 \strong{Maintainer}: Ghislain de Laplante \email{ghislaindel@gmail.com} (\href{https://orcid.org/0000-0002-5093-9185}{ORCID})
 
-Authors:
-\itemize{
-  \item Cole Fischer \email{cole.fischer@hotmail.com} (\href{https://orcid.org/0000-0002-7266-5760}{ORCID}) [contributor]
-}
-
 Other contributors:
 \itemize{
+  \item Cole Fischer \email{cole.fischer@hotmail.com} (\href{https://orcid.org/0000-0002-7266-5760}{ORCID}) [contributor]
   \item Emilie Stewart-Jones \email{emilie.stewart-jones@yukon.ca} [contributor]
   \item Everett Snieder \email{everett.snieder@gmail.com} (\href{https://orcid.org/0000-0003-4997-3404}{ORCID}) [contributor]
 }

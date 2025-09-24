@@ -301,11 +301,11 @@ plotTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
-            " LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+            ";"
           )
         )
       } else {
@@ -313,13 +313,13 @@ plotTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
             " AND ts.aggregation_type_id = ",
             aggregation_type_id,
-            " LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+            ";"
           )
         )
       }
@@ -328,13 +328,13 @@ plotTimeseries <- function(
       exist_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts WHERE ts.location_id = ",
+          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
           location_id,
           " AND ts.parameter_id = ",
           parameter_code,
           " AND ts.record_rate = '",
           record_rate,
-          "' LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+          "';"
         )
       )
     } else {
@@ -342,7 +342,7 @@ plotTimeseries <- function(
       exist_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, ls.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts WHERE ts.location_id = ",
+          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, ls.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
           location_id,
           " AND ts.parameter_id = ",
           parameter_code,
@@ -350,7 +350,7 @@ plotTimeseries <- function(
           record_rate,
           "' AND ts.aggregation_type_id = ",
           aggregation_type_id,
-          " LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+          ";"
         )
       )
     }
@@ -375,13 +375,13 @@ plotTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
             " AND ts.parameter_id = ",
             parameter_code,
-            " LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+            ";"
           )
         )
       } else {
@@ -389,7 +389,7 @@ plotTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -397,7 +397,7 @@ plotTimeseries <- function(
             parameter_code,
             " AND ts.aggregation_type_id = ",
             aggregation_type_id,
-            " LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+            ";"
           )
         )
       }
@@ -406,7 +406,7 @@ plotTimeseries <- function(
       exist_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts WHERE ts.location_id = ",
+          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
           location_id,
           " AND ts.sub_location_id = ",
           sub_location_id,
@@ -414,7 +414,7 @@ plotTimeseries <- function(
           parameter_code,
           " AND ts.record_rate = '",
           record_rate,
-          "' LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+          "';"
         )
       )
     } else {
@@ -422,7 +422,7 @@ plotTimeseries <- function(
       exist_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts WHERE ts.location_id = ",
+          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
           location_id,
           " AND ts.sub_location_id = ",
           sub_location_id,
@@ -432,7 +432,7 @@ plotTimeseries <- function(
           record_rate,
           "' AND ts.aggregation_type_id = ",
           aggregation_type_id,
-          " LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+          ";"
         )
       )
     }
