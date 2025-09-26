@@ -448,8 +448,8 @@ app_ui <- function(request) {
       # Now a footer, rendered in the server for language support
       div(
         hr(),
-        uiOutput("footer_ui"),
+        uiOutput("footer_ui")
       )
-    ), # End of page_fluid
+    ) # End of page_fluid
   ) # End tagList
 }

@@ -575,8 +575,7 @@ plotMultiTimeseries <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  
-              LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id 
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id 
               WHERE ts.location_id = ",
               location_id,
               " AND ts.parameter_id = ",
@@ -589,7 +588,7 @@ plotMultiTimeseries <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.parameter_id = ",
               parameter_code,
@@ -604,7 +603,7 @@ plotMultiTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
@@ -618,7 +617,7 @@ plotMultiTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
@@ -639,7 +638,7 @@ plotMultiTimeseries <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.sub_location_id = ",
               sub_location_id,
@@ -653,7 +652,7 @@ plotMultiTimeseries <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.sub_location_id = ",
               sub_location_id,
@@ -670,7 +669,7 @@ plotMultiTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -686,7 +685,7 @@ plotMultiTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -1597,7 +1596,7 @@ plotMultiTimeseries <- function(
         text = title,
         x = 0.05,
         xref = "container",
-        font = list(size = 18 * axis_scale)
+        font = list(size = 16 * axis_scale)
       ),
       margin = list(
         l = (80 + (30 * ((n_axes - 1) %/% 2))) * axis_scale,
@@ -1619,7 +1618,7 @@ plotMultiTimeseries <- function(
         font = list(size = legend_scale * 12),
         orientation = legend_position
       ),
-      font = list(family = "DejaVu Sans")
+      font = list(family = "Nunito Sans")
     )
 
     # Combine axis layouts with other layout settings
@@ -1744,7 +1743,7 @@ plotMultiTimeseries <- function(
             title = paste0(parameter_name, " (", timeseries[i, "units"], ")"),
             showgrid = gridy,
             showline = TRUE,
-            titlefont = list(size = axis_scale * 14),
+            titlefont = list(size = axis_scale * 13),
             tickfont = list(size = axis_scale * 12)
           ),
           margin = list(b = 0, t = 40 * axis_scale, l = 50 * axis_scale),
@@ -1753,7 +1752,7 @@ plotMultiTimeseries <- function(
             font = list(size = legend_scale * 12),
             orientation = legend_position
           ),
-          font = list(family = "DejaVu Sans")
+          font = list(family = "Nunito Sans")
         ) %>%
         plotly::config(locale = lang)
 
@@ -1789,7 +1788,7 @@ plotMultiTimeseries <- function(
     ) %>%
       plotly::layout(
         annotations = subtitles,
-        font = list(family = "DejaVu Sans")
+        font = list(family = "Nunito Sans")
       )
 
     # Link axes if desired

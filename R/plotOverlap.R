@@ -377,7 +377,7 @@ plotOverlap <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
@@ -404,7 +404,7 @@ plotOverlap <- function(
       exist_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
           location_id,
           " AND ts.parameter_id = ",
           parameter_code,
@@ -418,7 +418,7 @@ plotOverlap <- function(
       exist_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
           location_id,
           " AND ts.parameter_id = ",
           parameter_code,
@@ -451,7 +451,7 @@ plotOverlap <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -465,7 +465,7 @@ plotOverlap <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -482,7 +482,7 @@ plotOverlap <- function(
       exist_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
           location_id,
           " AND ts.sub_location_id = ",
           sub_location_id,
@@ -498,7 +498,7 @@ plotOverlap <- function(
       exist_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts  LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
           location_id,
           " AND ts.sub_location_id = ",
           sub_location_id,
@@ -1242,7 +1242,7 @@ plotOverlap <- function(
       margin = list(b = 0, t = 40 * axis_scale, l = 50 * axis_scale),
       hovermode = if (hover) "x unified" else ("none"),
       legend = list(font = list(size = legend_scale * 12)),
-      font = list(family = "DejaVu Sans")
+      font = list(family = "Nunito Sans")
     ) %>%
     plotly::config(locale = lang)
 

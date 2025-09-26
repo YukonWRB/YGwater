@@ -53,10 +53,11 @@ addTimeseries <- function(id) {
       moduleData$timeseries_display <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "
-        SELECT ts.timeseries_id, l.name AS location_name, sl.sub_location_name, ts.timezone_daily_calc AS time_zone, p.param_name, m.media_type, at.aggregation_type, ts.z AS depth_height_m, ts.sensor_priority, o.name AS owner, ts.record_rate
+        SELECT ts.timeseries_id, l.name AS location_name, sl.sub_location_name, ts.timezone_daily_calc AS time_zone, p.param_name, m.media_type, at.aggregation_type, lz.z_meters AS z, AS depth_height_m, ts.sensor_priority, o.name AS owner, ts.record_rate
         FROM timeseries ts
         INNER JOIN locations l ON ts.location_id = l.location_id
         LEFT JOIN sub_locations sl ON ts.sub_location_id = sl.sub_location_id
+        LEFT JOIN locations_z lz ON ts.z_id = lz.z_id
         INNER JOIN parameters p ON ts.parameter_id = p.parameter_id
         INNER JOIN media_types m ON ts.media_id = m.media_id
         INNER JOIN aggregation_types at ON ts.aggregation_type_id = at.aggregation_type_id

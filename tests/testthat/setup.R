@@ -1,7 +1,9 @@
 # Check and load python environment for tests on plotly objects
 
 if (!isTRUE(getOption("YGwater_pythonSetupDone", FALSE))) {
-  warning("tests on plotly objects use an outdated version of the 'kaleido' python package. You should try to reinstall kaleido periodically. See the 'setup.R' file in tests where this message originates.")
+  warning(
+    "tests on plotly objects use an outdated version of the 'kaleido' python package. You should try to reinstall kaleido periodically. See the 'setup.R' file in tests where this message originates."
+  )
 
   check_miniconda_installed()
 
@@ -25,24 +27,23 @@ if (!isTRUE(getOption("YGwater_pythonSetupDone", FALSE))) {
   options(YGwater_pythonSetupDone = TRUE)
 }
 
-# # Set NOT_CRAN = TRUE to avoid covr checks not running because they don't know otherwise
-# Sys.setenv(NOT_CRAN = "true")
-# message("Setting NOT_CRAN = TRUE to avoid covr checks not running because they don't know otherwise. Fix this if ever publishing to CRAN.")
-
 
 # If on CI, set environment variables which would otherwise be found in the user's .Renviron file.
-# We're working with a micro postgres database here installed on the CI environment!
+# We're working with a micro postgres database here installed on the CI environment; see the .github/workflows/R-CMD-check.yaml file.
+# This DB is created with AquaCache::create_test_db() and default parameters, expect for the username which uses 'postgres'
 if (Sys.getenv("CI") == "true") {
-  Sys.setenv(aquacacheName = "testdb",
-             aquacacheHost = "localhost",
-             aquacachePort = "5432",
-             aquacacheUser = "runner",
-             aquacachePass = "runner",
-             aquacacheAdminUser = "runner",
-             aquacacheAdminPass = "runner",
-             AQUSER = "readonly",
-             AQPASS = "WaterIsLife",
-             AQSERVER = "https://yukon.aquaticinformatics.net/AQUARIUS")
+  Sys.setenv(
+    aquacacheName = "testdb",
+    aquacacheHost = "localhost",
+    aquacachePort = "5432",
+    aquacacheUser = "runner",
+    aquacachePass = "runner",
+    aquacacheAdminUser = "runner",
+    aquacacheAdminPass = "runner",
+    AQUSER = "readonly",
+    AQPASS = "WaterIsLife",
+    AQSERVER = "https://yukon.aquaticinformatics.net/AQUARIUS"
+  )
   message("Running on CI, setting environment accordingly.")
 }
 
