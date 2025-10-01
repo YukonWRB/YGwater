@@ -3,7 +3,7 @@
 \docType{package}
 \name{YGwater-package}
 \alias{YGwater-package}
-\title{YGwater: Utility functions for the Yukon Water Science and Stewardship Branch}
+\title{YGwater: R functions and applications for the Yukon Water Science and Stewardship Branch}
 \description{
 Stores various functions for use across the Water Science and Stweardship Branch disciplines, including for generating reports, gathering and processing data, and creating plots.
 }
