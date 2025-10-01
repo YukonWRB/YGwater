@@ -545,7 +545,8 @@ app_server <- function(input, output, session) {
             label = bsicons::bs_icon(
               "hand-thumbs-up",
               size = "2em",
-              fill = "#244C5A"
+              fill = "#244C5A",
+              title = "Thumbs up"
             ),
             class = "btn btn-link",
             width = "50px"
@@ -555,7 +556,8 @@ app_server <- function(input, output, session) {
             label = bsicons::bs_icon(
               "hand-thumbs-down",
               size = "2em",
-              fill = "#244C5A"
+              fill = "#244C5A",
+              title = "Thumbs down"
             ),
             class = "btn btn-link",
             width = "50px"
