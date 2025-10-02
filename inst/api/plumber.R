@@ -26,8 +26,6 @@ function(req, res) {
 #* @get /locations
 #* @serializer csv
 function(req, res, lang = "en") {
-  host <- Sys.getenv("aquacacheHost")
-  stop("Hit the stop. Host: ", host)
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
