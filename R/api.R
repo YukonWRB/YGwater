@@ -15,11 +15,15 @@
 api <- function(host = "0.0.0.0", port = 8000) {
   rlang::check_installed("plumber", reason = "required to run the YGwater API")
 
-  api_path <- system.file("api", "plumber.R", package = "YGwater")
+  api_path <- system.file("api/plumber.R", package = "YGwater")
   if (api_path == "") {
-    # when running from source
-    api_path <- "inst/api/plumber.R"
+    stop("YGwater API not found.")
   }
   pr <- plumber::plumb(api_path)
+
+  spec <- pr$getApiSpec()
+  spec$servers <- list(list(url = "/api"))
+  pr$setApiSpec(spec)
+
   pr$run(host = host, port = port)
 }
