@@ -74,14 +74,17 @@ app_ui <- function(request) {
         }
       "
       )),
-      tags$style(HTML(
-        "
+      tags$style(
+        HTML(
+          "
     .alert { white-space: normal !important; }
   "
-      ))
+        )
+      )
     ),
     # page_fluid is the main container for the app, which contains the top bar, nav bar, content, and footer.
     page_fluid(
+      style = "padding:0; margin:0; max-width:100%;", # Remove the default padding/margin for better space utilization
       # Make the container for the top bar, which sits above the nav bar
       div(
         class = "top-bar-container d-none d-md-block",
@@ -140,10 +143,10 @@ app_ui <- function(request) {
           bg = "#244C5A",
           collapsible = TRUE,
           style = "z-index:1002"
-        ), # Just above any leaflet possibilities which only go up to 1000
+        ), # Just above any leaflet possibilities which only go up to 1000. Otherwise the map overlays the open nav menus.
         fluid = TRUE,
         lang = "en",
-        theme = NULL, # Theme is set earlier by css file referene in globals (THIS IS NOT WORKING)
+        theme = NULL, # Theme is set earlier by css file reference
         gap = "10px",
         nav_panel(
           title = uiOutput("homeNavTitle"),

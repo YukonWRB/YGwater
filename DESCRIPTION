@@ -70,6 +70,7 @@ Suggests:
     officer,
     officedown,
     pdftools,
+    plumber,
     purrr,
     ragg,
     reticulate,
