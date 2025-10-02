@@ -5,6 +5,7 @@
 #'
 #' @param host The host address to bind the server to. Default is '0.0.0.0'.
 #' @param port The port number to listen on. Default is 8000.
+#' @param server The server path for the API. Default is '/water-data/api'.
 #' @return Runs the API server.
 #' @export
 #' @examples
@@ -12,7 +13,7 @@
 #' run_api()
 #' }
 
-api <- function(host = "0.0.0.0", port = 8000) {
+api <- function(host = "0.0.0.0", port = 8000, server = "/water-data/api") {
   rlang::check_installed("plumber", reason = "required to run the YGwater API")
 
   api_path <- system.file("api/plumber.R", package = "YGwater")
@@ -22,7 +23,12 @@ api <- function(host = "0.0.0.0", port = 8000) {
   pr <- plumber::plumb(api_path)
 
   spec <- pr$getApiSpec()
-  spec$servers <- list(list(url = "/api"))
+  spec$components$securitySchemes$BasicAuth <- list(
+    type = "http",
+    scheme = "basic"
+  )
+  spec$security <- list(list(BasicAuth = list()))
+  spec$servers <- list(list(url = server))
   pr$setApiSpec(spec)
 
   pr$run(host = host, port = port)

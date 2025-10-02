@@ -4,12 +4,14 @@
 \alias{api}
 \title{Run the YGwater API}
 \usage{
-api(host = "0.0.0.0", port = 8000)
+api(host = "0.0.0.0", port = 8000, server = "/water-data/api")
 }
 \arguments{
 \item{host}{The host address to bind the server to. Default is '0.0.0.0'.}
 
 \item{port}{The port number to listen on. Default is 8000.}
+
+\item{server}{The server path for the API. Default is '/water-data/api'.}
 }
 \value{
 Runs the API server.
