@@ -31,6 +31,9 @@ function(req, res, lang = "en") {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    host = "localhost",
+    port = 5432,
+    name = "aquacache",
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -296,7 +299,7 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
 #' Return sample results
 #* @param sample_ids Sample ID (required, integer string separated by commas).
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters results to these parameters.
-#* @get /samples/<sample_id>/results
+#* @get /samples/<sample_ids>/results
 #* @serializer csv
 function(req, res, sample_ids, parameters = NA) {
   if (missing(sample_ids)) {
