@@ -1,6 +1,6 @@
 Package: YGwater
 Title: R functions and applications for the Yukon Water Science and Stewardship Branch
-Version: 1.7.2
+Version: 1.8.0
 Authors@R: c(
     person("Ghislain", "de Laplante", , email = "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -12,7 +12,7 @@ Authors@R: c(
   )
 Description: Stores various functions for use across the Water Science and
     Stweardship Branch disciplines, including for generating reports,
-    gathering and processing data, and creating plots.
+    gathering and processing data, and creating plots. Also includes several Shiny applications and an API for accessing the AquaCache database.
 License: AGPL (>= 3) + file LICENSE
 URL: https://github.com/YukonWRB/YGwater
 BugReports: https://github.com/YukonWRB/YGWater/issues
