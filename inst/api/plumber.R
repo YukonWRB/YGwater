@@ -1,5 +1,5 @@
 #' @apiTitle AquaCache API
-#' @apiDescription Minimal API for programmatic access to the aquacache database.
+#' @apiDescription API for programmatic access to the aquacache database.
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
@@ -29,9 +29,6 @@ function(req, res, lang = "en") {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
-    host = "localhost",
-    port = 5432,
-    name = "aquacache",
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)

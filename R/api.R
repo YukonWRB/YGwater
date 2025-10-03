@@ -3,9 +3,12 @@
 #' @description
 #' Launches the YGwater API using the plumber package.
 #'
-#' @param host The host address to bind the server to. Default is '0.0.0.0'.
+#' @param host The host address to bind the server to. Default is the local host.
 #' @param port The port number to listen on. Default is 8000.
 #' @param server The server path for the API. Default is '/water-data/api'.
+#' @param dbName The name of the PostgreSQL database. Default is 'aquacache'.
+#' @param dbHost The host address of the PostgreSQL database. Default is 'localhost'.
+#' @param dbPort The port number of the PostgreSQL database. Default is 5432.
 #' @return Runs the API server.
 #' @export
 #' @examples
@@ -13,7 +16,14 @@
 #' run_api()
 #' }
 
-api <- function(host = "0.0.0.0", port = 8000, server = "/water-data/api") {
+api <- function(
+  host = "127.0.0.1",
+  port = 8000,
+  server = "/water-data/api",
+  dbName = 'aquacache',
+  dbHost = 'localhost',
+  dbPort = 5432
+) {
   rlang::check_installed("plumber", reason = "required to run the YGwater API")
 
   api_path <- system.file("api/plumber.R", package = "YGwater")
@@ -21,6 +31,11 @@ api <- function(host = "0.0.0.0", port = 8000, server = "/water-data/api") {
     stop("YGwater API not found.")
   }
   pr <- plumber::plumb(api_path)
+
+  # Set environment variables for database connection
+  Sys.setenv(aquacacheName = dbName)
+  Sys.setenv(aquacacheHost = dbHost)
+  Sys.setenv(aquacachePort = dbPort)
 
   spec <- pr$getApiSpec()
   spec$components$securitySchemes$BasicAuth <- list(
