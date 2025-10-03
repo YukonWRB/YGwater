@@ -10,22 +10,21 @@ function(req, res) {
     "^/timeseries$",
     "^/parameters$",
     "^/samples(?:$|/)",
-    "^/snow-survey(?:$|/)"
+    "^/snow-survey(?:$|/)",
+    "^/__docs__/"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
     any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
 
   hdr <- req$HTTP_AUTHORIZATION %||% ""
-
   if (hdr == "") {
     if (!is_public_ok) {
       res$status <- 401
       res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
       return(list(error = "Authentication required"))
     }
-    # anonymous → service account (set via systemd EnvironmentFile)
-    req$user <- Sys.getenv("PUBLIC_USER", "public_reader")
-    req$password <- Sys.getenv("PUBLIC_PASS", "")
+    req$user <- "public_reader"
+    req$password <- "aquacache"
     return(plumber::forward())
   }
 
