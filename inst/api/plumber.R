@@ -4,20 +4,41 @@
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
 function(req, res) {
-  hdr <- req$HTTP_AUTHORIZATION
-  if (is.null(hdr)) {
-    res$status <- 401
-    res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
-    return(list(error = "Authentication required"))
+  # Allow anonymous only for read-only GET on these routes
+  public_paths <- c(
+    "^/locations$",
+    "^/timeseries$",
+    "^/parameters$",
+    "^/samples(?:$|/)",
+    "^/snow-survey(?:$|/)"
+  )
+  is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
+    any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
+
+  hdr <- req$HTTP_AUTHORIZATION %||% ""
+
+  if (hdr == "") {
+    if (!is_public_ok) {
+      res$status <- 401
+      res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
+      return(list(error = "Authentication required"))
+    }
+    # anonymous → service account (set via systemd EnvironmentFile)
+    req$user <- Sys.getenv("PUBLIC_USER", "public_reader")
+    req$password <- Sys.getenv("PUBLIC_PASS", "")
+    return(plumber::forward())
   }
-  cred <- rawToChar(jsonlite::base64_dec(sub("^Basic ", "", hdr)))
-  parts <- strsplit(cred, ":", fixed = TRUE)[[1]]
-  if (length(parts) != 2) {
+
+  # Parse Basic user:pass (split on first :)
+  b64 <- sub("^Basic\\s+", "", hdr)
+  cred <- rawToChar(jsonlite::base64_dec(b64))
+  i <- regexpr(":", cred, fixed = TRUE)
+  if (i < 1) {
     res$status <- 401
     return(list(error = "Invalid authentication header"))
   }
-  req$user <- parts[1]
-  req$password <- parts[2]
+  req$user <- substr(cred, 1, i - 1)
+  req$password <- substr(cred, i + 1, nchar(cred))
   plumber::forward()
 }
 
