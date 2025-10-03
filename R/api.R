@@ -13,7 +13,7 @@
 #' @export
 #' @examples
 #' \dontrun{
-#' run_api()
+#' api()
 #' }
 
 api <- function(

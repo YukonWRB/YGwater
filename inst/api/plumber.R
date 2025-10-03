@@ -355,3 +355,97 @@ function(req, res, sample_ids, parameters = NA) {
   }
   return(out)
 }
+
+
+#' Return basic snow survey data
+#* @get /snow-survey/data
+#* @serializer csv
+
+function(req, res) {
+  con <- YGwater::AquaConnect(
+    username = req$user,
+    password = req$password,
+    silent = TRUE
+  )
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  res <- snowInfo(
+    con = con,
+    complete_yrs = FALSE,
+    plots = FALSE,
+    quiet = TRUE,
+    stats = FALSE,
+    save_path = NULL
+  )$measurements
+  return(res)
+}
+
+#' Return basic snow survey metadata
+#* @get /snow-survey/metadata
+#* @serializer csv
+
+function(req, res) {
+  con <- YGwater::AquaConnect(
+    username = req$user,
+    password = req$password,
+    silent = TRUE
+  )
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  res <- snowInfo(
+    con = con,
+    complete_yrs = FALSE,
+    plots = FALSE,
+    quiet = TRUE,
+    stats = FALSE,
+    save_path = NULL
+  )$locations
+  return(res)
+}
+
+#' Return snow survey statistics
+#* @get /snow-survey/stats
+#* @serializer csv
+
+function(req, res) {
+  con <- YGwater::AquaConnect(
+    username = req$user,
+    password = req$password,
+    silent = TRUE
+  )
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  res <- snowInfo(
+    con = con,
+    complete_yrs = TRUE,
+    plots = FALSE,
+    quiet = TRUE,
+    stats = TRUE,
+    save_path = NULL
+  )$stats
+  return(res)
+}
+
+#' Return basic snow survey trends
+#* @get /snow-survey/trends
+#* @serializer csv
+
+function(req, res) {
+  con <- YGwater::AquaConnect(
+    username = req$user,
+    password = req$password,
+    silent = TRUE
+  )
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  res <- snowInfo(
+    con = con,
+    complete_yrs = TRUE,
+    plots = FALSE,
+    quiet = TRUE,
+    stats = TRUE,
+    save_path = NULL
+  )$trends
+
+  return(res)
+}

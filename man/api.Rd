@@ -4,14 +4,27 @@
 \alias{api}
 \title{Run the YGwater API}
 \usage{
-api(host = "0.0.0.0", port = 8000, server = "/water-data/api")
+api(
+  host = "127.0.0.1",
+  port = 8000,
+  server = "/water-data/api",
+  dbName = "aquacache",
+  dbHost = "localhost",
+  dbPort = 5432
+)
 }
 \arguments{
-\item{host}{The host address to bind the server to. Default is '0.0.0.0'.}
+\item{host}{The host address to bind the server to. Default is the local host.}
 
 \item{port}{The port number to listen on. Default is 8000.}
 
 \item{server}{The server path for the API. Default is '/water-data/api'.}
+
+\item{dbName}{The name of the PostgreSQL database. Default is 'aquacache'.}
+
+\item{dbHost}{The host address of the PostgreSQL database. Default is 'localhost'.}
+
+\item{dbPort}{The port number of the PostgreSQL database. Default is 5432.}
 }
 \value{
 Runs the API server.
@@ -21,6 +34,6 @@ Launches the YGwater API using the plumber package.
 }
 \examples{
 \dontrun{
-run_api()
+api()
 }
 }
