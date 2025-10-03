@@ -369,7 +369,7 @@ function(req, res) {
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- snowInfo(
+  res <- YGwater::snowInfo(
     con = con,
     complete_yrs = FALSE,
     plots = FALSE,
@@ -392,7 +392,7 @@ function(req, res) {
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- snowInfo(
+  res <- YGwater::snowInfo(
     con = con,
     complete_yrs = FALSE,
     plots = FALSE,
@@ -415,7 +415,7 @@ function(req, res) {
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- snowInfo(
+  res <- YGwater::snowInfo(
     con = con,
     complete_yrs = TRUE,
     plots = FALSE,
@@ -438,7 +438,7 @@ function(req, res) {
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- snowInfo(
+  res <- YGwater::snowInfo(
     con = con,
     complete_yrs = TRUE,
     plots = FALSE,
