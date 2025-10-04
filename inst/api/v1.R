@@ -310,7 +310,6 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
   return(out)
 }
 
-
 #' Return sample results
 #* @param sample_ids Sample ID (required, integer string separated by commas).
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters results to these parameters.
