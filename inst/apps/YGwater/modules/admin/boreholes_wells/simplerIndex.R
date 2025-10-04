@@ -1057,6 +1057,131 @@ simplerIndex <- function(id) {
         NULL
       }
 
+      normalize_unit <- function(unit) {
+        unit <- null_if_empty(unit)
+        if (is.null(unit)) {
+          return(NULL)
+        }
+        unit_val <- unit[1]
+        if (inherits(unit_val, "factor")) {
+          unit_val <- as.character(unit_val)
+        }
+        unit_val <- trimws(as.character(unit_val))
+        if (!nzchar(unit_val)) {
+          return(NULL)
+        }
+        unit_val
+      }
+
+      convert_length_to_m <- function(value, unit) {
+        if (is.null(value)) {
+          return(NULL)
+        }
+        unit_val <- normalize_unit(unit)
+        if (is.null(unit_val)) {
+          return(value)
+        }
+        unit_lower <- tolower(unit_val)
+        if (unit_lower %in% c("ft", "foot", "feet")) {
+          return(value * 0.3048)
+        }
+        if (unit_lower %in% c(
+          "cm",
+          "centimeter",
+          "centimetre",
+          "centimeters",
+          "centimetres"
+        )) {
+          return(value / 100)
+        }
+        if (unit_lower %in% c(
+          "mm",
+          "millimeter",
+          "millimetre",
+          "millimeters",
+          "millimetres"
+        )) {
+          return(value / 1000)
+        }
+        if (unit_lower %in% c(
+          "km",
+          "kilometer",
+          "kilometre",
+          "kilometers",
+          "kilometres"
+        )) {
+          return(value * 1000)
+        }
+        value
+      }
+
+      convert_length_to_mm <- function(value, unit) {
+        if (is.null(value)) {
+          return(NULL)
+        }
+        unit_val <- normalize_unit(unit)
+        if (is.null(unit_val)) {
+          return(value)
+        }
+        unit_lower <- tolower(unit_val)
+        if (unit_lower %in% c("inch", "in", "\"")) {
+          return(value * 25.4)
+        }
+        if (unit_lower %in% c("ft", "foot", "feet")) {
+          return(value * 304.8)
+        }
+        if (unit_lower %in% c(
+          "cm",
+          "centimeter",
+          "centimetre",
+          "centimeters",
+          "centimetres"
+        )) {
+          return(value * 10)
+        }
+        if (unit_lower %in% c(
+          "m",
+          "meter",
+          "metre",
+          "meters",
+          "metres"
+        )) {
+          return(value * 1000)
+        }
+        value
+      }
+
+      convert_flow_to_lpm <- function(value, unit) {
+        if (is.null(value)) {
+          return(NULL)
+        }
+        unit_val <- normalize_unit(unit)
+        if (is.null(unit_val)) {
+          return(value)
+        }
+        unit_lower <- tolower(unit_val)
+        if (unit_lower %in% c("l/s", "lps", "l per s", "l/sec")) {
+          return(value * 60)
+        }
+        if (unit_lower %in% c("l/min", "lpm", "l per min", "l/minute")) {
+          return(value)
+        }
+        if (unit_lower %in% c(
+          "g/min",
+          "gpm",
+          "gal/min",
+          "gallon/min",
+          "gallons/min",
+          "gallons per minute"
+        )) {
+          return(value * 3.785411784)
+        }
+        if (unit_lower %in% c("g/s", "gal/s", "gallons per second")) {
+          return(value * 3.785411784 * 60)
+        }
+        value
+      }
+
       sanitized <- metadata
       sanitized$name <- parse_character_scalar(
         metadata$name,
@@ -1132,6 +1257,51 @@ simplerIndex <- function(id) {
       for (field in numeric_fields) {
         sanitized[[field]] <- parse_numeric(metadata[[field]])
       }
+
+      sanitized$surveyed_ground_elev <- convert_length_to_m(
+        sanitized$surveyed_ground_elev,
+        metadata$surveyed_ground_elev_unit
+      )
+      sanitized$depth_to_bedrock <- convert_length_to_m(
+        sanitized$depth_to_bedrock,
+        metadata$depth_to_bedrock_unit
+      )
+      sanitized$permafrost_top <- convert_length_to_m(
+        sanitized$permafrost_top,
+        metadata$permafrost_top_unit
+      )
+      sanitized$permafrost_bot <- convert_length_to_m(
+        sanitized$permafrost_bot,
+        metadata$permafrost_bot_unit
+      )
+      sanitized$drill_depth <- convert_length_to_m(
+        sanitized$drill_depth,
+        metadata$drill_depth_unit
+      )
+      sanitized$top_of_screen <- convert_length_to_m(
+        sanitized$top_of_screen,
+        metadata$top_of_screen_unit
+      )
+      sanitized$bottom_of_screen <- convert_length_to_m(
+        sanitized$bottom_of_screen,
+        metadata$bottom_of_screen_unit
+      )
+      sanitized$well_head_stick_up <- convert_length_to_m(
+        sanitized$well_head_stick_up,
+        metadata$well_head_stick_up_unit
+      )
+      sanitized$static_water_level <- convert_length_to_m(
+        sanitized$static_water_level,
+        metadata$static_water_level_unit
+      )
+      sanitized$casing_od <- convert_length_to_mm(
+        sanitized$casing_od,
+        metadata$casing_od_unit
+      )
+      sanitized$estimated_yield <- convert_flow_to_lpm(
+        sanitized$estimated_yield,
+        metadata$estimated_yield_unit
+      )
 
       sanitized
     }
@@ -2589,12 +2759,7 @@ simplerIndex <- function(id) {
         permafrost_bot = input$permafrost_bot,
         permafrost_bot_unit = input$permafrost_bot_unit,
         date_drilled = input$date_drilled,
-        # Convert casing_od to mm if casing_od_unit is inch
-        casing_od = if (input$casing_od_unit == "inch") {
-          input$casing_od * 25.4
-        } else {
-          input$casing_od
-        },
+        casing_od = input$casing_od,
         casing_od_unit = input$casing_od_unit,
         drill_depth = input$drill_depth,
         drill_depth_unit = input$drill_depth_unit,
