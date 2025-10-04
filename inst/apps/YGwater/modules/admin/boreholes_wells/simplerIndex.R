@@ -710,7 +710,7 @@ simplerIndexUI <- function(id) {
                 6,
                 actionButton(
                   ns("upload_all"),
-                  "Upload sll",
+                  "Upload all",
                   class = "btn btn-success btn-block",
                   icon = icon("cloud-upload-alt")
                 )
@@ -1158,7 +1158,7 @@ simplerIndex <- function(id) {
       # Check to ensure that the well name does not already exist in the database
       existing_names <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT borehole_name FROM boreholes.boreholes WHERE name = $1;",
+        "SELECT borehole_name FROM boreholes.boreholes WHERE borehole_name = $1;",
         params = list(metadata$name)
       )$name
 
@@ -2589,7 +2589,12 @@ simplerIndex <- function(id) {
         permafrost_bot = input$permafrost_bot,
         permafrost_bot_unit = input$permafrost_bot_unit,
         date_drilled = input$date_drilled,
-        casing_od = input$casing_od,
+        # Convert casing_od to mm if casing_od_unit is inch
+        casing_od = if (input$casing_od_unit == "inch") {
+          input$casing_od * 25.4
+        } else {
+          input$casing_od
+        },
         casing_od_unit = input$casing_od_unit,
         drill_depth = input$drill_depth,
         drill_depth_unit = input$drill_depth_unit,
