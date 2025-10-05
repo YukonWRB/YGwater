@@ -3259,34 +3259,38 @@ simplerIndex <- function(id) {
             result <- AquaCache::insertACBorehole(
               con = session$userData$AquaCache,
               path = pdf_file_path,
-              well_name = metadata$name,
-              latitude = as.numeric(metadata$latitude),
-              longitude = as.numeric(metadata$longitude),
-              location_source = metadata$location_source,
-              surveyed_ground_elev = as.numeric(metadata$surveyed_ground_elev),
-              purpose_of_borehole = metadata$purpose_of_borehole,
-              purpose_borehole_inferred = metadata$purpose_borehole_inferred,
-              depth_to_bedrock = as.numeric(metadata$depth_to_bedrock),
-              permafrost_present = metadata$permafrost_present,
-              permafrost_top = as.numeric(metadata$permafrost_top),
-              permafrost_bot = as.numeric(metadata$permafrost_bot),
-              date_drilled = metadata$date_drilled,
-              casing_od = as.numeric(metadata$casing_od),
-              is_well = metadata$is_well,
-              well_depth = as.numeric(metadata$drill_depth),
-              top_of_screen = as.numeric(metadata$top_of_screen),
-              bottom_of_screen = as.numeric(metadata$bottom_of_screen),
-              well_head_stick_up = as.numeric(metadata$well_head_stick_up),
-              static_water_level = as.numeric(metadata$static_water_level),
-              estimated_yield = as.numeric(metadata$estimated_yield),
-              notes_borehole = metadata$notes_borehole,
-              notes_well = metadata$notes_well,
-              share_with_borehole = metadata$share_with_borehole,
-              drilled_by = metadata$drilled_by,
+              well_name = metadata[["name"]],
+              latitude = metadata[["latitude"]],
+              longitude = metadata[["longitude"]],
+              location_source = metadata[["location_source"]],
+              surveyed_ground_elev = metadata[[
+                "surveyed_ground_elev"
+              ]],
+              purpose_of_borehole = metadata[["purpose_of_borehole"]],
+              purpose_borehole_inferred = metadata[[
+                "purpose_borehole_inferred"
+              ]],
+              depth_to_bedrock = metadata[["depth_to_bedrock"]],
+              permafrost_present = metadata[["permafrost_present"]],
+              permafrost_top = metadata[["permafrost_top"]],
+              permafrost_bot = metadata[["permafrost_bot"]],
+              date_drilled = metadata[["date_drilled"]],
+              casing_od = metadata[["casing_od"]],
+              is_well = metadata[["is_well"]],
+              well_depth = metadata[["drill_depth"]],
+              top_of_screen = metadata[["top_of_screen"]],
+              bottom_of_screen = metadata[["bottom_of_screen"]],
+              well_head_stick_up = metadata[["well_head_stick_up"]],
+              static_water_level = metadata[["static_water_level"]],
+              estimated_yield = metadata[["estimated_yield"]],
+              notes_borehole = metadata[["notes_borehole"]],
+              notes_well = metadata[["notes_well"]],
+              share_with_borehole = metadata[["share_with_borehole"]],
+              drilled_by = metadata[["drilled_by"]],
               drill_method = NULL,
-              purpose_of_well = metadata$purpose_of_well,
-              purpose_well_inferred = metadata$purpose_well_inferred,
-              share_with_well = metadata$share_with_well
+              purpose_of_well = metadata[["purpose_of_well"]],
+              purpose_well_inferred = metadata[["purpose_well_inferred"]],
+              share_with_well = metadata[["share_with_well"]]
             )
 
             showNotification(
@@ -3301,7 +3305,7 @@ simplerIndex <- function(id) {
             showNotification(
               paste("Error uploading borehole:", e$message),
               type = "error",
-              duration = 5
+              duration = 10
             )
           }
         )
@@ -3309,7 +3313,7 @@ simplerIndex <- function(id) {
         showNotification(
           "No valid borehole data to upload",
           type = "warning",
-          duration = 5
+          duration = 7
         )
       }
     })
@@ -3322,7 +3326,7 @@ simplerIndex <- function(id) {
         showNotification(
           "Please assign every document page to a borehole before uploading.",
           type = "error",
-          duration = 5
+          duration = 7
         )
         return()
       }
@@ -3336,7 +3340,7 @@ simplerIndex <- function(id) {
         showNotification(
           "No boreholes to upload",
           type = "warning",
-          duration = 5
+          duration = 7
         )
         return()
       }
@@ -3462,7 +3466,7 @@ simplerIndex <- function(id) {
             "errors"
           ),
           type = "warning",
-          duration = 5
+          duration = 10
         )
       }
     })

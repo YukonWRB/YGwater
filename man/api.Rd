@@ -5,6 +5,7 @@
 \title{Run the YGwater API}
 \usage{
 api(
+  version = NULL,
   host = "127.0.0.1",
   port = 8000,
   server = "/water-data/api",
@@ -14,6 +15,8 @@ api(
 )
 }
 \arguments{
+\item{version}{The API version to use. Default is NULL, which uses the latest version.}
+
 \item{host}{The host address to bind the server to. Default is the local host.}
 
 \item{port}{The port number to listen on. Default is 8000.}
