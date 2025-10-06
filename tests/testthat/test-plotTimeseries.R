@@ -185,3 +185,34 @@ test_that("returned plot data is as expected", {
   expect_named(plot$trace_data, c("datetime", "value"))
   expect_named(plot$range_data, c("datetime", "min", "max", "q75", "q25"))
 })
+
+test_that("returned plot data is as expected with all parameters specified", {
+  skip_on_cran()
+
+  plot <- plotTimeseries(
+    location = "09EA004",
+    sub_location = NULL,
+    parameter = "water level",
+    record_rate = 5 * 60, # 5 minutes for WSC data
+    aggregation_type = "instantaneous",
+    z = NULL,
+    z_approx = NULL,
+    start_date = "2022-01-01",
+    end_date = "2023-01-01",
+    lang = "fr",
+    slider = FALSE,
+    data = TRUE,
+    datum = FALSE,
+    custom_title = NULL,
+    filter = 20,
+    unusable = FALSE,
+    grades = TRUE,
+    approvals = TRUE,
+    qualifiers = TRUE,
+    historic_range = TRUE
+  )$data
+  expect_type(plot, "list")
+  expect_named(plot, c("trace_data", "range_data"))
+  expect_named(plot$trace_data, c("datetime", "value"))
+  expect_named(plot$range_data, c("datetime", "min", "max", "q75", "q25"))
+})

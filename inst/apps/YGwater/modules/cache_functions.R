@@ -331,7 +331,22 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
         ),
         timeseries = dbGetQueryDT(
           con,
-          "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, z FROM timeseries AS ts LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id LEFT JOIN media_types AS m ON ts.media_id = m.media_id"
+          "SELECT ts.timeseries_id, 
+          ts.location_id, 
+          p.param_name, 
+          p.param_name_fr, 
+          m.media_type, 
+          ts.media_id, 
+          ts.parameter_id, 
+          ts.aggregation_type_id,
+          ts.start_datetime, 
+          ts.end_datetime, 
+          lz.z_meters AS z
+          FROM timeseries AS ts 
+          LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id 
+          LEFT JOIN media_types AS m ON ts.media_id = m.media_id
+          LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
+"
         ),
         parameters = dbGetQueryDT(
           con,

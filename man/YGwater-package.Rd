@@ -5,7 +5,7 @@
 \alias{YGwater-package}
 \title{YGwater: R functions and applications for the Yukon Water Science and Stewardship Branch}
 \description{
-Stores various functions for use across the Water Science and Stweardship Branch disciplines, including for generating reports, gathering and processing data, and creating plots.
+Stores various functions for use across the Water Science and Stweardship Branch disciplines, including for generating reports, gathering and processing data, and creating plots. Also includes several Shiny applications and an API for accessing the AquaCache database.
 }
 \seealso{
 Useful links:

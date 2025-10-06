@@ -399,7 +399,15 @@ calibrateUI <- function(id) {
                 label = "Instrument type",
                 choices = "placeholder"
               ),
-              textInput(ns("instrument_owner"), "Instrument owner", value = ""),
+              selectizeInput(
+                ns("instrument_owner"),
+                "Instrument owner",
+                choices = NULL,
+                multiple = TRUE,
+                options(
+                  maxItems = 1
+                )
+              ),
               checkboxInput(
                 ns("replaceableSensors"),
                 "Replaceable sensors?",
@@ -772,6 +780,20 @@ table.on("click", "tr", function() {
     instruments_data$instrument_maintenance <- DBI::dbGetQuery(
       session$userData$AquaCache,
       "SELECT * FROM instrument_maintenance"
+    )
+    instruments_data$organizations <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT * FROM organizations"
+    )
+    select_data$organizations <- setNames(
+      c(instruments_data$organizations$organization_id, "new"),
+      c(instruments_data$organizations$name, "Add new organization")
+    )
+    updateSelectizeInput(
+      session,
+      "instrument_owner",
+      choices = select_data$organizations,
+      selected = NULL
     )
 
     sensors_data$sensors <- DBI::dbGetQuery(
@@ -1226,6 +1248,84 @@ table.on("click", "tr", function() {
           "model",
           choices = select_data$models,
           selected = max(instruments_data$models$model_id)
+        )
+        removeModal()
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    ## Add new instrument owner ###############################################
+    observeEvent(
+      input$instrument_owner,
+      {
+        if (input$instrument_owner == "new") {
+          # Add a new owner using a modal dialog
+          showModal(modalDialog(
+            title = "Add new organization",
+            textInput(ns("new_org_name"), "Name"),
+            textInput(ns("new_org_name_fr"), "Name (French)"),
+            textInput(ns("new_org_contact_name"), "Contact name (optional)"),
+            textInput(ns("new_org_contact_email"), "Contact email (optional)"),
+            textInput(ns("new_org_contact_phone"), "Contact phone (optional)"),
+            textInput(ns("new_org_note"), "Note (optional)"),
+            actionButton(ns("add_new_org"), "Add new organization")
+          ))
+        }
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$add_new_org,
+      {
+        # Ensure that a name is entered
+        if (input$new_org_name == "" || input$new_org_name_fr == "") {
+          alert(
+            title = "Error",
+            text = "Please enter an organization name, english and french.",
+            type = "error",
+            timer = 4000
+          )
+          return()
+        }
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO public.organizations (name, name_fr, contact_name, email, phone, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          params = list(
+            input$new_org_name,
+            input$new_org_name_fr,
+            ifelse(
+              input$new_org_contact_name == "",
+              NA,
+              input$new_org_contact_name
+            ),
+            ifelse(
+              input$new_org_contact_email == "",
+              NA,
+              input$new_org_contact_email
+            ),
+            ifelse(
+              input$new_org_contact_phone == "",
+              NA,
+              input$new_org_contact_phone
+            ),
+            ifelse(input$new_org_note == "", NA, input$new_org_note)
+          )
+        )
+        instruments_data$organizations <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT * FROM organizations"
+        )
+        select_data$organizations <- setNames(
+          c(instruments_data$organizations$organization_id, "new"),
+          c(instruments_data$organizations$name, "Add new organization")
+        )
+        updateSelectizeInput(
+          session,
+          "instrument_owner",
+          choices = select_data$organizations,
+          selected = max(instruments_data$organizations$organization_id)
         )
         removeModal()
       },
@@ -2429,7 +2529,12 @@ table.on("click", "tr", function() {
           choices = select_data$types,
           selected = ""
         )
-        updateTextInput(session, "instrument_owner", value = "")
+        updateSelectizeInput(
+          session,
+          "instrument_owner",
+          choices = select_data$organizations,
+          selected = NULL
+        )
         updateCheckboxInput(session, "replaceableSensors", value = FALSE)
         updateDateInput(session, "date_retired", value = NA) #Reset the retired date to NA
         updateDateInput(session, "date_in_service", value = NA)
@@ -3570,10 +3675,10 @@ table.on("click", "tr", function() {
             "replaceableSensors",
             value = modify_record$holds_replaceable_sensors
           )
-          updateTextInput(
+          updateSelectizeInput(
             session,
             "instrument_owner",
-            value = modify_record$owner
+            selected = modify_record$owner
           )
           updateDateInput(
             session,

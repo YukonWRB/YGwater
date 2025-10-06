@@ -49,12 +49,16 @@ app_server <- function(input, output, session) {
       # Equipment tasks -----------------------------------------------------
       if (
         any(
-          session$userData$admin_privs$calibrate
+          session$userData$admin_privs$calibrate,
+          session$userData$admin_privs$deploy_recover
         )
       ) {
         nav_show(id = "navbar", target = "equipTasks")
         if (!isTRUE(session$userData$admin_privs$calibrate)) {
           nav_hide(id = "navbar", target = "calibrate")
+        }
+        if (!isTRUE(session$userData$admin_privs$deploy_recover)) {
+          nav_hide(id = "navbar", target = "deploy_recover")
         }
       } else {
         nav_hide(id = "navbar", target = "equipTasks")
@@ -147,22 +151,10 @@ app_server <- function(input, output, session) {
       }
 
       # Field visit ---------------------------------------------------------
-      if (
-        any(
-          session$userData$admin_privs$visit,
-          session$userData$admin_privs$deploy_recover
-        )
-      ) {
-        nav_show(id = "navbar", target = "fieldTasks")
-        if (isTRUE(session$userData$admin_privs$visit)) {
-          nav_show(id = "navbar", target = "visit")
-          nav_show(id = "navbar", target = "deploy_recover")
-        } else {
-          nav_hide(id = "navbar", target = "visit")
-          nav_hide(id = "navbar", target = "deploy_recover")
-        }
+      if (isTRUE(session$userData$admin_privs$visit)) {
+        nav_show(id = "navbar", target = "visit")
       } else {
-        nav_hide(id = "navbar", target = "fieldTasks")
+        nav_hide(id = "navbar", target = "visit")
       }
 
       # Simple Index
@@ -197,8 +189,7 @@ app_server <- function(input, output, session) {
         "visit",
         "adminTasks",
         "metadataTasks",
-        "wellTasks",
-        "fieldTasks"
+        "wellTasks"
       )) {
         nav_hide(id = "navbar", target = id)
       }
@@ -1085,7 +1076,7 @@ $(document).keyup(function(event) {
 
       admin_vis_flag("admin")
     } else if (admin_vis_flag() == "admin") {
-      updateActionButton(session, "admin", label = "Switch to Vizualize mode")
+      updateActionButton(session, "admin", label = "Switch to Visualize mode")
 
       # Show relevant tabs for admin mode
       showAdmin(show = TRUE)
