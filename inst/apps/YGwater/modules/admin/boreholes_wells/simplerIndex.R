@@ -95,7 +95,7 @@ simplerIndexUI <- function(id) {
               "Select",
               icon("mouse-pointer"),
               class = "btn-toggle"
-            ) %>%
+            ) |>
               tooltip(
                 "Enable the selection tool for OCR and content redaction."
               ),
@@ -104,7 +104,7 @@ simplerIndexUI <- function(id) {
               "Redact",
               icon("rectangle-xmark"),
               class = "btn-toggle"
-            ) %>%
+            ) |>
               tooltip(
                 "Redact the selected area. Boxes are transparent for usability but will be made opaque on upload."
               ),
@@ -120,7 +120,7 @@ simplerIndexUI <- function(id) {
               "Export PDF",
               class = "btn btn-outline-primary",
               title = "Export PDF with redactions and OCR text"
-            ) %>%
+            ) |>
               tooltip(
                 "Download a redacted copy for your records (does not send the PDF to the database)"
               ),
@@ -172,7 +172,7 @@ simplerIndexUI <- function(id) {
                     step = 10,
                     width = "150px"
                   )
-                ) %>%
+                ) |>
                   tooltip(
                     "Set the minimum confidence level for displaying OCR results. Higher values show only the most certain text."
                   ),
@@ -186,7 +186,7 @@ simplerIndexUI <- function(id) {
                     "Sparse Text + OSD" = "12"
                   ),
                   selected = "1"
-                ) %>%
+                ) |>
                   tooltip(
                     "Page Segmentation Mode (PSM) controls how Tesseract splits the image into text blocks. 'Auto + OSD' is a good general choice for documents with mixed layouts."
                   ),
@@ -259,7 +259,7 @@ simplerIndexUI <- function(id) {
                   placeholder = "Choose borehole",
                   maxItems = 1
                 )
-              ) %>%
+              ) |>
                 tooltip(
                   "Choose which borehole's details to view and edit."
                 )
@@ -421,7 +421,10 @@ simplerIndexUI <- function(id) {
                 "Surveyed ground elevation",
                 value = NULL,
                 step = 0.01
-              )
+              ) |>
+                tooltip(
+                  "Elevation relative to sea level. Can be empty, but please make an effort and try to fill it in."
+                )
             ),
             column(
               4,
@@ -442,8 +445,12 @@ simplerIndexUI <- function(id) {
                 "Depth to bedrock",
                 value = NULL,
                 min = 0,
-                step = 0.1
-              )
+                step = 0.1,
+                placholder = "Empty if not reached"
+              ) |>
+                tooltip(
+                  "If bedrock was not reached or if unknown, leave empty."
+                )
             ),
             column(
               4,
@@ -526,7 +533,7 @@ simplerIndexUI <- function(id) {
             textInput(
               ns("notes_well"),
               "Well notes",
-              placeholder = "Enter well-specific notes"
+              placeholder = "Screen type, filter pack, development, etc."
             ),
             selectizeInput(
               ns("share_with_well"),
@@ -553,7 +560,7 @@ simplerIndexUI <- function(id) {
                 radioButtons(
                   ns("casing_od_unit"),
                   "",
-                  choices = list("mm" = "mm", "inch" = "inch"),
+                  choices = list("cm" = "cm", "inch" = "inch"),
                   selected = "inch",
                   inline = TRUE
                 )
@@ -633,10 +640,13 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("static_water_level"),
-                  "Static water level",
+                  "Static water level BTOC",
                   value = NULL,
                   step = 0.01
-                )
+                ) |>
+                  tooltip(
+                    "Convert elevations BGS to BTOC!"
+                  )
               ),
               column(
                 4,
@@ -1073,6 +1083,41 @@ simplerIndex <- function(id) {
         unit_val
       }
 
+      convert_utm_to_ll <- function(easting, northing, zone) {
+        easting <- null_if_empty(easting)
+        northing <- null_if_empty(northing)
+        zone <- null_if_empty(zone)
+        if (is.null(easting) || is.null(northing) || is.null(zone)) {
+          return(list(latitude = NULL, longitude = NULL))
+        }
+        easting_num <- suppressWarnings(as.numeric(easting[1]))
+        northing_num <- suppressWarnings(as.numeric(northing[1]))
+        zone_val <- toupper(trimws(as.character(zone[1])))
+        if (
+          length(easting_num) == 0 ||
+            is.na(easting_num) ||
+            length(northing_num) == 0 ||
+            is.na(northing_num) ||
+            !grepl("^[0-9]{1,2}[C-HJ-NP-X]$", zone_val)
+        ) {
+          return(list(latitude = NULL, longitude = NULL))
+        }
+
+        # Only return the number part of the UTM zone (strip N/S)
+        zone_val <- sub("([0-9]{1,2})([C-HJ-NP-X])", "\\1", zone_val)
+        v <- data.frame(lon = easting_num, lat = northing_num) |>
+          terra::vect(
+            crs = paste0(
+              "+proj=utm +zone=",
+              zone_val,
+              " +datum=WGS84 +units=m +no_defs"
+            )
+          ) |>
+          terra::project("epsg:4326")
+        lonlat <- terra::geom(v)[, c("x", "y")]
+        return(list(latitude = lonlat$y, longitude = lonlat$x))
+      }
+
       convert_length_to_m <- function(value, unit) {
         value <- null_if_empty(value)
         if (is.null(value)) {
@@ -1324,7 +1369,25 @@ simplerIndex <- function(id) {
         metadata$estimated_yield_unit
       )
 
-      sanitized
+      if (is.null(sanitized$latitude) || is.null(sanitized$longitude)) {
+        if (identical(tolower(metadata$coordinate_system), "utm")) {
+          sanitized$latitude <- NULL
+          sanitized$longitude <- NULL
+          if (
+            !is.null(metadata$easting) &&
+              !is.null(metadata$northing) &&
+              !is.null(metadata$utm_zone)
+          ) {
+            latlon <- convert_utm_to_ll(
+              metadata$easting,
+              metadata$northing,
+              metadata$utm_zone
+            )
+            sanitized$latitude <- latlon$latitude
+            sanitized$longitude <- latlon$longitude
+          }
+        }
+      }
     }
 
     validate_metadata_for_upload <- function(metadata) {
@@ -1443,6 +1506,50 @@ simplerIndex <- function(id) {
         ))
       }
     })
+
+    # Make sure share_with is either public_reader or other groups, not both
+    observeEvent(
+      input$share_with_borehole,
+      {
+        if (
+          length(input$share_with_borehole) > 1 &
+            'public_reader' %in% input$share_with_borehole
+        ) {
+          showModal(modalDialog(
+            "If public_reader is selected it must be the only group selected.",
+            easyClose = TRUE
+          ))
+          updateSelectizeInput(
+            session,
+            "share_with_borehole",
+            selected = "public_reader"
+          )
+        }
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$share_with_well,
+      {
+        if (
+          length(input$share_with_well) > 1 &
+            'public_reader' %in% input$share_with_well
+        ) {
+          showModal(modalDialog(
+            "If public_reader is selected it must be the only group selected.",
+            easyClose = TRUE
+          ))
+          updateSelectizeInput(
+            session,
+            "share_with_well",
+            selected = "public_reader"
+          )
+        }
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
     observeEvent(
       input$num_boreholes,
@@ -1915,7 +2022,7 @@ simplerIndex <- function(id) {
         if (rv$pdf_index < nrow(rv$files_df)) {
           rv$pdf_index <- rv$pdf_index + 1
           # Ensure table selection follows
-          DT::dataTableProxy("pdf_table", session = session) %>%
+          DT::dataTableProxy("pdf_table", session = session) |>
             DT::selectRows(rv$pdf_index)
         }
       },
@@ -1929,7 +2036,7 @@ simplerIndex <- function(id) {
         if (rv$pdf_index >= 2) {
           rv$pdf_index <- rv$pdf_index - 1
           # Ensure table selection follows
-          DT::dataTableProxy("pdf_table", session = session) %>%
+          DT::dataTableProxy("pdf_table", session = session) |>
             DT::selectRows(rv$pdf_index)
         } else {
           rv$pdf_index <- 1
@@ -1965,7 +2072,7 @@ simplerIndex <- function(id) {
           } else if (rv$pdf_index > nrow(rv$files_df)) {
             rv$pdf_index <- nrow(rv$files_df)
             # Ensure table selection follows
-            DT::dataTableProxy("pdf_table", session = session) %>%
+            DT::dataTableProxy("pdf_table", session = session) |>
               DT::selectRows(rv$pdf_index)
           }
           sort_files_df()
@@ -2148,7 +2255,7 @@ simplerIndex <- function(id) {
         img_path <- rv$files_df$Path[rv$pdf_index]
         req(file.exists(img_path))
 
-        img <- magick::image_read(img_path) %>%
+        img <- magick::image_read(img_path) |>
           magick::image_enhance()
         info <- magick::image_info(img)
         img_width <- info$width
@@ -3299,6 +3406,20 @@ simplerIndex <- function(id) {
               duration = 5
             )
             DBI::dbExecute(session$userData$AquaCache, "COMMIT")
+
+            # Remove uploaded borehole from local data to prevent re-upload
+            rv$borehole_data[[current_borehole_id]] <- NULL
+            # Update selector choices
+            updateSelectizeInput(
+              session,
+              "borehole_details_selector",
+              choices = names(rv$borehole_data),
+              selected = if (length(names(rv$borehole_data)) > 0) {
+                names(rv$borehole_data)[1]
+              } else {
+                ""
+              }
+            )
           },
           error = function(e) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
@@ -3383,36 +3504,40 @@ simplerIndex <- function(id) {
 
             # Call AquaCache function with the metadata
             result <- AquaCache::insertACBorehole(
-              well_name = metadata$name,
-              latitude = as.numeric(metadata$latitude),
-              longitude = as.numeric(metadata$longitude),
-              location_source = metadata$location_source,
-              surveyed_ground_elev = as.numeric(metadata$surveyed_ground_elev),
-              purpose_of_borehole = metadata$purpose_of_borehole,
-              purpose_borehole_inferred = metadata$purpose_borehole_inferred,
-              depth_to_bedrock = as.numeric(metadata$depth_to_bedrock),
-              permafrost_present = metadata$permafrost_present,
-              permafrost_top = as.numeric(metadata$permafrost_top),
-              permafrost_bot = as.numeric(metadata$permafrost_bot),
-              date_drilled = metadata$date_drilled,
-              casing_od = as.numeric(metadata$casing_od),
-              is_well = metadata$is_well,
-              well_depth = as.numeric(metadata$drill_depth),
-              top_of_screen = as.numeric(metadata$top_of_screen),
-              bottom_of_screen = as.numeric(metadata$bottom_of_screen),
-              well_head_stick_up = as.numeric(metadata$well_head_stick_up),
-              static_water_level = as.numeric(metadata$static_water_level),
-              estimated_yield = as.numeric(metadata$estimated_yield),
-              notes_borehole = metadata$notes_borehole,
-              notes_well = metadata$notes_well,
               con = session$userData$AquaCache,
-              share_with_borehole = metadata$share_with_borehole,
-              drilled_by = metadata$drilled_by,
-              drill_method = NULL,
               path = pdf_file_path,
-              purpose_of_well = metadata$purpose_of_well,
-              purpose_well_inferred = metadata$purpose_well_inferred,
-              share_with_well = metadata$share_with_well
+              well_name = metadata[["name"]],
+              latitude = metadata[["latitude"]],
+              longitude = metadata[["longitude"]],
+              location_source = metadata[["location_source"]],
+              surveyed_ground_elev = metadata[[
+                "surveyed_ground_elev"
+              ]],
+              purpose_of_borehole = metadata[["purpose_of_borehole"]],
+              purpose_borehole_inferred = metadata[[
+                "purpose_borehole_inferred"
+              ]],
+              depth_to_bedrock = metadata[["depth_to_bedrock"]],
+              permafrost_present = metadata[["permafrost_present"]],
+              permafrost_top = metadata[["permafrost_top"]],
+              permafrost_bot = metadata[["permafrost_bot"]],
+              date_drilled = metadata[["date_drilled"]],
+              casing_od = metadata[["casing_od"]],
+              is_well = metadata[["is_well"]],
+              well_depth = metadata[["drill_depth"]],
+              top_of_screen = metadata[["top_of_screen"]],
+              bottom_of_screen = metadata[["bottom_of_screen"]],
+              well_head_stick_up = metadata[["well_head_stick_up"]],
+              static_water_level = metadata[["static_water_level"]],
+              estimated_yield = metadata[["estimated_yield"]],
+              notes_borehole = metadata[["notes_borehole"]],
+              notes_well = metadata[["notes_well"]],
+              share_with_borehole = metadata[["share_with_borehole"]],
+              drilled_by = metadata[["drilled_by"]],
+              drill_method = NULL,
+              purpose_of_well = metadata[["purpose_of_well"]],
+              purpose_well_inferred = metadata[["purpose_well_inferred"]],
+              share_with_well = metadata[["share_with_well"]]
             )
 
             success_count <- success_count + 1
@@ -3430,6 +3555,8 @@ simplerIndex <- function(id) {
               duration = 7
             )
             DBI::dbExecute(session$userData$AquaCache, "COMMIT")
+            # Remove uploaded borehole from local data to prevent re-upload
+            rv$borehole_data[[well_id]] <- NULL
           },
           error = function(e) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
@@ -3469,6 +3596,17 @@ simplerIndex <- function(id) {
           duration = 10
         )
       }
+      # Update selector choices
+      updateSelectizeInput(
+        session,
+        "borehole_details_selector",
+        choices = names(rv$borehole_data),
+        selected = if (length(names(rv$borehole_data)) > 0) {
+          names(rv$borehole_data)[1]
+        } else {
+          ""
+        }
+      )
     })
 
     # Add observer for OCR extracted text display
