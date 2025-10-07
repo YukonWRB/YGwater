@@ -285,7 +285,10 @@ simplerIndexUI <- function(id) {
             selected = "public_reader",
             multiple = TRUE,
             width = "100%"
-          ),
+          ) |>
+            tooltip(
+              "Select user groups to share this borehole with. 'public_reader' = shared with everyone."
+            ),
           # Add 'drilled by' selectize input
           selectizeInput(
             ns("drilled_by"),
@@ -295,10 +298,13 @@ simplerIndexUI <- function(id) {
             multiple = TRUE,
             options = list(
               create = TRUE,
-              placeholder = "Select or enter driller",
+              placeholder = "Select driller",
               maxItems = 1
             )
-          ),
+          ) |>
+            tooltip(
+              "Add a new driller by typing the name in."
+            ),
 
           # Location information section - remove surveyed_location_top_casing field
           radioButtons(
@@ -307,7 +313,10 @@ simplerIndexUI <- function(id) {
             choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
             selected = "utm",
             inline = TRUE
-          ),
+          ) |>
+            tooltip(
+              "UTM converted to Lat/Lon on upload."
+            ),
           conditionalPanel(
             condition = "input.coordinate_system == 'utm'",
             ns = ns,
@@ -445,8 +454,7 @@ simplerIndexUI <- function(id) {
                 "Depth to bedrock",
                 value = NULL,
                 min = 0,
-                step = 0.1,
-                placholder = "Empty if not reached"
+                step = 0.1
               ) |>
                 tooltip(
                   "If bedrock was not reached or if unknown, leave empty."
@@ -530,11 +538,6 @@ simplerIndexUI <- function(id) {
           conditionalPanel(
             condition = "input.is_well == true",
             ns = ns,
-            textInput(
-              ns("notes_well"),
-              "Well notes",
-              placeholder = "Screen type, filter pack, development, etc."
-            ),
             selectizeInput(
               ns("share_with_well"),
               "Share well with groups",
@@ -542,7 +545,10 @@ simplerIndexUI <- function(id) {
               selected = "public_reader",
               multiple = TRUE,
               width = "100%"
-            ),
+            ) |>
+              tooltip(
+                "Select user groups to share this well with. 'public_reader' = shared with everyone. Can be different from borehole sharing."
+              ),
             # Casing Outside Diameter
             fluidRow(
               column(
@@ -693,6 +699,11 @@ simplerIndexUI <- function(id) {
                 placeholder = "Enter if different from borehole purpose",
                 maxItems = 1
               )
+            ),
+            textInput(
+              ns("notes_well"),
+              "Well notes",
+              placeholder = "Screen type, filter pack, development, etc."
             ),
             radioButtons(
               ns("purpose_well_inferred"),
