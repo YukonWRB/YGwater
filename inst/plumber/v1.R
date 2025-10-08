@@ -1,17 +1,19 @@
 #' @apiTitle AquaCache API version 1
-#' @apiDescription API for programmatic access to the aquacache database.
+#' @apiDescription API for programmatic access to the aquacache database. Should usually be launched using function api(), in the R directory
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
 function(req, res) {
-  # Allow anonymous only for read-only GET on these routes
+  # Allow anonymous for read-only GET on these routes (uses public_reader account)
   public_paths <- c(
     "^/locations$",
     "^/timeseries$",
     "^/parameters$",
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
-    "^/__docs__/",
+    "^/__docs__/", # UI shell & assets
+    "^/openapi.json$", # <-- needed for the UI to load
+    "^/openapi.yaml$", # <-- sometimes used
     "^/timeseries/.+/measurements$"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
@@ -50,6 +52,9 @@ function(req, res, lang = "en") {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -89,6 +94,9 @@ function(req, res, lang = "en") {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -176,6 +184,9 @@ function(req, res, id, start, end = NA, limit = 100000) {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -209,6 +220,9 @@ function(req, res) {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -271,6 +285,9 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -339,6 +356,9 @@ function(req, res, sample_ids, parameters = NA) {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -396,6 +416,9 @@ function(req, res) {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -419,6 +442,9 @@ function(req, res) {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -442,6 +468,9 @@ function(req, res) {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -465,6 +494,9 @@ function(req, res) {
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
+    name = Sys.getenv("APIaquacacheName"),
+    port = Sys.getenv("APIaquacachePort"),
+    host = Sys.getenv("APIaquacacheHost"),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)

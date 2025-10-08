@@ -14,5 +14,7 @@ test_that("api() builds a router and sets OpenAPI bits without running", {
   expect_equal(spec$servers[[1]]$url, "/water-data/api")
 
   # check env vars were set
-  expect_equal(Sys.getenv("aquacacheName"), "aquacache_test")
+  expect_equal(Sys.getenv("APIaquacacheName"), "aquacache_test")
+  expect_equal(Sys.getenv("APIaquacheHost"), Sys.getenv("aquacacheHost"))
+  expect_equal(Sys.getenv("APIaquacachePort"), Sys.getenv("aquacachePort"))
 })

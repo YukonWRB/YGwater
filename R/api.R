@@ -23,9 +23,9 @@ api <- function(
   host = "127.0.0.1",
   port = 8000,
   server = "/water-data/api",
-  dbName = 'aquacache',
-  dbHost = 'localhost',
-  dbPort = 5432,
+  dbName = Sys.getenv("aquacacheName"),
+  dbHost = Sys.getenv("aquacacheHost"),
+  dbPort = Sys.getenv("aquacachePort"),
   run = TRUE
 ) {
   rlang::check_installed("plumber", reason = "required to run a plumber API")
@@ -59,9 +59,9 @@ api <- function(
 
   # Set environment variables for database connection
   # username and password are handled via Basic Authentication or use the default read-only user
-  Sys.setenv(aquacacheName = dbName)
-  Sys.setenv(aquacacheHost = dbHost)
-  Sys.setenv(aquacachePort = dbPort)
+  Sys.setenv(APIaquacacheName = dbName)
+  Sys.setenv(APIaquacacheHost = dbHost)
+  Sys.setenv(APIaquacachePort = dbPort)
 
   spec <- pr$getApiSpec()
   spec$components$securitySchemes$BasicAuth <- list(

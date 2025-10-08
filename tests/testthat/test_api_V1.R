@@ -2,8 +2,9 @@
 # devtools::install_github("edgararuiz/callthat")
 
 # Notably, this does not test the R function at api.R, but does test the plumber file at plumber/v1.R
+# Tests for api.R are in tests/testthat/test-api.R
 
-test_that("tests for V1", {
+test_that("tests for API V1", {
   # Set up and start the API and a test session
   expect_silent({
     # ------------- Start plumber API -------------------
@@ -27,8 +28,7 @@ test_that("tests for V1", {
     # ---------------- Make API call --------------------
     get_ts <- callthat::call_that_api_get(
       api_session,
-      endpoint = "timeseries",
-      query = list(weight = 1)
+      endpoint = "timeseries"
     ),
     "response"
   )
