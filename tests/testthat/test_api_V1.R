@@ -14,6 +14,8 @@ test_that("tests for API V1", {
       system.file("plumber", package = "YGwater"),
       api_file = "v1.R",
       env = c(
+        APIaquacacheAnonUser = Sys.getenv("aquacacheUser", "runner"),
+        APIaquacacheAnonPass = Sys.getenv("aquacachePass", "runner"),
         APIaquacacheName = Sys.getenv("aquacacheName"),
         APIaquacacheHost = Sys.getenv("aquacacheHost"),
         APIaquacachePort = Sys.getenv("aquacachePort")

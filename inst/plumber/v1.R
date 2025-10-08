@@ -51,8 +51,8 @@ function(req, res) {
 function(req, res, lang = "en") {
   con <- try(
     YGwater::AquaConnect(
-      username = req$user,
-      password = req$password,
+      username = Sys.getenv("APIaquacacheAnonUser", "public_reader"), # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
+      password = Sys.getenv("APIaquacacheAnonUser", "aquacache"),
       name = Sys.getenv("APIaquacacheName"),
       host = Sys.getenv("APIaquacacheHost"),
       port = Sys.getenv("APIaquacachePort"),
@@ -60,7 +60,6 @@ function(req, res, lang = "en") {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -70,6 +69,7 @@ function(req, res, lang = "en") {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sql <- if (lang == "en") {
     "SELECT * FROM public.location_metadata_en ORDER BY location_id"
@@ -114,7 +114,6 @@ function(req, res, lang = "en") {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -124,6 +123,7 @@ function(req, res, lang = "en") {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (lang == "en") {
     sql <- "SELECT * FROM continuous.timeseries_metadata_en ORDER BY timeseries_id"
@@ -217,7 +217,6 @@ function(req, res, id, start, end = NA, limit = 100000) {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -227,6 +226,7 @@ function(req, res, id, start, end = NA, limit = 100000) {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sql <- "SELECT * FROM continuous.measurements_continuous_corrected 
   WHERE timeseries_id = $1 
@@ -266,7 +266,6 @@ function(req, res) {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -276,6 +275,7 @@ function(req, res) {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sql <- "SELECT parameter_id, param_name, param_name_fr, description, description_fr, unit_default AS units FROM public.parameters ORDER BY parameter_id"
   out <- DBI::dbGetQuery(con, sql)
@@ -343,7 +343,6 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -353,6 +352,7 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sql <- "SELECT sample_id, location_id, sub_location_id, mt.media_type AS media, z AS depth_height, datetime, target_datetime, cm.collection_method, st.sample_type, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, g.grade_type_description AS sample_grade, a.approval_type_description AS sample_approval, q.qualifier_type_description AS sample_qualifier, o1.name AS owner, o2.name AS contributor, field_visit_id, samples.note
   FROM discrete.samples 
@@ -426,7 +426,6 @@ function(req, res, sample_ids, parameters = NA) {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -436,6 +435,7 @@ function(req, res, sample_ids, parameters = NA) {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sids <- as.integer(strsplit(sample_ids, ",")[[1]])
 
@@ -498,7 +498,6 @@ function(req, res) {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -508,6 +507,7 @@ function(req, res) {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   res <- YGwater::snowInfo(
     con = con,
@@ -536,7 +536,6 @@ function(req, res) {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -546,6 +545,7 @@ function(req, res) {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   res <- YGwater::snowInfo(
     con = con,
@@ -574,7 +574,6 @@ function(req, res) {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -584,6 +583,7 @@ function(req, res) {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   res <- YGwater::snowInfo(
     con = con,
@@ -612,7 +612,6 @@ function(req, res) {
     ),
     silent = TRUE
   )
-  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (inherits(con, "try-error")) {
     res$status <- 503
@@ -622,6 +621,7 @@ function(req, res) {
       stringsAsFactors = FALSE
     ))
   }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   res <- YGwater::snowInfo(
     con = con,
