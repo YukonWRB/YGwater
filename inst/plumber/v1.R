@@ -26,8 +26,8 @@ function(req, res) {
       res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
       return(list(error = "Authentication required"))
     }
-    req$user <- "public_reader"
-    req$password <- "aquacache"
+    req$user <- Sys.getenv("APIaquacacheAnonUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
+    req$password <- Sys.getenv("APIaquacacheAnonPass", "aquacache")
     return(plumber::forward())
   }
 
@@ -51,8 +51,8 @@ function(req, res) {
 function(req, res, lang = "en") {
   con <- try(
     YGwater::AquaConnect(
-      username = Sys.getenv("APIaquacacheAnonUser", "public_reader"), # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
-      password = Sys.getenv("APIaquacacheAnonUser", "aquacache"),
+      username = req$user,
+      password = req$password,
       name = Sys.getenv("APIaquacacheName"),
       host = Sys.getenv("APIaquacacheHost"),
       port = Sys.getenv("APIaquacachePort"),

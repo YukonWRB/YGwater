@@ -6,20 +6,18 @@
 
 test_that("tests for API V1", {
   # Set some environment variables for the API to use. These are normally set when the API is launched using api() but are set here in the local environment.
+  Sys.setenv(APIaquacacheAnonUser = Sys.getenv("aquacacheUser", "runner"))
+  Sys.setenv(APIaquacacheAnonPass = Sys.getenv("aquacachePass", "runner"))
+  Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheName"))
+  Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheHost"))
+  Sys.setenv(APIaquacachePort = Sys.getenv("aquacachePort"))
 
   # Set up and start the API and a test session
   expect_silent({
     # ------------- Start plumber API -------------------
     local_api <- callthat::call_that_plumber_start(
       system.file("plumber", package = "YGwater"),
-      api_file = "v1.R",
-      env = c(
-        APIaquacacheAnonUser = Sys.getenv("aquacacheUser", "runner"),
-        APIaquacacheAnonPass = Sys.getenv("aquacachePass", "runner"),
-        APIaquacacheName = Sys.getenv("aquacacheName"),
-        APIaquacacheHost = Sys.getenv("aquacacheHost"),
-        APIaquacachePort = Sys.getenv("aquacachePort")
-      )
+      api_file = "v1.R"
     )
 
     # ------------- Start test session ------------------

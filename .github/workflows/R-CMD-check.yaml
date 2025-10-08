@@ -49,6 +49,24 @@ jobs:
           username: runner
           password: runner
           database: testdb
+      
+      - name: Install PostGIS (with raster) for PostgreSQL 17
+        if: runner.os == 'Linux'
+        run: |
+          set -eux
+          # PGDG repo for versioned PG/PostGIS packages
+          sudo sh -c 'echo "deb [arch=amd64] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/postgres.asc >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \ postgresql-17-postgis-3 postgresql-17-postgis-3-scripts
+
+      - name: Enable PostGIS (core + raster)
+        env:
+          PGPASSWORD: runner
+        run: |
+          set -eux
+          psql -h 127.0.0.1 -U runner -d testdb -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+          psql -h 127.0.0.1 -U runner -d testdb -c "CREATE EXTENSION IF NOT EXISTS postgis_raster;"
           
       - name: Decompress CI seed database (Uses R for cross-platform functionality)
         run: |
