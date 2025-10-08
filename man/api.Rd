@@ -9,9 +9,9 @@ api(
   host = "127.0.0.1",
   port = 8000,
   server = "/water-data/api",
-  dbName = "aquacache",
-  dbHost = "localhost",
-  dbPort = 5432,
+  dbName = Sys.getenv("aquacacheName"),
+  dbHost = Sys.getenv("aquacacheHost"),
+  dbPort = Sys.getenv("aquacachePort"),
   run = TRUE
 )
 }

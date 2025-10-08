@@ -4,6 +4,11 @@
 # Notably, this does not test the R function at api.R, but does test the plumber file at plumber/v1.R
 # Tests for api.R are in tests/testthat/test-api.R
 
+# First set some environment variables for the API to use. These are normally set when the API is launched using api().
+Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheName"))
+Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheHost"))
+Sys.setenv(APIaquacachePort = Sys.getenv("aquacachePort"))
+
 test_that("tests for API V1", {
   # Set up and start the API and a test session
   expect_silent({
