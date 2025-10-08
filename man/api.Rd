@@ -11,7 +11,8 @@ api(
   server = "/water-data/api",
   dbName = "aquacache",
   dbHost = "localhost",
-  dbPort = 5432
+  dbPort = 5432,
+  run = TRUE
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ api(
 \item{dbHost}{The host address of the PostgreSQL database. Default is 'localhost'.}
 
 \item{dbPort}{The port number of the PostgreSQL database. Default is 5432.}
+
+\item{run}{Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.}
 }
 \value{
 Runs the API server.

@@ -73,6 +73,7 @@ Suggests:
     plumber,
     purrr,
     ragg,
+    readr,
     reticulate,
     rpostgis,
     RSQLite,
@@ -85,6 +86,7 @@ Suggests:
     tidyhydat,
     vdiffr,
     weathercan,
+    withr,
     zip,
 Remotes:
     github::ropensci/weathercan,
