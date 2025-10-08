@@ -49,34 +49,6 @@ jobs:
           username: runner
           password: runner
           database: testdb
-      
-      - name: Install PostGIS (PGDG, PostgreSQL 17) on Ubuntu
-        if: runner.os == 'Linux'
-        run: |
-          set -eux
-          # Add PGDG repo with a keyring (Ubuntu 24.04 needs signed-by)
-          sudo install -d /usr/share/postgresql-common/pgdg
-          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-            | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg arch=amd64] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
-            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
-          sudo apt-get update
-          # Install PostGIS for PG 17 (and SQL helper scripts)
-          sudo apt-get install -y --no-install-recommends \
-            postgresql-17-postgis-3 postgresql-17-postgis-3-scripts
-          # (optional: CLI tools)
-          # sudo apt-get install -y --no-install-recommends gdal-bin
-          # Sanity check: list the installed packages
-          dpkg -l | grep -E 'postgresql-.*postgis'
-
-
-      - name: Enable PostGIS (core + raster)
-        env:
-          PGPASSWORD: runner
-        run: |
-          set -eux
-          psql -h 127.0.0.1 -U runner -d testdb -c "CREATE EXTENSION IF NOT EXISTS postgis;"
-          psql -h 127.0.0.1 -U runner -d testdb -c "CREATE EXTENSION IF NOT EXISTS postgis_raster;"
           
       - name: Decompress CI seed database (Uses R for cross-platform functionality)
         run: |
