@@ -53,6 +53,7 @@ Suggests:
     AquaCache,
     bslib,
     bsicons,
+    callthat,
     curl,
     DT,
     exifr,
@@ -91,6 +92,7 @@ Suggests:
 Remotes:
     github::ropensci/weathercan,
     github::YukonWRB/AquaCache
+    github::edgararuiz/callthat
 Config/testthat/edition: 3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
