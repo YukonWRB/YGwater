@@ -8,9 +8,9 @@ test_that("tests for API V1", {
   # Set some environment variables for the API to use. These are normally set when the API is launched using api() but are set here in the local environment.
   Sys.setenv(APIaquacacheAnonUser = Sys.getenv("aquacacheUser", "runner"))
   Sys.setenv(APIaquacacheAnonPass = Sys.getenv("aquacachePass", "runner"))
-  Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheName"))
-  Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheHost"))
-  Sys.setenv(APIaquacachePort = Sys.getenv("aquacachePort"))
+  Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheName", "testdb"))
+  Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheHost", "localhost"))
+  Sys.setenv(APIaquacachePort = Sys.getenv("aquacachePort", "5432"))
 
   # Set up and start the API and a test session
   expect_silent({

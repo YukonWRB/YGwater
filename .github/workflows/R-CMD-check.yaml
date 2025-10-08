@@ -50,15 +50,25 @@ jobs:
           password: runner
           database: testdb
       
-      - name: Install PostGIS (with raster) for PostgreSQL 17
+      - name: Install PostGIS (PGDG, PostgreSQL 17) on Ubuntu
         if: runner.os == 'Linux'
         run: |
           set -eux
-          # PGDG repo for versioned PG/PostGIS packages
-          sudo sh -c 'echo "deb [arch=amd64] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/postgres.asc >/dev/null
+          # Add PGDG repo with a keyring (Ubuntu 24.04 needs signed-by)
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg arch=amd64] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \ postgresql-17-postgis-3 postgresql-17-postgis-3-scripts
+          # Install PostGIS for PG 17 (and SQL helper scripts)
+          sudo apt-get install -y --no-install-recommends \
+            postgresql-17-postgis-3 postgresql-17-postgis-3-scripts
+          # (optional: CLI tools)
+          # sudo apt-get install -y --no-install-recommends gdal-bin
+          # Sanity check: list the installed packages
+          dpkg -l | grep -E 'postgresql-.*postgis'
+
 
       - name: Enable PostGIS (core + raster)
         env:
