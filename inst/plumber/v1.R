@@ -49,15 +49,27 @@ function(req, res) {
 #* @get /locations
 #* @serializer csv
 function(req, res, lang = "en") {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
 
   sql <- if (lang == "en") {
     "SELECT * FROM public.location_metadata_en ORDER BY location_id"
@@ -91,15 +103,28 @@ function(req, res, lang = "en") {
 #* @get /timeseries
 #* @serializer csv
 function(req, res, lang = "en") {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
+
   if (lang == "en") {
     sql <- "SELECT * FROM continuous.timeseries_metadata_en ORDER BY timeseries_id"
   } else if (lang == "fr") {
@@ -181,15 +206,28 @@ function(req, res, id, start, end = NA, limit = 100000) {
     lim <- 100000
   }
 
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
+
   sql <- "SELECT * FROM continuous.measurements_continuous_corrected 
   WHERE timeseries_id = $1 
   AND datetime >= $2 
@@ -217,15 +255,27 @@ function(req, res, id, start, end = NA, limit = 100000) {
 #* @get /parameters
 #* @serializer csv
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
 
   sql <- "SELECT parameter_id, param_name, param_name_fr, description, description_fr, unit_default AS units FROM public.parameters ORDER BY parameter_id"
   out <- DBI::dbGetQuery(con, sql)
@@ -282,15 +332,27 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
     ))
   }
 
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
 
   sql <- "SELECT sample_id, location_id, sub_location_id, mt.media_type AS media, z AS depth_height, datetime, target_datetime, cm.collection_method, st.sample_type, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, g.grade_type_description AS sample_grade, a.approval_type_description AS sample_approval, q.qualifier_type_description AS sample_qualifier, o1.name AS owner, o2.name AS contributor, field_visit_id, samples.note
   FROM discrete.samples 
@@ -353,15 +415,27 @@ function(req, res, sample_ids, parameters = NA) {
       stringsAsFactors = FALSE
     ))
   }
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
 
   sids <- as.integer(strsplit(sample_ids, ",")[[1]])
 
@@ -413,15 +487,27 @@ function(req, res, sample_ids, parameters = NA) {
 #* @serializer csv
 
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
 
   res <- YGwater::snowInfo(
     con = con,
@@ -439,15 +525,27 @@ function(req, res) {
 #* @serializer csv
 
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
 
   res <- YGwater::snowInfo(
     con = con,
@@ -465,15 +563,27 @@ function(req, res) {
 #* @serializer csv
 
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
 
   res <- YGwater::snowInfo(
     con = con,
@@ -491,15 +601,27 @@ function(req, res) {
 #* @serializer csv
 
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
-    name = Sys.getenv("APIaquacacheName"),
-    port = Sys.getenv("APIaquacachePort"),
-    host = Sys.getenv("APIaquacacheHost"),
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
 
   res <- YGwater::snowInfo(
     con = con,
