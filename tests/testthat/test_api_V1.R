@@ -82,7 +82,7 @@ test_that("tests for API V1", {
   # pick a timeseries_id to test the /timeseries/{timeseries_id} endpoint later on
   test_timeseries_id <- out$timeseries_id[1]
   test_timeseries_end <- out$end_datetime[1]
-  # In case the end datetime is a numeric timestamp, convert to POSIXct
+  # In case the end datetime is a numeric timestamp, convert to POSIXct (this happens on CI sometimes)
   if (suppressWarnings(!is.na(as.numeric(test_timeseries_end)))) {
     test_timeseries_end <- as.POSIXct(
       as.numeric(test_timeseries_end),
@@ -142,8 +142,10 @@ test_that("tests for API V1", {
       api_session,
       endpoint = sprintf("timeseries/%s/measurements", test_timeseries_id),
       query = list(
-        start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
-        end = test_timeseries_end,
+        # start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
+        # end = test_timeseries_end,
+        start = "2022-01-01 00:00",
+        end = "2022-12-31 23:59",
         limit = 100
       )
     ),
