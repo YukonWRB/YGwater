@@ -82,6 +82,14 @@ test_that("tests for API V1", {
   # pick a timeseries_id to test the /timeseries/{timeseries_id} endpoint later on
   test_timeseries_id <- out$timeseries_id[1]
   test_timeseries_end <- out$end_datetime[1]
+  # In case the end datetime is a numeric timestamp, convert to POSIXct
+  if (suppressWarnings(!is.na(as.numeric(test_timeseries_end)))) {
+    test_timeseries_end <- as.POSIXct(
+      as.numeric(test_timeseries_end),
+      origin = "1970-01-01",
+      tz = "UTC"
+    )
+  }
 
   # Tests for /locations endpoint
   expect_s3_class(
