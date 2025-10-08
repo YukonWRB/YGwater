@@ -100,7 +100,8 @@ snowInfo <- function(
     JOIN datum_conversions AS d ON l.location_id = d.location_id
     WHERE n.name = 'Snow Survey Network' AND l.location IN ('",
         paste(locations, collapse = "', '"),
-        "');
+        "'
+        ORDER BY l.name);
 "
       )
     )
@@ -123,7 +124,8 @@ snowInfo <- function(
     paste0(
       "SELECT sample_id, location_id, datetime, target_datetime FROM samples WHERE location_id IN ('",
       paste(locations$location_id, collapse = "', '"),
-      "') AND media_id = 7 AND collection_method = 1"
+      "') AND media_id = 7 AND collection_method = 1
+      ORDER BY location_id, target_datetime;"
     )
   ) # media = 'atmospheric', collection_method = 'observation'
 
@@ -147,7 +149,8 @@ snowInfo <- function(
     paste0(
       "SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
-      "') AND p.parameter_id IN (21, 1220)"
+      "') AND p.parameter_id IN (21, 1220)
+      ORDER BY r.sample_id"
     )
   ) # 21 = SWE, 1220 = depth
 

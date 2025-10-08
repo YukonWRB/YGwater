@@ -1,4 +1,4 @@
-#' @apiTitle AquaCache API
+#' @apiTitle AquaCache API version 1
 #' @apiDescription API for programmatic access to the aquacache database.
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
@@ -11,7 +11,8 @@ function(req, res) {
     "^/parameters$",
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
-    "^/__docs__/"
+    "^/__docs__/",
+    "^/timeseries/.+/measurements$"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
     any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
@@ -120,11 +121,12 @@ function(req, res, lang = "en") {
 
 #' Return measurements for a timeseries
 #* @param id Timeseries ID (required).
-#* @param start Start date (required, ISO 8601 format).
-#* @param end End date (optional, ISO 8601 format, defaults to current date/time).
+#* @param start Start date/time (required, ISO 8601).
+#* @param end End date/time (optional; defaults to now, ISO 8601).
+#* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @get /timeseries/<id>/measurements
 #* @serializer csv
-function(req, res, id, start, end = NA) {
+function(req, res, id, start, end = NA, limit = 100000) {
   if (missing(id)) {
     res$headers[["X-Status"]] <- "error"
     return(data.frame(
@@ -166,17 +168,27 @@ function(req, res, id, start, end = NA) {
     ))
   }
 
+  lim <- suppressWarnings(as.integer(limit))
+  if (is.na(lim) || lim <= 0) {
+    lim <- 100000
+  }
+
   con <- YGwater::AquaConnect(
     username = req$user,
     password = req$password,
     silent = TRUE
   )
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  sql <- "SELECT * FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3 ORDER BY datetime DESC"
+  sql <- "SELECT * FROM continuous.measurements_continuous_corrected 
+  WHERE timeseries_id = $1 
+  AND datetime >= $2 
+  AND datetime <= $3 
+  ORDER BY datetime DESC
+  LIMIT $4"
   out <- DBI::dbGetQuery(
     con,
     sql,
-    params = list(as.integer(id), start, end)
+    params = list(as.integer(id), start, end, lim)
   )
 
   if (nrow(out) == 0) {
