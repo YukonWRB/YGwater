@@ -3,7 +3,7 @@
 #' @description
 #' This function is intended to facilitate the reporting of snow survey data by compiling basic statistics (years of record, missing years, mean, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of SWE, depth, and density for all requested stations. At its most basic (parameters to FALSE or NULL where applicable), the result is a list of two data.frames to the R environment with location metadata and field measurements.
 #'
-#' @param locations The list of locations requested, as a character vector of length n. Default "all" fetches all stations.
+#' @param locations The list of location codes requested from column 'location' of table 'locations', as a character vector of length n. Default "all" fetches all stations.
 #' @param inactive Boolean specifying whether to include inactive stations. In this case, a station with no measurements for 5 or more years is considered inactive. Default is FALSE, i.e. no inactive stations.
 #' @param save_path The path where the .csv(s) and plots should be saved. Set to NULL for data only as an R object. Plots are not created if there is no save path.
 #' @param stats set TRUE if you want basic statistics (mean, min, max) and calculated trends.
@@ -88,6 +88,7 @@ snowInfo <- function(
     )
     all_locs <- TRUE
   } else {
+    locs_in <- locations
     locations <- DBI::dbGetQuery(
       con,
       paste0(
@@ -100,12 +101,13 @@ snowInfo <- function(
     JOIN datum_conversions AS d ON l.location_id = d.location_id
     WHERE n.name = 'Snow Survey Network' AND l.location IN ('",
         paste(locations, collapse = "', '"),
-        "');
+        "'
+        ORDER BY l.name);
 "
       )
     )
     # Find the missing locations if any were not found. locations is a vector of requested locations
-    check_locs <- locations[!locations %in% loc_tbl$location]
+    check_locs <- locations[!locations$name %in% locs_in, "location"]
     if (length(check_locs) > 0) {
       message(
         "Could not find a record for location ",
@@ -117,13 +119,13 @@ snowInfo <- function(
   }
 
   #Get the measurements
-
   samples <- DBI::dbGetQuery(
     con,
     paste0(
       "SELECT sample_id, location_id, datetime, target_datetime FROM samples WHERE location_id IN ('",
       paste(locations$location_id, collapse = "', '"),
-      "') AND media_id = 7 AND collection_method = 1"
+      "') AND media_id = 7 AND collection_method = 1
+      ORDER BY location_id, target_datetime;"
     )
   ) # media = 'atmospheric', collection_method = 'observation'
 
@@ -133,9 +135,9 @@ snowInfo <- function(
     rm.inactive <- samples |>
       dplyr::group_by(.data$location_id) |>
       dplyr::summarise(
-        last_year = max(lubridate::year(.data$target_datetime))
+        "last_year" = max(lubridate::year(.data$target_datetime))
       ) |>
-      dplyr::filter(last_year <= cutoff) |>
+      dplyr::filter(.data$last_year <= cutoff) |>
       dplyr::pull(.data$location_id)
 
     locations <- locations[!locations$location_id %in% rm.inactive, ]
@@ -147,7 +149,8 @@ snowInfo <- function(
     paste0(
       "SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
-      "') AND p.parameter_id IN (21, 1220)"
+      "') AND p.parameter_id IN (21, 1220)
+      ORDER BY r.sample_id"
     )
   ) # 21 = SWE, 1220 = depth
 

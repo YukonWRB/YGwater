@@ -1,17 +1,21 @@
-#' @apiTitle AquaCache API
-#' @apiDescription API for programmatic access to the aquacache database.
+#' @apiTitle AquaCache API version 1
+#' @apiDescription API for programmatic access to the aquacache database. Should usually be launched using function api(), in the R directory
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
 function(req, res) {
-  # Allow anonymous only for read-only GET on these routes
+  # Allow anonymous for read-only GET on these routes (uses public_reader account)
   public_paths <- c(
     "^/locations$",
     "^/timeseries$",
     "^/parameters$",
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
-    "^/__docs__/"
+    "^/__docs__/", # UI shell & assets
+    "^/openapi.json$", # <-- needed for the UI to load without auth
+    "^/openapi.yaml$", # <-- sometimes used
+    "^/timeseries/measurements$",
+    "^/samples/results$/"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
     any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
@@ -23,8 +27,8 @@ function(req, res) {
       res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
       return(list(error = "Authentication required"))
     }
-    req$user <- "public_reader"
-    req$password <- "aquacache"
+    req$user <- Sys.getenv("APIaquacacheAnonUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
+    req$password <- Sys.getenv("APIaquacacheAnonPass", "aquacache")
     return(plumber::forward())
   }
 
@@ -46,11 +50,26 @@ function(req, res) {
 #* @get /locations
 #* @serializer csv
 function(req, res, lang = "en") {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sql <- if (lang == "en") {
@@ -85,12 +104,28 @@ function(req, res, lang = "en") {
 #* @get /timeseries
 #* @serializer csv
 function(req, res, lang = "en") {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+
   if (lang == "en") {
     sql <- "SELECT * FROM continuous.timeseries_metadata_en ORDER BY timeseries_id"
   } else if (lang == "fr") {
@@ -120,11 +155,12 @@ function(req, res, lang = "en") {
 
 #' Return measurements for a timeseries
 #* @param id Timeseries ID (required).
-#* @param start Start date (required, ISO 8601 format).
-#* @param end End date (optional, ISO 8601 format, defaults to current date/time).
-#* @get /timeseries/<id>/measurements
+#* @param start Start date/time (required, ISO 8601).
+#* @param end End date/time (optional; defaults to now, ISO 8601).
+#* @param limit Maximum number of records to return (optional; defaults to 100000).
+#* @get /timeseries/measurements
 #* @serializer csv
-function(req, res, id, start, end = NA) {
+function(req, res, id, start, end = NA, limit = 100000) {
   if (missing(id)) {
     res$headers[["X-Status"]] <- "error"
     return(data.frame(
@@ -166,17 +202,43 @@ function(req, res, id, start, end = NA) {
     ))
   }
 
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  lim <- suppressWarnings(as.integer(limit))
+  if (is.na(lim) || lim <= 0) {
+    lim <- 100000
+  }
+
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-  sql <- "SELECT * FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3 ORDER BY datetime DESC"
+
+  sql <- "SELECT * FROM continuous.measurements_continuous_corrected 
+  WHERE timeseries_id = $1 
+  AND datetime >= $2 
+  AND datetime <= $3 
+  ORDER BY datetime DESC
+  LIMIT $4"
   out <- DBI::dbGetQuery(
     con,
     sql,
-    params = list(as.integer(id), start, end)
+    params = list(as.integer(id), start, end, lim)
   )
 
   if (nrow(out) == 0) {
@@ -194,11 +256,26 @@ function(req, res, id, start, end = NA) {
 #* @get /parameters
 #* @serializer csv
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sql <- "SELECT parameter_id, param_name, param_name_fr, description, description_fr, unit_default AS units FROM public.parameters ORDER BY parameter_id"
@@ -256,11 +333,26 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
     ))
   }
 
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sql <- "SELECT sample_id, location_id, sub_location_id, mt.media_type AS media, z AS depth_height, datetime, target_datetime, cm.collection_method, st.sample_type, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, g.grade_type_description AS sample_grade, a.approval_type_description AS sample_approval, q.qualifier_type_description AS sample_qualifier, o1.name AS owner, o2.name AS contributor, field_visit_id, samples.note
@@ -313,7 +405,7 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
 #' Return sample results
 #* @param sample_ids Sample ID (required, integer string separated by commas).
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters results to these parameters.
-#* @get /samples/<sample_ids>/results
+#* @get /samples/results
 #* @serializer csv
 function(req, res, sample_ids, parameters = NA) {
   if (missing(sample_ids)) {
@@ -324,11 +416,26 @@ function(req, res, sample_ids, parameters = NA) {
       stringsAsFactors = FALSE
     ))
   }
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sids <- as.integer(strsplit(sample_ids, ",")[[1]])
@@ -381,11 +488,26 @@ function(req, res, sample_ids, parameters = NA) {
 #* @serializer csv
 
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   res <- YGwater::snowInfo(
@@ -404,11 +526,26 @@ function(req, res) {
 #* @serializer csv
 
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   res <- YGwater::snowInfo(
@@ -427,11 +564,26 @@ function(req, res) {
 #* @serializer csv
 
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   res <- YGwater::snowInfo(
@@ -450,11 +602,26 @@ function(req, res) {
 #* @serializer csv
 
 function(req, res) {
-  con <- YGwater::AquaConnect(
-    username = req$user,
-    password = req$password,
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
     silent = TRUE
   )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   res <- YGwater::snowInfo(

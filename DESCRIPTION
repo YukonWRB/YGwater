@@ -2,14 +2,16 @@ Package: YGwater
 Title: R functions and applications for the Yukon Water Science and Stewardship Branch
 Version: 1.8.1
 Authors@R: c(
-    person("Ghislain", "de Laplante", , email = "ghislaindel@gmail.com", role = c("aut", "cre"),
+    person("Ghislain", "de Laplante", email = "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
-    person("Cole", "Fischer", , email = "cole.fischer@hotmail.com", role = "ctb",
+    person("Cole", "Fischer", email = "cole.fischer@hotmail.com", role = "ctb",
            comment = c(ORCID = "0000-0002-7266-5760")),
-    person("Emilie", "Stewart-Jones", , email = "emilie.stewart-jones@yukon.ca", role = "ctb"),
-    person("Everett", "Snieder", , email = "everett.snieder@gmail.com", role = "ctb", 
-    comment = c(ORCID = "0000-0003-4997-3404"))
+    person("Emilie", "Stewart-Jones", email = "emilie.stewart-jones@yukon.ca", role = "ctb"),
+    person("Everett", "Snieder", email = "everett.snieder@gmail.com", role = "aut", 
+          comment = c(ORCID = "0000-0003-4997-3404"))
   )
+Author: Ghislain de Laplante [aut, cre], Cole Fischer [ctb], Emilie Stewart-Jones [ctb], Everett Snieder [aut]
+Maintainer: Ghislain de Laplante <ghislain.delaplante@yukon.ca>
 Description: Stores various functions for use across the Water Science and
     Stweardship Branch disciplines, including for generating reports,
     gathering and processing data, and creating plots. Also includes several Shiny applications and an API for accessing the AquaCache database.
@@ -53,6 +55,7 @@ Suggests:
     AquaCache,
     bslib,
     bsicons,
+    callthat,
     curl,
     DT,
     exifr,
@@ -73,6 +76,7 @@ Suggests:
     plumber,
     purrr,
     ragg,
+    readr,
     reticulate,
     rpostgis,
     RSQLite,
@@ -85,10 +89,12 @@ Suggests:
     tidyhydat,
     vdiffr,
     weathercan,
+    withr,
     zip,
 Remotes:
     github::ropensci/weathercan,
-    github::YukonWRB/AquaCache
+    github::YukonWRB/AquaCache,
+    github::edgararuiz/callthat
 Config/testthat/edition: 3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

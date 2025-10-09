@@ -10,6 +10,7 @@
 #' @param dbName The name of the PostgreSQL database. Default is 'aquacache'.
 #' @param dbHost The host address of the PostgreSQL database. Default is 'localhost'.
 #' @param dbPort The port number of the PostgreSQL database. Default is 5432.
+#' @param run Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.
 #' @return Runs the API server.
 #' @export
 #' @examples
@@ -22,18 +23,22 @@ api <- function(
   host = "127.0.0.1",
   port = 8000,
   server = "/water-data/api",
-  dbName = 'aquacache',
-  dbHost = 'localhost',
-  dbPort = 5432
+  dbName = Sys.getenv("aquacacheName"),
+  dbHost = Sys.getenv("aquacacheHost"),
+  dbPort = Sys.getenv("aquacachePort"),
+  run = TRUE
 ) {
-  rlang::check_installed("plumber", reason = "required to run the YGwater API")
+  rlang::check_installed("plumber", reason = "required to run a plumber API")
 
   if (!is.null(version)) {
-    api_path <- system.file(paste0("api/v", version, ".R"), package = "YGwater")
+    api_path <- system.file(
+      paste0("plumber/v", version, ".R"),
+      package = "YGwater"
+    )
   } else {
     # Find the latest version available and use it
     api_files <- list.files(
-      system.file("api", package = "YGwater"),
+      system.file("plumber", package = "YGwater"),
       pattern = "^v[0-9]+\\.R$"
     )
     if (length(api_files) == 0) {
@@ -42,7 +47,7 @@ api <- function(
     versions <- as.numeric(gsub("v([0-9]+)\\.R", "\\1", api_files))
     latest_version <- max(versions, na.rm = TRUE)
     api_path <- system.file(
-      paste0("api/v", latest_version, ".R"),
+      paste0("plumber/v", latest_version, ".R"),
       package = "YGwater"
     )
   }
@@ -54,9 +59,9 @@ api <- function(
 
   # Set environment variables for database connection
   # username and password are handled via Basic Authentication or use the default read-only user
-  Sys.setenv(aquacacheName = dbName)
-  Sys.setenv(aquacacheHost = dbHost)
-  Sys.setenv(aquacachePort = dbPort)
+  Sys.setenv(APIaquacacheName = dbName)
+  Sys.setenv(APIaquacacheHost = dbHost)
+  Sys.setenv(APIaquacachePort = dbPort)
 
   spec <- pr$getApiSpec()
   spec$components$securitySchemes$BasicAuth <- list(
@@ -67,5 +72,8 @@ api <- function(
   spec$servers <- list(list(url = server))
   pr$setApiSpec(spec)
 
+  if (!run) {
+    return(pr)
+  }
   pr$run(host = host, port = port)
 }
