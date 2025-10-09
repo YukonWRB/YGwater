@@ -163,7 +163,6 @@ function(req, res, lang = "en") {
 function(req, res, id, start, end = NA, limit = 100000) {
   if (missing(id)) {
     res$headers[["X-Status"]] <- "error"
-    stop("Missing required 'id' parameter.")
     return(data.frame(
       status = "error",
       message = "Missing required 'id' parameter.",
@@ -174,7 +173,6 @@ function(req, res, id, start, end = NA, limit = 100000) {
   # Ensure start and end are provided and can be converted to POSIXct
   if (missing(start)) {
     res$headers[["X-Status"]] <- "error"
-    stop("Missing required 'start' parameter.")
     return(data.frame(
       status = "error",
       message = "Missing required 'start' parameter.",
@@ -189,7 +187,6 @@ function(req, res, id, start, end = NA, limit = 100000) {
 
   if (inherits(start, "try-error") || is.na(start)) {
     res$headers[["X-Status"]] <- "error"
-    stop("Invalid 'start' parameter")
     return(data.frame(
       status = "error",
       message = "Invalid 'start' parameter. Must be in ISO 8601 format.",
@@ -198,7 +195,6 @@ function(req, res, id, start, end = NA, limit = 100000) {
   }
   if (inherits(end, "try-error") || is.na(end)) {
     res$headers[["X-Status"]] <- "error"
-    stop("Invalid 'end' parameter")
     return(data.frame(
       status = "error",
       message = "Invalid 'end' parameter. Must be in ISO 8601 format.",
@@ -225,7 +221,6 @@ function(req, res, id, start, end = NA, limit = 100000) {
 
   if (inherits(con, "try-error")) {
     res$status <- 503
-    stop("Database connection failed")
     return(data.frame(
       status = "error",
       message = "Database connection failed, check your credentials.",
@@ -247,7 +242,6 @@ function(req, res, id, start, end = NA, limit = 100000) {
   )
 
   if (nrow(out) == 0) {
-    stop("No measurements found")
     res$headers[["X-Status"]] <- "info"
     return(data.frame(
       status = "info",

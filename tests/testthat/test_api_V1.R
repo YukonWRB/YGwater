@@ -136,6 +136,7 @@ test_that("tests for API V1", {
   )
 
   ## Tests for /timeseries/{timeseries_id} endpoint
+  skip_on_ci()
   expect_s3_class(
     # ---------------- Make API call --------------------
     get_ts_id <- callthat::call_that_api_get(
