@@ -12,9 +12,10 @@ function(req, res) {
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
     "^/__docs__/", # UI shell & assets
-    "^/openapi.json$", # <-- needed for the UI to load
+    "^/openapi.json$", # <-- needed for the UI to load without auth
     "^/openapi.yaml$", # <-- sometimes used
-    "^/timeseries/.+/measurements$"
+    "^/timeseries/measurements$",
+    "^/samples/results$/"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
     any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
@@ -157,11 +158,12 @@ function(req, res, lang = "en") {
 #* @param start Start date/time (required, ISO 8601).
 #* @param end End date/time (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
-#* @get /timeseries/<id>/measurements
+#* @get /timeseries/measurements
 #* @serializer csv
 function(req, res, id, start, end = NA, limit = 100000) {
   if (missing(id)) {
     res$headers[["X-Status"]] <- "error"
+    stop("Missing required 'id' parameter.")
     return(data.frame(
       status = "error",
       message = "Missing required 'id' parameter.",
@@ -172,6 +174,7 @@ function(req, res, id, start, end = NA, limit = 100000) {
   # Ensure start and end are provided and can be converted to POSIXct
   if (missing(start)) {
     res$headers[["X-Status"]] <- "error"
+    stop("Missing required 'start' parameter.")
     return(data.frame(
       status = "error",
       message = "Missing required 'start' parameter.",
@@ -186,6 +189,7 @@ function(req, res, id, start, end = NA, limit = 100000) {
 
   if (inherits(start, "try-error") || is.na(start)) {
     res$headers[["X-Status"]] <- "error"
+    stop("Invalid 'start' parameter")
     return(data.frame(
       status = "error",
       message = "Invalid 'start' parameter. Must be in ISO 8601 format.",
@@ -194,6 +198,7 @@ function(req, res, id, start, end = NA, limit = 100000) {
   }
   if (inherits(end, "try-error") || is.na(end)) {
     res$headers[["X-Status"]] <- "error"
+    stop("Invalid 'end' parameter")
     return(data.frame(
       status = "error",
       message = "Invalid 'end' parameter. Must be in ISO 8601 format.",
@@ -220,6 +225,7 @@ function(req, res, id, start, end = NA, limit = 100000) {
 
   if (inherits(con, "try-error")) {
     res$status <- 503
+    stop("Database connection failed")
     return(data.frame(
       status = "error",
       message = "Database connection failed, check your credentials.",
@@ -241,6 +247,7 @@ function(req, res, id, start, end = NA, limit = 100000) {
   )
 
   if (nrow(out) == 0) {
+    stop("No measurements found")
     res$headers[["X-Status"]] <- "info"
     return(data.frame(
       status = "info",
@@ -404,7 +411,7 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
 #' Return sample results
 #* @param sample_ids Sample ID (required, integer string separated by commas).
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters results to these parameters.
-#* @get /samples/<sample_ids>/results
+#* @get /samples/results
 #* @serializer csv
 function(req, res, sample_ids, parameters = NA) {
   if (missing(sample_ids)) {

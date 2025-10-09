@@ -140,13 +140,12 @@ test_that("tests for API V1", {
     # ---------------- Make API call --------------------
     get_ts_id <- callthat::call_that_api_get(
       api_session,
-      endpoint = sprintf("timeseries/%s/measurements", test_timeseries_id),
+      endpoint = "timeseries/measurements",
       query = list(
-        # start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
-        # end = test_timeseries_end,
-        start = "2022-01-01 00:00",
-        end = "2022-12-31 23:59",
-        limit = 100
+        start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
+        end = test_timeseries_end,
+        limit = 100,
+        id = test_timeseries_id
       )
     ),
     "response"
