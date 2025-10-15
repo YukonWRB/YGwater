@@ -24,14 +24,14 @@ eq_fetch <- function(EQcode,
                      BD = 2,
                      apply_standards = TRUE,
                      path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"){
-  
-  # EQcode <- "KNO"
-  # stationIDs = c("FORMO-01", "FORMO-CK", "FO-WQ-SE-1", "FO-WQ-SE2-1", "FO-WQ-ST1-1", "FO-WQ-ST1-2", "FO-WQ-ST1-3")
-  # paramIDs = c("Fe-D", "Zn-D", "Cond-F")
-  # dates = "all"
-  # BD <- 2
-  # apply_standards = TRUE
-  # path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
+
+  EQcode <- "KNO"
+  stationIDs = c("FORMO-01", "FORMO-CK", "FO-WQ-SE-1", "FO-WQ-SE2-1", "FO-WQ-ST1-1", "FO-WQ-ST1-2", "FO-WQ-ST1-3")
+  paramIDs = c("Fe-D", "Zn-D", "Cond-F")
+  dates = "all"
+  BD <- 2
+  apply_standards = TRUE
+  path = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
   
   # Set a few options
   old_scipen <- getOption("scipen")
@@ -42,7 +42,7 @@ eq_fetch <- function(EQcode,
   on.exit(options(dplyr.summarise.inform = old_dplyr), add = TRUE)
   
   # Connect to EQWin
-  EQWin <- AccessConnect(path, silent = TRUE)
+  EQWin <- YGwater::AccessConnect(path, silent = TRUE)
   on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
   
   # Add project code to EQWin stations
