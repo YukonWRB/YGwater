@@ -5,29 +5,33 @@
 #'
 #' @param file Full path to the .xle file. This must be an XLE file from a Solinst logger.
 #' @param aq_upload Logical, whether to upload data to Aquarius. If FALSE a data.frame of the data is returned. Uses function [aq_upload()] with default parameters, so you'll want to make sure your Aquarius login details are in your .Renviron file.
-#' @param master_file Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity. Defaults to a WRB network location.
-#' @param logger_tracking Path to YOWN logger tracking sheet (.xlsx), used to track logger metadata. Defaults to a WRB network location. This part is done within a tryCatch block to enable this function to run even if the logger tracking sheet is open, missing, or otherwise inaccessible.
-#' @param dropbox Path to YOWN logger dropbox folder, where the xle file is located. Defaults to a WRB network location. This is used to move the file to the appropriate folder after processing.
-#' @param repo Path to YOWN Active Wells folder, which will be concatenated with the YOWN ID to create the final resting place for the xle file. Defaults to a WRB network location. If NULL the file will not get moved.
+#' @param master_file Path to YOWN master sheet (.xlsx), used to match logger data to YOWN ID and ensure integrity.
+#' @param logger_tracking Path to YOWN logger tracking sheet (.xlsx), used to track logger metadata. This part is done within a tryCatch block to enable this function to run even if the logger tracking sheet is open, missing, or otherwise inaccessible.
+#' @param dropbox Path to YOWN logger dropbox folder, where the xle file is located. This is used to move the file to the appropriate folder after processing.
+#' @param repo Path to YOWN Active Wells folder, which will be concatenated with the YOWN ID to create the final resting place for the xle file. If NULL the file will not get moved.
 #'
 #' @return Moves YOWN xle file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions if aq_upload is TRUE, else returns a data.frame.
 #' @export
 
 xle_processing <- function(file,
                            aq_upload = TRUE,
-                           master_file = yown_master_path(),
-                           logger_tracking = yown_tracking_path(),
-                           dropbox = yown_dropbox_path(),
-                           repo = yown_active_path()) {
+                           master_file = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
+                           logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
+                           dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
+                           repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
   
-  
-  # file = "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\backups\\220202_YOWN-2201D_ArmyBeachWell1D.xle"
+  # Debug Params
+  # file = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX/1077366_YOWN-0101 Wolf Creek_2025_04_15_120631.xle"
   # aq_upload = TRUE
   # master_file = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx"
   # logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
   # dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
   # repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
-
+  # 
+  
+  
+  # Make sure tibble is installed as it's in suggests
+  rlang::check_installed("tibble", reason = "necessary for function to run")
   
   if (!file.exists(master_file)) {
     stop("Master file not found, check file location")
@@ -55,7 +59,7 @@ xle_processing <- function(file,
     }, error = function(e) {
       stop("Logger tracking Excel file found but not not the sheet named 'Sheet 1', check the file and try again.")
     })
-
+    
     # Make sure the table has the required columns
     
     # ... please fill this in...
@@ -82,8 +86,6 @@ xle_processing <- function(file,
       
     }
   }
-
-  
   
   # Ensure the 'file' has extension .xle (last part of the string)
   if (!file.exists(file)) {
@@ -99,9 +101,6 @@ xle_processing <- function(file,
       
     }
   }
-
-  
-
   
   #### Define helper functions ####
   # Define pressure conversion function
@@ -174,13 +173,14 @@ xle_processing <- function(file,
   
   # Define header data extraction function
   parse_properties <- function(xml_nodes, node_name) {
-    data.frame(Property = xml_nodes %>%
-                 xml2::xml_find_all(paste0("//", node_name, "/*")) %>%
-                 xml2::xml_name(),
-               Value = xml_nodes %>%
-                 xml2::xml_find_all(paste0("//", node_name, "/*")) %>%
-                 xml2::xml_text(),
-               stringsAsFactors = FALSE)
+    tibble::tibble(
+      Property = xml_nodes %>%
+        xml2::xml_find_all(paste0("//", node_name, "/*")) %>%
+        xml2::xml_name(),
+      Value = xml_nodes %>%
+        xml2::xml_find_all(paste0("//", node_name, "/*")) %>%
+        xml2::xml_text()
+    )
   }
   
   #### xle processing ####
@@ -195,21 +195,15 @@ xle_processing <- function(file,
   instrument_data_header <- parse_properties(xml_file, "Instrument_info_data_header")
   
   # Extract Channel Data Headers (Ch1, Ch2, Ch3)
-  nodes <- xml2::xml_find_all(
-    xml_file,
-    "//Ch1_data_header|//Ch2_data_header|//Ch3_data_header"
-  )
-  
-  channel_data_header <- do.call(rbind, lapply(nodes, function(n) {
-    id_node <- xml2::xml_find_first(n, "Identification")
-    unit_node <- xml2::xml_find_first(n, "Unit")
-    data.frame(
-      Channel = xml2::xml_name(n),
-      Identification = if (inherits(id_node, "xml_missing")) NA_character_ else xml2::xml_text(id_node),
-      Unit = if (inherits(unit_node, "xml_missing")) NA_character_ else xml2::xml_text(unit_node),
-      stringsAsFactors = FALSE
-    )
-  }))
+  channel_data_header <- xml_file %>%
+    xml2::xml_find_all("//Ch1_data_header|//Ch2_data_header|//Ch3_data_header") %>%
+    purrr::map_dfr(~{
+      tibble::tibble(
+        Channel = xml2::xml_name(.x),
+        Identification = xml2::xml_find_first(.x, "Identification") %>% xml2::xml_text(),
+        Unit = xml2::xml_find_first(.x, "Unit") %>% xml2::xml_text()
+      )
+    })
   
   LTC <- FALSE # Tracks if there are three channels in the XML file or two
   
@@ -248,29 +242,15 @@ xle_processing <- function(file,
   write(paste0(well_loc, " detected in file name"), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
   
   # Extract Logs into a Data Frame
-  logs <- xml2::xml_find_all(xml_file, ".//Data/Log")
-  
-  rows <- lapply(logs, function(x) {
-    kids <- xml2::xml_children(x)
-    vals <- xml2::xml_text(kids)
-    nms  <- xml2::xml_name(kids)
-    out  <- as.list(vals); names(out) <- nms
-    out$id <- xml2::xml_attr(x, "id")
-    out
-  })
-  
-  # Build union of names and row-bind with proper NA fill
-  all_names <- unique(unlist(lapply(rows, base::names), use.names = FALSE))
-  
-  mat <- do.call(rbind, lapply(rows, function(r) {
-    v <- rep(NA_character_, length(all_names))
-    names(v) <- all_names
-    v[names(r)] <- unlist(r, use.names = FALSE)
-    v
-  }))
-  
-  data <- as.data.frame(mat, stringsAsFactors = FALSE, optional = TRUE)
-  
+  data <- xml_file %>%
+    xml2::xml_find_all("//Data/Log") %>%
+    purrr::map_df(~{
+      xml2::xml_children(.x) %>% 
+        purrr::set_names(xml2::xml_name(.)) %>% 
+        purrr::map(xml2::xml_text) %>%
+        tibble::as_tibble() %>%
+        dplyr::mutate(id = xml2::xml_attr(.x, "id"))
+    })
   
   # Convert columns to appropriate types
   if (LTC) {
@@ -284,9 +264,9 @@ xle_processing <- function(file,
       lubridate::with_tz("Time", tzone = "UTC") %>%
       dplyr::select(-c("id", "ms", "Date")) %>%
       stats::setNames(c("Time", 
-                 channel_data_header$Identification[1], 
-                 channel_data_header$Identification[2], 
-                 channel_data_header$Identification[3]))
+                        channel_data_header$Identification[1], 
+                        channel_data_header$Identification[2], 
+                        channel_data_header$Identification[3]))
   } else {
     final_data <- data %>%
       dplyr::mutate(
@@ -297,10 +277,10 @@ xle_processing <- function(file,
       lubridate::with_tz("Time", tzone = "UTC") %>%
       dplyr::select(-c("id", "ms", "Date")) %>%
       stats::setNames(c("Time", 
-                 channel_data_header$Identification[1], 
-                 channel_data_header$Identification[2]))
+                        channel_data_header$Identification[1], 
+                        channel_data_header$Identification[2]))
   }
-
+  
   if ("LEVEL" %in% colnames(final_data)) {
     final_data$LEVEL <- convert_level(column = final_data$LEVEL, level_unit)
     level_unit <- "m"}
@@ -328,45 +308,49 @@ xle_processing <- function(file,
         temp <- data.frame(Time = final_data$Time, Value = final_data$`Level (m)`)
         tryCatch({
           start <- Sys.time()
-          result <- aq_upload(well_loc, i, temp)
+          result <- YGwater::aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
           write(paste0("Level append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
         }, error = function(e) {
-          write("Level append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+          write(paste0("Level append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+          stop("Level upload failed with error:", e$message)
         })
       } else if (i == "Water Temp.TEMPERATURE") {
         temp <- data.frame(Time = final_data$Time, Value = final_data$'Temperature (\u00B0C)')
         tryCatch({
           start <- Sys.time()
-          result <- aq_upload(well_loc, i, temp)
+          result <- YGwater::aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
           write(paste0("Temperature append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
         }, error = function(e) {
-          write("Temperature append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
+          write(paste0("Temperature append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+          stop("Temperature upload failed with error:", e$message)
+        })
       } else if (i == "Conductivity Field.Econdy-F") {
         tryCatch({
           temp <- data.frame(Time = final_data$Time, Value = final_data$'Conductivity (\u00B5S/cm)')
           start <- Sys.time()
-          result <- aq_upload(well_loc, i, temp)
+          result <- YGwater::aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
           write(paste0("Conductivity append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
         }, error = function(e) {
-          write("Conductivity append FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")})
+          write(paste0("Conductivity append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
+          stop("Conductivity upload failed with error:", e$message)
+        })
       }
     }
   }
-
   
   #### Track metadata ####
   
   # Format data to be added
   new_data <- data.frame(YOWN_ID = well_loc,
-                Logger_Make = "Solinst",
-                Logger_Type = instrument_properties$Value[instrument_properties$Property == "Instrument_type"],
-                Logger_Model = instrument_properties$Value[instrument_properties$Property == "Model_number"],
-                Logger_Serial = instrument_properties$Value[instrument_properties$Property == "Serial_number"],
-                Deploy_Date = as.character(min(final_data$Time)),
-                Retrieve_Date = as.character(max(final_data$Time)))
+                         Logger_Make = "Solinst",
+                         Logger_Type = instrument_properties$Value[instrument_properties$Property == "Instrument_type"],
+                         Logger_Model = instrument_properties$Value[instrument_properties$Property == "Model_number"],
+                         Logger_Serial = instrument_properties$Value[instrument_properties$Property == "Serial_number"],
+                         Deploy_Date = as.character(min(final_data$Time)),
+                         Retrieve_Date = as.character(max(final_data$Time)))
   
   # Append the new data
   updated_data <- rbind(log_track_sheet, new_data) %>%
@@ -418,7 +402,7 @@ xle_processing <- function(file,
       write("Moving the file to its final resting place FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
     })
   }
-
+  
   
   if (!aq_upload) {
     return(final_data)
