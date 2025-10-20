@@ -563,7 +563,7 @@ YOWNplot <- function(AQID,
 
   # Draw arranged plots on background template file
   final_plot <- cowplot::ggdraw() +
-    cowplot::draw_image(system.file("data-raw/Template_grades.jpg", package = "YGwater")) +
+    cowplot::draw_image(system.file("YOWNplot/Template_grades.jpg", package = "YGwater")) +
     cowplot::draw_plot(final)
 
   # Save plot to specified directory
