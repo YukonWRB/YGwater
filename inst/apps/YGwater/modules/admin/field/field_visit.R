@@ -1,5 +1,18 @@
 # UI and server code for field visit module
 
+# TODO modifications to module
+# instrument table should have data types of factor for easier searching
+# Add owner, contributor, commissioner to field visit
+# Add 'reason for no field measurements' if none taken
+# Remove field visit start/end, just add sample time
+# map search + select for location/sub-location
+# Add ability to add new location/sub-location from within the module??
+# field visit -> sampling event
+
+# Samples need depth
+
+# Make way to retire instruments, apply with 15B104601 (yellow)
+
 visitUI <- function(id) {
   ns <- NS(id)
   page_fluid(

@@ -21,11 +21,12 @@
 #' @seealso [getHRDPS()] if looking for forecast precipitation and other parameters in .tif format. For nice precipitation maps and tabular reports of precipitation (past or future), try [basinPrecip()].
 #' @export
 #'
-getHRDPA <- function(start = Sys.time() - 60*60*24,
-                     end = Sys.time(),
-                     clip = c("YT"),
-                     save_path = "choose")
-{
+getHRDPA <- function(
+  start = Sys.time() - 60 * 60 * 24,
+  end = Sys.time(),
+  clip = c("YT"),
+  save_path = "choose"
+) {
   # Save path
   if (save_path == "choose") {
     if (!interactive()) {
@@ -34,56 +35,107 @@ getHRDPA <- function(start = Sys.time() - 60*60*24,
     message("Select the path to the folder where you want these rasters saved.")
     save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder")
   }
-  
+
   # Determine the sequence of files within the start:end window, compare against what exists in save_path, make list of files to dl. #####
-  start <- as.POSIXct(start) + 60*60*4.8 #Assuming that rasters are issued a bit more than one hour post valid time, this sets the start time so that the 6 hours before the requested start time is not included.
+  start <- as.POSIXct(start) + 60 * 60 * 4.8 #Assuming that rasters are issued a bit more than one hour post valid time, this sets the start time so that the 6 hours before the requested start time is not included.
   end <- as.POSIXct(end)
   attr(start, "tzone") <- "UTC"
   attr(end, "tzone") <- "UTC"
   start <- lubridate::floor_date(start, "6 hours")
   end <- lubridate::floor_date(end, "6 hours")
-  
+
   seq_days <- seq.Date(as.Date(start), as.Date(end), by = "day")
   available <- data.frame()
   for (i in 1:length(seq_days)) {
     day <- seq_days[i]
     for (j in c("00", "06", "12", "18")) {
-      tryCatch({
-        tmp <- xml2::read_html(paste0("https://dd.weather.gc.ca/", gsub("-", "", day), "/WXO-DD/model_hrdpa/2.5km/", j, "/"))
-        tmp <- rvest::html_elements(tmp, xpath ='//*[contains(@href, ".grib2")]') %>%
-          rvest::html_attr("href")
-        df <- data.frame(file = tmp, path = paste0("https://dd.weather.gc.ca/", gsub("-", "", day), "/WXO-DD/model_hrdpa/2.5km/", j, "/", tmp))
-        available <- rbind(available, df)
-      }, error = function(e) {
-
-        message(paste0("No reanalysis data available for ", day, " at ", j, " UTC"))
-      })
+      tryCatch(
+        {
+          tmp <- xml2::read_html(paste0(
+            "https://dd.weather.gc.ca/",
+            gsub("-", "", day),
+            "/WXO-DD/model_hrdpa/2.5km/",
+            j,
+            "/"
+          ))
+          tmp <- rvest::html_elements(
+            tmp,
+            xpath = '//*[contains(@href, ".grib2")]'
+          ) |>
+            rvest::html_attr("href")
+          df <- data.frame(
+            file = tmp,
+            path = paste0(
+              "https://dd.weather.gc.ca/",
+              gsub("-", "", day),
+              "/WXO-DD/model_hrdpa/2.5km/",
+              j,
+              "/",
+              tmp
+            )
+          )
+          available <- rbind(available, df)
+        },
+        error = function(e) {
+          message(paste0(
+            "No reanalysis data available for ",
+            day,
+            " at ",
+            j,
+            " UTC"
+          ))
+        }
+      )
     }
   }
-  
+
   available$cutoff <- "0700"
   available$cutoff[grepl("Prelim", available$file)] <- "0100"
   available$valid <- NA
-  available$valid <- as.POSIXct(substr(available$file, 1, 11), format = "%Y%m%dT%H", tz = "UTC")
+  available$valid <- as.POSIXct(
+    substr(available$file, 1, 11),
+    format = "%Y%m%dT%H",
+    tz = "UTC"
+  )
   available$integrate_time <- "6h"
   available$integrate_time[grepl("Accum24h", available$file)] <- "24h"
-  
-  last_available_01 <- available[available$valid == max(available$valid) & available$cutoff == "0100" & available$integrate_time == "6h", "valid"]
-  last_available_07 <- available[available$valid == max(available$valid) & available$cutoff == "0700" & available$integrate_time == "6h", "valid"]
-  first_available_01 <- available[available$valid == min(available$valid) & available$cutoff == "0100" & available$integrate_time == "6h", "valid"]
-  first_available_07 <- available[available$valid == min(available$valid) & available$cutoff == "0700" & available$integrate_time == "6h", "valid"]
-  
+
+  last_available_01 <- available[
+    available$valid == max(available$valid) &
+      available$cutoff == "0100" &
+      available$integrate_time == "6h",
+    "valid"
+  ]
+  last_available_07 <- available[
+    available$valid == max(available$valid) &
+      available$cutoff == "0700" &
+      available$integrate_time == "6h",
+    "valid"
+  ]
+  first_available_01 <- available[
+    available$valid == min(available$valid) &
+      available$cutoff == "0100" &
+      available$integrate_time == "6h",
+    "valid"
+  ]
+  first_available_07 <- available[
+    available$valid == min(available$valid) &
+      available$cutoff == "0700" &
+      available$integrate_time == "6h",
+    "valid"
+  ]
+
   #Make to nearest available time (correct times if they specify a yet-to-exist or no longer present file)
-  if (start > last_available_01){
+  if (start > last_available_01) {
     start <- last_available_01
   }
-  if (end > last_available_01){
+  if (end > last_available_01) {
     end <- last_available_01
   }
-  if (start < first_available_07){
+  if (start < first_available_07) {
     start <- first_available_07
   }
-  if (end < first_available_07){
+  if (end < first_available_07) {
     end <- first_available_07
   }
   #now make the sequence
@@ -94,7 +146,7 @@ getHRDPA <- function(start = Sys.time() - 60*60*24,
       sequence[i] <- paste0(sequence[i], " 00")
     }
   }
-  
+
   #Make clip polygon
   extent <- paste(clip, collapse = "_")
   if (!is.null(clip)) {
@@ -103,25 +155,46 @@ getHRDPA <- function(start = Sys.time() - 60*60*24,
       clip <- NULL
     }
   }
-  
+
   #Download the HRDPAs within the time window, save to disc. Don't re-dl files except to replace 1-hour-post raster with 7-hour-post
   clipped <- FALSE #So that clip gets projected the first time around
   for (i in sequence) {
-    name <- paste0(ifelse(!is.null(clip), paste0("clipped_", extent, "_"), ""), "HRDPA_6hrs_07_", substr(i, 1, 13), ".tiff")
+    name <- paste0(
+      ifelse(!is.null(clip), paste0("clipped_", extent, "_"), ""),
+      "HRDPA_6hrs_07_",
+      substr(i, 1, 13),
+      ".tiff"
+    )
     name <- gsub(" ", "", name)
     name <- gsub("-", "", name)
-    
-    row <- available[available$file == paste0(gsub("-", "", as.Date(i)), "T", substr(i, 12, 13), "Z_MSC_HRDPA_APCP-Accum6h_Sfc_RLatLon0.0225_PT0H.grib2"), ]
-    
+
+    row <- available[
+      available$file ==
+        paste0(
+          gsub("-", "", as.Date(i)),
+          "T",
+          substr(i, 12, 13),
+          "Z_MSC_HRDPA_APCP-Accum6h_Sfc_RLatLon0.0225_PT0H.grib2"
+        ),
+    ]
+
     if (nrow(row) == 0) {
-      row <- available[available$file == paste0(gsub("-", "", as.Date(i)), "T", substr(i, 12, 13), "Z_MSC_HRDPA-Prelim_APCP-Accum6h_Sfc_RLatLon0.0225_PT0H.grib2"), ]
+      row <- available[
+        available$file ==
+          paste0(
+            gsub("-", "", as.Date(i)),
+            "T",
+            substr(i, 12, 13),
+            "Z_MSC_HRDPA-Prelim_APCP-Accum6h_Sfc_RLatLon0.0225_PT0H.grib2"
+          ),
+      ]
     }
-    
+
     #Only download if raster doesn't already exist
     if (!(name %in% list.files(save_path))) {
       raster <- terra::rast(row$path)
     }
-    
+
     if (exists("raster")) {
       raster <- raster[[1]]
       if (!clipped) {
@@ -130,28 +203,31 @@ getHRDPA <- function(start = Sys.time() - 60*60*24,
         }
         clipped <- TRUE #So that project doesn't happen after the first iteration
       }
-      
+
       if (!is.null(clip)) {
         raster <- terra::mask(raster, clip) #Makes NA values beyond the boundary of clip
         raster <- terra::trim(raster) #Trims the NA values
       }
-      
-      terra::writeRaster(raster, paste0(save_path, "\\", name), overwrite = TRUE)
+
+      terra::writeRaster(
+        raster,
+        paste0(save_path, "\\", name),
+        overwrite = TRUE
+      )
       rm(raster)
       unlink(paste0(tempdir(), "/HRDPA", i))
     }
   } #End of DL sequence
-  
+
   #Clean up old 1-hour files if they are supplanted by 7-hours
   old.files <- list.files(save_path, pattern = "_01")
-  if (length(old.files > 0)){
-    for (i in old.files){
+  if (length(old.files > 0)) {
+    for (i in old.files) {
       #Check if a 7-hour file with same date/time exists, delete if TRUE
-      match.name <- sub(01,07,i)
-      if (file.exists(paste0(save_path, "/", match.name))){
+      match.name <- sub(01, 07, i)
+      if (file.exists(paste0(save_path, "/", match.name))) {
         file.remove(paste0(save_path, "/", i))
       }
     }
   } #End of clean-up
-  
 } #End of function

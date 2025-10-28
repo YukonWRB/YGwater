@@ -178,24 +178,22 @@ YGwater_globals <- function(
   ))
 
   # Report modules
-  source(system.file(
-    "apps/YGwater/modules/client/reports/basins.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/reports/WQReport.R",
-    package = "YGwater"
-  ))
+  if (g_drive) {
+    source(system.file(
+      "apps/YGwater/modules/client/reports/WQReport.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/snowBulletin.R",
+      package = "YGwater"
+    ))
+  }
   source(system.file(
     "apps/YGwater/modules/client/reports/snowInfo.R",
     package = "YGwater"
   ))
   source(system.file(
     "apps/YGwater/modules/client/reports/waterInfo.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/reports/snowBulletin.R",
     package = "YGwater"
   ))
 
@@ -210,6 +208,10 @@ YGwater_globals <- function(
   ))
   source(system.file(
     "apps/YGwater/modules/client/map/locationsMap.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/map/snowBulletinMap.R",
     package = "YGwater"
   ))
 
