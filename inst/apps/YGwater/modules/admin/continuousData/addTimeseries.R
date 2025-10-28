@@ -1168,7 +1168,7 @@ addTimeseries <- function(id) {
                 if (input$z != selected_timeseries$z) {
                   # Delete the existing entry in locations_z and redo. This takes care of cases where a user changes both the location/sub-location AND z
                   DBI::dbExecute(
-                    con,
+                    session$userData$AquaCache,
                     "DELETE FROM locations_z WHERE z_id = ",
                     selected_timeseries$z_id
                   )
