@@ -332,14 +332,14 @@ addImgSeries <- function(id) {
         return()
       }
       
-      showNotification
+      showNotification("Please be patient. This could take a **very** long time is fetching many images", type = "message")
       
       # Call the extendedTask to add new image series
       addNewSeries$invoke(
         config = session$userData$config,
         loc = input$location,
         owner = input$owner,
-        description = input$dexcription,
+        description = input$description,
         share_with = input$share_with,
         source_fx = input$source_fx,
         source_fx_args = input$source_fx_args,

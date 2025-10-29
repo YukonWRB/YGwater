@@ -7,6 +7,7 @@ maps,mapsNavMenuTitle,Maps,Cartes
 maps_locs,mapsNavLocsTitle,Monitoring locations,Emplacements de surveillance
 maps_params,mapsNavParamsTitle,Current/past conditions,Conditions présentes/historiques
 maps_raster,mapsNavRastersTitle,Rasters,Rasters
+maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
 plots,plotsNavMenuTitle,Plots ,Graphiques
 plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
 plots_continuous,plotsNavContTitle,Continuous,Continues

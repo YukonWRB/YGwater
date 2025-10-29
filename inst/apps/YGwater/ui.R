@@ -158,19 +158,26 @@ app_ui <- function(request) {
           value = "maps",
           nav_panel(
             title = uiOutput("mapsNavLocsTitle"),
-            value = "monitoringLocations",
+            value = "monitoringLocationsMap",
             uiOutput("mapLocs_ui")
           ),
           nav_panel(
             title = uiOutput("mapsNavParamsTitle"),
-            value = "parameterValues",
+            value = "parameterValuesMap",
             uiOutput("mapParams_ui")
           ),
           if (!config$public) {
             nav_panel(
               title = uiOutput("mapsNavRasterTitle"),
-              value = "rasterValues",
+              value = "rasterValuesMap",
               uiOutput("mapRaster_ui")
+            )
+          },
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("mapsNavSnowbullTitle"),
+              value = "snowBulletinMap",
+              uiOutput("mapSnowbull_ui")
             )
           }
         ),
@@ -188,7 +195,7 @@ app_ui <- function(request) {
             uiOutput("plotContinuous_ui")
           )
         ),
-        if (!config$public) {
+        if (config$g_drive) {
           nav_menu(
             title = uiOutput("reportsNavMenuTitle"),
             value = "reports",
@@ -202,12 +209,14 @@ app_ui <- function(request) {
               value = "waterInfo",
               uiOutput("waterInfo_ui")
             ),
-            nav_panel(
-              title = uiOutput("reportsNavWQTitle"),
-              value = "WQReport",
-              uiOutput("WQReport_ui")
-            ),
-            if (!config$public) {
+            if (config$g_drive) {
+              nav_panel(
+                title = uiOutput("reportsNavWQTitle"),
+                value = "WQReport",
+                uiOutput("WQReport_ui")
+              )
+            },
+            if (config$g_drive) {
               nav_panel(
                 title = uiOutput("reportsNavSnowbullTitle"),
                 value = "snowBulletin",
@@ -215,7 +224,7 @@ app_ui <- function(request) {
               )
             }
           ) # End reports nav_menu
-        }, # End if !config$public
+        }, # End if config$g_drive
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",
