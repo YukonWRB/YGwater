@@ -11,12 +11,12 @@ Authors@R: c(
     comment = c(ORCID = "0000-0003-4997-3404"))
   )
 Description: Stores various functions for use across the Water Science and
-    Stweardship Branch disciplines, including for generating reports,
+    Stewardship Branch disciplines, including for generating reports,
     gathering and processing data, and creating plots.
 License: AGPL (>= 3) + file LICENSE
 URL: https://github.com/YukonWRB/YGwater
 BugReports: https://github.com/YukonWRB/YGWater/issues
-Depends: 
+Depends:
     R (>= 4.1)
 Imports:
     cli,

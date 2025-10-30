@@ -7,11 +7,32 @@
 #' @noRd
 #' @keywords internal
 
-delayedAssign("prov_buff", local({
-  try(
-terra::vect(
-      system.file("extdata/prov_buffers/Provinces_buffered_300km.shp", package = "YGwater")  #This lives in the /inst folder, but because of how /inst works the path does not include /inst. Read up on this behavior in the R packages e-book.
-    ),
-    silent = TRUE
-  )
-}))
+delayedAssign(
+  "prov_buff",
+  local({
+    try(
+      terra::vect(
+        system.file(
+          "extdata/prov_buffers/Provinces_buffered_300km.shp",
+          package = "YGwater"
+        ) #This lives in the /inst folder, but because of how /inst works the path does not include /inst. Read up on this behavior in the R packages e-book.
+      ),
+      silent = TRUE
+    )
+  })
+)
+
+delayedAssign(
+  "swe_basin_labels",
+  local({
+    try(
+      terra::vect(
+        system.file(
+          "snow_survey/swe_basin_labels.geojson",
+          package = "YGwater"
+        )
+      ),
+      silent = TRUE
+    )
+  })
+)
