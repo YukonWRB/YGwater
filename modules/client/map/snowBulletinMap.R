@@ -589,7 +589,7 @@ download_discrete_ts <- function(
         }
     }
 
-    # Compute most recent non-NaN value per station
+    # Compute most recent non-NaN date per station using ts_list_temp
     station_latest_dates <- vapply(
         names(ts_list_temp),
         function(id) {
@@ -785,66 +785,88 @@ calculate_historic_daily_median <- function(
 
         # station columns are everything except datetime (and any preexisting doy/year)
         station_cols <- setdiff(names(ts), c("datetime", "doy", "year"))
-
         # prepare output data.frames
         hist_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
         rel_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+        # Vectorized and grouped computation for speed
+        p <- length(station_cols)
+        if (p > 0) {
+            vals_mat <- as.matrix(ts[, station_cols, drop = FALSE]) # n x p
+            hist_mat <- matrix(NA_real_, nrow = n, ncol = p)
+            rel_mat <- matrix(NA_real_, nrow = n, ncol = p)
 
-        for (st in station_cols) {
-            hist_col <- rep(NA_real_, n)
-            rel_col <- rep(NA_real_, n)
-            values_vec <- as.numeric(ts[[st]])
+            # Group by month-day (usually day==1 after snapping), compute per group
+            grp <- paste(month, day, sep = "-")
+            ug <- unique(grp)
 
-            for (i in seq_len(n)) {
-                this_year <- as.integer(format(ts$datetime[i], "%Y"))
-                this_month <- as.integer(format(ts$datetime[i], "%m"))
-                this_day <- as.integer(format(ts$datetime[i], "%d"))
+            for (g in ug) {
+                idx_g <- which(grp == g)
+                # Ensure chronological order within group
+                idx_g <- idx_g[order(year[idx_g])]
 
-                if (!is.null(lookback_year)) {
-                    lookback_filter <- year >= lookback_year
-                } else {
-                    lookback_filter <- (this_year - year) <= lookback_length
-                }
+                # Precompute years vector for the group
+                yg <- year[idx_g]
 
-                idx <- which(
-                    year < this_year &
-                        month == this_month &
-                        day == this_day &
-                        lookback_filter
-                )
+                for (j_idx in seq_along(idx_g)) {
+                    j <- idx_g[j_idx]
 
-                if (length(idx) > 0 && any(!is.na(values_vec[idx]))) {
-                    hist_col[i] <- median(values_vec[idx], na.rm = TRUE)
-                } else {
-                    hist_col[i] <- NA_real_
-                }
-                if (
-                    !is.na(hist_col[i]) &&
-                        !is.na(values_vec[i]) &&
-                        hist_col[i] != 0
-                ) {
-                    rel_col[i] <- 100 * values_vec[i] / hist_col[i]
-                } else if (
-                    !is.na(values_vec[i]) &&
-                        values_vec[i] == 0 &&
-                        !is.na(hist_col[i]) &&
-                        hist_col[i] == 0
-                ) {
-                    rel_col[i] <- -2
-                } else if (
-                    !is.na(values_vec[i]) &&
-                        values_vec[i] > 0 &&
-                        !is.na(hist_col[i]) &&
-                        hist_col[i] == 0
-                ) {
-                    rel_col[i] <- -1
-                } else {
-                    rel_col[i] <- NA_real_
+                    if (!is.null(lookback_year)) {
+                        prev_idx <- idx_g[which(
+                            yg < yg[j_idx] & yg >= lookback_year
+                        )]
+                    } else {
+                        prev_idx <- idx_g[which(
+                            yg < yg[j_idx] & yg >= (yg[j_idx] - lookback_length)
+                        )]
+                    }
+
+                    if (length(prev_idx) > 0) {
+                        prev_block <- vals_mat[prev_idx, , drop = FALSE]
+                        # Fast column medians when matrixStats is available
+                        if (requireNamespace("matrixStats", quietly = TRUE)) {
+                            hist_mat[j, ] <- matrixStats::colMedians(
+                                prev_block,
+                                na.rm = TRUE
+                            )
+                        } else {
+                            hist_mat[j, ] <- apply(
+                                prev_block,
+                                2,
+                                stats::median,
+                                na.rm = TRUE
+                            )
+                        }
+                    }
                 }
             }
 
-            hist_df[[st]] <- hist_col
-            rel_df[[st]] <- rel_col
+            # Compute relative SWE in a fully vectorized way
+            cur <- vals_mat
+            hist <- hist_mat
+
+            # Case 1: standard percentage where historic median != 0
+            mask1 <- !is.na(hist) & !is.na(cur) & (hist != 0)
+            rel_mat[mask1] <- 100 * cur[mask1] / hist[mask1]
+
+            # Case 2: both zero => -2
+            mask2 <- !is.na(cur) & (cur == 0) & !is.na(hist) & (hist == 0)
+            rel_mat[mask2] <- -2
+
+            # Case 3: current > 0, historic == 0 => -1
+            mask3 <- !is.na(cur) & (cur > 0) & !is.na(hist) & (hist == 0)
+            rel_mat[mask3] <- -1
+
+            colnames(hist_mat) <- station_cols
+            colnames(rel_mat) <- station_cols
+
+            hist_df[station_cols] <- as.data.frame(
+                hist_mat,
+                stringsAsFactors = FALSE
+            )
+            rel_df[station_cols] <- as.data.frame(
+                rel_mat,
+                stringsAsFactors = FALSE
+            )
         }
 
         # ensure ordering by datetime
@@ -1111,14 +1133,16 @@ load_base_data <- function(con, con2) {
 
     # Load or infer weight matrix from snowcourse factors CSV using discrete metadata
     weights_df <- load_snowcourse_factors(
-        metadata_discrete = discrete_data$metadata,
-        csv_path = "data-raw/snowcourse_factors.csv"
+        metadata_discrete = discrete_data$metadata
     )
 
     # If we can read basin polygons from shapefile now (so basin names exist), prefer them
-
     basins_shp <- sf::st_read(
-        "dev/era5/.data/shapes/swe_basins_ExportFeatures/swe_basins_ExportFeatures.shp",
+        system.file(
+            "snow_survey/swe_basins/swe_basins.shp",
+            package = "YGwater",
+            mustWork = TRUE
+        ),
         quiet = TRUE
     )
 
@@ -1324,862 +1348,650 @@ load_base_data <- function(con, con2) {
 # =============================================================================
 
 # Load all base data once at startup
-base_data <- load_base_data(con, con2)
-
 
 # =============================================================================
 # SHINY APP UI
 # =============================================================================
 
-ui <- shiny::fluidPage(
-    tags$head(
-        tags$style(HTML(
-            "
-            body, html {
-                height: 100%;
-                margin: 0;
-                padding: 0;
-                overflow: hidden;
-            }
-            .container-fluid {
-                height: 100vh;
-                padding: 0 !important;
-                margin: 0 !important;
-            }
-            .main-container {
-                height: 100vh;
-                padding: 0 !important;
-                margin: 0 !important;
-                position: relative;
-            }
-            .control-accordion {
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                z-index: 1000;
-                background: rgba(248, 249, 250, 0.95);
-                border: 1px solid #dee2e6;
-                border-radius: 5px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                min-width: 300px;
-                max-width: 400px;
-            }
-            .control-header {
-                background: #e9ecef;
-                padding: 12px 15px;
-                cursor: pointer;
-                user-select: none;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-bottom: 1px solid #dee2e6;
-                border-radius: 4px 4px 0 0;
-            }
-            .control-header:hover {
-                background: #dde2e6;
-            }
-            .control-header h4 {
-                margin: 0;
-                font-size: 16px;
-                font-weight: 600;
-                color: #495057;
-            }
-            .control-toggle {
-                font-size: 14px;
-                color: #6c757d;
-                transition: transform 0.2s ease;
-            }
-            .control-content {
-                padding: 15px;
-                display: block;
-                transition: max-height 0.3s ease-out, padding 0.3s ease-out;
-                max-height: 200px;
-            }
-            .control-content.collapsed {
-                max-height: 0;
-                padding: 0 15px;
-                overflow: hidden;
-            }
-            .slider-row {
-                display: flex;
-                align-items: center;
-                margin-bottom: 15px;
-            }
-            .slider-row:last-child {
-                margin-bottom: 0;
-            }
-            .slider-label {
-                min-width: 80px;
-                font-weight: bold;
-                margin-right: 15px;
-                font-size: 14px;
-            }
-            .slider-input {
-                flex: 1;
-                max-width: 200px;
-            }
-            .date-display {
-                margin-left: 15px;
-                font-style: italic;
-                color: #6c757d;
-                font-size: 13px;
-            }
-            #map {
-                position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
-                height: 100vh !important;
-                width: 100vw !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                z-index: 1 !important;
-            }
-            .leaflet-control-layers {
-                z-index: 800;
-            }
-        "
-        ))
-    ),
-
-    # Main container with full viewport
-    div(
-        class = "main-container",
-
-        # Full screen map (positioned absolutely to fill entire viewport)
-        leafletOutput("map"),
-
-        # Floating control accordion (positioned absolutely over the map)
+mapSnowbullUI <- function(id) {
+    ns <- NS(id)
+    fluidPage(
+        # Main container with full viewport
         div(
-            class = "control-accordion",
-
-            # Accordion header
+            style = "height: 100vh; width: 100vw; position: relative; margin: 0; padding: 0;",
+            leafletOutput(ns("map"), width = "100vw", height = "100vh"),
+            # Floating controls
             div(
-                class = "control-header",
-                onclick = "toggleControls()",
-                h4("SWE Analysis Controls"),
-                span(class = "control-toggle", id = "control-toggle", "▼")
-            ),
-
-            # Accordion content
-            div(
-                class = "control-content",
-                id = "control-content",
-
+                style = "
+          position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+          z-index: 1000; background: rgba(255,255,255,0.95); border: 1px solid #ccc;
+          border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); min-width: 400px;
+          padding: 10px 20px; display: flex; gap: 20px; align-items: center;",
+                # Year slider
                 div(
-                    class = "slider-row",
-                    div(class = "slider-label", "Year:"),
-                    div(
-                        class = "slider-input",
-                        sliderInput(
-                            "year",
-                            label = NULL,
-                            min = 2010,
-                            max = 2025,
-                            value = 2025,
-                            step = 1,
-                            sep = ""
-                        )
+                    style = "display: flex; align-items: center; gap: 5px;",
+                    span("Year:"),
+                    sliderInput(
+                        ns("year"),
+                        label = NULL,
+                        min = 2010,
+                        max = 2025,
+                        value = 2025,
+                        step = 1,
+                        sep = ""
                     )
                 ),
-
+                # Month select
                 div(
-                    class = "slider-row",
-                    div(class = "slider-label", "Month:"),
-                    div(class = "slider-input", {
-                        months_map <- stats::setNames(
-                            c(2, 3, 4, 5),
+                    style = "display: flex; align-items: center; gap: 5px;",
+                    span("Month:"),
+                    selectInput(
+                        ns("month"),
+                        label = NULL,
+                        choices = setNames(
+                            as.character(c(2, 3, 4, 5)),
                             c("February", "March", "April", "May")
-                        )
-                        choices <- stats::setNames(
-                            as.character(months_map),
-                            names(months_map)
-                        )
-                        tagList(
-                            selectInput(
-                                "month",
-                                label = NULL,
-                                choices = choices,
-                                selected = months_map[2],
-                                width = "100%"
-                            )
-                        )
-                    })
-                ),
-
-                div(
-                    class = "slider-row",
-                    div(class = "slider-label", "Values:"),
-                    div(
-                        class = "slider-input",
-                        radioButtons(
-                            "value_type",
-                            label = NULL,
-                            choices = list(
-                                "% of Normal" = "relative_swe",
-                                "Absolute (mm)" = "swe"
-                            ),
-                            selected = "relative_swe",
-                            inline = TRUE
-                        )
-                    )
-                )
-            )
-        )
-    ),
-
-    # JavaScript for collapsible functionality and plot generation
-    tags$script(HTML(
-        "
-        function toggleControls() {
-            var content = document.getElementById('control-content');
-            var toggle = document.getElementById('control-toggle');
-            
-            if (content.classList.contains('collapsed')) {
-                content.classList.remove('collapsed');
-                toggle.innerHTML = '▼';
-                toggle.style.transform = 'rotate(0deg)';
-            } else {
-                content.classList.add('collapsed');
-                toggle.innerHTML = '▶';
-                toggle.style.transform = 'rotate(-90deg)';
-            }
-        }
-        
-        function generatePlot(type, stationId, stationName) {
-            // Show loading message
-            var popup = document.querySelector('.leaflet-popup-content');
-            if (popup) {
-                popup.innerHTML = '<div style=\"text-align: center; padding: 20px;\"><b>' + 
-                    stationName + '</b><br><br>Loading plot...<br>' + 
-                    '<div style=\"margin-top: 10px;\">⏳</div></div>';
-            }
-            
-            // Send request to Shiny to generate plot
-            Shiny.setInputValue('generate_plot', {
-                type: type,
-                station_id: stationId,
-                station_name: stationName,
-                timestamp: Date.now()
-            });
-        }
-        
-        // Listen for custom messages from Shiny to update popup content
-        Shiny.addCustomMessageHandler('updatePopup', function(data) {
-            var popup = document.querySelector('.leaflet-popup-content');
-            if (popup) {
-                popup.innerHTML = data.html;
-            }
-        });
-    "
-    ))
-)
-
-# =============================================================================
-# SHINY APP SERVER
-# =============================================================================
-#input <- list(month = 4, year = 2025, value_type = "relative_swe") # For testing outside Shiny
-
-# ---- Color palette functions ----
-
-get_station_pal <- function(value_type, data) {
-    if (value_type == "relative") {
-        colorBin(
-            palette = station_colors,
-            bins = station_bins,
-            right = FALSE,
-            domain = c(
-                if (nrow(data$swe_at_pillows) > 0) {
-                    data$swe_at_pillows$value
-                } else {
-                    NULL
-                },
-                if (nrow(data$swe_at_surveys) > 0) {
-                    data$swe_at_surveys$value
-                } else {
-                    NULL
-                }
-            ),
-            na.color = "gray"
-        )
-    } else {
-        colorBin(
-            palette = absolute_colors,
-            bins = absolute_bins,
-            right = FALSE,
-            domain = c(
-                if (nrow(data$swe_at_pillows) > 0) {
-                    data$swe_at_pillows$value
-                } else {
-                    NULL
-                },
-                if (nrow(data$swe_at_surveys) > 0) {
-                    data$swe_at_surveys$value
-                } else {
-                    NULL
-                }
-            ),
-            na.color = "gray"
-        )
-    }
-}
-
-get_swe_pal <- function(value_type, data) {
-    if (value_type == "relative") {
-        colorBin(
-            palette = station_colors,
-            bins = station_bins,
-            domain = data$swe_at_basins$relative_swe,
-            na.color = "gray"
-        )
-    } else {
-        # For basins, we need to calculate absolute values
-        # For now, keep relative values for basins as we don't have absolute basin calculations
-        colorBin(
-            palette = station_colors,
-            bins = station_bins,
-            domain = data$swe_at_basins$relative_swe,
-            na.color = "gray"
-        )
-    }
-}
-
-# ---- End color palette functions ----
-server <- function(input, output, session) {
-    # Reactive expression for selected date display
-    output$selected_date <- renderText({
-        req(input$year, input$month)
-        # Convert DOY from character to numeric
-        date_obj <- get_datetime(input$year, input$month)
-        format(date_obj, "%B %d, %Y")
-    })
-
-    # Reactive data processing based on user inputs
-    processed_data <- reactive({
-        req(input$year, input$month)
-
-        # Extract data at points for the selected date
-        swe_at_basins <- get_swe_state(
-            data = base_data$basins,
-            year = input$year,
-            month = input$month,
-            key = "name",
-            cutoff = record_cutoff_years
-        )
-
-        swe_at_surveys <- get_swe_state(
-            data = base_data$surveys,
-            year = input$year,
-            month = input$month,
-            key = "location_id",
-            cutoff = record_cutoff_years
-        )
-
-        swe_at_pillows <- get_swe_state(
-            data = base_data$pillows,
-            year = input$year,
-            month = input$month,
-            key = "timeseries_id",
-            cutoff = record_cutoff_years
-        )
-
-        # Ensure data is not empty before proceeding
-        if (is.null(swe_at_basins)) {
-            stop("Basin data is empty.")
-        }
-
-        if (is.null(swe_at_surveys)) {
-            stop("Survey data is empty.")
-        }
-
-        if (is.null(swe_at_pillows)) {
-            stop("Pillow data is empty.")
-        }
-
-        # Filter out stations/basins with stale data (latest_date > cutoff years from selected date)
-        input_date <- get_datetime(input$year, input$month)
-
-        # Helper function to filter by latest_date within cutoff
-        filter_by_latest_date <- function(df, input_date, cutoff_days) {
-            df[
-                is.na(df$latest_date) |
-                    as.numeric(difftime(
-                        input_date,
-                        df$latest_date,
-                        units = "days"
-                    )) <=
-                        cutoff_days,
-                ,
-                drop = FALSE
-            ]
-        }
-        #swe_at_basins <- filter_by_latest_date(
-        #    swe_at_basins,
-        #    input_date,
-        #    366
-        #)
-        swe_at_surveys <- filter_by_latest_date(
-            swe_at_surveys,
-            input_date,
-            366
-        )
-        swe_at_pillows <- filter_by_latest_date(
-            swe_at_pillows,
-            input_date,
-            366
-        )
-
-        swe_at_basins$annotation <- paste0(
-            swe_at_basins$annotation,
-            "<br>(",
-            round(swe_at_basins$relative_swe, 1),
-            "%)"
-        )
-        # Consolidated popup generation function
-        generate_popup_content <- function(
-            type,
-            swe,
-            relative_swe,
-            historic_median,
-            name,
-            location = NULL,
-            id = NULL
-        ) {
-            type_label <- switch(
-                type,
-                "basin" = "",
-                "survey" = "<b>Type:</b> Discrete (Snow Course)<br>",
-                "pillow" = "<b>Type:</b> Continuous (Pillow)<br>",
-                ""
-            )
-
-            # Add generate plot button if applicable
-            plot_button <- if (!is.null(id)) {
-                sprintf(
-                    "<button onclick='generatePlot(\"%s\", \"%s\", \"%s\")' style='margin-top: 10px;'>Generate Plot</button>",
-                    type,
-                    id,
-                    name
-                )
-            } else {
-                ""
-            }
-
-            location_html <- if (!is.null(location)) {
-                paste0(
-                    "<span style='font-size: 12px; color: #666;'>",
-                    location,
-                    "</span><br><br>"
-                )
-            } else {
-                "<br>"
-            }
-
-            paste0(
-                "<div style='text-align: left; padding: 10px; width: 300px;'>",
-                "<b style='font-size: 16px;'>",
-                name,
-                "</b><br>",
-                location_html,
-                "<b>SWE Value (mm):</b> ",
-                if (!is.na(swe)) {
-                    paste0(round(swe, 1), " mm")
-                } else {
-                    "No data"
-                },
-                "<br>",
-                "<b>SWE Value (%):</b> ",
-                if (!is.na(relative_swe)) {
-                    paste0(round(relative_swe, 1), "% of normal")
-                } else {
-                    "No data"
-                },
-                "<br>",
-                "<b>Historic Median:</b> ",
-                if (!is.na(historic_median)) {
-                    paste0(round(historic_median, 1), " mm")
-                } else {
-                    "No data"
-                },
-                "<br>",
-                type_label,
-                plot_button,
-                "</div>"
-            )
-        }
-
-        # Create popup content for basins
-        swe_at_basins$popup_content <- mapply(
-            function(swe, relative_swe, historic_median, name) {
-                generate_popup_content(
-                    "basin",
-                    swe,
-                    relative_swe,
-                    historic_median,
-                    name,
-                    location = NULL,
-                    id = name # Use basin name as ID
-                )
-            },
-            swe_at_basins$swe,
-            swe_at_basins$relative_swe,
-            swe_at_basins$historic_median,
-            swe_at_basins$name,
-            SIMPLIFY = FALSE
-        )
-
-        # Create popup content for surveys with ID
-        swe_at_surveys$popup_content <- mapply(
-            function(swe, relative_swe, historic_median, name, location, id) {
-                generate_popup_content(
-                    "survey",
-                    swe,
-                    relative_swe,
-                    historic_median,
-                    name,
-                    location,
-                    id
-                )
-            },
-            swe_at_surveys$swe,
-            swe_at_surveys$relative_swe,
-            swe_at_surveys$historic_median,
-            swe_at_surveys$name,
-            swe_at_surveys$location,
-            swe_at_surveys$location_id,
-            SIMPLIFY = FALSE
-        )
-
-        # Create popup content for pillows with ID
-        swe_at_pillows$popup_content <- mapply(
-            function(swe, relative_swe, historic_median, name, location, id) {
-                generate_popup_content(
-                    "pillow",
-                    swe,
-                    relative_swe,
-                    historic_median,
-                    name,
-                    location,
-                    id
-                )
-            },
-            swe_at_pillows$swe,
-            swe_at_pillows$relative_swe,
-            swe_at_pillows$historic_median,
-            swe_at_pillows$name,
-            swe_at_pillows$location,
-            swe_at_pillows$timeseries_id,
-            SIMPLIFY = FALSE
-        )
-
-        list(
-            swe_at_basins = swe_at_basins,
-            swe_at_surveys = swe_at_surveys,
-            swe_at_pillows = swe_at_pillows
-        )
-    })
-
-    # Initialize map - This creates the map as a server output
-    output$map <- renderLeaflet({
-        # Set default bounds to Yukon if available, otherwise use fallback
-        if (!is.null(base_data$shapefiles$yukon)) {
-            bbox <- sf::st_bbox(base_data$shapefiles$yukon)
-        } else {
-            # Fallback bounds for Yukon territory
-            bbox <- c(xmin = -141, ymin = 60, xmax = -123, ymax = 69.6)
-        }
-
-        leaflet(
-            options = leafletOptions(
-                zoomDelta = 0.5,
-                zoomSnap = 0.25,
-                wheelPxPerZoomLevel = 120
-            )
-        ) %>%
-            addProviderTiles(
-                providers$USGS.USTopo,
-                group = "USGS Imagery Topo"
-            ) %>%
-            fitBounds(
-                as.numeric(bbox["xmin"]),
-                as.numeric(bbox["ymin"]),
-                as.numeric(bbox["xmax"]),
-                as.numeric(bbox["ymax"])
-            ) %>%
-            # Add Yukon boundary
-            {
-                if (!is.null(base_data$shapefiles$yukon)) {
-                    addPolygons(
-                        .,
-                        data = base_data$shapefiles$yukon,
-                        color = "#222222",
-                        weight = 3,
-                        fill = FALSE,
-                        group = "Yukon boundary",
-                        label = "Yukon"
-                    )
-                } else {
-                    .
-                }
-            } %>%
-            # Add roads
-            {
-                if (!is.null(base_data$shapefiles$roads)) {
-                    addPolylines(
-                        .,
-                        data = base_data$shapefiles$roads,
-                        color = "#8B0000",
-                        weight = 2,
-                        opacity = 0.8,
-                        group = "Roads",
-                        label = ~ as.character(feature_name)
-                    )
-                } else {
-                    .
-                }
-            } %>%
-            # Add communities (as a group for toggling)
-            {
-                if (!is.null(base_data$shapefiles$communities)) {
-                    addMarkers(
-                        .,
-                        data = base_data$shapefiles$communities,
-                        icon = icons(
-                            iconUrl = communities_icon_svg,
-                            iconWidth = 16,
-                            iconHeight = 16
                         ),
-                        label = ~ as.character(feature_name),
-                        popup = ~ as.character(feature_name),
-                        group = "Communities"
+                        selected = "3",
+                        width = "100px"
+                    )
+                ),
+                # Value type radio
+                div(
+                    style = "display: flex; align-items: center; gap: 5px;",
+                    span("Values:"),
+                    radioButtons(
+                        ns("value_type"),
+                        label = NULL,
+                        choices = list(
+                            "% of Normal" = "relative_swe",
+                            "Absolute (mm)" = "swe"
+                        ),
+                        selected = "relative_swe",
+                        inline = TRUE
+                    )
+                )
+            )
+        ),
+        # JS for plot generation
+        tags$script(HTML(sprintf(
+            "
+        function generatePlot(type, stationId, stationName) {
+          var popup = document.querySelector('.leaflet-popup-content');
+          if (popup) {
+            popup.innerHTML = '<div style=\"text-align: center; padding: 20px;\"><b>' + 
+              stationName + '</b><br><br>Loading plot...<br>' + 
+              '<div style=\"margin-top: 10px;\">⏳</div></div>';
+          }
+          Shiny.setInputValue('%s', {
+            type: type,
+            station_id: stationId,
+            station_name: stationName,
+            timestamp: Date.now()
+          });
+        }
+      ",
+            ns("generate_plot")
+        )))
+    )
+}
+
+
+mapSnowbull <- function(id, language) {
+    moduleServer(id, function(input, output, session) {
+        ns <- session$ns
+
+        # Server setup ####
+
+        base_data <- load_base_data(con, con2)
+        print("Base data loaded successfully")
+        print(sprintf(
+            "Number of pillows: %d",
+            nrow(base_data$pillows$metadata)
+        ))
+        print(sprintf(
+            "Number of surveys: %d",
+            nrow(base_data$surveys$metadata)
+        ))
+        print(sprintf("Number of basins: %d", nrow(base_data$basins$metadata)))
+
+        # Render UI elements ####
+        # (placeholder for now)
+        # ---- End color palette functions ----
+        # Reactive expression for selected date display
+        output$selected_date <- renderText({
+            req(input$year, input$month)
+            # Convert DOY from character to numeric
+            date_obj <- get_datetime(input$year, input$month)
+            format(date_obj, "%B %d, %Y")
+        })
+
+        # Reactive data processing based on user inputs
+        processed_data <- reactive({
+            print(sprintf(
+                "Processing data for year: %d, month: %s",
+                input$year,
+                input$month
+            ))
+
+            req(input$year, input$month)
+
+            # Extract data at points for the selected date
+            swe_at_basins <- get_swe_state(
+                data = base_data$basins,
+                year = input$year,
+                month = input$month,
+                key = "name",
+                cutoff = record_cutoff_years
+            )
+            print(sprintf(
+                "Processed basins: %d with data",
+                sum(!is.na(swe_at_basins$swe))
+            ))
+
+            swe_at_surveys <- get_swe_state(
+                data = base_data$surveys,
+                year = input$year,
+                month = input$month,
+                key = "location_id",
+                cutoff = record_cutoff_years
+            )
+
+            swe_at_pillows <- get_swe_state(
+                data = base_data$pillows,
+                year = input$year,
+                month = input$month,
+                key = "timeseries_id",
+                cutoff = record_cutoff_years
+            )
+
+            # Ensure data is not empty before proceeding
+            if (is.null(swe_at_basins)) {
+                stop("Basin data is empty.")
+            }
+
+            if (is.null(swe_at_surveys)) {
+                stop("Survey data is empty.")
+            }
+
+            if (is.null(swe_at_pillows)) {
+                stop("Pillow data is empty.")
+            }
+
+            # Filter out stations/basins with stale data (latest_date > cutoff years from selected date)
+            input_date <- get_datetime(input$year, input$month)
+
+            # Helper function to filter by latest_date within cutoff
+            filter_by_latest_date <- function(df, input_date, cutoff_days) {
+                df[
+                    is.na(df$latest_date) |
+                        as.numeric(difftime(
+                            input_date,
+                            df$latest_date,
+                            units = "days"
+                        )) <=
+                            cutoff_days,
+                    ,
+                    drop = FALSE
+                ]
+            }
+            #swe_at_basins <- filter_by_latest_date(
+            #    swe_at_basins,
+            #    input_date,
+            #    366
+            #)
+            swe_at_surveys <- filter_by_latest_date(
+                swe_at_surveys,
+                input_date,
+                366
+            )
+            swe_at_pillows <- filter_by_latest_date(
+                swe_at_pillows,
+                input_date,
+                366
+            )
+
+            swe_at_basins$annotation <- paste0(
+                swe_at_basins$annotation,
+                "<br>(",
+                round(swe_at_basins$relative_swe, 1),
+                "%)"
+            )
+            # Consolidated popup generation function
+            generate_popup_content <- function(
+                type,
+                swe,
+                relative_swe,
+                historic_median,
+                name,
+                location = NULL,
+                id = NULL
+            ) {
+                type_label <- switch(
+                    type,
+                    "basin" = "",
+                    "survey" = "<b>Type:</b> Discrete (Snow Course)<br>",
+                    "pillow" = "<b>Type:</b> Continuous (Pillow)<br>",
+                    ""
+                )
+
+                # Add generate plot button if applicable
+                plot_button <- if (!is.null(id)) {
+                    sprintf(
+                        "<button onclick='generatePlot(\"%s\", \"%s\", \"%s\")' style='margin-top: 10px;'>Generate Plot</button>",
+                        type,
+                        id,
+                        name
                     )
                 } else {
-                    .
+                    ""
                 }
-            } %>%
-            # Add layer control for toggling
-            addLayersControl(
-                baseGroups = c("USGS Imagery Topo"),
-                overlayGroups = c(
-                    "Basins averages",
-                    "Snow surveys (discrete)",
-                    "Snow pillows (continuous)",
-                    "Roads",
-                    "Communities",
-                    "Yukon boundary"
-                ),
-                options = layersControlOptions(collapsed = FALSE),
-                position = "topleft"
+
+                location_html <- if (!is.null(location)) {
+                    paste0(
+                        "<span style='font-size: 12px; color: #666;'>",
+                        location,
+                        "</span><br><br>"
+                    )
+                } else {
+                    "<br>"
+                }
+
+                paste0(
+                    "<div style='text-align: left; padding: 10px; width: 300px;'>",
+                    "<b style='font-size: 16px;'>",
+                    name,
+                    "</b><br>",
+                    location_html,
+                    "<b>SWE Value (mm):</b> ",
+                    if (!is.na(swe)) {
+                        paste0(round(swe, 1), " mm")
+                    } else {
+                        "No data"
+                    },
+                    "<br>",
+                    "<b>SWE Value (%):</b> ",
+                    if (!is.na(relative_swe)) {
+                        paste0(round(relative_swe, 1), "% of normal")
+                    } else {
+                        "No data"
+                    },
+                    "<br>",
+                    "<b>Historic Median:</b> ",
+                    if (!is.na(historic_median)) {
+                        paste0(round(historic_median, 1), " mm")
+                    } else {
+                        "No data"
+                    },
+                    "<br>",
+                    type_label,
+                    plot_button,
+                    "</div>"
+                )
+            }
+
+            # Create popup content for basins
+            swe_at_basins$popup_content <- mapply(
+                function(swe, relative_swe, historic_median, name) {
+                    generate_popup_content(
+                        "basin",
+                        swe,
+                        relative_swe,
+                        historic_median,
+                        name,
+                        location = NULL,
+                        id = name # Use basin name as ID
+                    )
+                },
+                swe_at_basins$swe,
+                swe_at_basins$relative_swe,
+                swe_at_basins$historic_median,
+                swe_at_basins$name,
+                SIMPLIFY = FALSE
+            )
+
+            # Create popup content for surveys with ID
+            swe_at_surveys$popup_content <- mapply(
+                function(
+                    swe,
+                    relative_swe,
+                    historic_median,
+                    name,
+                    location,
+                    id
+                ) {
+                    generate_popup_content(
+                        "survey",
+                        swe,
+                        relative_swe,
+                        historic_median,
+                        name,
+                        location,
+                        id
+                    )
+                },
+                swe_at_surveys$swe,
+                swe_at_surveys$relative_swe,
+                swe_at_surveys$historic_median,
+                swe_at_surveys$name,
+                swe_at_surveys$location,
+                swe_at_surveys$location_id,
+                SIMPLIFY = FALSE
+            )
+
+            # Create popup content for pillows with ID
+            swe_at_pillows$popup_content <- mapply(
+                function(
+                    swe,
+                    relative_swe,
+                    historic_median,
+                    name,
+                    location,
+                    id
+                ) {
+                    generate_popup_content(
+                        "pillow",
+                        swe,
+                        relative_swe,
+                        historic_median,
+                        name,
+                        location,
+                        id
+                    )
+                },
+                swe_at_pillows$swe,
+                swe_at_pillows$relative_swe,
+                swe_at_pillows$historic_median,
+                swe_at_pillows$name,
+                swe_at_pillows$location,
+                swe_at_pillows$timeseries_id,
+                SIMPLIFY = FALSE
+            )
+
+            list(
+                swe_at_basins = swe_at_basins,
+                swe_at_surveys = swe_at_surveys,
+                swe_at_pillows = swe_at_pillows
+            )
+        })
+
+        # Initialize map - This creates the map as a server output
+        output[[ns("map")]] <- renderLeaflet({
+            # Set default bounds to Yukon if available, otherwise use fallback
+            if (!is.null(base_data$shapefiles$yukon)) {
+                bbox <- sf::st_bbox(base_data$shapefiles$yukon)
+            } else {
+                bbox <- c(xmin = -141, ymin = 60, xmax = -123, ymax = 69.6)
+            }
+
+            leaflet::leaflet(
+                options = leaflet::leafletOptions(
+                    zoomDelta = 0.5,
+                    zoomSnap = 0.25,
+                    wheelPxPerZoomLevel = 120
+                )
             ) %>%
-            hideGroup("Roads") %>%
-            hideGroup("Snow pillows (continuous)") %>%
-            # Add initial color palette legend
-            addLegend(
-                position = "bottomleft",
-                title = "SWE Values",
-                pal = colorBin(
+                leaflet::addProviderTiles(
+                    leaflet::providers$Esri.WorldTopoMap,
+                    group = "Topographic"
+                ) %>%
+                leaflet::fitBounds(
+                    as.numeric(bbox["xmin"]),
+                    as.numeric(bbox["ymin"]),
+                    as.numeric(bbox["xmax"]),
+                    as.numeric(bbox["ymax"])
+                ) %>%
+                {
+                    if (!is.null(base_data$shapefiles$yukon)) {
+                        leaflet::addPolygons(
+                            .,
+                            data = base_data$shapefiles$yukon,
+                            color = "#222222",
+                            weight = 3,
+                            fill = FALSE,
+                            group = "Boundary"
+                        )
+                    } else {
+                        .
+                    }
+                } %>%
+                {
+                    if (!is.null(base_data$shapefiles$roads)) {
+                        leaflet::addPolylines(
+                            .,
+                            data = base_data$shapefiles$roads,
+                            color = "#8B0000",
+                            weight = 2,
+                            opacity = 0.8,
+                            group = "Roads"
+                        )
+                    } else {
+                        .
+                    }
+                } %>%
+                {
+                    if (!is.null(base_data$shapefiles$communities)) {
+                        leaflet::addMarkers(
+                            .,
+                            data = base_data$shapefiles$communities,
+                            icon = leaflet::icons(
+                                iconUrl = communities_icon_svg,
+                                iconWidth = 16,
+                                iconHeight = 16
+                            ),
+                            group = "Communities"
+                        )
+                    } else {
+                        .
+                    }
+                } %>%
+                leaflet::addLayersControl(
+                    baseGroups = "Topographic",
+                    overlayGroups = c("Boundary", "Roads", "Communities"),
+                    options = leaflet::layersControlOptions(collapsed = TRUE)
+                ) %>%
+                leaflet::hideGroup("Roads")
+        })
+
+        # Update map when data changes
+        observe({
+            print(sprintf(
+                "Updating map - Year: %d, Month: %s, Value type: %s",
+                input$year,
+                input$month,
+                input$value_type
+            ))
+
+            req(input$year, input$month, input$value_type)
+            data <- processed_data()
+
+            print(sprintf(
+                "Map update - Basins: %d, Surveys: %d, Pillows: %d",
+                nrow(data$swe_at_basins),
+                nrow(data$swe_at_surveys),
+                nrow(data$swe_at_pillows)
+            ))
+
+            # Select value column based on input$value_type
+            value_col <- if (input$value_type == "relative_swe") {
+                "relative_swe"
+            } else {
+                "swe"
+            }
+
+            # Create appropriate color palette based on value type
+            if (input$value_type == "relative_swe") {
+                swe_pal <- colorBin(
                     palette = station_colors,
                     bins = station_bins,
-                    domain = NULL
-                ),
-                values = station_bins[-length(station_bins)],
-                bins = station_bins,
-                labels = c(
-                    "No data",
-                    "No snow present where historical median is zero",
-                    "Snow present where historical median is zero",
-                    "50-70%",
-                    "70-90%",
-                    "90-110%",
-                    "110-130%",
-                    "130-150%",
-                    ">150%"
-                ),
-                opacity = 0.7
-            )
-    })
-
-    # Update map when data changes
-    observe({
-        req(input$year, input$month, input$value_type) # Ensure inputs are available
-        data <- processed_data()
-
-        # Select value column based on input$value_type
-        value_col <- if (input$value_type == "relative_swe") {
-            "relative_swe"
-        } else {
-            "swe"
-        }
-
-        # Create appropriate color palette based on value type
-        if (input$value_type == "relative_swe") {
-            swe_pal <- colorBin(
-                palette = station_colors,
-                bins = station_bins,
-                domain = c(
-                    data$swe_at_basins[[value_col]],
-                    data$swe_at_surveys[[value_col]],
-                    data$swe_at_pillows[[value_col]]
-                ),
-                na.color = "gray"
-            )
-        } else {
-            swe_pal <- colorBin(
-                palette = absolute_colors,
-                bins = absolute_bins,
-                domain = c(
-                    data$swe_at_basins[[value_col]],
-                    data$swe_at_surveys[[value_col]],
-                    data$swe_at_pillows[[value_col]]
-                ),
-                na.color = "gray"
-            )
-        }
-
-        leafletProxy("map") %>%
-            clearGroup("Basins averages") %>%
-            clearGroup("Snow surveys (discrete)") %>%
-            clearGroup("Snow pillows (continuous)") %>%
-            addPolygons(
-                data = data$swe_at_basins,
-                fillColor = ~ swe_pal(get(value_col)),
-                color = "white",
-                weight = 2,
-                opacity = 1,
-                fillOpacity = 0.7,
-                label = ~ lapply(
-                    paste0(
-                        name,
-                        "<br>SWE: ",
-                        if (input$value_type == "relative_swe") {
-                            paste0(round(get(value_col), 1), "% of normal")
-                        } else {
-                            paste0(round(get(value_col), 1), " mm")
-                        }
+                    domain = c(
+                        data$swe_at_basins[[value_col]],
+                        data$swe_at_surveys[[value_col]],
+                        data$swe_at_pillows[[value_col]]
                     ),
-                    htmltools::HTML
-                ),
-                popup = ~ lapply(popup_content, htmltools::HTML),
-                group = "Basins averages"
-            ) %>%
-            addCircleMarkers(
-                data = data$swe_at_surveys,
-                radius = 8,
-                color = "black",
-                fillColor = ~ swe_pal(get(value_col)),
-                weight = 2,
-                opacity = 1,
-                fillOpacity = 1,
-                label = ~ lapply(
-                    paste0(name, "<br>", location),
-                    htmltools::HTML
-                ),
-                popup = ~ lapply(popup_content, htmltools::HTML),
-                group = "Snow surveys (discrete)"
-            ) %>%
-            addCircleMarkers(
-                data = data$swe_at_pillows,
-                radius = 8,
-                color = "blue",
-                fillColor = ~ swe_pal(get(value_col)),
-                weight = 2,
-                opacity = 1,
-                fillOpacity = 1,
-                label = ~ lapply(
-                    paste0(name, "<br>", location),
-                    htmltools::HTML
-                ),
-                popup = ~ lapply(popup_content, htmltools::HTML),
-                group = "Snow pillows (continuous)"
-            ) %>%
-            # Clear and update legend based on selected value type
-            clearControls() %>%
-            addLegend(
-                position = "bottomleft",
-                title = if (input$value_type == "relative_swe") {
-                    "SWE (% of Normal)"
-                } else {
-                    "SWE (mm)"
-                },
-                pal = swe_pal,
-                values = if (input$value_type == "relative_swe") {
-                    station_bins[-length(station_bins)]
-                } else {
-                    absolute_bins[-length(absolute_bins)]
-                },
-                bins = if (input$value_type == "relative_swe") {
-                    station_bins
-                } else {
-                    absolute_bins
-                },
-                labels = if (input$value_type == "relative_swe") {
-                    c(
-                        "No data",
-                        "Below Historic",
-                        "Near Historic",
-                        "50-70%",
-                        "70-90%",
-                        "90-110%",
-                        "110-130%",
-                        "130-150%",
-                        ">150%"
-                    )
-                } else {
-                    c(
-                        "0-50",
-                        "50-100",
-                        "100-150",
-                        "150-200",
-                        "200-250",
-                        "250-300",
-                        "300-400",
-                        "400-500",
-                        ">500"
-                    )
-                },
-                opacity = 0.7
+                    na.color = "gray"
+                )
+            } else {
+                swe_pal <- colorBin(
+                    palette = absolute_colors,
+                    bins = absolute_bins,
+                    domain = c(
+                        data$swe_at_basins[[value_col]],
+                        data$swe_at_surveys[[value_col]],
+                        data$swe_at_pillows[[value_col]]
+                    ),
+                    na.color = "gray"
+                )
+            }
+
+            leafletProxy("map") %>%
+                clearGroup("Basins averages") %>%
+                clearGroup("Snow surveys (discrete)") %>%
+                clearGroup("Snow pillows (continuous)") %>%
+                addPolygons(
+                    data = data$swe_at_basins,
+                    fillColor = ~ swe_pal(get(value_col)),
+                    color = "white",
+                    weight = 2,
+                    opacity = 1,
+                    fillOpacity = 0.7,
+                    label = ~ lapply(
+                        paste0(
+                            name,
+                            "<br>SWE: ",
+                            if (input$value_type == "relative_swe") {
+                                paste0(round(get(value_col), 1), "% of normal")
+                            } else {
+                                paste0(round(get(value_col), 1), " mm")
+                            }
+                        ),
+                        htmltools::HTML
+                    ),
+                    popup = ~ lapply(popup_content, htmltools::HTML),
+                    group = "Basins averages"
+                ) %>%
+                addCircleMarkers(
+                    data = data$swe_at_surveys,
+                    radius = 8,
+                    color = "black",
+                    fillColor = ~ swe_pal(get(value_col)),
+                    weight = 2,
+                    opacity = 1,
+                    fillOpacity = 1,
+                    label = ~ lapply(
+                        paste0(name, "<br>", location),
+                        htmltools::HTML
+                    ),
+                    popup = ~ lapply(popup_content, htmltools::HTML),
+                    group = "Snow surveys (discrete)"
+                ) %>%
+                addCircleMarkers(
+                    data = data$swe_at_pillows,
+                    radius = 8,
+                    color = "blue",
+                    fillColor = ~ swe_pal(get(value_col)),
+                    weight = 2,
+                    opacity = 1,
+                    fillOpacity = 1,
+                    label = ~ lapply(
+                        paste0(name, "<br>", location),
+                        htmltools::HTML
+                    ),
+                    popup = ~ lapply(popup_content, htmltools::HTML),
+                    group = "Snow pillows (continuous)"
+                ) %>%
+                # Clear and update legend based on selected value type
+                clearControls()
+            # %>%
+            # addLegend(
+            #   position = "bottomleft",
+            #   title = if (input$value_type == "relative_swe") {
+            #     "SWE (% of Normal)"
+            #   } else {
+            #     "SWE (mm)"
+            #   },
+            #   pal = swe_pal,
+            #   values = if (input$value_type == "relative_swe") {
+            #     station_bins[-length(station_bins)]
+            #   } else {
+            #     absolute_bins[-length(absolute_bins)]
+            #   },
+            #   bins = if (input$value_type == "relative_swe") {
+            #     station_bins
+            #   } else {
+            #     absolute_bins
+            #   },
+            #   labels = if (input$value_type == "relative_swe") {
+            #     c(
+            #       "No data",
+            #       "Below Historic",
+            #       "Near Historic",
+            #       "50-70%",
+            #       "70-90%",
+            #       "90-110%",
+            #       "110-130%",
+            #       "130-150%",
+            #       ">150%"
+            #     )
+            #   } else {
+            #     c(
+            #       "0-50",
+            #       "50-100",
+            #       "100-150",
+            #       "150-200",
+            #       "200-250",
+            #       "250-300",
+            #       "300-400",
+            #       "400-500",
+            #       ">500"
+            #     )
+            #   },
+            #   opacity = 0.7
+            # )
+        })
+
+        # Add observer for plot generation requests
+        observeEvent(input$generate_plot, {
+            print(sprintf(
+                "Generating plot - Type: %s, Station: %s",
+                input$generate_plot$type,
+                input$generate_plot$station_name
+            ))
+
+            req(
+                input$generate_plot$type,
+                input$generate_plot$station_id,
+                input$generate_plot$station_name
             )
-    })
 
-    # Add observer for plot generation requests
-    observeEvent(input$generate_plot, {
-        req(
-            input$generate_plot$type,
-            input$generate_plot$station_id,
-            input$generate_plot$station_name
-        )
+            plot_html <- if (input$generate_plot$type == "pillow") {
+                create_continuous_plot_popup(
+                    timeseries = base_data$pillows$timeseries$swe[, c(
+                        "datetime",
+                        as.character(input$generate_plot$station_id)
+                    )],
+                    year = input$year
+                )
+            } else if (input$generate_plot$type == "survey") {
+                create_discrete_plot_popup(
+                    timeseries = base_data$surveys$timeseries$swe[, c(
+                        "datetime",
+                        as.character(input$generate_plot$station_id)
+                    )]
+                )
+            } else if (input$generate_plot$type == "basin") {
+                # Get basin data and use discrete plot style
+                create_discrete_plot_popup(
+                    timeseries = base_data$basins$timeseries$swe[, c(
+                        "datetime",
+                        input$generate_plot$station_id
+                    )]
+                )
+            }
 
-        plot_html <- if (input$generate_plot$type == "pillow") {
-            create_continuous_plot_popup(
-                timeseries = base_data$pillows$timeseries$swe[, c(
-                    "datetime",
-                    as.character(input$generate_plot$station_id)
-                )],
-                year = input$year
-            )
-        } else if (input$generate_plot$type == "survey") {
-            create_discrete_plot_popup(
-                timeseries = base_data$surveys$timeseries$swe[, c(
-                    "datetime",
-                    as.character(input$generate_plot$station_id)
-                )]
-            )
-        } else if (input$generate_plot$type == "basin") {
-            # Get basin data and use discrete plot style
-            create_discrete_plot_popup(
-                timeseries = base_data$basins$timeseries$swe[, c(
-                    "datetime",
-                    input$generate_plot$station_id
-                )]
-            )
-        }
-
-        # Send the plot HTML back to update the popup
-        session$sendCustomMessage("updatePopup", list(html = plot_html))
-    })
-}
-
-# =============================================================================
-# RUN SHINY APP
-# =============================================================================
-
-shiny::shinyApp(ui = ui, server = server)
+            # Send the plot HTML back to update the popup
+            session$sendCustomMessage("updatePopup", list(html = plot_html))
+            print("Plot generated successfully")
+        })
+    }) # End of moduleServer
+} # End of mapLocs function

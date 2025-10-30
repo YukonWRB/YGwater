@@ -21,18 +21,3 @@ delayedAssign(
     )
   })
 )
-
-delayedAssign(
-  "swe_basin_labels",
-  local({
-    try(
-      terra::vect(
-        system.file(
-          "snow_survey/swe_basin_labels.geojson",
-          package = "YGwater"
-        )
-      ),
-      silent = TRUE
-    )
-  })
-)

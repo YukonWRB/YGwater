@@ -13,13 +13,8 @@ Authors@R: c(
 Author: Ghislain de Laplante [aut, cre], Cole Fischer [ctb], Emilie Stewart-Jones [ctb], Everett Snieder [aut]
 Maintainer: Ghislain de Laplante <ghislain.delaplante@yukon.ca>
 Description: Stores various functions for use across the Water Science and
-<<<<<<< HEAD
     Stewardship Branch disciplines, including for generating reports,
-    gathering and processing data, and creating plots.
-=======
-    Stweardship Branch disciplines, including for generating reports,
     gathering and processing data, and creating plots. Also includes several Shiny applications and an API for accessing the AquaCache database.
->>>>>>> e6d9d9fd82c8a0cebe98d9ba0dd51b33a022c233
 License: AGPL (>= 3) + file LICENSE
 URL: https://github.com/YukonWRB/YGwater
 BugReports: https://github.com/YukonWRB/YGWater/issues
