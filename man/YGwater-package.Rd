@@ -5,7 +5,9 @@
 \alias{YGwater-package}
 \title{YGwater: R functions and applications for the Yukon Water Science and Stewardship Branch}
 \description{
-Stores various functions for use across the Water Science and Stweardship Branch disciplines, including for generating reports, gathering and processing data, and creating plots.
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
+Stores various functions for use across the Water Science and Stweardship Branch disciplines, including for generating reports, gathering and processing data, and creating plots. Also includes several Shiny applications and an API for accessing the AquaCache database.
 }
 \seealso{
 Useful links:
@@ -18,11 +20,15 @@ Useful links:
 \author{
 \strong{Maintainer}: Ghislain de Laplante \email{ghislaindel@gmail.com} (\href{https://orcid.org/0000-0002-5093-9185}{ORCID})
 
+Authors:
+\itemize{
+  \item Everett Snieder \email{everett.snieder@gmail.com} (\href{https://orcid.org/0000-0003-4997-3404}{ORCID})
+}
+
 Other contributors:
 \itemize{
   \item Cole Fischer \email{cole.fischer@hotmail.com} (\href{https://orcid.org/0000-0002-7266-5760}{ORCID}) [contributor]
   \item Emilie Stewart-Jones \email{emilie.stewart-jones@yukon.ca} [contributor]
-  \item Everett Snieder \email{everett.snieder@gmail.com} (\href{https://orcid.org/0000-0003-4997-3404}{ORCID}) [contributor]
 }
 
 }

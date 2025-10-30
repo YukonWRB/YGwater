@@ -1,12 +1,13 @@
+# YGwater <img src="man/figures/logo.png" align="right" height="120" alt="" />
+
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/YukonWRB/YGwater/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/YukonWRB/YGwater/actions/workflows/R-CMD-check.yaml)
-[![Codecov test coverage](https://codecov.io/gh/YukonWRB/YGwater/graph/badge.svg)](https://app.codecov.io/gh/YukonWRB/YGwater)
 <!-- badges: end -->
 
 
 #### Welcome to the Yukon Water Resources Branch's YGwater GitHub repository!
 
-This public repository holds many of the R functions that we use on a day-to-day basis at the Water Resources Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application that will soon be published (we'll put the URL here once it is).
+This repository holds many of the R functions that we use on a day-to-day basis at the Water Resources Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application deployed at https://service.yukon.ca/water-data/shiny, and an API that's deployed at https://service.yukon.ca/water-data/api.
 
 You'll also find a host of other interesting R functions, some more hydrology/climate specific than others:
 

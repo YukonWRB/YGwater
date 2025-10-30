@@ -74,14 +74,17 @@ app_ui <- function(request) {
         }
       "
       )),
-      tags$style(HTML(
-        "
+      tags$style(
+        HTML(
+          "
     .alert { white-space: normal !important; }
   "
-      ))
+        )
+      )
     ),
     # page_fluid is the main container for the app, which contains the top bar, nav bar, content, and footer.
     page_fluid(
+      style = "padding:0; margin:0; max-width:100%;", # Remove the default padding/margin for better space utilization
       # Make the container for the top bar, which sits above the nav bar
       div(
         class = "top-bar-container d-none d-md-block",
@@ -140,10 +143,10 @@ app_ui <- function(request) {
           bg = "#244C5A",
           collapsible = TRUE,
           style = "z-index:1002"
-        ), # Just above any leaflet possibilities which only go up to 1000
+        ), # Just above any leaflet possibilities which only go up to 1000. Otherwise the map overlays the open nav menus.
         fluid = TRUE,
         lang = "en",
-        theme = NULL, # Theme is set earlier by css file referene in globals (THIS IS NOT WORKING)
+        theme = NULL, # Theme is set earlier by css file reference
         gap = "10px",
         nav_panel(
           title = uiOutput("homeNavTitle"),
@@ -155,19 +158,26 @@ app_ui <- function(request) {
           value = "maps",
           nav_panel(
             title = uiOutput("mapsNavLocsTitle"),
-            value = "monitoringLocations",
+            value = "monitoringLocationsMap",
             uiOutput("mapLocs_ui")
           ),
           nav_panel(
             title = uiOutput("mapsNavParamsTitle"),
-            value = "parameterValues",
+            value = "parameterValuesMap",
             uiOutput("mapParams_ui")
           ),
           if (!config$public) {
             nav_panel(
               title = uiOutput("mapsNavRasterTitle"),
-              value = "rasterValues",
+              value = "rasterValuesMap",
               uiOutput("mapRaster_ui")
+            )
+          },
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("mapsNavSnowbullTitle"),
+              value = "snowBulletinMap",
+              uiOutput("mapSnowbull_ui")
             )
           }
         ),
@@ -185,7 +195,7 @@ app_ui <- function(request) {
             uiOutput("plotContinuous_ui")
           )
         ),
-        if (!config$public) {
+        if (config$g_drive) {
           nav_menu(
             title = uiOutput("reportsNavMenuTitle"),
             value = "reports",
@@ -199,12 +209,14 @@ app_ui <- function(request) {
               value = "waterInfo",
               uiOutput("waterInfo_ui")
             ),
-            nav_panel(
-              title = uiOutput("reportsNavWQTitle"),
-              value = "WQReport",
-              uiOutput("WQReport_ui")
-            ),
-            if (!config$public) {
+            if (config$g_drive) {
+              nav_panel(
+                title = uiOutput("reportsNavWQTitle"),
+                value = "WQReport",
+                uiOutput("WQReport_ui")
+              )
+            },
+            if (config$g_drive) {
               nav_panel(
                 title = uiOutput("reportsNavSnowbullTitle"),
                 value = "snowBulletin",
@@ -212,7 +224,7 @@ app_ui <- function(request) {
               )
             }
           ) # End reports nav_menu
-        }, # End if !config$public
+        }, # End if config$g_drive
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",

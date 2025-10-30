@@ -49,12 +49,16 @@ app_server <- function(input, output, session) {
       # Equipment tasks -----------------------------------------------------
       if (
         any(
-          session$userData$admin_privs$calibrate
+          session$userData$admin_privs$calibrate,
+          session$userData$admin_privs$deploy_recover
         )
       ) {
         nav_show(id = "navbar", target = "equipTasks")
         if (!isTRUE(session$userData$admin_privs$calibrate)) {
           nav_hide(id = "navbar", target = "calibrate")
+        }
+        if (!isTRUE(session$userData$admin_privs$deploy_recover)) {
+          nav_hide(id = "navbar", target = "deploy_recover")
         }
       } else {
         nav_hide(id = "navbar", target = "equipTasks")
@@ -147,22 +151,10 @@ app_server <- function(input, output, session) {
       }
 
       # Field visit ---------------------------------------------------------
-      if (
-        any(
-          session$userData$admin_privs$visit,
-          session$userData$admin_privs$deploy_recover
-        )
-      ) {
-        nav_show(id = "navbar", target = "fieldTasks")
-        if (isTRUE(session$userData$admin_privs$visit)) {
-          nav_show(id = "navbar", target = "visit")
-          nav_show(id = "navbar", target = "deploy_recover")
-        } else {
-          nav_hide(id = "navbar", target = "visit")
-          nav_hide(id = "navbar", target = "deploy_recover")
-        }
+      if (isTRUE(session$userData$admin_privs$visit)) {
+        nav_show(id = "navbar", target = "visit")
       } else {
-        nav_hide(id = "navbar", target = "fieldTasks")
+        nav_hide(id = "navbar", target = "visit")
       }
 
       # Simple Index
@@ -197,8 +189,7 @@ app_server <- function(input, output, session) {
         "visit",
         "adminTasks",
         "metadataTasks",
-        "wellTasks",
-        "fieldTasks"
+        "wellTasks"
       )) {
         nav_hide(id = "navbar", target = id)
       }
@@ -218,9 +209,10 @@ app_server <- function(input, output, session) {
   # Bookmarking and browser history navigation -------------------------------
   bookmarkable_tabs <- c(
     "home",
-    "monitoringLocations",
-    "parameterValues",
-    "rasterValues",
+    "monitoringLocationsMap",
+    "parameterValuesMap",
+    "rasterValuesMap",
+    "snowBulletinMap",
     "discPlot",
     "contPlot",
     "FOD",
@@ -286,9 +278,10 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
-    ui_loaded$mapParamValues <- FALSE
-    ui_loaded$mapRasterValues <- FALSE
-    ui_loaded$mapMonitoringLocations <- FALSE
+    ui_loaded$paramValuesMap <- FALSE
+    ui_loaded$rasterValuesMap <- FALSE
+    ui_loaded$monitoringLocationsMap <- FALSE
+    ui_loaded$snowBulletinMap <- FALSE
     ui_loaded$FOD <- FALSE
     ui_loaded$imgTableView <- FALSE
     ui_loaded$imgMapView <- FALSE
@@ -452,7 +445,9 @@ app_server <- function(input, output, session) {
     output$mapsNavLocsTitle <- renderUI({
       tr("maps_locs", languageSelection$language)
     })
-
+    output$mapsNavSnowbullTitle <- renderUI({
+      tr("maps_snowbull", languageSelection$language)
+    })
     output$plotsNavMenuTitle <- renderUI({
       tr("plots", languageSelection$language)
     })
@@ -1223,11 +1218,11 @@ $(document).keyup(function(event) {
     }
 
     ### Maps nav_menu ##########################
-    if (input$navbar == "monitoringLocations") {
+    if (input$navbar == "monitoringLocationsMap") {
       # This is reached through a nav_menu
-      if (!ui_loaded$mapMonitoringLocations) {
+      if (!ui_loaded$monitoringLocationsMap) {
         output$mapLocs_ui <- renderUI(mapLocsUI("mapLocs"))
-        ui_loaded$mapMonitoringLocations <- TRUE
+        ui_loaded$monitoringLocationsMap <- TRUE
         moduleOutputs$mapLocs <- mapLocs(
           "mapLocs",
           language = languageSelection
@@ -1253,19 +1248,25 @@ $(document).keyup(function(event) {
         }
       })
     }
-    if (input$navbar == "parameterValues") {
-      if (!ui_loaded$mapParamValues) {
+    if (input$navbar == "parameterValuesMap") {
+      if (!ui_loaded$paramValuesMap) {
         output$mapParams_ui <- renderUI(mapParamsUI("mapParams"))
-        ui_loaded$mapParamValues <- TRUE
+        ui_loaded$paramValuesMap <- TRUE
         mapParams("mapParams", language = languageSelection) # Call the server
       }
     }
-
-    if (input$navbar == "rasterValues") {
-      if (!ui_loaded$mapRasterValues) {
+    if (input$navbar == "rasterValuesMap") {
+      if (!ui_loaded$rasterValuesMap) {
         output$mapRaster_ui <- renderUI(mapRasterUI("mapRaster"))
-        ui_loaded$mapRasterValues <- TRUE
+        ui_loaded$rasterValuesMap <- TRUE
         mapRaster("mapRaster", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "snowBulletinMap") {
+      if (!ui_loaded$snowBulletinMap) {
+        output$mapSnowbull_ui <- renderUI(mapSnowbullUI("mapSnowbull"))
+        ui_loaded$snowBulletinMap <- TRUE
+        mapSnowbull("mapSnowbull", language = languageSelection) # Call the server
       }
     }
 
