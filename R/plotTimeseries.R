@@ -1408,7 +1408,11 @@ plotTimeseries <- function(
           text = stn_name,
           x = 0.05,
           xref = "container",
-          font = list(size = axis_scale * 18)
+          font = list(
+            size = axis_scale * 18,
+            family = "Nunito Sans",
+            color = "#000000"
+          )
         )
       } else {
         NULL
