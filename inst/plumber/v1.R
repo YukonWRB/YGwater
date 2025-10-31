@@ -513,6 +513,7 @@ function(req, res) {
   res <- YGwater::snowInfo(
     con = con,
     complete_yrs = FALSE,
+    inactive = TRUE,
     plots = FALSE,
     quiet = TRUE,
     stats = FALSE,
