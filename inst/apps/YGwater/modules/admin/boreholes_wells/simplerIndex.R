@@ -1399,6 +1399,8 @@ simplerIndex <- function(id) {
           }
         }
       }
+
+      sanitized
     }
 
     validate_metadata_for_upload <- function(metadata) {
@@ -1425,7 +1427,7 @@ simplerIndex <- function(id) {
         session$userData$AquaCache,
         "SELECT borehole_name FROM boreholes.boreholes WHERE borehole_name = $1;",
         params = list(metadata$name)
-      )$name
+      )$borehole_name
 
       if (length(existing_names) > 0) {
         showNotification(
