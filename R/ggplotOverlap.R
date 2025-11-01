@@ -83,70 +83,75 @@
 # legend_scale = 1
 # line_scale = 1
 
-
-ggplotOverlap <- function(location,
-                          parameter,
-                          record_rate = NULL,
-                          startDay = 1,
-                          endDay = 365,
-                          traceEnd = endDay,
-                          tzone = "MST",
-                          years = NULL,
-                          datum = TRUE,
-                          title = TRUE,
-                          custom_title = NULL,
-                          filter = NULL,
-                          historic_range = "all",
-                          returns = "auto",
-                          return_type = "max",
-                          return_months = c(5:9),
-                          return_max_year = NULL,
-                          allowed_missing = 10,
-                          line_scale = 1,
-                          axis_scale = 1,
-                          legend_scale = 1,
-                          gridx = FALSE,
-                          gridy = FALSE,
-                          legend = TRUE,
-                          save_path = NULL,
-                          con = NULL,
-                          continuous_data = NULL,
-                          snowbulletin = FALSE,
-                          lang = "en")
-{
-  
+ggplotOverlap <- function(
+  location,
+  parameter,
+  record_rate = NULL,
+  startDay = 1,
+  endDay = 365,
+  traceEnd = endDay,
+  tzone = "MST",
+  years = NULL,
+  datum = TRUE,
+  title = TRUE,
+  custom_title = NULL,
+  filter = NULL,
+  historic_range = "all",
+  returns = "auto",
+  return_type = "max",
+  return_months = c(5:9),
+  return_max_year = NULL,
+  allowed_missing = 10,
+  line_scale = 1,
+  axis_scale = 1,
+  legend_scale = 1,
+  gridx = FALSE,
+  gridy = FALSE,
+  legend = TRUE,
+  save_path = NULL,
+  con = NULL,
+  continuous_data = NULL,
+  snowbulletin = FALSE,
+  lang = "en"
+) {
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
-  
+
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
   old_warn <- getOption("warn")
   options(warn = -1)
   on.exit(options(warn = old_warn), add = TRUE)
-  
+
   #### --------- Checks on input parameters and other start-up bits ------- ####
   if (inherits(parameter, "character")) {
     parameter <- tolower(parameter)
   }
-  
+
   if (!(lang %in% c("en", "fr"))) {
-    stop("Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again.")
+    stop(
+      "Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again."
+    )
   }
-  
+
   if (!is.null(record_rate)) {
     if (!lubridate::is.period(lubridate::period(record_rate))) {
-      warning("Your entry for parameter record_rate is invalid. It's been reset to the default NULL.")
+      warning(
+        "Your entry for parameter record_rate is invalid. It's been reset to the default NULL."
+      )
       record_rate <- NULL
     }
   }
-  
+
   return_type <- tolower(return_type)
   returns <- tolower(returns)
   if (!returns %in% c("table", "auto", "calculate", "none")) {
-    stop("Your entry for the parameter 'return' is invalid. Please review the function documentation and try again.")
+    stop(
+      "Your entry for the parameter 'return' is invalid. Please review the function documentation and try again."
+    )
   }
-  
+
   if (is.null(years)) {
     years <- lubridate::year(Sys.Date())
     null_years <- TRUE
@@ -156,65 +161,92 @@ ggplotOverlap <- function(location,
     years <- sort(years)
     if (length(years) > 10) {
       years <- years[(length(years) - 10):length(years)]
-      message("The parameter 'years' can only have up to 10 years. It's been truncated to the most recent 10 years.")
+      message(
+        "The parameter 'years' can only have up to 10 years. It's been truncated to the most recent 10 years."
+      )
     }
   }
-  
+
   # Select save path
   if (!is.null(save_path)) {
     if (save_path %in% c("Choose", "choose")) {
       # print("Select the folder where you want this graph saved.")
-      save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"), "Desktop"))
+      save_path <- rstudioapi::selectDirectory(
+        caption = "Select Save Folder",
+        path = file.path(Sys.getenv("USERPROFILE"), "Desktop")
+      )
     } else {
       if (!dir.exists(save_path)) {
-        stop("The directory you pointed to with parameter 'save_path' does not exist")
+        stop(
+          "The directory you pointed to with parameter 'save_path' does not exist"
+        )
       }
     }
   }
-  
+
   if (!(historic_range %in% c("all", "last"))) {
-    warning("Parameter `historic_range` can only be 'all' or 'last'. Resetting it to the default 'all'.")
+    warning(
+      "Parameter `historic_range` can only be 'all' or 'last'. Resetting it to the default 'all'."
+    )
     historic_range <- "all"
   }
-  
-  
+
   #### ------------------ Dealing with start/end dates and traceEnd ---------------------- ####
   # Sort out startDay and endDay into actual dates if needed
   last_year <- max(years)
-  
-  leap_list <- (seq(1800, 2100, by = 4))  # Create list of all leap years
-  tryCatch({ #This part will fail if startDay specified as a number
-    startDay <- as.character(startDay)
-    startDay <- as.POSIXct(startDay, tz = tzone)
-    lubridate::year(startDay) <- last_year
-  }, error = function(e) {
-    startDay <<- as.numeric(startDay)
-    if (last_year %in% leap_list & length(years) > 1) { #Skips over Feb 29 because feb 29 has no historical info
-      if (startDay == 59) {
-        startDay <<- startDay + 1
-      }
-    }
-    startDay <<- as.POSIXct(startDay*60*60*24, origin = paste0(last_year - 1, "-12-31"), tz = "UTC")
-    startDay <<- lubridate::force_tz(startDay, tzone)
-  })
-  tryCatch({ #This part will fail if endDay specified as a number
-    endDay <- as.character(endDay)
-    endDay <- as.POSIXct(endDay, tz = tzone)
-    lubridate::year(endDay) <- last_year
-  }, error = function(e) {
-    endDay <<- as.numeric(endDay)
-    if (last_year %in% leap_list & length(years) > 1) { #Skips over Feb 29 because feb 29 has no historical info
-      if (endDay == 59) {
-        if (endDay < 366) {
-          endDay <<- endDay + 1
+
+  leap_list <- (seq(1800, 2100, by = 4)) # Create list of all leap years
+  tryCatch(
+    {
+      #This part will fail if startDay specified as a number
+      startDay <- as.character(startDay)
+      startDay <- as.POSIXct(startDay, tz = tzone)
+      lubridate::year(startDay) <- last_year
+    },
+    error = function(e) {
+      startDay <<- as.numeric(startDay)
+      if (last_year %in% leap_list & length(years) > 1) {
+        #Skips over Feb 29 because feb 29 has no historical info
+        if (startDay == 59) {
+          startDay <<- startDay + 1
         }
       }
+      startDay <<- as.POSIXct(
+        startDay * 60 * 60 * 24,
+        origin = paste0(last_year - 1, "-12-31"),
+        tz = "UTC"
+      )
+      startDay <<- lubridate::force_tz(startDay, tzone)
     }
-    endDay <<- as.POSIXct(endDay*60*60*24, origin = paste0(last_year - 1, "-12-31 23:59:59"), tz = "UTC")
-    endDay <<- lubridate::force_tz(endDay, tzone)
-  })
-  
-  if (startDay > endDay) { #if the user is wanting a range overlapping the new year
+  )
+  tryCatch(
+    {
+      #This part will fail if endDay specified as a number
+      endDay <- as.character(endDay)
+      endDay <- as.POSIXct(endDay, tz = tzone)
+      lubridate::year(endDay) <- last_year
+    },
+    error = function(e) {
+      endDay <<- as.numeric(endDay)
+      if (last_year %in% leap_list & length(years) > 1) {
+        #Skips over Feb 29 because feb 29 has no historical info
+        if (endDay == 59) {
+          if (endDay < 366) {
+            endDay <<- endDay + 1
+          }
+        }
+      }
+      endDay <<- as.POSIXct(
+        endDay * 60 * 60 * 24,
+        origin = paste0(last_year - 1, "-12-31 23:59:59"),
+        tz = "UTC"
+      )
+      endDay <<- lubridate::force_tz(endDay, tzone)
+    }
+  )
+
+  if (startDay > endDay) {
+    #if the user is wanting a range overlapping the new year
     overlaps <- TRUE
     if (null_years) {
       years <- lubridate::year(Sys.Date()) - 1
@@ -227,28 +259,36 @@ ggplotOverlap <- function(location,
   } else {
     overlaps <- FALSE
   }
-  
-  tryCatch({ #This part will fail if traceEnd specified as a number
-    traceEnd <- as.character(traceEnd)
-    traceEnd <- as.POSIXct(traceEnd, tz = tzone)
-  }, error = function(e) {
-    traceEnd <<- as.numeric(traceEnd)
-    if (last_year %in% leap_list & length(years) > 1) { #Skips over Feb 29 because feb 29 has no historical info
-      if (traceEnd == 59) {
-        if (traceEnd < 366) {
-          traceEnd <<- traceEnd + 1
+
+  tryCatch(
+    {
+      #This part will fail if traceEnd specified as a number
+      traceEnd <- as.character(traceEnd)
+      traceEnd <- as.POSIXct(traceEnd, tz = tzone)
+    },
+    error = function(e) {
+      traceEnd <<- as.numeric(traceEnd)
+      if (last_year %in% leap_list & length(years) > 1) {
+        #Skips over Feb 29 because feb 29 has no historical info
+        if (traceEnd == 59) {
+          if (traceEnd < 366) {
+            traceEnd <<- traceEnd + 1
+          }
         }
       }
+      traceEnd <<- as.POSIXct(
+        traceEnd * 60 * 60 * 24,
+        origin = paste0(last_year - 1, "-12-31 23:59:59"),
+        tz = "UTC"
+      )
+      traceEnd <<- lubridate::force_tz(traceEnd, tzone)
     }
-    traceEnd <<- as.POSIXct(traceEnd*60*60*24, origin = paste0(last_year - 1, "-12-31 23:59:59"), tz = "UTC")
-    traceEnd <<- lubridate::force_tz(traceEnd, tzone)
-  })
+  )
   lubridate::year(traceEnd) <- lubridate::year(endDay)
   if (traceEnd > endDay) {
     traceEnd <- endDay
   }
-  
-  
+
   if (is.null(return_max_year)) {
     if (historic_range == "last") {
       return_max_year <- max(years)
@@ -258,65 +298,144 @@ ggplotOverlap <- function(location,
   } else {
     if (return_max_year > max(years) & historic_range == "last") {
       return_max_year <- max(years)
-      message("Your parameter entry for 'return_max_year' is invalid (greater than the last year to plot). It has been adjusted to the last year to plot. See the help file for other options.")
+      message(
+        "Your parameter entry for 'return_max_year' is invalid (greater than the last year to plot). It has been adjusted to the last year to plot. See the help file for other options."
+      )
     }
   }
-  
-  if (startDay > Sys.Date()) { #If left like this it results in wonky ribbon plotting and extra 'ghost' timeseries. Since there would be no data anyways change the year, endDay can stay in the future to enable plotting graphs with only the ribbon beyond the last day.
+
+  if (startDay > Sys.Date()) {
+    #If left like this it results in wonky ribbon plotting and extra 'ghost' timeseries. Since there would be no data anyways change the year, endDay can stay in the future to enable plotting graphs with only the ribbon beyond the last day.
     diff <- as.numeric(endDay - startDay)
     lubridate::year(startDay) <- lubridate::year(Sys.Date())
-    if (startDay > Sys.Date()) { #Depending on where we are in the year and what the startDay is, startDay could still be in the future.
+    if (startDay > Sys.Date()) {
+      #Depending on where we are in the year and what the startDay is, startDay could still be in the future.
       lubridate::year(startDay) <- lubridate::year(Sys.Date()) - 1
     }
-    endDay <- startDay + (diff*60*60*24)
+    endDay <- startDay + (diff * 60 * 60 * 24)
   }
-  
+
   day_seq <- seq.POSIXt(startDay, endDay, by = "day")
   if (length(day_seq) < 30) {
-    warning("The date range you have selected is less than 30 days. This graph type is not optimized for fewer than 30 days.")
+    warning(
+      "The date range you have selected is less than 30 days. This graph type is not optimized for fewer than 30 days."
+    )
   }
-  
+
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
-    location_id <- dbGetQueryDT(con, paste0("SELECT location_id FROM locations WHERE location = '", location, "';"))[1,1]
+    location_id <- dbGetQueryDT(
+      con,
+      paste0(
+        "SELECT location_id FROM locations WHERE location = '",
+        location,
+        "';"
+      )
+    )[1, 1]
     #Confirm parameter and location exist in the database and that there is only one entry
     if (inherits(parameter, "character")) {
       escaped_parameter <- gsub("'", "''", parameter)
-      parameter_tbl <- dbGetQueryDT(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '", escaped_parameter, "' OR param_name_fr = '", escaped_parameter, "';"))
+      parameter_tbl <- dbGetQueryDT(
+        con,
+        paste0(
+          "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '",
+          escaped_parameter,
+          "' OR param_name_fr = '",
+          escaped_parameter,
+          "';"
+        )
+      )
       parameter_code <- parameter_tbl$parameter_id[1]
       if (is.na(parameter_code)) {
         stop("The parameter you entered does not exist in the database.")
       }
     } else if (inherits(parameter, "numeric")) {
-      parameter_tbl <- dbGetQueryDT(con, paste0("SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ", parameter, ";"))
+      parameter_tbl <- dbGetQueryDT(
+        con,
+        paste0(
+          "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ",
+          parameter,
+          ";"
+        )
+      )
       if (nrow(parameter_tbl) == 0) {
         stop("The parameter you entered does not exist in the database.")
       }
       parameter_code <- parameter
     }
     # Default to the english name if the french name is not available
-    parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name_fr"] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
-    
+    parameter_tbl[
+      is.na(parameter_tbl$param_name_fr),
+      "param_name_fr"
+    ] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
+
     if (lang == "fr") {
       parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
     } else if (lang == "en" || is.na(parameter_name)) {
       parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
     }
-    instantaneous <- dbGetQueryDT(con, "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';")[1,1]
+    instantaneous <- dbGetQueryDT(
+      con,
+      "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';"
+    )[1, 1]
     if (is.null(record_rate)) {
-      exist_check <- dbGetQueryDT(con, paste0("SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, ";"))
+      exist_check <- dbGetQueryDT(
+        con,
+        paste0(
+          "SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ",
+          location_id,
+          " AND parameter_id = ",
+          parameter_code,
+          " AND aggregation_type_id = ",
+          instantaneous,
+          ";"
+        )
+      )
     } else {
-      exist_check <- dbGetQueryDT(con, paste0("SELECT timeseries_id FROM timeseries WHERE location_id = ", location_id, " AND parameter_id = ", parameter_code, " AND aggregation_type_id = ", instantaneous, " AND record_rate = '", record_rate, "';"))
+      exist_check <- dbGetQueryDT(
+        con,
+        paste0(
+          "SELECT timeseries_id FROM timeseries WHERE location_id = ",
+          location_id,
+          " AND parameter_id = ",
+          parameter_code,
+          " AND aggregation_type_id = ",
+          instantaneous,
+          " AND record_rate = '",
+          record_rate,
+          "';"
+        )
+      )
     }
     if (nrow(exist_check) == 0) {
       if (is.null(record_rate)) {
-        stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", and continuous category data.")
+        stop(
+          "There doesn't appear to be a match in the database for location ",
+          location,
+          ", parameter ",
+          parameter,
+          ", and continuous category data."
+        )
       } else {
-        stop("There doesn't appear to be a match in the database for location ", location, ", parameter ", parameter, ", record rate ", record_rate, " and continuous category data. You could try leaving the record rate to the default 'null'.")
+        stop(
+          "There doesn't appear to be a match in the database for location ",
+          location,
+          ", parameter ",
+          parameter,
+          ", record rate ",
+          record_rate,
+          " and continuous category data. You could try leaving the record rate to the default 'null'."
+        )
       }
     } else if (nrow(exist_check) > 1) {
       if (is.null(record_rate)) {
-        warning("There is more than one entry in the database for location ", location, ", parameter ", parameter, ", and continuous category data. Since you left the record_rate as NULL, selecting the one with the most frequent recording rate.")
+        warning(
+          "There is more than one entry in the database for location ",
+          location,
+          ", parameter ",
+          parameter,
+          ", and continuous category data. Since you left the record_rate as NULL, selecting the one with the most frequent recording rate."
+        )
         exist_check$record_rate <- lubridate::as.period(exist_check$record_rate)
         exist_check <- exist_check[order(exist_check$record_rate), ]
         tsid <- exist_check[1, "timeseries_id"]
@@ -324,73 +443,133 @@ ggplotOverlap <- function(location,
     } else if (nrow(exist_check) == 1) {
       tsid <- exist_check$timeseries_id
     }
-    
+
     # Find the ts units
-    units <- dbGetQueryDT(con, paste0("SELECT unit_default FROM parameters WHERE parameter_id = ", parameter_code, ";"))
-    
+    units <- dbGetQueryDT(
+      con,
+      paste0(
+        "SELECT unit_default FROM parameters WHERE parameter_id = ",
+        parameter_code,
+        ";"
+      )
+    )
+
     # Find the necessary datum (latest datum)
     if (datum) {
       if (units != "m") {
-        warning("The parameter you are plotting is not in meters. Datum will not be applied.")
+        warning(
+          "The parameter you are plotting is not in meters. Datum will not be applied."
+        )
         datum <- data.frame(conversion_m = 0)
       } else {
-        datum <- dbGetQueryDT(con, paste0("SELECT conversion_m FROM datum_conversions WHERE location_id = ", location_id, " AND current = TRUE"))
+        datum <- dbGetQueryDT(
+          con,
+          paste0(
+            "SELECT conversion_m FROM datum_conversions WHERE location_id = ",
+            location_id,
+            " AND current = TRUE"
+          )
+        )
       }
     } else {
       datum <- data.frame(conversion_m = 0)
     }
-    
-    
+
     # Get the necessary data -------------------
     # start with daily means data
     daily_end <- endDay
     if (historic_range == "all") {
-      lubridate::year(daily_end) <- max(max(years) + 1, lubridate::year(Sys.time()))
-      daily_end <- daily_end + 60*60*24 # adds a day so that the ribbon is complete for the whole plotted line
+      lubridate::year(daily_end) <- max(
+        max(years) + 1,
+        lubridate::year(Sys.time())
+      )
+      daily_end <- daily_end + 60 * 60 * 24 # adds a day so that the ribbon is complete for the whole plotted line
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
-        daily_end <- daily_end + 60*60*24
+        daily_end <- daily_end + 60 * 60 * 24
       }
-      daily <- dbGetQueryDT(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
+      daily <- dbGetQueryDT(
+        con,
+        paste0(
+          "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+          tsid,
+          " AND date <= '",
+          daily_end,
+          "' ORDER by date ASC;"
+        )
+      )
     } else if (historic_range == "last") {
       if (overlaps) {
         lubridate::year(daily_end) <- last_year + 1
       } else {
         lubridate::year(daily_end) <- last_year
       }
-      daily_end <- daily_end + 60*60*24 #adds a day so that the ribbon is complete for the whole plotted line
+      daily_end <- daily_end + 60 * 60 * 24 #adds a day so that the ribbon is complete for the whole plotted line
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
-        daily_end <- daily_end + 60*60*24
+        daily_end <- daily_end + 60 * 60 * 24
       }
-      daily <- dbGetQueryDT(con, paste0("SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ", tsid, " AND date <= '", daily_end, "' ORDER by date ASC;"))
+      daily <- dbGetQueryDT(
+        con,
+        paste0(
+          "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+          tsid,
+          " AND date <= '",
+          daily_end,
+          "' ORDER by date ASC;"
+        )
+      )
     }
-    
+
     #Fill in any missing days in daily with NAs
     all_dates <- seq(min(daily$date), max(daily$date), by = "1 day")
-    complete <- data.frame(date = all_dates, value = NA, max = NA, min = NA, q75 = NA, q25 = NA)
-    complete[match(daily$date, all_dates) , ] <- daily
+    complete <- data.frame(
+      date = all_dates,
+      value = NA,
+      max = NA,
+      min = NA,
+      q75 = NA,
+      q25 = NA
+    )
+    complete[match(daily$date, all_dates), ] <- daily
     daily <- complete
-    
+
     daily$date <- as.POSIXct(daily$date) #to posixct and not date so that it plays well with realtime df
     daily$date <- lubridate::force_tz(daily$date, tzone)
     names(daily)[names(daily) == "date"] <- "datetime"
-    
+
     dates <- lubridate::POSIXct(tz = tzone) #creates empty posixct vector to hold days missing realtime data and needing to be infilled with daily
     realtime <- data.frame()
-    for (i in rev(years)) { #Using rev so that the most recent year gets realtime, if possible
+    for (i in rev(years)) {
+      #Using rev so that the most recent year gets realtime, if possible
       start <- as.POSIXct(paste0(i, substr(startDay, 5, 16)), tz = tzone)
       start_UTC <- start
       attr(start_UTC, "tzone") <- "UTC"
-      end <- as.POSIXct(paste0(i, substr(traceEnd, 5, 10), " 23:59:59"), tz = tzone)
+      end <- as.POSIXct(
+        paste0(i, substr(traceEnd, 5, 10), " 23:59:59"),
+        tz = tzone
+      )
       if (overlaps) {
         lubridate::year(end) <- lubridate::year(end) + 1
       }
       end_UTC <- end
       attr(end_UTC, "tzone") <- "UTC"
-      if (length(day_seq) < 90) { # 90 days at 5 minute data points is 25920 rows.
-        if (nrow(realtime) < 20000) { # if plotting 70-90 days of 5 minute data will only have the greatest year with 5 minute points
-          new_realtime <- dbGetQueryDT(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid, " AND datetime BETWEEN '", as.character(start_UTC), "' AND '", as.character(end_UTC), "' AND value IS NOT NULL")) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+      if (length(day_seq) < 90) {
+        # 90 days at 5 minute data points is 25920 rows.
+        if (nrow(realtime) < 20000) {
+          # if plotting 70-90 days of 5 minute data will only have the greatest year with 5 minute points
+          new_realtime <- dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ",
+              tsid,
+              " AND datetime BETWEEN '",
+              as.character(start_UTC),
+              "' AND '",
+              as.character(end_UTC),
+              "' AND value IS NOT NULL"
+            )
+          ) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
           if (nrow(new_realtime) > 20000) {
-            new_realtime <- new_realtime[order(new_realtime$datetime) , ]
+            new_realtime <- new_realtime[order(new_realtime$datetime), ]
             new_realtime <- utils::tail(new_realtime, 20000) #Retain only max 20000 data points for plotting performance
             end_new_dates <- min(new_realtime$datetime)
             new_dates <- seq.POSIXt(start, end_new_dates, by = "days")
@@ -409,7 +588,10 @@ ggplotOverlap <- function(location,
         get_daily <- TRUE
       }
       if (get_daily) {
-        new_realtime <- daily[daily$datetime >= start & daily$datetime <= end , c("datetime", "value")]
+        new_realtime <- daily[
+          daily$datetime >= start & daily$datetime <= end,
+          c("datetime", "value")
+        ]
         if (nrow(new_realtime) > 0) {
           realtime <- rbind(realtime, new_realtime)
         }
@@ -420,53 +602,106 @@ ggplotOverlap <- function(location,
       for (i in 1:length(dates)) {
         toDate <- as.Date(dates[i]) #convert to plain date to check if there are any datetimes with that plain date in the data.frame
         if (!(toDate %in% as.Date(realtime$datetime))) {
-          row <- daily[daily$datetime == dates[i] , c("datetime", "value")]
+          row <- daily[daily$datetime == dates[i], c("datetime", "value")]
           realtime <- rbind(realtime, row)
         }
       }
     }
     if (nrow(realtime) == 0) {
-      stop("There is no data to plot within this range of years and days. If you're wanting a plot overlaping the new year, remember that the last year requested should be the *December* year.")
+      stop(
+        "There is no data to plot within this range of years and days. If you're wanting a plot overlaping the new year, remember that the last year requested should be the *December* year."
+      )
     }
-    
+
     # Add the ribbon values ######################
     # Make the ribbon sequence
-    ribbon_yr <- lubridate::year(min((max(daily$datetime) - 24*60*60), (daily_end - 24*60*60))) #Daily was queried as one day longer than the day sequence earlier... this reverses that one day extra, but also finds out if the actual data extracted doesn't go that far back
+    ribbon_yr <- lubridate::year(min(
+      (max(daily$datetime) - 24 * 60 * 60),
+      (daily_end - 24 * 60 * 60)
+    )) #Daily was queried as one day longer than the day sequence earlier... this reverses that one day extra, but also finds out if the actual data extracted doesn't go that far back
     if (overlaps) {
       if (historic_range == "all") {
-        ribbon_seq <- seq.POSIXt(as.POSIXct(paste0(ribbon_yr - 1, substr(startDay, 5, 16)), tz = tzone), as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone), by = "day")
+        ribbon_seq <- seq.POSIXt(
+          as.POSIXct(
+            paste0(ribbon_yr - 1, substr(startDay, 5, 16)),
+            tz = tzone
+          ),
+          as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone),
+          by = "day"
+        )
       } else {
-        ribbon_seq <- seq.POSIXt(as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone), as.POSIXct(paste0(last_year + 1, substr(endDay, 5, 16)), tz = tzone), by = "day")
+        ribbon_seq <- seq.POSIXt(
+          as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone),
+          as.POSIXct(paste0(last_year + 1, substr(endDay, 5, 16)), tz = tzone),
+          by = "day"
+        )
       }
     } else {
       if (historic_range == "all") {
-        ribbon_seq <- seq.POSIXt(as.POSIXct(paste0(ribbon_yr, substr(startDay, 5, 16)), tz = tzone), as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone), by = "day")
+        ribbon_seq <- seq.POSIXt(
+          as.POSIXct(paste0(ribbon_yr, substr(startDay, 5, 16)), tz = tzone),
+          as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone),
+          by = "day"
+        )
       } else {
-        ribbon_seq <- seq.POSIXt(as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone), as.POSIXct(paste0(last_year, substr(endDay, 5, 16)), tz = tzone), by = "day")
+        ribbon_seq <- seq.POSIXt(
+          as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone),
+          as.POSIXct(paste0(last_year, substr(endDay, 5, 16)), tz = tzone),
+          by = "day"
+        )
       }
     }
-    
+
     ribbon <- data.frame()
-    ribbon_start_end <- if (overlaps) paste0(lubridate::year(min(daily$datetime)), "-", lubridate::year(min(daily$datetime)) + 1 ) else lubridate::year(min(daily$datetime))
+    ribbon_start_end <- if (overlaps) {
+      paste0(
+        lubridate::year(min(daily$datetime)),
+        "-",
+        lubridate::year(min(daily$datetime)) + 1
+      )
+    } else {
+      lubridate::year(min(daily$datetime))
+    }
     for (i in 1:length(ribbon_seq)) {
       target_date <- ribbon_seq[i]
       plot_date <- day_seq[i]
       if (is.na(plot_date)) {
-        plot_date <- day_seq[i - 1] + 60*60*24 - 1
+        plot_date <- day_seq[i - 1] + 60 * 60 * 24 - 1
       }
-      if (!(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29)) { #Can't have the Feb 29 date because there is no Feb 29 ribbon
-        row <- daily[daily$datetime == target_date, !names(daily) %in% c("value", "grade", "approval")]
+      if (
+        !(lubridate::month(target_date) == 2 &
+          lubridate::day(target_date) == 29)
+      ) {
+        #Can't have the Feb 29 date because there is no Feb 29 ribbon
+        row <- daily[
+          daily$datetime == target_date,
+          !names(daily) %in% c("value", "grade", "approval")
+        ]
         if (nrow(row) == 0) {
           lubridate::year(target_date) <- lubridate::year(target_date) - 1
           if (is.na(target_date)) {
             next
           }
-          row <- daily[daily$datetime == target_date, !names(daily) %in% c("value", "grade", "approval")]
+          row <- daily[
+            daily$datetime == target_date,
+            !names(daily) %in% c("value", "grade", "approval")
+          ]
         }
         lubridate::year(row$datetime) <- lubridate::year(plot_date)
         if (i == length(ribbon_seq)) {
           row$datetime <- row$datetime - 1 #This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
-          ribbon_start_end <- if (overlaps) c(ribbon_start_end, paste0(lubridate::year(target_date) - 2, "-", lubridate::year(target_date) - 1)) else c(ribbon_start_end, lubridate::year(target_date) - 1)
+          ribbon_start_end <- if (overlaps) {
+            c(
+              ribbon_start_end,
+              paste0(
+                lubridate::year(target_date) - 2,
+                "-",
+                lubridate::year(target_date) - 1
+              )
+            )
+          } else {
+            c(ribbon_start_end, lubridate::year(target_date) - 1)
+          }
         }
         if (nrow(row) > 0) {
           ribbon <- rbind(ribbon, row)
@@ -477,7 +712,10 @@ ggplotOverlap <- function(location,
       if (min(ribbon$datetime) < min(realtime$datetime)) {
         first_date <- min(realtime$datetime)
         lubridate::hour(first_date) <- 0
-        ribbon[ribbon$datetime == min(ribbon$datetime), "datetime"] <- first_date
+        ribbon[
+          ribbon$datetime == min(ribbon$datetime),
+          "datetime"
+        ] <- first_date
       }
       realtime <- merge(realtime, ribbon, all = TRUE, by = "datetime")
     } else {
@@ -486,8 +724,7 @@ ggplotOverlap <- function(location,
       realtime$q75 <- NA
       realtime$q25 <- NA
     }
-    
-    
+
     realtime$year <- lubridate::year(realtime$datetime) #year, month columns used for removing Feb 29 later
     realtime$month <- lubridate::month(realtime$datetime)
     realtime$day <- lubridate::day(realtime$datetime)
@@ -496,107 +733,225 @@ ggplotOverlap <- function(location,
     daily$month <- lubridate::month(daily$datetime)
     daily$day <- lubridate::month(daily$datetime)
     daily <- daily[!(daily$month == 2 & daily$day == 29), ] #Remove Feb 29
-    
-    if (overlaps) { # This section sorts out the overlap years, builds the plotting column
+
+    if (overlaps) {
+      # This section sorts out the overlap years, builds the plotting column
       temp <- data.frame(date = day_seq)
       temp$year = lubridate::year(temp$date)
       temp <- temp[!(temp$year == max(temp$year)), ] #Remove the rows for days after the new year
       temp$month = lubridate::month(temp$date)
       temp$day = lubridate::day(temp$date)
       temp$day <- stringr::str_pad(temp$day, 2, side = "left", pad = "0")
-      
+
       #Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)
       temp$md <- paste0(temp$month, temp$day)
       temp$md <- as.numeric(temp$md)
       md_sequence <- seq(min(temp$md), max(temp$md))
-      
-      realtime$day <- stringr::str_pad(realtime$day, 2, side = "left", pad = "0")
+
+      realtime$day <- stringr::str_pad(
+        realtime$day,
+        2,
+        side = "left",
+        pad = "0"
+      )
       realtime$md <- paste0(realtime$month, realtime$day)
       realtime$md <- as.numeric(realtime$md)
-      
+
       realtime$fake_datetime <- as.POSIXct(rep(NA, nrow(realtime)))
       realtime$plot_year <- NA
-      for (i in 1:nrow(realtime)) {  #!!!This desperately needs to be vectorized in some way. Super slow!
-        fake_datetime <- gsub("[0-9]{4}", if (realtime$md[i] %in% md_sequence) last_year else last_year + 1, realtime$datetime[i])
-        fake_datetime <- ifelse(nchar(fake_datetime) > 11, fake_datetime, paste0(fake_datetime, " 00:00:00"))
+      for (i in 1:nrow(realtime)) {
+        #!!!This desperately needs to be vectorized in some way. Super slow!
+        fake_datetime <- gsub(
+          "[0-9]{4}",
+          if (realtime$md[i] %in% md_sequence) last_year else last_year + 1,
+          realtime$datetime[i]
+        )
+        fake_datetime <- ifelse(
+          nchar(fake_datetime) > 11,
+          fake_datetime,
+          paste0(fake_datetime, " 00:00:00")
+        )
         realtime$fake_datetime[i] <- as.POSIXct(fake_datetime, tz = tzone)
-        realtime$plot_year[i] <- if (realtime$md[i] %in% md_sequence) paste0(realtime$year[i], "-", realtime$year[i] + 1) else paste0(realtime$year[i] - 1, "-", realtime$year[i])
+        realtime$plot_year[i] <- if (realtime$md[i] %in% md_sequence) {
+          paste0(realtime$year[i], "-", realtime$year[i] + 1)
+        } else {
+          paste0(realtime$year[i] - 1, "-", realtime$year[i])
+        }
       }
-    } else { #Does not overlap the new year
+    } else {
+      #Does not overlap the new year
       realtime$plot_year <- as.character(realtime$year)
       realtime$fake_datetime <- gsub("[0-9]{4}", last_year, realtime$datetime)
-      realtime$fake_datetime <- ifelse(nchar(realtime$fake_datetime) > 11, realtime$fake_datetime, paste0(realtime$fake_datetime, " 00:00:00"))
-      realtime$fake_datetime <- as.POSIXct(realtime$fake_datetime, tz = tzone, format = '%Y-%m-%d %H:%M:%S') #Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
+      realtime$fake_datetime <- ifelse(
+        nchar(realtime$fake_datetime) > 11,
+        realtime$fake_datetime,
+        paste0(realtime$fake_datetime, " 00:00:00")
+      )
+      realtime$fake_datetime <- as.POSIXct(
+        realtime$fake_datetime,
+        tz = tzone,
+        format = '%Y-%m-%d %H:%M:%S'
+      ) #Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
     }
-    
+
     # apply datum correction where necessary
     if (datum$conversion_m > 0) {
-      daily[ , c("value", "max", "min", "q75", "q25")] <- apply(daily[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
-      realtime[ , c("value", "max", "min", "q75", "q25")] <- apply(realtime[ , c("value", "max", "min", "q75", "q25")], 2, function(x) x + datum$conversion_m)
+      daily[, c("value", "max", "min", "q75", "q25")] <- apply(
+        daily[, c("value", "max", "min", "q75", "q25")],
+        2,
+        function(x) x + datum$conversion_m
+      )
+      realtime[, c("value", "max", "min", "q75", "q25")] <- apply(
+        realtime[, c("value", "max", "min", "q75", "q25")],
+        2,
+        function(x) x + datum$conversion_m
+      )
     }
   }
-  
-  
+
   #### --------------------------- Data provided -------------------------- ####
-  
+
   if (!is.null(continuous_data)) {
     if (!all(names(continuous_data) %in% c("datetime", "value"))) {
-      stop("The data.frame passed to parameter 'continuous_data' must have columns named 'datetime' and 'value'.")
+      stop(
+        "The data.frame passed to parameter 'continuous_data' must have columns named 'datetime' and 'value'."
+      )
     }
     parameter_name <- titleCase(parameter)
     #### Add this in here: ------------------
     dat <- continuous_data
     # Remove Feb 29
     dat$monthday <- format(dat$datetime, "%m-%d")
-    dat <- dat[dat$monthday != "02-29",]
+    dat <- dat[dat$monthday != "02-29", ]
     dat <- dat[, c("datetime", "value")]
     # Calculate min, max, median
     dat$day <- format(dat$datetime, "%m-%d")
     summary_dat <- dat %>%
       dplyr::group_by(.data$day) %>%
-      dplyr::summarise(min = round(min(.data$value), 0),
-                       max = round(max(.data$value), 0),
-                       md = round(stats::median(.data$value), 0),
-                       q75 = round(stats::quantile(.data$value, 0.75), 0),
-                       q25 = round(stats::quantile(.data$value, 0.25), 0))
-    
+      dplyr::summarise(
+        min = round(min(.data$value), 0),
+        max = round(max(.data$value), 0),
+        md = round(stats::median(.data$value), 0),
+        q75 = round(stats::quantile(.data$value, 0.75), 0),
+        q25 = round(stats::quantile(.data$value, 0.25), 0)
+      )
+
     # Add date
     summary_dat$datetime <- NA
-    
+
     # Use startay and endDay to set up for plotting and merge dat with summary_dat
     if (overlaps) {
-      summary_dat[summary_dat$day >= format(startDay, "%m-%d") & summary_dat$day <= "12-31",]$datetime <- paste0(years, "-", summary_dat[summary_dat$day >= format(startDay, "%m-%d") & summary_dat$day <= "12-31",]$day )
-      summary_dat[summary_dat$day >= "01-01" & summary_dat$day <= format(endDay, "%m-%d"),]$datetime <- paste0(years + 1, "-", summary_dat[summary_dat$day >= "01-01" & summary_dat$day <= format(endDay, "%m-%d"),]$day )
-      summary_dat$datetime <- as.POSIXct(summary_dat$datetime, format = "%Y-%m-%d")
+      summary_dat[
+        summary_dat$day >= format(startDay, "%m-%d") &
+          summary_dat$day <= "12-31",
+      ]$datetime <- paste0(
+        years,
+        "-",
+        summary_dat[
+          summary_dat$day >= format(startDay, "%m-%d") &
+            summary_dat$day <= "12-31",
+        ]$day
+      )
+      summary_dat[
+        summary_dat$day >= "01-01" & summary_dat$day <= format(endDay, "%m-%d"),
+      ]$datetime <- paste0(
+        years + 1,
+        "-",
+        summary_dat[
+          summary_dat$day >= "01-01" &
+            summary_dat$day <= format(endDay, "%m-%d"),
+        ]$day
+      )
+      summary_dat$datetime <- as.POSIXct(
+        summary_dat$datetime,
+        format = "%Y-%m-%d"
+      )
       dat$datetime <- as.POSIXct(dat$datetime, format = "%Y-%m-%d")
-      
+
       # Add columns for year and value. If want to add additional years, then would only need to add value, not stats
       if (parameter == "cddf") {
-        tab <- merge(summary_dat, dat[dat$datetime >= paste0(years, '-09-01')
-                                      & dat$datetime <= paste0(years + 1, '-06-14'),], by = c("day"), all.x = TRUE)
+        tab <- merge(
+          summary_dat,
+          dat[
+            dat$datetime >= paste0(years, '-09-01') &
+              dat$datetime <= paste0(years + 1, '-06-14'),
+          ],
+          by = c("day"),
+          all.x = TRUE
+        )
       } else {
-        tab <- merge(summary_dat, dat[dat$datetime >= paste0(years, "-", format(startDay, "%m-%d"))
-                                      & dat$datetime <= paste0(years + 1, "-", format(endDay, "%m-%d")),], by = c("day"), all.x = TRUE)
+        tab <- merge(
+          summary_dat,
+          dat[
+            dat$datetime >= paste0(years, "-", format(startDay, "%m-%d")) &
+              dat$datetime <= paste0(years + 1, "-", format(endDay, "%m-%d")),
+          ],
+          by = c("day"),
+          all.x = TRUE
+        )
       }
     } else {
-      summary_dat[summary_dat$day >= format(startDay, "%m-%d") & summary_dat$day <= format(endDay, "%m-%d"),]$datetime <- paste0(years, "-", summary_dat[summary_dat$day >= format(startDay, "%m-%d") & summary_dat$day <= format(endDay, "%m-%d"),]$day )
-      
-      summary_dat$datetime <- as.POSIXct(summary_dat$datetime, format = "%Y-%m-%d")
-      
+      summary_dat[
+        summary_dat$day >= format(startDay, "%m-%d") &
+          summary_dat$day <= format(endDay, "%m-%d"),
+      ]$datetime <- paste0(
+        years,
+        "-",
+        summary_dat[
+          summary_dat$day >= format(startDay, "%m-%d") &
+            summary_dat$day <= format(endDay, "%m-%d"),
+        ]$day
+      )
+
+      summary_dat$datetime <- as.POSIXct(
+        summary_dat$datetime,
+        format = "%Y-%m-%d"
+      )
+
       dat$datetime <- as.POSIXct(dat$datetime, format = "%Y-%m-%d")
-      
-      tab <- merge(summary_dat, dat[dat$datetime >= paste0(years, "-", format(startDay, "%m-%d"))
-                                    & dat$datetime <= paste0(years, "-", format(endDay, "%m-%d")),], by = c("day"), all.x = TRUE)
+
+      tab <- merge(
+        summary_dat,
+        dat[
+          dat$datetime >= paste0(years, "-", format(startDay, "%m-%d")) &
+            dat$datetime <= paste0(years, "-", format(endDay, "%m-%d")),
+        ],
+        by = c("day"),
+        all.x = TRUE
+      )
     }
     if (overlaps) {
-      ribbon_start_end <- c(paste0(lubridate::year(min(summary_dat$datetime)), "-", lubridate::year(min(summary_dat$datetime)) + 1), paste0(lubridate::year(max(summary_dat$datetime)) - 1, "-", lubridate::year(max(summary_dat$datetime))))
+      ribbon_start_end <- c(
+        paste0(
+          lubridate::year(min(summary_dat$datetime)),
+          "-",
+          lubridate::year(min(summary_dat$datetime)) + 1
+        ),
+        paste0(
+          lubridate::year(max(summary_dat$datetime)) - 1,
+          "-",
+          lubridate::year(max(summary_dat$datetime))
+        )
+      )
     } else {
-      ribbon_start_end <- c(lubridate::year(min(summary_dat$datetime)), lubridate::year(max(summary_dat$datetime)))
+      ribbon_start_end <- c(
+        lubridate::year(min(summary_dat$datetime)),
+        lubridate::year(max(summary_dat$datetime))
+      )
     }
-    
-    
+
     # rename columns
-    colnames(tab) <- c("day", "min", "max", "md", "q75", "q25", "datetime", "datetime.y", "value")
+    colnames(tab) <- c(
+      "day",
+      "min",
+      "max",
+      "md",
+      "q75",
+      "q25",
+      "datetime",
+      "datetime.y",
+      "value"
+    )
     # Add columns to imitate hydrometContinuous realtime table
     tab$year <- format(tab$datetime, "%Y")
     tab$month <- format(tab$datetime, "%m")
@@ -604,21 +959,23 @@ ggplotOverlap <- function(location,
     tab$plot_year <- paste0(years, "-", years + 1)
     tab$datetime <- as.POSIXct(tab$datetime, format = "%Y-%m-%d")
     tab$fake_datetime <- tab$datetime
-    
+
     #####----------------
     realtime <- tab
     daily <- continuous_data
     day_seq <- realtime$datetime
     units <- "\u00B0C"
-    
   } #End of loop integrating provided data
-  
+
   if (snowbulletin) {
     # Order realtime by fake_datetime
-    realtime <- realtime[order(realtime$fake_datetime),]
+    realtime <- realtime[order(realtime$fake_datetime), ]
     # Remove all values before the first of the month
     try({
-      realtime[realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"), "value"] <- NA
+      realtime[
+        realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"),
+        "value"
+      ] <- NA
     })
     # Apply rolling mean
     realtime$q25 <- zoo::rollmean(realtime$q25, 5, fill = NA, align = "left")
@@ -626,35 +983,91 @@ ggplotOverlap <- function(location,
     realtime$min <- zoo::rollmean(realtime$min, 5, fill = NA, align = "left")
     realtime$max <- zoo::rollmean(realtime$max, 5, fill = NA, align = "left")
   }
-  
+
   if (!is.null(filter)) {
     if (!inherits(filter, "numeric")) {
-      message("Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done.")
+      message(
+        "Parameter 'filter' was modified from the default NULL but not properly specified as a class 'numeric'. Filtering will not be done."
+      )
     } else {
-      if (parameter %in% c("water level", "niveau d'eau", "flow", "d\u00E9bit d'eau", "snow depth", "profondeur de la neige", "snow water equivalent", "\u00E9quivalent en eau de la neige", "distance") | grepl("precipitation", parameter, ignore.case = TRUE)) { #remove all values less than 0
-        realtime[realtime$value < 0 & !is.na(realtime$value),"value"] <- NA
-      } else { #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
-        realtime[realtime$value < -100 & !is.na(realtime$value),"value"] <- NA
+      if (
+        parameter %in%
+          c(
+            "water level",
+            "niveau d'eau",
+            "water flow",
+            "d\u00E9bit d'eau",
+            "snow depth",
+            "profondeur de la neige",
+            "snow water equivalent",
+            "\u00E9quivalent en eau de la neige",
+            "distance"
+          ) |
+          grepl("precipitation", parameter, ignore.case = TRUE)
+      ) {
+        #remove all values less than 0
+        realtime[realtime$value < 0 & !is.na(realtime$value), "value"] <- NA
+      } else {
+        #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
+        realtime[realtime$value < -100 & !is.na(realtime$value), "value"] <- NA
       }
-      
-      rollmedian <- zoo::rollapply(realtime$value, width = filter, FUN = "median", align = "center", fill = "extend", na.rm = TRUE)
-      rollmad <- zoo::rollapply(realtime$value, width = filter, FUN = "mad", align = "center", fill = "extend", na.rm = TRUE)
+
+      rollmedian <- zoo::rollapply(
+        realtime$value,
+        width = filter,
+        FUN = "median",
+        align = "center",
+        fill = "extend",
+        na.rm = TRUE
+      )
+      rollmad <- zoo::rollapply(
+        realtime$value,
+        width = filter,
+        FUN = "mad",
+        align = "center",
+        fill = "extend",
+        na.rm = TRUE
+      )
       outlier <- abs(realtime$value - rollmedian) > 5 * rollmad
       realtime$value[outlier] <- NA
     }
   }
-  
+
+  if (
+    parameter %in%
+      c(
+        "water level",
+        "niveau d'eau",
+        "water flow",
+        "d\u00E9bit d'eau",
+        "snow depth",
+        "profondeur de la neige",
+        "snow water equivalent",
+        "\u00E9quivalent en eau de la neige",
+        "distance"
+      ) |
+      grepl("precipitation", parameter, ignore.case = TRUE)
+  ) {
+    #remove all values less than 0
+    realtime[realtime$value < 0 & !is.na(realtime$value), "value"] <- NA
+    realtime[realtime$q75 < 0 & !is.na(realtime$q75), "q75"] <- 0
+    realtime[realtime$max < 0 & !is.na(realtime$max), "max"] <- 0
+    realtime[realtime$q25 < 0 & !is.na(realtime$q25), "q25"] <- 0
+    realtime[realtime$min < 0 & !is.na(realtime$min), "min"] <- 0
+  }
+
   #### ----------------------------- Make the plot -------------------------- ####
   line_size = 1
   minHist <- min(realtime$min, na.rm = TRUE)
   maxHist <- max(realtime$max, na.rm = TRUE)
   minLines <- min(realtime$value, na.rm = TRUE)
   maxLines <- max(realtime$value, na.rm = TRUE)
+
   min <- if (minHist < minLines) minHist else minLines
   max <- if (maxHist > maxLines) maxHist else maxLines
-  
+
   # x axis settings
-  if  (length(day_seq) > 200) {
+  if (length(day_seq) > 200) {
     date_breaks = "2 months"
     if (lang == "fr") {
       labs = "%d %b"
@@ -704,19 +1117,43 @@ ggplotOverlap <- function(location,
       labs = "%H:%M"
     }
   }
-  
-  eng_months <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-  fr_months  <- c("janv", "f\u00E9vr", "mars", "avr", "mai", "juin",
-                  "juil", "ao\u00FBt", "sept", "oct", "nov", "d\u00E9c")
-  
+
+  eng_months <- c(
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+  )
+  fr_months <- c(
+    "janv",
+    "f\u00E9vr",
+    "mars",
+    "avr",
+    "mai",
+    "juin",
+    "juil",
+    "ao\u00FBt",
+    "sept",
+    "oct",
+    "nov",
+    "d\u00E9c"
+  )
+
   # Define a custom date labeling function
   custom_date_labels <- function(x) {
     label <- format(x, format = labs)
-    
+
     # Remove leading zeros from day numbers
     label <- gsub("\\b0([1-9])", "\\1", label)
-    
+
     if (lang == "fr") {
       # Replace month abbreviations
       for (i in seq_along(eng_months)) {
@@ -724,159 +1161,416 @@ ggplotOverlap <- function(location,
       }
       # Replace weekday abbreviations (if using %a or %A in labs)
       eng_days <- c("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-      fr_days  <- c("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
+      fr_days <- c("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
       for (i in seq_along(eng_days)) {
         label <- gsub(eng_days[i], fr_days[i], label)
       }
     }
     return(label)
   }
-  
-  plot <- ggplot2::ggplot(realtime, ggplot2::aes(x = .data$fake_datetime, y = .data$value)) +
-    ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0,0.05)) + # The expand argument controls space between the data and the x axis. Default for continuous variable is 0.05
-    ggplot2::scale_x_datetime(date_breaks = date_breaks, labels = custom_date_labels, expand = c(0,0)) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
-    ggplot2::labs(x = NULL, y =  paste0(parameter_name, " (", units, ")")) +
+
+  plot <- ggplot2::ggplot(
+    realtime,
+    ggplot2::aes(x = .data$fake_datetime, y = .data$value)
+  ) +
+    ggplot2::scale_y_continuous(limits = c(min, max), expand = c(0, 0.05)) + # The expand argument controls space between the data and the x axis. Default for continuous variable is 0.05
+    ggplot2::scale_x_datetime(
+      date_breaks = date_breaks,
+      labels = custom_date_labels,
+      expand = c(0, 0)
+    ) + # The expand argument controls space between the data and the y axis. Default for continuous variable is 0.05
+    ggplot2::labs(x = NULL, y = paste0(parameter_name, " (", units, ")")) +
     ggplot2::theme_classic()
-  
+
   if (legend) {
-    plot <- plot + 
-      ggplot2::theme(legend.position = "right", 
-                     legend.justification = c(0, 0.95), 
-                     legend.text = ggplot2::element_text(size = 8 * legend_scale), 
-                     legend.title = ggplot2::element_text(size = 9 * legend_scale), 
-                     axis.title.y = ggplot2::element_text(size = 12 * axis_scale), 
-                     axis.text.x = ggplot2::element_text(size = 11 * axis_scale), 
-                     axis.text.y = ggplot2::element_text(size = 11 * axis_scale))
+    plot <- plot +
+      ggplot2::theme(
+        legend.position = "right",
+        legend.justification = c(0, 0.95),
+        legend.text = ggplot2::element_text(size = 8 * legend_scale),
+        legend.title = ggplot2::element_text(size = 9 * legend_scale),
+        axis.title.y = ggplot2::element_text(size = 12 * axis_scale),
+        axis.text.x = ggplot2::element_text(size = 11 * axis_scale),
+        axis.text.y = ggplot2::element_text(size = 11 * axis_scale)
+      )
   } else {
-    plot <- plot + 
-      ggplot2::theme(legend.position = "none", 
-                     axis.title.y = ggplot2::element_text(size = 12 * axis_scale), 
-                     axis.text.x = ggplot2::element_text(size = 11 * axis_scale), 
-                     axis.text.y = ggplot2::element_text(size = 11 * axis_scale))
+    plot <- plot +
+      ggplot2::theme(
+        legend.position = "none",
+        axis.title.y = ggplot2::element_text(size = 12 * axis_scale),
+        axis.text.x = ggplot2::element_text(size = 11 * axis_scale),
+        axis.text.y = ggplot2::element_text(size = 11 * axis_scale)
+      )
   }
-  
+
   if (!is.infinite(minHist)) {
-    if (!identical(realtime$min, realtime$max)) { #if they're identical there's nothing to plot!
+    if (!identical(realtime$min, realtime$max)) {
+      #if they're identical there's nothing to plot!
       plot <- plot +
-        ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"), na.rm = T)
+        ggplot2::geom_ribbon(
+          ggplot2::aes(ymin = .data$min, ymax = .data$max, fill = "Min - Max"),
+          na.rm = T
+        )
       if (!all(is.na(realtime$q25))) {
         plot <- plot +
-          ggplot2::geom_ribbon(ggplot2::aes(ymin = .data$q25, ymax = .data$q75, fill = if (lang == "en") "25th-75th Percentile  " else "25e-75e percentile    "), na.rm = T) +
-          ggplot2::scale_fill_manual(name = if (lang == "en") "Historical Range" else "Plage historique", values = if (lang == "en") c("Min - Max" = "gray90", "25th-75th Percentile  " = "gray80") else c("Min - Max" = "gray90", "25e-75e percentile    " = "gray80"))
+          ggplot2::geom_ribbon(
+            ggplot2::aes(
+              ymin = .data$q25,
+              ymax = .data$q75,
+              fill = if (lang == "en") {
+                "25th-75th Percentile  "
+              } else {
+                "25e-75e percentile    "
+              }
+            ),
+            na.rm = T
+          ) +
+          ggplot2::scale_fill_manual(
+            name = if (lang == "en") "Historical Range" else "Plage historique",
+            values = if (lang == "en") {
+              c("Min - Max" = "gray90", "25th-75th Percentile  " = "gray80")
+            } else {
+              c("Min - Max" = "gray90", "25e-75e percentile    " = "gray80")
+            }
+          )
       } else {
         plot <- plot +
-          ggplot2::scale_fill_manual(name = if (lang == "en") "Historical Range" else "Plage historique", values = c("Min - Max" = "gray90"))
+          ggplot2::scale_fill_manual(
+            name = if (lang == "en") "Historical Range" else "Plage historique",
+            values = c("Min - Max" = "gray90")
+          )
       }
     } else {
       minHist <- Inf # set to Inf here so that historical range is not printed later on the graph
     }
   }
-  
+
   if (gridx) {
-    plot <- plot + ggplot2::theme(panel.grid.major.x = ggplot2::element_line(color = "black", size = 0.5))
+    plot <- plot +
+      ggplot2::theme(
+        panel.grid.major.x = ggplot2::element_line(color = "black", size = 0.5)
+      )
   }
   if (gridy) {
-    plot <- plot + ggplot2::theme(panel.grid.major.y = ggplot2::element_line(color = "black", size = 0.5))
+    plot <- plot +
+      ggplot2::theme(
+        panel.grid.major.y = ggplot2::element_line(color = "black", size = 0.5)
+      )
   }
-  
+
   if (!snowbulletin) {
     plot <- plot +
-      ggplot2::geom_line(ggplot2::aes(colour = .data$plot_year, group = .data$plot_year), linewidth = line_size, na.rm = T) +
-      ggplot2::scale_colour_manual(name = if (lang == "en") "Year" else "Ann\u00E9e", labels = rev(unique(realtime$plot_year)), values = grDevices::colorRampPalette(c("#206976", "#7A9A01", "#F2A900","#DC4405"))(length(unique(realtime$plot_year))), na.translate = FALSE, breaks = rev(unique(realtime$plot_year)))
+      ggplot2::geom_line(
+        ggplot2::aes(colour = .data$plot_year, group = .data$plot_year),
+        linewidth = line_size,
+        na.rm = T
+      ) +
+      ggplot2::scale_colour_manual(
+        name = if (lang == "en") "Year" else "Ann\u00E9e",
+        labels = rev(unique(realtime$plot_year)),
+        values = grDevices::colorRampPalette(c(
+          "#206976",
+          "#7A9A01",
+          "#F2A900",
+          "#DC4405"
+        ))(length(unique(realtime$plot_year))),
+        na.translate = FALSE,
+        breaks = rev(unique(realtime$plot_year))
+      )
   } else {
     plot <- plot +
       ggplot2::geom_line(ggplot2::aes(y = max), colour = "#0097A9", size = 1) +
       ggplot2::geom_line(ggplot2::aes(y = min), colour = "#834333", size = 1) +
       ggplot2::geom_line(colour = "black", linewidth = line_size, na.rm = T)
   }
-  
+
   # Get or calculate return periods -------------
-  label_en <- c("two year return", "five year return", "ten year return", "twenty year return", "fifty year return", "one hundred year return", "two hundred year return", "five hundred year return", "one-thousand year return", "two-thousand year return")
-  label_fr <- c("retour de deux ans", "retour de cinq ans", "retour de dix ans", "retour de vingt ans", "retour de cinquante ans", "retour de cent ans", "retour de deux cents ans", "retour de cinq cents ans", "retour de mille ans", "retour de deux mille ans")
+  label_en <- c(
+    "two year return",
+    "five year return",
+    "ten year return",
+    "twenty year return",
+    "fifty year return",
+    "one hundred year return",
+    "two hundred year return",
+    "five hundred year return",
+    "one-thousand year return",
+    "two-thousand year return"
+  )
+  label_fr <- c(
+    "retour de deux ans",
+    "retour de cinq ans",
+    "retour de dix ans",
+    "retour de vingt ans",
+    "retour de cinquante ans",
+    "retour de cent ans",
+    "retour de deux cents ans",
+    "retour de cinq cents ans",
+    "retour de mille ans",
+    "retour de deux mille ans"
+  )
   if (returns != "none") {
     if (returns %in% c("table", "auto")) {
       #search for the location in the table
       returns_table <- paste0(parameter, "_returns_", return_type)
       if (location %in% data[[returns_table]]$ID) {
         returns <- "table"
-        loc_returns <- data[[returns_table]][data[[returns_table]]$ID == location , ]
-        loc_returns[ , c("twoyear", "fiveyear", "tenyear", "twentyyear", "fiftyyear", "onehundredyear", "twohundredyear", "fivehundredyear", "thousandyear", "twothousandyear", "LSL", "FSL")] <- apply(loc_returns[ , c("twoyear", "fiveyear", "tenyear", "twentyyear", "fiftyyear", "onehundredyear", "twohundredyear", "fivehundredyear", "thousandyear", "twothousandyear", "LSL", "FSL")], 2, function(x) x + datum$conversion_m)
+        loc_returns <- data[[returns_table]][
+          data[[returns_table]]$ID == location,
+        ]
+        loc_returns[, c(
+          "twoyear",
+          "fiveyear",
+          "tenyear",
+          "twentyyear",
+          "fiftyyear",
+          "onehundredyear",
+          "twohundredyear",
+          "fivehundredyear",
+          "thousandyear",
+          "twothousandyear",
+          "LSL",
+          "FSL"
+        )] <- apply(
+          loc_returns[, c(
+            "twoyear",
+            "fiveyear",
+            "tenyear",
+            "twentyyear",
+            "fiftyyear",
+            "onehundredyear",
+            "twohundredyear",
+            "fivehundredyear",
+            "thousandyear",
+            "twothousandyear",
+            "LSL",
+            "FSL"
+          )],
+          2,
+          function(x) x + datum$conversion_m
+        )
         loc_returns[is.na(loc_returns)] <- -10 #This prevents a ggplot error when it tries to plot a logical along with numerics, but keeps the values out of the plot.
-        
+
         plot <- plot +
-          ggplot2::geom_hline(yintercept = loc_returns$twoyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$fiveyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$tenyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$twentyyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$fiftyyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$onehundredyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$twohundredyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$fivehundredyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$thousandyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = loc_returns$twothousandyear, 
-                              linetype = "dashed", color = "black") +
-          ggplot2::annotate("text", 
-                            x = mean(realtime$fake_datetime), 
-                            y = c(loc_returns$twoyear, loc_returns$fiveyear, loc_returns$tenyear, loc_returns$twentyyear, loc_returns$fiftyyear, loc_returns$onehundredyear, loc_returns$twohundredyear, loc_returns$fivehundredyear, loc_returns$thousandyear, loc_returns$twothousandyear), 
-                            label = if (lang == "en") label_en else if (lang == "fr") label_fr, 
-                            size = 2.6 * line_scale, 
-                            vjust = -.2 * line_scale)
-      } else if (returns == "auto") { # if there is no entry to the table AND the user specified auto, calculate loop will run after this
+          ggplot2::geom_hline(
+            yintercept = loc_returns$twoyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$fiveyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$tenyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$twentyyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$fiftyyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$onehundredyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$twohundredyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$fivehundredyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$thousandyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::geom_hline(
+            yintercept = loc_returns$twothousandyear,
+            linetype = "dashed",
+            color = "black"
+          ) +
+          ggplot2::annotate(
+            "text",
+            x = mean(realtime$fake_datetime),
+            y = c(
+              loc_returns$twoyear,
+              loc_returns$fiveyear,
+              loc_returns$tenyear,
+              loc_returns$twentyyear,
+              loc_returns$fiftyyear,
+              loc_returns$onehundredyear,
+              loc_returns$twohundredyear,
+              loc_returns$fivehundredyear,
+              loc_returns$thousandyear,
+              loc_returns$twothousandyear
+            ),
+            label = if (lang == "en") {
+              label_en
+            } else if (lang == "fr") {
+              label_fr
+            },
+            size = 2.6 * line_scale,
+            vjust = -.2 * line_scale
+          )
+      } else if (returns == "auto") {
+        # if there is no entry to the table AND the user specified auto, calculate loop will run after this
         returns <- "calculate"
       }
     }
     if (returns == "calculate") {
-      tryCatch({
-        extremes <- suppressWarnings(fasstr::calc_annual_extremes(daily[daily$year <= return_max_year , ], dates = "datetime", values = "value", water_year_start = return_months[1], months = return_months, allowed_missing = allowed_missing))
-        extremes$Measure <- "1-Day"
-        if (return_type == "max") {
-          analysis <- fasstr::compute_frequency_analysis(data = extremes, events = "Year", values = "Max_1_Day", use_max = TRUE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005), plot_curve = FALSE)
-          return_yrs <- c(min(lubridate::year(analysis$Freq_Analysis_Data$Max_1_Day_Date)), max(lubridate::year(analysis$Freq_Analysis_Data$Max_1_Day_Date)))
-        } else if (return_type == "min") {
-          analysis <- fasstr::compute_frequency_analysis(data = extremes, events = "Year", values = "Min_1_Day", use_max = FALSE, fit_quantiles = c(0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005))
-          return_yrs <- c(min(lubridate::year(analysis$Freq_Analysis_Data$Min_1_Day_Date)), max(lubridate::year(analysis$Freq_Analysis_Data$Min_1_Day_Date)))
+      tryCatch(
+        {
+          extremes <- suppressWarnings(fasstr::calc_annual_extremes(
+            daily[daily$year <= return_max_year, ],
+            dates = "datetime",
+            values = "value",
+            water_year_start = return_months[1],
+            months = return_months,
+            allowed_missing = allowed_missing
+          ))
+          extremes$Measure <- "1-Day"
+          if (return_type == "max") {
+            analysis <- fasstr::compute_frequency_analysis(
+              data = extremes,
+              events = "Year",
+              values = "Max_1_Day",
+              use_max = TRUE,
+              fit_quantiles = c(
+                0.5,
+                0.2,
+                0.1,
+                0.05,
+                0.02,
+                0.01,
+                0.005,
+                0.002,
+                0.001,
+                0.0005
+              ),
+              plot_curve = FALSE
+            )
+            return_yrs <- c(
+              min(lubridate::year(analysis$Freq_Analysis_Data$Max_1_Day_Date)),
+              max(lubridate::year(analysis$Freq_Analysis_Data$Max_1_Day_Date))
+            )
+          } else if (return_type == "min") {
+            analysis <- fasstr::compute_frequency_analysis(
+              data = extremes,
+              events = "Year",
+              values = "Min_1_Day",
+              use_max = FALSE,
+              fit_quantiles = c(
+                0.5,
+                0.2,
+                0.1,
+                0.05,
+                0.02,
+                0.01,
+                0.005,
+                0.002,
+                0.001,
+                0.0005
+              )
+            )
+            return_yrs <- c(
+              min(lubridate::year(analysis$Freq_Analysis_Data$Min_1_Day_Date)),
+              max(lubridate::year(analysis$Freq_Analysis_Data$Min_1_Day_Date))
+            )
+          }
+          freq <- analysis$Freq_Fitted_Quantiles
+
+          plot <- plot +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[10, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[9, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[8, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[7, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[6, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[5, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[4, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[3, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[2, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::geom_hline(
+              yintercept = as.numeric(freq[1, 4]),
+              linetype = "dashed",
+              color = "black"
+            ) +
+            ggplot2::annotate(
+              "text",
+              x = mean(realtime$fake_datetime),
+              y = c(
+                as.numeric(freq[10, 4]),
+                as.numeric(freq[9, 4]),
+                as.numeric(freq[8, 4]),
+                as.numeric(freq[7, 4]),
+                as.numeric(freq[6, 4]),
+                as.numeric(freq[5, 4]),
+                as.numeric(freq[4, 4]),
+                as.numeric(freq[3, 4]),
+                as.numeric(freq[2, 4]),
+                as.numeric(freq[1, 4])
+              ),
+              label = if (lang == "en") {
+                label_en
+              } else if (lang == "fr") {
+                label_fr
+              },
+              size = 2.6 * line_scale,
+              vjust = -.2 * line_scale
+            )
+        },
+        error = function(e) {
+          returns <<- "failed"
         }
-        freq <- analysis$Freq_Fitted_Quantiles
-        
-        plot <- plot +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[10,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[9,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[8,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[7,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[6,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[5,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[4,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[3,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[2,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::geom_hline(yintercept = as.numeric(freq[1,4]), 
-                              linetype = "dashed", color = "black") +
-          ggplot2::annotate("text", 
-                            x = mean(realtime$fake_datetime),
-                            y = c(as.numeric(freq[10,4]), as.numeric(freq[9,4]), as.numeric(freq[8,4]), as.numeric(freq[7,4]), as.numeric(freq[6,4]), as.numeric(freq[5,4]), as.numeric(freq[4,4]), as.numeric(freq[3,4]), as.numeric(freq[2,4]), as.numeric(freq[1,4])), 
-                            label = if (lang == "en") label_en else if (lang == "fr") label_fr, 
-                            size = 2.6 * line_scale, 
-                            vjust = -.2 * line_scale)
-      }, error = function(e) {
-        returns <<- "failed"
-      })
+      )
     }
   }
   #Add some information below the legend
@@ -886,15 +1580,39 @@ ggplotOverlap <- function(location,
     if (!is.infinite(minHist)) {
       if (overlaps) {
         if (lang == "en") {
-          line1 <- paste0("\n         \n        Historical range based\n        on years\n        ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+          line1 <- paste0(
+            "\n         \n        Historical range based\n        on years\n        ",
+            ribbon_start_end[1],
+            " to ",
+            ribbon_start_end[2],
+            "."
+          )
         } else {
-          line1 <- paste0("\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es\n        ", ribbon_start_end[1], " \u00E0 ", ribbon_start_end[2], "." )
-        } 
+          line1 <- paste0(
+            "\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es\n        ",
+            ribbon_start_end[1],
+            " \u00E0 ",
+            ribbon_start_end[2],
+            "."
+          )
+        }
       } else {
         if (lang == "en") {
-          line1 <- paste0("\n         \n        Historical range based\n        on years ", ribbon_start_end[1], " to ", ribbon_start_end[2], "." )
+          line1 <- paste0(
+            "\n         \n        Historical range based\n        on years ",
+            ribbon_start_end[1],
+            " to ",
+            ribbon_start_end[2],
+            "."
+          )
         } else {
-          line1 <- paste0("\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es ", ribbon_start_end[1], " \u00E0 ", ribbon_start_end[2], "." )
+          line1 <- paste0(
+            "\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es ",
+            ribbon_start_end[1],
+            " \u00E0 ",
+            ribbon_start_end[2],
+            "."
+          )
         }
       }
     } else {
@@ -904,18 +1622,58 @@ ggplotOverlap <- function(location,
         line1 <- "\n         \n        Pas assez de donn\u00E9es pour\n        les plages historiques"
       }
       plot <- plot + #Adjust the legend spacing so that the text isn't pushed off the plot area
-        ggplot2::theme(legend.box.spacing = ggplot2::unit(0, "pt"), legend.box.margin = ggplot2::margin(0, 0, 0, 0))
+        ggplot2::theme(
+          legend.box.spacing = ggplot2::unit(0, "pt"),
+          legend.box.margin = ggplot2::margin(0, 0, 0, 0)
+        )
     }
     if (returns == "calculate") {
       if (lang == "en") {
-        line2 <- paste0("        \n        \n        Return periods calculated\n        using months ", eng_months[return_months[1]], " to ",  eng_months[return_months[length(return_months)]], " \n        and years ", return_yrs[1], " to ", return_yrs[2], ". \n        ", nrow(analysis$Freq_Analysis_Data), " data points retained after\n        removing years with > ", allowed_missing, " %\n        missing data.")
+        line2 <- paste0(
+          "        \n        \n        Return periods calculated\n        using months ",
+          eng_months[return_months[1]],
+          " to ",
+          eng_months[return_months[length(return_months)]],
+          " \n        and years ",
+          return_yrs[1],
+          " to ",
+          return_yrs[2],
+          ". \n        ",
+          nrow(analysis$Freq_Analysis_Data),
+          " data points retained after\n        removing years with > ",
+          allowed_missing,
+          " %\n        missing data."
+        )
       } else {
-        line2 <- paste0("        \n        \n        P\u00E9riodes de retour calcul\u00E9es\n        en utilisant les mois de ", fr_months[return_months[1]], "\n        \u00E0 ",  fr_months[return_months[length(return_months)]], " et les ann\u00E9es de ", return_yrs[1], "\n        \u00E0 ", return_yrs[2], ". ", nrow(analysis$Freq_Analysis_Data), " points de donn\u00E9es\n        conserv\u00E9s apr\u00E8s avoir retir\u00E9\n        les ann\u00E9es avec > ", allowed_missing, "% de\n        donn\u00E9es manquantes.")
+        line2 <- paste0(
+          "        \n        \n        P\u00E9riodes de retour calcul\u00E9es\n        en utilisant les mois de ",
+          fr_months[return_months[1]],
+          "\n        \u00E0 ",
+          fr_months[return_months[length(return_months)]],
+          " et les ann\u00E9es de ",
+          return_yrs[1],
+          "\n        \u00E0 ",
+          return_yrs[2],
+          ". ",
+          nrow(analysis$Freq_Analysis_Data),
+          " points de donn\u00E9es\n        conserv\u00E9s apr\u00E8s avoir retir\u00E9\n        les ann\u00E9es avec > ",
+          allowed_missing,
+          "% de\n        donn\u00E9es manquantes."
+        )
       }
       lines <- paste0(line1, line2)
       plot <- plot +
         ggplot2::coord_cartesian(clip = "off", default = TRUE) +
-        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8 * legend_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7*spread_vert/30, ymax = (max - spread_vert/2) - 7*spread_vert/30)
+        ggplot2::annotation_custom(
+          grid::textGrob(
+            lines,
+            gp = grid::gpar(fontsize = 8 * legend_scale),
+            just = "left"
+          ),
+          xmin = end_time1,
+          ymin = (max - spread_vert / 2) - 7 * spread_vert / 30,
+          ymax = (max - spread_vert / 2) - 7 * spread_vert / 30
+        )
     } else if (returns == "table") {
       if (lang == "en") {
         line2 <- "        \n        \n        Return periods are based\n        on statistical analysis\n        of select data from the\n        start of records to 2021."
@@ -925,7 +1683,16 @@ ggplotOverlap <- function(location,
       lines <- paste0(line1, line2)
       plot <- plot +
         ggplot2::coord_cartesian(clip = "off", default = TRUE) +
-        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8 * legend_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
+        ggplot2::annotation_custom(
+          grid::textGrob(
+            lines,
+            gp = grid::gpar(fontsize = 8 * legend_scale),
+            just = "left"
+          ),
+          xmin = end_time1,
+          ymin = (max - spread_vert / 2) - 7 * spread_vert / 30,
+          ymax = (max - spread_vert / 2) - 7 * spread_vert / 30
+        )
     } else if (returns == "failed") {
       if (lang == "en") {
         line2 <- "        \n        \n        Insufficient data to \n        calculate returns using\n        last requested year."
@@ -935,39 +1702,98 @@ ggplotOverlap <- function(location,
       lines <- paste0(line1, line2)
       plot <- plot +
         ggplot2::coord_cartesian(clip = "off", default = TRUE) +
-        ggplot2::annotation_custom(grid::textGrob(lines, gp = grid::gpar(fontsize = 8 * legend_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
+        ggplot2::annotation_custom(
+          grid::textGrob(
+            lines,
+            gp = grid::gpar(fontsize = 8 * legend_scale),
+            just = "left"
+          ),
+          xmin = end_time1,
+          ymin = (max - spread_vert / 2) - 7 * spread_vert / 30,
+          ymax = (max - spread_vert / 2) - 7 * spread_vert / 30
+        )
     } else {
       plot <- plot +
         ggplot2::coord_cartesian(clip = "off", default = TRUE) +
-        ggplot2::annotation_custom(grid::textGrob(line1, gp = grid::gpar(fontsize = 8 * legend_scale), just = "left"), xmin = end_time1, ymin = (max - spread_vert/2) - 7 * spread_vert/30, ymax = (max - spread_vert/2) - 7 * spread_vert/30)
+        ggplot2::annotation_custom(
+          grid::textGrob(
+            line1,
+            gp = grid::gpar(fontsize = 8 * legend_scale),
+            just = "left"
+          ),
+          xmin = end_time1,
+          ymin = (max - spread_vert / 2) - 7 * spread_vert / 30,
+          ymax = (max - spread_vert / 2) - 7 * spread_vert / 30
+        )
     }
   }
-  
-  
+
   # Wrap things up and return() -----------------------
   if (title) {
     if (is.null(custom_title)) {
       if (lang == "fr") {
-        stn_name <- dbGetQueryDT(con, paste0("SELECT name_fr FROM locations where location = '", location, "'"))[1,1]
-      } 
+        stn_name <- dbGetQueryDT(
+          con,
+          paste0(
+            "SELECT name_fr FROM locations where location = '",
+            location,
+            "'"
+          )
+        )[1, 1]
+      }
       if (lang == "en" || is.na(stn_name)) {
-        stn_name <- dbGetQueryDT(con, paste0("SELECT name FROM locations where location = '", location, "'"))[1,1]
+        stn_name <- dbGetQueryDT(
+          con,
+          paste0("SELECT name FROM locations where location = '", location, "'")
+        )[1, 1]
       }
       stn_name <- titleCase(stn_name, lang)
-      
+
       plot <- plot +
         ggplot2::labs(title = stn_name) +
-        ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * axis_scale, face = "bold"))
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            hjust = 0.05,
+            size = 12 * axis_scale,
+            face = "bold"
+          )
+        )
     } else if (!is.null(custom_title)) {
       plot <- plot +
         ggplot2::labs(title = as.character(custom_title)) +
-        ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * axis_scale, face = "bold"))
+        ggplot2::theme(
+          plot.title = ggplot2::element_text(
+            hjust = 0.05,
+            size = 12 * axis_scale,
+            face = "bold"
+          )
+        )
     }
   }
-  
+
   #Save it if requested
   if (!is.null(save_path)) {
-    ggplot2::ggsave(filename = paste0(save_path,"/", location, "_", parameter, "_", Sys.Date(), "_", lubridate::hour(as.POSIXct(format(Sys.time()), tz = tzone)), lubridate::minute(as.POSIXct(format(Sys.time()), tz = tzone)), ".png"), plot = plot, height = 8, width = 12, units = "in", device = "png", dpi = 500)
+    ggplot2::ggsave(
+      filename = paste0(
+        save_path,
+        "/",
+        location,
+        "_",
+        parameter,
+        "_",
+        Sys.Date(),
+        "_",
+        lubridate::hour(as.POSIXct(format(Sys.time()), tz = tzone)),
+        lubridate::minute(as.POSIXct(format(Sys.time()), tz = tzone)),
+        ".png"
+      ),
+      plot = plot,
+      height = 8,
+      width = 12,
+      units = "in",
+      device = "png",
+      dpi = 500
+    )
   }
   return(plot)
 }
