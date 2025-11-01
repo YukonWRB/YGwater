@@ -6,7 +6,6 @@
 #' @noRd
 
 app_ui <- function(request) {
-  
   fluidPage(
     shinyjs::useShinyjs(),
     div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")),
@@ -19,7 +18,8 @@ app_ui <- function(request) {
       tags$style(HTML("#lang { display: none; }")),
       tags$style(HTML("#error { display: none; }")),
       # Add custom CSS for spacing and alignment
-      tags$style(HTML("
+      tags$style(HTML(
+        "
         .button-row {
           display: flex;
           gap: 10px; /* Space between buttons */
@@ -27,21 +27,25 @@ app_ui <- function(request) {
           margin-bottom: 0px; /* Space below buttons */
           margin-top: 0px; /* Space above buttons */
         }
-      "))
+      "
+      ))
     ),
-    
+
     # Hidden input fields to set default parameters
     textInput("loc_code", label = NULL, value = "09AB004"), # Marsh lk
     numericInput("param_code", label = NULL, value = 1165), # level
     textInput("lang", label = NULL, value = "en"),
-    
+
     # Make visible buttons in a fluidRow (rendered in server)
     uiOutput("visible_buttons"),
 
     tags$div(
-      plotly::plotlyOutput("plot", height = "100%", width = "100%")
+      plotly::plotlyOutput("plot", height = "100%", width = "100%") |>
+        shinycssloaders::withSpinner(
+          type = 5,
+          color = #244C5A)
+        )
     ),
     htmlOutput("error")
-    
   ) # End fluidPage
 }

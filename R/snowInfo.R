@@ -77,7 +77,7 @@ snowInfo <- function(
     locations <- DBI::dbGetQuery(
       con,
       "
-    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
@@ -93,7 +93,7 @@ snowInfo <- function(
       con,
       paste0(
         "
-    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
@@ -147,7 +147,7 @@ snowInfo <- function(
   results <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('",
+      "SELECT r.sample_id, r.result, p.param_name, p.unit_default FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
       "') AND p.parameter_id IN (21, 1220)
       ORDER BY r.sample_id"
@@ -156,7 +156,21 @@ snowInfo <- function(
 
   #Manipulate/preprocess things a bit
   samples$year <- lubridate::year(samples$target_datetime)
-  samples$month <- lubridate::month(samples$target_datetime)
+  # samples$month <- lubridate::month(samples$target_datetime)
+  # Create samples$month, but be aware than May could have sampling on the 15th as well as on the 1st. The 15th should become month 5.5
+  samples$month <- round(
+    as.numeric(
+      format(samples$target_datetime, "%m")
+    ) +
+      (as.numeric(format(samples$target_datetime, "%d")) - 1) / 31,
+    1
+  )
+  # Drop numbers after decimal place if they are 0
+  samples$month <- ifelse(
+    samples$month %% 1 == 0,
+    as.integer(samples$month),
+    samples$month
+  )
 
   results <- merge(results, samples, by = "sample_id")
 
@@ -761,7 +775,7 @@ snowInfo <- function(
                 cm^{
                   "3"
                 } *
-                  ')'
+                ')'
             ),
             title = paste0(locations$location[i], ": ", display_name)
           )
@@ -774,7 +788,7 @@ snowInfo <- function(
                 cm^{
                   "3"
                 } *
-                  ')'
+                ')'
             )
           )
       }
@@ -882,12 +896,27 @@ snowInfo <- function(
     ]
   }
 
+  # Add column to locations for 'last_survey' 'first_survey_date', 'march1_surveys', 'april1_surveys', 'may1_surveys' (counts of surveys on those dates, using target_datetime)
+  locations$first_survey <- NA
   locations$last_survey <- NA
+  locations$march1_surveys <- NA
+  locations$april1_surveys <- NA
+  locations$may1_surveys <- NA
+  locations$may15_surveys <- NA
   for (i in 1:nrow(locations)) {
-    locations$last_survey[i] <- as.character(as.Date(max(samples[
+    surveys <- samples[
       samples$location_id == locations$location_id[i],
-      "target_datetime"
-    ])))
+    ]
+    locations$first_survey[i] <- as.character(as.Date(min(
+      surveys$target_datetime
+    )))
+    locations$last_survey[i] <- as.character(as.Date(max(
+      surveys$target_datetime
+    )))
+    locations$march1_surveys[i] <- nrow(surveys[surveys$month == 3, ])
+    locations$april1_surveys[i] <- nrow(surveys[surveys$month == 4, ])
+    locations$may1_surveys[i] <- nrow(surveys[surveys$month == 5, ])
+    locations$may15_surveys[i] <- nrow(surveys[surveys$month == 5.5, ])
   }
 
   #Fix up the location metadata table
@@ -895,17 +924,24 @@ snowInfo <- function(
   names(locations) <- c(
     "location_code",
     "location_name",
+    "note",
     "latitude",
     "longitude",
     "elevation_m",
-    "last_survey"
+    "first_survey",
+    "last_survey",
+    "march1_surveys",
+    "april1_surveys",
+    "may1_surveys",
+    "may15_surveys"
   )
 
-  # Fix up the results table\
+  # Fix up the results table
   results <- results[, c(
     "location",
     "name",
     "param_name",
+    "unit_default",
     "datetime",
     "target_datetime",
     "year",
@@ -916,6 +952,7 @@ snowInfo <- function(
     "location_code",
     "location_name",
     "parameter",
+    "units",
     "sample_date",
     "target_date",
     "year",
@@ -927,6 +964,11 @@ snowInfo <- function(
   # Make dates Date class
   results$sample_date <- as.Date(results$sample_date)
   results$target_date <- as.Date(results$target_date)
+  # Make 'month' a character column so it prints without the trailing .0
+  results$month <- as.character(results$month)
+
+  # Order by location_code and target_date
+  results <- results[order(results$location_code, results$target_date), ]
 
   #Concatenate the various products into a list to return.
   if (stats) {

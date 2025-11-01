@@ -83,6 +83,7 @@ Suggests:
     tesseract,
     trend,
     shiny,
+    shinycssloaders,
     shinyjs,
     shinyWidgets,
     testthat (>= 3.0.0),
