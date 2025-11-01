@@ -172,6 +172,7 @@ snowbullpillow <- function(location, custom_title, year, month, language = "en",
     line_scale = scale,
     axis_scale = scale,
     legend_scale = scale,
+    historic_range = "last",
     snowbulletin = TRUE, 
     lang = language,
     gridx = FALSE,
@@ -481,7 +482,8 @@ snowbullCDDF <- function(timeseries_id,
                         snowbulletin = TRUE,
                         lang = language,
                         gridy = FALSE,
-                        gridx = FALSE)
+                        gridx = FALSE,
+                        historic_range = "last")
   plot <- plot + ggplot2::theme(legend.position = "none") 
   
   if (language == "fr") {
@@ -514,7 +516,8 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
         snowbulletin = TRUE,
         lang = language,
         gridx = FALSE,
-        gridy = FALSE
+        gridy = FALSE,
+        historic_range = "last"
       )
     
     if (exists('flood') &
