@@ -25,6 +25,30 @@ addLocation <- function(id, inputs) {
     # Get some data from aquacache
     moduleData <- reactiveValues()
 
+    ensure_character <- function(x) {
+      if (is.null(x)) {
+        character(0)
+      } else {
+        as.character(x)
+      }
+    }
+
+    parse_ids <- function(x) {
+      vals <- ensure_character(x)
+      vals <- vals[nzchar(vals)]
+      if (!length(vals)) {
+        integer(0)
+      } else {
+        out <- suppressWarnings(as.integer(vals))
+        unique(out[!is.na(out)])
+      }
+    }
+
+    pending_network_selection <- reactiveVal(character(0))
+    pending_network_new <- reactiveVal(NULL)
+    pending_project_selection <- reactiveVal(character(0))
+    pending_project_new <- reactiveVal(NULL)
+
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -225,16 +249,15 @@ addLocation <- function(id, inputs) {
           ))),
           selectizeInput(
             ns("network"),
-            "Network (type your own if not in list)",
+            "Network(s) (type your own if not in list)",
             choices = stats::setNames(
               moduleData$networks$network_id,
               moduleData$networks$name
             ),
-            multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+            multiple = TRUE,
             options = list(
               create = TRUE,
-              placeholder = "Optional but recommended",
-              maxItems = 1
+              placeholder = "Optional but recommended"
             ), # With a choice to allow users to add a network
             width = "100%"
           ),
@@ -248,8 +271,7 @@ addLocation <- function(id, inputs) {
             multiple = TRUE,
             options = list(
               create = TRUE,
-              placeholder = "Optional",
-              maxItems = 1
+              placeholder = "Optional"
             ), # With a choice to allow users to add a project
             width = "100%"
           )
@@ -823,19 +845,31 @@ addLocation <- function(id, inputs) {
     observeEvent(
       input$network,
       {
-        if (
-          input$network %in%
-            moduleData$networks$network_id ||
-            nchar(input$network) == 0
-        ) {
+        vals <- ensure_character(input$network)
+        pending_network_selection(vals)
+
+        existing_ids <- ensure_character(moduleData$networks$network_id)
+        new_vals <- setdiff(vals, existing_ids)
+        new_vals <- new_vals[nzchar(new_vals)]
+
+        if (!length(new_vals)) {
+          pending_network_new(NULL)
           return()
         }
+
+        new_val <- new_vals[length(new_vals)]
+        pending_network_new(new_val)
+
         net_types <- DBI::dbGetQuery(
           session$userData$AquaCache,
           "SELECT id, name FROM network_project_types"
         )
         showModal(modalDialog(
-          textInput(ns("network_name"), "Network name", value = input$loc_name),
+          textInput(
+            ns("network_name"),
+            "Network name",
+            value = if (nzchar(new_val)) new_val else input$loc_name
+          ),
           textInput(ns("network_name_fr"), "Network name French (optional)"),
           textInput(ns("network_description"), "Network description"),
           textInput(
@@ -896,6 +930,14 @@ addLocation <- function(id, inputs) {
           "SELECT network_id, name FROM networks"
         )
         # Update the selectizeInput to the new value
+        new_id <- moduleData$networks$network_id[
+          moduleData$networks$name == df$name
+        ]
+        prior_selection <- ensure_character(pending_network_selection())
+        new_value <- pending_network_new()
+        retained <- prior_selection[prior_selection != new_value]
+        retained <- retained[nzchar(retained)]
+        selected_values <- unique(c(retained, ensure_character(new_id)))
         updateSelectizeInput(
           session,
           "network",
@@ -903,11 +945,10 @@ addLocation <- function(id, inputs) {
             moduleData$networks$network_id,
             moduleData$networks$name
           ),
-          selected = moduleData$networks[
-            moduleData$networks$name == df$name,
-            "network_id"
-          ]
+          selected = selected_values
         )
+        pending_network_selection(selected_values)
+        pending_network_new(NULL)
         removeModal()
         showModal(modalDialog(
           "New network added.",
@@ -922,20 +963,32 @@ addLocation <- function(id, inputs) {
     observeEvent(
       input$project,
       {
-        if (
-          input$project %in%
-            moduleData$projects$project_id ||
-            nchar(input$project) == 0
-        ) {
+        vals <- ensure_character(input$project)
+        pending_project_selection(vals)
+
+        existing_ids <- ensure_character(moduleData$projects$project_id)
+        new_vals <- setdiff(vals, existing_ids)
+        new_vals <- new_vals[nzchar(new_vals)]
+
+        if (!length(new_vals)) {
+          pending_project_new(NULL)
           return()
         }
+
+        new_val <- new_vals[length(new_vals)]
+        pending_project_new(new_val)
+
         proj_types <- DBI::dbGetQuery(
           session$userData$AquaCache,
           "SELECT id, name FROM network_project_types"
         )
 
         showModal(modalDialog(
-          textInput(ns("project_name"), "Project name", value = input$loc_name),
+          textInput(
+            ns("project_name"),
+            "Project name",
+            value = if (nzchar(new_val)) new_val else input$loc_name
+          ),
           textInput(ns("project_name_fr"), "Project name French (optional)"),
           textInput(ns("project_description"), "Project description"),
           textInput(
@@ -995,6 +1048,14 @@ addLocation <- function(id, inputs) {
           "SELECT project_id, name FROM projects"
         )
         # Update the selectizeInput to the new value
+        new_id <- moduleData$projects$project_id[
+          moduleData$projects$name == df$name
+        ]
+        prior_selection <- ensure_character(pending_project_selection())
+        new_value <- pending_project_new()
+        retained <- prior_selection[prior_selection != new_value]
+        retained <- retained[nzchar(retained)]
+        selected_values <- unique(c(retained, ensure_character(new_id)))
         updateSelectizeInput(
           session,
           "project",
@@ -1002,11 +1063,10 @@ addLocation <- function(id, inputs) {
             moduleData$projects$project_id,
             moduleData$projects$name
           ),
-          selected = moduleData$projects[
-            moduleData$projects$name == df$name,
-            "project_id"
-          ]
+          selected = selected_values
         )
+        pending_project_selection(selected_values)
+        pending_project_new(NULL)
         removeModal()
         showModal(modalDialog(
           "New project added.",
@@ -1477,8 +1537,16 @@ addLocation <- function(id, inputs) {
             }
 
             # Changes to network
-            if (isTruthy(input$network)) {
-              # Remove all existing networks for this location
+            desired_networks <- parse_ids(input$network)
+            existing_networks <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              sprintf(
+                "SELECT network_id FROM locations_networks WHERE location_id = %d",
+                selected_loc()
+              )
+            )$network_id
+            existing_networks <- parse_ids(existing_networks)
+            if (!identical(sort(existing_networks), sort(desired_networks))) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
@@ -1486,20 +1554,31 @@ addLocation <- function(id, inputs) {
                   selected_loc()
                 )
               )
-              # Add the new network
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                sprintf(
-                  "INSERT INTO locations_networks (location_id, network_id) VALUES (%d, %d)",
-                  selected_loc(),
-                  as.numeric(input$network)
+              if (length(desired_networks)) {
+                network_df <- data.frame(
+                  network_id = desired_networks,
+                  location_id = rep(selected_loc(), length(desired_networks))
                 )
-              )
+                DBI::dbAppendTable(
+                  session$userData$AquaCache,
+                  "locations_networks",
+                  network_df,
+                  append = TRUE
+                )
+              }
             }
 
             # Changes to project
-            if (isTruthy(input$project)) {
-              # Remove all existing projects for this location
+            desired_projects <- parse_ids(input$project)
+            existing_projects <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              sprintf(
+                "SELECT project_id FROM locations_projects WHERE location_id = %d",
+                selected_loc()
+              )
+            )$project_id
+            existing_projects <- parse_ids(existing_projects)
+            if (!identical(sort(existing_projects), sort(desired_projects))) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
@@ -1507,17 +1586,18 @@ addLocation <- function(id, inputs) {
                   selected_loc()
                 )
               )
-              # Add the new project. Build a df because more than one project can be associated with a location
-              df <- data.frame(
-                location_id = selected_loc(),
-                project_id = as.numeric(input$project)
-              )
-              DBI::dbAppendTable(
-                session$userData$AquaCache,
-                "locations_projects",
-                df,
-                append = TRUE
-              )
+              if (length(desired_projects)) {
+                project_df <- data.frame(
+                  project_id = desired_projects,
+                  location_id = rep(selected_loc(), length(desired_projects))
+                )
+                DBI::dbAppendTable(
+                  session$userData$AquaCache,
+                  "locations_projects",
+                  project_df,
+                  append = TRUE
+                )
+              }
             }
 
             # Changes to jurisdictional relevance
@@ -1760,6 +1840,8 @@ addLocation <- function(id, inputs) {
       }
 
       # If we are here, we are adding a new location
+      network_ids <- parse_ids(input$network)
+      project_ids <- parse_ids(input$project)
       # Make a data.frame to pass to addACLocation
       df <- data.frame(
         location = input$loc_code,
@@ -1787,15 +1869,15 @@ addLocation <- function(id, inputs) {
         datum_id_to = as.numeric(input$datum_id_to),
         conversion_m = input$elev,
         current = TRUE,
-        network = if (isTruthy(input$network)) {
-          as.numeric(input$network)
+        network = if (length(network_ids)) {
+          network_ids[1]
         } else {
-          NA
+          NA_integer_
         },
-        project = if (isTruthy(input$project)) {
-          as.numeric(input$project)
+        project = if (length(project_ids)) {
+          project_ids[1]
         } else {
-          NA
+          NA_integer_
         },
         jurisdictional_relevance = if (
           isTruthy(input$loc_jurisdictional_relevance)
@@ -1829,6 +1911,54 @@ addLocation <- function(id, inputs) {
           DBI::dbBegin(session$userData$AquaCache)
 
           AquaCache::addACLocation(con = session$userData$AquaCache, df = df)
+
+          new_loc_id <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            glue::glue_sql(
+              "SELECT location_id FROM locations WHERE location = {input$loc_code};",
+              .con = session$userData$AquaCache
+            )
+          )$location_id
+          if (length(new_loc_id) == 1) {
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "DELETE FROM locations_networks WHERE location_id = {new_loc_id};",
+                .con = session$userData$AquaCache
+              )
+            )
+            if (length(network_ids)) {
+              network_df <- data.frame(
+                network_id = network_ids,
+                location_id = rep(new_loc_id, length(network_ids))
+              )
+              DBI::dbAppendTable(
+                session$userData$AquaCache,
+                "locations_networks",
+                network_df,
+                append = TRUE
+              )
+            }
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              glue::glue_sql(
+                "DELETE FROM locations_projects WHERE location_id = {new_loc_id};",
+                .con = session$userData$AquaCache
+              )
+            )
+            if (length(project_ids)) {
+              project_df <- data.frame(
+                project_id = project_ids,
+                location_id = rep(new_loc_id, length(project_ids))
+              )
+              DBI::dbAppendTable(
+                session$userData$AquaCache,
+                "locations_projects",
+                project_df,
+                append = TRUE
+              )
+            }
+          }
 
           # Close transaction
           DBI::dbCommit(session$userData$AquaCache)
@@ -1868,6 +1998,10 @@ addLocation <- function(id, inputs) {
           updateSelectizeInput(session, "network", selected = character(0))
           updateSelectizeInput(session, "project", selected = character(0))
           updateTextInput(session, "loc_note", value = character(0))
+          pending_network_selection(character(0))
+          pending_network_new(NULL)
+          pending_project_selection(character(0))
+          pending_project_new(NULL)
         },
         error = function(e) {
           # Rollback the transaction if there was an error
