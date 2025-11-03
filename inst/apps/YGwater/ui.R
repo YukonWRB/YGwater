@@ -336,6 +336,11 @@ app_ui <- function(request) {
               uiOutput("addGuidelines_ui")
             ),
             nav_panel(
+              title = "Add/edit sample series",
+              value = "addSampleSeries",
+              uiOutput("addSampleSeries_ui")
+            ),
+            nav_panel(
               title = "Sync sample series",
               value = "syncDisc",
               uiOutput("syncDisc_ui")

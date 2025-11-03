@@ -107,6 +107,7 @@ app_server <- function(input, output, session) {
         any(
           session$userData$admin_privs$addDiscData,
           session$userData$admin_privs$editDiscData,
+          session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
           session$userData$admin_privs$addGuidelines
         )
@@ -117,6 +118,9 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$editDiscData)) {
           nav_hide(id = "navbar", target = "editDiscData")
+        }
+        if (!isTRUE(session$userData$admin_privs$addSampleSeries)) {
+          nav_hide(id = "navbar", target = "addSampleSeries")
         }
         if (!isTRUE(session$userData$admin_privs$syncDisc)) {
           nav_hide(id = "navbar", target = "syncDisc")
@@ -312,6 +316,7 @@ app_server <- function(input, output, session) {
     ui_loaded$addDiscData <- FALSE
     ui_loaded$editDiscData <- FALSE
     ui_loaded$addGuidelines <- FALSE
+    ui_loaded$addSampleSeries <- FALSE
     ui_loaded$syncDisc <- FALSE
 
     ui_loaded$addDocs <- FALSE
@@ -911,6 +916,7 @@ $(document).keyup(function(event) {
             ),
             addDiscData = has_priv("discrete", c("results", "samples")),
             editDiscData = has_priv("discrete", c("results", "samples")),
+            addSampleSeries = has_priv("discrete", "sample_series"),
             syncDisc = has_priv(
               "discrete",
               c("results", "samples", "sample_series")
@@ -1519,6 +1525,13 @@ $(document).keyup(function(event) {
         output$addGuidelines_ui <- renderUI(addGuidelinesUI("addGuidelines")) # Render the UI
         ui_loaded$addGuidelines <- TRUE
         addGuidelines("addGuidelines") # Call the server
+      }
+    }
+    if (input$navbar == "addSampleSeries") {
+      if (!ui_loaded$addSampleSeries) {
+        output$addSampleSeries_ui <- renderUI(addSampleSeriesUI("addSampleSeries"))
+        ui_loaded$addSampleSeries <- TRUE
+        addSampleSeries("addSampleSeries")
       }
     }
     if (input$navbar == "addDocs") {
