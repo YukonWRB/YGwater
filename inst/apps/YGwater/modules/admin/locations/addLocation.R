@@ -4,6 +4,36 @@ addLocationUI <- function(id) {
   ns <- NS(id)
 
   tagList(
+    tags$style(
+      HTML(sprintf(
+        "
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #FFFCF5;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #FBE5B2;
+        /* expanded header */
+        --bs-accordion-active-bg:   #FBE5B2;
+      }
+    ",
+        ns("accordion1")
+      )),
+      HTML(sprintf(
+        "
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #E5F4F6;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #0097A9;
+        /* expanded header */
+        --bs-accordion-active-bg:   #0097A9;
+      }
+    ",
+        ns("accordion2")
+      ))
+    ),
     page_fluid(
       uiOutput(ns("ui"))
     )
@@ -92,6 +122,16 @@ addLocation <- function(id, inputs) {
     getModuleData() # Initial data load
 
     output$ui <- renderUI({
+      req(
+        moduleData$exist_locs,
+        moduleData$loc_types,
+        moduleData$organizations,
+        moduleData$agreements,
+        moduleData$datums,
+        moduleData$networks,
+        moduleData$projects,
+        moduleData$users
+      )
       tagList(
         radioButtons(
           ns("mode"),
@@ -102,9 +142,19 @@ addLocation <- function(id, inputs) {
         conditionalPanel(
           condition = "input.mode == 'modify'",
           ns = ns,
-          DT::DTOutput(ns("loc_table"))
+          accordion(
+            id = ns("accordion1"),
+            open = "locations_table_panel",
+            accordion_panel(
+              DT::DTOutput(ns("loc_table"))
+            )
+          )
         ),
-        htmlOutput(ns("hydat_note")),
+        conditionalPanel(
+          condition = "input.mode == 'add'",
+          ns = ns,
+          htmlOutput(ns("hydat_note"))
+        ),
         textInput(
           ns("loc_code"),
           "Location code (must not exist already)",

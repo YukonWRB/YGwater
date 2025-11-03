@@ -773,6 +773,8 @@ addTimeseries <- function(id) {
 
                   # convert to JSON
                   args <- jsonlite::toJSON(args, auto_unbox = TRUE)
+                } else {
+                  args <- NA
                 }
               } else {
                 # if the source_fx_args is NULL, we set it to NA

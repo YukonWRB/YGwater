@@ -4,6 +4,36 @@ addSamplesUI <- function(id) {
   ns <- NS(id)
 
   tagList(
+    tags$style(
+      HTML(sprintf(
+        "
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #FFFCF5;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #FBE5B2;
+        /* expanded header */
+        --bs-accordion-active-bg:   #FBE5B2;
+      }
+    ",
+        ns("accordion1")
+      )),
+      HTML(sprintf(
+        "
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #E5F4F6;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #0097A9;
+        /* expanded header */
+        --bs-accordion-active-bg:   #0097A9;
+      }
+    ",
+        ns("accordion2")
+      ))
+    ),
     page_fluid(
       uiOutput(ns("ui"))
     )
@@ -17,27 +47,51 @@ addSamples <- function(id) {
     moduleData <- reactiveValues()
     selected_sample_ids <- reactiveVal(integer())
 
-    multi_editable_fields <- list(
-      collection_method = list(label = "Collection method", column = "collection_method"),
-      sample_type = list(label = "Sample type", column = "sample_type"),
-      linked_with = list(label = "Linked with", column = "linked_with"),
-      sample_volume_ml = list(label = "Sample volume (mL)", column = "sample_volume_ml"),
-      purge_volume_l = list(label = "Purge volume (L)", column = "purge_volume_l"),
-      purge_time_min = list(label = "Purge time (minutes)", column = "purge_time_min"),
-      flow_rate_l_min = list(label = "Flow rate (L/min)", column = "flow_rate_l_min"),
-      wave_hgt_m = list(label = "Wave height (m)", column = "wave_hgt_m"),
-      sample_grade = list(label = "Sample grade", column = "sample_grade"),
-      sample_approval = list(label = "Sample approval", column = "sample_approval"),
-      sample_qualifier = list(label = "Sample qualifier", column = "sample_qualifier"),
-      owner = list(label = "Owner", column = "owner"),
-      contributor = list(label = "Contributor", column = "contributor"),
-      comissioning_org = list(label = "Comissioning organization", column = "comissioning_org"),
-      sampling_org = list(label = "Sampling organization", column = "sampling_org"),
-      documents = list(label = "Documents", column = "documents", cast = "::integer[]"),
-      share_with = list(label = "Share with", column = "share_with", cast = "::text[]"),
-      import_source = list(label = "Import source", column = "import_source"),
-      no_update = list(label = "Lock sample from updates", column = "no_update"),
-      note = list(label = "Notes", column = "note")
+    multi_editable_fields <- stats::setNames(
+      c(
+        "collection_method",
+        "sample_type",
+        "linked_with",
+        "sample_volume_ml",
+        "purge_volume_l",
+        "purge_time_min",
+        "flow_rate_l_min",
+        "wave_hgt_m",
+        "sample_grade",
+        "sample_approval",
+        "sample_qualifier",
+        "owner",
+        "contributor",
+        "comissioning_org",
+        "sampling_org",
+        "documents",
+        "share_with",
+        "import_source",
+        "no_update",
+        "note"
+      ),
+      c(
+        "Collection method",
+        "Sample type",
+        "Linked with",
+        "Sample volume (mL)",
+        "Purge volume (L)",
+        "Purge time (minutes)",
+        "Flow rate (L/min)",
+        "Wave height (m)",
+        "Sample grade",
+        "Sample approval",
+        "Sample qualifier",
+        "Owner",
+        "Contributor",
+        "Comissioning organization",
+        "Sampling organization",
+        "Documents",
+        "Share with",
+        "Import source",
+        "Lock sample from updates",
+        "Notes"
+      )
     )
 
     parse_datetime_input <- function(value) {
@@ -120,35 +174,119 @@ addSamples <- function(id) {
     }
 
     collect_sample_inputs <- function() {
-      location_id <- if (length(input$location)) as.integer(input$location[[1]]) else NA_integer_
-      sub_location_id <- if (length(input$sub_location)) as.integer(input$sub_location[[1]]) else NA_integer_
-      media_id <- if (length(input$media)) as.integer(input$media[[1]]) else NA_integer_
-      collection_method <- if (length(input$collection_method)) as.integer(input$collection_method[[1]]) else NA_integer_
-      sample_type <- if (length(input$sample_type)) as.integer(input$sample_type[[1]]) else NA_integer_
-      linked_with <- if (length(input$linked_with)) as.integer(input$linked_with[[1]]) else NA_integer_
-      owner <- if (length(input$owner)) as.integer(input$owner[[1]]) else NA_integer_
-      contributor <- if (length(input$contributor)) as.integer(input$contributor[[1]]) else NA_integer_
-      comissioning_org <- if (length(input$comissioning_org)) as.integer(input$comissioning_org[[1]]) else NA_integer_
-      sampling_org <- if (length(input$sampling_org)) as.integer(input$sampling_org[[1]]) else NA_integer_
-      sample_grade <- if (length(input$sample_grade)) as.integer(input$sample_grade[[1]]) else NA_integer_
-      sample_approval <- if (length(input$sample_approval)) as.integer(input$sample_approval[[1]]) else NA_integer_
-      sample_qualifier <- if (length(input$sample_qualifier)) as.integer(input$sample_qualifier[[1]]) else NA_integer_
+      location_id <- if (length(input$location)) {
+        as.integer(input$location[[1]])
+      } else {
+        NA_integer_
+      }
+      sub_location_id <- if (length(input$sub_location)) {
+        as.integer(input$sub_location[[1]])
+      } else {
+        NA_integer_
+      }
+      media_id <- if (length(input$media)) {
+        as.integer(input$media[[1]])
+      } else {
+        NA_integer_
+      }
+      collection_method <- if (length(input$collection_method)) {
+        as.integer(input$collection_method[[1]])
+      } else {
+        NA_integer_
+      }
+      sample_type <- if (length(input$sample_type)) {
+        as.integer(input$sample_type[[1]])
+      } else {
+        NA_integer_
+      }
+      linked_with <- if (length(input$linked_with)) {
+        as.integer(input$linked_with[[1]])
+      } else {
+        NA_integer_
+      }
+      owner <- if (length(input$owner)) {
+        as.integer(input$owner[[1]])
+      } else {
+        NA_integer_
+      }
+      contributor <- if (length(input$contributor)) {
+        as.integer(input$contributor[[1]])
+      } else {
+        NA_integer_
+      }
+      comissioning_org <- if (length(input$comissioning_org)) {
+        as.integer(input$comissioning_org[[1]])
+      } else {
+        NA_integer_
+      }
+      sampling_org <- if (length(input$sampling_org)) {
+        as.integer(input$sampling_org[[1]])
+      } else {
+        NA_integer_
+      }
+      sample_grade <- if (length(input$sample_grade)) {
+        as.integer(input$sample_grade[[1]])
+      } else {
+        NA_integer_
+      }
+      sample_approval <- if (length(input$sample_approval)) {
+        as.integer(input$sample_approval[[1]])
+      } else {
+        NA_integer_
+      }
+      sample_qualifier <- if (length(input$sample_qualifier)) {
+        as.integer(input$sample_qualifier[[1]])
+      } else {
+        NA_integer_
+      }
 
       list(
         location_id = location_id,
         sub_location_id = sub_location_id,
         media_id = media_id,
-        z = if (!length(input$z) || is.na(input$z)) NA_real_ else as.numeric(input$z),
+        z = if (!length(input$z) || is.na(input$z)) {
+          NA_real_
+        } else {
+          as.numeric(input$z)
+        },
         datetime = parse_datetime_input(input$datetime),
         target_datetime = parse_datetime_input(input$target_datetime),
         collection_method = collection_method,
         sample_type = sample_type,
         linked_with = linked_with,
-        sample_volume_ml = if (!length(input$sample_volume_ml) || is.na(input$sample_volume_ml)) NA_real_ else as.numeric(input$sample_volume_ml),
-        purge_volume_l = if (!length(input$purge_volume_l) || is.na(input$purge_volume_l)) NA_real_ else as.numeric(input$purge_volume_l),
-        purge_time_min = if (!length(input$purge_time_min) || is.na(input$purge_time_min)) NA_real_ else as.numeric(input$purge_time_min),
-        flow_rate_l_min = if (!length(input$flow_rate_l_min) || is.na(input$flow_rate_l_min)) NA_real_ else as.numeric(input$flow_rate_l_min),
-        wave_hgt_m = if (!length(input$wave_hgt_m) || is.na(input$wave_hgt_m)) NA_real_ else as.numeric(input$wave_hgt_m),
+        sample_volume_ml = if (
+          !length(input$sample_volume_ml) || is.na(input$sample_volume_ml)
+        ) {
+          NA_real_
+        } else {
+          as.numeric(input$sample_volume_ml)
+        },
+        purge_volume_l = if (
+          !length(input$purge_volume_l) || is.na(input$purge_volume_l)
+        ) {
+          NA_real_
+        } else {
+          as.numeric(input$purge_volume_l)
+        },
+        purge_time_min = if (
+          !length(input$purge_time_min) || is.na(input$purge_time_min)
+        ) {
+          NA_real_
+        } else {
+          as.numeric(input$purge_time_min)
+        },
+        flow_rate_l_min = if (
+          !length(input$flow_rate_l_min) || is.na(input$flow_rate_l_min)
+        ) {
+          NA_real_
+        } else {
+          as.numeric(input$flow_rate_l_min)
+        },
+        wave_hgt_m = if (!length(input$wave_hgt_m) || is.na(input$wave_hgt_m)) {
+          NA_real_
+        } else {
+          as.numeric(input$wave_hgt_m)
+        },
         sample_grade = sample_grade,
         sample_approval = sample_approval,
         sample_qualifier = sample_qualifier,
@@ -158,10 +296,18 @@ addSamples <- function(id) {
         sampling_org = sampling_org,
         documents = format_integer_array(input$documents),
         share_with = format_share_with(input$share_with),
-        import_source = if (isTruthy(input$import_source)) input$import_source else NA_character_,
+        import_source = if (isTruthy(input$import_source)) {
+          input$import_source
+        } else {
+          NA_character_
+        },
         no_update = isTRUE(input$no_update),
         note = if (isTruthy(input$note)) input$note else NA_character_,
-        import_source_id = if (isTruthy(input$import_source_id)) input$import_source_id else NA_character_
+        import_source_id = if (isTruthy(input$import_source_id)) {
+          input$import_source_id
+        } else {
+          NA_character_
+        }
       )
     }
 
@@ -172,7 +318,11 @@ addSamples <- function(id) {
       updateNumericInput(session, "z", value = NA)
       updateTextInput(session, "datetime", value = "")
       updateTextInput(session, "target_datetime", value = "")
-      updateSelectizeInput(session, "collection_method", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "collection_method",
+        selected = character(0)
+      )
       updateSelectizeInput(session, "sample_type", selected = character(0))
       updateSelectizeInput(session, "linked_with", selected = character(0))
       updateNumericInput(session, "sample_volume_ml", value = NA)
@@ -194,43 +344,187 @@ addSamples <- function(id) {
       updateTextAreaInput(session, "note", value = "")
       updateCheckboxInput(session, "no_update", value = FALSE)
       if (!is.null(input$multi_fields)) {
-        updateCheckboxGroupInput(session, "multi_fields", selected = character(0))
+        updateCheckboxGroupInput(
+          session,
+          "multi_fields",
+          selected = character(0)
+        )
       }
     }
 
     update_form_from_sample <- function(sample_id) {
-      details <- moduleData$samples[moduleData$samples$sample_id == sample_id, , drop = FALSE]
+      details <- moduleData$samples[
+        moduleData$samples$sample_id == sample_id,
+        ,
+        drop = FALSE
+      ]
       if (!nrow(details)) {
         return()
       }
       details <- details[1, ]
-      updateSelectizeInput(session, "location", selected = as.character(details$location_id))
-      updateSelectizeInput(session, "sub_location", selected = if (is.na(details$sub_location_id)) character(0) else as.character(details$sub_location_id))
-      updateSelectizeInput(session, "media", selected = as.character(details$media_id))
+      updateSelectizeInput(
+        session,
+        "location",
+        selected = as.character(details$location_id)
+      )
+      updateSelectizeInput(
+        session,
+        "sub_location",
+        selected = if (is.na(details$sub_location_id)) {
+          character(0)
+        } else {
+          as.character(details$sub_location_id)
+        }
+      )
+      updateSelectizeInput(
+        session,
+        "media",
+        selected = as.character(details$media_id)
+      )
       updateNumericInput(session, "z", value = details$z)
-      updateTextInput(session, "datetime", value = format_datetime_input(details$datetime))
-      updateTextInput(session, "target_datetime", value = format_datetime_input(details$target_datetime))
-      updateSelectizeInput(session, "collection_method", selected = as.character(details$collection_method))
-      updateSelectizeInput(session, "sample_type", selected = as.character(details$sample_type))
-      updateSelectizeInput(session, "linked_with", selected = if (is.na(details$linked_with)) character(0) else as.character(details$linked_with))
-      updateNumericInput(session, "sample_volume_ml", value = details$sample_volume_ml)
-      updateNumericInput(session, "purge_volume_l", value = details$purge_volume_l)
-      updateNumericInput(session, "purge_time_min", value = details$purge_time_min)
-      updateNumericInput(session, "flow_rate_l_min", value = details$flow_rate_l_min)
+      updateTextInput(
+        session,
+        "datetime",
+        value = format_datetime_input(details$datetime)
+      )
+      updateTextInput(
+        session,
+        "target_datetime",
+        value = format_datetime_input(details$target_datetime)
+      )
+      updateSelectizeInput(
+        session,
+        "collection_method",
+        selected = as.character(details$collection_method)
+      )
+      updateSelectizeInput(
+        session,
+        "sample_type",
+        selected = as.character(details$sample_type)
+      )
+      updateSelectizeInput(
+        session,
+        "linked_with",
+        selected = if (is.na(details$linked_with)) {
+          character(0)
+        } else {
+          as.character(details$linked_with)
+        }
+      )
+      updateNumericInput(
+        session,
+        "sample_volume_ml",
+        value = details$sample_volume_ml
+      )
+      updateNumericInput(
+        session,
+        "purge_volume_l",
+        value = details$purge_volume_l
+      )
+      updateNumericInput(
+        session,
+        "purge_time_min",
+        value = details$purge_time_min
+      )
+      updateNumericInput(
+        session,
+        "flow_rate_l_min",
+        value = details$flow_rate_l_min
+      )
       updateNumericInput(session, "wave_hgt_m", value = details$wave_hgt_m)
-      updateSelectizeInput(session, "sample_grade", selected = if (is.na(details$sample_grade)) character(0) else as.character(details$sample_grade))
-      updateSelectizeInput(session, "sample_approval", selected = if (is.na(details$sample_approval)) character(0) else as.character(details$sample_approval))
-      updateSelectizeInput(session, "sample_qualifier", selected = if (is.na(details$sample_qualifier)) character(0) else as.character(details$sample_qualifier))
-      updateSelectizeInput(session, "owner", selected = as.character(details$owner))
-      updateSelectizeInput(session, "contributor", selected = if (is.na(details$contributor)) character(0) else as.character(details$contributor))
-      updateSelectizeInput(session, "comissioning_org", selected = if (is.na(details$comissioning_org)) character(0) else as.character(details$comissioning_org))
-      updateSelectizeInput(session, "sampling_org", selected = if (is.na(details$sampling_org)) character(0) else as.character(details$sampling_org))
-      updateSelectizeInput(session, "documents", selected = as.character(parse_integer_array(details$documents)))
-      updateSelectizeInput(session, "share_with", selected = parse_share_with(details$share_with))
-      updateTextInput(session, "import_source", value = if (is.na(details$import_source)) "" else details$import_source)
-      updateTextInput(session, "import_source_id", value = if (is.na(details$import_source_id)) "" else details$import_source_id)
-      updateTextAreaInput(session, "note", value = if (is.na(details$note)) "" else details$note)
-      updateCheckboxInput(session, "no_update", value = isTRUE(details$no_update))
+      updateSelectizeInput(
+        session,
+        "sample_grade",
+        selected = if (is.na(details$sample_grade)) {
+          character(0)
+        } else {
+          as.character(details$sample_grade)
+        }
+      )
+      updateSelectizeInput(
+        session,
+        "sample_approval",
+        selected = if (is.na(details$sample_approval)) {
+          character(0)
+        } else {
+          as.character(details$sample_approval)
+        }
+      )
+      updateSelectizeInput(
+        session,
+        "sample_qualifier",
+        selected = if (is.na(details$sample_qualifier)) {
+          character(0)
+        } else {
+          as.character(details$sample_qualifier)
+        }
+      )
+      updateSelectizeInput(
+        session,
+        "owner",
+        selected = as.character(details$owner)
+      )
+      updateSelectizeInput(
+        session,
+        "contributor",
+        selected = if (is.na(details$contributor)) {
+          character(0)
+        } else {
+          as.character(details$contributor)
+        }
+      )
+      updateSelectizeInput(
+        session,
+        "comissioning_org",
+        selected = if (is.na(details$comissioning_org)) {
+          character(0)
+        } else {
+          as.character(details$comissioning_org)
+        }
+      )
+      updateSelectizeInput(
+        session,
+        "sampling_org",
+        selected = if (is.na(details$sampling_org)) {
+          character(0)
+        } else {
+          as.character(details$sampling_org)
+        }
+      )
+      updateSelectizeInput(
+        session,
+        "documents",
+        selected = as.character(parse_integer_array(details$documents))
+      )
+      updateSelectizeInput(
+        session,
+        "share_with",
+        selected = parse_share_with(details$share_with)
+      )
+      updateTextInput(
+        session,
+        "import_source",
+        value = if (is.na(details$import_source)) "" else details$import_source
+      )
+      updateTextInput(
+        session,
+        "import_source_id",
+        value = if (is.na(details$import_source_id)) {
+          ""
+        } else {
+          details$import_source_id
+        }
+      )
+      updateTextAreaInput(
+        session,
+        "note",
+        value = if (is.na(details$note)) "" else details$note
+      )
+      updateCheckboxInput(
+        session,
+        "no_update",
+        value = isTRUE(details$no_update)
+      )
     }
 
     getModuleData <- function() {
@@ -298,36 +592,56 @@ addSamples <- function(id) {
       DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(NULL)
     })
 
-    observeEvent(input$location, {
-      req(moduleData$sub_locations)
-      loc_id <- if (length(input$location)) as.integer(input$location[[1]]) else NA_integer_
-      if (is.na(loc_id)) {
-        updateSelectizeInput(
-          session,
-          "sub_location",
-          choices = stats::setNames(
-            moduleData$sub_locations$sub_location_id,
-            moduleData$sub_locations$sub_location_name
+    observeEvent(
+      input$location,
+      {
+        req(moduleData$sub_locations)
+        loc_id <- if (length(input$location)) {
+          as.integer(input$location[[1]])
+        } else {
+          NA_integer_
+        }
+        if (is.na(loc_id)) {
+          updateSelectizeInput(
+            session,
+            "sub_location",
+            choices = stats::setNames(
+              moduleData$sub_locations$sub_location_id,
+              moduleData$sub_locations$sub_location_name
+            )
           )
-        )
-      } else {
-        available <- moduleData$sub_locations[moduleData$sub_locations$location_id == loc_id, ]
-        updateSelectizeInput(
-          session,
-          "sub_location",
-          choices = stats::setNames(
-            available$sub_location_id,
-            available$sub_location_name
+        } else {
+          available <- moduleData$sub_locations[
+            moduleData$sub_locations$location_id == loc_id,
+          ]
+          updateSelectizeInput(
+            session,
+            "sub_location",
+            choices = stats::setNames(
+              available$sub_location_id,
+              available$sub_location_name
+            )
           )
-        )
-      }
-    }, ignoreNULL = FALSE)
+        }
+      },
+      ignoreNULL = FALSE
+    )
 
-    observeEvent(input$share_with, {
-      if (length(input$share_with) > 1 && "public_reader" %in% input$share_with) {
-        updateSelectizeInput(session, "share_with", selected = "public_reader")
-      }
-    }, ignoreNULL = TRUE)
+    observeEvent(
+      input$share_with,
+      {
+        if (
+          length(input$share_with) > 1 && "public_reader" %in% input$share_with
+        ) {
+          updateSelectizeInput(
+            session,
+            "share_with",
+            selected = "public_reader"
+          )
+        }
+      },
+      ignoreNULL = TRUE
+    )
 
     observeEvent(input$mode, {
       if (identical(input$mode, "add")) {
@@ -366,23 +680,47 @@ addSamples <- function(id) {
         conditionalPanel(
           condition = "input.mode == 'modify'",
           ns = ns,
-          checkboxInput(ns("multi_edit"), "Enable multi-sample edit", value = FALSE),
+          accordion(
+            id = ns("accordion1"),
+            open = "sample_table_panel",
+            accordion_panel(
+              id = ns("sample_table_panel"),
+              title = "Select samples to modify",
+              checkboxInput(
+                ns("multi_edit"),
+                "Enable multi-sample edit",
+                value = FALSE
+              ) |>
+                tooltip(
+                  "Allows selection of multiple samples to update fields simultaneously."
+                ),
+              DT::DTOutput(ns("sample_table"))
+            )
+          ),
           conditionalPanel(
             condition = "input.multi_edit",
             ns = ns,
-            tags$div(
-              class = "alert alert-warning",
-              "Only selected fields will be updated for all chosen samples. Location, sub-location, elevation/depth, sample datetime, target datetime, and import source ID remain single-sample edits."
-            ),
-            checkboxGroupInput(
-              ns("multi_fields"),
-              "Fields to update across all selected samples",
-              choices = vapply(multi_editable_fields, `[[`, character(1), "label"),
-              selected = character(0),
-              inline = FALSE
+            accordion(
+              id = ns("accordion2"),
+              open = "multi_edit_fields_panel",
+              accordion_panel(
+                id = ns("multi_edit_fields_panel"),
+                title = "Multi-sample edit options",
+                tags$div(
+                  class = "alert alert-warning",
+                  "Only selected fields will be updated for all chosen samples. Location, sub-location, elevation/depth, sample datetime, target datetime, and import source ID remain single-sample edits."
+                ),
+                checkboxGroupInput(
+                  ns("multi_fields"),
+                  "Fields to update across all selected samples",
+                  choices = multi_editable_fields,
+                  selected = character(0),
+                  inline = TRUE,
+                  width = "100%"
+                )
+              )
             )
-          ),
-          DT::DTOutput(ns("sample_table"))
+          )
         ),
         conditionalPanel(
           condition = "input.mode == 'add'",
@@ -398,7 +736,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("location"),
               "Location",
-              choices = stats::setNames(moduleData$locations$location_id, moduleData$locations$name),
+              choices = stats::setNames(
+                moduleData$locations$location_id,
+                moduleData$locations$name
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Select a location"),
               width = "100%"
@@ -409,7 +750,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("sub_location"),
               "Sub-location",
-              choices = stats::setNames(moduleData$sub_locations$sub_location_id, moduleData$sub_locations$sub_location_name),
+              choices = stats::setNames(
+                moduleData$sub_locations$sub_location_id,
+                moduleData$sub_locations$sub_location_name
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional"),
               width = "100%"
@@ -422,7 +766,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("media"),
               "Media",
-              choices = stats::setNames(moduleData$media$media_id, moduleData$media$media_type),
+              choices = stats::setNames(
+                moduleData$media$media_id,
+                moduleData$media$media_type
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Select media"),
               width = "100%"
@@ -470,9 +817,15 @@ addSamples <- function(id) {
             selectizeInput(
               ns("collection_method"),
               "Collection method",
-              choices = stats::setNames(moduleData$collection_methods$collection_method_id, moduleData$collection_methods$collection_method),
+              choices = stats::setNames(
+                moduleData$collection_methods$collection_method_id,
+                moduleData$collection_methods$collection_method
+              ),
               multiple = TRUE,
-              options = list(maxItems = 1, placeholder = "Select collection method"),
+              options = list(
+                maxItems = 1,
+                placeholder = "Select collection method"
+              ),
               width = "100%"
             )
           ),
@@ -481,7 +834,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("sample_type"),
               "Sample type",
-              choices = stats::setNames(moduleData$sample_types$sample_type_id, moduleData$sample_types$sample_type),
+              choices = stats::setNames(
+                moduleData$sample_types$sample_type_id,
+                moduleData$sample_types$sample_type
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Select sample type"),
               width = "100%"
@@ -499,7 +855,10 @@ addSamples <- function(id) {
                 paste0(
                   moduleData$samples$sample_id,
                   " – ",
-                  format(as.POSIXct(moduleData$samples$datetime, tz = "UTC"), "%Y-%m-%d %H:%M")
+                  format(
+                    as.POSIXct(moduleData$samples$datetime, tz = "UTC"),
+                    "%Y-%m-%d %H:%M"
+                  )
                 )
               ),
               multiple = TRUE,
@@ -512,7 +871,15 @@ addSamples <- function(id) {
             selectizeInput(
               ns("documents"),
               "Associated documents",
-              choices = stats::setNames(moduleData$documents$document_id, paste0(moduleData$documents$name, " (", moduleData$documents$document_id, ")")),
+              choices = stats::setNames(
+                moduleData$documents$document_id,
+                paste0(
+                  moduleData$documents$name,
+                  " (",
+                  moduleData$documents$document_id,
+                  ")"
+                )
+              ),
               multiple = TRUE,
               options = list(placeholder = "Optional"),
               width = "100%"
@@ -522,32 +889,60 @@ addSamples <- function(id) {
         fluidRow(
           column(
             3,
-            numericInput(ns("sample_volume_ml"), "Sample volume (mL)", value = NA, width = "100%")
+            numericInput(
+              ns("sample_volume_ml"),
+              "Sample volume (mL)",
+              value = NA,
+              width = "100%"
+            )
           ),
           column(
             3,
-            numericInput(ns("purge_volume_l"), "Purge volume (L)", value = NA, width = "100%")
+            numericInput(
+              ns("purge_volume_l"),
+              "Purge volume (L)",
+              value = NA,
+              width = "100%"
+            )
           ),
           column(
             3,
-            numericInput(ns("purge_time_min"), "Purge time (min)", value = NA, width = "100%")
+            numericInput(
+              ns("purge_time_min"),
+              "Purge time (min)",
+              value = NA,
+              width = "100%"
+            )
           ),
           column(
             3,
-            numericInput(ns("flow_rate_l_min"), "Flow rate (L/min)", value = NA, width = "100%")
+            numericInput(
+              ns("flow_rate_l_min"),
+              "Flow rate (L/min)",
+              value = NA,
+              width = "100%"
+            )
           )
         ),
         fluidRow(
           column(
             4,
-            numericInput(ns("wave_hgt_m"), "Wave height (m)", value = NA, width = "100%")
+            numericInput(
+              ns("wave_hgt_m"),
+              "Wave height (m)",
+              value = NA,
+              width = "100%"
+            )
           ),
           column(
             4,
             selectizeInput(
               ns("sample_grade"),
               "Sample grade",
-              choices = stats::setNames(moduleData$grades$grade_type_id, moduleData$grades$grade_type_description),
+              choices = stats::setNames(
+                moduleData$grades$grade_type_id,
+                moduleData$grades$grade_type_description
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional"),
               width = "100%"
@@ -558,7 +953,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("sample_approval"),
               "Sample approval",
-              choices = stats::setNames(moduleData$approvals$approval_type_id, moduleData$approvals$approval_type_description),
+              choices = stats::setNames(
+                moduleData$approvals$approval_type_id,
+                moduleData$approvals$approval_type_description
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional"),
               width = "100%"
@@ -571,7 +969,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("sample_qualifier"),
               "Sample qualifier",
-              choices = stats::setNames(moduleData$qualifiers$qualifier_type_id, moduleData$qualifiers$qualifier_type_description),
+              choices = stats::setNames(
+                moduleData$qualifiers$qualifier_type_id,
+                moduleData$qualifiers$qualifier_type_description
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional"),
               width = "100%"
@@ -582,7 +983,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("owner"),
               "Owner",
-              choices = stats::setNames(moduleData$organizations$organization_id, moduleData$organizations$name),
+              choices = stats::setNames(
+                moduleData$organizations$organization_id,
+                moduleData$organizations$name
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Select owner"),
               width = "100%"
@@ -595,7 +999,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("contributor"),
               "Contributor",
-              choices = stats::setNames(moduleData$organizations$organization_id, moduleData$organizations$name),
+              choices = stats::setNames(
+                moduleData$organizations$organization_id,
+                moduleData$organizations$name
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional"),
               width = "100%"
@@ -606,7 +1013,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("comissioning_org"),
               "Comissioning organization",
-              choices = stats::setNames(moduleData$organizations$organization_id, moduleData$organizations$name),
+              choices = stats::setNames(
+                moduleData$organizations$organization_id,
+                moduleData$organizations$name
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional"),
               width = "100%"
@@ -619,7 +1029,10 @@ addSamples <- function(id) {
             selectizeInput(
               ns("sampling_org"),
               "Sampling organization",
-              choices = stats::setNames(moduleData$organizations$organization_id, moduleData$organizations$name),
+              choices = stats::setNames(
+                moduleData$organizations$organization_id,
+                moduleData$organizations$name
+              ),
               multiple = TRUE,
               options = list(maxItems = 1, placeholder = "Optional"),
               width = "100%"
@@ -640,14 +1053,28 @@ addSamples <- function(id) {
         fluidRow(
           column(
             6,
-            textInput(ns("import_source"), "Import source", placeholder = "Optional")
+            textInput(
+              ns("import_source"),
+              "Import source",
+              placeholder = "Optional"
+            )
           ),
           column(
             6,
-            textInput(ns("import_source_id"), "Import source ID", placeholder = "Optional")
+            textInput(
+              ns("import_source_id"),
+              "Import source ID",
+              placeholder = "Optional"
+            )
           )
         ),
-        textAreaInput(ns("note"), "Notes", rows = 3, placeholder = "Optional", width = "100%"),
+        textAreaInput(
+          ns("note"),
+          "Notes",
+          rows = 3,
+          placeholder = "Optional",
+          width = "100%"
+        ),
         conditionalPanel(
           condition = "input.mode == 'add'",
           ns = ns,
@@ -670,14 +1097,53 @@ addSamples <- function(id) {
     output$sample_table <- DT::renderDT({
       req(moduleData$samples_display)
       display <- moduleData$samples_display
-      display$datetime <- format(as.POSIXct(display$datetime, tz = "UTC"), "%Y-%m-%d %H:%M")
-      display$target_datetime <- format(as.POSIXct(display$target_datetime, tz = "UTC"), "%Y-%m-%d %H:%M")
+      display$datetime <- format(
+        as.POSIXct(display$datetime, tz = "UTC"),
+        "%Y-%m-%d %H:%M"
+      )
+      display$target_datetime <- format(
+        as.POSIXct(display$target_datetime, tz = "UTC"),
+        "%Y-%m-%d %H:%M"
+      )
       display$share_with <- gsub("[{}]", "", display$share_with)
+      # Make several columns 'factors' for better filtering in DT
+      factor_cols <- c(
+        "location",
+        "sub_location",
+        "media_type",
+        "sample_type",
+        "collection_method",
+        "owner",
+        "contributor"
+      )
+      for (col in factor_cols) {
+        display[[col]] <- as.factor(display[[col]])
+      }
       DT::datatable(
         display,
-        selection = "multiple",
+        selection = if (isTRUE(input$multi_edit)) {
+          list(mode = "multiple", selected = NULL, target = "row")
+        } else {
+          list(mode = "single", selected = NULL, target = "row")
+        },
         filter = "top",
-        options = list(pageLength = 10, scrollX = TRUE)
+        rownames = FALSE,
+        options = list(
+          pageLength = 10,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({",
+            "  'background-color': '#079',",
+            "  'color': '#fff',",
+            "  'font-size': '100%',",
+            "});",
+            "$(this.api().table().body()).css({",
+            "  'font-size': '90%',",
+            "});",
+            "}"
+          )
+        )
       )
     })
 
@@ -719,14 +1185,21 @@ addSamples <- function(id) {
           update_form_from_sample(ids)
         }
         if (!is.null(input$multi_fields)) {
-          updateCheckboxGroupInput(session, "multi_fields", selected = character(0))
+          updateCheckboxGroupInput(
+            session,
+            "multi_fields",
+            selected = character(0)
+          )
         }
       }
     })
 
     observeEvent(input$add_sample, {
       if (!identical(input$mode, "add")) {
-        showNotification("Switch to 'Add new' mode to create a sample.", type = "error")
+        showNotification(
+          "Switch to 'Add new' mode to create a sample.",
+          type = "error"
+        )
         return()
       }
       form <- collect_sample_inputs()
@@ -752,7 +1225,10 @@ addSamples <- function(id) {
         return()
       }
       if (is.na(form$datetime)) {
-        showNotification("Sample datetime is required and must be in YYYY-MM-DD HH:MM format.", type = "error")
+        showNotification(
+          "Sample datetime is required and must be in YYYY-MM-DD HH:MM format.",
+          type = "error"
+        )
         return()
       }
 
@@ -806,7 +1282,11 @@ addSamples <- function(id) {
 
       tryCatch(
         {
-          res <- DBI::dbGetQuery(session$userData$AquaCache, insert_sql, params = params)
+          res <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            insert_sql,
+            params = params
+          )
           getModuleData()
           reset_form()
           selected_sample_ids(integer())
@@ -817,28 +1297,43 @@ addSamples <- function(id) {
           )
         },
         error = function(e) {
-          showNotification(paste("Failed to add sample:", e$message), type = "error")
+          showNotification(
+            paste("Failed to add sample:", e$message),
+            type = "error"
+          )
         }
       )
     })
 
     observeEvent(input$update_sample, {
       if (!identical(input$mode, "modify")) {
-        showNotification("Switch to 'Modify existing' mode to update a sample.", type = "error")
+        showNotification(
+          "Switch to 'Modify existing' mode to update a sample.",
+          type = "error"
+        )
         return()
       }
       sample_ids <- selected_sample_ids()
       if (!length(sample_ids)) {
-        showNotification("Select at least one sample from the table to modify.", type = "error")
+        showNotification(
+          "Select at least one sample from the table to modify.",
+          type = "error"
+        )
         return()
       }
       form <- collect_sample_inputs()
       multi_mode <- isTRUE(input$multi_edit) && length(sample_ids) > 1
 
       if (multi_mode) {
-        selected_fields <- intersect(input$multi_fields, names(multi_editable_fields))
+        selected_fields <- intersect(
+          input$multi_fields,
+          multi_editable_fields
+        )
         if (!length(selected_fields)) {
-          showNotification("Choose at least one field to update in multi-sample mode.", type = "error")
+          showNotification(
+            "Choose at least one field to update in multi-sample mode.",
+            type = "error"
+          )
           return()
         }
 
@@ -846,19 +1341,32 @@ addSamples <- function(id) {
         set_clauses <- character()
         validation_errors <- character()
         for (field in selected_fields) {
-          spec <- multi_editable_fields[[field]]
+          spec <- multi_editable_fields[multi_editable_fields == field][[1]]
           value <- form[[field]]
-          if (field %in% c("collection_method", "sample_type", "owner") && is.na(value)) {
-            validation_errors <- c(validation_errors, sprintf("%s must be specified.", spec$label))
+          if (
+            field %in%
+              c("collection_method", "sample_type", "owner") &&
+              is.na(value)
+          ) {
+            validation_errors <- c(
+              validation_errors,
+              sprintf("%s must be specified.", spec$label)
+            )
           }
           params[[length(params) + 1]] <- value
           placeholder <- paste0("$", length(params))
           cast <- if (!is.null(spec$cast)) spec$cast else ""
-          set_clauses <- c(set_clauses, sprintf("%s = %s%s", spec$column, placeholder, cast))
+          set_clauses <- c(
+            set_clauses,
+            sprintf("%s = %s%s", spec$column, placeholder, cast)
+          )
         }
 
         if (length(validation_errors)) {
-          showNotification(paste(validation_errors, collapse = " "), type = "error")
+          showNotification(
+            paste(validation_errors, collapse = " "),
+            type = "error"
+          )
           return()
         }
 
@@ -876,28 +1384,47 @@ addSamples <- function(id) {
 
         errors <- character()
         for (id in sample_ids) {
-          res <- try(DBI::dbExecute(session$userData$AquaCache, update_sql, params = c(params, list(id))), silent = TRUE)
+          res <- try(
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              update_sql,
+              params = c(params, list(id))
+            ),
+            silent = TRUE
+          )
           if (inherits(res, "try-error")) {
             err_condition <- attr(res, "condition")
-            message <- if (!is.null(err_condition)) conditionMessage(err_condition) else as.character(res)
+            message <- if (!is.null(err_condition)) {
+              conditionMessage(err_condition)
+            } else {
+              as.character(res)
+            }
             errors <- c(errors, sprintf("Sample %s: %s", id, message))
           }
         }
 
         if (length(errors)) {
-          showNotification(paste(c("Failed to update some samples:", errors), collapse = " "), type = "error")
+          showNotification(
+            paste(c("Failed to update some samples:", errors), collapse = " "),
+            type = "error"
+          )
           return()
         }
 
         getModuleData()
-        selected_rows <- which(moduleData$samples_display$sample_id %in% sample_ids)
+        selected_rows <- which(
+          moduleData$samples_display$sample_id %in% sample_ids
+        )
         proxy <- DT::dataTableProxy(ns("sample_table"))
         if (length(selected_rows)) {
           proxy |> DT::selectRows(selected_rows)
         } else {
           proxy |> DT::selectRows(NULL)
         }
-        showNotification(sprintf("Updated %d samples successfully.", length(sample_ids)), type = "message")
+        showNotification(
+          sprintf("Updated %d samples successfully.", length(sample_ids)),
+          type = "message"
+        )
       } else {
         sample_id <- sample_ids[[1]]
         if (is.na(form$location_id)) {
@@ -921,7 +1448,10 @@ addSamples <- function(id) {
           return()
         }
         if (is.na(form$datetime)) {
-          showNotification("Sample datetime is required and must be in YYYY-MM-DD HH:MM format.", type = "error")
+          showNotification(
+            "Sample datetime is required and must be in YYYY-MM-DD HH:MM format.",
+            type = "error"
+          )
           return()
         }
 
@@ -991,12 +1521,19 @@ addSamples <- function(id) {
 
         tryCatch(
           {
-            DBI::dbExecute(session$userData$AquaCache, update_sql, params = params)
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              update_sql,
+              params = params
+            )
             getModuleData()
             showNotification("Sample updated successfully.", type = "message")
           },
           error = function(e) {
-            showNotification(paste("Failed to update sample:", e$message), type = "error")
+            showNotification(
+              paste("Failed to update sample:", e$message),
+              type = "error"
+            )
           }
         )
       }
