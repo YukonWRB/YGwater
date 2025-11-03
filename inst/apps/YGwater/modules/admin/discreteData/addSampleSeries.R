@@ -72,7 +72,10 @@ addSampleSeries <- function(id) {
         if (!nzchar(key) || !nzchar(value)) {
           return(list(
             json = NULL,
-            error = sprintf("Argument '%s' must include both key and value.", part)
+            error = sprintf(
+              "Argument '%s' must include both key and value.",
+              part
+            )
           ))
         }
         args[[key]] <- value
@@ -81,7 +84,12 @@ addSampleSeries <- function(id) {
     }
 
     format_source_args <- function(value) {
-      if (is.null(value) || length(value) == 0 || all(is.na(value)) || !nzchar(value)) {
+      if (
+        is.null(value) ||
+          length(value) == 0 ||
+          all(is.na(value)) ||
+          !nzchar(value)
+      ) {
         return("")
       }
       parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
@@ -215,7 +223,7 @@ addSampleSeries <- function(id) {
             width = 6,
             selectizeInput(
               ns("default_owner"),
-              "Default owner",
+              "Default owner (applies if no sample owner specified)",
               choices = stats::setNames(
                 moduleData$organizations$organization_id,
                 moduleData$organizations$name
@@ -233,7 +241,7 @@ addSampleSeries <- function(id) {
             width = 6,
             selectizeInput(
               ns("default_contributor"),
-              "Default contributor",
+              "Default contributor (applies if no sample contributor specified)",
               choices = stats::setNames(
                 moduleData$organizations$organization_id,
                 moduleData$organizations$name
@@ -255,48 +263,48 @@ addSampleSeries <- function(id) {
         ),
         splitLayout(
           cellWidths = c("50%", "50%"),
-          tags$div(
-            class = "alert alert-info",
-            "The source function is required and should correspond to a downloader provided by the AquaCache package."
-          ),
-          tags$div(
-            class = "alert alert-info",
-            "Arguments must be provided as comma-separated 'key: value' pairs so they can be converted to JSON."
-          )
-        ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          selectizeInput(
-            ns("source_fx"),
-            "Source function",
-            choices = moduleData$source_fx,
-            multiple = TRUE,
-            options = list(
-              maxItems = 1,
-              placeholder = "Select source function"
+          verticalLayout(
+            tags$div(
+              class = "alert alert-info",
+              "The source function is required and should correspond to a download-transform function provided by the AquaCache package."
             ),
-            width = "100%"
+            selectizeInput(
+              ns("source_fx"),
+              "Source function (see AquaCache package documentation for details)",
+              choices = moduleData$source_fx,
+              multiple = TRUE,
+              options = list(
+                maxItems = 1,
+                placeholder = "Select source function"
+              ),
+              width = "100%"
+            ),
+            actionButton(
+              ns("source_fx_doc"),
+              "Open function documentation"
+            )
           ),
-          textInput(
-            ns("source_fx_args"),
-            "Source function arguments",
-            placeholder = "arg1: value1, arg2: value2"
-          )
-        ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          actionButton(
-            ns("source_fx_doc"),
-            "Open function documentation"
-          ),
-          actionButton(
-            ns("args_example"),
-            "Show example arguments"
+          verticalLayout(
+            tags$div(
+              class = "alert alert-info",
+              "Arguments must be formatted as key-value pairs for conversion to JSON, e.g. 'arg1: value1, arg2: value2'. Leave blank if not using a source_fx, otherwise refer to the function documentation in AquaCache."
+            ),
+            textInput(
+              ns("source_fx_args"),
+              "Source function arguments",
+              value = "",
+              placeholder = "arg1: value1, arg2: value2",
+              width = "100%"
+            ),
+            actionButton(
+              ns("args_example"),
+              "Show example arguments"
+            )
           )
         ),
         textAreaInput(
           ns("note"),
-          "Note",
+          "Note (optional)",
           rows = 3,
           placeholder = "Optional",
           width = "100%"
@@ -367,27 +375,35 @@ addSampleSeries <- function(id) {
       showNotification("Module reloaded", type = "message")
     })
 
-    observeEvent(input$location, {
-      req(moduleData$sub_locations)
-      possibilities <- moduleData$sub_locations[
-        moduleData$sub_locations$location_id == input$location,
-      ]
-      updateSelectizeInput(
-        session,
-        "sub_location",
-        choices = stats::setNames(
-          possibilities$sub_location_id,
-          possibilities$sub_location_name
+    observeEvent(
+      input$location,
+      {
+        req(moduleData$sub_locations)
+        possibilities <- moduleData$sub_locations[
+          moduleData$sub_locations$location_id == input$location,
+        ]
+        updateSelectizeInput(
+          session,
+          "sub_location",
+          choices = stats::setNames(
+            possibilities$sub_location_id,
+            possibilities$sub_location_name
+          )
         )
-      )
-    }, ignoreNULL = TRUE)
+      },
+      ignoreNULL = TRUE
+    )
 
-    observeEvent(input$mode, {
-      if (input$mode == "add") {
-        selected_series(NULL)
-        DT::selectRows(table_proxy, NULL)
-      }
-    }, ignoreNULL = TRUE)
+    observeEvent(
+      input$mode,
+      {
+        if (input$mode == "add") {
+          selected_series(NULL)
+          DT::selectRows(table_proxy, NULL)
+        }
+      },
+      ignoreNULL = TRUE
+    )
 
     prompt_new_org <- function(value, target) {
       moduleData$org_modal_target <- target
@@ -410,133 +426,195 @@ addSampleSeries <- function(id) {
       ))
     }
 
-    observeEvent(input$default_owner, {
-      if (length(input$default_owner) == 0 || identical(input$default_owner, "")) {
-        return()
-      }
-      if (input$default_owner %in% moduleData$organizations$organization_id) {
-        return()
-      }
-      prompt_new_org(input$default_owner, "default_owner")
-    }, ignoreNULL = TRUE)
+    observeEvent(
+      input$default_owner,
+      {
+        if (
+          length(input$default_owner) == 0 || identical(input$default_owner, "")
+        ) {
+          return()
+        }
+        if (input$default_owner %in% moduleData$organizations$organization_id) {
+          return()
+        }
+        prompt_new_org(input$default_owner, "default_owner")
+      },
+      ignoreNULL = TRUE
+    )
 
-    observeEvent(input$default_contributor, {
-      if (length(input$default_contributor) == 0 || identical(input$default_contributor, "")) {
-        return()
-      }
-      if (input$default_contributor %in% moduleData$organizations$organization_id) {
-        return()
-      }
-      prompt_new_org(input$default_contributor, "default_contributor")
-    }, ignoreNULL = TRUE)
+    observeEvent(
+      input$default_contributor,
+      {
+        if (
+          length(input$default_contributor) == 0 ||
+            identical(input$default_contributor, "")
+        ) {
+          return()
+        }
+        if (
+          input$default_contributor %in%
+            moduleData$organizations$organization_id
+        ) {
+          return()
+        }
+        prompt_new_org(input$default_contributor, "default_contributor")
+      },
+      ignoreNULL = TRUE
+    )
 
-    observeEvent(input$save_org, {
-      if (!isTruthy(input$org_name)) {
-        shinyjs::js$backgroundCol(ns("org_name"), "#fdd")
-        return()
-      } else {
-        shinyjs::js$backgroundCol(ns("org_name"), "#fff")
-      }
-      df <- data.frame(
-        name = input$org_name,
-        name_fr = if (isTruthy(input$org_name_fr)) input$org_name_fr else NA,
-        contact_name = if (isTruthy(input$contact_name)) input$contact_name else NA,
-        phone = if (isTruthy(input$contact_phone)) input$contact_phone else NA,
-        email = if (isTruthy(input$contact_email)) input$contact_email else NA,
-        note = if (isTruthy(input$contact_note)) input$contact_note else NA
-      )
-      DBI::dbAppendTable(session$userData$AquaCache, "organizations", df)
-      moduleData$organizations <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT organization_id, name FROM organizations ORDER BY name ASC"
-      )
-      updateSelectizeInput(
-        session,
-        "default_owner",
-        choices = stats::setNames(
-          moduleData$organizations$organization_id,
-          moduleData$organizations$name
+    observeEvent(
+      input$save_org,
+      {
+        if (!isTruthy(input$org_name)) {
+          shinyjs::js$backgroundCol(ns("org_name"), "#fdd")
+          return()
+        } else {
+          shinyjs::js$backgroundCol(ns("org_name"), "#fff")
+        }
+        df <- data.frame(
+          name = input$org_name,
+          name_fr = if (isTruthy(input$org_name_fr)) input$org_name_fr else NA,
+          contact_name = if (isTruthy(input$contact_name)) {
+            input$contact_name
+          } else {
+            NA
+          },
+          phone = if (isTruthy(input$contact_phone)) {
+            input$contact_phone
+          } else {
+            NA
+          },
+          email = if (isTruthy(input$contact_email)) {
+            input$contact_email
+          } else {
+            NA
+          },
+          note = if (isTruthy(input$contact_note)) input$contact_note else NA
         )
-      )
-      updateSelectizeInput(
-        session,
-        "default_contributor",
-        choices = stats::setNames(
-          moduleData$organizations$organization_id,
-          moduleData$organizations$name
+        DBI::dbAppendTable(session$userData$AquaCache, "organizations", df)
+        moduleData$organizations <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT organization_id, name FROM organizations ORDER BY name ASC"
         )
-      )
-      new_id <- moduleData$organizations[
-        moduleData$organizations$name == df$name,
-        "organization_id"
-      ]
-      if (!length(new_id)) {
-        new_id <- moduleData$organizations$organization_id[1]
-      }
-      if (identical(moduleData$org_modal_target, "default_owner")) {
-        updateSelectizeInput(session, "default_owner", selected = new_id)
-      } else if (identical(moduleData$org_modal_target, "default_contributor")) {
-        updateSelectizeInput(session, "default_contributor", selected = new_id)
-      }
-      moduleData$org_modal_target <- NULL
-      removeModal()
-      showNotification("Organization added", type = "message")
-    }, ignoreNULL = TRUE)
+        updateSelectizeInput(
+          session,
+          "default_owner",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          )
+        )
+        updateSelectizeInput(
+          session,
+          "default_contributor",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          )
+        )
+        new_id <- moduleData$organizations[
+          moduleData$organizations$name == df$name,
+          "organization_id"
+        ]
+        if (!length(new_id)) {
+          new_id <- moduleData$organizations$organization_id[1]
+        }
+        if (identical(moduleData$org_modal_target, "default_owner")) {
+          updateSelectizeInput(session, "default_owner", selected = new_id)
+        } else if (
+          identical(moduleData$org_modal_target, "default_contributor")
+        ) {
+          updateSelectizeInput(
+            session,
+            "default_contributor",
+            selected = new_id
+          )
+        }
+        moduleData$org_modal_target <- NULL
+        removeModal()
+        showNotification("Organization added", type = "message")
+      },
+      ignoreNULL = TRUE
+    )
 
-    observeEvent(input$ss_table_rows_selected, {
-      sel <- input$ss_table_rows_selected
-      if (length(sel) == 0) {
-        selected_series(NULL)
-        return()
-      }
-      ssid <- moduleData$sample_series_display[sel, "sample_series_id"]
-      selected_series(ssid)
-      details <- moduleData$sample_series[
-        moduleData$sample_series$sample_series_id == ssid,
-      ]
-      if (nrow(details) == 0) {
-        showNotification("Selected sample series not found.", type = "error")
-        return()
-      }
-      updateSelectizeInput(session, "location", selected = details$location_id)
-      updateSelectizeInput(
-        session,
-        "sub_location",
-        selected = if (is.na(details$sub_location_id)) character(0) else details$sub_location_id
-      )
-      updateTextInput(
-        session,
-        "synch_from",
-        value = format_datetime_input(details$synch_from)
-      )
-      updateTextInput(
-        session,
-        "synch_to",
-        value = format_datetime_input(details$synch_to)
-      )
-      updateSelectizeInput(session, "default_owner", selected = details$default_owner)
-      updateSelectizeInput(
-        session,
-        "default_contributor",
-        selected = if (is.na(details$default_contributor)) character(0) else details$default_contributor
-      )
-      updateCheckboxInput(session, "active", value = isTRUE(details$active))
-      updateSelectizeInput(
-        session,
-        "source_fx",
-        selected = if (is.na(details$source_fx)) character(0) else details$source_fx
-      )
-      updateTextInput(
-        session,
-        "source_fx_args",
-        value = format_source_args(details$source_fx_args)
-      )
-      updateTextAreaInput(
-        session,
-        "note",
-        value = ifelse(is.na(details$note), "", details$note)
-      )
-    }, ignoreNULL = TRUE)
+    observeEvent(
+      input$ss_table_rows_selected,
+      {
+        sel <- input$ss_table_rows_selected
+        if (length(sel) == 0) {
+          selected_series(NULL)
+          return()
+        }
+        ssid <- moduleData$sample_series_display[sel, "sample_series_id"]
+        selected_series(ssid)
+        details <- moduleData$sample_series[
+          moduleData$sample_series$sample_series_id == ssid,
+        ]
+        if (nrow(details) == 0) {
+          showNotification("Selected sample series not found.", type = "error")
+          return()
+        }
+        updateSelectizeInput(
+          session,
+          "location",
+          selected = details$location_id
+        )
+        updateSelectizeInput(
+          session,
+          "sub_location",
+          selected = if (is.na(details$sub_location_id)) {
+            character(0)
+          } else {
+            details$sub_location_id
+          }
+        )
+        updateTextInput(
+          session,
+          "synch_from",
+          value = format_datetime_input(details$synch_from)
+        )
+        updateTextInput(
+          session,
+          "synch_to",
+          value = format_datetime_input(details$synch_to)
+        )
+        updateSelectizeInput(
+          session,
+          "default_owner",
+          selected = details$default_owner
+        )
+        updateSelectizeInput(
+          session,
+          "default_contributor",
+          selected = if (is.na(details$default_contributor)) {
+            character(0)
+          } else {
+            details$default_contributor
+          }
+        )
+        updateCheckboxInput(session, "active", value = isTRUE(details$active))
+        updateSelectizeInput(
+          session,
+          "source_fx",
+          selected = if (is.na(details$source_fx)) {
+            character(0)
+          } else {
+            details$source_fx
+          }
+        )
+        updateTextInput(
+          session,
+          "source_fx_args",
+          value = format_source_args(details$source_fx_args)
+        )
+        updateTextAreaInput(
+          session,
+          "note",
+          value = ifelse(is.na(details$note), "", details$note)
+        )
+      },
+      ignoreNULL = TRUE
+    )
 
     observeEvent(input$args_example, {
       if (is.null(input$source_fx) || input$source_fx == "") {
@@ -550,10 +628,10 @@ addSampleSeries <- function(id) {
         moduleData$sample_series$source_fx == input$source_fx,
         "source_fx_args"
       ]
-      examples <- examples[!is.na(examples)]
+      examples <- examples[!is.na(examples)][1:5]
       if (!length(examples)) {
         showModal(modalDialog(
-          "No example arguments found in existing sample series.",
+          "No example arguments found in existing sample series. Refer to the AquaCache package documentation for details on the required arguments.",
           easyClose = TRUE
         ))
         return()
@@ -632,7 +710,9 @@ addSampleSeries <- function(id) {
       }
       con <- session$userData$AquaCache
       DBI::dbBegin(con)
-      sub_loc <- if (length(input$sub_location) == 0 || !nzchar(input$sub_location[1])) {
+      sub_loc <- if (
+        length(input$sub_location) == 0 || !nzchar(input$sub_location[1])
+      ) {
         NA
       } else {
         as.numeric(input$sub_location[1])
@@ -645,7 +725,10 @@ addSampleSeries <- function(id) {
         synch_from = synch_from,
         synch_to = synch_to,
         default_owner = as.numeric(input$default_owner),
-        default_contributor = if (length(input$default_contributor) == 0 || !nzchar(input$default_contributor[1])) {
+        default_contributor = if (
+          length(input$default_contributor) == 0 ||
+            !nzchar(input$default_contributor[1])
+        ) {
           NA
         } else {
           as.numeric(input$default_contributor[1])
@@ -659,7 +742,10 @@ addSampleSeries <- function(id) {
         DBI::dbGetQuery(con, sql),
         error = function(e) {
           DBI::dbRollback(con)
-          showNotification(paste("Error adding sample series:", e$message), type = "error")
+          showNotification(
+            paste("Error adding sample series:", e$message),
+            type = "error"
+          )
           return(NULL)
         }
       )
@@ -672,7 +758,11 @@ addSampleSeries <- function(id) {
         updateTextInput(session, "synch_from", value = "")
         updateTextInput(session, "synch_to", value = "")
         updateSelectizeInput(session, "default_owner", selected = character(0))
-        updateSelectizeInput(session, "default_contributor", selected = character(0))
+        updateSelectizeInput(
+          session,
+          "default_contributor",
+          selected = character(0)
+        )
         updateCheckboxInput(session, "active", value = TRUE)
         updateSelectizeInput(session, "source_fx", selected = character(0))
         updateTextInput(session, "source_fx_args", value = "")
@@ -722,7 +812,9 @@ addSampleSeries <- function(id) {
       }
       con <- session$userData$AquaCache
       DBI::dbBegin(con)
-      sub_loc <- if (length(input$sub_location) == 0 || !nzchar(input$sub_location[1])) {
+      sub_loc <- if (
+        length(input$sub_location) == 0 || !nzchar(input$sub_location[1])
+      ) {
         NA
       } else {
         as.numeric(input$sub_location[1])
@@ -735,7 +827,10 @@ addSampleSeries <- function(id) {
         synch_from = synch_from,
         synch_to = synch_to,
         default_owner = as.numeric(input$default_owner),
-        default_contributor = if (length(input$default_contributor) == 0 || !nzchar(input$default_contributor[1])) {
+        default_contributor = if (
+          length(input$default_contributor) == 0 ||
+            !nzchar(input$default_contributor[1])
+        ) {
           NA
         } else {
           as.numeric(input$default_contributor[1])
@@ -753,13 +848,19 @@ addSampleSeries <- function(id) {
         },
         error = function(e) {
           DBI::dbRollback(con)
-          showNotification(paste("Error modifying sample series:", e$message), type = "error")
+          showNotification(
+            paste("Error modifying sample series:", e$message),
+            type = "error"
+          )
           FALSE
         }
       )
       if (isTRUE(res)) {
         DBI::dbCommit(con)
-        showNotification("Sample series updated successfully.", type = "message")
+        showNotification(
+          "Sample series updated successfully.",
+          type = "message"
+        )
         getModuleData()
       }
     })
