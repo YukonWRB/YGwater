@@ -90,6 +90,10 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
+      "apps/YGwater/modules/admin/discreteData/addSamples.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/YGwater/modules/admin/discreteData/editDiscData.R",
       package = "YGwater"
     ))

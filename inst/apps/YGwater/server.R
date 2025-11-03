@@ -106,6 +106,7 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addDiscData,
+          session$userData$admin_privs$addSamples,
           session$userData$admin_privs$editDiscData,
           session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
@@ -115,6 +116,9 @@ app_server <- function(input, output, session) {
         nav_show(id = "navbar", target = "discreteDataTasks")
         if (!isTRUE(session$userData$admin_privs$addDiscData)) {
           nav_hide(id = "navbar", target = "addDiscData")
+        }
+        if (!isTRUE(session$userData$admin_privs$addSamples)) {
+          nav_hide(id = "navbar", target = "addSamples")
         }
         if (!isTRUE(session$userData$admin_privs$editDiscData)) {
           nav_hide(id = "navbar", target = "editDiscData")
@@ -327,6 +331,7 @@ app_server <- function(input, output, session) {
     ui_loaded$addTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
+    ui_loaded$addSamples <- FALSE
     ui_loaded$editDiscData <- FALSE
     ui_loaded$addGuidelines <- FALSE
     ui_loaded$addSampleSeries <- FALSE
@@ -928,6 +933,7 @@ $(document).keyup(function(event) {
               )
             ),
             addDiscData = has_priv("discrete", c("results", "samples")),
+            addSamples = has_priv("discrete", "samples"),
             editDiscData = has_priv("discrete", c("results", "samples")),
             addSampleSeries = has_priv("discrete", "sample_series"),
             syncDisc = has_priv(
@@ -1525,6 +1531,13 @@ $(document).keyup(function(event) {
           moduleOutputs$addDiscData$change_tab <- NULL
         }
       })
+    }
+    if (input$navbar == "addSamples") {
+      if (!ui_loaded$addSamples) {
+        output$addSamples_ui <- renderUI(addSamplesUI("addSamples"))
+        ui_loaded$addSamples <- TRUE
+        addSamples("addSamples")
+      }
     }
     if (input$navbar == "editDiscData") {
       if (!ui_loaded$editDiscData) {
