@@ -15,7 +15,30 @@ addSamples <- function(id) {
     ns <- session$ns
 
     moduleData <- reactiveValues()
-    selected_sample <- reactiveVal(NULL)
+    selected_sample_ids <- reactiveVal(integer())
+
+    multi_editable_fields <- list(
+      collection_method = list(label = "Collection method", column = "collection_method"),
+      sample_type = list(label = "Sample type", column = "sample_type"),
+      linked_with = list(label = "Linked with", column = "linked_with"),
+      sample_volume_ml = list(label = "Sample volume (mL)", column = "sample_volume_ml"),
+      purge_volume_l = list(label = "Purge volume (L)", column = "purge_volume_l"),
+      purge_time_min = list(label = "Purge time (minutes)", column = "purge_time_min"),
+      flow_rate_l_min = list(label = "Flow rate (L/min)", column = "flow_rate_l_min"),
+      wave_hgt_m = list(label = "Wave height (m)", column = "wave_hgt_m"),
+      sample_grade = list(label = "Sample grade", column = "sample_grade"),
+      sample_approval = list(label = "Sample approval", column = "sample_approval"),
+      sample_qualifier = list(label = "Sample qualifier", column = "sample_qualifier"),
+      owner = list(label = "Owner", column = "owner"),
+      contributor = list(label = "Contributor", column = "contributor"),
+      comissioning_org = list(label = "Comissioning organization", column = "comissioning_org"),
+      sampling_org = list(label = "Sampling organization", column = "sampling_org"),
+      documents = list(label = "Documents", column = "documents", cast = "::integer[]"),
+      share_with = list(label = "Share with", column = "share_with", cast = "::text[]"),
+      import_source = list(label = "Import source", column = "import_source"),
+      no_update = list(label = "Lock sample from updates", column = "no_update"),
+      note = list(label = "Notes", column = "note")
+    )
 
     parse_datetime_input <- function(value) {
       if (is.null(value) || !nzchar(value)) {
@@ -170,6 +193,9 @@ addSamples <- function(id) {
       updateTextInput(session, "import_source_id", value = "")
       updateTextAreaInput(session, "note", value = "")
       updateCheckboxInput(session, "no_update", value = FALSE)
+      if (!is.null(input$multi_fields)) {
+        updateCheckboxGroupInput(session, "multi_fields", selected = character(0))
+      }
     }
 
     update_form_from_sample <- function(sample_id) {
@@ -267,7 +293,7 @@ addSamples <- function(id) {
 
     observeEvent(input$reload_module, {
       getModuleData()
-      selected_sample(NULL)
+      selected_sample_ids(integer())
       reset_form()
       DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(NULL)
     })
@@ -305,7 +331,7 @@ addSamples <- function(id) {
 
     observeEvent(input$mode, {
       if (identical(input$mode, "add")) {
-        selected_sample(NULL)
+        selected_sample_ids(integer())
         reset_form()
         DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(NULL)
       }
@@ -340,6 +366,22 @@ addSamples <- function(id) {
         conditionalPanel(
           condition = "input.mode == 'modify'",
           ns = ns,
+          checkboxInput(ns("multi_edit"), "Enable multi-sample edit", value = FALSE),
+          conditionalPanel(
+            condition = "input.multi_edit",
+            ns = ns,
+            tags$div(
+              class = "alert alert-warning",
+              "Only selected fields will be updated for all chosen samples. Location, sub-location, elevation/depth, sample datetime, target datetime, and import source ID remain single-sample edits."
+            ),
+            checkboxGroupInput(
+              ns("multi_fields"),
+              "Fields to update across all selected samples",
+              choices = vapply(multi_editable_fields, `[[`, character(1), "label"),
+              selected = character(0),
+              inline = FALSE
+            )
+          ),
           DT::DTOutput(ns("sample_table"))
         ),
         conditionalPanel(
@@ -633,7 +675,7 @@ addSamples <- function(id) {
       display$share_with <- gsub("[{}]", "", display$share_with)
       DT::datatable(
         display,
-        selection = "single",
+        selection = "multiple",
         filter = "top",
         options = list(pageLength = 10, scrollX = TRUE)
       )
@@ -644,13 +686,41 @@ addSamples <- function(id) {
         return()
       }
       idx <- input$sample_table_rows_selected
-      if (length(idx) == 1) {
-        sample_id <- moduleData$samples_display$sample_id[idx]
-        selected_sample(sample_id)
-        update_form_from_sample(sample_id)
-      } else {
-        selected_sample(NULL)
+      multi_enabled <- isTRUE(input$multi_edit)
+      if (!multi_enabled && length(idx) > 1) {
+        idx <- idx[1]
+        DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(idx)
+      }
+      if (!length(idx)) {
+        selected_sample_ids(integer())
         reset_form()
+        return()
+      }
+      ids <- moduleData$samples_display$sample_id[idx]
+      selected_sample_ids(ids)
+      if (!multi_enabled && length(ids) == 1) {
+        update_form_from_sample(ids)
+      }
+    })
+
+    observeEvent(input$multi_edit, {
+      if (!identical(input$mode, "modify")) {
+        return()
+      }
+      if (!isTRUE(input$multi_edit)) {
+        ids <- selected_sample_ids()
+        if (length(ids) > 1) {
+          ids <- ids[1]
+          selected_sample_ids(ids)
+          row_idx <- match(ids, moduleData$samples_display$sample_id)
+          DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(row_idx)
+          update_form_from_sample(ids)
+        } else if (length(ids) == 1) {
+          update_form_from_sample(ids)
+        }
+        if (!is.null(input$multi_fields)) {
+          updateCheckboxGroupInput(session, "multi_fields", selected = character(0))
+        }
       }
     })
 
@@ -739,7 +809,7 @@ addSamples <- function(id) {
           res <- DBI::dbGetQuery(session$userData$AquaCache, insert_sql, params = params)
           getModuleData()
           reset_form()
-          selected_sample(NULL)
+          selected_sample_ids(integer())
           DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(NULL)
           showNotification(
             sprintf("Sample %s added successfully.", res$sample_id[1]),
@@ -757,38 +827,105 @@ addSamples <- function(id) {
         showNotification("Switch to 'Modify existing' mode to update a sample.", type = "error")
         return()
       }
-      sample_id <- selected_sample()
-      if (is.null(sample_id)) {
-        showNotification("Select a sample from the table to modify.", type = "error")
+      sample_ids <- selected_sample_ids()
+      if (!length(sample_ids)) {
+        showNotification("Select at least one sample from the table to modify.", type = "error")
         return()
       }
       form <- collect_sample_inputs()
-      if (is.na(form$location_id)) {
-        showNotification("Location is required.", type = "error")
-        return()
-      }
-      if (is.na(form$media_id)) {
-        showNotification("Media is required.", type = "error")
-        return()
-      }
-      if (is.na(form$collection_method)) {
-        showNotification("Collection method is required.", type = "error")
-        return()
-      }
-      if (is.na(form$sample_type)) {
-        showNotification("Sample type is required.", type = "error")
-        return()
-      }
-      if (is.na(form$owner)) {
-        showNotification("Owner is required.", type = "error")
-        return()
-      }
-      if (is.na(form$datetime)) {
-        showNotification("Sample datetime is required and must be in YYYY-MM-DD HH:MM format.", type = "error")
-        return()
-      }
+      multi_mode <- isTRUE(input$multi_edit) && length(sample_ids) > 1
 
-      update_sql <- "
+      if (multi_mode) {
+        selected_fields <- intersect(input$multi_fields, names(multi_editable_fields))
+        if (!length(selected_fields)) {
+          showNotification("Choose at least one field to update in multi-sample mode.", type = "error")
+          return()
+        }
+
+        params <- list()
+        set_clauses <- character()
+        validation_errors <- character()
+        for (field in selected_fields) {
+          spec <- multi_editable_fields[[field]]
+          value <- form[[field]]
+          if (field %in% c("collection_method", "sample_type", "owner") && is.na(value)) {
+            validation_errors <- c(validation_errors, sprintf("%s must be specified.", spec$label))
+          }
+          params[[length(params) + 1]] <- value
+          placeholder <- paste0("$", length(params))
+          cast <- if (!is.null(spec$cast)) spec$cast else ""
+          set_clauses <- c(set_clauses, sprintf("%s = %s%s", spec$column, placeholder, cast))
+        }
+
+        if (length(validation_errors)) {
+          showNotification(paste(validation_errors, collapse = " "), type = "error")
+          return()
+        }
+
+        if (!length(set_clauses)) {
+          showNotification("No fields selected for update.", type = "error")
+          return()
+        }
+
+        set_sql <- paste(set_clauses, collapse = ",\n          ")
+        update_sql <- sprintf(
+          "UPDATE discrete.samples\n        SET\n          %s\n        WHERE sample_id = $%d;",
+          set_sql,
+          length(params) + 1
+        )
+
+        errors <- character()
+        for (id in sample_ids) {
+          res <- try(DBI::dbExecute(session$userData$AquaCache, update_sql, params = c(params, list(id))), silent = TRUE)
+          if (inherits(res, "try-error")) {
+            err_condition <- attr(res, "condition")
+            message <- if (!is.null(err_condition)) conditionMessage(err_condition) else as.character(res)
+            errors <- c(errors, sprintf("Sample %s: %s", id, message))
+          }
+        }
+
+        if (length(errors)) {
+          showNotification(paste(c("Failed to update some samples:", errors), collapse = " "), type = "error")
+          return()
+        }
+
+        getModuleData()
+        selected_rows <- which(moduleData$samples_display$sample_id %in% sample_ids)
+        proxy <- DT::dataTableProxy(ns("sample_table"))
+        if (length(selected_rows)) {
+          proxy |> DT::selectRows(selected_rows)
+        } else {
+          proxy |> DT::selectRows(NULL)
+        }
+        showNotification(sprintf("Updated %d samples successfully.", length(sample_ids)), type = "message")
+      } else {
+        sample_id <- sample_ids[[1]]
+        if (is.na(form$location_id)) {
+          showNotification("Location is required.", type = "error")
+          return()
+        }
+        if (is.na(form$media_id)) {
+          showNotification("Media is required.", type = "error")
+          return()
+        }
+        if (is.na(form$collection_method)) {
+          showNotification("Collection method is required.", type = "error")
+          return()
+        }
+        if (is.na(form$sample_type)) {
+          showNotification("Sample type is required.", type = "error")
+          return()
+        }
+        if (is.na(form$owner)) {
+          showNotification("Owner is required.", type = "error")
+          return()
+        }
+        if (is.na(form$datetime)) {
+          showNotification("Sample datetime is required and must be in YYYY-MM-DD HH:MM format.", type = "error")
+          return()
+        }
+
+        update_sql <- "
         UPDATE discrete.samples
         SET
           location_id = $1,
@@ -821,47 +958,48 @@ addSamples <- function(id) {
         WHERE sample_id = $28;
       "
 
-      params <- list(
-        form$location_id,
-        form$sub_location_id,
-        form$media_id,
-        form$z,
-        form$datetime,
-        form$target_datetime,
-        form$collection_method,
-        form$sample_type,
-        form$linked_with,
-        form$sample_volume_ml,
-        form$purge_volume_l,
-        form$purge_time_min,
-        form$flow_rate_l_min,
-        form$wave_hgt_m,
-        form$sample_grade,
-        form$sample_approval,
-        form$sample_qualifier,
-        form$owner,
-        form$contributor,
-        form$comissioning_org,
-        form$sampling_org,
-        form$documents,
-        form$share_with,
-        form$import_source,
-        form$no_update,
-        form$note,
-        form$import_source_id,
-        sample_id
-      )
+        params <- list(
+          form$location_id,
+          form$sub_location_id,
+          form$media_id,
+          form$z,
+          form$datetime,
+          form$target_datetime,
+          form$collection_method,
+          form$sample_type,
+          form$linked_with,
+          form$sample_volume_ml,
+          form$purge_volume_l,
+          form$purge_time_min,
+          form$flow_rate_l_min,
+          form$wave_hgt_m,
+          form$sample_grade,
+          form$sample_approval,
+          form$sample_qualifier,
+          form$owner,
+          form$contributor,
+          form$comissioning_org,
+          form$sampling_org,
+          form$documents,
+          form$share_with,
+          form$import_source,
+          form$no_update,
+          form$note,
+          form$import_source_id,
+          sample_id
+        )
 
-      tryCatch(
-        {
-          DBI::dbExecute(session$userData$AquaCache, update_sql, params = params)
-          getModuleData()
-          showNotification("Sample updated successfully.", type = "message")
-        },
-        error = function(e) {
-          showNotification(paste("Failed to update sample:", e$message), type = "error")
-        }
-      )
+        tryCatch(
+          {
+            DBI::dbExecute(session$userData$AquaCache, update_sql, params = params)
+            getModuleData()
+            showNotification("Sample updated successfully.", type = "message")
+          },
+          error = function(e) {
+            showNotification(paste("Failed to update sample:", e$message), type = "error")
+          }
+        )
+      }
     })
   })
 }
