@@ -847,8 +847,7 @@ get_swe_state <- function(
   data,
   year,
   month,
-  key,
-  cutoff = 5
+  key
 ) {
   # Assert that data contains timeseries and metadata
   stopifnot(is.list(data))
@@ -1444,87 +1443,36 @@ mapSnowbull <- function(id, language) {
     })
 
     # Reactive data processing based on user inputs
-    processed_data <- reactive({
-      shiny::req(input$year, input$month)
 
+    # Generic function to get processed data for a given year/month
+    get_processed_data <- function(year, month) {
       # Extract data at points for the selected date
       swe_at_basins <- get_swe_state(
         data = base_data$basins,
-        year = input$year,
-        month = input$month,
-        key = "name",
-        cutoff = record_cutoff_years
+        year = year,
+        month = month,
+        key = "name"
       )
-
       swe_at_surveys <- get_swe_state(
         data = base_data$surveys,
-        year = input$year,
-        month = input$month,
-        key = "location_id",
-        cutoff = record_cutoff_years
+        year = year,
+        month = month,
+        key = "location_id"
       )
-
       swe_at_pillows <- get_swe_state(
         data = base_data$pillows,
-        year = input$year,
-        month = input$month,
-        key = "timeseries_id",
-        cutoff = record_cutoff_years
+        year = year,
+        month = month,
+        key = "timeseries_id"
       )
 
-      # Ensure data is not empty before proceeding
-      if (is.null(swe_at_basins)) {
-        stop("Basin data is empty.")
-      }
-
-      if (is.null(swe_at_surveys)) {
-        stop("Survey data is empty.")
-      }
-
-      if (is.null(swe_at_pillows)) {
-        stop("Pillow data is empty.")
-      }
-
-      # Filter out stations/basins with stale data (latest_date > cutoff years from selected date)
-      input_date <- get_datetime(input$year, input$month)
-
-      # Helper function to filter by latest_date within cutoff
-      filter_by_latest_date <- function(df, input_date, cutoff_days) {
-        df[
-          is.na(df$latest_date) |
-            as.numeric(difftime(
-              input_date,
-              df$latest_date,
-              units = "days"
-            )) <=
-              cutoff_days,
-          ,
-          drop = FALSE
-        ]
-      }
-      #swe_at_basins <- filter_by_latest_date(
-      #    swe_at_basins,
-      #    input_date,
-      #    366
-      #)
-      swe_at_surveys <- filter_by_latest_date(
-        swe_at_surveys,
-        input_date,
-        record_cutoff_years * 366
-      )
-      swe_at_pillows <- filter_by_latest_date(
-        swe_at_pillows,
-        input_date,
-        record_cutoff_years * 366
-      )
-
+      # Add annotation and popup_content as before
       swe_at_basins$annotation <- paste0(
         swe_at_basins$annotation,
         "<br>(",
         round(swe_at_basins$relative_swe, 1),
         "%)"
       )
-      # Consolidated popup generation function
       generate_popup_content <- function(
         type,
         swe,
@@ -1541,8 +1489,6 @@ mapSnowbull <- function(id, language) {
           "pillow" = "<b>Type:</b> Continuous (Pillow)<br>",
           ""
         )
-
-        # Add generate plot button if applicable
         plot_button <- if (!is.null(id)) {
           sprintf(
             "<button onclick='generatePlot(\"%s\", \"%s\", \"%s\")' style='margin-top: 10px;'>Generate Plot</button>",
@@ -1553,7 +1499,6 @@ mapSnowbull <- function(id, language) {
         } else {
           ""
         }
-
         location_html <- if (!is.null(location)) {
           paste0(
             "<span style='font-size: 12px; color: #666;'>",
@@ -1563,7 +1508,6 @@ mapSnowbull <- function(id, language) {
         } else {
           "<br>"
         }
-
         paste0(
           "<div style='text-align: left; padding: 10px; width: 300px;'>",
           "<b style='font-size: 16px;'>",
@@ -1571,11 +1515,7 @@ mapSnowbull <- function(id, language) {
           "</b><br>",
           location_html,
           "<b>SWE Value (mm):</b> ",
-          if (!is.na(swe)) {
-            paste0(round(swe, 1), " mm")
-          } else {
-            "No data"
-          },
+          if (!is.na(swe)) paste0(round(swe, 1), " mm") else "No data",
           "<br>",
           "<b>SWE Value (%):</b> ",
           if (!is.na(relative_swe)) {
@@ -1596,8 +1536,6 @@ mapSnowbull <- function(id, language) {
           "</div>"
         )
       }
-
-      # Create popup content for basins
       swe_at_basins$popup_content <- mapply(
         function(swe, relative_swe, historic_median, name) {
           generate_popup_content(
@@ -1607,7 +1545,7 @@ mapSnowbull <- function(id, language) {
             historic_median,
             name,
             location = NULL,
-            id = name # Use basin name as ID
+            id = name
           )
         },
         swe_at_basins$swe,
@@ -1616,8 +1554,6 @@ mapSnowbull <- function(id, language) {
         swe_at_basins$name,
         SIMPLIFY = FALSE
       )
-
-      # Create popup content for surveys with ID
       swe_at_surveys$popup_content <- mapply(
         function(swe, relative_swe, historic_median, name, location, id) {
           generate_popup_content(
@@ -1638,8 +1574,6 @@ mapSnowbull <- function(id, language) {
         swe_at_surveys$location_id,
         SIMPLIFY = FALSE
       )
-
-      # Create popup content for pillows with ID
       swe_at_pillows$popup_content <- mapply(
         function(swe, relative_swe, historic_median, name, location, id) {
           generate_popup_content(
@@ -1661,11 +1595,48 @@ mapSnowbull <- function(id, language) {
         SIMPLIFY = FALSE
       )
 
+      filter_by_latest_date <- function(df, input_date, cutoff_days) {
+        df[
+          is.na(df$latest_date) |
+            as.numeric(difftime(
+              input_date,
+              df$latest_date,
+              units = "days"
+            )) <=
+              cutoff_days,
+          ,
+          drop = FALSE
+        ]
+      }
+      #swe_at_basins <- filter_by_latest_date(
+      #    swe_at_basins,
+      #    input_date,
+      #    366
+      #)
+
+      input_date <- get_datetime(year, month)
+      swe_at_surveys <- filter_by_latest_date(
+        swe_at_surveys,
+        input_date,
+        366
+      )
+
+      swe_at_pillows <- filter_by_latest_date(
+        swe_at_pillows,
+        input_date,
+        366
+      )
+
       list(
         swe_at_basins = swe_at_basins,
         swe_at_surveys = swe_at_surveys,
         swe_at_pillows = swe_at_pillows
       )
+    }
+
+    processed_data <- reactive({
+      shiny::req(input$year, input$month)
+      get_processed_data(input$year, input$month)
     })
 
     # Initialize map - This creates the map as a server output
@@ -1678,162 +1649,7 @@ mapSnowbull <- function(id, language) {
       }
 
       # Compute initial processed data for default year/month (March 2025)
-      initial_data <- {
-        swe_at_basins <- get_swe_state(
-          data = base_data$basins,
-          year = 2025,
-          month = 3,
-          key = "name",
-          cutoff = record_cutoff_years
-        )
-        swe_at_surveys <- get_swe_state(
-          data = base_data$surveys,
-          year = 2025,
-          month = 3,
-          key = "location_id",
-          cutoff = record_cutoff_years
-        )
-        swe_at_pillows <- get_swe_state(
-          data = base_data$pillows,
-          year = 2025,
-          month = 3,
-          key = "timeseries_id",
-          cutoff = record_cutoff_years
-        )
-        # Add popup_content as in processed_data()
-        swe_at_basins$annotation <- paste0(
-          swe_at_basins$annotation,
-          "<br>(",
-          round(swe_at_basins$relative_swe, 1),
-          "%)"
-        )
-        generate_popup_content <- function(
-          type,
-          swe,
-          relative_swe,
-          historic_median,
-          name,
-          location = NULL,
-          id = NULL
-        ) {
-          type_label <- switch(
-            type,
-            "basin" = "",
-            "survey" = "<b>Type:</b> Discrete (Snow Course)<br>",
-            "pillow" = "<b>Type:</b> Continuous (Pillow)<br>",
-            ""
-          )
-          plot_button <- if (!is.null(id)) {
-            sprintf(
-              "<button onclick='generatePlot(\"%s\", \"%s\", \"%s\")' style='margin-top: 10px;'>Generate Plot</button>",
-              type,
-              id,
-              name
-            )
-          } else {
-            ""
-          }
-          location_html <- if (!is.null(location)) {
-            paste0(
-              "<span style='font-size: 12px; color: #666;'>",
-              location,
-              "</span><br><br>"
-            )
-          } else {
-            "<br>"
-          }
-          paste0(
-            "<div style='text-align: left; padding: 10px; width: 300px;'>",
-            "<b style='font-size: 16px;'>",
-            name,
-            "</b><br>",
-            location_html,
-            "<b>SWE Value (mm):</b> ",
-            if (!is.na(swe)) paste0(round(swe, 1), " mm") else "No data",
-            "<br>",
-            "<b>SWE Value (%):</b> ",
-            if (!is.na(relative_swe)) {
-              paste0(round(relative_swe, 1), "% of normal")
-            } else {
-              "No data"
-            },
-            "<br>",
-            "<b>Historic Median:</b> ",
-            if (!is.na(historic_median)) {
-              paste0(round(historic_median, 1), " mm")
-            } else {
-              "No data"
-            },
-            "<br>",
-            type_label,
-            plot_button,
-            "</div>"
-          )
-        }
-        swe_at_basins$popup_content <- mapply(
-          function(swe, relative_swe, historic_median, name) {
-            generate_popup_content(
-              "basin",
-              swe,
-              relative_swe,
-              historic_median,
-              name,
-              location = NULL,
-              id = name
-            )
-          },
-          swe_at_basins$swe,
-          swe_at_basins$relative_swe,
-          swe_at_basins$historic_median,
-          swe_at_basins$name,
-          SIMPLIFY = FALSE
-        )
-        swe_at_surveys$popup_content <- mapply(
-          function(swe, relative_swe, historic_median, name, location, id) {
-            generate_popup_content(
-              "survey",
-              swe,
-              relative_swe,
-              historic_median,
-              name,
-              location,
-              id
-            )
-          },
-          swe_at_surveys$swe,
-          swe_at_surveys$relative_swe,
-          swe_at_surveys$historic_median,
-          swe_at_surveys$name,
-          swe_at_surveys$location,
-          swe_at_surveys$location_id,
-          SIMPLIFY = FALSE
-        )
-        swe_at_pillows$popup_content <- mapply(
-          function(swe, relative_swe, historic_median, name, location, id) {
-            generate_popup_content(
-              "pillow",
-              swe,
-              relative_swe,
-              historic_median,
-              name,
-              location,
-              id
-            )
-          },
-          swe_at_pillows$swe,
-          swe_at_pillows$relative_swe,
-          swe_at_pillows$historic_median,
-          swe_at_pillows$name,
-          swe_at_pillows$location,
-          swe_at_pillows$timeseries_id,
-          SIMPLIFY = FALSE
-        )
-        list(
-          swe_at_basins = swe_at_basins,
-          swe_at_surveys = swe_at_surveys,
-          swe_at_pillows = swe_at_pillows
-        )
-      }
+      initial_data <- get_processed_data(2025, 3)
       # Select value column for initial palette
       value_col <- "relative_swe"
       initial_data$swe_at_basins$value_to_show <- initial_data$swe_at_basins[[
@@ -2039,7 +1855,6 @@ mapSnowbull <- function(id, language) {
       }
 
       data <- processed_data()
-
       # Select value column based on input$value_type
       value_col <- if (value_type == "relative_swe") {
         "relative_swe"
