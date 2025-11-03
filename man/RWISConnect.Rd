@@ -27,7 +27,7 @@ RWISConnect(
 A connection to the database
 }
 \description{
-Establishes a connection to the RWIS (Road Weather Information System) database. Only works from within YG networks.
+Establishes a connection to the RWIS (Road Weather Information System) PostgreSQL database. Only works from within YG networks.
 }
 \seealso{
 \code{\link[=AquaConnect]{AquaConnect()}} for establishing a connection to the WRB's hydrometric database.
