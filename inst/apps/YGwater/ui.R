@@ -326,6 +326,11 @@ app_ui <- function(request) {
               uiOutput("addDiscData_ui")
             ),
             nav_panel(
+              title = "Add/edit samples",
+              value = "addSamples",
+              uiOutput("addSamples_ui")
+            ),
+            nav_panel(
               title = "Edit/delete discrete data",
               value = "editDiscData",
               uiOutput("editDiscData_ui")
