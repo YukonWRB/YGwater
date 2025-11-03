@@ -154,11 +154,22 @@ app_server <- function(input, output, session) {
         nav_hide(id = "navbar", target = "fileTasks")
       }
 
-      # Field visit ---------------------------------------------------------
-      if (isTRUE(session$userData$admin_privs$visit)) {
-        nav_show(id = "navbar", target = "visit")
+      # Field tasks ---------------------------------------------------------
+      if (
+        any(
+          session$userData$admin_privs$visit,
+          session$userData$admin_privs$deploy_recover
+        )
+      ) {
+        nav_show(id = "navbar", target = "fieldTasks")
+        if (!isTRUE(session$userData$admin_privs$visit)) {
+          nav_hide(id = "navbar", target = "visit")
+        }
+        if (!isTRUE(session$userData$admin_privs$deploy_recover)) {
+          nav_hide(id = "navbar", target = "deploy_recover")
+        }
       } else {
-        nav_hide(id = "navbar", target = "visit")
+        nav_hide(id = "navbar", target = "fieldTasks")
       }
 
       # Simple Index
@@ -190,7 +201,9 @@ app_server <- function(input, output, session) {
         "continuousDataTasks",
         "discreteDataTasks",
         "fileTasks",
+        "fieldTasks",
         "visit",
+        "deploy_recover",
         "adminTasks",
         "metadataTasks",
         "wellTasks"
@@ -1529,7 +1542,9 @@ $(document).keyup(function(event) {
     }
     if (input$navbar == "addSampleSeries") {
       if (!ui_loaded$addSampleSeries) {
-        output$addSampleSeries_ui <- renderUI(addSampleSeriesUI("addSampleSeries"))
+        output$addSampleSeries_ui <- renderUI(addSampleSeriesUI(
+          "addSampleSeries"
+        ))
         ui_loaded$addSampleSeries <- TRUE
         addSampleSeries("addSampleSeries")
       }
