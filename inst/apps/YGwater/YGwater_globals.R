@@ -218,10 +218,10 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/map/locationsMap.R",
     package = "YGwater"
   ))
-  source(system.file(
-    "apps/YGwater/modules/client/map/snowBulletinMap.R",
-    package = "YGwater"
-  ))
+  # source(system.file(
+  #   "apps/YGwater/modules/client/map/snowBulletinMap.R",
+  #   package = "YGwater"
+  # ))
 
   # Image modules
   source(system.file(
@@ -262,7 +262,7 @@ YGwater_globals <- function(
   translations <- data.table::fread(system.file(
     "apps/YGwater/translations.csv",
     package = "YGwater"
-  ))
+  ), encoding = "UTF-8")
   # Build a list from the data.frame
   translation_cache <<- lapply(
     setdiff(names(translations[, -2]), "id"),
