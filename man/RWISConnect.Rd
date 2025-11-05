@@ -5,11 +5,11 @@
 \title{Connect to the RWIS database}
 \usage{
 RWISConnect(
-  name = "rwdm",
-  host = "rwis.gov.yk.ca",
-  port = "5432",
-  username = "rwdmread",
-  password = "rwdmread"
+  name = Sys.getenv("rwisName", "rwdm"),
+  host = Sys.getenv("rwisHost", "rwis.gov.yk.ca"),
+  port = Sys.getenv("rwisPort", "5432"),
+  username = Sys.getenv("rwisUser"),
+  password = Sys.getenv("rwisPass")
 )
 }
 \arguments{
