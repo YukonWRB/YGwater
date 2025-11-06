@@ -936,6 +936,8 @@ snowInfo <- function(
     "may15_surveys"
   )
 
+  locations <- locations[order(locations$location_code), ]
+
   # Fix up the results table
   results <- results[, c(
     "location",

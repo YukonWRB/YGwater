@@ -146,6 +146,8 @@ addLocation <- function(id, inputs) {
             id = ns("accordion1"),
             open = "locations_table_panel",
             accordion_panel(
+              id = ns("locations_table_panel"),
+              title = "Select location to modify",
               DT::DTOutput(ns("loc_table"))
             )
           )

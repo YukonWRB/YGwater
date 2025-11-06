@@ -4321,6 +4321,12 @@ contPlot <- function(id, language, windowDims, inputs) {
                 subplots$subplot3$parameter,
                 subplots$subplot4$parameter
               ))
+              lead_lags <- c(
+                subplots$subplot1$lead_lag,
+                subplots$subplot2$lead_lag,
+                subplots$subplot3$lead_lag,
+                subplots$subplot4$lead_lag
+              )
 
               # Make sure that each combination of locs[n], sub_locs[n], z[n], record_rates[n], aggregation_types[n], params[n] and lead_lags[n] is unique
               combinations <- data.frame(
