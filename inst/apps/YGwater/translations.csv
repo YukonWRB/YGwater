@@ -277,7 +277,7 @@ app_version3,,revision,révision
 Generic labels,,,
 data_type,direct translation,Data Type,Types de données
 unknown,,Unknown,Inconnu
-cluster_points_label,,Group points into clusters,Regrouper les points en grappes
+cluster_points_label,,Cluster points,Regrouper les points
 location_type_legend,,Location type,Type d’emplacement
 loc,direct translation,Location,Emplacement
 locs,,Locations,Endroits
