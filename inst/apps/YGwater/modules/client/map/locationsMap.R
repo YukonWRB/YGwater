@@ -159,6 +159,11 @@ mapLocs <- function(id, language) {
               ),
               multiple = TRUE
             ),
+            checkboxInput(
+              ns("cluster_points"),
+              label = tr("cluster_points_label", language$language),
+              value = FALSE
+            ),
             sliderInput(
               ns("yrs"),
               label = tr("year_filter", language$language),
@@ -446,22 +451,80 @@ mapLocs <- function(id, language) {
         timeseries.sub <- timeseries.sub[timeseries.sub$start_datetime <= as.POSIXct(paste0(input$yrs[2], "-12-31 23:59:59"), tz = "UTC") & timeseries.sub$end_datetime >= as.POSIXct(paste0(input$yrs[1], "-01-01 00:00"), tz = "UTC"),]
       }
       
-      
+
       loc.sub <- moduleData$locations[moduleData$locations$location_id %in% timeseries.sub$location_id, ]
       loc.sub <- loc.sub[popup_data, on = .(location_id), popup_html := popup_html]
-      
-      leaflet::leafletProxy("map", session = session) %>%
+
+      type_col <- if (language$abbrev == "fr") "type_fr" else "type"
+      unknown_label <- tr("unknown", language$language)
+      loc.sub[, type_label := get(type_col)]
+      loc.sub[is.na(type_label) | trimws(type_label) == "", type_label := unknown_label]
+      loc.sub[, type_label := titleCase(type_label, language$abbrev)]
+
+      loc_types <- sort(unique(loc.sub$type_label))
+
+      marker_color_choices <- c("blue", "orange", "darkred", "darkgreen", "purple", "cadetblue", "black", "lightgray", "pink")
+      marker_color_hex <- c(
+        blue = "#2C7FB8",
+        orange = "#E69F00",
+        darkred = "#B2182B",
+        darkgreen = "#1B7837",
+        purple = "#762A83",
+        cadetblue = "#4DA1A9",
+        black = "#4D4D4D",
+        lightgray = "#BDBDBD",
+        pink = "#F781BF"
+      )
+      icon_choices <- c("map-marker", "tint", "leaf", "globe", "flag", "compass", "thermometer-half", "water", "chart-line")
+
+      type_map <- data.table::data.table(
+        type_label = loc_types,
+        marker_color = marker_color_choices[((seq_along(loc_types) - 1) %% length(marker_color_choices)) + 1],
+        icon_name = icon_choices[((seq_along(loc_types) - 1) %% length(icon_choices)) + 1]
+      )
+
+      loc.sub[type_map, on = .(type_label), `:=`(
+        marker_color = i.marker_color,
+        icon_name = i.icon_name
+      )]
+
+      map_proxy <- leaflet::leafletProxy("map", session = session) %>%
         leaflet::clearMarkers() %>%
         leaflet::clearMarkerClusters() %>%
-        leaflet::addMarkers(data = loc.sub,
-                            lng = ~longitude,
-                            lat = ~latitude,
-                            popup = ~popup_html,
-                            clusterOptions = leaflet::markerClusterOptions()
-                            )
+        leaflet::removeControl("location_type_legend")
+
+      if (nrow(loc.sub) > 0) {
+        icons <- leaflet::awesomeIcons(
+          icon = loc.sub$icon_name,
+          iconColor = "#FFFFFF",
+          library = "fa",
+          markerColor = loc.sub$marker_color
+        )
+
+        cluster_options <- if (isTRUE(input$cluster_points)) leaflet::markerClusterOptions() else NULL
+
+        map_proxy <- map_proxy %>%
+          leaflet::addAwesomeMarkers(
+            data = loc.sub,
+            lng = ~longitude,
+            lat = ~latitude,
+            popup = ~popup_html,
+            icon = icons,
+            clusterOptions = cluster_options
+          ) %>%
+          leaflet::addLegend(
+            colors = marker_color_hex[type_map$marker_color],
+            labels = type_map$type_label,
+            title = tr("location_type_legend", language$language),
+            position = "bottomright",
+            layerId = "location_type_legend"
+          )
+      }
+
+      map_proxy
 
     }) # End of observe for map filters and rendering location points
-    
+
     
     # Pass a message to the main map server when a location link is clicked ############################
     # Listen for a click in the popup

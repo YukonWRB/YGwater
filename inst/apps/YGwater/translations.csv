@@ -276,6 +276,9 @@ app_version2,,connected to AquaCache database revision ,connectée à la base de
 app_version3,,revision,révision
 Generic labels,,,
 data_type,direct translation,Data Type,Types de données
+unknown,,Unknown,Inconnu
+cluster_points_label,,Group points into clusters,Regrouper les points en grappes
+location_type_legend,,Location type,Type d’emplacement
 loc,direct translation,Location,Emplacement
 locs,,Locations,Endroits
 loc(s),,Location(s),Emplacement(s)
