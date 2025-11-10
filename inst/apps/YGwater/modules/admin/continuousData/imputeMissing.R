@@ -256,7 +256,7 @@ imputeMissing <- function(id) {
         con,
         paste(
           "SELECT datetime, value FROM continuous.measurements_continuous",
-          "WHERE timeseries_id = ?tsid AND datetime >= ?start_dt AND datetime <= ?end_dt",
+          "WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3",
           "ORDER BY datetime"
         ),
         tsid = tsid,
