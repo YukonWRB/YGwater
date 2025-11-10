@@ -610,6 +610,10 @@ getVector <- function(
 
   if ("attributes" %in% names(res)) {
     attr_raw <- res[["attributes"]]
+    # IF all NA, skip
+    if (all(is.na(attr_raw))) {
+      attr_raw <- c()
+    }
 
     if (length(attr_raw) > 0) {
       attr_frames <- lapply(seq_along(attr_raw), function(idx) {
