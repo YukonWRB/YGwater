@@ -35,7 +35,7 @@ estimateFlowStats <- function(gauged_stations, ungauged_area, ungauged_name, per
   #### ------------------------------ Get data -----------------------------####
   ## Get predictor data
   
-  flow_paramId <- DBI::dbGetQuery(con, "SELECT parameter_id FROM parameters WHERE param_name = 'flow'")$parameter_id
+  flow_paramId <- DBI::dbGetQuery(con, "SELECT parameter_id FROM parameters WHERE param_name = 'water flow'")$parameter_id
   
   flow_all <- DBI::dbGetQuery(con, 
                               paste0("SELECT locations.name, timeseries.location, measurements_calculated_daily_corrected.date, measurements_calculated_daily_corrected.value, locations.geom_id ",

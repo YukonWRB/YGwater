@@ -70,7 +70,7 @@ waterInfo <- function(con = AquaConnect(),
   end_date <- as.POSIXct(end_date)
   attr(end_date, "tzone") <- "UTC"
   
-  params <- DBI::dbGetQuery(con, "SELECT parameter_id, param_name FROM parameters WHERE param_name IN ('water level', 'flow')")
+  params <- DBI::dbGetQuery(con, "SELECT parameter_id, param_name FROM parameters WHERE param_name IN ('water level', 'water flow')")
 
   #select the locations
   if (locations[1] == "all") {
@@ -79,24 +79,24 @@ waterInfo <- function(con = AquaConnect(),
     locs <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE parameter_id IN (", paste(params$parameter_id, collapse = ", "), ") AND location IN ('", paste(locations, collapse = "', '"), "');"))
   }
 
-  #now retain only level or flow if level_flow == 'one'.
+  # now retain only level or flow if level_flow == 'one'.
   if (level_flow == "one") {
     for (i in unique(locs$location)) {
       sub <- locs[locs$location == i ,]
       if (nrow(sub) > 1) {
-        if (params[params$param_name == "flow", "parameter_id"] %in% sub$parameter_id) {
+        if (params[params$param_name == "water flow", "parameter_id"] %in% sub$parameter_id) {
           level_end <- sub[sub$parameter_id == params[params$param_name == "water level", "parameter_id"], "end_datetime"]
           if (level_end > end_date) {
             level_end <- end_date
           }
-          flow_end <- sub[sub$parameter_id == params[params$param_name == "flow", "parameter_id"], "end_datetime"]
+          flow_end <- sub[sub$parameter_id == params[params$param_name == "water flow", "parameter_id"], "end_datetime"]
           if (flow_end > end_date) {
             flow_end <- end_date
           }
-          if (flow_end > level_end - 6*30*24*60*60) { #check if last flow is recent enough
+          if (flow_end > level_end - 6*30*24*60*60) { # check if last flow is recent enough
             locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name == "water level", "parameter_id"]) , ] #drop level
           } else {
-            locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name == "flow", "parameter_id"]) , ] #drop flow
+            locs <- locs[!(locs$location == i & locs$parameter_id == params[params$param_name == "water flow", "parameter_id"]) , ] # drop flow
           }
         }
       }
@@ -117,7 +117,7 @@ waterInfo <- function(con = AquaConnect(),
     })
   }
 
-  #Several objects are initialized below as extremes is run once per element in extremes for all objects/outputs
+  # Several objects are initialized below as extremes is run once per element in extremes for all objects/outputs
   metadata <- data.frame()
   info <- data.frame()
   trends <- data.frame()
@@ -219,7 +219,7 @@ waterInfo <- function(con = AquaConnect(),
         plot <- plot +
           ggplot2::geom_point(ggplot2::aes(y = .data$Max_1_Day), color = "red3") +
           ggplot2::geom_line(ggplot2::aes(y = .data$Max_1_Day), linewidth = 0.1, color = "red3")
-        if (params[params$parameter_id == sub(".*_", "", i), "param_name"] == "flow") {
+        if (params[params$parameter_id == sub(".*_", "", i), "param_name"] == "water flow") {
           plot <- plot +
             ggplot2::labs(y = "Annual extreme value (log scale)", title = paste0(sub("_.*", "", i), ": " , name), subtitle = paste0("Parameter: ", params[params$parameter_id == sub(".*_", "", i), "param_name"], ", m3/s")) +
             ggplot2::scale_y_log10()
@@ -258,8 +258,9 @@ waterInfo <- function(con = AquaConnect(),
         }
       }
       grDevices::dev.off()
-    } #End of plots loop
-  }#End of loop working on extremes list of tables.
+    } # End of plots loop
+  }# End of loop working on extremes list of tables.
+  
   if (plot_type == "combined" & plots & !quiet) {
     message("Minimum and maximum flow plots were combined and returned in a list element. You can view each combined plot by calling grid::grid.draw on the desired object, or dig a bit deeper and find each individual ggplot object.")
   }
