@@ -83,8 +83,9 @@ snowInfo <- function(
     JOIN networks AS n ON ln.network_id = n.network_id
     JOIN samples AS s ON l.location_id = s.location_id
     JOIN datum_conversions AS d ON l.location_id = d.location_id
-    WHERE n.name = 'Snow Survey Network';
-"
+    WHERE n.name = 'Snow Survey Network'
+    ORDER BY l.name;
+  "
     )
     all_locs <- TRUE
   } else {
@@ -101,9 +102,9 @@ snowInfo <- function(
     JOIN datum_conversions AS d ON l.location_id = d.location_id
     WHERE n.name = 'Snow Survey Network' AND l.location IN ('",
         paste(locations, collapse = "', '"),
-        "'
-        ORDER BY l.name);
-"
+        "')
+    ORDER BY l.name;
+  "
       )
     )
     # Find the missing locations if any were not found. locations is a vector of requested locations
@@ -118,16 +119,24 @@ snowInfo <- function(
     all_locs <- FALSE
   }
 
+  if (!nrow(locations)) {
+    stop("No matching snow survey locations were found.")
+  }
+
   #Get the measurements
   samples <- DBI::dbGetQuery(
     con,
     paste0(
       "SELECT sample_id, location_id, datetime, target_datetime FROM samples WHERE location_id IN ('",
       paste(locations$location_id, collapse = "', '"),
-      "') AND media_id = 7 AND collection_method = 1
-      ORDER BY location_id, target_datetime;"
+      "') AND media_id = 7 AND collection_method = 1 ",
+      "ORDER BY location_id, target_datetime;"
     )
   ) # media = 'atmospheric', collection_method = 'observation'
+
+  if (!nrow(samples)) {
+    stop("No snow survey measurements were found for the selected locations.")
+  }
 
   if (!inactive) {
     # Filter out any location with no measurements for 5 or more years
@@ -149,10 +158,14 @@ snowInfo <- function(
     paste0(
       "SELECT r.sample_id, r.result, p.param_name, p.unit_default FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
-      "') AND p.parameter_id IN (21, 1220)
-      ORDER BY r.sample_id"
+      "') AND p.parameter_id IN (21, 1220) ",
+      "ORDER BY r.sample_id"
     )
   ) # 21 = SWE, 1220 = depth
+
+  if (!nrow(results)) {
+    stop("No snow survey results were found for the selected locations.")
+  }
 
   #Manipulate/preprocess things a bit
   samples$year <- lubridate::year(samples$target_datetime)
