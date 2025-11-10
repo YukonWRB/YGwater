@@ -4,7 +4,8 @@ imputeMissingUI <- function(id) {
   ns <- NS(id)
   tagList(
     tags$style(
-      HTML(sprintf("
+      HTML(sprintf(
+        "
      /* Add colors to the accordion. Using ns() makes it specific to each accordion */
       #%s.accordion {
         /* body background */
@@ -14,8 +15,11 @@ imputeMissingUI <- function(id) {
         /* expanded header */
         --bs-accordion-active-bg:   #FBE5B2;
       }
-    ", ns("accordion1"))),
-      HTML(sprintf("
+    ",
+        ns("accordion1")
+      )),
+      HTML(sprintf(
+        "
      /* Add colors to the accordion. Using ns() makes it specific to each accordion */
       #%s.accordion {
         /* body background */
@@ -25,8 +29,11 @@ imputeMissingUI <- function(id) {
         /* expanded header */
         --bs-accordion-active-bg:   #0097A9;
       }
-    ", ns("accordion2"))),
-      HTML(sprintf("
+    ",
+        ns("accordion2")
+      )),
+      HTML(sprintf(
+        "
      /* Add colors to the accordion. Using ns() makes it specific to each accordion */
       #%s.accordion {
         /* body background */
@@ -36,9 +43,11 @@ imputeMissingUI <- function(id) {
         /* expanded header */
         --bs-accordion-active-bg:   #7A9A01;
       }
-    ", ns("accordion3")))
-      ),
-    
+    ",
+        ns("accordion3")
+      ))
+    ),
+
     page_fluid(
       accordion(
         id = ns("accordion1"),
@@ -57,13 +66,26 @@ imputeMissingUI <- function(id) {
         accordion_panel(
           id = ns("options_panel"),
           title = "Imputation options",
-          textInput(ns("start"), "Start datetime (UTC)", placeholder = "YYYY-MM-DD HH:MM:SS"),
-          textInput(ns("end"), "End datetime (UTC)", placeholder = "YYYY-MM-DD HH:MM:SS"),
+          textInput(
+            ns("start"),
+            "Start datetime (UTC)",
+            placeholder = "YYYY-MM-DD HH:MM:SS"
+          ),
+          textInput(
+            ns("end"),
+            "End datetime (UTC)",
+            placeholder = "YYYY-MM-DD HH:MM:SS"
+          ),
           numericInput(ns("radius"), "Search radius (km)", value = 10, min = 0),
-          selectInput(ns("method"), "Interpolation method",
-                      choices = c("Direct (use other timeseries with calculated offset)" = "direct",
-                                  "Linear (direct point to point)" = "linear",
-                                  "Spline (curve fitted with surrounding data)" = "spline")),
+          selectInput(
+            ns("method"),
+            "Interpolation method",
+            choices = c(
+              "Direct (use other timeseries with calculated offset)" = "direct",
+              "Linear (direct point to point)" = "linear",
+              "Spline (curve fitted with surrounding data)" = "spline"
+            )
+          ),
           actionButton(ns("load"), "Load data")
         )
       ),
@@ -88,20 +110,19 @@ imputeMissingUI <- function(id) {
 imputeMissing <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    
+
     ts_meta <- reactive({
       dbGetQueryDT(
         session$userData$AquaCache,
         paste(
-          "SELECT timeseries_id, location_name AS location, parameter_name AS parameter,",
-          "media_type AS media, aggregation_type AS aggregation, recording_rate,",
-          "latitude, longitude FROM continuous.timeseries_metadata_en"
+          "SELECT tm.timeseries_id, tm.location_name AS location, tm.parameter_name AS parameter,",
+          "tm.media_type AS media, tm.aggregation_type AS aggregation, tm.recording_rate,",
+          "l.latitude, l.longitude FROM continuous.timeseries_metadata_en tm JOIN locations l ON tm.location_id = l.location_id"
         )
       )
     })
-    
-    output$ts_table <- DT::renderDT({
 
+    output$ts_table <- DT::renderDT({
       # Convert some data types to factors for better filtering in DT
       df <- ts_meta()
       display <- as.data.frame(df)
@@ -112,30 +133,31 @@ imputeMissing <- function(id) {
       display$latitude <- NULL
       display$longitude <- NULL
 
-      DT::datatable(display,
-                    selection = 'single',
-                    options = list(
-                      columnDefs = list(
-                        list(targets = 0,
-                             visible = FALSE)),
-                      scrollX = TRUE,
-                      initComplete = htmlwidgets::JS(
-                        "function(settings, json) {",
-                        "$(this.api().table().header()).css({",
-                        "  'background-color': '#079',",
-                        "  'color': '#fff',",
-                        "  'font-size': '100%',",
-                        "});",
-                        "$(this.api().table().body()).css({",
-                        "  'font-size': '90%',",
-                        "});",
-                        "}"
-                      )
-                    ),
-                    filter = 'top'
+      DT::datatable(
+        display,
+        selection = 'single',
+        options = list(
+          columnDefs = list(
+            list(targets = 0, visible = FALSE)
+          ),
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({",
+            "  'background-color': '#079',",
+            "  'color': '#fff',",
+            "  'font-size': '100%',",
+            "});",
+            "$(this.api().table().body()).css({",
+            "  'font-size': '90%',",
+            "});",
+            "}"
+          )
+        ),
+        filter = 'top'
       )
     })
-    
+
     selected_ts <- reactiveVal()
 
     observeEvent(input$ts_table_rows_selected, {
@@ -148,16 +170,32 @@ imputeMissing <- function(id) {
       meta <- as.data.frame(ts_meta())
       meta[meta$timeseries_id == selected_ts(), , drop = FALSE]
     })
-    
+
     ts_plot_pre_task <- ExtendedTask$new(function(df) {
       promises::future_promise({
-        plot <- plotly::plot_ly(data = df, x = ~datetime, y = ~value_raw, type = 'scatter', mode = 'lines', name = 'Original') %>%
-          plotly::add_lines(y = ~value_corrected, name = 'Corrected', line = list(color = 'red')) %>%
-          plotly::layout(title = NULL, xaxis = list(title = "Datetime"), yaxis = list(title = "Value"))
+        plot <- plotly::plot_ly(
+          data = df,
+          x = ~datetime,
+          y = ~value_raw,
+          type = 'scatter',
+          mode = 'lines',
+          name = 'Original'
+        ) %>%
+          plotly::add_lines(
+            y = ~value_corrected,
+            name = 'Corrected',
+            line = list(color = 'red')
+          ) %>%
+          plotly::layout(
+            title = NULL,
+            xaxis = list(title = "Datetime"),
+            yaxis = list(title = "Value")
+          )
         return(plot)
       })
-    }) |> bind_task_button("plot_ts_pre")
-    
+    }) |>
+      bind_task_button("plot_ts_pre")
+
     observeEvent(input$plot_ts_pre, {
       req(selected_ts())
       query <- sprintf(
@@ -167,12 +205,11 @@ imputeMissing <- function(id) {
       df <- DBI::dbGetQuery(session$userData$AquaCache, query)
       ts_plot_pre_task$invoke(df)
     })
-    
+
     output$ts_plot_pre <- plotly::renderPlotly({
       ts_plot_pre_task$result()
     })
-    
-    
+
     raw_data <- reactiveVal(NULL)
     full_data <- reactiveVal(NULL)
     candidates <- reactiveVal(NULL)
@@ -239,17 +276,26 @@ imputeMissing <- function(id) {
       start_dt <- parse_datetime(input$start)
       end_dt <- parse_datetime(input$end)
       if (is.na(start_dt) || is.na(end_dt)) {
-        showNotification("Please provide valid start and end datetimes in UTC.", type = "error")
+        showNotification(
+          "Please provide valid start and end datetimes in UTC.",
+          type = "error"
+        )
         return()
       }
       if (start_dt >= end_dt) {
-        showNotification("The start datetime must be before the end datetime.", type = "error")
+        showNotification(
+          "The start datetime must be before the end datetime.",
+          type = "error"
+        )
         return()
       }
 
       df <- fetch_series(selected_ts(), start_dt, end_dt)
       if (nrow(df) == 0) {
-        showNotification("No measurements were found for the selected period.", type = "error")
+        showNotification(
+          "No measurements were found for the selected period.",
+          type = "error"
+        )
         raw_data(NULL)
         full_data(NULL)
         imputed_data(NULL)
@@ -283,7 +329,11 @@ imputeMissing <- function(id) {
 
       if (input$method == "direct") {
         meta <- as.data.frame(ts_meta())
-        selected_row <- meta[meta$timeseries_id == selected_ts(), , drop = FALSE]
+        selected_row <- meta[
+          meta$timeseries_id == selected_ts(),
+          ,
+          drop = FALSE
+        ]
         if (nrow(selected_row) > 0) {
           meta <- meta[meta$timeseries_id != selected_ts(), , drop = FALSE]
           meta <- meta[meta$parameter == selected_row$parameter, , drop = FALSE]
@@ -294,9 +344,19 @@ imputeMissing <- function(id) {
             meta$latitude,
             meta$longitude
           )
-          meta <- meta[is.na(meta$distance_km) | meta$distance_km <= input$radius, , drop = FALSE]
+          meta <- meta[
+            is.na(meta$distance_km) | meta$distance_km <= input$radius,
+            ,
+            drop = FALSE
+          ]
           meta <- meta[order(meta$distance_km), ]
-          candidates(meta[, c("timeseries_id", "location", "parameter", "recording_rate", "distance_km")])
+          candidates(meta[, c(
+            "timeseries_id",
+            "location",
+            "parameter",
+            "recording_rate",
+            "distance_km"
+          )])
         } else {
           candidates(NULL)
         }
@@ -305,37 +365,55 @@ imputeMissing <- function(id) {
       }
     })
 
-    observeEvent({
-      list(full_data(), input$radius, input$method)
-    }, {
-      if (is.null(full_data()) || input$method != "direct") {
-        candidates(NULL)
-        return()
-      }
-      meta <- as.data.frame(ts_meta())
-      selected_row <- meta[meta$timeseries_id == selected_ts(), , drop = FALSE]
-      if (nrow(selected_row) == 0) {
-        candidates(NULL)
-        return()
-      }
-      meta <- meta[meta$timeseries_id != selected_ts(), , drop = FALSE]
-      meta <- meta[meta$parameter == selected_row$parameter, , drop = FALSE]
-      meta$distance_km <- mapply(
-        haversine_km,
-        selected_row$latitude[[1]],
-        selected_row$longitude[[1]],
-        meta$latitude,
-        meta$longitude
-      )
-      meta <- meta[is.na(meta$distance_km) | meta$distance_km <= input$radius, , drop = FALSE]
-      meta <- meta[order(meta$distance_km), ]
-      if (nrow(meta) == 0) {
-        candidates(NULL)
-      } else {
-        candidates(meta[, c("timeseries_id", "location", "parameter", "recording_rate", "distance_km")])
-      }
-    }, ignoreNULL = FALSE)
-    
+    observeEvent(
+      {
+        list(full_data(), input$radius, input$method)
+      },
+      {
+        if (is.null(full_data()) || input$method != "direct") {
+          candidates(NULL)
+          return()
+        }
+        meta <- as.data.frame(ts_meta())
+        selected_row <- meta[
+          meta$timeseries_id == selected_ts(),
+          ,
+          drop = FALSE
+        ]
+        if (nrow(selected_row) == 0) {
+          candidates(NULL)
+          return()
+        }
+        meta <- meta[meta$timeseries_id != selected_ts(), , drop = FALSE]
+        meta <- meta[meta$parameter == selected_row$parameter, , drop = FALSE]
+        meta$distance_km <- mapply(
+          haversine_km,
+          selected_row$latitude[[1]],
+          selected_row$longitude[[1]],
+          meta$latitude,
+          meta$longitude
+        )
+        meta <- meta[
+          is.na(meta$distance_km) | meta$distance_km <= input$radius,
+          ,
+          drop = FALSE
+        ]
+        meta <- meta[order(meta$distance_km), ]
+        if (nrow(meta) == 0) {
+          candidates(NULL)
+        } else {
+          candidates(meta[, c(
+            "timeseries_id",
+            "location",
+            "parameter",
+            "recording_rate",
+            "distance_km"
+          )])
+        }
+      },
+      ignoreNULL = FALSE
+    )
+
     output$direct_impute_selection <- renderText({
       req(input$method == "direct")
       if (is.null(candidates()) || nrow(candidates()) == 0) {
@@ -375,7 +453,10 @@ imputeMissing <- function(id) {
         if (!any(overlap)) {
           return(NULL)
         }
-        offset <- mean(merged$value[overlap] - merged$reference_value[overlap], na.rm = TRUE)
+        offset <- mean(
+          merged$value[overlap] - merged$reference_value[overlap],
+          na.rm = TRUE
+        )
         fill_idx <- which(is.na(merged$value) & !is.na(merged$reference_value))
         if (!length(fill_idx)) {
           return(NULL)
@@ -417,40 +498,66 @@ imputeMissing <- function(id) {
       if (method == "direct") {
         sel <- input$candidates_rows_selected
         if (length(sel) != 1) {
-          showNotification("Select a timeseries for direct imputation.", type = "error")
+          showNotification(
+            "Select a timeseries for direct imputation.",
+            type = "error"
+          )
           return()
         }
         ref_meta <- candidates()
         if (is.null(ref_meta) || nrow(ref_meta) < sel) {
-          showNotification("Unable to determine the selected timeseries.", type = "error")
+          showNotification(
+            "Unable to determine the selected timeseries.",
+            type = "error"
+          )
           return()
         }
         tsid2 <- ref_meta[sel, "timeseries_id"]
         ref_df <- fetch_series(tsid2, min(df$datetime), max(df$datetime))
         if (nrow(ref_df) == 0) {
-          showNotification("The selected reference timeseries has no data in the requested period.", type = "error")
+          showNotification(
+            "The selected reference timeseries has no data in the requested period.",
+            type = "error"
+          )
           return()
         }
-        ref_full <- merge(data.frame(datetime = df$datetime), ref_df, by = "datetime", all.x = TRUE)
+        ref_full <- merge(
+          data.frame(datetime = df$datetime),
+          ref_df,
+          by = "datetime",
+          all.x = TRUE
+        )
         imp <- perform_impute(df, "direct", ref_full)
         if (is.null(imp)) {
-          showNotification("Unable to impute values with the selected timeseries. Ensure there is overlapping data to compute an offset.", type = "error")
+          showNotification(
+            "Unable to impute values with the selected timeseries. Ensure there is overlapping data to compute an offset.",
+            type = "error"
+          )
           return()
         }
       } else {
         imp <- perform_impute(df, method)
         if (is.null(imp)) {
           if (method == "linear") {
-            showNotification("At least two existing measurements are required for linear interpolation.", type = "error")
+            showNotification(
+              "At least two existing measurements are required for linear interpolation.",
+              type = "error"
+            )
           } else {
-            showNotification("At least three existing measurements are required for spline interpolation.", type = "error")
+            showNotification(
+              "At least three existing measurements are required for spline interpolation.",
+              type = "error"
+            )
           }
           return()
         }
       }
 
       if (!any(imp$imputed)) {
-        showNotification("No missing values met the criteria for imputation.", type = "warning")
+        showNotification(
+          "No missing values met the criteria for imputation.",
+          type = "warning"
+        )
       }
       imputed_data(imp)
     })
@@ -492,7 +599,10 @@ imputeMissing <- function(id) {
           name = "Imputed",
           marker = list(color = "#D55E00", size = 6)
         ) %>%
-        plotly::layout(xaxis = list(title = "Datetime"), yaxis = list(title = "Value"))
+        plotly::layout(
+          xaxis = list(title = "Datetime"),
+          yaxis = list(title = "Value")
+        )
     })
 
     observeEvent(input$commit, {
@@ -500,7 +610,10 @@ imputeMissing <- function(id) {
       df <- imputed_data()
       to_push <- df[df$imputed, c("datetime", "value")]
       if (nrow(to_push) == 0) {
-        showNotification("There are no imputed values to commit.", type = "error")
+        showNotification(
+          "There are no imputed values to commit.",
+          type = "error"
+        )
         return()
       }
       to_push$timeseries_id <- selected_ts()
@@ -515,7 +628,10 @@ imputeMissing <- function(id) {
             target = "realtime",
             overwrite = "conflict"
           )
-          showNotification("Imputed values saved to the database.", type = "message")
+          showNotification(
+            "Imputed values saved to the database.",
+            type = "message"
+          )
         },
         error = function(e) {
           showNotification(paste("Commit failed:", e$message), type = "error")
