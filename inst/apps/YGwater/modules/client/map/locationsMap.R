@@ -2,6 +2,7 @@ mapLocsUI <- function(id) {
   ns <- NS(id)
 
   tagList(
+    # styling for custom legend
     tags$style(HTML(
       "
   /* Remove leaflet control background and border for custom legend */
@@ -12,6 +13,7 @@ mapLocsUI <- function(id) {
   }
 "
     )),
+    # Custom JavaScript to create pie chart style cluster icons
     tags$script(HTML(
       "
     function pieClusterIcon(cluster) {
@@ -71,7 +73,7 @@ mapLocsUI <- function(id) {
     }
   "
     )),
-
+    # Function to change tabs from map popups
     tags$script(
       HTML(
         "
