@@ -18,19 +18,21 @@ snowInfoMod <- function(id, language) {
     ns <- session$ns  # Used to create UI elements in the server code
     
     moduleData <- reactiveValues(
-      locs = dbGetQueryDT(session$userData$AquaCache, "
-              SELECT DISTINCT l.location_id, l.location, l.name, l.name_fr
-              FROM locations AS l
-              JOIN locations_networks AS ln ON l.location_id = ln.location_id
-              JOIN networks AS n ON ln.network_id = n.network_id
-              JOIN samples AS s ON l.location_id = s.location_id
-              WHERE n.name = 'Snow Survey Network';"
+      locs = dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT DISTINCT l.location_id, l.location, l.name, l.name_fr
+         FROM locations AS l
+         JOIN locations_networks AS ln ON l.location_id = ln.location_id
+         JOIN networks AS n ON ln.network_id = n.network_id
+         JOIN samples AS s ON l.location_id = s.location_id
+         WHERE n.name = 'Snow Survey Network'
+         ORDER BY l.name;"
       )
     )
     
     # Create reactiveValues to store the user's selections. Used if switching between languages.
     selections <- reactiveValues(
-      locations = "all",
+      loc = "all",
       inactive = FALSE,
       complete = TRUE,
       stats = TRUE,
@@ -81,7 +83,7 @@ snowInfoMod <- function(id, language) {
                          c("combined", "separate"),
                          c(tr("gen_snowInfo_ptype_combine", language$language), tr("gen_snowInfo_ptype_separate", language$language))
                        ),
-                       selected = selections$ptype,
+                       selected = selections$plot_type,
                        multiple = FALSE,
                        width = "100%"),
         
@@ -112,9 +114,14 @@ snowInfoMod <- function(id, language) {
     # }, ignoreInit = TRUE)
     observeEvent(input$plots, {
       selections$plots <- input$plots
+      if (input$plots) {
+        shinyjs::show("ptype")
+      } else {
+        shinyjs::hide("ptype")
+      }
     }, ignoreInit = TRUE)
-    observeEvent(input$plot_type, {
-      selections$plot_type <- input$plot_type
+    observeEvent(input$ptype, {
+      selections$plot_type <- input$ptype
     }, ignoreInit = TRUE)
     
     # Adjust filter selections based on if 'all' is selected (remove selections other than 'all') ################
@@ -136,7 +143,7 @@ snowInfoMod <- function(id, language) {
     
     observeEvent(input$go, {
       
-      if (nchar(selections$loc) == 0) {
+      if (!length(selections$loc)) {
         showNotification(
           tr("gen_no_loc", language$language),
           type = "error",
@@ -176,10 +183,19 @@ snowInfoMod <- function(id, language) {
             incProgress(0.7)
             
             # 4. Zip up everything in 'dir' and write the zip to `file`
-            files <- list.files(dir, full.names = TRUE)
-            
-            zip::zip(zipfile = paste0(dir, "/report.zip", files = files, mode = "cherry-pick", include_directories = FALSE))
-            outputFile(paste0(dir, "/report.zip"))
+            files <- list.files(dir, full.names = FALSE)
+            if (!length(files)) {
+              stop("No files were generated for the report.")
+            }
+
+            zip::zip(
+              zipfile = file.path(dir, "report.zip"),
+              files = files,
+              mode = "cherry-pick",
+              include_directories = FALSE,
+              root = dir
+            )
+            outputFile(file.path(dir, "report.zip"))
             
             # Delete everything in the 'dir' except for the .zip file
             files <- list.files(dir, full.names = TRUE)
