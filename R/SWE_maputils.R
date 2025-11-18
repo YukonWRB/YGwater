@@ -23,7 +23,6 @@
 #' }
 #'
 #' @author Yukon Government, Water Resources
-#' @name SWE_maputils
 
 # =============================================================================
 # CONFIGURATION
@@ -34,24 +33,13 @@
 #' Sets up color schemes, bins, and other visualization parameters used across
 #' both leaflet and ggplot2 mapping functions.
 #'
-#' @return A list containing:
-#' \itemize{
-#'   \item \code{relative_bins}: Breakpoints for relative SWE values (% of normal)
-#'   \item \code{relative_colors}: Color palette for relative SWE visualization
-#'   \item \code{absolute_bins}: Breakpoints for absolute SWE values (mm)
-#'   \item \code{absolute_colors}: Color palette for absolute SWE visualization
-#'   \item \code{communities_icon_svg}: SVG icon for community markers
-#' }
+#' @return A nested list containing all plotting options for basins, stations, roads, boundaries, labels, etc.
 #'
 #' @details
-#' The relative SWE bins are designed to highlight significant departures from normal:
-#' \itemize{
-#'   \item Values < -100% indicate much below normal conditions
-#'   \item Values 90-110% represent near-normal conditions
-#'   \item Values > 150% indicate much above normal conditions
-#' }
+#' The relative SWE bins are designed to highlight significant departures from normal
 #'
 #' @export
+#' @noRd
 initialize_visualization_parameters <- function() {
     # Color scheme and visualization parameters
     # Bins represent percentage of normal SWE (relative_swe values)
@@ -68,7 +56,6 @@ initialize_visualization_parameters <- function() {
         "#6772F7" # Blue (extremely high)
     )
 
-    # Absolute value bins and colors for SWE (in mm)
     absolute_bins <- c(0, 50, 100, 150, 200, 250, 300, 400, 500, Inf)
     absolute_colors <- c(
         "#e6f5ff", # Very light sky blue
@@ -82,11 +69,116 @@ initialize_visualization_parameters <- function() {
         "#2d004b" # Very dark purple
     )
 
+    # SVG icon for communities
+    communities_icon_svg <- "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polygon points='8,0 16,8 8,16 0,8' fill='black' stroke='white' stroke-width='2'/></svg>"
+
+    # Percentile bins and colors (Spectral palette, 0-100)
+    percentile_bins <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+    percentile_colors <- c(
+        "#9e0142", # Very low (0-10)
+        "#d53e4f", # Low (10-20)
+        "#f46d43", # Below normal (20-30)
+        "#fdae61", # Below normal (30-40)
+        "#fee090", # Near normal (40-50)
+        "#e6f598", # Near normal (50-60)
+        "#abdda4", # Above normal (60-70)
+        "#66c2a5", # Above normal (70-80)
+        "#3288bd", # High (80-90)
+        "#5e4fa2" # Very high (90-100)
+    )
+
     list(
+        basins = list(
+            fillColor = relative_colors,
+            bins = relative_bins,
+            color = "white",
+            weight = 2,
+            opacity = 1,
+            fillOpacity = 0.7,
+            label = list(
+                color = "#222",
+                fontSize = "14px",
+                fontWeight = "bold",
+                textShadow = "2px 2px 4px #fff"
+            ),
+            popupOptions = list(
+                maxWidth = 320,
+                closeButton = TRUE,
+                autoPan = TRUE
+            ),
+            highlightOptions = list(
+                color = "#FF6600",
+                weight = 4,
+                opacity = 1,
+                bringToFront = TRUE,
+                sendToBack = FALSE
+            )
+        ),
+        pillows = list(
+            color = "blue",
+            radius = 8,
+            weight = 2,
+            opacity = 1,
+            fillOpacity = 1,
+            highlightOptions = list(
+                color = "#00FFFF",
+                weight = 5,
+                opacity = 1,
+                bringToFront = TRUE,
+                sendToBack = FALSE
+            )
+        ),
+        surveys = list(
+            color = "black",
+            radius = 8,
+            weight = 2,
+            opacity = 1,
+            fillOpacity = 1,
+            highlightOptions = list(
+                color = "#00FFFF",
+                weight = 5,
+                opacity = 1,
+                bringToFront = TRUE,
+                sendToBack = FALSE
+            )
+        ),
+        roads = list(
+            color = "#8B0000",
+            weight = 2,
+            opacity = 0.8,
+            label = list(
+                color = "#8B0000"
+            )
+        ),
+        boundary = list(
+            color = "#222222",
+            weight = 3,
+            fill = FALSE
+        ),
+        communities = list(
+            icon = communities_icon_svg,
+            iconWidth = 16,
+            iconHeight = 16,
+            label = list(
+                color = "#222",
+                fontSize = "13px",
+                fontWeight = "bold",
+                fontStyle = "italic",
+                textShadow = "1px 1px 2px #fff"
+            ),
+            labelOptions = list(
+                noHide = TRUE,
+                direction = "top",
+                textOnly = TRUE
+            )
+        ),
+
         relative_bins = relative_bins,
         relative_colors = relative_colors,
         absolute_bins = absolute_bins,
-        absolute_colors = absolute_colors
+        absolute_colors = absolute_colors,
+        percentile_bins = percentile_bins,
+        percentile_colors = percentile_colors
     )
 }
 
@@ -108,6 +200,7 @@ initialize_visualization_parameters <- function() {
 #' recent datetime to find the last valid measurement. This is used to determine
 #' data currency for station filtering.
 #'
+#' @noRd
 #' @examples
 #' \dontrun{
 #' ts_data <- data.frame(
@@ -139,7 +232,7 @@ get_most_recent_date <- function(ts) {
 #' @param year Integer year (e.g., 2025)
 #' @param month Integer month (1-12)
 #' @return POSIXct datetime object in UTC timezone, set to first day of month
-#'
+#' @noRd
 #' @description
 #' Creates a standardized datetime for the first day of the specified month and year.
 #' Used throughout the application for consistent date handling.
@@ -167,7 +260,7 @@ get_datetime <- function(year, month) {
 #' @description
 #' Queries the spatial.vectors table and transforms geometries to WGS84.
 #' Used for loading administrative boundaries, communities, roads, etc.
-#'
+#' @noRd
 #' @details
 #' The function first verifies that the requested layer exists in the database,
 #' then downloads and transforms the geometry to WGS84 for consistent mapping.
@@ -186,25 +279,6 @@ get_datetime <- function(year, month) {
 #' )
 #' }
 download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
-    cat(sprintf("DEBUG: Attempting to load spatial layer: %s\n", layer_name))
-
-    # Assert that the requested layer_name exists in the database
-    exists_query <- sprintf(
-        "SELECT EXISTS (SELECT 1 FROM spatial.vectors WHERE layer_name = %s)",
-        DBI::dbQuoteString(con, layer_name)
-    )
-    exists_res <- DBI::dbGetQuery(con, exists_query)
-    if (nrow(exists_res) == 0 || !isTRUE(as.logical(exists_res[[1]]))) {
-        cat(sprintf(
-            "ERROR: Layer '%s' not found in spatial.vectors table\n",
-            layer_name
-        ))
-        stop(sprintf(
-            "Layer '%s' not found in spatial.vectors table",
-            layer_name
-        ))
-    }
-
     query <- sprintf(
         "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
          FROM spatial.vectors 
@@ -218,16 +292,9 @@ download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
 
     data <- DBI::dbGetQuery(con, query)
     if (nrow(data) == 0) {
-        cat(sprintf("WARNING: No data found for layer: %s\n", layer_name))
         warning(sprintf("No data found for layer: %s", layer_name))
         return(NULL)
     }
-
-    cat(sprintf(
-        "DEBUG: Successfully loaded %d features for layer: %s\n",
-        nrow(data),
-        layer_name
-    ))
 
     geom <- sf::st_as_sfc(data$geom_4326, crs = 4326)
     sf::st_sf(data, geometry = geom, crs = 4326)
@@ -310,8 +377,6 @@ download_continuous_ts <- function(
     # Master timeseries dataframe (will contain datetime + one column per station)
     master_df <- NULL
 
-    cat("Processing", length(ts_ids), "timeseries...\n")
-
     for (i in seq_along(ts_ids)) {
         ts_id <- ts_ids[i]
 
@@ -358,7 +423,7 @@ download_continuous_ts <- function(
         # Resample to daily or monthly as requested
         if (resolution == "daily") {
             ts_data$day <- as.Date(ts_data$datetime)
-            ts_daily <- aggregate(
+            ts_daily <- stats::aggregate(
                 value ~ day,
                 data = ts_data,
                 FUN = mean,
@@ -369,7 +434,7 @@ download_continuous_ts <- function(
             ts_out <- ts_daily
         } else if (resolution == "monthly") {
             ts_data$month <- format(ts_data$datetime, "%Y-%m")
-            ts_monthly <- aggregate(
+            ts_monthly <- stats::aggregate(
                 value ~ month,
                 data = ts_data,
                 FUN = mean,
@@ -552,8 +617,6 @@ download_discrete_ts <- function(
 
     master_df <- NULL
 
-    cat("Processing", length(ts_ids), "discrete timeseries...\n")
-
     for (i in seq_along(ts_ids)) {
         loc_id <- ts_ids[i]
 
@@ -724,7 +787,7 @@ download_discrete_ts <- function(
 load_snowcourse_factors <- function(
     metadata_discrete
 ) {
-    snowcourse_factors <- read.csv(
+    snowcourse_factors <- utils::read.csv(
         system.file(
             "snow_survey/snowcourse_factors.csv",
             package = "YGwater"
@@ -733,7 +796,9 @@ load_snowcourse_factors <- function(
     )
 
     # Remove duplicate Hyland River value
-    snowcourse_factors <- subset(snowcourse_factors, location != "10AD-SC01")
+    snowcourse_factors <- snowcourse_factors[
+        snowcourse_factors$location != "10AD-SC01",
+    ]
     # Drop location_name column
     snowcourse_factors <- snowcourse_factors[,
         !colnames(snowcourse_factors) %in% "location_name"
@@ -883,12 +948,15 @@ calculate_historic_daily_median <- function(
         # prepare output data.frames
         hist_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
         rel_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+        perc_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+
         # Vectorized and grouped computation for speed
         p <- length(station_cols)
         if (p > 0) {
             vals_mat <- as.matrix(ts[, station_cols, drop = FALSE]) # n x p
             hist_mat <- matrix(NA_real_, nrow = n, ncol = p)
             rel_mat <- matrix(NA_real_, nrow = n, ncol = p)
+            perc_mat <- matrix(NA_real_, nrow = n, ncol = p)
 
             # Group by month-day (usually day==1 after snapping), compute per group
             grp <- paste(month, day, sep = "-")
@@ -923,6 +991,28 @@ calculate_historic_daily_median <- function(
                             stats::median,
                             na.rm = TRUE
                         )
+
+                        # Calculate percentile: what % of historical values are <= current value
+
+                        if (yg[j_idx] >= 2000 && length(prev_idx) >= 4) {
+                            current_values <- vals_mat[j, ]
+                            if (all(is.na(current_values))) {
+                                perc_mat[j, ] <- NA_real_
+                            } else {
+                                perc_mat[j, ] <- (colSums(
+                                    prev_block <=
+                                        matrix(
+                                            current_values,
+                                            nrow = nrow(prev_block),
+                                            ncol = ncol(prev_block),
+                                            byrow = TRUE
+                                        ),
+                                    na.rm = TRUE
+                                ) /
+                                    colSums(!is.na(prev_block), na.rm = TRUE)) *
+                                    100
+                            }
+                        }
                     }
                 }
             }
@@ -954,15 +1044,23 @@ calculate_historic_daily_median <- function(
                 rel_mat,
                 stringsAsFactors = FALSE
             )
+
+            colnames(perc_mat) <- station_cols
+            perc_df[station_cols] <- as.data.frame(
+                perc_mat,
+                stringsAsFactors = FALSE
+            )
         }
 
         # ensure ordering by datetime
         hist_df <- hist_df[order(hist_df$datetime), , drop = FALSE]
         rel_df <- rel_df[order(rel_df$datetime), , drop = FALSE]
+        perc_df <- perc_df[order(perc_df$datetime), , drop = FALSE]
 
         return(list(
             historic_median = hist_df,
-            relative_swe = rel_df
+            relative_swe = rel_df,
+            percentile = perc_df
         ))
     }
 
@@ -1061,6 +1159,12 @@ get_swe_state <- function(
         target_date
     )
 
+    point_source_data$percentile <- extract_at_date(
+        data$timeseries$percentile,
+        key,
+        target_date
+    )
+
     return(point_source_data)
 
     # For backward compatibility, also set $value to match selected value_type if needed
@@ -1097,38 +1201,60 @@ get_swe_state <- function(
 #' station_ts <- base_data$pillows$timeseries$swe[, c("datetime", "123")]
 #' popup_html <- create_continuous_plot_popup(station_ts, 2025, con)
 #' }
-create_continuous_plot_popup <- function(timeseries, year, con) {
-    station_name <- names(timeseries)[2]
+create_continuous_plot_popup <- function(
+    timeseries,
+    year,
+    con,
+    station_name = NULL
+) {
+    # Validate timeseries structure
+    if (!is.data.frame(timeseries) || ncol(timeseries) < 2) {
+        stop("Timeseries must have columns datetime and value")
+    }
+
+    if (is.null(station_name)) {
+        station_name <- names(timeseries)[2]
+    }
+
     names(timeseries) <- c("datetime", "value")
 
     timeseries <- timeseries[
         !is.na(timeseries$value) & !is.nan(timeseries$value),
     ]
-    plot <- YGwater::ggplotOverlap(
-        parameter = "Snow Water Equivalent",
-        startDay = 240,
-        endDay = 239,
-        years = c(year - 1),
-        returns = "none",
-        custom_title = station_name,
-        line_scale = 1 * 0.9,
-        axis_scale = 1 * 0.9,
-        legend_scale = 1 * 0.9,
-        snowbulletin = TRUE,
-        lang = "en",
-        gridx = FALSE,
-        gridy = FALSE,
-        historic_range = "last",
-        filter = c(100, 100),
-        continuous_data = timeseries,
-        con = con
+
+    tryCatch(
+        {
+            plot <- ggplotOverlap(
+                parameter = "Snow Water Equivalent",
+                startDay = 240,
+                endDay = 239,
+                years = c(year - 1),
+                returns = "none",
+                custom_title = station_name,
+                line_scale = 1 * 0.9,
+                axis_scale = 1 * 0.9,
+                legend_scale = 1 * 0.9,
+                snowbulletin = TRUE,
+                lang = "en",
+                gridx = FALSE,
+                gridy = FALSE,
+                filter = c(100, 100),
+                continuous_data = timeseries,
+                con = con
+            )
+        },
+        error = function(e) {
+            return(
+                "<div style='text-align: center; padding: 20px;'><p style='color: #d9534f;'>Error generating plot</p></div>"
+            )
+        }
     )
 
     # Save the ggplotOverlap plot as a PNG tempfile with smaller dimensions
     plot_file <- file.path(tempdir(), "plot.png")
-    png(plot_file, width = 800, height = 600, res = 120)
+    grDevices::png(plot_file, width = 800, height = 600, res = 120)
     print(plot)
-    dev.off()
+    grDevices::dev.off()
 
     # Encode PNG to base64
     plot_data <- readBin(plot_file, "raw", file.info(plot_file)$size)
@@ -1184,13 +1310,22 @@ create_discrete_plot_popup <- function(timeseries) {
     timeseries$month <- as.integer(format(timeseries$datetime, "%m"))
     timeseries$year <- as.integer(format(timeseries$datetime, "%Y"))
     timeseries$units <- "mm"
-
-    plot <- YGwater::hydrometDiscrete(
-        parameter = "SWE",
-        location = station_name,
-        startDay = 1,
-        discrete_data = timeseries,
-        plot_type = "linedbox"
+    tryCatch(
+        {
+            plot <- hydrometDiscrete(
+                parameter = "SWE",
+                location = station_name,
+                startDay = 1,
+                discrete_data = timeseries,
+                years = c(max(timeseries$year, na.rm = TRUE)),
+                plot_type = "boxplot"
+            )
+        },
+        error = function(e) {
+            return(
+                "<div style='text-align: center; padding: 20px;'><p style='color: #d9534f;'>Error generating plot</p></div>"
+            )
+        }
     )
 
     # Save the plot as a PNG tempfile with smaller dimensions
@@ -1226,10 +1361,6 @@ create_discrete_plot_popup <- function(timeseries) {
     )
     return(popup_html)
 }
-
-# =============================================================================
-# MAIN DATA LOADING FUNCTION
-# =============================================================================
 
 #' Load all base data for the SWE mapping application
 #'
@@ -1271,70 +1402,44 @@ create_discrete_plot_popup <- function(timeseries) {
 #' print(sprintf("Loaded %d basins", nrow(base_data$basins$metadata)))
 #' }
 load_base_data <- function(con) {
-    cat("DEBUG: Starting load_base_data function...\n")
-    cat("Loading base data...\n")
-
-    # Initialize base data list
     base_data <- list(
         pillows = list(),
         surveys = list(),
         basins = list(),
         shapefiles = list()
     )
-    cat("DEBUG: Initialized base_data structure\n")
-
-    cat("Loading timeseries data...\n")
 
     # Load timeseries data from both continuous and discrete sources
-    cat("DEBUG: Loading continuous data...\n")
     continuous_data <- download_continuous_ts(con)
-    cat(sprintf(
-        "DEBUG: Loaded continuous data with %d stations\n",
-        if (is.null(continuous_data$metadata)) {
-            0
-        } else {
-            nrow(continuous_data$metadata)
-        }
-    ))
 
-    cat("DEBUG: Calculating historic medians for continuous data...\n")
     ret <- calculate_historic_daily_median(
         continuous_data$timeseries$swe,
         lookback_year = 1980
     )
     continuous_data$timeseries$historic_median <- ret$historic_median
     continuous_data$timeseries$relative_swe <- ret$relative_swe
+    continuous_data$timeseries$percentile <- ret$percentile
     base_data$pillows <- continuous_data
-    cat("DEBUG: Completed continuous data processing\n")
 
-    cat("DEBUG: Loading discrete data...\n")
     discrete_data <- download_discrete_ts(con)
-    cat(sprintf(
-        "DEBUG: Loaded discrete data with %d stations\n",
-        if (is.null(discrete_data$metadata)) 0 else nrow(discrete_data$metadata)
-    ))
 
-    cat("DEBUG: Calculating historic medians for discrete data...\n")
     ret <- calculate_historic_daily_median(
         discrete_data$timeseries$swe,
         lookback_year = 1980
     )
     discrete_data$timeseries$historic_median <- ret$historic_median
     discrete_data$timeseries$relative_swe <- ret$relative_swe
+    discrete_data$timeseries$percentile <- ret$percentile
     base_data$surveys <- discrete_data
-    cat("DEBUG: Completed discrete data processing\n")
 
     # Ensure discrete SWE wide timeseries is available
 
     # Load or infer weight matrix from snowcourse factors CSV using discrete metadata
-    cat("DEBUG: Loading snowcourse factors...\n")
     weights_df <- load_snowcourse_factors(
         metadata_discrete = discrete_data$metadata
     )
-    cat(sprintf("DEBUG: Loaded %d snowcourse factors\n", nrow(weights_df)))
 
     # If we can read basin polygons from shapefile now (so basin names exist), prefer them
-    cat("DEBUG: Loading basin shapefile...\n")
     basins_shp <- sf::st_read(
         system.file(
             "snow_survey/swe_basins/swe_basins.shp",
@@ -1343,11 +1448,10 @@ load_base_data <- function(con) {
         ),
         quiet = TRUE
     )
-    cat(sprintf("DEBUG: Loaded %d basins from shapefile\n", nrow(basins_shp)))
 
     # Calculate basin areas in square kilometers
     basins_shp$area_km2 <- sf::st_area(basins_shp) |>
-        units::set_units(km^2) |>
+        units::set_units("km^2") |>
         as.numeric()
 
     if ("SWE_Basin" %in% names(basins_shp)) {
@@ -1356,16 +1460,11 @@ load_base_data <- function(con) {
 
     # Ensure CRS is WGS84 for leaflet plotting
     if (sf::st_crs(basins_shp)$epsg != 4326) {
-        cat("DEBUG: Transforming basins to WGS84...\n")
         basins_shp <- sf::st_transform(basins_shp, 4326)
     }
 
     # Prepare dates and station list from discrete wide timeseries
     basin_dates <- base_data$surveys$timeseries$swe$datetime
-    cat(sprintf(
-        "DEBUG: Processing %d basin dates for weighted averages...\n",
-        length(basin_dates)
-    ))
 
     # Convert station_cols from location_id to location (name) using discrete metadata
     basin_names <- basins_shp$name
@@ -1422,7 +1521,6 @@ load_base_data <- function(con) {
     basin_timeseries[, basin_names] <- basin_swe_mat
 
     # Compute historic median and relative change for basins (wide format)
-    cat("DEBUG: Calculating historic medians for basins...\n")
     ret <- calculate_historic_daily_median(
         basin_timeseries,
         lookback_year = 1980
@@ -1431,11 +1529,10 @@ load_base_data <- function(con) {
     base_data$basins$timeseries <- list(
         swe = basin_timeseries,
         historic_median = ret$historic_median,
-        relative_swe = ret$relative_swe
+        relative_swe = ret$relative_swe,
+        percentile = ret$percentile
     )
-    cat("DEBUG: Completed basin timeseries processing\n")
 
-    cat("DEBUG: Loading Yukon boundary...\n")
     prov_sf <- download_spatial_layer(
         con,
         "Provincial/Territorial Boundaries",
@@ -1471,7 +1568,6 @@ load_base_data <- function(con) {
         base_data$shapefiles$inverted_yukon <- bbox_extent
     }
 
-    cat("Loading roads...\n")
     roads <- download_spatial_layer(con, "Roads")
     # Ensure CRS is WGS84 for leaflet
     if (!is.null(roads) && sf::st_crs(roads)$epsg != 4326) {
@@ -1479,7 +1575,6 @@ load_base_data <- function(con) {
     }
     base_data$shapefiles$roads <- roads
 
-    cat("Loading communities...\n")
     place_types <- c("City", "Town", "Village") # Filter to major communities only
     communities <- download_spatial_layer(
         con,
@@ -1502,7 +1597,6 @@ load_base_data <- function(con) {
 
     # Add popup, annotate, and annotation columns to communities
     if (!is.null(communities)) {
-        cat(sprintf("DEBUG: Processing %d communities...\n", nrow(communities)))
         communities$popup <- sprintf(
             "<div style='text-align: left; padding: 10px;'><b>%s</b><br><span style='font-size: 12px; color: #666;'>%s</span></div>",
             htmltools::htmlEscape(communities$feature_name),
@@ -1524,7 +1618,7 @@ load_base_data <- function(con) {
         )
 
         # Create named list of label position adjustments for each community
-        community_adjustments <- setNames(
+        community_adjustments <- stats::setNames(
             lapply(communities$feature_name, function(name) {
                 list(x = 0, y = 0) # Default: no offset
             }),
@@ -1535,13 +1629,13 @@ load_base_data <- function(con) {
         community_adjustments[["Whitehorse"]] <- list(x = 0, y = 10)
         community_adjustments[["Dawson City"]] <- list(x = 0, y = 0)
         community_adjustments[["Watson Lake"]] <- list(x = 60, y = 0)
-        community_adjustments[["Haines Junction"]] <- list(x = -80, y = -80)
+        community_adjustments[["Haines Junction"]] <- list(x = -70, y = -80)
         community_adjustments[["Carmacks"]] <- list(x = 20, y = -40)
         community_adjustments[["Mayo"]] <- list(x = 0, y = -40)
         community_adjustments[["Pelly Crossing"]] <- list(x = 0, y = 0)
         community_adjustments[["Ross River"]] <- list(x = 0, y = 0)
         community_adjustments[["Teslin"]] <- list(x = 60, y = 10)
-        community_adjustments[["Beaver Creek"]] <- list(x = 20, y = 0)
+        community_adjustments[["Beaver Creek"]] <- list(x = 40, y = 0)
         community_adjustments[["Burwash Landing"]] <- list(x = 0, y = 0)
         community_adjustments[["Carcross"]] <- list(x = 0, y = 0)
         community_adjustments[["Faro"]] <- list(x = 0, y = -30)
@@ -1550,7 +1644,10 @@ load_base_data <- function(con) {
 
         # Get coordinates and apply adjustments
         comm_coords <- sf::st_coordinates(communities)
-        communities$x_adjusted <- comm_coords[, 1] +
+
+        communities$x <- comm_coords[, 1]
+        communities$y <- comm_coords[, 2]
+        communities$x_adjusted <- communities$x +
             vapply(
                 communities$feature_name,
                 function(n) {
@@ -1562,7 +1659,7 @@ load_base_data <- function(con) {
                 },
                 numeric(1)
             )
-        communities$y_adjusted <- comm_coords[, 2] +
+        communities$y_adjusted <- communities$y +
             vapply(
                 communities$feature_name,
                 function(n) {
@@ -1574,13 +1671,11 @@ load_base_data <- function(con) {
                 },
                 numeric(1)
             )
-        cat("DEBUG: Completed community processing with adjustments\n")
     }
 
     base_data$shapefiles$communities <- communities
 
     # Process basin names for better display on map
-    cat("DEBUG: Processing basin metadata for display...\n")
     base_data$basins$metadata <- basins_shp
     base_data$basins$metadata$annotation <- base_data$basins$metadata$Label
     base_data$basins$metadata$annotation <- gsub(
@@ -1601,7 +1696,7 @@ load_base_data <- function(con) {
     )
 
     # Create named list of label position adjustments for each basin
-    basin_adjustments <- setNames(
+    basin_adjustments <- stats::setNames(
         lapply(base_data$basins$metadata$name, function(name) {
             list(x = 0, y = 0) # Default: no offset
         }),
@@ -1623,7 +1718,10 @@ load_base_data <- function(con) {
     # Get basin centroids and apply adjustments
     basin_centroids <- sf::st_centroid(base_data$basins$metadata)
     basin_coords <- sf::st_coordinates(basin_centroids)
-    base_data$basins$metadata$x <- basin_coords[, 1] +
+    base_data$basins$metadata$x <- basin_coords[, 1]
+    base_data$basins$metadata$y <- basin_coords[, 2]
+
+    base_data$basins$metadata$x_adjusted <- base_data$basins$metadata$x +
         vapply(
             base_data$basins$metadata$name,
             function(n) {
@@ -1635,7 +1733,7 @@ load_base_data <- function(con) {
             },
             numeric(1)
         )
-    base_data$basins$metadata$y <- basin_coords[, 2] +
+    base_data$basins$metadata$y_adjusted <- base_data$basins$metadata$y +
         vapply(
             base_data$basins$metadata$name,
             function(n) {
@@ -1647,50 +1745,46 @@ load_base_data <- function(con) {
             },
             numeric(1)
         )
-
-    cat("DEBUG: Completed basin metadata processing\n")
-    cat("DEBUG: load_base_data function completed successfully\n")
-
     return(base_data)
 }
 
 get_processed_data <- function(year, month, base_data, shiny = TRUE) {
-    cat(sprintf(
-        "DEBUG: Starting get_processed_data for %s/%s (shiny=%s)\n",
-        year,
-        month,
-        shiny
-    ))
-
     # Extract data at points for the selected date
-    cat("DEBUG: Extracting basin data...\n")
     swe_at_basins <- get_swe_state(
         data = base_data$basins,
         year = year,
         month = month,
         key = "name"
     )
-    cat(sprintf("DEBUG: Extracted %d basins\n", nrow(swe_at_basins)))
-
-    cat("DEBUG: Extracting survey data...\n")
     swe_at_surveys <- get_swe_state(
         data = base_data$surveys,
         year = year,
         month = month,
         key = "location_id"
     )
-    cat(sprintf("DEBUG: Extracted %d surveys\n", nrow(swe_at_surveys)))
-
-    cat("DEBUG: Extracting pillow data...\n")
     swe_at_pillows <- get_swe_state(
         data = base_data$pillows,
         year = year,
         month = month,
         key = "timeseries_id"
     )
-    cat(sprintf("DEBUG: Extracted %d pillows\n", nrow(swe_at_pillows)))
 
-    # Add annotation and popup_content as before
+    # Ensure all swe_at_* columns are numeric (especially percentiles)
+    swe_at_basins$swe <- as.numeric(swe_at_basins$swe)
+    swe_at_basins$relative_swe <- as.numeric(swe_at_basins$relative_swe)
+    swe_at_basins$historic_median <- as.numeric(swe_at_basins$historic_median)
+    swe_at_basins$percentile <- as.numeric(swe_at_basins$percentile)
+
+    swe_at_surveys$swe <- as.numeric(swe_at_surveys$swe)
+    swe_at_surveys$relative_swe <- as.numeric(swe_at_surveys$relative_swe)
+    swe_at_surveys$historic_median <- as.numeric(swe_at_surveys$historic_median)
+    swe_at_surveys$percentile <- as.numeric(swe_at_surveys$percentile)
+
+    swe_at_pillows$swe <- as.numeric(swe_at_pillows$swe)
+    swe_at_pillows$relative_swe <- as.numeric(swe_at_pillows$relative_swe)
+    swe_at_pillows$historic_median <- as.numeric(swe_at_pillows$historic_median)
+    swe_at_pillows$percentile <- as.numeric(swe_at_pillows$percentile)
+
     swe_at_basins$annotation <- paste0(
         swe_at_basins$annotation,
         "<br>(",
@@ -1705,7 +1799,8 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
         historic_median,
         name,
         location = NULL,
-        id = NULL
+        id = NULL,
+        percentile = NULL
     ) {
         type_label <- switch(
             type,
@@ -1714,6 +1809,9 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             "pillow" = "<b>Type:</b> Continuous (Pillow)<br>",
             ""
         )
+
+        name <- gsub("_", " ", name)
+
         plot_button <- if (shiny && !is.null(id)) {
             sprintf(
                 "<button onclick='generatePlot(\"%s\", \"%s\", \"%s\")' style='margin-top: 10px;'>Generate Plot</button>",
@@ -1806,10 +1904,10 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             type_label,
             area_html,
             "<br>",
-            "<b>SWE Value (mm):</b> ",
+            "<b>SWE Value:</b> ",
             if (!is.na(swe)) paste0(round(swe, 1), " mm") else "No data",
             "<br>",
-            "<b>SWE Value (%):</b> ",
+            "<b>SWE Value:</b> ",
             if (!is.na(relative_swe)) {
                 paste0(round(relative_swe, 1), "% of normal")
             } else {
@@ -1823,13 +1921,21 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
                 "No data"
             },
             "<br>",
+            "<b>Percentile:</b> ",
+            if (!is.null(percentile) && !is.na(percentile)) {
+                paste0(round(percentile, 1), "th percentile")
+            } else {
+                "No data"
+            },
+            "<br>",
             plot_button,
             "</div>"
         )
     }
 
+    # Fix mapply argument mismatch for popup_content
     swe_at_basins$popup_content <- mapply(
-        function(swe, relative_swe, historic_median, name) {
+        function(swe, relative_swe, historic_median, percentile, name) {
             generate_popup_content(
                 "basin",
                 swe,
@@ -1837,17 +1943,27 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
                 historic_median,
                 name,
                 location = NULL,
-                id = name
+                id = name,
+                percentile = percentile
             )
         },
         swe_at_basins$swe,
         swe_at_basins$relative_swe,
         swe_at_basins$historic_median,
+        swe_at_basins$percentile,
         swe_at_basins$name,
         SIMPLIFY = FALSE
     )
     swe_at_surveys$popup_content <- mapply(
-        function(swe, relative_swe, historic_median, name, location, id) {
+        function(
+            swe,
+            relative_swe,
+            historic_median,
+            percentile,
+            name,
+            location,
+            id
+        ) {
             generate_popup_content(
                 "survey",
                 swe,
@@ -1855,19 +1971,29 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
                 historic_median,
                 name,
                 location,
-                id
+                id,
+                percentile
             )
         },
         swe_at_surveys$swe,
         swe_at_surveys$relative_swe,
         swe_at_surveys$historic_median,
+        swe_at_surveys$percentile,
         swe_at_surveys$name,
         swe_at_surveys$location,
         swe_at_surveys$location_id,
         SIMPLIFY = FALSE
     )
     swe_at_pillows$popup_content <- mapply(
-        function(swe, relative_swe, historic_median, name, location, id) {
+        function(
+            swe,
+            relative_swe,
+            historic_median,
+            percentile,
+            name,
+            location,
+            id
+        ) {
             generate_popup_content(
                 "pillow",
                 swe,
@@ -1875,12 +2001,14 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
                 historic_median,
                 name,
                 location,
-                id
+                id,
+                percentile
             )
         },
         swe_at_pillows$swe,
         swe_at_pillows$relative_swe,
         swe_at_pillows$historic_median,
+        swe_at_pillows$percentile,
         swe_at_pillows$name,
         swe_at_pillows$location,
         swe_at_pillows$timeseries_id,
@@ -1915,8 +2043,6 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
         366
     )
 
-    cat("DEBUG: get_processed_data completed successfully\n")
-
     list(
         swe_at_basins = swe_at_basins,
         swe_at_surveys = swe_at_surveys,
@@ -1940,13 +2066,11 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 #' @details
 #' The map includes:
 #' \itemize{
-#'   \item SWE basins colored by weighted average values
-#'   \item Snow pillow stations (blue circles) with continuous data
-#'   \item Snow survey stations (black circles) with discrete data
-#'   \item Communities with adjusted label positions
-#'   \item Roads and territorial boundaries
-#'   \item Layer control for toggling visibility
-#'   \item Interactive popups with station details and plot generation
+#'
+#'   \item Historical range (min/max) as shaded area
+#'   \item Historical median as dashed line
+#'   \item Current year data as solid line
+#'   \item Click-to-expand functionality for full-size viewing
 #' }
 #'
 #' @examples
@@ -1965,12 +2089,6 @@ leaflet_snow_bulletin_map <- function(
     base_data = NULL,
     filename = NULL
 ) {
-    cat(sprintf(
-        "DEBUG: Starting leaflet_snow_bulletin_map for %s/%s\n",
-        year,
-        month
-    ))
-
     # Load required packages
     requireNamespace("leaflet")
     requireNamespace("sf")
@@ -1978,11 +2096,10 @@ leaflet_snow_bulletin_map <- function(
 
     # Define color palettes and bins
     viz_params <- initialize_visualization_parameters()
-    cat("DEBUG: Initialized visualization parameters\n")
 
     # Load base_data if not provided
+
     if (is.null(base_data)) {
-        cat("DEBUG: Loading base_data from database...\n")
         con <- AquaCache::AquaConnect(
             host = "10.250.12.154",
             port = 5432,
@@ -1991,11 +2108,8 @@ leaflet_snow_bulletin_map <- function(
         )
         on.exit(DBI::dbDisconnect(con))
         base_data <- load_base_data(con)
-    } else {
-        cat("DEBUG: Using provided base_data\n")
     }
 
-    cat("DEBUG: Getting processed data...\n")
     data <- get_processed_data(
         year = year,
         month = month,
@@ -2013,10 +2127,9 @@ leaflet_snow_bulletin_map <- function(
         data$swe_at_pillows$value_to_show
     )
 
-    cat("DEBUG: Creating color palette...\n")
     swe_pal <- leaflet::colorBin(
-        palette = viz_params$relative_colors,
-        bins = viz_params$relative_bins,
+        palette = viz_params$basins$fillColor,
+        bins = viz_params$basins$bins,
         domain = pal_domain,
         na.color = "gray"
     )
@@ -2024,13 +2137,10 @@ leaflet_snow_bulletin_map <- function(
     # Set default bounds to Yukon if available, otherwise use fallback
     if (!is.null(base_data$shapefiles$yukon)) {
         bbox <- sf::st_bbox(base_data$shapefiles$yukon)
-        cat("DEBUG: Using Yukon boundary for map bounds\n")
     } else {
         bbox <- c(xmin = -141, ymin = 60, xmax = -123, ymax = 69.6)
-        cat("DEBUG: Using fallback bounds for map\n")
     }
 
-    cat("DEBUG: Creating leaflet map...\n")
     m <- leaflet::leaflet(
         options = leaflet::leafletOptions(
             zoomDelta = 0.5,
@@ -2051,46 +2161,39 @@ leaflet_snow_bulletin_map <- function(
         leaflet::addPolygons(
             data = data$swe_at_basins,
             fillColor = ~ swe_pal(value_to_show),
-            color = "white",
-            weight = 2,
-            opacity = 1,
-            fillOpacity = 0.7,
+            color = viz_params$basins$color,
+            weight = viz_params$basins$weight,
+            opacity = viz_params$basins$opacity,
+            fillOpacity = viz_params$basins$fillOpacity,
             label = ~ lapply(annotation, htmltools::HTML),
             popup = ~ lapply(popup_content, htmltools::HTML),
-            popupOptions = leaflet::popupOptions(
-                maxWidth = 320,
-                closeButton = TRUE,
-                autoPan = TRUE
+            popupOptions = do.call(
+                leaflet::popupOptions,
+                viz_params$basins$popupOptions
             ),
             group = "Basins averages"
         ) %>%
         leaflet::addLabelOnlyMarkers(
             data = data$swe_at_basins,
-            lng = data$swe_at_basins$x,
-            lat = data$swe_at_basins$y,
+            lng = data$swe_at_basins$x_adjusted,
+            lat = data$swe_at_basins$y_adjusted,
             label = ~ lapply(data$swe_at_basins$annotation, htmltools::HTML),
             labelOptions = leaflet::labelOptions(
                 noHide = TRUE,
                 direction = "center",
                 textOnly = TRUE,
-                style = list(
-                    "color" = "#222",
-                    "font-size" = "14px",
-                    "font-weight" = "bold",
-                    "text-shadow" = "2px 2px 4px #fff"
-                )
+                style = viz_params$basins$label
             ),
             group = "Basins averages"
         ) %>%
-        # --- Roads BELOW circle markers ---
         {
             if (!is.null(base_data$shapefiles$roads)) {
                 leaflet::addPolylines(
                     .,
                     data = base_data$shapefiles$roads,
-                    color = "#8B0000",
-                    weight = 2,
-                    opacity = 0.8,
+                    color = viz_params$roads$color,
+                    weight = viz_params$roads$weight,
+                    opacity = viz_params$roads$opacity,
                     group = "Roads",
                     label = ~ lapply(
                         as.character(feature_name),
@@ -2101,97 +2204,87 @@ leaflet_snow_bulletin_map <- function(
                 .
             }
         } %>%
-        # --- Boundary BEFORE circle markers ---
         {
-            # Boundary
             if (!is.null(base_data$shapefiles$yukon)) {
                 leaflet::addPolygons(
                     .,
                     data = base_data$shapefiles$yukon,
-                    color = "#222222",
-                    weight = 3,
-                    fill = FALSE,
+                    color = viz_params$boundary$color,
+                    weight = viz_params$boundary$weight,
+                    fill = viz_params$boundary$fill,
                     group = "Boundary"
                 )
             } else {
                 .
             }
         } %>%
-        # --- Circle markers AFTER boundary ---
         leaflet::addCircleMarkers(
             data = data$swe_at_surveys,
-            radius = 8,
-            color = "black",
+            radius = viz_params$surveys$radius,
+            color = viz_params$surveys$color,
             fillColor = ~ swe_pal(value_to_show),
-            weight = 2,
-            opacity = 1,
-            fillOpacity = 1,
+            weight = viz_params$surveys$weight,
+            opacity = viz_params$surveys$opacity,
+            fillOpacity = viz_params$surveys$fillOpacity,
             label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
             popup = ~ lapply(popup_content, htmltools::HTML),
-            popupOptions = leaflet::popupOptions(
-                maxWidth = 320,
-                closeButton = TRUE,
-                autoPan = TRUE
+            popupOptions = do.call(
+                leaflet::popupOptions,
+                viz_params$basins$popupOptions
             ),
             group = "Snow surveys (discrete)"
         ) %>%
         leaflet::addCircleMarkers(
             data = data$swe_at_pillows,
-            radius = 8,
-            color = "blue",
+            radius = viz_params$pillows$radius,
+            color = viz_params$pillows$color,
             fillColor = ~ swe_pal(value_to_show),
-            weight = 2,
-            opacity = 1,
-            fillOpacity = 1,
+            weight = viz_params$pillows$weight,
+            opacity = viz_params$pillows$opacity,
+            fillOpacity = viz_params$pillows$fillOpacity,
             label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
             popup = ~ lapply(popup_content, htmltools::HTML),
-            popupOptions = leaflet::popupOptions(
-                maxWidth = 320,
-                closeButton = TRUE,
-                autoPan = TRUE
+            popupOptions = do.call(
+                leaflet::popupOptions,
+                viz_params$basins$popupOptions
             ),
             group = "Snow pillows (continuous)"
         ) %>%
-        # --- Communities and labels ---
         {
-            # Communities and labels with annotation and popup
             if (!is.null(base_data$shapefiles$communities)) {
                 comm <- base_data$shapefiles$communities
-                communities_icon_svg <- "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polygon points='8,0 16,8 8,16 0,8' fill='black' stroke='white' stroke-width='2'/></svg>"
-
-                # Add annotation and popup columns if not present
                 . <- leaflet::addMarkers(
                     .,
                     data = comm,
                     icon = leaflet::icons(
-                        iconUrl = communities_icon_svg,
-                        iconWidth = 16,
-                        iconHeight = 16
+                        iconUrl = viz_params$communities$icon,
+                        iconWidth = viz_params$communities$iconWidth,
+                        iconHeight = viz_params$communities$iconHeight
                     ),
                     label = ~ lapply(annotation, htmltools::HTML),
                     popup = ~ lapply(popup, htmltools::HTML),
-                    popupOptions = leaflet::popupOptions(
-                        maxWidth = 320,
-                        closeButton = TRUE,
-                        autoPan = TRUE
+                    popupOptions = do.call(
+                        leaflet::popupOptions,
+                        viz_params$basins$popupOptions
                     ),
                     group = "Communities"
                 )
                 . <- leaflet::addLabelOnlyMarkers(
                     .,
                     data = comm,
-                    lng = comm$x_adjusted,
-                    lat = comm$y_adjusted,
-                    label = ~ lapply(annotation, htmltools::HTML),
+                    lng = comm$x,
+                    lat = comm$y,
+                    label = ~ lapply(comm$annotation, htmltools::HTML),
                     labelOptions = leaflet::labelOptions(
-                        noHide = TRUE,
-                        direction = "top",
-                        textOnly = TRUE,
+                        noHide = viz_params$communities$labelOptions$noHide,
+                        direction = viz_params$communities$labelOptions$direction,
+                        textOnly = viz_params$communities$labelOptions$textOnly,
                         style = list(
-                            "color" = "#222",
-                            "font-size" = "13px",
-                            "font-weight" = "bold",
-                            "text-shadow" = "1px 1px 2px #fff"
+                            color = viz_params$communities$label$color,
+                            fontSize = viz_params$communities$label$fontSize,
+                            fontWeight = viz_params$communities$label$fontWeight,
+                            fontStyle = viz_params$communities$label$fontStyle,
+                            textShadow = viz_params$communities$label$textShadow
                         )
                     ),
                     group = "Communities"
@@ -2212,10 +2305,18 @@ leaflet_snow_bulletin_map <- function(
                 "Snow pillows (continuous)"
             ),
             options = leaflet::layersControlOptions(collapsed = FALSE)
+        ) %>%
+        leaflet::addLegend(
+            position = "bottomright",
+            pal = swe_pal,
+            values = pal_domain,
+            title = "% of Normal",
+            labFormat = leaflet::labelFormat(suffix = "%"),
+            opacity = 1
         )
 
     if (!is.null(filename)) {
-        cat(sprintf("DEBUG: Saving map to file: %s\n", filename))
+        cat(sprintf("Saving map to file: %s\n", filename))
         requireNamespace("pandoc")
 
         loc <- pandoc::pandoc_locate()
@@ -2228,10 +2329,8 @@ leaflet_snow_bulletin_map <- function(
             file = filename,
             selfcontained = TRUE
         )
-        cat("DEBUG: Map saved successfully\n")
     }
 
-    cat("DEBUG: leaflet_snow_bulletin_map completed successfully\n")
     return(m)
 }
 
@@ -2298,7 +2397,6 @@ ggplot_snow_bulletin_map <- function(
 
     # Load base_data if not provided
     if (is.null(base_data)) {
-        cat("DEBUG: Loading base_data from database...\n")
         con <- AquaCache::AquaConnect(
             host = "10.250.12.154",
             port = 5432,
@@ -2308,8 +2406,6 @@ ggplot_snow_bulletin_map <- function(
         on.exit(DBI::dbDisconnect(con))
         base_data <- load_base_data(con)
     }
-
-    cat("DEBUG: Getting processed data...\n")
     data <- get_processed_data(
         year = year,
         month = month,
@@ -2326,11 +2422,11 @@ ggplot_snow_bulletin_map <- function(
     create_color_mapping <- function(values) {
         cut_values <- cut(
             values,
-            breaks = viz_params$relative_bins,
+            breaks = viz_params$basins$bins,
             include.lowest = TRUE,
             right = FALSE
         )
-        colors <- viz_params$relative_colors[as.numeric(cut_values)]
+        colors <- viz_params$basins$fillColor[as.numeric(cut_values)]
         colors[is.na(colors)] <- "gray"
         return(colors)
     }
@@ -2375,7 +2471,8 @@ ggplot_snow_bulletin_map <- function(
                 data = base_data$shapefiles$yukon,
                 fill = "#F5F5DC", # Beige terrain-like color
                 color = "black",
-                size = 1.5
+                size = viz_params$boundary$weight * 0.25,
+                alpha = 0.5 # 50% transparent background
             )
     }
 
@@ -2383,10 +2480,10 @@ ggplot_snow_bulletin_map <- function(
     p <- p +
         ggplot2::geom_sf(
             data = data$swe_at_basins,
-            ggplot2::aes(fill = I(fill_color)),
-            color = "white",
-            size = 0.5,
-            alpha = 0.7
+            ggplot2::aes(fill = I(data$swe_at_basins$fill_color)),
+            color = viz_params$basins$color,
+            size = viz_params$basins$weight * 0.25,
+            alpha = viz_params$basins$fillOpacity
         )
 
     # Add Yukon boundary background (underneath everything except basins)
@@ -2394,8 +2491,8 @@ ggplot_snow_bulletin_map <- function(
         p <- p +
             ggplot2::geom_sf(
                 data = base_data$shapefiles$yukon,
-                color = "black",
-                size = 1.5
+                color = viz_params$boundary$color,
+                size = viz_params$boundary$weight * 0.25
             )
     }
 
@@ -2404,9 +2501,9 @@ ggplot_snow_bulletin_map <- function(
         p <- p +
             ggplot2::geom_sf(
                 data = base_data$shapefiles$roads,
-                color = "#8B0000",
-                size = 0.3,
-                alpha = 0.8
+                color = viz_params$roads$color,
+                size = viz_params$roads$weight * 0.15,
+                alpha = viz_params$roads$opacity
             )
     }
 
@@ -2415,12 +2512,15 @@ ggplot_snow_bulletin_map <- function(
         p <- p +
             ggplot2::geom_point(
                 data = data$swe_at_surveys,
-                ggplot2::aes(x = x, y = y),
+                ggplot2::aes(
+                    x = data$swe_at_surveys$x,
+                    y = data$swe_at_surveys$y
+                ),
                 fill = data$swe_at_surveys$fill_color,
-                color = "black",
-                size = 3,
+                color = viz_params$surveys$color,
+                size = viz_params$surveys$radius / 2.5,
                 shape = 21,
-                stroke = 1
+                stroke = viz_params$surveys$weight * 0.5
             )
     }
 
@@ -2429,12 +2529,15 @@ ggplot_snow_bulletin_map <- function(
         p <- p +
             ggplot2::geom_point(
                 data = data$swe_at_pillows,
-                ggplot2::aes(x = x, y = y),
+                ggplot2::aes(
+                    x = data$swe_at_pillows$x,
+                    y = data$swe_at_pillows$y
+                ),
                 fill = data$swe_at_pillows$fill_color,
-                color = "blue",
-                size = 3,
+                color = viz_params$pillows$color,
+                size = viz_params$pillows$radius / 2.5,
                 shape = 21,
-                stroke = 1
+                stroke = viz_params$pillows$weight * 0.5
             )
     }
 
@@ -2459,15 +2562,19 @@ ggplot_snow_bulletin_map <- function(
                 data = communities_df,
                 ggplot2::aes(x = x, y = y),
                 fill = "black",
-                size = 2,
+                size = viz_params$communities$iconWidth / 8,
                 shape = 18
             ) +
             ggplot2::geom_text(
                 data = communities_df,
-                ggplot2::aes(x = x_adjust, y = y_adjust, label = annotation),
+                ggplot2::aes(
+                    x = x_adjust,
+                    y = y_adjust,
+                    label = annotation
+                ),
                 size = 2,
                 fontface = "bold.italic",
-                color = "#222",
+                color = viz_params$communities$label$color,
                 vjust = -0.5,
                 hjust = 0.5,
                 family = "serif"
@@ -2476,8 +2583,8 @@ ggplot_snow_bulletin_map <- function(
 
     # Add basin labels using pre-calculated adjusted coordinates
     basin_labels_df <- data.frame(
-        x = data$swe_at_basins$x,
-        y = data$swe_at_basins$y,
+        x = data$swe_at_basins$x_adjusted,
+        y = data$swe_at_basins$y_adjusted,
         annotation = data$swe_at_basins$annotation
     )
 
@@ -2487,9 +2594,9 @@ ggplot_snow_bulletin_map <- function(
         shadowtext::geom_shadowtext(
             data = basin_labels_df,
             ggplot2::aes(x = x, y = y, label = annotation),
-            size = 2,
+            size = 2.25,
             fontface = "bold",
-            color = "#222",
+            color = viz_params$basins$label$color,
             bg.color = "white",
             bg.r = 0.1
         )
@@ -2511,6 +2618,32 @@ ggplot_snow_bulletin_map <- function(
         "December"
     )[as.numeric(month) + 1]
 
+    # Add colormap legend for SWE (relative_swe)
+    # Create legend data dynamically based on actual data bins
+    bin_ranges <- viz_params$relative_bins[-length(viz_params$relative_bins)]
+    bin_labels <- character(length(bin_ranges))
+
+    for (i in seq_along(bin_ranges)) {
+        if (i == 1) {
+            bin_labels[i] <- sprintf("< %d%%", bin_ranges[i + 1])
+        } else if (i == length(bin_ranges)) {
+            bin_labels[i] <- sprintf("> %d%%", bin_ranges[i])
+        } else {
+            bin_labels[i] <- sprintf(
+                "%d-%d%%",
+                bin_ranges[i],
+                bin_ranges[i + 1]
+            )
+        }
+    }
+
+    swe_legend_df <- data.frame(
+        bin = seq_along(bin_ranges),
+        color = viz_params$relative_colors[-length(viz_params$relative_colors)],
+        label = bin_labels,
+        stringsAsFactors = FALSE
+    )
+
     p <- p +
         ggplot2::labs(
             title = sprintf(
@@ -2519,6 +2652,17 @@ ggplot_snow_bulletin_map <- function(
                 year
             ),
             subtitle = "SWE as % of Normal | Basins (polygons) | Discrete stations (black) | Continuous stations (blue)"
+        ) +
+        ggplot2::scale_fill_manual(
+            values = viz_params$basins$fillColor,
+            guide = ggplot2::guide_legend(
+                title = "% of Normal",
+                override.aes = list(
+                    fill = viz_params$basins$fillColor,
+                    color = viz_params$basins$fillColor
+                ),
+                label.theme = ggplot2::element_text(size = 8)
+            )
         )
 
     # Add coordinate system
@@ -2548,6 +2692,12 @@ ggplot_snow_bulletin_map <- function(
         )
 
     if (!is.null(filename)) {
+        if (!grepl("\\.png$", filename, ignore.case = TRUE)) {
+            filename <- paste0(filename, ".png")
+        }
+
+        cat(sprintf("Saving ggplot map to to file: %s\n", filename))
+
         ggplot2::ggsave(
             filename = filename,
             plot = p,
@@ -2568,12 +2718,10 @@ ggplot_snow_bulletin_map <- function(
 #' @details Demonstrates the snow bulletin mapping functionality by creating
 #'   both interactive (leaflet) and static (ggplot2) maps for April and May 2025.
 #' @export
+#' @noRd
 demo_snow_bulletin_maps <- function(con = NULL) {
-    cat("DEBUG: Starting demo_snow_bulletin_maps...\n")
-
     # Create database connection if not provided
     if (is.null(con)) {
-        cat("DEBUG: Creating database connection...\n")
         con <- AquaCache::AquaConnect(
             name = "aquacache",
             host = "10.250.12.154",
@@ -2582,29 +2730,22 @@ demo_snow_bulletin_maps <- function(con = NULL) {
             password = "aquacache"
         )
         on.exit(DBI::dbDisconnect(con))
-    } else {
-        cat("DEBUG: Using provided database connection\n")
     }
 
-    cat("Loading base data...\n")
     base_data <- load_base_data(con)
 
-    cat("Creating leaflet map for April 2025...\n")
     leaflet_map <- leaflet_snow_bulletin_map(
         year = 2025,
         month = 4,
         base_data = base_data
     )
 
-    cat("Creating ggplot map for May 2025...\n")
     ggplot_map <- ggplot_snow_bulletin_map(
         year = 2025,
         month = 5,
         base_data = base_data,
         filename = "snowbul.png"
     )
-
-    cat("Demo maps created successfully!\n")
 
     return(list(
         leaflet_map = leaflet_map,

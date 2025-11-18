@@ -17,7 +17,7 @@ ggplotOverlap(
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
-  historic_range = "all",
+  historic_range = NULL,
   returns = "auto",
   return_type = "max",
   return_months = c(5:9),
