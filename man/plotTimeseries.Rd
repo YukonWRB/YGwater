@@ -5,7 +5,8 @@
 \title{Plot a continous timeseries from the aquacache}
 \usage{
 plotTimeseries(
-  location,
+  timeseries_id = NULL,
+  location = NULL,
   sub_location = NULL,
   parameter,
   record_rate = NULL,
@@ -34,13 +35,17 @@ plotTimeseries(
   gridx = FALSE,
   gridy = FALSE,
   webgl = TRUE,
-  rate = NULL,
+  resolution = NULL,
   tzone = "auto",
+  raw = FALSE,
+  imputed = FALSE,
   data = FALSE,
   con = NULL
 )
 }
 \arguments{
+\item{timeseries_id}{The timeseries ID to plot, if known (else leave NULL).}
+
 \item{location}{The location for which you want a plot.}
 
 \item{sub_location}{Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).}
@@ -99,9 +104,13 @@ plotTimeseries(
 
 \item{webgl}{Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.}
 
-\item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
+\item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
 \item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
+
+\item{raw}{Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.}
+
+\item{imputed}{Should imputed data be displayed differently? Default is FALSE.}
 
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 

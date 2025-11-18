@@ -22,7 +22,7 @@
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param unusable Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
-#' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
+#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
 #' @param legend_scale A scale factor to apply to the size of text in the legend. Default is 1.
@@ -66,7 +66,7 @@
 # unusable = FALSE
 # hover = FALSE
 # custom_title = NULL
-# rate = "max"
+# resolution = "max"
 # webgl = FALSE
 # slider = FALSE
 
@@ -90,7 +90,7 @@ plotOverlap <- function(
   filter = NULL,
   unusable = FALSE,
   historic_range = 'last',
-  rate = "day",
+  resolution = "day",
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
@@ -202,11 +202,11 @@ plotOverlap <- function(
     }
   }
 
-  if (!is.null(rate)) {
-    rate <- tolower(rate)
-    if (!(rate %in% c("max", "hour", "day"))) {
+  if (!is.null(resolution)) {
+    resolution <- tolower(resolution)
+    if (!(resolution %in% c("max", "hour", "day"))) {
       stop(
-        "Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again."
+        "Your entry for the parameter 'resolution' is invalid. Please review the function documentation and try again."
       )
     }
   }
@@ -731,7 +731,7 @@ plotOverlap <- function(
     attr(end_UTC, "tzone") <- "UTC"
     if (nrow(realtime) < 100000) {
       # limits the number of data points to 100000
-      if (rate == "max") {
+      if (resolution == "max") {
         new_realtime <- dbGetQueryDT(
           con,
           glue::glue_sql(
@@ -739,7 +739,7 @@ plotOverlap <- function(
             .con = con
           )
         ) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-      } else if (rate == "hour") {
+      } else if (resolution == "hour") {
         new_realtime <- dbGetQueryDT(
           con,
           glue::glue_sql(
@@ -747,7 +747,7 @@ plotOverlap <- function(
             .con = con
           )
         ) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-      } else if (rate == "day") {
+      } else if (resolution == "day") {
         new_realtime <- data.table::data.table()
       }
 

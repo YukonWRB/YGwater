@@ -16,58 +16,109 @@
 #' @export
 #'
 
-WSC_drainages <- function(inputs_folder = "choose",
-                          save_path = "choose",
-                          active_only = FALSE,
-                          limit_stns = list(stns_08 = c("08AB001", "08AC002", "08AC001", "08AA003", "08AA011", "08AA010", "08AA009", "08AA005", "08AA012", "08AA007", "08AA008"), stns_10 = c("10MB004", "10MA003", "10MA005", "10MA002", "10MA004", "10MA001", "10MB003", "10MC002", "10MC007", "10MD003", "10MD001", "10ED001", "10DB001", "10BE001", "10BE009", "10AC005", "10EB013", "10AA001", "10AA005", "10AA006", "10AD002", "10AA004", "10AB001"))
-)
-{
-
+WSC_drainages <- function(
+  inputs_folder = "choose",
+  save_path = "choose",
+  active_only = FALSE,
+  limit_stns = list(
+    stns_08 = c(
+      "08AB001",
+      "08AC002",
+      "08AC001",
+      "08AA003",
+      "08AA011",
+      "08AA010",
+      "08AA009",
+      "08AA005",
+      "08AA012",
+      "08AA007",
+      "08AA008"
+    ),
+    stns_10 = c(
+      "10MB004",
+      "10MA003",
+      "10MA005",
+      "10MA002",
+      "10MA004",
+      "10MA001",
+      "10MB003",
+      "10MC002",
+      "10MC007",
+      "10MD003",
+      "10MD001",
+      "10ED001",
+      "10DB001",
+      "10BE001",
+      "10BE009",
+      "10AC005",
+      "10EB013",
+      "10AA001",
+      "10AA005",
+      "10AA006",
+      "10AD002",
+      "10AA004",
+      "10AB001"
+    )
+  )
+) {
   #Initial setup
-  rlang::check_installed("sf", reason = "Package sf is required to use function drainageBasins") #This is here because sf is not a 'depends' of this package; it is only necessary for this function.
+  rlang::check_installed(
+    "sf",
+    reason = "Package sf is required to use function drainageBasins"
+  ) #This is here because sf is not a 'depends' of this package; it is only necessary for this function.
 
   if (inputs_folder == "choose") {
     if (!interactive()) {
       stop("You must specify a save path when running in non-interactive mode.")
     }
     message("Select the inputs folder.")
-    inputs_folder <-  rstudioapi::selectDirectory(caption = "Select Inputs Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
+    inputs_folder <- rstudioapi::selectDirectory(
+      caption = "Select Inputs Folder",
+      path = file.path(Sys.getenv("USERPROFILE"), "Desktop")
+    )
   }
   if (save_path == "choose") {
     if (!interactive()) {
       stop("You must specify a save path when running in non-interactive mode.")
     }
     message("Select the folder where you want the watershed shapefiles saved.")
-    save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
+    save_path <- rstudioapi::selectDirectory(
+      caption = "Select Save Folder",
+      path = file.path(Sys.getenv("USERPROFILE"), "Desktop")
+    )
   }
   temp <- tempdir(check = TRUE)
   suppressWarnings(dir.create(paste0(temp, "/files")))
   temp <- paste0(temp, "/files")
 
-
   #Get all the files in a single folder
-  for (i in list.dirs(inputs_folder, full.names = FALSE, recursive=FALSE)) {
-    if (TRUE %in% stringr::str_detect(names(limit_stns),i)) {
-      stations <- unname(unlist(limit_stns[stringr::str_detect(names(limit_stns),i)]))
+  for (i in list.dirs(inputs_folder, full.names = FALSE, recursive = FALSE)) {
+    if (TRUE %in% stringr::str_detect(names(limit_stns), i)) {
+      stations <- unname(unlist(limit_stns[stringr::str_detect(
+        names(limit_stns),
+        i
+      )]))
       for (j in stations) {
         files <- list.files(paste0(inputs_folder, "/", i, "/", j))
-        files <- files[grep("Station", files, invert=TRUE)]
+        files <- files[grep("Station", files, invert = TRUE)]
         for (k in files) {
-          file.copy(from = paste0(inputs_folder, "/", i, "/", j, "/", k), to = temp)
+          file.copy(
+            from = paste0(inputs_folder, "/", i, "/", j, "/", k),
+            to = temp
+          )
         }
       }
     } else {
-      folders <- list.dirs(paste0(inputs_folder, "/", i), recursive=FALSE)
+      folders <- list.dirs(paste0(inputs_folder, "/", i), recursive = FALSE)
       for (j in folders) {
         files <- list.files(j)
-        files <- files[grep("Station", files, invert=TRUE)]
+        files <- files[grep("Station", files, invert = TRUE)]
         for (k in files) {
           file.copy(from = paste0(j, "/", k), to = temp)
         }
       }
     }
   }
-
 
   ###### Combine all points and polys into two shapefile #####
   #Get all the shapefile names, (no file extensions)
@@ -76,39 +127,90 @@ WSC_drainages <- function(inputs_folder = "choose",
   shapefiles <- shapefiles[!startsWith(shapefiles, "test")] #This is only to make test work, as the "test" is created in the tempdir!
 
   #rbind polygons together
-  tryCatch({
-    poly <- sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[1], 1, 7),"_DrainageBasin_BassinDeDrainage"))) #st_zm is there because doing rbind on many polygons sometimes causes an error where it is looking for a z-dimension. No idea why.
-    for (i in 2:length(shapefiles)) {
-      poly <- rbind(poly, sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[i], 1, 7),"_DrainageBasin_BassinDeDrainage"))))
+  tryCatch(
+    {
+      poly <- sf::st_zm(sf::read_sf(
+        dsn = temp,
+        layer = paste0(
+          substr(shapefiles[1], 1, 7),
+          "_DrainageBasin_BassinDeDrainage"
+        )
+      )) #st_zm is there because doing rbind on many polygons sometimes causes an error where it is looking for a z-dimension. No idea why.
+      for (i in 2:length(shapefiles)) {
+        poly <- rbind(
+          poly,
+          sf::st_zm(sf::read_sf(
+            dsn = temp,
+            layer = paste0(
+              substr(shapefiles[i], 1, 7),
+              "_DrainageBasin_BassinDeDrainage"
+            )
+          ))
+        )
+      }
+      poly <- poly[!duplicated(data.frame(poly)), ] #root out duplicates
+      if (active_only) {
+        #Retain only active stations
+        poly <- poly[poly$Status == "active", ]
+      }
+      #Write to file
+      suppressMessages(sf::write_sf(
+        poly,
+        dsn = save_path,
+        layer = "WSC_watersheds_polygons",
+        driver = "ESRI Shapefile"
+      ))
+      message("The polygons shapefile has been saved in ", save_path)
+    },
+    error = function(e) {
+      message(
+        "The polygons could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question."
+      )
     }
-    poly <- poly[!duplicated(data.frame(poly)),] #root out duplicates
-    if (active_only) {#Retain only active stations
-      poly <- poly[poly$Status =="active", ]
-    }
-    #Write to file
-    suppressMessages(sf::write_sf(poly, dsn = save_path, layer = "WSC_watersheds_polygons", driver = "ESRI Shapefile"))
-    message("The polygons shapefile has been saved in ", save_path)
-  }, error = function(e) {
-    message("The polygons could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
-  })
+  )
 
   #rbind points together
-  tryCatch({
-    points <- sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[1], 1, 7),"_PourPoint_PointExutoire")))
-    for (i in 2:length(shapefiles)) {
-      points <- rbind(points, sf::st_zm(sf::read_sf(dsn=temp, layer=paste0(substr(shapefiles[i], 1, 7),"_PourPoint_PointExutoire"))))
+  tryCatch(
+    {
+      points <- sf::st_zm(sf::read_sf(
+        dsn = temp,
+        layer = paste0(substr(shapefiles[1], 1, 7), "_PourPoint_PointExutoire")
+      ))
+      for (i in 2:length(shapefiles)) {
+        points <- rbind(
+          points,
+          sf::st_zm(sf::read_sf(
+            dsn = temp,
+            layer = paste0(
+              substr(shapefiles[i], 1, 7),
+              "_PourPoint_PointExutoire"
+            )
+          ))
+        )
+      }
+      points <- points[!duplicated(data.frame(points)), ] #root out duplicates
+      if (active_only) {
+        #Retain only active stations
+        points <- points[points$Status == "active", ]
+      }
+      #Write to file
+      suppressMessages(sf::write_sf(
+        points,
+        dsn = save_path,
+        layer = "WSC_watersheds_points",
+        driver = "ESRI Shapefile"
+      ))
+      message("The points shapefile has been saved in ", save_path)
+    },
+    error = function(e) {
+      message(
+        "The points could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question."
+      )
     }
-    points <- points[!duplicated(data.frame(points)),] #root out duplicates
-    if (active_only) {#Retain only active stations
-      points <- points[points$Status == "active", ]
-    }
-    #Write to file
-    suppressMessages(sf::write_sf(points, dsn = save_path, layer = "WSC_watersheds_points", driver = "ESRI Shapefile"))
-    message("The points shapefile has been saved in ", save_path)
-  }, error = function(e) {
-    message("The points could not be combined. Check that the inputs folder contains only folder(s) containing folders for each WSC station, each containing shapefiles for the station in question.")
-  })
-  suppressWarnings(invisible(file.remove(list.files(tempdir(), full.names=TRUE))))
-  unlink(temp, recursive=TRUE)
-
+  )
+  suppressWarnings(invisible(file.remove(list.files(
+    tempdir(),
+    full.names = TRUE
+  ))))
+  unlink(temp, recursive = TRUE)
 } #End of function

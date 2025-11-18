@@ -34,7 +34,7 @@
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set
 #'   to FALSE to force standard scatter traces.
-#' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
+#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
@@ -74,7 +74,7 @@ plotMultiTimeseries <- function(
   gridx = FALSE,
   gridy = FALSE,
   webgl = TRUE,
-  rate = NULL,
+  resolution = NULL,
   tzone = "auto",
   data = FALSE,
   con = NULL
@@ -104,7 +104,7 @@ plotMultiTimeseries <- function(
   # legend_scale <- 1
   # gridx <- FALSE
   # gridy <- FALSE
-  # rate <- NULL
+  # resolution <- NULL
   # tzone <- "auto"
   # legend_position <- 'v'
   # shareX = TRUE
@@ -175,11 +175,11 @@ plotMultiTimeseries <- function(
     lead_lag <- NA
   }
 
-  if (!is.null(rate)) {
-    rate <- tolower(rate)
-    if (!(rate %in% c("max", "hour", "day"))) {
+  if (!is.null(resolution)) {
+    resolution <- tolower(resolution)
+    if (!(resolution %in% c("max", "hour", "day"))) {
       stop(
-        "Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again."
+        "Your entry for the parameter 'resolution' is invalid. Please review the function documentation and try again."
       )
     }
   }
@@ -416,15 +416,15 @@ plotMultiTimeseries <- function(
     )
   }
 
-  # Adjust the rate parameter
+  # Adjust the resolution parameter
   range <- seq.POSIXt(start_date, end_date, by = "day")
-  if (is.null(rate)) {
+  if (is.null(resolution)) {
     if (length(range) > 3000) {
-      rate <- "day"
+      resolution <- "day"
     } else if (length(range) > 1000) {
-      rate <- "hour"
+      resolution <- "hour"
     } else {
-      rate <- "max"
+      resolution <- "max"
     }
   }
 
@@ -923,7 +923,7 @@ plotMultiTimeseries <- function(
       )
       range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
       attr(range_data$datetime, "tzone") <- tzone
-      if (rate == "day") {
+      if (resolution == "day") {
         # daily data is always generated using corrected data
         trace_data <- dbGetQueryDT(
           con,
@@ -938,7 +938,7 @@ plotMultiTimeseries <- function(
           )
         )
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
-      } else if (rate == "hour") {
+      } else if (resolution == "hour") {
         trace_data <- dbGetQueryDT(
           con,
           paste0(
@@ -951,7 +951,7 @@ plotMultiTimeseries <- function(
             "' ORDER BY datetime DESC;"
           )
         )
-      } else if (rate == "max") {
+      } else if (resolution == "max") {
         # limit to 200 000 records for plotting performance
         if (corrections_apply) {
           trace_data <- dbGetQueryDT(
@@ -1001,7 +1001,7 @@ plotMultiTimeseries <- function(
       attr(trace_data$datetime, "tzone") <- tzone
     } else {
       #No historic range requested
-      if (rate == "day") {
+      if (resolution == "day") {
         trace_data <- dbGetQueryDT(
           con,
           paste0(
@@ -1015,7 +1015,7 @@ plotMultiTimeseries <- function(
           )
         )
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
-      } else if (rate == "hour") {
+      } else if (resolution == "hour") {
         trace_data <- dbGetQueryDT(
           con,
           paste0(
@@ -1028,7 +1028,7 @@ plotMultiTimeseries <- function(
             "' ORDER BY datetime DESC;"
           )
         )
-      } else if (rate == "max") {
+      } else if (resolution == "max") {
         # limit to 200 000 records for plotting performance
         if (corrections_apply) {
           trace_data <- dbGetQueryDT(

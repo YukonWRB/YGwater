@@ -5,11 +5,11 @@
 \title{Connect to the RWIS database}
 \usage{
 RWISConnect(
-  name = "rwdm",
-  host = "rwis.gov.yk.ca",
-  port = "5432",
-  username = "rwdmread",
-  password = "rwdmread"
+  name = Sys.getenv("rwisName", "rwdm"),
+  host = Sys.getenv("rwisHost", "rwis.gov.yk.ca"),
+  port = Sys.getenv("rwisPort", "5432"),
+  username = Sys.getenv("rwisUser"),
+  password = Sys.getenv("rwisPass")
 )
 }
 \arguments{
@@ -27,7 +27,7 @@ RWISConnect(
 A connection to the database
 }
 \description{
-Establishes a connection to the RWIS (Road Weather Information System) database. Only works from within YG networks.
+Establishes a connection to the RWIS (Road Weather Information System) PostgreSQL database. Only works from within YG networks.
 }
 \seealso{
 \code{\link[=AquaConnect]{AquaConnect()}} for establishing a connection to the WRB's hydrometric database.

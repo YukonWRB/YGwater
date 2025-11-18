@@ -2,7 +2,7 @@
 #'
 #' @description
 #'
-#' Establishes a connection to the RWIS (Road Weather Information System) database. Only works from within YG networks.
+#' Establishes a connection to the RWIS (Road Weather Information System) PostgreSQL database. Only works from within YG networks.
 #'
 #' @param name Database name.
 #' @param host Database host address.
@@ -16,23 +16,48 @@
 #' @export
 #'
 
-RWISConnect <- function(name = "rwdm", host = "rwis.gov.yk.ca", port = "5432", username = "rwdmread", password = "rwdmread") 
-{
-  
-  #initial checks
-  rlang::check_installed("RPostgres", reason = "Package RPostgres is required to use function RWISConnect") #This is here because RPostgreSQL is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
-  
-  RWIS <- DBI::dbConnect(drv = RPostgres::Postgres(),
-                         dbname = name,
-                         host = host,
-                         port = port,
-                         user = username,
-                         password = password)
-  
+RWISConnect <- function(
+  name = Sys.getenv("rwisName", "rwdm"),
+  host = Sys.getenv("rwisHost", "rwis.gov.yk.ca"),
+  port = Sys.getenv("rwisPort", "5432"),
+  username = Sys.getenv("rwisUser"),
+  password = Sys.getenv("rwisPass")
+) {
+  # Check that each parameter is a non-empty string
+  params <- list(
+    name = name,
+    host = host,
+    port = port,
+    username = username,
+    password = password
+  )
+  for (param_name in names(params)) {
+    param_value <- params[[param_name]]
+    if (
+      !is.character(param_value) ||
+        length(param_value) != 1 ||
+        nchar(param_value) == 0
+    ) {
+      stop(paste(
+        "RWISConnect: parameter",
+        param_name,
+        "must be a non-empty string. By default, RWISConnect() reads connection parameters from environment variables."
+      ))
+    }
+  }
+
+  RWIS <- DBI::dbConnect(
+    drv = RPostgres::Postgres(),
+    dbname = params$name,
+    host = params$host,
+    port = params$port,
+    user = params$username,
+    password = params$password
+  )
+
   if (!DBI::dbIsValid(RWIS)) {
     stop("Connection failed.")
   } else {
     return(RWIS)
   }
 }
-

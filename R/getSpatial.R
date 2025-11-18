@@ -454,6 +454,11 @@ getVector <- function(
     reason = "required to use function getVector."
   )
 
+  rlang::check_installed(
+    "jsonlite",
+    reason = "required to parse feature attributes stored in JSON format."
+  )
+
   if (
     is.null(geom_id) &
       is.null(layer_name) &
@@ -602,5 +607,74 @@ getVector <- function(
       boundary = bounds
     )
   }
+
+  if ("attributes" %in% names(res)) {
+    attr_raw <- res[["attributes"]]
+    # IF all NA, skip
+    if (all(is.na(attr_raw))) {
+      attr_raw <- c()
+    }
+
+    if (length(attr_raw) > 0) {
+      attr_frames <- lapply(seq_along(attr_raw), function(idx) {
+        raw_value <- attr_raw[idx]
+        if (is.na(raw_value)) {
+          return(data.frame(.row_id = idx))
+        }
+
+        raw_value_chr <- if (!is.character(raw_value)) {
+          as.character(raw_value)
+        } else {
+          raw_value
+        }
+
+        if (!nzchar(raw_value_chr)) {
+          return(data.frame(.row_id = idx))
+        }
+
+        parsed <- tryCatch(
+          jsonlite::fromJSON(raw_value_chr, simplifyVector = TRUE),
+          error = function(e) NULL
+        )
+
+        if (is.null(parsed)) {
+          return(data.frame(.row_id = idx))
+        }
+
+        parsed_df <- NULL
+        if (is.data.frame(parsed)) {
+          parsed_df <- parsed
+        } else if (is.list(parsed)) {
+          parsed_df <- as.data.frame(parsed, stringsAsFactors = FALSE)
+        } else {
+          parsed_df <- data.frame(value = parsed, stringsAsFactors = FALSE)
+        }
+
+        if (nrow(parsed_df) == 0) {
+          parsed_df <- data.frame(.row_id = idx)
+        }
+
+        parsed_df <- parsed_df[1, , drop = FALSE]
+        parsed_df$.row_id <- idx
+        parsed_df
+      })
+
+      attr_tbl <- jsonlite::rbind_pages(attr_frames)
+
+      if (".row_id" %in% names(attr_tbl)) {
+        attr_tbl <- attr_tbl[order(attr_tbl$.row_id), , drop = FALSE]
+        attr_tbl$.row_id <- NULL
+      }
+
+      attr_tbl <- attr_tbl[, setdiff(names(attr_tbl), names(res)), drop = FALSE]
+
+      if (ncol(attr_tbl) > 0) {
+        existing_vals <- terra::values(res)
+        combined_vals <- cbind(existing_vals, attr_tbl)
+        terra::values(res) <- combined_vals
+      }
+    }
+  }
+
   return(res)
 }

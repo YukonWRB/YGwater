@@ -22,26 +22,31 @@
 #' @return Appends points to the Aquarius server.
 #' @export
 
-aq_upload <- function(loc_id,
-                      ts_name,
-                      data,
-                      overwrite = FALSE,
-                      start = NULL,
-                      end = NULL,
-                      login = Sys.getenv(c("AQUSER", "AQPASS")),
-                      server = Sys.getenv("AQSERVER"))
-{
-  if (overwrite){
+aq_upload <- function(
+  loc_id,
+  ts_name,
+  data,
+  overwrite = FALSE,
+  start = NULL,
+  end = NULL,
+  login = Sys.getenv(c("AQUSER", "AQPASS")),
+  server = Sys.getenv("AQSERVER")
+) {
+  if (overwrite) {
     if (is.null(start) | is.null(end)) {
-      stop("You input overwrite = TRUE but have not specified an end and/or start time. Both of these parameters must be set for overwrite to work.")
+      stop(
+        "You input overwrite = TRUE but have not specified an end and/or start time. Both of these parameters must be set for overwrite to work."
+      )
     }
   }
 
   #Check that data has correct column names
   if (!(all(c("Value", "Time") %in% names(data)))) {
-    stop("Your data.frame must contain columns labelled Value and Time. Case sensitive.")
+    stop(
+      "Your data.frame must contain columns labelled Value and Time. Case sensitive."
+    )
   }
-  
+
   # check if httr and jsonlite are installed as it's needed by timeseries_client.R
   rlang::check_installed("httr", reason = "to use the aq_upload() function")
   rlang::check_installed("jsonlite", reason = "to use the aq_upload() function")
@@ -54,7 +59,7 @@ aq_upload <- function(loc_id,
   data <- stats::na.omit(data) #Very important! Any NA data actually gets appended to AQ as a point and is then a PITA to overwrite.
 
   #Start with server connection
-  source(system.file("scripts",  "timeseries_client.R", package = "YGwater"))
+  source(system.file("scripts", "timeseries_client.R", package = "YGwater"))
   #Make the Aquarius configuration and connect
   config = list(
     server = server,
@@ -63,27 +68,29 @@ aq_upload <- function(loc_id,
     timeSeriesName = paste0(ts_name, "@", loc_id),
     eventPeriodStartDay = start,
     eventPeriodEndDay = end
-    )
+  )
 
-  timeseries$connect(config$server,
-                     config$username,
-                     config$password)
+  timeseries$connect(config$server, config$username, config$password)
   on.exit(timeseries$disconnect())
 
   #Then append Points.
   #Notes about how AQ handles timestamps: it doesn't. The server will take the data fed to it as if it was UTC, without considering the tz attribute, and applies the station offset to that value. Therefore times must be converted to UTC prior to being uploaded, even if the TZ attribute does not matter. Time data can be fed in as.POSIXct or as dateTtime.
 
-  result <- timeseries$waitForCompletedAppendRequest(timeseries$appendPoints(config$timeSeriesName, data, start, end), 120) #This makes it wait up to 120 seconds to show the append result - long enough for even giant datasets.
+  result <- timeseries$waitForCompletedAppendRequest(
+    timeseries$appendPoints(config$timeSeriesName, data, start, end),
+    120
+  ) #This makes it wait up to 120 seconds to show the append result - long enough for even giant datasets.
   points_in_file <- nrow(data)
 
-  output <- list(appended = result$NumberOfPointsAppended,
-                 input = points_in_file)
+  output <- list(
+    appended = result$NumberOfPointsAppended,
+    input = points_in_file
+  )
 
   if (result$AppendStatus == "Completed") {
     cli::cli_alert_success(
       "{.strong Your request was completed:} {result$NumberOfPointsAppended} points were appended out of the {points_in_file} that were in the provided dataset.\nThe points were appended to the timeseries {.strong {ts_name}} at location {.strong {loc_id}}."
     )
-    
   } else {
     cli::cli_alert_danger(
       "{.strong Your request was not completed or had an irregular status:} {result$AppendStatus}.\n{result$NumberOfPointsAppended} points were appended out of the {points_in_file} that were in the provided dataset.\nThe target timeseries was {.strong {ts_name}} at location {.strong {loc_id}}."

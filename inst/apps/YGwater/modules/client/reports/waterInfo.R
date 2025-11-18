@@ -207,10 +207,19 @@ waterInfoMod <- function(id, language) {
             incProgress(0.7)
             
             # 4. Zip up everything in 'dir' and write the zip to `file`
-            files <- list.files(dir, full.names = TRUE)
-            
-            zip::zip(zipfile = paste0(dir, "/report.zip", files = files, mode = "cherry-pick", include_directories = FALSE))
-            outputFile(paste0(dir, "/report.zip"))
+            files <- list.files(dir, full.names = FALSE)
+            if (!length(files)) {
+              stop("No files were generated for the report.")
+            }
+
+            zip::zip(
+              zipfile = file.path(dir, "report.zip"),
+              files = files,
+              mode = "cherry-pick",
+              include_directories = FALSE,
+              root = dir
+            )
+            outputFile(file.path(dir, "report.zip"))
             
             # Delete everything in the 'dir' except for the .zip file
             files <- list.files(dir, full.names = TRUE)

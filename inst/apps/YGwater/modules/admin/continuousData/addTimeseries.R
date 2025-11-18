@@ -275,7 +275,7 @@ addTimeseries <- function(id) {
             ),
             actionButton(
               ns("args_example"),
-              "Show example arguments for selected function"
+              "Show example arguments"
             )
           )
         ),
@@ -458,12 +458,11 @@ addTimeseries <- function(id) {
     observeEvent(input$args_example, {
       if (is.null(input$source_fx) || input$source_fx == "") {
         showModal(modalDialog(
-          "Please select a source function to see example arguments.",
+          "Select a source function to view example arguments.",
           easyClose = TRUE
         ))
         return()
       }
-      out <<- moduleData$timeseries
       ex_args <- moduleData$timeseries[
         moduleData$timeseries$source_fx == input$source_fx,
         "source_fx_args"
@@ -764,17 +763,17 @@ addTimeseries <- function(id) {
                   args <- source_fx_args
                   # split into "argument1: value1" etc.
                   args <- strsplit(args, ",\\s*")[[1]]
-                  # split each pair on ":" and trim whitespace
-                  args <- strsplit(args, ":\\s*")
-                  # build a named list: names = keys, values = values
-                  args <- stats::setNames(
-                    lapply(args, function(x) x[2]),
-                    sapply(args, function(x) x[1])
-                  )
+
+                  # split only on first colon
+                  keys <- sub(":.*", "", args)
+                  vals <- sub("^[^:]+:\\s*", "", args)
+
+                  # build named list
+                  args <- stats::setNames(as.list(vals), keys)
+
                   # convert to JSON
                   args <- jsonlite::toJSON(args, auto_unbox = TRUE)
                 } else {
-                  # if the source_fx_args is empty, we set it to NA
                   args <- NA
                 }
               } else {
@@ -1457,13 +1456,14 @@ addTimeseries <- function(id) {
                 args <- input$source_fx_args
                 # split into "argument1: value1" etc.
                 args <- strsplit(args, ",\\s*")[[1]]
-                # split each pair on ":" and trim whitespace
-                args <- strsplit(args, ":\\s*")
-                # build a named list: names = keys, values = values
-                args <- stats::setNames(
-                  lapply(args, function(x) x[2]),
-                  sapply(args, function(x) x[1])
-                )
+
+                # split only on first colon
+                keys <- sub(":.*", "", args)
+                vals <- sub("^[^:]+:\\s*", "", args)
+
+                # build named list
+                args <- stats::setNames(as.list(vals), keys)
+
                 # convert to JSON
                 args <- jsonlite::toJSON(args, auto_unbox = TRUE)
 
