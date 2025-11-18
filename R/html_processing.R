@@ -200,10 +200,10 @@ html_processing <- function(
     log_properties$Value[log_properties$Property == "Log Name"],
     "(?<=YOWN).{4,6}"
   ) # Gets the 5 characters after YOWN-
-  well_loc <- gsub("_", "", well_loc)
-  well_loc <- gsub("-", "", well_loc)
-  well_loc <- gsub(" ", "", well_loc)
-  well_loc <- gsub("/.", "", well_loc)
+  well_loc <- sub("_", "", well_loc)
+  well_loc <- sub("-", "", well_loc)
+  well_loc <- sub(" ", "", well_loc)
+  well_loc <- sub("/.", "", well_loc)
   if (grepl("[0-9]", substr(well_loc, 5, 5))) {
     # Check if character 5 is a number. Should be one of D or S
     well_loc <- substr(well_loc, 1, 4)
@@ -300,7 +300,7 @@ html_processing <- function(
       tryCatch(
         {
           start <- Sys.time()
-          result <- YGwater::aq_upload(well_loc, i, temp)
+          result <- aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
           write(
             paste0(
@@ -336,7 +336,7 @@ html_processing <- function(
       tryCatch(
         {
           start <- Sys.time()
-          result <- YGwater::aq_upload(well_loc, i, temp)
+          result <- aq_upload(well_loc, i, temp)
           end <- Sys.time() - start
           write(
             paste0(

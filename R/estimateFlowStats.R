@@ -60,7 +60,7 @@ estimateFlowStats <- function(
   )
 
   ## Get areas for stations
-  areas <- YGwater::getVector(
+  areas <- getVector(
     layer_name = "Drainage basins",
     feature_name = gauged_stations
   )

@@ -616,11 +616,16 @@ hydrometDiscrete <- function(
   } else if (plot_type == "boxplot") {
     plot <- plot +
       ggplot2::geom_boxplot(
-        outlier.shape = 8,
-        outlier.size = 1.7 * plot_scale,
         color = "black",
-        fill = "aliceblue",
-        varwidth = TRUE
+        fill = "#87CEEB",
+        varwidth = TRUE,
+        outlier.shape = 1,
+        outlier.color = "#512A44",
+        outlier.fill = "#512A44",
+        whisker.linewidth = 1,
+        box.linewidth = 1,
+        outlier.size = 3 * plot_scale,
+        notch = FALSE
       )
   }
 
@@ -635,7 +640,7 @@ hydrometDiscrete <- function(
             colour = as.factor(.data$year),
             fill = as.factor(.data$year)
           ),
-          size = plot_scale * 3.5,
+          size = plot_scale * 3.5 * 2,
           shape = 21
         ) +
         ggplot2::scale_colour_manual(
