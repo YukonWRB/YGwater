@@ -1126,7 +1126,10 @@ simplerIndex <- function(id) {
           ) |>
           terra::project("epsg:4326")
         lonlat <- terra::geom(v)[, c("x", "y")]
-        return(list(latitude = lonlat$y, longitude = lonlat$x))
+        return(list(
+          latitude = lonlat[names(lonlat) == "y"],
+          longitude = lonlat[names(lonlat) == "x"]
+        ))
       }
 
       convert_length_to_m <- function(value, unit) {

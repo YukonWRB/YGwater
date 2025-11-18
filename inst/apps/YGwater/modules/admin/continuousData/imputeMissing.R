@@ -56,6 +56,12 @@ imputeMissingUI <- function(id) {
           id = ns("ts_panel"),
           title = "Timeseries selection",
           DT::DTOutput(ns("ts_table")),
+          dateRangeInput(
+            ns("dt_range_pre"),
+            "Date range (for viewing only)",
+            start = Sys.Date() - 365,
+            end = Sys.Date()
+          ),
           input_task_button(ns("plot_ts_pre"), "Plot timeseries"),
           plotly::plotlyOutput(ns("ts_plot_pre"))
         )
@@ -66,15 +72,24 @@ imputeMissingUI <- function(id) {
         accordion_panel(
           id = ns("options_panel"),
           title = "Imputation options",
-          textInput(
-            ns("start"),
-            "Start datetime (UTC)",
-            placeholder = "YYYY-MM-DD HH:MM:SS"
-          ),
-          textInput(
-            ns("end"),
-            "End datetime (UTC)",
-            placeholder = "YYYY-MM-DD HH:MM:SS"
+          shinyWidgets::airDatepickerInput(
+            ns("dt_range_impute"),
+            label = "Imputation datetime range (UTC)",
+            value = c(
+              .POSIXct(Sys.time() - 365 * 24 * 3600, tz = "UTC"),
+              .POSIXct(Sys.time(), tz = "UTC")
+            ),
+            range = TRUE,
+            multiple = FALSE,
+            timepicker = TRUE,
+            maxDate = Sys.Date() + 1,
+            startView = Sys.Date(),
+            update_on = "change",
+            timepickerOpts = shinyWidgets::timepickerOptions(
+              minutesStep = 15,
+              timeFormat = "HH:mm"
+            ),
+            width = "100%"
           ),
           numericInput(ns("radius"), "Search radius (km)", value = 10, min = 0),
           selectInput(
@@ -171,39 +186,49 @@ imputeMissing <- function(id) {
       meta[meta$timeseries_id == selected_ts(), , drop = FALSE]
     })
 
-    ts_plot_pre_task <- ExtendedTask$new(function(df) {
+    ts_plot_pre_task <- ExtendedTask$new(function(tsid, range, config) {
       promises::future_promise({
-        plot <- plotly::plot_ly(
-          data = df,
-          x = ~datetime,
-          y = ~value_raw,
-          type = 'scatter',
-          mode = 'lines',
-          name = 'Original'
-        ) %>%
-          plotly::add_lines(
-            y = ~value_corrected,
-            name = 'Corrected',
-            line = list(color = 'red')
-          ) %>%
-          plotly::layout(
-            title = NULL,
-            xaxis = list(title = "Datetime"),
-            yaxis = list(title = "Value")
-          )
-        return(plot)
+        con <- AquaConnect(
+          name = config$dbName,
+          host = config$dbHost,
+          port = config$dbPort,
+          username = config$dbUser,
+          password = config$dbPass,
+          silent = TRUE
+        )
+        on.exit(DBI::dbDisconnect(con))
+
+        plot <- plotTimeseries(
+          timeseries_id = tsid,
+          raw = TRUE,
+          con = con,
+          start_date = range[1],
+          end_date = range[2],
+          grades = TRUE,
+          approvals = TRUE,
+          qualifiers = TRUE,
+          resolution = "max",
+          imputed = TRUE,
+          data = TRUE,
+          datum = FALSE
+        )
+        # Modify the plot object to add red where data is missing
+        missing <- is.na(plot$data$value)
+
+        return(plot$plot)
       })
     }) |>
       bind_task_button("plot_ts_pre")
 
     observeEvent(input$plot_ts_pre, {
       req(selected_ts())
-      query <- sprintf(
-        "SELECT datetime, value_raw, value_corrected FROM continuous.measurements_continuous_corrected WHERE timeseries_id = %s ORDER BY datetime",
-        selected_ts()
+      print(selected_ts())
+      print(input$dt_range_pre)
+      ts_plot_pre_task$invoke(
+        tsid = selected_ts(),
+        range = input$dt_range_pre,
+        config = session$userData$config
       )
-      df <- DBI::dbGetQuery(session$userData$AquaCache, query)
-      ts_plot_pre_task$invoke(df)
     })
 
     output$ts_plot_pre <- plotly::renderPlotly({
@@ -214,17 +239,6 @@ imputeMissing <- function(id) {
     full_data <- reactiveVal(NULL)
     candidates <- reactiveVal(NULL)
     imputed_data <- reactiveVal(NULL)
-
-    parse_datetime <- function(x) {
-      if (is.null(x) || !nzchar(x)) {
-        return(NA_real_)
-      }
-      parsed <- suppressWarnings(as.POSIXct(x, tz = "UTC"))
-      if (is.na(parsed)) {
-        return(NA_real_)
-      }
-      parsed
-    }
 
     record_rate_seconds <- function(rate) {
       if (is.null(rate) || is.na(rate) || !nzchar(rate)) {
@@ -252,18 +266,15 @@ imputeMissing <- function(id) {
 
     fetch_series <- function(tsid, start_dt, end_dt) {
       con <- session$userData$AquaCache
-      query <- DBI::sqlInterpolate(
+      query <- DBI::dbGetQuery(
         con,
-        paste(
-          "SELECT datetime, value FROM continuous.measurements_continuous",
-          "WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3",
-          "ORDER BY datetime"
-        ),
-        tsid = tsid,
-        start_dt = start_dt,
-        end_dt = end_dt
+        "SELECT datetime, value, imputed FROM continuous.measurements_continuous WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3 ORDER BY datetime",
+        params = list(
+          tsid,
+          start_dt,
+          end_dt
+        )
       )
-      res <- DBI::dbGetQuery(con, query)
       if (nrow(res) > 0) {
         res$datetime <- as.POSIXct(res$datetime, tz = "UTC")
         res$value <- as.numeric(res$value)
@@ -273,8 +284,8 @@ imputeMissing <- function(id) {
 
     observeEvent(input$load, {
       req(selected_ts())
-      start_dt <- parse_datetime(input$start)
-      end_dt <- parse_datetime(input$end)
+      start_dt <- input$dt_range_impute[1]
+      end_dt <- input$dt_range_impute[2]
       if (is.na(start_dt) || is.na(end_dt)) {
         showNotification(
           "Please provide valid start and end datetimes in UTC.",

@@ -137,7 +137,7 @@ app_server <- function(input, output, session) {
 
   # Define the ExtendedTask to generate the plot
   plot_output <- ExtendedTask$new(
-    function(loc, param, lang, webgl, config, rate) {
+    function(loc, param, lang, webgl, config, resolution) {
       promises::future_promise({
         con <- AquaConnect(
           name = config$dbName,
@@ -169,7 +169,7 @@ app_server <- function(input, output, session) {
           start_date = Sys.Date() - 30,
           datum = TRUE,
           # filter = 20,
-          rate = rate,
+          resolution = resolution,
           lang = lang,
           line_scale = 1,
           axis_scale = 1,
@@ -200,7 +200,7 @@ app_server <- function(input, output, session) {
   # Trigger the plot creation when the render changes
   observeEvent(input$user_speed, {
     req(params$loc_code, params$param_code, params$lang)
-    rate <- if (input$user_speed < 0.0003) {
+    resolution <- if (input$user_speed < 0.0003) {
       "day"
     } else if (input$user_speed < 0.002) {
       "hour"
@@ -214,7 +214,7 @@ app_server <- function(input, output, session) {
       params$lang,
       session$userData$use_webgl,
       config,
-      rate
+      resolution
     )
   })
 

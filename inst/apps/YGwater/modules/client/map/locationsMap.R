@@ -741,7 +741,7 @@ mapLocs <- function(id, language) {
     }
 
     observe({
-      req(input$map_zoom, popupData())
+      req(input$map_zoom, popupData(), language$language)
       popup_data <- popupData()
       if (!is.null(input$type)) {
         if (length(input$type) > 1) {
@@ -971,13 +971,6 @@ mapLocs <- function(id, language) {
           MoreArgs = list(size = 20, stroke = "#244C5A", stroke_width = 1),
           USE.NAMES = FALSE
         )
-
-        # Create icons without custom class names
-        # icons <- leaflet::icons(
-        #   iconUrl = icon_urls,
-        #   iconWidth = 15,
-        #   iconHeight = 15
-        # )
 
         # Create icons with custom class names, used for pie chart cluster icons
         slug <- function(x) gsub("[^A-Za-z0-9_-]", "_", x)

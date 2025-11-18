@@ -3909,7 +3909,7 @@ contPlot <- function(id, language, windowDims, inputs) {
                 gridy = gridy,
                 con = con,
                 data = TRUE,
-                rate = 'max'
+                resolution = 'max'
               )
               return(plot)
             },

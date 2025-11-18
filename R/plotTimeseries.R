@@ -33,9 +33,10 @@
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.
-#' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
+#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
+#' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
@@ -45,7 +46,7 @@
 
 plotTimeseries <- function(
   timeseries_id = NULL,
-  location,
+  location = NULL,
   sub_location = NULL,
   parameter,
   record_rate = NULL,
@@ -74,9 +75,10 @@ plotTimeseries <- function(
   gridx = FALSE,
   gridy = FALSE,
   webgl = TRUE,
-  rate = NULL,
+  resolution = NULL,
   tzone = "auto",
   raw = FALSE,
+  imputed = FALSE,
   data = FALSE,
   con = NULL
 ) {
@@ -105,9 +107,10 @@ plotTimeseries <- function(
   # axis_scale = 1
   # legend_scale = 1
   # legend_position = "v"
-  # rate = "max"
+  # resolution = "max"
   # tzone = "auto"
   # raw = FALSE
+  # imputed = FALSE
   # con = NULL
   # gridx = FALSE
   # gridy = FALSE
@@ -119,8 +122,8 @@ plotTimeseries <- function(
   # Deal with non-standard evaluations from data.table to silence check() notes
   period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- NULL
 
-  if (!is.null(rate)) {
-    if (rate == "day" && raw) {
+  if (!is.null(resolution)) {
+    if (resolution == "day" && raw) {
       warning(
         "You have requested raw data at a daily rate. Daily data is only available as corrected data, so raw was reset to FALSE."
       )
@@ -145,11 +148,11 @@ plotTimeseries <- function(
     }
   }
 
-  if (!is.null(rate)) {
-    rate <- tolower(rate)
-    if (!(rate %in% c("max", "hour", "day"))) {
+  if (!is.null(resolution)) {
+    resolution <- tolower(resolution)
+    if (!(resolution %in% c("max", "hour", "day"))) {
       stop(
-        "Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again."
+        "Your entry for the parameter 'resolution' is invalid. Please review the function documentation and try again."
       )
     }
   }
@@ -630,17 +633,17 @@ plotTimeseries <- function(
   }
 
   range <- seq.POSIXt(start_date, end_date, by = "day")
-  if (is.null(rate)) {
+  if (is.null(resolution)) {
     if (length(range) > 3000) {
       if (!raw) {
-        rate <- "day"
+        resolution <- "day"
       } else {
-        rate <- "hour"
+        resolution <- "hour"
       }
     } else if (length(range) > 1000) {
-      rate <- "hour"
+      resolution <- "hour"
     } else {
-      rate <- "max"
+      resolution <- "max"
     }
   }
 
@@ -770,28 +773,28 @@ plotTimeseries <- function(
 
   ## fetch trace and range data ###################
   # Trace data first
-  if (rate == "day") {
+  if (resolution == "day") {
     trace_data <- dbGetQueryDT(
       con,
-      "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+      "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
       params = list(tsid, start_date, end_date)
     )
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
-  } else if (rate == "hour") {
+  } else if (resolution == "hour") {
     trace_data <- dbGetQueryDT(
       con,
       paste0(
-        "SELECT datetime, value_corrected AS value",
+        "SELECT datetime, value_corrected AS value, imputed",
         if (raw) ", value_raw",
         " FROM measurements_hourly_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC;"
       ),
       params = list(tsid, start_date, end_date)
     )
-  } else if (rate == "max") {
+  } else if (resolution == "max") {
     trace_data <- dbGetQueryDT(
       con,
       paste0(
-        "SELECT datetime, value_corrected AS value",
+        "SELECT datetime, value_corrected AS value, imputed",
         if (raw) ", value_raw",
         " FROM measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC LIMIT 200000;"
       ),
@@ -803,7 +806,7 @@ plotTimeseries <- function(
         infill <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT datetime, value_corrected AS value",
+            "SELECT datetime, value_corrected AS value, imputed",
             if (raw) ", value_raw",
             " FROM measurements_hourly_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC;"
           ),
@@ -821,12 +824,12 @@ plotTimeseries <- function(
 
   # Range data
   if (historic_range) {
-    # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous (corrected view or not). Where there isn't any data in the table fill in with the value from the daily table.
+    # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous_corrected view. Where there isn't any data in the table fill in with the value from the daily table.
     range_end <- end_date + 1 * 24 * 60 * 60
     range_start <- start_date - 1 * 24 * 60 * 60
     range_data <- dbGetQueryDT(
       con,
-      "SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;",
+      "SELECT date AS datetime, min, max, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;",
       params = list(tsid, range_start, range_end)
     )
     range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
@@ -884,19 +887,23 @@ plotTimeseries <- function(
       # Create a data.table of NA rows to be inserted
       na_rows <- data.table::data.table(
         datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
-        value = NA
+        value = NA,
+        imputed = FALSE
       )
       if (raw) {
         na_rows[, "value_raw" := NA]
         # Combine with NA rows
         trace_data <- data.table::rbindlist(
-          list(trace_data[, c("datetime", "value", "value_raw")], na_rows),
+          list(
+            trace_data[, c("datetime", "value", "value_raw", "imputed")],
+            na_rows
+          ),
           use.names = TRUE
         )
       } else {
         # Combine with NA rows
         trace_data <- data.table::rbindlist(
-          list(trace_data[, c("datetime", "value")], na_rows),
+          list(trace_data[, c("datetime", "value", "imputed")], na_rows),
           use.names = TRUE
         )
       }
@@ -908,7 +915,7 @@ plotTimeseries <- function(
     if (min_trace > start_date) {
       extra <- dbGetQueryDT(
         con,
-        "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
+        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
         params = list(
           tsid,
           min(trace_data$datetime),
@@ -926,7 +933,7 @@ plotTimeseries <- function(
     # this means that no trace data could be had because there are no measurements in the continuous or the hourly views table
     trace_data <- dbGetQueryDT(
       con,
-      "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+      "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
       params = list(tsid, start_date, end_date)
     )
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
@@ -1091,6 +1098,8 @@ plotTimeseries <- function(
     } else {
       paste(parameter_name, "(raw)")
     }
+
+    # Add the raw data first so it's below the corrected data
     plot <- plot %>%
       plotly::add_trace(
         data = trace_data,
@@ -1113,26 +1122,78 @@ plotTimeseries <- function(
       )
   }
 
-  plot <- plot %>%
-    plotly::add_trace(
-      data = trace_data,
-      x = ~datetime,
-      y = ~value,
-      type = if (webgl) "scattergl" else "scatter",
-      mode = "lines",
-      line = list(width = 2.5 * line_scale),
-      name = corrected_name,
-      color = I("#00454e"),
-      hoverinfo = if (hover) "text" else "none",
-      text = ~ paste0(
-        parameter_name,
-        ": ",
-        round(.data$value, 4),
-        " (",
-        .data$datetime,
-        ")"
+  # Add the corrected data trace
+  if (imputed) {
+    plot <- plot %>%
+      plotly::add_trace(
+        data = trace_data[trace_data$imputed == FALSE, ],
+        x = ~datetime,
+        y = ~value,
+        type = if (webgl) "scattergl" else "scatter",
+        mode = "lines",
+        line = list(width = 2.5 * line_scale),
+        name = corrected_name,
+        color = I("#00454e"),
+        hoverinfo = if (hover) "text" else "none",
+        text = ~ paste0(
+          parameter_name,
+          ": ",
+          round(.data$value, 4),
+          " (",
+          .data$datetime,
+          ")"
+        )
       )
-    )
+    plot <- plot %>%
+      plotly::add_trace(
+        data = trace_data[trace_data$imputed == TRUE, ],
+        x = ~datetime,
+        y = ~value,
+        type = if (webgl) "scattergl" else "scatter",
+        mode = "markers",
+        marker = list(
+          symbol = "circle",
+          size = 6 * line_scale,
+          color = "#e600b4ff",
+          line = list(width = 1 * line_scale, color = "#e600b4ff")
+        ),
+        name = if (lang == "en") {
+          paste0(corrected_name, " (imputed)")
+        } else {
+          paste0(corrected_name, " (imput\u00E9)")
+        },
+        hoverinfo = if (hover) "text" else "none",
+        text = ~ paste0(
+          parameter_name,
+          ": ",
+          round(.data$value, 4),
+          " (",
+          .data$datetime,
+          ")"
+        )
+      )
+  } else {
+    plot <- plot %>%
+      plotly::add_trace(
+        data = trace_data,
+        x = ~datetime,
+        y = ~value,
+        type = if (webgl) "scattergl" else "scatter",
+        mode = "lines",
+        line = list(width = 2.5 * line_scale),
+        name = corrected_name,
+        color = I("#00454e"),
+        hoverinfo = if (hover) "text" else "none",
+        text = ~ paste0(
+          parameter_name,
+          ": ",
+          round(.data$value, 4),
+          " (",
+          .data$datetime,
+          ")"
+        )
+      )
+  }
 
   # Add the grades, approvals, qualifiers as ribbons below the plotting area
   if (any(grades, approvals, qualifiers)) {

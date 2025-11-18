@@ -1,5 +1,8 @@
 # Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 
+con <- AquaConnect()
+on.exit(DBI::dbDisconnect(con), add = TRUE)
+
 test_that("timeseries plot is as expected for one year with no historic range or slider", {
   skip_on_cran()
   skip_on_ci()
@@ -17,7 +20,8 @@ test_that("timeseries plot is as expected for one year with no historic range or
     start_date = "2022-01-01",
     end_date = "2023-01-01",
     historic_range = FALSE,
-    slider = FALSE
+    slider = FALSE,
+    con = con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -40,7 +44,8 @@ test_that("timeseries plot is as expected for one year with no historic range", 
     parameter = "water level",
     start_date = "2022-01-01",
     end_date = "2023-01-01",
-    historic_range = FALSE
+    historic_range = FALSE,
+    con = con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -62,7 +67,8 @@ test_that("timeseries plot is as expected for one year with historic range", {
     location = "09EA004",
     parameter = "water level",
     start_date = "2022-01-01",
-    end_date = "2023-01-01"
+    end_date = "2023-01-01",
+    con = con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -85,7 +91,8 @@ test_that("French timeseries plot is as expected for one year with historic rang
     parameter = "water level",
     start_date = "2022-01-01",
     end_date = "2023-01-01",
-    lang = "fr"
+    lang = "fr",
+    con = con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -109,7 +116,8 @@ test_that("French timeseries plot is as expected for one year with historic rang
     start_date = "2022-01-01",
     end_date = "2023-01-01",
     lang = "fr",
-    slider = FALSE
+    slider = FALSE,
+    con = con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -136,7 +144,8 @@ test_that("grades, approvals, qualifiers are displayed", {
     slider = FALSE,
     grades = TRUE,
     qualifiers = TRUE,
-    approvals = TRUE
+    approvals = TRUE,
+    con = con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -161,7 +170,8 @@ test_that("one of grades, approvals, qualifiers is displayed", {
     end_date = "2023-01-01",
     lang = "fr",
     slider = FALSE,
-    grades = TRUE
+    grades = TRUE,
+    con = con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -178,7 +188,8 @@ test_that("returned plot data is as expected", {
     end_date = "2023-01-01",
     lang = "fr",
     slider = FALSE,
-    data = TRUE
+    data = TRUE,
+    con = con
   )$data
   expect_type(plot, "list")
   expect_named(plot, c("trace_data", "range_data"))
@@ -209,7 +220,8 @@ test_that("returned plot data is as expected with all parameters specified", {
     grades = TRUE,
     approvals = TRUE,
     qualifiers = TRUE,
-    historic_range = TRUE
+    historic_range = TRUE,
+    con = con
   )$data
   expect_type(plot, "list")
   expect_named(plot, c("trace_data", "range_data"))
@@ -236,7 +248,8 @@ test_that("plotTimeseries works when given only a timeseries_id", {
     end_date = "2023-01-01",
     historic_range = TRUE,
     slider = FALSE,
-    data = TRUE
+    data = TRUE,
+    con = con
   )
   expect_s3_class(plot$plot, "plotly")
   expect_named(plot$data, c("trace_data", "range_data"))
@@ -266,7 +279,8 @@ test_that("plotTimeseries plots raw and corrected data", {
     historic_range = TRUE,
     slider = FALSE,
     data = TRUE,
-    raw = TRUE
+    raw = TRUE,
+    con = con
   )
   expect_s3_class(plot$plot, "plotly")
   expect_named(plot$data, c("trace_data", "range_data"))

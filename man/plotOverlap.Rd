@@ -24,7 +24,7 @@ plotOverlap(
   filter = NULL,
   unusable = FALSE,
   historic_range = "last",
-  rate = "day",
+  resolution = "day",
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
@@ -77,7 +77,7 @@ plotOverlap(
 
 \item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
 
-\item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
+\item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
 \item{line_scale}{A scale factor to apply to the size (width) of the lines. Default is 1.}
 
