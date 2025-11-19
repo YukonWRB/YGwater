@@ -193,7 +193,7 @@ test_that("returned plot data is as expected", {
   )$data
   expect_type(plot, "list")
   expect_named(plot, c("trace_data", "range_data"))
-  expect_named(plot$trace_data, c("datetime", "value"))
+  expect_named(plot$trace_data, c("datetime", "value", "imputed"))
   expect_named(plot$range_data, c("datetime", "min", "max", "q75", "q25"))
 })
 
@@ -225,7 +225,7 @@ test_that("returned plot data is as expected with all parameters specified", {
   )$data
   expect_type(plot, "list")
   expect_named(plot, c("trace_data", "range_data"))
-  expect_named(plot$trace_data, c("datetime", "value"))
+  expect_named(plot$trace_data, c("datetime", "value", "imputed"))
   expect_named(plot$range_data, c("datetime", "min", "max", "q75", "q25"))
 })
 
@@ -253,7 +253,7 @@ test_that("plotTimeseries works when given only a timeseries_id", {
   )
   expect_s3_class(plot$plot, "plotly")
   expect_named(plot$data, c("trace_data", "range_data"))
-  expect_named(plot$data$trace_data, c("datetime", "value"))
+  expect_named(plot$data$trace_data, c("datetime", "value", "imputed"))
   expect_named(plot$data$range_data, c("datetime", "min", "max", "q75", "q25"))
 })
 
@@ -284,7 +284,10 @@ test_that("plotTimeseries plots raw and corrected data", {
   )
   expect_s3_class(plot$plot, "plotly")
   expect_named(plot$data, c("trace_data", "range_data"))
-  expect_named(plot$data$trace_data, c("datetime", "value", "value_raw"))
+  expect_named(
+    plot$data$trace_data,
+    c("datetime", "value", "value_raw", "imputed")
+  )
   expect_named(plot$data$range_data, c("datetime", "min", "max", "q75", "q25"))
 
   dir <- file.path(tempdir(), "plotly_tests")
