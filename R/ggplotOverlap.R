@@ -1284,7 +1284,10 @@ ggplotOverlap <- function(
   }
 
   current_year_label_en <- paste0("Year(s): ", paste(years, collapse = ", "))
-  current_year_label_fr <- paste0("Année(s): ", paste(years, collapse = ", "))
+  current_year_label_fr <- paste0(
+    "Ann\u00E9ee(s): ",
+    paste(years, collapse = ", ")
+  )
   current_year_label <- if (lang == "en") {
     current_year_label_en
   } else {
@@ -1306,7 +1309,7 @@ ggplotOverlap <- function(
         na.rm = T
       ) +
       ggplot2::scale_colour_manual(
-        name = if (lang == "en") "Year" else "Année",
+        name = if (lang == "en") "Year" else "Ann\u00E9ee",
         labels = rev(unique(realtime$plot_year)),
         values = grDevices::colorRampPalette(c(
           "#206976",
@@ -1333,7 +1336,7 @@ ggplotOverlap <- function(
         na.rm = T
       ) +
       ggplot2::scale_colour_manual(
-        name = if (lang == "en") "Legend" else "Légende",
+        name = if (lang == "en") "Legend" else "L\u00E9egende",
         # Create the color mapping as a variable
 
         # Then use it in scale_colour_manual
