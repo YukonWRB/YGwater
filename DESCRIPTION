@@ -53,6 +53,7 @@ Imports:
     zoo
 Suggests:
     AquaCache,
+    base64enc,
     bslib,
     bsicons,
     callthat,
@@ -72,6 +73,7 @@ Suggests:
     odbc,
     officer,
     officedown,
+    pandoc,
     pdftools,
     plumber,
     purrr,
@@ -82,6 +84,7 @@ Suggests:
     RSQLite,
     tesseract,
     trend,
+    shadowtext,
     shiny,
     shinycssloaders,
     shinyjs,

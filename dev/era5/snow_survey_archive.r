@@ -743,9 +743,9 @@ create_continuous_plot_popup <- function(ts_id, station_name) {
 
     # Save the ggplotOverlap plot as a PNG tempfile with smaller dimensions
     plot_file <- tempfile(fileext = ".png")
-    png(plot_file, width = 800, height = 600, res = 120)
+    grDevices::png(plot_file, width = 800, height = 600, res = 120)
     print(plot)
-    dev.off()
+    grDevices::dev.off()
 
     # Encode PNG to base64
     plot_data <- readBin(plot_file, "raw", file.info(plot_file)$size)
@@ -830,9 +830,9 @@ create_discrete_plot_popup <- function(ts, station_name) {
 
     # Suppress warnings during PNG creation to avoid the geom_line warning
     suppressWarnings({
-        png(plot_file, width = 800, height = 600, res = 120)
+        grDevices::png(plot_file, width = 800, height = 600, res = 120)
         print(plot)
-        dev.off()
+        grDevices::dev.off()
     })
 
     # Encode PNG to base64

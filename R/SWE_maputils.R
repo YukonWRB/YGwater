@@ -38,8 +38,8 @@
 #' @details
 #' The relative SWE bins are designed to highlight significant departures from normal
 #'
-#' @export
 #' @noRd
+
 initialize_visualization_parameters <- function() {
   # Color scheme and visualization parameters
   # Bins represent percentage of normal SWE (relative_swe values)
@@ -1180,6 +1180,7 @@ get_swe_state <- function(
 #' @param timeseries data.frame with 'datetime' and station value columns
 #' @param year Integer year for plot focus
 #' @param con Database connection for historical data access
+#' @param station_name Optional character string for station name/title
 #' @return Character string containing HTML with embedded base64 image
 #'
 #' @description
@@ -1207,6 +1208,12 @@ create_continuous_plot_popup <- function(
   con,
   station_name = NULL
 ) {
+  # Check for base64enc as it's in package suggests
+  rlang::check_installed(
+    "base64enc",
+    reason = "to create base64-encoded plot images"
+  )
+
   # Validate timeseries structure
   if (!is.data.frame(timeseries) || ncol(timeseries) < 2) {
     stop("Timeseries must have columns datetime and value")
@@ -1303,6 +1310,12 @@ create_continuous_plot_popup <- function(
 #' popup_html <- create_discrete_plot_popup(station_ts)
 #' }
 create_discrete_plot_popup <- function(timeseries) {
+  # Check for base64enc as it's in package suggests
+  rlang::check_installed(
+    "base64enc",
+    reason = "to create base64-encoded plot images"
+  )
+
   # Clean and validate the data before plotting
   station_name <- names(timeseries)[2]
   names(timeseries) <- c("datetime", "value")
@@ -1333,9 +1346,9 @@ create_discrete_plot_popup <- function(timeseries) {
 
   # Suppress warnings during PNG creation to avoid the geom_line warning
   suppressWarnings({
-    png(plot_file, width = 800, height = 600, res = 120)
+    grDevices::png(plot_file, width = 800, height = 600, res = 120)
     print(plot)
-    dev.off()
+    grDevices::dev.off()
   })
 
   # Encode PNG to base64
@@ -1402,6 +1415,7 @@ create_discrete_plot_popup <- function(timeseries) {
 #' print(sprintf("Loaded %d basins", nrow(base_data$basins$metadata)))
 #' }
 load_base_data <- function(con) {
+  # Initialize empty list to hold all base data
   base_data <- list(
     pillows = list(),
     surveys = list(),
@@ -1450,9 +1464,7 @@ load_base_data <- function(con) {
   )
 
   # Calculate basin areas in square kilometers
-  basins_shp$area_km2 <- sf::st_area(basins_shp) |>
-    units::set_units("km^2") |>
-    as.numeric()
+  basins_shp$area_km2 <- sf::st_area(basins_shp) * 0.000001
 
   if ("SWE_Basin" %in% names(basins_shp)) {
     names(basins_shp)[names(basins_shp) == "SWE_Basin"] <- "name"
@@ -1845,7 +1857,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
         area_html <- paste0(
           "<b>Area:</b> ",
           round(basin_area, 1),
-          " km²<br>"
+          " km\u00B2<br>"
         )
       }
       if (length(basin_elev) > 0 && !is.na(basin_elev)) {
@@ -2318,6 +2330,10 @@ leaflet_snow_bulletin_map <- function(
   if (!is.null(filename)) {
     cat(sprintf("Saving map to file: %s\n", filename))
     requireNamespace("pandoc")
+    rlang::check_installed(
+      "pandoc",
+      reason = "to create self-contained HTML files"
+    )
 
     loc <- pandoc::pandoc_locate()
     if (is.null(loc)) {
@@ -2590,16 +2606,24 @@ ggplot_snow_bulletin_map <- function(
 
   basin_labels_df$annotation <- gsub("<br>", "\n", basin_labels_df$annotation)
 
-  p <- p +
-    shadowtext::geom_shadowtext(
-      data = basin_labels_df,
-      ggplot2::aes(x = x, y = y, label = annotation),
-      size = 2.25,
-      fontface = "bold",
-      color = viz_params$basins$label$color,
-      bg.color = "white",
-      bg.r = 0.1
+  # If shadowtext package is available, use it for better label visibility
+  if (!requireNamespace("shadowtext", quietly = TRUE)) {
+    warning(
+      "Package 'shadowtext' not installed. Basin labels may be less visible. ",
+      "Consider installing 'shadowtext' for improved label rendering."
     )
+  } else {
+    p <- p +
+      shadowtext::geom_shadowtext(
+        data = basin_labels_df,
+        ggplot2::aes(x = x, y = y, label = annotation),
+        size = 2.25,
+        fontface = "bold",
+        color = viz_params$basins$label$color,
+        bg.color = "white",
+        bg.r = 0.1
+      )
+  }
 
   # Add title and subtitle
   month_name <- c(
@@ -2713,12 +2737,15 @@ ggplot_snow_bulletin_map <- function(
 
 #' Create demo maps for snow bulletin visualization
 #'
+#' @description
+#' Generates both interactive leaflet and static ggplot2 maps for snow water equivalent
+#'
 #' @param con DBI database connection object (optional)
 #' @return list containing both leaflet and ggplot map objects
 #' @details Demonstrates the snow bulletin mapping functionality by creating
 #'   both interactive (leaflet) and static (ggplot2) maps for April and May 2025.
 #' @export
-#' @noRd
+
 demo_snow_bulletin_maps <- function(con = NULL) {
   # Create database connection if not provided
   if (is.null(con)) {

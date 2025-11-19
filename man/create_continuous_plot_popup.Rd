@@ -12,6 +12,8 @@ create_continuous_plot_popup(timeseries, year, con, station_name = NULL)
 \item{year}{Integer year for plot focus}
 
 \item{con}{Database connection for historical data access}
+
+\item{station_name}{Optional character string for station name/title}
 }
 \value{
 Character string containing HTML with embedded base64 image
