@@ -2018,13 +2018,9 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
         round(swe_at_basins$relative_swe, 1),
         "%)"
     )
-  }
 
-  # Fix mapply argument mismatch for popup_content
-  swe_at_basins$popup_content <- mapply(
-    function(swe, relative_swe, historic_median, percentile, name) {
-      generate_popup_content(
-        "basin",
+    generate_popup_content <- function(
+        type,
         swe,
         relative_swe,
         historic_median,
@@ -2063,68 +2059,66 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             "<br>"
         }
 
-    # Get basin area if type is basin, otherwise get coordinates
-    area_html <- if (type == "basin") {
-      basin_area <- base_data$basins$metadata$area_km2[
-        base_data$basins$metadata$name == name
-      ]
-      basin_elev <- base_data$basins$metadata$MeanElev_m[
-        base_data$basins$metadata$name == name
-      ]
-      area_html <- ""
-      if (length(basin_area) > 0 && !is.na(basin_area)) {
-        area_html <- paste0(
-          "<b>Area:</b> ",
-          round(basin_area, 1),
-          " km\u00B2<br>"
-        )
-      }
-      if (length(basin_elev) > 0 && !is.na(basin_elev)) {
-        area_html <- paste0(
-          area_html,
-          "<b>Mean Elevation:</b> ",
-          round(basin_elev, 0),
-          " m<br>"
-        )
-      }
-      area_html
-    } else if (type %in% c("survey", "pillow")) {
-      # Get coordinates and round them
-      if (type == "survey") {
-        coord_data <- base_data$surveys$metadata[
-          base_data$surveys$metadata$location_id == id,
-        ]
-      } else {
-        coord_data <- base_data$pillows$metadata[
-          base_data$pillows$metadata$timeseries_id == id,
-        ]
-      }
-      if (nrow(coord_data) > 0) {
-        coords <- sf::st_coordinates(coord_data)
-        lat <- round(coords[1, 2], 2)
-        lon <- round(coords[1, 1], 2)
-        elev_html <- ""
-        if (!is.na(coord_data$conversion_m[1])) {
-          elev_html <- paste0(
-            "<b>Elevation:</b> ",
-            round(coord_data$conversion_m[1], 0),
-            " m<br>"
-          )
+        area_html <- if (type == "basin") {
+            basin_area <- base_data$basins$metadata$area_km2[
+                base_data$basins$metadata$name == name
+            ]
+            basin_elev <- base_data$basins$metadata$MeanElev_m[
+                base_data$basins$metadata$name == name
+            ]
+            area_html <- ""
+            if (length(basin_area) > 0 && !is.na(basin_area)) {
+                area_html <- paste0(
+                    "<b>Area:</b> ",
+                    round(basin_area, 1),
+                    " km\u00B2<br>"
+                )
+            }
+            if (length(basin_elev) > 0 && !is.na(basin_elev)) {
+                area_html <- paste0(
+                    area_html,
+                    "<b>Mean Elevation:</b> ",
+                    round(basin_elev, 0),
+                    " m<br>"
+                )
+            }
+            area_html
+        } else if (type %in% c("survey", "pillow")) {
+            if (type == "survey") {
+                coord_data <- base_data$surveys$metadata[
+                    base_data$surveys$metadata$location_id == id,
+                ]
+            } else {
+                coord_data <- base_data$pillows$metadata[
+                    base_data$pillows$metadata$timeseries_id == id,
+                ]
+            }
+            if (nrow(coord_data) > 0) {
+                coords <- sf::st_coordinates(coord_data)
+                lat <- round(coords[1, 2], 2)
+                lon <- round(coords[1, 1], 2)
+                elev_html <- ""
+                if (!is.na(coord_data$conversion_m[1])) {
+                    elev_html <- paste0(
+                        "<b>Elevation:</b> ",
+                        round(coord_data$conversion_m[1], 0),
+                        " m<br>"
+                    )
+                }
+                paste0(
+                    "<b>Coordinates:</b> ",
+                    lat,
+                    "N, ",
+                    lon,
+                    "W<br>",
+                    elev_html
+                )
+            } else {
+                ""
+            }
+        } else {
+            ""
         }
-        paste0(
-          "<b>Coordinates:</b> ",
-          lat,
-          "N, ",
-          lon,
-          "W<br>",
-          elev_html
-        )
-      } else {
-        ""
-      }
-    } else {
-      ""
-    }
 
         paste0(
             "<div style='text-align: left; padding: 10px; width: 300px;'>",
@@ -2138,7 +2132,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             "<b>SWE Value:</b> ",
             if (!is.na(swe)) paste0(round(swe, 1), " mm") else "No data",
             "<br>",
-            "<b>SWE Value:</b> ",
+            "<b>Relative SWE:</b> ",
             if (!is.na(relative_swe)) {
                 paste0(round(relative_swe, 1), "% of normal")
             } else {
