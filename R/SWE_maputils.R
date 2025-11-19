@@ -332,7 +332,7 @@ download_continuous_ts <- function(
 ) {
   # Build metadata query for continuous SWE timeseries
   md_query <- paste0(
-    "SELECT 
+    "SELECT
             t.timeseries_id,
             t.location_id,
             l.location,
@@ -343,104 +343,47 @@ download_continuous_ts <- function(
          FROM continuous.timeseries t
          JOIN public.locations l ON t.location_id = l.location_id
          LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
-         WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters 
+         WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters
                                  WHERE param_name = 'snow water equivalent')"
   )
 
-    # Convert metadata to sf (WGS84)
-    md_continuous <- sf::st_as_sf(
-        md_continuous_df,
-        coords = c("longitude", "latitude"),
-        crs = 4326,
-        remove = FALSE
-    )
+  md_continuous_df <- DBI::dbGetQuery(con, md_query)
 
-    ts_ids <- unique(md_continuous$timeseries_id)
-    # Temporary list to hold per-station data.frames for latest-date calculation
-    ts_list_temp <- vector("list", length(ts_ids))
-    names(ts_list_temp) <- as.character(ts_ids)
+  if (nrow(md_continuous_df) == 0) {
+    warning("No continuous SWE stations found")
+    return(list(
+      timeseries = list(
+        swe = data.frame(datetime = as.POSIXct(character(0)))
+      ),
+      metadata = NULL
+    ))
+  }
 
-    # Master timeseries dataframe (will contain datetime + one column per station)
-    master_df <- NULL
+  # Convert metadata to sf (WGS84)
+  md_continuous <- sf::st_as_sf(
+    md_continuous_df,
+    coords = c("longitude", "latitude"),
+    crs = 4326,
+    remove = FALSE
+  )
 
-    for (i in seq_along(ts_ids)) {
-        ts_id <- ts_ids[i]
+  ts_ids <- unique(md_continuous$timeseries_id)
+  # Temporary list to hold per-station data.frames for latest-date calculation
+  ts_list_temp <- vector("list", length(ts_ids))
+  names(ts_list_temp) <- as.character(ts_ids)
 
-        # Retrieve measurements for this timeseries
-        ts_query <- sprintf(
-            "SELECT date, value FROM continuous.measurements_calculated_daily_corrected
+  # Master timeseries dataframe (will contain datetime + one column per station)
+  master_df <- NULL
+
+  for (i in seq_along(ts_ids)) {
+    ts_id <- ts_ids[i]
+
+    # Retrieve measurements for this timeseries
+    ts_query <- sprintf(
+      "SELECT date, value FROM continuous.measurements_calculated_daily_corrected
              WHERE timeseries_id = %d AND value IS NOT NULL",
-            as.integer(ts_id)
-        )
-
-        if (!is.null(start_date)) {
-            ts_query <- paste0(
-                ts_query,
-                " AND date >= ",
-                DBI::dbQuoteString(con, start_date)
-            )
-        }
-        if (!is.null(end_date)) {
-            ts_query <- paste0(
-                ts_query,
-                " AND date <= ",
-                DBI::dbQuoteString(con, end_date)
-            )
-        }
-
-        ts_data <- DBI::dbGetQuery(con, ts_query)
-
-        if (nrow(ts_data) == 0) {
-            # store empty df for latest-date processing
-            ts_list_temp[[as.character(ts_id)]] <- data.frame(
-                datetime = as.POSIXct(character(0)),
-                value = numeric(0)
-            )
-            next
-        }
-        # Rename 'date' column to 'datetime'
-        if ("date" %in% names(ts_data)) {
-            names(ts_data)[names(ts_data) == "date"] <- "datetime"
-        }
-        # Parse datetimes and sort
-        ts_data$datetime <- as.POSIXct(ts_data$datetime, tz = "UTC")
-        ts_data <- ts_data[order(ts_data$datetime), , drop = FALSE]
-
-        # Resample to daily or monthly as requested
-        if (resolution == "daily") {
-            ts_data$day <- as.Date(ts_data$datetime)
-            ts_daily <- stats::aggregate(
-                value ~ day,
-                data = ts_data,
-                FUN = mean,
-                na.rm = TRUE
-            )
-            names(ts_daily) <- c("datetime", "value")
-            ts_daily$datetime <- as.POSIXct(ts_daily$datetime, tz = "UTC")
-            ts_out <- ts_daily
-        } else if (resolution == "monthly") {
-            ts_data$month <- format(ts_data$datetime, "%Y-%m")
-            ts_monthly <- stats::aggregate(
-                value ~ month,
-                data = ts_data,
-                FUN = mean,
-                na.rm = TRUE
-            )
-            names(ts_monthly) <- c("datetime", "value")
-            # set to first day of month
-            ts_monthly$datetime <- as.POSIXct(
-                paste0(ts_monthly$datetime, "-01"),
-                tz = "UTC"
-            )
-            ts_out <- ts_monthly
-        } else {
-            warning(sprintf(
-                "Unknown resolution '%s' for timeseries_id: %s",
-                resolution,
-                ts_id
-            ))
-            ts_out <- ts_data[, c("datetime", "value"), drop = FALSE]
-        }
+      as.integer(ts_id)
+    )
 
     if (!is.null(start_date)) {
       ts_query <- paste0(
@@ -669,9 +612,10 @@ download_discrete_ts <- function(
   ts_ids <- unique(md_discrete$location_id)
   ts_list_temp <- vector("list", length(ts_ids))
   names(ts_list_temp) <- as.character(ts_ids)
+  master_df <- NULL
 
-    for (i in seq_along(ts_ids)) {
-        loc_id <- ts_ids[i]
+  for (i in seq_along(ts_ids)) {
+    loc_id <- ts_ids[i]
 
     ts_query <- sprintf(
       "SELECT s.datetime, s.target_datetime, r.result
