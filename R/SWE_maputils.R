@@ -853,31 +853,26 @@ load_snowcourse_factors <- function(
         snowcourse_factors$location != "10AD-SC01",
     ]
     # Drop location_name column
-    snowcourse_factors <- snowcourse_factors[,
-        !colnames(snowcourse_factors) %in% "location_name"
+    snowcourse_factors <- snowcourse_factors[
+      , !colnames(snowcourse_factors) %in% "location_name"
     ]
 
-    if (!is.null(metadata_discrete)) {
-        # Replace 'location' in snowcourse_factors with 'location_id' from metadata_discrete
-        # Assume metadata_discrete has columns 'location' and 'location_id'
-        if (
-            "location" %in%
-                colnames(snowcourse_factors) &&
-                "location" %in% colnames(metadata_discrete) &&
-                "location_id" %in% colnames(metadata_discrete)
-        ) {
-            snowcourse_factors <- merge(
-                snowcourse_factors,
-                metadata_discrete[, c("location", "location_id")],
-                by = "location",
-                all.x = TRUE,
-                sort = FALSE
-            )
-            # Remove old 'location' column if desired, keep only 'location_id'
-            snowcourse_factors$location <- NULL
-        }
+    if (
+      !is.null(metadata_discrete) &&
+          "location" %in% colnames(snowcourse_factors) &&
+          "location" %in% colnames(metadata_discrete) &&
+          "location_id" %in% colnames(metadata_discrete)
+  ) {
+      snowcourse_factors <- merge(
+          snowcourse_factors,
+          metadata_discrete[, c("location", "location_id")],
+          by = "location",
+          all.x = TRUE,
+          sort = FALSE
+      )
+
+      snowcourse_factors$location <- NULL
     }
-  }
 
   return(snowcourse_factors)
 }
