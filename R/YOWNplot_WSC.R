@@ -64,7 +64,7 @@ YOWNplot_WSC <- function(
     print(i)
 
     # Download data from Aquarius
-    datalist <- suppressMessages(YGwater::aq_download(
+    datalist <- suppressMessages(aq_download(
       loc_id = i,
       ts_name = "Wlevel_masl.Calculated",
       login = login,
@@ -152,7 +152,7 @@ YOWNplot_WSC <- function(
     print(i)
 
     # Download data from Aquarius
-    datalist <- suppressMessages(YGwater::aq_download(
+    datalist <- suppressMessages(aq_download(
       loc_id = i,
       ts_name = "Stage.Preliminary",
       login = login,

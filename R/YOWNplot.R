@@ -73,7 +73,7 @@ YOWNplot <- function(
   #### Download time series data from Aquarius, preliminary formatting ####
   # Download data from Aquarius
   message("Downloading data from Aquarius")
-  datalist <- suppressMessages(YGwater::aq_download(
+  datalist <- suppressMessages(aq_download(
     loc_id = AQID,
     ts_name = timeSeriesID,
     login = login,
