@@ -2480,7 +2480,7 @@ ggplot_snow_bulletin_map <- function(
     p <- p +
         ggplot2::geom_sf(
             data = data$swe_at_basins,
-            ggplot2::aes(fill = I(data$swe_at_basins$fill_color)),
+            fill = data$swe_at_basins$fill_color,
             color = viz_params$basins$color,
             size = viz_params$basins$weight * 0.25,
             alpha = viz_params$basins$fillOpacity
@@ -2617,29 +2617,26 @@ ggplot_snow_bulletin_map <- function(
         "November",
         "December"
     )[as.numeric(month) + 1]
-
     # Add colormap legend for SWE (relative_swe)
-    # Create legend data dynamically based on actual data bins
+    # Use complete predefined colormap for consistent legend
     bin_ranges <- viz_params$relative_bins[-length(viz_params$relative_bins)]
-    bin_labels <- character(length(bin_ranges))
+    bin_colors <- viz_params$relative_colors
+    bin_labels <- c(
+        "≥ 150%",
+        "130 - 149%",
+        "110 - 129%",
+        "90 - 109%",
+        "70 - 89%",
+        "50 - 69%",
+        "< 50%",
+        "Snow present where historical median is zero",
+        "No snow present were historical mean is zero"
+    )
 
-    for (i in seq_along(bin_ranges)) {
-        if (i == 1) {
-            bin_labels[i] <- sprintf("< %d%%", bin_ranges[i + 1])
-        } else if (i == length(bin_ranges)) {
-            bin_labels[i] <- sprintf("> %d%%", bin_ranges[i])
-        } else {
-            bin_labels[i] <- sprintf(
-                "%d-%d%%",
-                bin_ranges[i],
-                bin_ranges[i + 1]
-            )
-        }
-    }
-
+    # Create manual legend using annotation_custom
     swe_legend_df <- data.frame(
-        bin = seq_along(bin_ranges),
-        color = viz_params$relative_colors[-length(viz_params$relative_colors)],
+        bin = seq_along(bin_colors),
+        color = bin_colors,
         label = bin_labels,
         stringsAsFactors = FALSE
     )
@@ -2652,17 +2649,6 @@ ggplot_snow_bulletin_map <- function(
                 year
             ),
             subtitle = "SWE as % of Normal | Basins (polygons) | Discrete stations (black) | Continuous stations (blue)"
-        ) +
-        ggplot2::scale_fill_manual(
-            values = viz_params$basins$fillColor,
-            guide = ggplot2::guide_legend(
-                title = "% of Normal",
-                override.aes = list(
-                    fill = viz_params$basins$fillColor,
-                    color = viz_params$basins$fillColor
-                ),
-                label.theme = ggplot2::element_text(size = 8)
-            )
         )
 
     # Add coordinate system
@@ -2676,7 +2662,56 @@ ggplot_snow_bulletin_map <- function(
         ymax = max(basin_bbox["ymax"], yukon_bbox["ymax"])
     ))
 
-    buffer_degrees <- 50 / 111.32 # Convert 50km to degrees (approx 111.32 km per degree)
+    buffer_degrees <- 50 / 111.32 # Convert 50km to degrees (approx)
+
+    # Create a manual legend for SWE values
+    legend_df <- data.frame(
+        x = rep(basin_bbox["xmax"] - 1.5 * buffer_degrees, length(bin_colors)),
+        y = seq(
+            from = basin_bbox["ymax"] - buffer_degrees,
+            to = basin_bbox["ymax"] - buffer_degrees - 2.0,
+            length.out = length(bin_colors)
+        ),
+        color = bin_colors,
+        label = bin_labels,
+        stringsAsFactors = FALSE
+    )
+
+    # Add legend squares and text
+    for (i in seq_len(nrow(legend_df))) {
+        p <- p +
+            ggplot2::annotate(
+                "rect",
+                xmin = legend_df$x[i] - 0.64,
+                xmax = legend_df$x[i] - 0.04,
+                ymin = legend_df$y[i] - 0.08,
+                ymax = legend_df$y[i] + 0.08,
+                fill = legend_df$color[i],
+                color = "black",
+                size = 0.2
+            ) +
+            ggplot2::annotate(
+                "text",
+                x = legend_df$x[i],
+                y = legend_df$y[i],
+                label = legend_df$label[i],
+                hjust = 0,
+                size = 2,
+                fontface = "bold"
+            )
+    }
+
+    # Add legend title
+    p <- p +
+        ggplot2::annotate(
+            "text",
+            x = legend_df$x[1] - 0.1,
+            y = legend_df$y[1] + 0.2,
+            label = "% of Normal",
+            hjust = 0.5,
+            size = 2.5,
+            fontface = "bold"
+        )
 
     p <- p +
         ggplot2::coord_sf(
@@ -2737,7 +2772,8 @@ demo_snow_bulletin_maps <- function(con = NULL) {
     leaflet_map <- leaflet_snow_bulletin_map(
         year = 2025,
         month = 4,
-        base_data = base_data
+        base_data = base_data,
+        filename = "snowbul.html"
     )
 
     ggplot_map <- ggplot_snow_bulletin_map(
@@ -2753,3 +2789,5 @@ demo_snow_bulletin_maps <- function(con = NULL) {
         base_data = base_data
     ))
 }
+
+#demo_snow_bulletin_maps()

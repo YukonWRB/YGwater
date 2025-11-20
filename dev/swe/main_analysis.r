@@ -23,6 +23,47 @@ con2 <- AquaConnect(
 )
 
 
+download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
+    query <- sprintf(
+        "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
+         FROM spatial.vectors 
+         WHERE layer_name = %s",
+        DBI::dbQuoteString(con, layer_name)
+    )
+
+    if (!is.null(additional_query) && nzchar(additional_query)) {
+        query <- paste(query, additional_query)
+    }
+
+    data <- DBI::dbGetQuery(con, query)
+    if (nrow(data) == 0) {
+        warning(sprintf("No data found for layer: %s", layer_name))
+        return(NULL)
+    }
+
+    geom <- sf::st_as_sfc(data$geom_4326, crs = 4326)
+    sf::st_sf(data, geometry = geom, crs = 4326)
+}
+
+place_types <- c("City", "Town", "Village") # Filter to major communities only
+communities <- download_spatial_layer(
+    con2,
+    "Communities",
+    additional_query = sprintf(
+        "AND (description IN (%s) OR feature_name IN ('Old Crow', 'Beaver Creek'))",
+        paste(
+            sapply(
+                place_types,
+                function(x) DBI::dbQuoteString(con, x)
+            ),
+            collapse = ", "
+        )
+    )
+)
+
+
+query_date <- as.Date("2025-11-10", format = "%Y-%m-%d")
+
 # Single query to get raster values for ERA5 model
 era5_query <- "
 SELECT 
@@ -38,16 +79,20 @@ era5_raster_data <- DBI::dbGetQuery(con2, era5_query)
 # Convert to time series object
 era5_raster_data$datetime <- as.POSIXct(era5_raster_data$datetime)
 
-# Select first of each month
-era5_raster_data$year_month <- format(era5_raster_data$datetime, "%Y-%m")
-era5_raster_data <- era5_raster_data[!duplicated(era5_raster_data$year_month), ]
-era5_raster_data$year_month <- NULL
-
-# Filter for years > 2000
+# Filter for records that match the day of year of query_date
+query_day_of_year <- as.numeric(format(query_date, "%j"))
+era5_raster_data$day_of_year <- as.numeric(format(
+    era5_raster_data$datetime,
+    "%j"
+))
 era5_raster_data <- era5_raster_data[
-    format(era5_raster_data$datetime, "%Y") > "2020",
+    era5_raster_data$day_of_year == query_day_of_year,
 ]
-
+era5_raster_data$day_of_year <- NULL
+# Filter to only include data up to year 2000
+era5_raster_data$year <- as.numeric(format(era5_raster_data$datetime, "%Y"))
+era5_raster_data <- era5_raster_data[era5_raster_data$year >= 1980, ]
+era5_raster_data$year <- NULL
 
 # Get all raster objects for the ERA5 data
 era5_rasters <- list()
@@ -80,6 +125,102 @@ era5_stack <- do.call(c, era5_rasters)
 time_vector <- era5_raster_data$datetime
 month_vector <- as.numeric(format(time_vector, "%m"))
 
+
+# Remove the most recent date from the stack before calculating median
+n_layers <- terra::nlyr(era5_stack)
+era5_stack_subset <- era5_stack[[1:(n_layers - 1)]]
+
+# Calculate median across time dimension (layers), excluding most recent
+era5_median <- terra::app(era5_stack_subset, fun = median, na.rm = TRUE)
+# Get the most recent layer from the stack
+era5_recent <- era5_stack[[n_layers]]
+
+# Calculate relative change: most recent divided by median
+era5_relative_change <- 100 * era5_recent / era5_median
+
+
+# Load shapefile
+hybas_shapefile <- sf::st_read(
+    "H:/esniede/data/HydroSheds/hybas_ar_lev01-12_v1c/hybas_ar_lev07_v1c.shp"
+)
+hybas_shapefile <- sf::st_transform(hybas_shapefile, crs = 4326)
+
+# Select the specific HYBAS basin with ID 8070214100
+hybas_id_to_select <- 8070212940
+selected_basin <- hybas_shapefile[
+    hybas_shapefile$HYBAS_ID == hybas_id_to_select,
+]
+# Plot ERA5 median SWE as base layer
+
+# Function to get plot limits from geometry with buffer
+get_lims_from_geom <- function(geom, buffer_m = 5000) {
+    # Get extents of geometry
+    geom_bbox <- sf::st_bbox(geom)
+
+    # Convert to degrees (approximate conversion at this latitude)
+    lat_center <- mean(c(geom_bbox["ymin"], geom_bbox["ymax"]))
+    m_to_deg_lon <- 1 / (111320 * cos(lat_center * pi / 180))
+    m_to_deg_lat <- 1 / 110540
+
+    buffer_deg_lon <- buffer_m * m_to_deg_lon
+    buffer_deg_lat <- buffer_m * m_to_deg_lat
+
+    # Apply buffer to bounding box
+    xlim <- c(
+        geom_bbox["xmin"] - buffer_deg_lon,
+        geom_bbox["xmax"] + buffer_deg_lon
+    )
+    ylim <- c(
+        geom_bbox["ymin"] - buffer_deg_lat,
+        geom_bbox["ymax"] + buffer_deg_lat
+    )
+
+    return(list(xlim = xlim, ylim = ylim))
+}
+
+
+# Get extents of selected basin with 500m buffer
+lims <- get_lims_from_geom(selected_basin, buffer_m = 5000)
+xlim <- lims$xlim
+ylim <- lims$ylim
+
+# Plot ERA5 median SWE with zoomed extents
+plot(
+    era5_relative_change,
+    main = paste(
+        "ERA5 SWE Relative to historic median (1980-1924) on",
+        format(query_date, "%Y-%m-%d"),
+        "with HYBAS Basin:",
+        hybas_id_to_select
+    ),
+    xlab = "Longitude",
+    ylab = "Latitude",
+    range = c(0, 200),
+    xlim = xlim,
+    ylim = ylim,
+    col = colorRampPalette(c("red", "white", "blue"))(100)
+)
+# Add the selected basin as overlay
+plot(selected_basin$geometry, border = "darkblue", lwd = 2, add = TRUE)
+
+# Add communities as points
+plot(communities$geometry, pch = 16, bg = "orange", cex = 2.5, add = TRUE)
+# Add community labels
+text(
+    sf::st_coordinates(communities),
+    labels = communities$feature_name,
+    pos = 1,
+    cex = 1.2
+)
+
+
+plot(
+    era5_recent * 1000,
+    main = "ERA5 Median SWE",
+    col = terrain.colors(100),
+    range = c(0, 100)
+)
+
 # Function to get the most recent September 1st given a date
 get_date_datum <- function(date_input, month = 9) {
     if (month < 1 | month > 12) {
@@ -110,8 +251,9 @@ get_date_datum <- function(date_input, month = 9) {
     return(sept1_recent)
 }
 
+
 # Get the most recent September 1st for March 1, 2023
-test_date <- as.Date("2023-04-01")
+test_date <- as.Date("2025-01-01")
 recent_sept <- get_date_datum(test_date, 8)
 # Get raster corresponding to test_date
 test_date_raster_idx <- which(as.Date(time_vector) == test_date)
@@ -122,11 +264,57 @@ annual_low_idx <- which(as.Date(time_vector) == recent_sept)
 annual_low_raster <- era5_rasters[[annual_low_idx]]
 
 swe_minus_perenial <- test_date_raster - annual_low_raster
+
+swe_perrenial_mask <- annual_low_raster > 0.1
+
+swe_masked <- test_date_raster
+swe_masked[swe_perrenial_mask] <- NA
+
+
+# Load shapefile
+swe_basins <- sf::st_read("inst/snow_survey/swe_basins/swe_basins.shp")
+swe_basins <- sf::st_transform(swe_basins, crs = 4326)
+
+# Clip swe_masked based on swe_basins
+swe_clipped <- terra::crop(swe_masked, swe_basins)
+# Mask and calculate mean for each basin
+basin_means <- data.frame(
+    basin_id = 1:nrow(swe_basins),
+    mean_swe = NA
+)
+
+for (i in 1:nrow(swe_basins)) {
+    # Extract single basin polygon
+    single_basin <- swe_basins[i, ]
+
+    # Crop and mask raster to this basin
+    basin_raster <- terra::crop(swe_clipped, single_basin)
+    basin_raster <- terra::mask(basin_raster, single_basin)
+
+    # Calculate mean value for this basin
+    basin_means$mean_swe[i] <- terra::global(
+        basin_raster,
+        fun = "mean",
+        na.rm = TRUE
+    )$mean
+
+    cat("Basin", i, "mean SWE:", basin_means$mean_swe[i], "\n")
+}
+
+# Add mean SWE values to the shapefile
+swe_basins$mean_swe <- basin_means$mean_swe
+
+# Plot the basins with SWE values
+plot(swe_basins["mean_swe"], main = "Basin Average SWE")
+
+
 #swe_minus_perenial[swe_minus_perenial < 0] <- 0
 
 plot(swe_minus_perenial)
 plot(test_date_raster)
 plot(annual_low_raster)
+
+
 # Get raster corresponding to recent_sept
 recent_sept_raster_idx <- which(as.Date(time_vector) == recent_sept)
 if (length(recent_sept_raster_idx) > 0) {
