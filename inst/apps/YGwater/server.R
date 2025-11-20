@@ -106,7 +106,9 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addDiscData,
+          session$userData$admin_privs$addSamples,
           session$userData$admin_privs$editDiscData,
+          session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
           session$userData$admin_privs$addGuidelines
         )
@@ -115,8 +117,14 @@ app_server <- function(input, output, session) {
         if (!isTRUE(session$userData$admin_privs$addDiscData)) {
           nav_hide(id = "navbar", target = "addDiscData")
         }
+        if (!isTRUE(session$userData$admin_privs$addSamples)) {
+          nav_hide(id = "navbar", target = "addSamples")
+        }
         if (!isTRUE(session$userData$admin_privs$editDiscData)) {
           nav_hide(id = "navbar", target = "editDiscData")
+        }
+        if (!isTRUE(session$userData$admin_privs$addSampleSeries)) {
+          nav_hide(id = "navbar", target = "addSampleSeries")
         }
         if (!isTRUE(session$userData$admin_privs$syncDisc)) {
           nav_hide(id = "navbar", target = "syncDisc")
@@ -150,11 +158,22 @@ app_server <- function(input, output, session) {
         nav_hide(id = "navbar", target = "fileTasks")
       }
 
-      # Field visit ---------------------------------------------------------
-      if (isTRUE(session$userData$admin_privs$visit)) {
-        nav_show(id = "navbar", target = "visit")
+      # Field tasks ---------------------------------------------------------
+      if (
+        any(
+          session$userData$admin_privs$visit,
+          session$userData$admin_privs$deploy_recover
+        )
+      ) {
+        nav_show(id = "navbar", target = "fieldTasks")
+        if (!isTRUE(session$userData$admin_privs$visit)) {
+          nav_hide(id = "navbar", target = "visit")
+        }
+        if (!isTRUE(session$userData$admin_privs$deploy_recover)) {
+          nav_hide(id = "navbar", target = "deploy_recover")
+        }
       } else {
-        nav_hide(id = "navbar", target = "visit")
+        nav_hide(id = "navbar", target = "fieldTasks")
       }
 
       # Simple Index
@@ -186,7 +205,9 @@ app_server <- function(input, output, session) {
         "continuousDataTasks",
         "discreteDataTasks",
         "fileTasks",
+        "fieldTasks",
         "visit",
+        "deploy_recover",
         "adminTasks",
         "metadataTasks",
         "wellTasks"
@@ -310,8 +331,10 @@ app_server <- function(input, output, session) {
     ui_loaded$addTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
+    ui_loaded$addSamples <- FALSE
     ui_loaded$editDiscData <- FALSE
     ui_loaded$addGuidelines <- FALSE
+    ui_loaded$addSampleSeries <- FALSE
     ui_loaded$syncDisc <- FALSE
 
     ui_loaded$addDocs <- FALSE
@@ -910,7 +933,9 @@ $(document).keyup(function(event) {
               )
             ),
             addDiscData = has_priv("discrete", c("results", "samples")),
+            addSamples = has_priv("discrete", "samples"),
             editDiscData = has_priv("discrete", c("results", "samples")),
+            addSampleSeries = has_priv("discrete", "sample_series"),
             syncDisc = has_priv(
               "discrete",
               c("results", "samples", "sample_series")
@@ -1507,6 +1532,13 @@ $(document).keyup(function(event) {
         }
       })
     }
+    if (input$navbar == "addSamples") {
+      if (!ui_loaded$addSamples) {
+        output$addSamples_ui <- renderUI(addSamplesUI("addSamples"))
+        ui_loaded$addSamples <- TRUE
+        addSamples("addSamples")
+      }
+    }
     if (input$navbar == "editDiscData") {
       if (!ui_loaded$editDiscData) {
         output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData")) # Render the UI
@@ -1519,6 +1551,15 @@ $(document).keyup(function(event) {
         output$addGuidelines_ui <- renderUI(addGuidelinesUI("addGuidelines")) # Render the UI
         ui_loaded$addGuidelines <- TRUE
         addGuidelines("addGuidelines") # Call the server
+      }
+    }
+    if (input$navbar == "addSampleSeries") {
+      if (!ui_loaded$addSampleSeries) {
+        output$addSampleSeries_ui <- renderUI(addSampleSeriesUI(
+          "addSampleSeries"
+        ))
+        ui_loaded$addSampleSeries <- TRUE
+        addSampleSeries("addSampleSeries")
       }
     }
     if (input$navbar == "addDocs") {

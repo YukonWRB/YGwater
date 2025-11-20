@@ -90,7 +90,15 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
+      "apps/YGwater/modules/admin/discreteData/addSamples.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/YGwater/modules/admin/discreteData/editDiscData.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/discreteData/addSampleSeries.R",
       package = "YGwater"
     ))
     source(system.file(
@@ -251,10 +259,13 @@ YGwater_globals <- function(
 
   # Load translations infrastructure to the global environment
 
-  translations <- data.table::fread(system.file(
-    "apps/YGwater/translations.csv",
-    package = "YGwater"
-  ))
+  translations <- data.table::fread(
+    system.file(
+      "apps/YGwater/translations.csv",
+      package = "YGwater"
+    ),
+    encoding = "UTF-8"
+  )
   # Build a list from the data.frame
   translation_cache <<- lapply(
     setdiff(names(translations[, -2]), "id"),

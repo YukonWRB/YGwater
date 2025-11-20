@@ -24,21 +24,24 @@ round_any <- function(x, accuracy, f = round) {
 #' @return Numeric vector with infinite values converted to `NA`.
 #' @export
 inf_to_na <- function(x) {
-  
   # data.table
   if (data.table::is.data.table(x)) {
     num_cols <- names(x)[vapply(x, is.numeric, logical(1))]
     if (length(num_cols)) {
-      x[, (num_cols) := lapply(.SD, function(col) {
-        col[!is.finite(col)] <- NA
-        col
-      }), .SDcols = num_cols]
+      x[,
+        (num_cols) := lapply(.SD, function(col) {
+          col[!is.finite(col)] <- NA
+          col
+        }),
+        .SDcols = num_cols
+      ]
     }
     return(x)
   }
-  
+
   # data.frame / tibble
-  if (is.data.frame(x)) { # TRUE for tibbles or data.frames (and data.tables, but these are dealt with differently)
+  if (is.data.frame(x)) {
+    # TRUE for tibbles or data.frames (and data.tables, but these are dealt with differently)
     numeric_cols <- sapply(x, is.numeric)
     x[numeric_cols] <- lapply(x[numeric_cols], function(col) {
       col[!is.finite(col)] <- NA
@@ -46,22 +49,22 @@ inf_to_na <- function(x) {
     })
     return(x)
   }
-  
+
   # vector
   if (is.numeric(x)) {
     x[!is.finite(x)] <- NA
     return(x)
   }
-  
+
   # If x is not numeric, return it unchanged
   warning("Input is not numeric. Returning unchanged.")
   return(x)
 }
 
 #' Convert hours to ISO 8601 duration format
-#' 
+#'
 #' Converts a numeric value representing hours into an ISO 8601 duration string.
-#' 
+#'
 #' @param x Numeric value representing hours.
 #' @return A string in ISO 8601 duration format (e.g., "P1DT2H30M0S").
 #' @noRd
@@ -69,11 +72,22 @@ inf_to_na <- function(x) {
 #' iso_period(26.5)  # Returns "P1DT2H30M0S"
 
 iso_period <- function(x) {
-  days <- floor(x / 24)
-  remaining_hours <- x %% 24
-  minutes <- floor((remaining_hours - floor(remaining_hours)) * 60)
-  seconds <- round(((remaining_hours - floor(remaining_hours)) * 60 - minutes) * 60)
-  paste0("P", days, "DT", floor(remaining_hours), "H", minutes, "M", seconds, "S")
+  if (length(x) == 0) {
+    return(character())
+  }
+
+  total_seconds <- round(x * 3600)
+  days <- total_seconds %/% (24 * 3600)
+  remainder <- total_seconds %% (24 * 3600)
+  hours <- remainder %/% 3600
+  remainder <- remainder %% 3600
+  minutes <- remainder %/% 60
+  seconds <- remainder %% 60
+
+  result <- sprintf("P%dDT%dH%dM%dS", days, hours, minutes, seconds)
+  invalid <- is.na(total_seconds) | !is.finite(total_seconds)
+  result[invalid] <- NA_character_
+  result
 }
 
 

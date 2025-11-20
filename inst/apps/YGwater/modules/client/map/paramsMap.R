@@ -683,11 +683,22 @@ mapParams <- function(id, language) {
         }
 
         abs_range <- range(abs_vals, na.rm = TRUE)
-        abs_bins <- seq(
-          abs_range[1],
-          abs_range[2],
-          length.out = length(map_params$colors) + 1
-        )
+        
+        # Handle case where all values are identical or range is zero
+        if (abs_range[1] == abs_range[2] || !is.finite(abs_range[1]) || !is.finite(abs_range[2])) {
+          # Create a small range around the single value for binning
+          if (abs_range[1] == 0) {
+            abs_bins <- c(-0.1, 0.1)
+          } else {
+            abs_bins <- c(abs_range[1] * 0.99, abs_range[1] * 1.01)
+          }
+        } else {
+          abs_bins <- seq(
+            abs_range[1],
+            abs_range[2],
+            length.out = length(map_params$colors) + 1
+          )
+        }
 
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,

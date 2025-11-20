@@ -210,21 +210,21 @@ initialize_visualization_parameters <- function() {
 #' get_most_recent_date(ts_data)  # Returns 2024-01-03
 #' }
 get_most_recent_date <- function(ts) {
-    if (
-        is.null(ts) ||
-            nrow(ts) == 0 ||
-            !"datetime" %in% names(ts) ||
-            !"value" %in% names(ts)
-    ) {
-        return(NA_real_)
-    }
-    ts$datetime <- as.POSIXct(ts$datetime)
-    valid_idx <- which(!is.na(ts$value) & !is.nan(ts$value))
-    if (length(valid_idx) == 0) {
-        return(NA_real_)
-    }
-    latest_time <- max(ts$datetime[valid_idx], na.rm = TRUE)
-    return(latest_time)
+  if (
+    is.null(ts) ||
+      nrow(ts) == 0 ||
+      !"datetime" %in% names(ts) ||
+      !"value" %in% names(ts)
+  ) {
+    return(NA_real_)
+  }
+  ts$datetime <- as.POSIXct(ts$datetime)
+  valid_idx <- which(!is.na(ts$value) & !is.nan(ts$value))
+  if (length(valid_idx) == 0) {
+    return(NA_real_)
+  }
+  latest_time <- max(ts$datetime[valid_idx], na.rm = TRUE)
+  return(latest_time)
 }
 
 #' Convert year and month to POSIXct datetime
@@ -243,7 +243,7 @@ get_most_recent_date <- function(ts) {
 #' get_datetime(2024, 12) # Returns 2024-12-01 00:00:00 UTC
 #' }
 get_datetime <- function(year, month) {
-    as.POSIXct(as.Date(paste0(year, "-", month, "-01")), tz = "UTC")
+  as.POSIXct(as.Date(paste0(year, "-", month, "-01")), tz = "UTC")
 }
 
 # =============================================================================
@@ -283,12 +283,8 @@ download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
         "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
          FROM spatial.vectors 
          WHERE layer_name = %s",
-        DBI::dbQuoteString(con, layer_name)
-    )
-
-    if (!is.null(additional_query) && nzchar(additional_query)) {
-        query <- paste(query, additional_query)
-    }
+    DBI::dbQuoteString(con, layer_name)
+  )
 
     data <- DBI::dbGetQuery(con, query)
     if (nrow(data) == 0) {
@@ -329,14 +325,14 @@ download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
 #' print(nrow(continuous_data$metadata))         # Number of stations
 #' }
 download_continuous_ts <- function(
-    con,
-    start_date = sprintf("%d-01-01", 1950),
-    end_date = sprintf("%d-01-01", 2100),
-    resolution = "daily"
+  con,
+  start_date = sprintf("%d-01-01", 1950),
+  end_date = sprintf("%d-01-01", 2100),
+  resolution = "daily"
 ) {
-    # Build metadata query for continuous SWE timeseries
-    md_query <- paste0(
-        "SELECT 
+  # Build metadata query for continuous SWE timeseries
+  md_query <- paste0(
+    "SELECT 
             t.timeseries_id,
             t.location_id,
             l.location,
@@ -349,17 +345,7 @@ download_continuous_ts <- function(
          LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
          WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters 
                                  WHERE param_name = 'snow water equivalent')"
-    )
-
-    md_continuous_df <- DBI::dbGetQuery(con, md_query)
-
-    if (nrow(md_continuous_df) == 0) {
-        warning("No continuous SWE stations found")
-        return(list(
-            timeseries = data.frame(datetime = as.POSIXct(character(0))),
-            metadata = NULL
-        ))
-    }
+  )
 
     # Convert metadata to sf (WGS84)
     md_continuous <- sf::st_as_sf(
@@ -456,90 +442,159 @@ download_continuous_ts <- function(
             ts_out <- ts_data[, c("datetime", "value"), drop = FALSE]
         }
 
-        # Keep a copy for latest-date calculation
-        ts_list_temp[[as.character(ts_id)]] <- ts_out
-
-        # Merge into master dataframe (wide format)
-        # rename value column to station id
-        station_col <- as.character(ts_id)
-        ts_wide <- ts_out
-        names(ts_wide)[names(ts_wide) == "value"] <- station_col
-
-        if (is.null(master_df)) {
-            master_df <- ts_wide
-        } else {
-            # base merge by datetime, keep all dates
-            master_df <- merge(
-                master_df,
-                ts_wide,
-                by = "datetime",
-                all = TRUE,
-                sort = TRUE
-            )
-        }
+    if (!is.null(start_date)) {
+      ts_query <- paste0(
+        ts_query,
+        " AND date >= ",
+        DBI::dbQuoteString(con, start_date)
+      )
     }
+    if (!is.null(end_date)) {
+      ts_query <- paste0(
+        ts_query,
+        " AND date <= ",
+        DBI::dbQuoteString(con, end_date)
+      )
+    }
+
+    ts_data <- DBI::dbGetQuery(con, ts_query)
+
+    if (nrow(ts_data) == 0) {
+      # store empty df for latest-date processing
+      ts_list_temp[[as.character(ts_id)]] <- data.frame(
+        datetime = as.POSIXct(character(0)),
+        value = numeric(0)
+      )
+      next
+    }
+    # Rename 'date' column to 'datetime'
+    if ("date" %in% names(ts_data)) {
+      names(ts_data)[names(ts_data) == "date"] <- "datetime"
+    }
+    # Parse datetimes and sort
+    ts_data$datetime <- as.POSIXct(ts_data$datetime, tz = "UTC")
+    ts_data <- ts_data[order(ts_data$datetime), , drop = FALSE]
+
+    # Resample to daily or monthly as requested
+    if (resolution == "daily") {
+      ts_data$day <- as.Date(ts_data$datetime)
+      ts_daily <- stats::aggregate(
+        value ~ day,
+        data = ts_data,
+        FUN = mean,
+        na.rm = TRUE
+      )
+      names(ts_daily) <- c("datetime", "value")
+      ts_daily$datetime <- as.POSIXct(ts_daily$datetime, tz = "UTC")
+      ts_out <- ts_daily
+    } else if (resolution == "monthly") {
+      ts_data$month <- format(ts_data$datetime, "%Y-%m")
+      ts_monthly <- stats::aggregate(
+        value ~ month,
+        data = ts_data,
+        FUN = mean,
+        na.rm = TRUE
+      )
+      names(ts_monthly) <- c("datetime", "value")
+      # set to first day of month
+      ts_monthly$datetime <- as.POSIXct(
+        paste0(ts_monthly$datetime, "-01"),
+        tz = "UTC"
+      )
+      ts_out <- ts_monthly
+    } else {
+      warning(sprintf(
+        "Unknown resolution '%s' for timeseries_id: %s",
+        resolution,
+        ts_id
+      ))
+      ts_out <- ts_data[, c("datetime", "value"), drop = FALSE]
+    }
+
+    # Keep a copy for latest-date calculation
+    ts_list_temp[[as.character(ts_id)]] <- ts_out
+
+    # Merge into master dataframe (wide format)
+    # rename value column to station id
+    station_col <- as.character(ts_id)
+    ts_wide <- ts_out
+    names(ts_wide)[names(ts_wide) == "value"] <- station_col
 
     if (is.null(master_df)) {
-        # No data found for any station
-        master_df <- data.frame(datetime = as.POSIXct(character(0)))
+      master_df <- ts_wide
     } else {
-        # Ensure master_df sorted by datetime
-        master_df <- master_df[order(master_df$datetime), , drop = FALSE]
-        # convert columns other than datetime to numeric (they may be list factors)
-        non_dt_cols <- setdiff(names(master_df), "datetime")
-        for (col in non_dt_cols) {
-            master_df[[col]] <- as.numeric(master_df[[col]])
-        }
+      # base merge by datetime, keep all dates
+      master_df <- merge(
+        master_df,
+        ts_wide,
+        by = "datetime",
+        all = TRUE,
+        sort = TRUE
+      )
     }
+  }
 
-    # Compute most recent non-NaN date per station using ts_list_temp
-    station_latest_dates <- vapply(
-        names(ts_list_temp),
-        function(id) {
-            ts <- ts_list_temp[[id]]
-            get_most_recent_date(ts)
-        },
-        FUN.VALUE = as.POSIXct(NA)
-    )
+  if (is.null(master_df)) {
+    # No data found for any station
+    master_df <- data.frame(datetime = as.POSIXct(character(0)))
+  } else {
+    # Ensure master_df sorted by datetime
+    master_df <- master_df[order(master_df$datetime), , drop = FALSE]
+    # convert columns other than datetime to numeric (they may be list factors)
+    non_dt_cols <- setdiff(names(master_df), "datetime")
+    for (col in non_dt_cols) {
+      master_df[[col]] <- as.numeric(master_df[[col]])
+    }
+  }
 
-    station_means_df <- data.frame(
-        timeseries_id = as.integer(names(station_latest_dates)),
-        latest_date = as.POSIXct(
-            station_latest_dates,
-            origin = "1970-01-01",
-            tz = "UTC"
-        ),
-        latest_observation = format(
-            as.POSIXct(
-                station_latest_dates,
-                origin = "1970-01-01",
-                tz = "UTC"
-            ),
-            "%Y-%m-%d"
-        ),
-        stringsAsFactors = FALSE
-    )
+  # Compute most recent non-NaN date per station using ts_list_temp
+  station_latest_dates <- vapply(
+    names(ts_list_temp),
+    function(id) {
+      ts <- ts_list_temp[[id]]
+      get_most_recent_date(ts)
+    },
+    FUN.VALUE = as.POSIXct(NA)
+  )
 
-    md_no_geom <- sf::st_drop_geometry(md_continuous)
-    merged_df <- merge(
-        md_no_geom,
-        station_means_df,
-        by = "timeseries_id",
-        all.x = TRUE,
-        sort = FALSE
-    )
+  station_means_df <- data.frame(
+    timeseries_id = as.integer(names(station_latest_dates)),
+    latest_date = as.POSIXct(
+      station_latest_dates,
+      origin = "1970-01-01",
+      tz = "UTC"
+    ),
+    latest_observation = format(
+      as.POSIXct(
+        station_latest_dates,
+        origin = "1970-01-01",
+        tz = "UTC"
+      ),
+      "%Y-%m-%d"
+    ),
+    stringsAsFactors = FALSE
+  )
 
-    # Reattach geometry in the order of merged_df
-    geom_match <- match(merged_df$timeseries_id, md_continuous$timeseries_id)
-    geom <- sf::st_geometry(md_continuous)[geom_match]
+  md_no_geom <- sf::st_drop_geometry(md_continuous)
+  merged_df <- merge(
+    md_no_geom,
+    station_means_df,
+    by = "timeseries_id",
+    all.x = TRUE,
+    sort = FALSE
+  )
 
-    metadata_sf <- sf::st_sf(
-        merged_df,
-        geometry = geom,
-        crs = sf::st_crs(md_continuous)
-    )
+  # Reattach geometry in the order of merged_df
+  geom_match <- match(merged_df$timeseries_id, md_continuous$timeseries_id)
+  geom <- sf::st_geometry(md_continuous)[geom_match]
 
-    return(list(timeseries = list(swe = master_df), metadata = metadata_sf))
+  metadata_sf <- sf::st_sf(
+    merged_df,
+    geometry = geom,
+    crs = sf::st_crs(md_continuous)
+  )
+
+  return(list(timeseries = list(swe = master_df), metadata = metadata_sf))
 }
 
 #' Retrieve discrete SWE timeseries and station metadata
@@ -571,14 +626,14 @@ download_continuous_ts <- function(
 #' ]
 #' }
 download_discrete_ts <- function(
-    con,
-    start_date = sprintf("%d-01-01", 1950),
-    end_date = sprintf("%d-01-01", 2100)
+  con,
+  start_date = sprintf("%d-01-01", 1950),
+  end_date = sprintf("%d-01-01", 2100)
 ) {
-    # Build metadata query for discrete SWE timeseries
-    md_discrete_df <- DBI::dbGetQuery(
-        con,
-        "SELECT DISTINCT
+  # Build metadata query for discrete SWE timeseries
+  md_discrete_df <- DBI::dbGetQuery(
+    con,
+    "SELECT DISTINCT
             l.location_id,
             l.latitude,
             l.longitude,
@@ -591,176 +646,174 @@ download_discrete_ts <- function(
          LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
          WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters
                                  WHERE param_name = 'snow water equivalent')"
-    )
+  )
 
-    if (nrow(md_discrete_df) == 0) {
-        warning("No discrete SWE stations found")
-        return(list(
-            timeseries = list(
-                swe = data.frame(datetime = as.POSIXct(character(0)))
-            ),
-            metadata = NULL
-        ))
-    }
+  if (nrow(md_discrete_df) == 0) {
+    warning("No discrete SWE stations found")
+    return(list(
+      timeseries = list(
+        swe = data.frame(datetime = as.POSIXct(character(0)))
+      ),
+      metadata = NULL
+    ))
+  }
 
-    # Convert metadata to sf (WGS84)
-    md_discrete <- sf::st_as_sf(
-        md_discrete_df,
-        coords = c("longitude", "latitude"),
-        crs = 4326,
-        remove = FALSE
-    )
+  # Convert metadata to sf (WGS84)
+  md_discrete <- sf::st_as_sf(
+    md_discrete_df,
+    coords = c("longitude", "latitude"),
+    crs = 4326,
+    remove = FALSE
+  )
 
-    ts_ids <- unique(md_discrete$location_id)
-    ts_list_temp <- vector("list", length(ts_ids))
-    names(ts_list_temp) <- as.character(ts_ids)
-
-    master_df <- NULL
+  ts_ids <- unique(md_discrete$location_id)
+  ts_list_temp <- vector("list", length(ts_ids))
+  names(ts_list_temp) <- as.character(ts_ids)
 
     for (i in seq_along(ts_ids)) {
         loc_id <- ts_ids[i]
 
-        ts_query <- sprintf(
-            "SELECT s.datetime, s.target_datetime, r.result
+    ts_query <- sprintf(
+      "SELECT s.datetime, s.target_datetime, r.result
              FROM discrete.samples s
              JOIN discrete.results r ON s.sample_id = r.sample_id
              WHERE s.location_id = %s
                AND r.parameter_id = (SELECT parameter_id FROM public.parameters
                                      WHERE param_name = 'snow water equivalent')
                AND r.result IS NOT NULL",
-            DBI::dbQuoteLiteral(con, loc_id)
-        )
+      DBI::dbQuoteLiteral(con, loc_id)
+    )
 
-        if (!is.null(start_date)) {
-            ts_query <- paste0(
-                ts_query,
-                " AND (COALESCE(s.target_datetime, s.datetime) >= ",
-                DBI::dbQuoteString(con, start_date),
-                ")"
-            )
-        }
-        if (!is.null(end_date)) {
-            ts_query <- paste0(
-                ts_query,
-                " AND (COALESCE(s.target_datetime, s.datetime) <= ",
-                DBI::dbQuoteString(con, end_date),
-                ")"
-            )
-        }
-
-        ts <- DBI::dbGetQuery(con, ts_query)
-
-        if (nrow(ts) == 0) {
-            ts_list_temp[[as.character(loc_id)]] <- data.frame(
-                datetime = as.POSIXct(character(0)),
-                value = numeric(0)
-            )
-            next
-        }
-
-        # prefer target_datetime when present
-        if ("target_datetime" %in% names(ts)) {
-            ts$target_datetime[is.na(ts$target_datetime)] <- ts$datetime[is.na(
-                ts$target_datetime
-            )]
-            ts$datetime <- as.POSIXct(ts$target_datetime, tz = "UTC")
-            ts$target_datetime <- NULL
-        } else {
-            ts$datetime <- as.POSIXct(ts$datetime, tz = "UTC")
-        }
-
-        # Convert datetime to just the date (day resolution)
-        ts$datetime <- as.Date(ts$datetime)
-
-        # rename result -> value
-        if ("result" %in% names(ts)) {
-            names(ts)[names(ts) == "result"] <- "value"
-        }
-
-        ts <- ts[order(ts$datetime), , drop = FALSE]
-
-        # store temporary for latest-date calc
-        ts_list_temp[[as.character(loc_id)]] <- ts[,
-            c("datetime", "value"),
-            drop = FALSE
-        ]
-
-        # merge into master_df (wide)
-        station_col <- as.character(loc_id)
-        ts_wide <- ts[, c("datetime", "value"), drop = FALSE]
-        names(ts_wide)[names(ts_wide) == "value"] <- station_col
-
-        if (is.null(master_df)) {
-            master_df <- ts_wide
-        } else {
-            master_df <- merge(
-                master_df,
-                ts_wide,
-                by = "datetime",
-                all = TRUE,
-                sort = TRUE
-            )
-        }
+    if (!is.null(start_date)) {
+      ts_query <- paste0(
+        ts_query,
+        " AND (COALESCE(s.target_datetime, s.datetime) >= ",
+        DBI::dbQuoteString(con, start_date),
+        ")"
+      )
     }
+    if (!is.null(end_date)) {
+      ts_query <- paste0(
+        ts_query,
+        " AND (COALESCE(s.target_datetime, s.datetime) <= ",
+        DBI::dbQuoteString(con, end_date),
+        ")"
+      )
+    }
+
+    ts <- DBI::dbGetQuery(con, ts_query)
+
+    if (nrow(ts) == 0) {
+      ts_list_temp[[as.character(loc_id)]] <- data.frame(
+        datetime = as.POSIXct(character(0)),
+        value = numeric(0)
+      )
+      next
+    }
+
+    # prefer target_datetime when present
+    if ("target_datetime" %in% names(ts)) {
+      ts$target_datetime[is.na(ts$target_datetime)] <- ts$datetime[is.na(
+        ts$target_datetime
+      )]
+      ts$datetime <- as.POSIXct(ts$target_datetime, tz = "UTC")
+      ts$target_datetime <- NULL
+    } else {
+      ts$datetime <- as.POSIXct(ts$datetime, tz = "UTC")
+    }
+
+    # Convert datetime to just the date (day resolution)
+    ts$datetime <- as.Date(ts$datetime)
+
+    # rename result -> value
+    if ("result" %in% names(ts)) {
+      names(ts)[names(ts) == "result"] <- "value"
+    }
+
+    ts <- ts[order(ts$datetime), , drop = FALSE]
+
+    # store temporary for latest-date calc
+    ts_list_temp[[as.character(loc_id)]] <- ts[,
+      c("datetime", "value"),
+      drop = FALSE
+    ]
+
+    # merge into master_df (wide)
+    station_col <- as.character(loc_id)
+    ts_wide <- ts[, c("datetime", "value"), drop = FALSE]
+    names(ts_wide)[names(ts_wide) == "value"] <- station_col
 
     if (is.null(master_df)) {
-        master_df <- data.frame(datetime = as.POSIXct(character(0)))
+      master_df <- ts_wide
     } else {
-        master_df <- master_df[order(master_df$datetime), , drop = FALSE]
-        non_dt_cols <- setdiff(names(master_df), "datetime")
-        for (col in non_dt_cols) {
-            master_df[[col]] <- as.numeric(master_df[[col]])
-        }
+      master_df <- merge(
+        master_df,
+        ts_wide,
+        by = "datetime",
+        all = TRUE,
+        sort = TRUE
+      )
     }
+  }
 
-    # Compute most recent non-NaN value per station using ts_list_temp
-    station_latest_dates <- vapply(
-        names(ts_list_temp),
-        function(id) {
-            ts <- ts_list_temp[[id]]
-            get_most_recent_date(ts)
-        },
-        FUN.VALUE = as.POSIXct(NA)
-    )
+  if (is.null(master_df)) {
+    master_df <- data.frame(datetime = as.POSIXct(character(0)))
+  } else {
+    master_df <- master_df[order(master_df$datetime), , drop = FALSE]
+    non_dt_cols <- setdiff(names(master_df), "datetime")
+    for (col in non_dt_cols) {
+      master_df[[col]] <- as.numeric(master_df[[col]])
+    }
+  }
 
-    station_means_df <- data.frame(
-        location_id = as.integer(names(station_latest_dates)),
-        latest_date = as.POSIXct(
-            station_latest_dates,
-            origin = "1970-01-01",
-            tz = "UTC"
-        ),
-        latest_observation = format(
-            as.POSIXct(
-                station_latest_dates,
-                origin = "1970-01-01",
-                tz = "UTC"
-            ),
-            "%Y-%m-%d"
-        ),
-        stringsAsFactors = FALSE
-    )
+  # Compute most recent non-NaN value per station using ts_list_temp
+  station_latest_dates <- vapply(
+    names(ts_list_temp),
+    function(id) {
+      ts <- ts_list_temp[[id]]
+      get_most_recent_date(ts)
+    },
+    FUN.VALUE = as.POSIXct(NA)
+  )
 
-    md_no_geom <- sf::st_drop_geometry(md_discrete)
-    merged_df <- merge(
-        md_no_geom,
-        station_means_df,
-        by = "location_id",
-        all.x = TRUE,
-        sort = FALSE
-    )
+  station_means_df <- data.frame(
+    location_id = as.integer(names(station_latest_dates)),
+    latest_date = as.POSIXct(
+      station_latest_dates,
+      origin = "1970-01-01",
+      tz = "UTC"
+    ),
+    latest_observation = format(
+      as.POSIXct(
+        station_latest_dates,
+        origin = "1970-01-01",
+        tz = "UTC"
+      ),
+      "%Y-%m-%d"
+    ),
+    stringsAsFactors = FALSE
+  )
 
-    # Reattach geometry in original order
-    geom_match <- match(merged_df$location_id, md_discrete$location_id)
-    geom <- sf::st_geometry(md_discrete)[geom_match]
+  md_no_geom <- sf::st_drop_geometry(md_discrete)
+  merged_df <- merge(
+    md_no_geom,
+    station_means_df,
+    by = "location_id",
+    all.x = TRUE,
+    sort = FALSE
+  )
 
-    metadata_sf <- sf::st_sf(
-        merged_df,
-        geometry = geom,
-        crs = sf::st_crs(md_discrete)
-    )
+  # Reattach geometry in original order
+  geom_match <- match(merged_df$location_id, md_discrete$location_id)
+  geom <- sf::st_geometry(md_discrete)[geom_match]
 
-    return(list(timeseries = list(swe = master_df), metadata = metadata_sf))
+  metadata_sf <- sf::st_sf(
+    merged_df,
+    geometry = geom,
+    crs = sf::st_crs(md_discrete)
+  )
+
+  return(list(timeseries = list(swe = master_df), metadata = metadata_sf))
 }
 
 #' Load and process snowcourse factors for discrete SWE stations
@@ -785,7 +838,7 @@ download_discrete_ts <- function(
 #' station_weights <- weights[weights$location_id == 123, ]
 #' }
 load_snowcourse_factors <- function(
-    metadata_discrete
+  metadata_discrete
 ) {
     snowcourse_factors <- utils::read.csv(
         system.file(
@@ -824,8 +877,9 @@ load_snowcourse_factors <- function(
             snowcourse_factors$location <- NULL
         }
     }
+  }
 
-    return(snowcourse_factors)
+  return(snowcourse_factors)
 }
 
 # =============================================================================
@@ -868,70 +922,154 @@ load_snowcourse_factors <- function(
 #' result <- calculate_historic_daily_median(ts_data, lookback_length = 30)
 #' }
 calculate_historic_daily_median <- function(
-    ts,
-    lookback_length = NULL,
-    lookback_year = NULL
+  ts,
+  lookback_length = NULL,
+  lookback_year = NULL
 ) {
-    # Default behaviour if neither provided
-    if (is.null(lookback_year) && is.null(lookback_length)) {
-        lookback_year <- 1980
-    } else if (!is.null(lookback_year) && !is.null(lookback_length)) {
-        stop("Specify either lookback_year or lookback_length, not both.")
-    }
+  # Default behaviour if neither provided
+  if (is.null(lookback_year) && is.null(lookback_length)) {
+    lookback_year <- 1980
+  } else if (!is.null(lookback_year) && !is.null(lookback_length)) {
+    stop("Specify either lookback_year or lookback_length, not both.")
+  }
 
-    # For each unique year/month, if no value exists exactly on the 1st, grab the nearest value within 5 days
-    if ("datetime" %in% names(ts)) {
-        ts$year <- as.integer(format(ts$datetime, "%Y"))
-        ts$month <- as.integer(format(ts$datetime, "%m"))
-        ts$day <- as.integer(format(ts$datetime, "%d"))
+  # For each unique year/month, if no value exists exactly on the 1st, grab the nearest value within 5 days
+  if ("datetime" %in% names(ts)) {
+    ts$year <- as.integer(format(ts$datetime, "%Y"))
+    ts$month <- as.integer(format(ts$datetime, "%m"))
+    ts$day <- as.integer(format(ts$datetime, "%d"))
 
-        # Only keep Feb-May
-        ts <- ts[ts$month %in% 2:5, , drop = FALSE]
+    # Only keep Feb-May
+    ts <- ts[ts$month %in% 2:5, , drop = FALSE]
 
-        # For each year/month, ensure a value exists for the 1st (or nearest within 5 days)
-        keep_rows <- logical(nrow(ts))
-        # Track which rows are snapped (not on the 1st)
-        snapped_rows <- logical(nrow(ts))
-        unique_ym <- unique(ts[, c("year", "month")])
-        for (i in seq_len(nrow(unique_ym))) {
-            y <- unique_ym$year[i]
-            m <- unique_ym$month[i]
-            idx <- which(ts$year == y & ts$month == m)
-            # Prefer day==1
-            idx1 <- idx[ts$day[idx] == 1]
-            if (length(idx1) > 0) {
-                keep_rows[idx1] <- TRUE
-            } else {
-                # Find nearest to 1st within 5 days
-                days_from_first <- abs(ts$day[idx] - 1)
-                min_diff <- min(days_from_first)
-                if (min_diff <= 5) {
-                    nearest_idx <- idx[which.min(days_from_first)]
-                    keep_rows[nearest_idx] <- TRUE
-                    snapped_rows[nearest_idx] <- TRUE
-                }
-            }
+    # For each year/month, ensure a value exists for the 1st (or nearest within 5 days)
+    keep_rows <- logical(nrow(ts))
+    # Track which rows are snapped (not on the 1st)
+    snapped_rows <- logical(nrow(ts))
+    unique_ym <- unique(ts[, c("year", "month")])
+    for (i in seq_len(nrow(unique_ym))) {
+      y <- unique_ym$year[i]
+      m <- unique_ym$month[i]
+      idx <- which(ts$year == y & ts$month == m)
+      # Prefer day==1
+      idx1 <- idx[ts$day[idx] == 1]
+      if (length(idx1) > 0) {
+        keep_rows[idx1] <- TRUE
+      } else {
+        # Find nearest to 1st within 5 days
+        days_from_first <- abs(ts$day[idx] - 1)
+        min_diff <- min(days_from_first)
+        if (min_diff <= 5) {
+          nearest_idx <- idx[which.min(days_from_first)]
+          keep_rows[nearest_idx] <- TRUE
+          snapped_rows[nearest_idx] <- TRUE
         }
-        # Snap datetime to 1st of month for snapped rows
-        if (any(snapped_rows)) {
-            ts$datetime[snapped_rows] <- as.POSIXct(
-                sprintf(
-                    "%d-%02d-01",
-                    ts$year[snapped_rows],
-                    ts$month[snapped_rows]
-                ),
-                tz = "UTC"
+      }
+    }
+    # Snap datetime to 1st of month for snapped rows
+    if (any(snapped_rows)) {
+      ts$datetime[snapped_rows] <- as.POSIXct(
+        sprintf(
+          "%d-%02d-01",
+          ts$year[snapped_rows],
+          ts$month[snapped_rows]
+        ),
+        tz = "UTC"
+      )
+      ts$day[snapped_rows] <- 1
+    }
+    ts <- ts[keep_rows, , drop = FALSE]
+    # Remove extra columns
+    ts$year <- NULL
+    ts$month <- NULL
+    ts$day <- NULL
+    ts$date_first_of_month <- NULL
+    ts$date_diff_days <- NULL
+  }
+
+  # Wide timeseries: datetime + one column per station (stations as columns)
+  if ("datetime" %in% names(ts)) {
+    ts$datetime <- as.POSIXct(ts$datetime, tz = "UTC")
+    n <- nrow(ts)
+    day <- as.integer(format(ts$datetime, "%d"))
+    month <- as.integer(format(ts$datetime, "%m"))
+    year <- as.integer(format(ts$datetime, "%Y"))
+
+    #doy <- snap_doy(doy)
+
+    # station columns are everything except datetime (and any preexisting doy/year)
+    station_cols <- setdiff(names(ts), c("datetime", "doy", "year"))
+    # prepare output data.frames
+    hist_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+    rel_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+    perc_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+
+    # Vectorized and grouped computation for speed
+    p <- length(station_cols)
+    if (p > 0) {
+      vals_mat <- as.matrix(ts[, station_cols, drop = FALSE]) # n x p
+      hist_mat <- matrix(NA_real_, nrow = n, ncol = p)
+      rel_mat <- matrix(NA_real_, nrow = n, ncol = p)
+      perc_mat <- matrix(NA_real_, nrow = n, ncol = p)
+
+      # Group by month-day (usually day==1 after snapping), compute per group
+      grp <- paste(month, day, sep = "-")
+      ug <- unique(grp)
+
+      for (g in ug) {
+        idx_g <- which(grp == g)
+        # Ensure chronological order within group
+        idx_g <- idx_g[order(year[idx_g])]
+
+        # Precompute years vector for the group
+        yg <- year[idx_g]
+
+        for (j_idx in seq_along(idx_g)) {
+          j <- idx_g[j_idx]
+
+          if (!is.null(lookback_year)) {
+            prev_idx <- idx_g[which(
+              yg < yg[j_idx] & yg >= lookback_year
+            )]
+          } else {
+            prev_idx <- idx_g[which(
+              yg < yg[j_idx] & yg >= (yg[j_idx] - lookback_length)
+            )]
+          }
+
+          if (length(prev_idx) > 0) {
+            prev_block <- vals_mat[prev_idx, , drop = FALSE]
+            hist_mat[j, ] <- apply(
+              prev_block,
+              2,
+              stats::median,
+              na.rm = TRUE
             )
-            ts$day[snapped_rows] <- 1
+
+            # Calculate percentile: what % of historical values are <= current value
+
+            if (yg[j_idx] >= 2000 && length(prev_idx) >= 4) {
+              current_values <- vals_mat[j, ]
+              if (all(is.na(current_values))) {
+                perc_mat[j, ] <- NA_real_
+              } else {
+                perc_mat[j, ] <- (colSums(
+                  prev_block <=
+                    matrix(
+                      current_values,
+                      nrow = nrow(prev_block),
+                      ncol = ncol(prev_block),
+                      byrow = TRUE
+                    ),
+                  na.rm = TRUE
+                ) /
+                  colSums(!is.na(prev_block), na.rm = TRUE)) *
+                  100
+              }
+            }
+          }
         }
-        ts <- ts[keep_rows, , drop = FALSE]
-        # Remove extra columns
-        ts$year <- NULL
-        ts$month <- NULL
-        ts$day <- NULL
-        ts$date_first_of_month <- NULL
-        ts$date_diff_days <- NULL
-    }
+      }
 
     # Wide timeseries: datetime + one column per station (stations as columns)
     if ("datetime" %in% names(ts)) {
@@ -1017,24 +1155,29 @@ calculate_historic_daily_median <- function(
                 }
             }
 
-            # Compute relative SWE in a fully vectorized way
-            cur <- vals_mat
-            hist <- hist_mat
+      # Case 1: standard percentage where historic median != 0
+      mask1 <- !is.na(hist) & !is.na(cur) & (hist != 0)
+      rel_mat[mask1] <- 100 * cur[mask1] / hist[mask1]
 
-            # Case 1: standard percentage where historic median != 0
-            mask1 <- !is.na(hist) & !is.na(cur) & (hist != 0)
-            rel_mat[mask1] <- 100 * cur[mask1] / hist[mask1]
+      # Case 2: both zero => -2
+      mask2 <- !is.na(cur) & (cur == 0) & !is.na(hist) & (hist == 0)
+      rel_mat[mask2] <- -2
 
-            # Case 2: both zero => -2
-            mask2 <- !is.na(cur) & (cur == 0) & !is.na(hist) & (hist == 0)
-            rel_mat[mask2] <- -2
+      # Case 3: current > 0, historic == 0 => -1
+      mask3 <- !is.na(cur) & (cur > 0) & !is.na(hist) & (hist == 0)
+      rel_mat[mask3] <- -1
 
-            # Case 3: current > 0, historic == 0 => -1
-            mask3 <- !is.na(cur) & (cur > 0) & !is.na(hist) & (hist == 0)
-            rel_mat[mask3] <- -1
+      colnames(hist_mat) <- station_cols
+      colnames(rel_mat) <- station_cols
 
-            colnames(hist_mat) <- station_cols
-            colnames(rel_mat) <- station_cols
+      hist_df[station_cols] <- as.data.frame(
+        hist_mat,
+        stringsAsFactors = FALSE
+      )
+      rel_df[station_cols] <- as.data.frame(
+        rel_mat,
+        stringsAsFactors = FALSE
+      )
 
             hist_df[station_cols] <- as.data.frame(
                 hist_mat,
@@ -1064,9 +1207,9 @@ calculate_historic_daily_median <- function(
         ))
     }
 
-    stop(
-        "Input timeseries must contain a 'datetime' column (and either 'value' for single-station or station columns for wide format)."
-    )
+  stop(
+    "Input timeseries must contain a 'datetime' column (and either 'value' for single-station or station columns for wide format)."
+  )
 }
 
 #' Extract SWE data at specific points for a given year and month
@@ -1105,42 +1248,40 @@ calculate_historic_daily_median <- function(
 #' valid_stations <- pillow_data[!is.na(pillow_data$swe), ]
 #' }
 get_swe_state <- function(
-    data,
-    year,
-    month,
-    key
+  data,
+  year,
+  month,
+  key
 ) {
-    # Assert that data contains timeseries and metadata
-    stopifnot(is.list(data))
-    stopifnot("timeseries" %in% names(data))
-    stopifnot("metadata" %in% names(data))
-    stopifnot(all(
-        c("swe", "historic_median", "relative_swe") %in%
-            names(data$timeseries)
-    ))
-    point_source_data <- data$metadata
-    target_date <- get_datetime(year, month)
+  # Assert that data contains timeseries and metadata
+  stopifnot(is.list(data))
+  stopifnot("timeseries" %in% names(data))
+  stopifnot("metadata" %in% names(data))
+  stopifnot(all(
+    c("swe", "historic_median", "relative_swe") %in%
+      names(data$timeseries)
+  ))
+  point_source_data <- data$metadata
+  target_date <- get_datetime(year, month)
 
-    # Validate that key column exists in metadata
-    stopifnot(key %in% colnames(point_source_data))
+  # Validate that key column exists in metadata
+  stopifnot(key %in% colnames(point_source_data))
 
-    # Helper to extract value for each station at the closest matching date
-    extract_at_date <- function(ts_df, col_key, target_date) {
-        vals <- rep(NA_real_, nrow(point_source_data))
-        if (!is.null(ts_df) && "datetime" %in% names(ts_df)) {
-            for (i in seq_len(nrow(point_source_data))) {
-                station_id <- as.character(point_source_data[[col_key]][i])
-                if (!is.null(station_id) && station_id %in% names(ts_df)) {
-                    # Find row in ts_df with closest date to target_date
-                    dt <- as.Date(ts_df$datetime)
-                    idx <- which(dt == as.Date(target_date))
-                    if (length(idx) == 1) {
-                        vals[i] <- as.numeric(ts_df[[station_id]][idx])
-                    }
-                }
-            }
+  # Helper to extract value for each station at the closest matching date
+  extract_at_date <- function(ts_df, col_key, target_date) {
+    vals <- rep(NA_real_, nrow(point_source_data))
+    if (!is.null(ts_df) && "datetime" %in% names(ts_df)) {
+      for (i in seq_len(nrow(point_source_data))) {
+        station_id <- as.character(point_source_data[[col_key]][i])
+        if (!is.null(station_id) && station_id %in% names(ts_df)) {
+          # Find row in ts_df with closest date to target_date
+          dt <- as.Date(ts_df$datetime)
+          idx <- which(dt == as.Date(target_date))
+          if (length(idx) == 1) {
+            vals[i] <- as.numeric(ts_df[[station_id]][idx])
+          }
         }
-        vals
+      }
     }
 
     point_source_data$swe <- extract_at_date(
@@ -1338,28 +1479,38 @@ create_discrete_plot_popup <- function(timeseries) {
         dev.off()
     })
 
-    # Encode PNG to base64
-    plot_data <- readBin(plot_file, "raw", file.info(plot_file)$size)
-    plot_base64 <- base64enc::base64encode(plot_data)
-    unlink(plot_file)
+  # Save the plot as a PNG tempfile with smaller dimensions
+  plot_file <- tempfile(fileext = ".png")
 
-    # HTML for popup with smaller image and click-to-open functionality
-    popup_html <- sprintf(
-        paste0(
-            "<div style='text-align: center; max-width: 660px; width: 100%%;'>",
-            "<b>%s</b><br>",
-            "<img src='data:image/png;base64,%s' ",
-            "style='width: 100%%; height: auto; cursor: pointer; border: 1px solid #ccc; margin-top: 10px;' ",
-            "onclick='window.open(\"data:image/png;base64,%s\", \"_blank\", \"width=800,height=600\");' ",
-            "title='Click to open full size in new window' />",
-            "<br><small style='color: #666;'>Click image to open full size</small>",
-            "</div>"
-        ),
-        htmltools::htmlEscape(station_name),
-        plot_base64,
-        plot_base64
-    )
-    return(popup_html)
+  # Suppress warnings during PNG creation to avoid the geom_line warning
+  suppressWarnings({
+    png(plot_file, width = 800, height = 600, res = 120)
+    print(plot)
+    dev.off()
+  })
+
+  # Encode PNG to base64
+  plot_data <- readBin(plot_file, "raw", file.info(plot_file)$size)
+  plot_base64 <- base64enc::base64encode(plot_data)
+  unlink(plot_file)
+
+  # HTML for popup with smaller image and click-to-open functionality
+  popup_html <- sprintf(
+    paste0(
+      "<div style='text-align: center; max-width: 660px; width: 100%%;'>",
+      "<b>%s</b><br>",
+      "<img src='data:image/png;base64,%s' ",
+      "style='width: 100%%; height: auto; cursor: pointer; border: 1px solid #ccc; margin-top: 10px;' ",
+      "onclick='window.open(\"data:image/png;base64,%s\", \"_blank\", \"width=800,height=600\");' ",
+      "title='Click to open full size in new window' />",
+      "<br><small style='color: #666;'>Click image to open full size</small>",
+      "</div>"
+    ),
+    htmltools::htmlEscape(station_name),
+    plot_base64,
+    plot_base64
+  )
+  return(popup_html)
 }
 
 #' Load all base data for the SWE mapping application
@@ -1454,9 +1605,8 @@ load_base_data <- function(con) {
         units::set_units("km^2") |>
         as.numeric()
 
-    if ("SWE_Basin" %in% names(basins_shp)) {
-        names(basins_shp)[names(basins_shp) == "SWE_Basin"] <- "name"
-    }
+  basin_timeseries[, basin_names] <- NA_real_
+  basin_timeseries[, basin_names] <- basin_swe_mat
 
     # Ensure CRS is WGS84 for leaflet plotting
     if (sf::st_crs(basins_shp)$epsg != 4326) {
@@ -1466,55 +1616,205 @@ load_base_data <- function(con) {
     # Prepare dates and station list from discrete wide timeseries
     basin_dates <- base_data$surveys$timeseries$swe$datetime
 
-    # Convert station_cols from location_id to location (name) using discrete metadata
-    basin_names <- basins_shp$name
-    basin_swe_mat <- matrix(
-        NA_real_,
-        nrow = length(basin_dates),
-        ncol = length(basin_names)
+  prov_sf <- download_spatial_layer(
+    con,
+    "Provincial/Territorial Boundaries",
+    additional_query = "AND feature_name = 'Yukon'"
+  )
+  # Ensure CRS is WGS84 for leaflet
+  if (!is.null(prov_sf) && sf::st_crs(prov_sf)$epsg != 4326) {
+    prov_sf <- sf::st_transform(prov_sf, 4326)
+  }
+  base_data$shapefiles$yukon <- prov_sf
+
+  bbox_extent <- sf::st_as_sfc(sf::st_bbox(
+    c(xmin = -170, xmax = -90, ymin = 50, ymax = 90),
+    crs = 4326
+  ))
+  # Ensure CRS match for st_difference
+  if (
+    !is.null(base_data$shapefiles$yukon) &&
+      sf::st_crs(bbox_extent) != sf::st_crs(base_data$shapefiles$yukon)
+  ) {
+    base_data$shapefiles$yukon <- sf::st_transform(
+      base_data$shapefiles$yukon,
+      sf::st_crs(bbox_extent)
+    )
+  }
+  # Guard against NULL Yukon geometry
+  if (!is.null(base_data$shapefiles$yukon)) {
+    base_data$shapefiles$inverted_yukon <- sf::st_difference(
+      bbox_extent,
+      sf::st_union(base_data$shapefiles$yukon)
+    )
+  } else {
+    base_data$shapefiles$inverted_yukon <- bbox_extent
+  }
+
+  roads <- download_spatial_layer(con, "Roads")
+  # Ensure CRS is WGS84 for leaflet
+  if (!is.null(roads) && sf::st_crs(roads)$epsg != 4326) {
+    roads <- sf::st_transform(roads, 4326)
+  }
+  base_data$shapefiles$roads <- roads
+
+  place_types <- c("City", "Town", "Village") # Filter to major communities only
+  communities <- download_spatial_layer(
+    con,
+    "Communities",
+    additional_query = sprintf(
+      "AND (description IN (%s) OR feature_name IN ('Old Crow', 'Beaver Creek'))",
+      paste(
+        sapply(
+          place_types,
+          function(x) DBI::dbQuoteString(con, x)
+        ),
+        collapse = ", "
+      )
+    )
+  )
+  # Ensure CRS is WGS84 for leaflet
+  if (!is.null(communities) && sf::st_crs(communities)$epsg != 4326) {
+    communities <- sf::st_transform(communities, 4326)
+  }
+
+  # Add popup, annotate, and annotation columns to communities
+  if (!is.null(communities)) {
+    communities$popup <- sprintf(
+      "<div style='text-align: left; padding: 10px;'><b>%s</b><br><span style='font-size: 12px; color: #666;'>%s</span></div>",
+      htmltools::htmlEscape(communities$feature_name),
+      htmltools::htmlEscape(communities$description)
+    )
+    communities$annotate <- communities$description %in% place_types
+    communities$annotation <- communities$feature_name
+
+    communities$annotation <- vapply(
+      communities$annotation,
+      FUN.VALUE = character(1),
+      FUN = function(x) {
+        if (is.na(x) || x == "") {
+          return(x)
+        }
+        # Add line break after first word if it's 5+ characters
+        sub("^(\\S{5,})\\s+", "\\1<br>", x, perl = TRUE)
+      }
     )
 
-    for (i in seq_along(basin_dates)) {
-        basin_swe_mat[i, ] <- NA_real_
+    # Create named list of label position adjustments for each community
+    community_adjustments <- stats::setNames(
+      lapply(communities$feature_name, function(name) {
+        list(x = 0, y = 0) # Default: no offset
+      }),
+      communities$feature_name
+    )
 
-        weight_matrix <- weights_df[,
-            c("location_id", basin_names),
-            drop = FALSE
-        ]
+    # Customize specific communities
+    community_adjustments[["Whitehorse"]] <- list(x = 0, y = 10)
+    community_adjustments[["Dawson City"]] <- list(x = 0, y = 0)
+    community_adjustments[["Watson Lake"]] <- list(x = 60, y = 0)
+    community_adjustments[["Haines Junction"]] <- list(x = -70, y = -80)
+    community_adjustments[["Carmacks"]] <- list(x = 20, y = -40)
+    community_adjustments[["Mayo"]] <- list(x = 0, y = -40)
+    community_adjustments[["Pelly Crossing"]] <- list(x = 0, y = 0)
+    community_adjustments[["Ross River"]] <- list(x = 0, y = 0)
+    community_adjustments[["Teslin"]] <- list(x = 60, y = 10)
+    community_adjustments[["Beaver Creek"]] <- list(x = 40, y = 0)
+    community_adjustments[["Burwash Landing"]] <- list(x = 0, y = 0)
+    community_adjustments[["Carcross"]] <- list(x = 0, y = 0)
+    community_adjustments[["Faro"]] <- list(x = 0, y = -30)
+    community_adjustments[["Old Crow"]] <- list(x = 0, y = 10)
+    community_adjustments[["Inuvik"]] <- list(x = 0, y = 0)
 
-        swe_samples <- as.numeric(discrete_data$timeseries$swe[
-            i,
-            as.character(weight_matrix$location_id),
-            drop = TRUE
-        ])
+    # Get coordinates and apply adjustments
+    comm_coords <- sf::st_coordinates(communities)
 
-        nan_samples <- is.na(swe_samples)
+    communities$x <- comm_coords[, 1]
+    communities$y <- comm_coords[, 2]
+    communities$x_adjusted <- communities$x +
+      vapply(
+        communities$feature_name,
+        function(n) {
+          if (n %in% names(community_adjustments)) {
+            community_adjustments[[n]]$x / 111.32 # convert km -> degrees (approx)
+          } else {
+            0
+          }
+        },
+        numeric(1)
+      )
+    communities$y_adjusted <- communities$y +
+      vapply(
+        communities$feature_name,
+        function(n) {
+          if (n %in% names(community_adjustments)) {
+            community_adjustments[[n]]$y / 111.32 # convert km -> degrees (approx)
+          } else {
+            0
+          }
+        },
+        numeric(1)
+      )
+  }
 
-        swe_samples <- swe_samples[!nan_samples]
-        weight_matrix <- weight_matrix[!nan_samples, ]
-        # Drop location_id column before normalization and multiplication
-        weight_matrix <- weight_matrix[, -1, drop = FALSE]
+  base_data$shapefiles$communities <- communities
 
-        # Normalize columns so that each basin's weights sum to 1
-        weight_matrix <- sweep(
-            weight_matrix,
-            2,
-            colSums(weight_matrix, na.rm = TRUE),
-            FUN = "/"
-        )
-
-        # Remove the location_id column for multiplication
-        basin_vals <- as.numeric(
-            t(matrix(swe_samples, ncol = 1)) %*% as.matrix(weight_matrix)
-        )
-
-        basin_swe_mat[i, ] <- basin_vals
+  # Process basin names for better display on map
+  base_data$basins$metadata <- basins_shp
+  base_data$basins$metadata$annotation <- base_data$basins$metadata$Label
+  base_data$basins$metadata$annotation <- gsub(
+    "_",
+    " ",
+    as.character(base_data$basins$metadata$annotation)
+  )
+  base_data$basins$metadata$annotation <- vapply(
+    base_data$basins$metadata$annotation,
+    FUN.VALUE = character(1),
+    FUN = function(x) {
+      if (is.na(x) || x == "") {
+        return(x)
+      }
+      # Add line break after first word if it's 5+ characters
+      sub("^(\\S{5,})\\s+", "\\1<br>", x, perl = TRUE)
     }
+  )
 
-    # Build timeseries data.frame (datetime + basin columns)
-    basin_timeseries <- data.frame(
-        datetime = basin_dates,
-        stringsAsFactors = FALSE
+  # Create named list of label position adjustments for each basin
+  basin_adjustments <- stats::setNames(
+    lapply(base_data$basins$metadata$name, function(name) {
+      list(x = 0, y = 0) # Default: no offset
+    }),
+    base_data$basins$metadata$name
+  )
+
+  # Customize specific basins
+  basin_adjustments[["Lower_Yukon"]] <- list(x = -100, y = 40)
+  basin_adjustments[["Liard"]] <- list(x = -50, y = 60)
+  basin_adjustments[["Upper_Yukon"]] <- list(x = -75, y = -10)
+  basin_adjustments[["Pelly"]] <- list(x = 0, y = 20)
+  basin_adjustments[["Porcupine"]] <- list(x = 120, y = -30)
+  basin_adjustments[["Stewart"]] <- list(x = 0, y = 40)
+  basin_adjustments[["Teslin_Big_Salmon"]] <- list(x = -70, y = 90)
+  basin_adjustments[["Central_Yukon"]] <- list(x = -115, y = 30)
+  basin_adjustments[["White"]] <- list(x = 10, y = -20)
+  basin_adjustments[["Alsek"]] <- list(x = 0, y = -80)
+
+  # Get basin centroids and apply adjustments
+  basin_centroids <- sf::st_centroid(base_data$basins$metadata)
+  basin_coords <- sf::st_coordinates(basin_centroids)
+  base_data$basins$metadata$x <- basin_coords[, 1]
+  base_data$basins$metadata$y <- basin_coords[, 2]
+
+  base_data$basins$metadata$x_adjusted <- base_data$basins$metadata$x +
+    vapply(
+      base_data$basins$metadata$name,
+      function(n) {
+        if (n %in% names(basin_adjustments)) {
+          basin_adjustments[[n]]$x / 111.32 # convert km -> degrees (approx)
+        } else {
+          0
+        }
+      },
+      numeric(1)
     )
 
     basin_timeseries[, basin_names] <- NA_real_
@@ -1525,6 +1825,8 @@ load_base_data <- function(con) {
         basin_timeseries,
         lookback_year = 1980
     )
+  return(base_data)
+}
 
     base_data$basins$timeseries <- list(
         swe = basin_timeseries,
@@ -1544,26 +1846,13 @@ load_base_data <- function(con) {
     }
     base_data$shapefiles$yukon <- prov_sf
 
-    bbox_extent <- sf::st_as_sfc(sf::st_bbox(
-        c(xmin = -170, xmax = -90, ymin = 50, ymax = 90),
-        crs = 4326
-    ))
-    # Ensure CRS match for st_difference
-    if (
-        !is.null(base_data$shapefiles$yukon) &&
-            sf::st_crs(bbox_extent) != sf::st_crs(base_data$shapefiles$yukon)
-    ) {
-        base_data$shapefiles$yukon <- sf::st_transform(
-            base_data$shapefiles$yukon,
-            sf::st_crs(bbox_extent)
-        )
-    }
-    # Guard against NULL Yukon geometry
-    if (!is.null(base_data$shapefiles$yukon)) {
-        base_data$shapefiles$inverted_yukon <- sf::st_difference(
-            bbox_extent,
-            sf::st_union(base_data$shapefiles$yukon)
-        )
+    plot_button <- if (shiny && !is.null(id)) {
+      sprintf(
+        "<button onclick='generatePlot(\"%s\", \"%s\", \"%s\")' style='margin-top: 10px;'>Generate Plot</button>",
+        type,
+        id,
+        name
+      )
     } else {
         base_data$shapefiles$inverted_yukon <- bbox_extent
     }
@@ -1602,19 +1891,13 @@ load_base_data <- function(con) {
             htmltools::htmlEscape(communities$feature_name),
             htmltools::htmlEscape(communities$description)
         )
-        communities$annotate <- communities$description %in% place_types
-        communities$annotation <- communities$feature_name
-
-        communities$annotation <- vapply(
-            communities$annotation,
-            FUN.VALUE = character(1),
-            FUN = function(x) {
-                if (is.na(x) || x == "") {
-                    return(x)
-                }
-                # Add line break after first word if it's 5+ characters
-                sub("^(\\S{5,})\\s+", "\\1<br>", x, perl = TRUE)
-            }
+      }
+      if (length(basin_elev) > 0 && !is.na(basin_elev)) {
+        area_html <- paste0(
+          area_html,
+          "<b>Mean Elevation:</b> ",
+          round(basin_elev, 0),
+          " m<br>"
         )
 
         # Create named list of label position adjustments for each community
@@ -1791,9 +2074,13 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
         round(swe_at_basins$relative_swe, 1),
         "%)"
     )
+  }
 
-    generate_popup_content <- function(
-        type,
+  # Fix mapply argument mismatch for popup_content
+  swe_at_basins$popup_content <- mapply(
+    function(swe, relative_swe, historic_median, percentile, name) {
+      generate_popup_content(
+        "basin",
         swe,
         relative_swe,
         historic_median,
@@ -2084,10 +2371,10 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 #'
 #' @export
 leaflet_snow_bulletin_map <- function(
-    year,
-    month,
-    base_data = NULL,
-    filename = NULL
+  year,
+  month,
+  base_data = NULL,
+  filename = NULL
 ) {
     # Load required packages
     requireNamespace("leaflet")
@@ -2148,16 +2435,60 @@ leaflet_snow_bulletin_map <- function(
             wheelPxPerZoomLevel = 120
         )
     ) %>%
-        leaflet::addProviderTiles(
-            leaflet::providers$Esri.WorldTerrain,
-            group = "Topographic"
-        ) %>%
-        leaflet::fitBounds(
-            as.numeric(bbox["xmin"]),
-            as.numeric(bbox["ymin"]),
-            as.numeric(bbox["xmax"]),
-            as.numeric(bbox["ymax"])
-        ) %>%
+    leaflet::fitBounds(
+      as.numeric(bbox["xmin"]),
+      as.numeric(bbox["ymin"]),
+      as.numeric(bbox["xmax"]),
+      as.numeric(bbox["ymax"])
+    ) %>%
+    leaflet::addPolygons(
+      data = data$swe_at_basins,
+      fillColor = ~ swe_pal(value_to_show),
+      color = viz_params$basins$color,
+      weight = viz_params$basins$weight,
+      opacity = viz_params$basins$opacity,
+      fillOpacity = viz_params$basins$fillOpacity,
+      label = ~ lapply(annotation, htmltools::HTML),
+      popup = ~ lapply(popup_content, htmltools::HTML),
+      popupOptions = do.call(
+        leaflet::popupOptions,
+        viz_params$basins$popupOptions
+      ),
+      group = "Basins averages"
+    ) %>%
+    leaflet::addLabelOnlyMarkers(
+      data = data$swe_at_basins,
+      lng = data$swe_at_basins$x_adjusted,
+      lat = data$swe_at_basins$y_adjusted,
+      label = ~ lapply(data$swe_at_basins$annotation, htmltools::HTML),
+      labelOptions = leaflet::labelOptions(
+        noHide = TRUE,
+        direction = "center",
+        textOnly = TRUE,
+        style = viz_params$basins$label
+      ),
+      group = "Basins averages"
+    ) %>%
+    {
+      if (!is.null(base_data$shapefiles$roads)) {
+        leaflet::addPolylines(
+          .,
+          data = base_data$shapefiles$roads,
+          color = viz_params$roads$color,
+          weight = viz_params$roads$weight,
+          opacity = viz_params$roads$opacity,
+          group = "Roads",
+          label = ~ lapply(
+            as.character(feature_name),
+            htmltools::HTML
+          )
+        )
+      } else {
+        .
+      }
+    } %>%
+    {
+      if (!is.null(base_data$shapefiles$yukon)) {
         leaflet::addPolygons(
             data = data$swe_at_basins,
             fillColor = ~ swe_pal(value_to_show),
@@ -2314,6 +2645,106 @@ leaflet_snow_bulletin_map <- function(
             labFormat = leaflet::labelFormat(suffix = "%"),
             opacity = 1
         )
+      } else {
+        .
+      }
+    } %>%
+    leaflet::addCircleMarkers(
+      data = data$swe_at_surveys,
+      radius = viz_params$surveys$radius,
+      color = viz_params$surveys$color,
+      fillColor = ~ swe_pal(value_to_show),
+      weight = viz_params$surveys$weight,
+      opacity = viz_params$surveys$opacity,
+      fillOpacity = viz_params$surveys$fillOpacity,
+      label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
+      popup = ~ lapply(popup_content, htmltools::HTML),
+      popupOptions = do.call(
+        leaflet::popupOptions,
+        viz_params$basins$popupOptions
+      ),
+      group = "Snow surveys (discrete)"
+    ) %>%
+    leaflet::addCircleMarkers(
+      data = data$swe_at_pillows,
+      radius = viz_params$pillows$radius,
+      color = viz_params$pillows$color,
+      fillColor = ~ swe_pal(value_to_show),
+      weight = viz_params$pillows$weight,
+      opacity = viz_params$pillows$opacity,
+      fillOpacity = viz_params$pillows$fillOpacity,
+      label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
+      popup = ~ lapply(popup_content, htmltools::HTML),
+      popupOptions = do.call(
+        leaflet::popupOptions,
+        viz_params$basins$popupOptions
+      ),
+      group = "Snow pillows (continuous)"
+    ) %>%
+    {
+      if (!is.null(base_data$shapefiles$communities)) {
+        comm <- base_data$shapefiles$communities
+        . <- leaflet::addMarkers(
+          .,
+          data = comm,
+          icon = leaflet::icons(
+            iconUrl = viz_params$communities$icon,
+            iconWidth = viz_params$communities$iconWidth,
+            iconHeight = viz_params$communities$iconHeight
+          ),
+          label = ~ lapply(annotation, htmltools::HTML),
+          popup = ~ lapply(popup, htmltools::HTML),
+          popupOptions = do.call(
+            leaflet::popupOptions,
+            viz_params$basins$popupOptions
+          ),
+          group = "Communities"
+        )
+        . <- leaflet::addLabelOnlyMarkers(
+          .,
+          data = comm,
+          lng = comm$x,
+          lat = comm$y,
+          label = ~ lapply(comm$annotation, htmltools::HTML),
+          labelOptions = leaflet::labelOptions(
+            noHide = viz_params$communities$labelOptions$noHide,
+            direction = viz_params$communities$labelOptions$direction,
+            textOnly = viz_params$communities$labelOptions$textOnly,
+            style = list(
+              color = viz_params$communities$label$color,
+              fontSize = viz_params$communities$label$fontSize,
+              fontWeight = viz_params$communities$label$fontWeight,
+              fontStyle = viz_params$communities$label$fontStyle,
+              textShadow = viz_params$communities$label$textShadow
+            )
+          ),
+          group = "Communities"
+        )
+        .
+      } else {
+        .
+      }
+    } %>%
+    leaflet::addLayersControl(
+      baseGroups = "Topographic",
+      overlayGroups = c(
+        "Boundary",
+        "Roads",
+        "Communities",
+        "Basins averages",
+        "Snow surveys (discrete)",
+        "Snow pillows (continuous)"
+      ),
+      options = leaflet::layersControlOptions(collapsed = FALSE)
+    ) %>%
+    leaflet::addLegend(
+      position = "bottomright",
+      pal = swe_pal,
+      values = pal_domain,
+      title = "% of Normal",
+      labFormat = leaflet::labelFormat(suffix = "%"),
+      opacity = 1
+    )
 
     if (!is.null(filename)) {
         cat(sprintf("Saving map to file: %s\n", filename))
@@ -2381,13 +2812,13 @@ leaflet_snow_bulletin_map <- function(
 #'
 #' @export
 ggplot_snow_bulletin_map <- function(
-    year,
-    month,
-    base_data = NULL,
-    width = 12,
-    height = 8,
-    filename = NULL,
-    dpi = 300
+  year,
+  month,
+  base_data = NULL,
+  width = 12,
+  height = 8,
+  filename = NULL,
+  dpi = 300
 ) {
     # Load required packages
     requireNamespace("ggplot2")
@@ -2435,11 +2866,65 @@ ggplot_snow_bulletin_map <- function(
     data$swe_at_basins$fill_color <- create_color_mapping(
         data$swe_at_basins$value_to_show
     )
-    data$swe_at_surveys$fill_color <- create_color_mapping(
-        data$swe_at_surveys$value_to_show
+    on.exit(DBI::dbDisconnect(con))
+    base_data <- load_base_data(con)
+  }
+  data <- get_processed_data(
+    year = year,
+    month = month,
+    base_data = base_data,
+    shiny = FALSE
+  )
+
+  value_col <- "relative_swe"
+  data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_col]]
+  data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_col]]
+  data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
+
+  # Create color mapping function using same bins and colors as leaflet
+  create_color_mapping <- function(values) {
+    cut_values <- cut(
+      values,
+      breaks = viz_params$basins$bins,
+      include.lowest = TRUE,
+      right = FALSE
     )
-    data$swe_at_pillows$fill_color <- create_color_mapping(
-        data$swe_at_pillows$value_to_show
+    colors <- viz_params$basins$fillColor[as.numeric(cut_values)]
+    colors[is.na(colors)] <- "gray"
+    return(colors)
+  }
+
+  # Apply colors to data
+  data$swe_at_basins$fill_color <- create_color_mapping(
+    data$swe_at_basins$value_to_show
+  )
+  data$swe_at_surveys$fill_color <- create_color_mapping(
+    data$swe_at_surveys$value_to_show
+  )
+  data$swe_at_pillows$fill_color <- create_color_mapping(
+    data$swe_at_pillows$value_to_show
+  )
+
+  # Get coordinates for stations
+  surveys_coords <- sf::st_coordinates(data$swe_at_surveys)
+  data$swe_at_surveys$x <- surveys_coords[, 1]
+  data$swe_at_surveys$y <- surveys_coords[, 2]
+
+  pillows_coords <- sf::st_coordinates(data$swe_at_pillows)
+  data$swe_at_pillows$x <- pillows_coords[, 1]
+  data$swe_at_pillows$y <- pillows_coords[, 2]
+
+  # Create the base plot
+  p <- ggplot2::ggplot() +
+    ggplot2::theme_void() +
+    ggplot2::theme(
+      legend.position = "right",
+      plot.title = ggplot2::element_text(
+        hjust = 0.5,
+        size = 14,
+        face = "bold"
+      ),
+      plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 12)
     )
 
     # Get coordinates for stations
@@ -2476,7 +2961,8 @@ ggplot_snow_bulletin_map <- function(
             )
     }
 
-    # Add SWE basins
+  # Add Yukon boundary background (underneath everything except basins)
+  if (!is.null(base_data$shapefiles$yukon)) {
     p <- p +
         ggplot2::geom_sf(
             data = data$swe_at_basins,
@@ -2506,6 +2992,35 @@ ggplot_snow_bulletin_map <- function(
                 alpha = viz_params$roads$opacity
             )
     }
+  }
+
+  swe_legend_df <- data.frame(
+    bin = seq_along(bin_ranges),
+    color = viz_params$relative_colors[-length(viz_params$relative_colors)],
+    label = bin_labels,
+    stringsAsFactors = FALSE
+  )
+
+  p <- p +
+    ggplot2::labs(
+      title = sprintf(
+        "Yukon Snow Water Equivalent - %s %s",
+        month_name,
+        year
+      ),
+      subtitle = "SWE as % of Normal | Basins (polygons) | Discrete stations (black) | Continuous stations (blue)"
+    ) +
+    ggplot2::scale_fill_manual(
+      values = viz_params$basins$fillColor,
+      guide = ggplot2::guide_legend(
+        title = "% of Normal",
+        override.aes = list(
+          fill = viz_params$basins$fillColor,
+          color = viz_params$basins$fillColor
+        ),
+        label.theme = ggplot2::element_text(size = 8)
+      )
+    )
 
     # Add survey stations (discrete)
     if (nrow(data$swe_at_surveys) > 0) {
@@ -2541,21 +3056,7 @@ ggplot_snow_bulletin_map <- function(
             )
     }
 
-    # Add communities using pre-calculated adjusted coordinates
-    if (!is.null(base_data$shapefiles$communities)) {
-        comm_coords <- sf::st_coordinates(base_data$shapefiles$communities)
-        communities_df <- data.frame(
-            x = comm_coords[, 1],
-            y = comm_coords[, 2],
-            name = base_data$shapefiles$communities$feature_name,
-            annotation = gsub(
-                "<br>",
-                "\n",
-                base_data$shapefiles$communities$annotation
-            ),
-            x_adjust = base_data$shapefiles$communities$x_adjusted,
-            y_adjust = base_data$shapefiles$communities$y_adjusted
-        )
+    cat(sprintf("Saving ggplot map to to file: %s\n", filename))
 
         p <- p +
             ggplot2::geom_point(

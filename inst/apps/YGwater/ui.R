@@ -326,6 +326,11 @@ app_ui <- function(request) {
               uiOutput("addDiscData_ui")
             ),
             nav_panel(
+              title = "Add/edit samples",
+              value = "addSamples",
+              uiOutput("addSamples_ui")
+            ),
+            nav_panel(
               title = "Edit/delete discrete data",
               value = "editDiscData",
               uiOutput("editDiscData_ui")
@@ -334,6 +339,11 @@ app_ui <- function(request) {
               title = "Add/modify guidelines",
               value = "addGuidelines",
               uiOutput("addGuidelines_ui")
+            ),
+            nav_panel(
+              title = "Add/edit sample series",
+              value = "addSampleSeries",
+              uiOutput("addSampleSeries_ui")
             ),
             nav_panel(
               title = "Sync sample series",

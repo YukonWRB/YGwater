@@ -12,23 +12,28 @@
 #' @export
 #'
 
-bridgeReport <- function(con = AquaConnect(silent = TRUE),
-                         locations = "all",
-                         zoom = TRUE,
-                         zoom_days = 30,
-                         save_path = "choose"
-                         )
-{
-
+bridgeReport <- function(
+  con = AquaConnect(silent = TRUE),
+  locations = "all",
+  zoom = TRUE,
+  zoom_days = 30,
+  save_path = "choose"
+) {
   on.exit(DBI::dbDisconnect(con))
-  rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
-  if (!rlang::is_installed("knitr")) { #This is here because knitr is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
+  rlang::check_installed(
+    "knitr",
+    reason = "necessary to create a report using Rmarkdown."
+  )
+  if (!rlang::is_installed("knitr")) {
+    #This is here because knitr is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
     message("Installing dependency 'knitr'...")
     utils::install.packages("knitr")
     if (rlang::is_installed("knitr")) {
       message("Package knitr successfully installed.")
     } else {
-      stop("Failed to install package knitr. You could troubleshoot by running utils::install.packages('knitr') by itself.")
+      stop(
+        "Failed to install package knitr. You could troubleshoot by running utils::install.packages('knitr') by itself."
+      )
     }
   }
 
@@ -37,15 +42,20 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
       stop("You must specify a save path when running in non-interactive mode.")
     }
     message("Select the path to the folder where you want this report saved.")
-    save_path <- rstudioapi::selectDirectory(caption = "Select Save Folder", path = file.path(Sys.getenv("USERPROFILE"),"Desktop"))
+    save_path <- rstudioapi::selectDirectory(
+      caption = "Select Save Folder",
+      path = file.path(Sys.getenv("USERPROFILE"), "Desktop")
+    )
   } else {
     if (!dir.exists(save_path)) {
       stop("The save path you specified does not exist.")
     }
   }
-  
+
   if (locations == "all") {
-    tsid <- DBI::dbGetQuery(con, "
+    tsid <- DBI::dbGetQuery(
+      con,
+      "
     SELECT t.location, t.timeseries_id, l.name 
     FROM timeseries AS t 
     JOIN parameters AS p ON t.parameter_id = p.parameter_id 
@@ -66,9 +76,12 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
     ) AS l ON t.location_id = l.location_id 
     WHERE p.parameter_id = 1160
     AND n.name = 'Highway Observation Network';
-")
+"
+    )
   } else {
-    tsid <- DBI::dbGetQuery(con, "
+    tsid <- DBI::dbGetQuery(
+      con,
+      "
     SELECT t.location, t.timeseries_id, l.name 
     FROM timeseries AS t 
     JOIN parameters AS p ON t.parameter_id = p.parameter_id 
@@ -89,10 +102,13 @@ bridgeReport <- function(con = AquaConnect(silent = TRUE),
     ) AS l ON t.location_id = l.location_id 
     WHERE p.parameter_id = 1160
     AND n.name = 'Highway Observation Network'
-    AND t.location IN ('", paste(locations, collapse = "', '"), "');
-")
+    AND t.location IN ('",
+      paste(locations, collapse = "', '"),
+      "');
+"
+    )
   }
-  
+
   rmarkdown::render(
     input = system.file("rmd", "Bridge_report.Rmd", package = "YGwater"),
     output_file = paste0(Sys.Date(), "_Bridge-Radar-Report"),

@@ -41,7 +41,7 @@ estimateFlowStats <- function(
 
   flow_paramId <- DBI::dbGetQuery(
     con,
-    "SELECT parameter_id FROM parameters WHERE param_name = 'flow'"
+    "SELECT parameter_id FROM parameters WHERE param_name = 'water flow'"
   )$parameter_id
 
   flow_all <- DBI::dbGetQuery(
