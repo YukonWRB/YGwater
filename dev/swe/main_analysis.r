@@ -178,7 +178,6 @@ get_lims_from_geom <- function(geom, buffer_m = 5000) {
     return(list(xlim = xlim, ylim = ylim))
 }
 
-
 # Get extents of selected basin with 500m buffer
 lims <- get_lims_from_geom(selected_basin, buffer_m = 5000)
 xlim <- lims$xlim
@@ -188,7 +187,7 @@ ylim <- lims$ylim
 plot(
     era5_relative_change,
     main = paste(
-        "ERA5 SWE Relative to historic median (1980-1924) on",
+        "ERA5 SWE Relative to historic median (1980-2024) on",
         format(query_date, "%Y-%m-%d"),
         "with HYBAS Basin:",
         hybas_id_to_select

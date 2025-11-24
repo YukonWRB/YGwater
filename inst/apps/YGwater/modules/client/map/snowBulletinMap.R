@@ -18,7 +18,7 @@
 # - Snowcourse factors: CSV file with basin weighting factors
 # =============================================================================
 # Load utility functions and color palettes
-source("R/SWE_maputils.R")
+#source("R/SWE_maputils.R")
 # =============================================================================
 # DATA LOADING AND PROCESSING
 # =============================================================================
@@ -149,7 +149,7 @@ mapSnowbull <- function(id, language) {
 
     con <- session$userData$AquaCache
 
-    base_data <- load_base_data(con)
+    base_data <- load_bulletin_data(con)
 
     viz_params <- initialize_visualization_parameters()
 
