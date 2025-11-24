@@ -11,7 +11,9 @@ ggplot_snow_bulletin_map(
   width = 12,
   height = 8,
   filename = NULL,
-  dpi = 300
+  dpi = 300,
+  parameter_name = "swe",
+  type = "relative"
 )
 }
 \arguments{
@@ -19,7 +21,7 @@ ggplot_snow_bulletin_map(
 
 \item{month}{Integer month (e.g., 3 for March)}
 
-\item{base_data}{Optional preloaded base_data from \code{load_base_data()}, otherwise loads from default connection}
+\item{base_data}{Optional preloaded base_data from \code{load_bulletin_data()}, otherwise loads from default connection}
 
 \item{width}{Numeric width of the plot in inches (default: 12)}
 
@@ -29,18 +31,16 @@ ggplot_snow_bulletin_map(
 
 \item{dpi}{Numeric resolution in dots per inch (default: 300)}
 
-\item{values}{Numeric vector of SWE values}
+\item{parameter_name}{Character, parameter to plot (default: "swe")}
+
+\item{type}{Character, "absolute", "relative", or "percentile" (default: "relative")}
 }
 \value{
 A ggplot2 object with SWE basins and stations
-
-Character vector of color hex codes
 }
 \description{
 Creates a publication-ready static map showing SWE conditions across the Yukon Territory.
 Optimized for high-resolution output and professional presentation.
-
-Maps SWE values to color bins for plotting.
 }
 \details{
 The static map features:
@@ -56,19 +56,4 @@ The static map features:
 
 Label positions are pre-calculated and adjusted to minimize overlap and
 maximize readability across different map extents.
-}
-\examples{
-\dontrun{
-# Create plot for May 2025
-p <- ggplot_snow_bulletin_map(2025, 5)
-print(p)
-
-# Save high-resolution PNG
-ggplot_snow_bulletin_map(
-  2025, 5,
-  filename = "swe_map_may2025.png",
-  width = 16, height = 10, dpi = 300
-)
-}
-
 }

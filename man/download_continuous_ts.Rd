@@ -8,7 +8,8 @@ download_continuous_ts(
   con,
   start_date = sprintf("\%d-01-01", 1950),
   end_date = sprintf("\%d-01-01", 2100),
-  resolution = "daily"
+  resolution = "daily",
+  parameter_name = "snow water equivalent"
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ download_continuous_ts(
 \item{end_date}{Character date string (YYYY-MM-DD) for filtering data}
 
 \item{resolution}{Character, either "daily" or "monthly" for data aggregation}
+
+\item{parameter_name}{Character string of the parameter name to retrieve}
 }
 \value{
 A list with two elements:
@@ -40,7 +43,7 @@ timeseries data.frame, facilitating efficient historical analysis.
 \examples{
 \dontrun{
 continuous_data <- download_continuous_ts(con)
-print(names(continuous_data$timeseries$swe))  # Shows datetime + station columns
+print(names(continuous_data$timeseries$data))  # Shows datetime + station columns
 print(nrow(continuous_data$metadata))         # Number of stations
 }
 }

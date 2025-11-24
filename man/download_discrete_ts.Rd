@@ -17,6 +17,8 @@ download_discrete_ts(
 \item{start_date}{Character date string (YYYY-MM-DD) for filtering data}
 
 \item{end_date}{Character date string (YYYY-MM-DD) for filtering data}
+
+\item{parameter_name}{Character string of the parameter name to retrieve}
 }
 \value{
 A list with two elements:

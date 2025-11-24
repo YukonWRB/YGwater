@@ -7,7 +7,8 @@
 calculate_historic_daily_median(
   ts,
   lookback_length = NULL,
-  lookback_year = NULL
+  lookback_start = NULL,
+  lookback_end = NULL
 )
 }
 \arguments{
@@ -15,13 +16,15 @@ calculate_historic_daily_median(
 
 \item{lookback_length}{Integer number of years to look back from each measurement (optional)}
 
-\item{lookback_year}{Integer year to start lookback period from (e.g., 1980) (optional)}
+\item{lookback_start}{Integer year to start lookback period from (e.g., 1980) (optional)}
+
+\item{lookback_end}{Integer year to end lookback period (optional, defaults to current year - 1)}
 }
 \value{
 A list with two elements:
 \describe{
 \item{historic_median}{data.frame with historic median values for each date/station}
-\item{relative_swe}{data.frame with current values as percentage of historic median}
+\item{relative_data}{data.frame with current values as percentage of historic median}
 }
 }
 \description{
@@ -43,7 +46,7 @@ consistency with snow bulletin reporting periods.
 \examples{
 \dontrun{
 # Calculate using fixed lookback year
-result <- calculate_historic_daily_median(ts_data, lookback_year = 1980)
+result <- calculate_historic_daily_median(ts_data, lookback_start = 1980)
 
 # Calculate using rolling 30-year window
 result <- calculate_historic_daily_median(ts_data, lookback_length = 30)

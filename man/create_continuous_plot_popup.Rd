@@ -12,6 +12,8 @@ create_continuous_plot_popup(timeseries, year, con, station_name = NULL)
 \item{year}{Integer year for plot focus}
 
 \item{con}{Database connection for historical data access}
+
+\item{station_name}{Optional character string for station name in plot title}
 }
 \value{
 Character string containing HTML with embedded base64 image
@@ -32,7 +34,7 @@ The plot shows:
 }
 \examples{
 \dontrun{
-station_ts <- base_data$pillows$timeseries$swe[, c("datetime", "123")]
+station_ts <- base_data$pillows$timeseries$data[, c("datetime", "123")]
 popup_html <- create_continuous_plot_popup(station_ts, 2025, con)
 }
 }

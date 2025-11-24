@@ -38,11 +38,10 @@
 #' @details
 #' The relative SWE bins are designed to highlight significant departures from normal
 #'
-#' @export
 #' @noRd
 initialize_visualization_parameters <- function() {
     # Color scheme and visualization parameters
-    # Bins represent percentage of normal SWE (relative_swe values)
+    # Bins represent percentage of normal SWE (relative_data values)
     relative_bins <- c(-2, -1, 0, 50, 70, 90, 110, 130, 150, Inf)
     relative_colors <- c(
         "#27A62C", # Green (much below normal)
@@ -92,14 +91,14 @@ initialize_visualization_parameters <- function() {
             fillColor = relative_colors,
             bins = relative_bins,
             color = "white",
-            weight = 2,
+            weight = 3,
             opacity = 1,
             fillOpacity = 0.7,
             label = list(
                 color = "#222",
                 fontSize = "14px",
                 fontWeight = "bold",
-                textShadow = "2px 2px 4px #fff"
+                textShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
             ),
             popupOptions = list(
                 maxWidth = 320,
@@ -164,7 +163,7 @@ initialize_visualization_parameters <- function() {
                 fontSize = "13px",
                 fontWeight = "bold",
                 fontStyle = "italic",
-                textShadow = "1px 1px 2px #fff"
+                textShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
             ),
             labelOptions = list(
                 noHide = TRUE,
@@ -200,7 +199,6 @@ initialize_visualization_parameters <- function() {
 #' recent datetime to find the last valid measurement. This is used to determine
 #' data currency for station filtering.
 #'
-#' @noRd
 #' @examples
 #' \dontrun{
 #' ts_data <- data.frame(
@@ -209,6 +207,7 @@ initialize_visualization_parameters <- function() {
 #' )
 #' get_most_recent_date(ts_data)  # Returns 2024-01-03
 #' }
+#' @noRd
 get_most_recent_date <- function(ts) {
     if (
         is.null(ts) ||
@@ -232,7 +231,6 @@ get_most_recent_date <- function(ts) {
 #'
 #' @param parameter Character string of parameter name to standardize
 #' @return Character string of standardized parameter name
-#' @noRd
 #' @description
 #' Converts various parameter name variations to standardized database values.
 #' Handles common abbreviations and full names for snow, precipitation, and temperature.
@@ -241,17 +239,18 @@ get_most_recent_date <- function(ts) {
 #' Standardizes parameter names as follows:
 #' \itemize{
 #'   \item Snow variations ('snow', 'swe', 'snow water equivalent') -> 'snow water equivalent'
-#'   \item Precipitation variations ('precip', 'precipitation', 'rain') -> 'precipitation'
-#'   \item Temperature variations ('temp', 'temperature', 'air temp') -> 'temperature'
+#'   \item Precipitation variations ('precip', 'precipitation', 'rain') -> 'precipitation, total'
+#'   \item Temperature variations ('temp', 'temperature', 'air temp') -> 'temperature, air'
 #' }
 #'
 #' @examples
 #' \dontrun{
 #' standardize_parameter_name("snow")  # Returns "snow water equivalent"
 #' standardize_parameter_name("swe")   # Returns "snow water equivalent"
-#' standardize_parameter_name("precip") # Returns "precipitation"
-#' standardize_parameter_name("temp")   # Returns "temperature"
+#' standardize_parameter_name("precip") # Returns "precipitation, total"
+#' standardize_parameter_name("temp")   # Returns "temperature, air"
 #' }
+#' @noRd
 standardize_parameter_name <- function(parameter) {
     if (is.null(parameter) || is.na(parameter) || parameter == "") {
         return("snow water equivalent") # Default to SWE
@@ -303,7 +302,6 @@ standardize_parameter_name <- function(parameter) {
 #' @param year Integer year (e.g., 2025)
 #' @param month Integer month (1-12)
 #' @return POSIXct datetime object in UTC timezone, set to first day of month
-#' @noRd
 #' @description
 #' Creates a standardized datetime for the first day of the specified month and year.
 #' Used throughout the application for consistent date handling.
@@ -313,6 +311,7 @@ standardize_parameter_name <- function(parameter) {
 #' get_datetime(2025, 3)  # Returns 2025-03-01 00:00:00 UTC
 #' get_datetime(2024, 12) # Returns 2024-12-01 00:00:00 UTC
 #' }
+#' @noRd
 get_datetime <- function(year, month) {
     as.POSIXct(as.Date(paste0(year, "-", month, "-01")), tz = "UTC")
 }
@@ -479,7 +478,6 @@ resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
 #' @description
 #' Queries the spatial.vectors table and transforms geometries to WGS84.
 #' Used for loading administrative boundaries, communities, roads, etc.
-#' @noRd
 #' @details
 #' The function first verifies that the requested layer exists in the database,
 #' then downloads and transforms the geometry to WGS84 for consistent mapping.
@@ -497,6 +495,7 @@ resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
 #'   "AND description IN ('City', 'Town')"
 #' )
 #' }
+#' @noRd
 download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
     query <- sprintf(
         "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
@@ -522,9 +521,14 @@ download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
 #' Retrieve continuous SWE timeseries and station metadata
 #'
 #' @param con DBI database connection object
+
+#' Retrieve continuous SWE timeseries and station metadata
+#'
+#' @param con DBI database connection object
 #' @param start_date Character date string (YYYY-MM-DD) for filtering data
 #' @param end_date Character date string (YYYY-MM-DD) for filtering data
 #' @param resolution Character, either "daily" or "monthly" for data aggregation
+#' @param parameter_name Character string of the parameter name to retrieve
 #' @return A list with two elements:
 #' \describe{
 #'   \item{timeseries}{Named list containing a 'swe' data.frame with datetime and station columns}
@@ -544,7 +548,7 @@ download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
 #' @examples
 #' \dontrun{
 #' continuous_data <- download_continuous_ts(con)
-#' print(names(continuous_data$timeseries$swe))  # Shows datetime + station columns
+#' print(names(continuous_data$timeseries$data))  # Shows datetime + station columns
 #' print(nrow(continuous_data$metadata))         # Number of stations
 #' }
 download_continuous_ts <- function(
@@ -554,6 +558,8 @@ download_continuous_ts <- function(
     resolution = "daily",
     parameter_name = "snow water equivalent"
 ) {
+    parameter_name <- standardize_parameter_name(parameter_name)
+
     # Verify parameter exists in public.parameters table
     if (!check_parameter_exists(con, parameter_name)) {
         warning(sprintf(
@@ -798,6 +804,7 @@ check_parameter_exists <- function(con, parameter_name) {
 #' @param con DBI database connection object
 #' @param start_date Character date string (YYYY-MM-DD) for filtering data
 #' @param end_date Character date string (YYYY-MM-DD) for filtering data
+#' @param parameter_name Character string of the parameter name to retrieve
 #' @return A list with two elements:
 #' \describe{
 #'   \item{timeseries}{Named list containing a 'swe' data.frame with datetime and station columns}
@@ -1105,11 +1112,12 @@ load_snowcourse_factors <- function(
 #'
 #' @param ts Wide-format data.frame with 'datetime' column and station columns
 #' @param lookback_length Integer number of years to look back from each measurement (optional)
-#' @param lookback_year Integer year to start lookback period from (e.g., 1980) (optional)
+#' @param lookback_start Integer year to start lookback period from (e.g., 1980) (optional)
+#' @param lookback_end Integer year to end lookback period (optional, defaults to current year - 1)
 #' @return A list with two elements:
 #' \describe{
 #'   \item{historic_median}{data.frame with historic median values for each date/station}
-#'   \item{relative_swe}{data.frame with current values as percentage of historic median}
+#'   \item{relative_data}{data.frame with current values as percentage of historic median}
 #' }
 #'
 #' @description
@@ -1131,7 +1139,7 @@ load_snowcourse_factors <- function(
 #' @examples
 #' \dontrun{
 #' # Calculate using fixed lookback year
-#' result <- calculate_historic_daily_median(ts_data, lookback_year = 1980)
+#' result <- calculate_historic_daily_median(ts_data, lookback_start = 1980)
 #'
 #' # Calculate using rolling 30-year window
 #' result <- calculate_historic_daily_median(ts_data, lookback_length = 30)
@@ -1139,13 +1147,43 @@ load_snowcourse_factors <- function(
 calculate_historic_daily_median <- function(
     ts,
     lookback_length = NULL,
-    lookback_year = NULL
+    lookback_start = NULL,
+    lookback_end = NULL
 ) {
     # Default behaviour if neither provided
-    if (is.null(lookback_year) && is.null(lookback_length)) {
-        lookback_year <- 1980
-    } else if (!is.null(lookback_year) && !is.null(lookback_length)) {
-        stop("Specify either lookback_year or lookback_length, not both.")
+    if (is.null(lookback_start) && is.null(lookback_length)) {
+        lookback_start <- 1980
+    } else if (!is.null(lookback_start) && !is.null(lookback_length)) {
+        stop("Specify either lookback_start or lookback_length, not both.")
+    }
+
+    # Warning if lookback_end is not provided when using lookback_start
+    if (!is.null(lookback_start) && is.null(lookback_end)) {
+        warning(
+            "lookback_end not provided when using lookback_start. Defaulting to most recent historical value (current year - 1)."
+        )
+    }
+
+    if (!"datetime" %in% names(ts)) {
+        stop(sprintf(
+            "Input timeseries must contain 'datetime' column. Found columns: %s",
+            paste(names(ts), collapse = ", ")
+        ))
+    }
+
+    if (lookback_start >= lookback_end && !is.null(lookback_end)) {
+        stop("lookback_start must be less than lookback_end.")
+    }
+
+    if (
+        lookback_start < 1800 ||
+            lookback_end < 1800 ||
+            lookback_start > as.integer(format(Sys.Date(), "%Y")) ||
+            lookback_end > as.integer(format(Sys.Date(), "%Y"))
+    ) {
+        stop(
+            "lookback_start and lookback_end must be valid years (>= 1800 and <= current year)."
+        )
     }
 
     # For each unique year/month, if no value exists exactly on the 1st, grab the nearest value within 5 days
@@ -1241,11 +1279,22 @@ calculate_historic_daily_median <- function(
                 for (current_idx in seq_along(group_indices)) {
                     current_row <- group_indices[current_idx]
 
-                    if (!is.null(lookback_year)) {
+                    # if lookback_start is provided, use that as fixed start year
+                    # default to the current year - 1 as lookback_end
+                    if (!is.null(lookback_start)) {
                         historical_indices <- group_indices[which(
                             group_years < group_years[current_idx] &
-                                group_years >= lookback_year
+                                group_years >= lookback_start
                         )]
+
+                        # if lookback_end is provided, apply that
+                        if (!is.null(lookback_end)) {
+                            historical_indices <- historical_indices[which(
+                                group_years[historical_indices] <= lookback_end
+                            )]
+                        }
+
+                        # if lookback_length is provided, apply that. Note, this is secondary to lookback_start
                     } else {
                         historical_indices <- group_indices[which(
                             group_years < group_years[current_idx] &
@@ -1336,7 +1385,7 @@ calculate_historic_daily_median <- function(
 
         return(list(
             historic_median = hist_df,
-            relative_swe = rel_df,
+            relative_data = rel_df,
             percentile = perc_df
         ))
     }
@@ -1355,7 +1404,7 @@ calculate_historic_daily_median <- function(
 #' @return data.frame subset of metadata with additional SWE value columns:
 #' \describe{
 #'   \item{swe}{Absolute SWE value in mm}
-#'   \item{relative_swe}{SWE as percentage of historic median}
+#'   \item{relative_data}{SWE as percentage of historic median}
 #'   \item{historic_median}{Historic median SWE value for this date}
 #' }
 #'
@@ -1392,7 +1441,7 @@ get_swe_state <- function(
     stopifnot("timeseries" %in% names(data))
     stopifnot("metadata" %in% names(data))
     stopifnot(all(
-        c("swe", "historic_median", "relative_swe") %in%
+        c("data", "historic_median", "relative_data") %in%
             names(data$timeseries)
     ))
     point_source_data <- data$metadata
@@ -1421,12 +1470,12 @@ get_swe_state <- function(
     }
 
     point_source_data$swe <- extract_at_date(
-        data$timeseries$swe,
+        data$timeseries$data,
         key,
         target_date
     )
-    point_source_data$relative_swe <- extract_at_date(
-        data$timeseries$relative_swe,
+    point_source_data$relative_data <- extract_at_date(
+        data$timeseries$relative_data,
         key,
         target_date
     )
@@ -1457,6 +1506,7 @@ get_swe_state <- function(
 #' @param timeseries data.frame with 'datetime' and station value columns
 #' @param year Integer year for plot focus
 #' @param con Database connection for historical data access
+#' @param station_name Optional character string for station name in plot title
 #' @return Character string containing HTML with embedded base64 image
 #'
 #' @description
@@ -1475,7 +1525,7 @@ get_swe_state <- function(
 #'
 #' @examples
 #' \dontrun{
-#' station_ts <- base_data$pillows$timeseries$swe[, c("datetime", "123")]
+#' station_ts <- base_data$pillows$timeseries$data[, c("datetime", "123")]
 #' popup_html <- create_continuous_plot_popup(station_ts, 2025, con)
 #' }
 create_continuous_plot_popup <- function(
@@ -1529,9 +1579,9 @@ create_continuous_plot_popup <- function(
 
     # Save the ggplotOverlap plot as a PNG tempfile with smaller dimensions
     plot_file <- file.path(tempdir(), "plot.png")
-    grDevices::png(plot_file, width = 800, height = 600, res = 120)
-    print(plot)
-    grDevices::dev.off()
+    #grDevices::png(plot_file, width = 800, height = 600, res = 120)
+    #print(plot)
+    #grDevices::dev.off()
 
     # Encode PNG to base64
     plot_data <- readBin(plot_file, "raw", file.info(plot_file)$size)
@@ -1576,7 +1626,7 @@ create_continuous_plot_popup <- function(
 #'
 #' @examples
 #' \dontrun{
-#' station_ts <- base_data$surveys$timeseries$swe[, c("datetime", "456")]
+#' station_ts <- base_data$surveys$timeseries$data[, c("datetime", "456")]
 #' popup_html <- create_discrete_plot_popup(station_ts)
 #' }
 create_discrete_plot_popup <- function(timeseries) {
@@ -1610,9 +1660,9 @@ create_discrete_plot_popup <- function(timeseries) {
 
     # Suppress warnings during PNG creation to avoid the geom_line warning
     suppressWarnings({
-        png(plot_file, width = 800, height = 600, res = 120)
-        print(plot)
-        dev.off()
+        #png(plot_file, width = 800, height = 600, res = 120)
+        #print(plot)
+        #dev.off()
     })
 
     # Encode PNG to base64
@@ -1642,12 +1692,17 @@ create_discrete_plot_popup <- function(timeseries) {
 #' Load all base data for the SWE mapping application
 #'
 #' @param con DBI database connection object
+#' @param load_swe Logical indicating whether to load SWE data (default TRUE)
+#' @param load_precip Logical indicating whether to load precipitation data (default FALSE)
+#' @param load_temp Logical indicating whether to load temperature data (default FALSE)
 #' @return A list containing all loaded base data:
 #' \describe{
 #'   \item{pillows}{List with continuous station timeseries and metadata}
 #'   \item{surveys}{List with discrete station timeseries and metadata}
 #'   \item{basins}{List with basin-averaged timeseries and metadata}
 #'   \item{shapefiles}{List with spatial data (yukon, communities, roads)}
+#'   \item{precipitation}{List with precipitation timeseries and metadata (if loaded)}
+#'   \item{temperature}{List with temperature timeseries and metadata (if loaded)}
 #' }
 #'
 #' @description
@@ -1683,8 +1738,8 @@ create_discrete_plot_popup <- function(timeseries) {
 load_bulletin_data <- function(
     con,
     load_swe = TRUE,
-    load_precip = TRUE,
-    load_temp = TRUE
+    load_precip = FALSE,
+    load_temp = FALSE
 ) {
     base_data <- list(
         pillows = list(),
@@ -1713,22 +1768,25 @@ load_bulletin_data <- function(
         continuous_data <- download_continuous_ts(con, parameter_name = "swe")
 
         ret <- calculate_historic_daily_median(
-            continuous_data$timeseries$swe,
-            lookback_year = 1980
+            continuous_data$timeseries$data,
+            lookback_start = 1980,
+            lookback_end = 2020
         )
         continuous_data$timeseries$historic_median <- ret$historic_median
-        continuous_data$timeseries$relative_swe <- ret$relative_swe
+        continuous_data$timeseries$relative_data <- ret$relative_data
         continuous_data$timeseries$percentile <- ret$percentile
         base_data$pillows <- continuous_data
 
         discrete_data <- download_discrete_ts(con)
 
         ret <- calculate_historic_daily_median(
-            discrete_data$timeseries$swe,
-            lookback_year = 1980
+            discrete_data$timeseries$data,
+            lookback_start = 1980,
+            lookback_end = 2020
         )
+
         discrete_data$timeseries$historic_median <- ret$historic_median
-        discrete_data$timeseries$relative_swe <- ret$relative_swe
+        discrete_data$timeseries$relative_data <- ret$relative_data
         discrete_data$timeseries$percentile <- ret$percentile
         base_data$surveys <- discrete_data
 
@@ -1749,7 +1807,7 @@ load_bulletin_data <- function(
         }
 
         # Prepare dates and station list from discrete wide timeseries
-        basin_dates <- base_data$surveys$timeseries$swe$datetime
+        basin_dates <- base_data$surveys$timeseries$data$datetime
 
         # Convert station_cols from location_id to location (name) using discrete metadata
         basin_names <- basins_shp$name
@@ -1767,7 +1825,7 @@ load_bulletin_data <- function(
                 drop = FALSE
             ]
 
-            swe_samples <- as.numeric(discrete_data$timeseries$swe[
+            swe_samples <- as.numeric(discrete_data$timeseries$data[
                 i,
                 as.character(weight_matrix$location_id),
                 drop = TRUE
@@ -1808,13 +1866,13 @@ load_bulletin_data <- function(
         # Compute historic median and relative change for basins (wide format)
         ret <- calculate_historic_daily_median(
             basin_timeseries,
-            lookback_year = 1980
+            lookback_start = 1980
         )
 
         base_data$basins$timeseries <- list(
-            swe = basin_timeseries,
+            data = basin_timeseries,
             historic_median = ret$historic_median,
-            relative_swe = ret$relative_swe,
+            relative_data = ret$relative_data,
             percentile = ret$percentile
         )
     } # end load_swe
@@ -1834,11 +1892,11 @@ load_bulletin_data <- function(
 
         ret = calculate_historic_daily_median(
             monthly_precip,
-            lookback_year = 1980
+            lookback_start = 1980
         )
 
         precip_data$timeseries$historic_median <- ret$historic_median
-        precip_data$timeseries$relative_precipitation <- ret$relative_swe
+        precip_data$timeseries$relative_precipitation <- ret$relative_data
         precip_data$timeseries$percentile <- ret$percentile
 
         base_data$precipitation <- precip_data
@@ -1879,27 +1937,47 @@ load_bulletin_data <- function(
         base_data$shapefiles$inverted_yukon <- bbox_extent
     }
 
-    roads <- download_spatial_layer(con, "Roads")
+    roads <- download_spatial_layer(
+        con = con,
+        layer_name = "Roads",
+        additional_query = "AND description IN ('Primary Highway', 'Secondary Highway')"
+    )
     # Ensure CRS is WGS84 for leaflet
     if (!is.null(roads) && sf::st_crs(roads)$epsg != 4326) {
         roads <- sf::st_transform(roads, 4326)
     }
+
+    # Clip roads to basin boundaries if both exist
+    # Ensure both have the same CRS
+    if (sf::st_crs(roads) != sf::st_crs(basins_shp)) {
+        roads <- sf::st_transform(roads, sf::st_crs(basins_shp))
+    }
+
+    # Buffer basin boundaries by 10km and clip roads to buffered area
+    basins_buffered <- sf::st_buffer(sf::st_union(basins_shp), dist = 100000) # 10km in meters
+    roads <- sf::st_intersection(roads, basins_buffered)
+
     base_data$shapefiles$roads <- roads
 
-    place_types <- c("City", "Town", "Village") # Filter to major communities only
+    #place_types <- c("City", "Town", "Village") # Filter to major communities only
+    keep_communities <- c(
+        "Whitehorse",
+        "Dawson City",
+        "Watson Lake",
+        "Haines Junction",
+        "Carmacks",
+        "Mayo",
+        "Pelly Crossing",
+        "Ross River",
+        "Teslin",
+        "Beaver Creek",
+        "Carcross",
+        "Faro",
+        "Old Crow"
+    )
     communities <- download_spatial_layer(
-        con,
-        "Communities",
-        additional_query = sprintf(
-            "AND (description IN (%s) OR feature_name IN ('Old Crow', 'Beaver Creek'))",
-            paste(
-                sapply(
-                    place_types,
-                    function(x) DBI::dbQuoteString(con, x)
-                ),
-                collapse = ", "
-            )
-        )
+        con = con,
+        layer_name = "Communities"
     )
     # Ensure CRS is WGS84 for leaflet
     if (!is.null(communities) && sf::st_crs(communities)$epsg != 4326) {
@@ -1913,7 +1991,10 @@ load_bulletin_data <- function(
             htmltools::htmlEscape(communities$feature_name),
             htmltools::htmlEscape(communities$description)
         )
-        communities$annotate <- communities$description %in% place_types
+        communities <- communities[
+            communities$feature_name %in% keep_communities,
+        ]
+        #communities$annotate <- communities$description %in% place_types
         communities$annotation <- communities$feature_name
 
         communities$annotation <- vapply(
@@ -2082,31 +2163,31 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 
     # Ensure all swe_at_* columns are numeric (especially percentiles)
     swe_at_basins$swe <- as.numeric(swe_at_basins$swe)
-    swe_at_basins$relative_swe <- as.numeric(swe_at_basins$relative_swe)
+    swe_at_basins$relative_data <- as.numeric(swe_at_basins$relative_data)
     swe_at_basins$historic_median <- as.numeric(swe_at_basins$historic_median)
     swe_at_basins$percentile <- as.numeric(swe_at_basins$percentile)
 
     swe_at_surveys$swe <- as.numeric(swe_at_surveys$swe)
-    swe_at_surveys$relative_swe <- as.numeric(swe_at_surveys$relative_swe)
+    swe_at_surveys$relative_data <- as.numeric(swe_at_surveys$relative_data)
     swe_at_surveys$historic_median <- as.numeric(swe_at_surveys$historic_median)
     swe_at_surveys$percentile <- as.numeric(swe_at_surveys$percentile)
 
     swe_at_pillows$swe <- as.numeric(swe_at_pillows$swe)
-    swe_at_pillows$relative_swe <- as.numeric(swe_at_pillows$relative_swe)
+    swe_at_pillows$relative_data <- as.numeric(swe_at_pillows$relative_data)
     swe_at_pillows$historic_median <- as.numeric(swe_at_pillows$historic_median)
     swe_at_pillows$percentile <- as.numeric(swe_at_pillows$percentile)
 
     swe_at_basins$annotation <- paste0(
         swe_at_basins$annotation,
         "<br>(",
-        round(swe_at_basins$relative_swe, 1),
+        round(swe_at_basins$relative_data, 1),
         "%)"
     )
 
     generate_popup_content <- function(
         type,
         swe,
-        relative_swe,
+        relative_data,
         historic_median,
         name,
         location = NULL,
@@ -2115,9 +2196,9 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
     ) {
         type_label <- switch(
             type,
-            "basin" = "<b>Type:</b> Discrete (weighted average)<br>",
-            "survey" = "<b>Type:</b> Discrete (Snow Course)<br>",
-            "pillow" = "<b>Type:</b> Continuous (Pillow)<br>",
+            "basin" = "<b>Type:</b> Discrete (basin-average estimate SWE)<br>",
+            "survey" = "<b>Type:</b> Discrete (snow course)<br>",
+            "pillow" = "<b>Type:</b> Continuous (pillow)<br>",
             ""
         )
 
@@ -2218,14 +2299,14 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             "<b>SWE Value:</b> ",
             if (!is.na(swe)) paste0(round(swe, 1), " mm") else "No data",
             "<br>",
-            "<b>SWE Value:</b> ",
-            if (!is.na(relative_swe)) {
-                paste0(round(relative_swe, 1), "% of normal")
+            "<b>Percent of Median:</b> ",
+            if (!is.na(relative_data)) {
+                paste0(round(relative_data, 1), "% of normal")
             } else {
                 "No data"
             },
             "<br>",
-            "<b>Historic Median:</b> ",
+            "<b>Historical Median:</b> ",
             if (!is.na(historic_median)) {
                 paste0(round(historic_median, 1), " mm")
             } else {
@@ -2246,11 +2327,11 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 
     # Fix mapply argument mismatch for popup_content
     swe_at_basins$popup_content <- mapply(
-        function(swe, relative_swe, historic_median, percentile, name) {
+        function(swe, relative_data, historic_median, percentile, name) {
             generate_popup_content(
                 "basin",
                 swe,
-                relative_swe,
+                relative_data,
                 historic_median,
                 name,
                 location = NULL,
@@ -2259,7 +2340,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             )
         },
         swe_at_basins$swe,
-        swe_at_basins$relative_swe,
+        swe_at_basins$relative_data,
         swe_at_basins$historic_median,
         swe_at_basins$percentile,
         swe_at_basins$name,
@@ -2268,7 +2349,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
     swe_at_surveys$popup_content <- mapply(
         function(
             swe,
-            relative_swe,
+            relative_data,
             historic_median,
             percentile,
             name,
@@ -2278,7 +2359,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             generate_popup_content(
                 "survey",
                 swe,
-                relative_swe,
+                relative_data,
                 historic_median,
                 name,
                 location,
@@ -2287,7 +2368,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             )
         },
         swe_at_surveys$swe,
-        swe_at_surveys$relative_swe,
+        swe_at_surveys$relative_data,
         swe_at_surveys$historic_median,
         swe_at_surveys$percentile,
         swe_at_surveys$name,
@@ -2298,7 +2379,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
     swe_at_pillows$popup_content <- mapply(
         function(
             swe,
-            relative_swe,
+            relative_data,
             historic_median,
             percentile,
             name,
@@ -2308,7 +2389,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             generate_popup_content(
                 "pillow",
                 swe,
-                relative_swe,
+                relative_data,
                 historic_median,
                 name,
                 location,
@@ -2317,7 +2398,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             )
         },
         swe_at_pillows$swe,
-        swe_at_pillows$relative_swe,
+        swe_at_pillows$relative_data,
         swe_at_pillows$historic_median,
         swe_at_pillows$percentile,
         swe_at_pillows$name,
@@ -2377,13 +2458,13 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 #' @details
 #' The map includes:
 #' \itemize{
-#'
 #'   \item Historical range (min/max) as shaded area
 #'   \item Historical median as dashed line
 #'   \item Current year data as solid line
 #'   \item Click-to-expand functionality for full-size viewing
 #' }
 #'
+#' @noRd
 #' @examples
 #' \dontrun{
 #' # Create map for April 2025
@@ -2393,7 +2474,6 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 #' leaflet_snow_bulletin_map(2025, 4, filename = "swe_map_apr2025.html")
 #' }
 #'
-#' @export
 leaflet_snow_bulletin_map <- function(
     year,
     month,
@@ -2428,7 +2508,7 @@ leaflet_snow_bulletin_map <- function(
         shiny = FALSE
     )
 
-    value_col <- "relative_swe"
+    value_col <- "relative_data"
     data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_col]]
     data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_col]]
     data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
@@ -2448,6 +2528,12 @@ leaflet_snow_bulletin_map <- function(
     # Set default bounds to Yukon if available, otherwise use fallback
     if (!is.null(base_data$shapefiles$yukon)) {
         bbox <- sf::st_bbox(base_data$shapefiles$yukon)
+        # Add 300km buffer (approximately 2.7 degrees at Yukon latitudes)
+        buffer_degrees <- 500 / 111.32 # Convert 300km to degrees
+        bbox["xmin"] <- bbox["xmin"] - buffer_degrees
+        bbox["xmax"] <- bbox["xmax"] + buffer_degrees
+        bbox["ymin"] <- bbox["ymin"] - buffer_degrees
+        bbox["ymax"] <- bbox["ymax"] + buffer_degrees
     } else {
         bbox <- c(xmin = -141, ymin = 60, xmax = -123, ymax = 69.6)
     }
@@ -2460,10 +2546,10 @@ leaflet_snow_bulletin_map <- function(
         )
     ) %>%
         leaflet::addProviderTiles(
-            leaflet::providers$Esri.WorldTerrain,
+            leaflet::providers$Esri.WorldImagery,
             group = "Topographic"
         ) %>%
-        leaflet::fitBounds(
+        leaflet::setMaxBounds(
             as.numeric(bbox["xmin"]),
             as.numeric(bbox["ymin"]),
             as.numeric(bbox["xmax"]),
@@ -2473,7 +2559,7 @@ leaflet_snow_bulletin_map <- function(
             data = data$swe_at_basins,
             fillColor = ~ swe_pal(value_to_show),
             color = viz_params$basins$color,
-            weight = viz_params$basins$weight,
+            weight = viz_params$basins$weight * 2,
             opacity = viz_params$basins$opacity,
             fillOpacity = viz_params$basins$fillOpacity,
             label = ~ lapply(annotation, htmltools::HTML),
@@ -2482,6 +2568,15 @@ leaflet_snow_bulletin_map <- function(
                 leaflet::popupOptions,
                 viz_params$basins$popupOptions
             ),
+            group = "Basins averages"
+        ) %>%
+        leaflet::addPolygons(
+            data = data$swe_at_basins,
+            fillColor = "transparent",
+            color = "black",
+            weight = viz_params$basins$weight * 0.5,
+            opacity = 1,
+            fillOpacity = 0,
             group = "Basins averages"
         ) %>%
         leaflet::addLabelOnlyMarkers(
@@ -2641,10 +2736,31 @@ leaflet_snow_bulletin_map <- function(
             selfcontained = TRUE
         )
     }
-
     return(m)
 }
 
+
+# Create the color mapping function using same bins and colors as leaflet
+#' Create color mapping for SWE values
+#'
+#' @param values Numeric vector of SWE values
+#' @return Character vector of color hex codes
+#' @description
+#' Maps SWE values to color bins for plotting.
+create_color_mapping <- function(values) {
+    viz_params <- initialize_visualization_parameters()
+    cut_values <- cut(
+        values,
+        breaks = viz_params$basins$bins,
+        include.lowest = TRUE,
+        right = FALSE
+    )
+    colors <- viz_params$basins$fggplot_snow_bulletin_mapillColor[as.numeric(
+        cut_values
+    )]
+    colors[is.na(colors)] <- "gray"
+    return(colors)
+}
 
 #' Create a static ggplot2 map for SWE basins and stations
 #'
@@ -2655,6 +2771,8 @@ leaflet_snow_bulletin_map <- function(
 #' @param height Numeric height of the plot in inches (default: 8)
 #' @param filename Optional character string for PNG output file path
 #' @param dpi Numeric resolution in dots per inch (default: 300)
+#' @param parameter_name Character, parameter to plot (default: "swe")
+#' @param type Character, "absolute", "relative", or "percentile" (default: "relative")
 #' @return A ggplot2 object with SWE basins and stations
 #'
 #' @description
@@ -2675,20 +2793,6 @@ leaflet_snow_bulletin_map <- function(
 #'
 #' Label positions are pre-calculated and adjusted to minimize overlap and
 #' maximize readability across different map extents.
-#'
-#' @examples
-#' \dontrun{
-#' # Create plot for May 2025
-#' p <- ggplot_snow_bulletin_map(2025, 5)
-#' print(p)
-#'
-#' # Save high-resolution PNG
-#' ggplot_snow_bulletin_map(
-#'   2025, 5,
-#'   filename = "swe_map_may2025.png",
-#'   width = 16, height = 10, dpi = 300
-#' )
-#' }
 #'
 #' @export
 ggplot_snow_bulletin_map <- function(
@@ -2731,29 +2835,10 @@ ggplot_snow_bulletin_map <- function(
         shiny = FALSE
     )
 
-    value_col <- "relative_swe"
+    value_col <- "relative_data"
     data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_col]]
     data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_col]]
-    data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
-
-    # Create color mapping function using same bins and colors as leaflet
-    #' Create color mapping for SWE values
-    #'
-    #' @param values Numeric vector of SWE values
-    #' @return Character vector of color hex codes
-    #' @description
-    #' Maps SWE values to color bins for plotting.
-    create_color_mapping <- function(values) {
-        cut_values <- cut(
-            values,
-            breaks = viz_params$basins$bins,
-            include.lowest = TRUE,
-            right = FALSE
-        )
-        colors <- viz_params$basins$fillColor[as.numeric(cut_values)]
-        colors[is.na(colors)] <- "gray"
-        return(colors)
-    }
+    ### data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
 
     # Apply colors to data
     data$swe_at_basins$fill_color <- create_color_mapping(
@@ -2762,9 +2847,10 @@ ggplot_snow_bulletin_map <- function(
     data$swe_at_surveys$fill_color <- create_color_mapping(
         data$swe_at_surveys$value_to_show
     )
-    data$swe_at_pillows$fill_color <- create_color_mapping(
-        data$swe_at_pillows$value_to_show
-    )
+    # commenting out pillows on PNG
+    ##data$swe_at_pillows$fill_color <- create_color_mapping(
+    ##    data$swe_at_pillows$value_to_show
+    ##)
 
     # Get coordinates for stations
     surveys_coords <- sf::st_coordinates(data$swe_at_surveys)
@@ -2772,8 +2858,8 @@ ggplot_snow_bulletin_map <- function(
     data$swe_at_surveys$y <- surveys_coords[, 2]
 
     pillows_coords <- sf::st_coordinates(data$swe_at_pillows)
-    data$swe_at_pillows$x <- pillows_coords[, 1]
-    data$swe_at_pillows$y <- pillows_coords[, 2]
+    ##data$swe_at_pillows$x <- pillows_coords[, 1]
+    ##data$swe_at_pillows$y <- pillows_coords[, 2]
 
     # Create the base plot
     p <- ggplot2::ggplot() +
@@ -2848,22 +2934,22 @@ ggplot_snow_bulletin_map <- function(
             )
     }
 
-    # Add pillow stations (continuous)
-    if (nrow(data$swe_at_pillows) > 0) {
-        p <- p +
-            ggplot2::geom_point(
-                data = data$swe_at_pillows,
-                ggplot2::aes(
-                    x = data$swe_at_pillows$x,
-                    y = data$swe_at_pillows$y
-                ),
-                fill = data$swe_at_pillows$fill_color,
-                color = viz_params$pillows$color,
-                size = viz_params$pillows$radius / 2.5,
-                shape = 21,
-                stroke = viz_params$pillows$weight * 0.5
-            )
-    }
+    # # Add pillow stations (continuous)
+    # if (nrow(data$swe_at_pillows) > 0) {
+    #     p <- p +
+    #         ggplot2::geom_point(
+    #             data = data$swe_at_pillows,
+    #             ggplot2::aes(
+    #                 x = data$swe_at_pillows$x,
+    #                 y = data$swe_at_pillows$y
+    #             ),
+    #             fill = data$swe_at_pillows$fill_color,
+    #             color = viz_params$pillows$color,
+    #             size = viz_params$pillows$radius / 2.5,
+    #             shape = 21,
+    #             stroke = viz_params$pillows$weight * 0.5
+    #         )
+    # }
 
     # Add communities using pre-calculated adjusted coordinates
     if (!is.null(base_data$shapefiles$communities)) {
@@ -2884,7 +2970,7 @@ ggplot_snow_bulletin_map <- function(
         p <- p +
             ggplot2::geom_point(
                 data = communities_df,
-                ggplot2::aes(x = x, y = y),
+                ggplot2::aes(x = communities_df$x, y = communities_df$y),
                 fill = "black",
                 size = viz_params$communities$iconWidth / 8,
                 shape = 18
@@ -2892,9 +2978,9 @@ ggplot_snow_bulletin_map <- function(
             ggplot2::geom_text(
                 data = communities_df,
                 ggplot2::aes(
-                    x = x_adjust,
-                    y = y_adjust,
-                    label = annotation
+                    x = communities_df$x_adjust,
+                    y = communities_df$y_adjust,
+                    label = communities_df$annotation
                 ),
                 size = 2,
                 fontface = "bold.italic",
@@ -2917,12 +3003,16 @@ ggplot_snow_bulletin_map <- function(
     p <- p +
         shadowtext::geom_shadowtext(
             data = basin_labels_df,
-            ggplot2::aes(x = x, y = y, label = annotation),
+            ggplot2::aes(
+                x = basin_labels_df$x,
+                y = basin_labels_df$y,
+                label = basin_labels_df$annotation
+            ),
             size = 2.25,
             fontface = "bold",
             color = viz_params$basins$label$color,
             bg.color = "white",
-            bg.r = 0.1
+            bg.r = 0.2
         )
 
     # Add title and subtitle
@@ -2942,7 +3032,7 @@ ggplot_snow_bulletin_map <- function(
         "December"
     )[as.numeric(month) + 1]
 
-    # Add colormap legend for SWE (relative_swe)
+    # Add colormap legend for SWE (relative_data)
     # Create legend data dynamically based on actual data bins
     bin_ranges <- viz_params$relative_bins[-length(viz_params$relative_bins)]
     bin_labels <- character(length(bin_ranges))
@@ -3041,7 +3131,6 @@ ggplot_snow_bulletin_map <- function(
 #' @return list containing both leaflet and ggplot map objects
 #' @details Demonstrates the snow bulletin mapping functionality by creating
 #'   both interactive (leaflet) and static (ggplot2) maps for April and May 2025.
-#' @export
 #' @noRd
 demo_snow_bulletin_maps <- function(con = NULL) {
     # Create database connection if not provided

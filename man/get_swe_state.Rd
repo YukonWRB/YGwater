@@ -19,7 +19,7 @@ get_swe_state(data, year, month, key)
 data.frame subset of metadata with additional SWE value columns:
 \describe{
 \item{swe}{Absolute SWE value in mm}
-\item{relative_swe}{SWE as percentage of historic median}
+\item{relative_data}{SWE as percentage of historic median}
 \item{historic_median}{Historic median SWE value for this date}
 }
 }
