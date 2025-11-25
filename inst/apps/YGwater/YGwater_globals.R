@@ -218,10 +218,10 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/map/locationsMap.R",
     package = "YGwater"
   ))
-  # source(system.file(
-  #   "apps/YGwater/modules/client/map/snowBulletinMap.R",
-  #   package = "YGwater"
-  # ))
+  source(system.file(
+    "apps/YGwater/modules/client/map/snowBulletinMap.R",
+    package = "YGwater"
+  ))
 
   # Image modules
   source(system.file(

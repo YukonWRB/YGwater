@@ -177,13 +177,13 @@ app_ui <- function(request) {
               uiOutput("mapRaster_ui")
             )
           },
-          # if (!config$public) {
-          #   nav_panel(
-          #     title = uiOutput("mapsNavSnowbullTitle"),
-          #     value = "snowBulletinMap",
-          #     uiOutput("mapSnowbull_ui")
-          #   )
-          # }
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("mapsNavSnowbullTitle"),
+              value = "snowBulletinMap",
+              uiOutput("mapSnowbull_ui")
+            )
+          }
         ),
         nav_menu(
           title = uiOutput("plotsNavMenuTitle"),
