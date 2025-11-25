@@ -18,7 +18,7 @@
 # - Snowcourse factors: CSV file with basin weighting factors
 # =============================================================================
 # Load utility functions and color palettes
-source("R/SWE_maputils.R")
+#source("R/SWE_maputils.R")
 # =============================================================================
 # DATA LOADING AND PROCESSING
 # =============================================================================
@@ -81,11 +81,11 @@ mapSnowbullUI <- function(id) {
               ns("value_type"),
               label = NULL,
               choices = list(
-                "% of Normal" = "relative_swe",
+                "% of Normal" = "relative_data",
                 "Absolute (mm)" = "swe",
                 "Percentile" = "percentile"
               ),
-              selected = "relative_swe",
+              selected = "relative_data",
               inline = FALSE
             )
           )
@@ -149,7 +149,7 @@ mapSnowbull <- function(id, language) {
 
     con <- session$userData$AquaCache
 
-    base_data <- load_base_data(con)
+    base_data <- load_bulletin_data(con)
 
     viz_params <- initialize_visualization_parameters()
 
@@ -195,7 +195,7 @@ mapSnowbull <- function(id, language) {
         shiny = TRUE
       )
 
-      value_col <- "relative_swe"
+      value_col <- "relative_data"
       initial_data$swe_at_basins$value_to_show <- initial_data$swe_at_basins[[
         value_col
       ]]
@@ -394,7 +394,7 @@ mapSnowbull <- function(id, language) {
       value_type <- if (!is.null(input$value_type)) {
         input$value_type
       } else {
-        "relative_swe"
+        "relative_data"
       }
 
       data <- processed_data()
@@ -407,10 +407,10 @@ mapSnowbull <- function(id, language) {
       # Select value column based on input$value_type
       value_col <- switch(
         value_type,
-        "relative_swe" = "relative_swe",
-        "swe" = "swe",
+        "relative_data" = "relative_data",
+        "swe" = "data",
         "percentile" = "percentile",
-        "relative_swe"
+        "relative_data"
       )
 
       # Precompute a unified column so leaflet formulas can access it
@@ -428,7 +428,7 @@ mapSnowbull <- function(id, language) {
       # Create appropriate color palette based on value type
       swe_pal <- switch(
         value_type,
-        "relative_swe" = leaflet::colorBin(
+        "relative_data" = leaflet::colorBin(
           palette = viz_params$relative_colors,
           bins = viz_params$relative_bins,
           domain = pal_domain,
@@ -449,14 +449,14 @@ mapSnowbull <- function(id, language) {
       )
       legend_title <- switch(
         value_type,
-        "relative_swe" = "% of Normal",
+        "relative_data" = "% of Normal",
         "swe" = "SWE (mm)",
         "percentile" = "Percentile",
         "% of Normal"
       )
       legend_labFormat <- switch(
         value_type,
-        "relative_swe" = leaflet::labelFormat(suffix = "%"),
+        "relative_data" = leaflet::labelFormat(suffix = "%"),
         "swe" = leaflet::labelFormat(suffix = " mm"),
         "percentile" = leaflet::labelFormat(suffix = "th"),
         leaflet::labelFormat(suffix = "%")
@@ -618,8 +618,8 @@ mapSnowbull <- function(id, language) {
 
       plot_html <- if (input$generate_plot$type == "pillow") {
         create_continuous_plot_popup(
-          timeseries = base_data$pillows$timeseries$swe[
-            base_data$pillows$timeseries$swe$datetime <=
+          timeseries = base_data$pillows$timeseries$data[
+            base_data$pillows$timeseries$data$datetime <=
               as.Date(paste0(input$year, "-12-31")),
             c("datetime", as.character(input$generate_plot$station_id))
           ],
@@ -628,16 +628,16 @@ mapSnowbull <- function(id, language) {
         )
       } else if (input$generate_plot$type == "survey") {
         create_discrete_plot_popup(
-          timeseries = base_data$surveys$timeseries$swe[
-            base_data$surveys$timeseries$swe$datetime <=
+          timeseries = base_data$surveys$timeseries$data[
+            base_data$surveys$timeseries$data$datetime <=
               as.Date(paste0(input$year, "-12-31")),
             c("datetime", as.character(input$generate_plot$station_id))
           ]
         )
       } else if (input$generate_plot$type == "basin") {
         create_discrete_plot_popup(
-          timeseries = base_data$basins$timeseries$swe[
-            base_data$basins$timeseries$swe$datetime <=
+          timeseries = base_data$basins$timeseries$data[
+            base_data$basins$timeseries$data$datetime <=
               as.Date(paste0(input$year, "-12-31")),
             c(
               "datetime",
