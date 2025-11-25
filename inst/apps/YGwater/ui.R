@@ -29,6 +29,10 @@ app_ui <- function(request) {
     ),
 
     tags$head(
+      includeHTML(system.file(
+        "apps/YGwater/www/html/matomo.html",
+        package = "YGwater"
+      )), # Include Matomo analytics tracking code
       tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
       tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
       # JS below is for updating the title of the page from the server, when the user changes language
@@ -173,13 +177,13 @@ app_ui <- function(request) {
               uiOutput("mapRaster_ui")
             )
           },
-          if (!config$public) {
-            nav_panel(
-              title = uiOutput("mapsNavSnowbullTitle"),
-              value = "snowBulletinMap",
-              uiOutput("mapSnowbull_ui")
-            )
-          }
+          # if (!config$public) {
+          #   nav_panel(
+          #     title = uiOutput("mapsNavSnowbullTitle"),
+          #     value = "snowBulletinMap",
+          #     uiOutput("mapSnowbull_ui")
+          #   )
+          # }
         ),
         nav_menu(
           title = uiOutput("plotsNavMenuTitle"),

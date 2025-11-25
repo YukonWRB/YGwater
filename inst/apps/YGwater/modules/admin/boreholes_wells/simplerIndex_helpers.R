@@ -387,7 +387,7 @@ create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
           lwd = 2
         )
       }
-      dev.off()
+      grDevices::dev.off()
     }
     magick::image_write(img, path = temp_file_path, format = "pdf")
   } else {
@@ -420,7 +420,7 @@ create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
             lwd = 2
           )
         }
-        dev.off()
+        grDevices::dev.off()
       }
       img_list[[i]] <- img
     }

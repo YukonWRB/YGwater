@@ -50,6 +50,10 @@ YGwater <- function(
   rlang::check_installed("zip", reason = "required to use YGwater app")
   rlang::check_installed("htmlwidgets", reason = "required to use YGwater app")
   rlang::check_installed("jsonlite", reason = "required to use YGwater app")
+  rlang::check_installed(
+    "base64enc",
+    reason = "to create base64-encoded plot images"
+  )
 
   if (!rlang::is_installed("AquaCache")) {
     rlang::check_installed(

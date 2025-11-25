@@ -1082,7 +1082,7 @@ plotTimeseries <- function(
   corrected_name <- parameter_name
   if (raw) {
     corrected_name <- if (lang == "fr") {
-      paste(parameter_name, "(corrigé)")
+      paste(parameter_name, "(corrig\u00E9)")
     } else {
       paste(parameter_name, "(corrected)")
     }

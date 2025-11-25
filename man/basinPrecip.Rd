@@ -42,7 +42,7 @@ basinPrecip(
 \item{hrdps_loc}{The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.}
 }
 \value{
-The accumulated precipitation in mm of water within the drainage specified or immediately surrounding the point specified in \code{location} printed to the console and (optionally) a map of precipitation printed to the console. A list is also generated containing statistics and the optional plot; to save this plot to disc use either png() or dev.print(), or use the graphical device export functionality.
+The accumulated precipitation in mm of water within the drainage specified or immediately surrounding the point specified in \code{location} printed to the console and (optionally) a map of precipitation printed to the console. A list is also generated containing statistics and the optional plot; to save this plot to disc use either grDevices::png() or grDevices::dev.print(), or use the graphical device export functionality.
 }
 \description{
 Calculates accumulated precipitation above defined basins or immediately surrounding a specified point. If possible, make sure to specify a location in parameters hrdpa_loc and hrdps_loc to speed things up! Uses functions \code{\link[=getHRDPA]{getHRDPA()}} and \code{\link[=getHRDPS]{getHRDPS()}} to bring in precipi rasters if any need to be downloaded.
