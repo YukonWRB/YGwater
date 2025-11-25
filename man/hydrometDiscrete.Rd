@@ -39,7 +39,7 @@ hydrometDiscrete(
 
 \item{title}{Should a title be included?}
 
-\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
+\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as such: Location 09AB004: Marsh Lake Near Whitehorse.}
 
 \item{plot_type}{Choose from "violin" , "boxplot" or "linedbox".}
 

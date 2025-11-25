@@ -1,32 +1,3 @@
-#' @title Snow Water Equivalent (SWE) Mapping Utilities
-#' @description
-#' This module provides comprehensive functionality for creating interactive and static maps
-#' of Snow Water Equivalent (SWE) data across the Yukon Territory. It includes data loading,
-#' processing, visualization, and mapping functions for both continuous (snow pillow) and
-#' discrete (manual snow course) measurements.
-#'
-#' @section Key Features:
-#' \itemize{
-#'   \item Interactive leaflet maps with popup plots
-#'   \item Static ggplot2 maps for publication
-#'   \item Basin-averaged SWE calculations using weighted station data
-#'   \item Historical comparison with percentile-based coloring
-#'   \item Support for both absolute (mm) and relative (% of normal) values
-#' }
-#'
-#' @section Data Sources:
-#' \itemize{
-#'   \item SWE basins: Local shapefile with basin polygons
-#'   \item Stations/Communities/Roads: PostgreSQL spatial database (AquaCache)
-#'   \item Timeseries data: Continuous and discrete measurements database
-#'   \item Snowcourse factors: CSV file with basin weighting factors
-#' }
-#'
-#' @author Yukon Government, Water Resources
-
-# =============================================================================
-# CONFIGURATION
-# =============================================================================
 #' Initialize visualization parameters
 #'
 #' @description
@@ -39,6 +10,7 @@
 #' The relative SWE bins are designed to highlight significant departures from normal
 #'
 #' @noRd
+
 initialize_visualization_parameters <- function() {
     # Color scheme and visualization parameters
     # Bins represent percentage of normal SWE (relative_data values)
@@ -226,7 +198,6 @@ get_most_recent_date <- function(ts) {
     return(latest_time)
 }
 
-
 #' Standardize parameter names for consistent database queries
 #'
 #' @param parameter Character string of parameter name to standardize
@@ -296,7 +267,6 @@ standardize_parameter_name <- function(parameter) {
     }
 }
 
-
 #' Convert year and month to POSIXct datetime
 #'
 #' @param year Integer year (e.g., 2025)
@@ -312,10 +282,10 @@ standardize_parameter_name <- function(parameter) {
 #' get_datetime(2024, 12) # Returns 2024-12-01 00:00:00 UTC
 #' }
 #' @noRd
+
 get_datetime <- function(year, month) {
     as.POSIXct(as.Date(paste0(year, "-", month, "-01")), tz = "UTC")
 }
-
 
 #' Resample timeseries data by aggregation function and frequency
 #'
@@ -324,6 +294,7 @@ get_datetime <- function(year, month) {
 #' @param func Character string: aggregation function ("sum", "mean", "max", "min")
 #' @return data.frame with resampled timeseries data
 #' @noRd
+
 resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
     if (is.null(ts_data) || nrow(ts_data) == 0) {
         return(ts_data)
@@ -463,7 +434,6 @@ resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
     return(resampled_data)
 }
 
-
 # =============================================================================
 # DATA LOADING FUNCTIONS
 # =============================================================================
@@ -496,10 +466,11 @@ resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
 #' )
 #' }
 #' @noRd
+
 download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
     query <- sprintf(
-        "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
-         FROM spatial.vectors 
+        "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326
+         FROM spatial.vectors
          WHERE layer_name = %s",
         DBI::dbQuoteString(con, layer_name)
     )
@@ -551,6 +522,7 @@ download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
 #' print(names(continuous_data$timeseries$data))  # Shows datetime + station columns
 #' print(nrow(continuous_data$metadata))         # Number of stations
 #' }
+
 download_continuous_ts <- function(
     con,
     start_date = sprintf("%d-01-01", 1950),
@@ -576,7 +548,7 @@ download_continuous_ts <- function(
 
     # Build metadata query for continuous SWE timeseries
     md_query <- paste0(
-        "SELECT 
+        "SELECT
             t.timeseries_id,
             t.location_id,
             l.location,
@@ -587,7 +559,7 @@ download_continuous_ts <- function(
          FROM continuous.timeseries t
          JOIN public.locations l ON t.location_id = l.location_id
          LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
-         WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters 
+         WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters
                                  WHERE param_name = ",
         DBI::dbQuoteString(con, parameter_name),
         ")"
@@ -790,6 +762,7 @@ download_continuous_ts <- function(
 #' @param parameter_name Character string of the parameter name to check
 #' @return Logical indicating whether the parameter exists
 #' @noRd
+
 check_parameter_exists <- function(con, parameter_name) {
     param_check_query <- sprintf(
         "SELECT COUNT(*) as count FROM public.parameters WHERE param_name = %s",
@@ -828,6 +801,7 @@ check_parameter_exists <- function(con, parameter_name) {
 #'   !is.na(discrete_data$metadata$latest_date),
 #' ]
 #' }
+
 download_discrete_ts <- function(
     con,
     start_date = sprintf("%d-01-01", 1950),
@@ -1060,6 +1034,7 @@ download_discrete_ts <- function(
 #' # Check which basins a station contributes to
 #' station_weights <- weights[weights$location_id == 123, ]
 #' }
+
 load_snowcourse_factors <- function(
     metadata_discrete
 ) {
@@ -1144,6 +1119,7 @@ load_snowcourse_factors <- function(
 #' # Calculate using rolling 30-year window
 #' result <- calculate_historic_daily_median(ts_data, lookback_length = 30)
 #' }
+
 calculate_historic_daily_median <- function(
     ts,
     lookback_length = NULL,
@@ -1430,6 +1406,7 @@ calculate_historic_daily_median <- function(
 #' # Check data availability
 #' valid_stations <- pillow_data[!is.na(pillow_data$swe), ]
 #' }
+
 get_swe_state <- function(
     data,
     year,
@@ -1528,6 +1505,7 @@ get_swe_state <- function(
 #' station_ts <- base_data$pillows$timeseries$data[, c("datetime", "123")]
 #' popup_html <- create_continuous_plot_popup(station_ts, 2025, con)
 #' }
+
 create_continuous_plot_popup <- function(
     timeseries,
     year,
@@ -1629,6 +1607,7 @@ create_continuous_plot_popup <- function(
 #' station_ts <- base_data$surveys$timeseries$data[, c("datetime", "456")]
 #' popup_html <- create_discrete_plot_popup(station_ts)
 #' }
+
 create_discrete_plot_popup <- function(timeseries) {
     # Clean and validate the data before plotting
     station_name <- names(timeseries)[2]
@@ -2140,6 +2119,21 @@ load_bulletin_data <- function(
     return(base_data)
 }
 
+#' Get processed SWE data for mapping at specified date
+#'
+#' @param year Integer year for data extraction
+#' @param month Integer month for data extraction
+#' @param base_data List containing all loaded base data
+#' @param shiny Logical indicating if running in Shiny app context (default TRUE)
+#' @return A list containing processed SWE data at basins, surveys, and pillows
+#'
+#' @description
+#' Extracts SWE data at basins, discrete survey stations, and continuous pillow stations
+#' for the specified year and month. Formats data for mapping, including
+#' popup content generation.
+#'
+#' @noRd
+
 get_processed_data <- function(year, month, base_data, shiny = TRUE) {
     # Extract data at points for the selected date
     swe_at_basins <- get_swe_state(
@@ -2237,7 +2231,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
                 area_html <- paste0(
                     "<b>Area:</b> ",
                     round(basin_area, 1),
-                    " km²<br>"
+                    " km\U00B2<br>"
                 )
             }
             if (length(basin_elev) > 0 && !is.na(basin_elev)) {
@@ -2442,7 +2436,6 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
     )
 }
 
-
 #' Create an interactive leaflet map for SWE basins and stations
 #'
 #' @param year Integer year (e.g., 2025)
@@ -2473,7 +2466,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 #' # Save to file
 #' leaflet_snow_bulletin_map(2025, 4, filename = "swe_map_apr2025.html")
 #' }
-#'
+
 leaflet_snow_bulletin_map <- function(
     year,
     month,
@@ -2739,14 +2732,15 @@ leaflet_snow_bulletin_map <- function(
     return(m)
 }
 
-
-# Create the color mapping function using same bins and colors as leaflet
 #' Create color mapping for SWE values
+#'
+#' @description
+#' Creates a color mapping for SWE values based on predefined bins and colors.
 #'
 #' @param values Numeric vector of SWE values
 #' @return Character vector of color hex codes
-#' @description
-#' Maps SWE values to color bins for plotting.
+#' @noRd
+
 create_color_mapping <- function(values) {
     viz_params <- initialize_visualization_parameters()
     cut_values <- cut(
@@ -2795,6 +2789,7 @@ create_color_mapping <- function(values) {
 #' maximize readability across different map extents.
 #'
 #' @export
+
 ggplot_snow_bulletin_map <- function(
     year,
     month,
@@ -3124,14 +3119,13 @@ ggplot_snow_bulletin_map <- function(
     return(p)
 }
 
-
 #' Create demo maps for snow bulletin visualization
 #'
 #' @param con DBI database connection object (optional)
 #' @return list containing both leaflet and ggplot map objects
-#' @details Demonstrates the snow bulletin mapping functionality by creating
-#'   both interactive (leaflet) and static (ggplot2) maps for April and May 2025.
+#' @details Demonstrates the snow bulletin mapping functionality by creating both interactive (leaflet) and static (ggplot2) maps for April and May 2025.
 #' @noRd
+
 demo_snow_bulletin_maps <- function(con = NULL) {
     # Create database connection if not provided
     if (is.null(con)) {
@@ -3167,5 +3161,3 @@ demo_snow_bulletin_maps <- function(con = NULL) {
         base_data = base_data
     ))
 }
-
-#demo_snow_bulletin_maps()

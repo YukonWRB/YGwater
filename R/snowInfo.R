@@ -32,11 +32,11 @@ snowInfo <- function(
 ) {
   # parameters for testing (remember to comment out when done)
   # locations <- "all"
-  # inactive <- TRUE
+  # inactive <- FALSE
   # save_path <- "C:/Users/gtdelapl/Desktop"
   # stats <- TRUE
-  # complete_yrs <- FALSE
-  # plots <- FALSE
+  # complete_yrs <- TRUE
+  # plots <- TRUE
   # plot_type <- "combined"
   # quiet <- FALSE
   # con <- NULL
@@ -77,13 +77,13 @@ snowInfo <- function(
     locations <- DBI::dbGetQuery(
       con,
       "
-    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m
+    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
     JOIN samples AS s ON l.location_id = s.location_id
     JOIN datum_conversions AS d ON l.location_id = d.location_id
-    WHERE n.name = 'Snow Survey Network'
+    WHERE n.name = 'Yukon Snow Survey Network'
     ORDER BY l.name;
   "
     )
@@ -94,13 +94,13 @@ snowInfo <- function(
       con,
       paste0(
         "
-    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m
+    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
     JOIN samples AS s ON l.location_id = s.location_id
     JOIN datum_conversions AS d ON l.location_id = d.location_id
-    WHERE n.name = 'Snow Survey Network' AND l.location IN ('",
+    WHERE n.name = 'Yukon Snow Survey Network' AND l.location IN ('",
         paste(locations, collapse = "', '"),
         "')
     ORDER BY l.name;
@@ -688,6 +688,7 @@ snowInfo <- function(
         datetime = datetimes,
         target_datetime = target_datetimes,
         result = (SWE / 10) / depth,
+        unit_default = "g/cm3",
         year = years,
         month = months,
         location = unique(plot_results$location),
@@ -934,13 +935,41 @@ snowInfo <- function(
 
   #Fix up the location metadata table
   locations <- locations[, -which(names(locations) == "location_id")]
+
+  locations$sub_basin <- NA_character_
+
+  # Placeholder for future basin lookup once vectors are added to the database
+  # basin_shapes <- sf::st_read(con, query = "SELECT * FROM spatial.vectors WHERE ...")
+  # locations$sub_basin <- getVector(....)
+
+  locations <- locations[, c(
+    "location",
+    "name",
+    "note",
+    "sub_basin",
+    "latitude",
+    "longitude",
+    "conversion_m",
+    "created",
+    "modified",
+    "first_survey",
+    "last_survey",
+    "march1_surveys",
+    "april1_surveys",
+    "may1_surveys",
+    "may15_surveys"
+  )]
+
   names(locations) <- c(
     "location_code",
     "location_name",
     "note",
+    "sub_basin",
     "latitude",
     "longitude",
     "elevation_m",
+    "metadata_created",
+    "metadata_modified",
     "first_survey",
     "last_survey",
     "march1_surveys",
@@ -948,6 +977,18 @@ snowInfo <- function(
     "may1_surveys",
     "may15_surveys"
   )
+
+  locations$metadata_created <- as.Date(locations$metadata_created)
+  locations$metadata_modified <- as.Date(locations$metadata_modified)
+  metadata_dates <- locations$metadata_modified
+  metadata_dates[is.na(metadata_dates)] <- locations$metadata_created[is.na(
+    metadata_dates
+  )]
+  last_metadata_modified <- suppressWarnings(max(
+    as.Date(metadata_dates),
+    na.rm = TRUE
+  ))
+  report_generated <- Sys.time()
 
   locations <- locations[order(locations$location_code), ]
 
@@ -985,7 +1026,7 @@ snowInfo <- function(
   # Order by location_code and target_date
   results <- results[order(results$location_code, results$target_date), ]
 
-  #Concatenate the various products into a list to return.
+  # Concatenate the various products into a list to return.
   if (stats) {
     if (all_locs) {
       out <- list(
@@ -1007,9 +1048,219 @@ snowInfo <- function(
     out <- list("locations" = locations, "measurements" = results)
   }
   if (!is.null(save_path)) {
-    openxlsx::write.xlsx(
-      out,
-      paste0(save_path, "/SnowInfo_", Sys.Date(), "/snow survey.xlsx")
+    wb <- openxlsx::createWorkbook()
+    for (sheet_name in names(out)) {
+      openxlsx::addWorksheet(wb, sheetName = sheet_name)
+      if (sheet_name == "locations") {
+        head <- data.frame(
+          c(
+            "Description: Metadata about Yukon snow survey locations. Information is fetched in real-time and reflects the location metadata at query time.",
+            paste0(
+              "Generated at : ",
+              substr(format(Sys.time(), tz = "MST"), 1, 16),
+              " MST"
+            ),
+            "Report Title: Snow survey location metadata",
+            paste0(
+              "Date metadata last modified: ",
+              as.character(last_metadata_modified)
+            ),
+            "",
+            "Fields information:",
+            "location_code: Unique code for the snow survey location, with prefix correspond to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
+            "note: short descriptions of significant events affecting the records, if course was discontinued, of deviations from standard 10-pt snow course, where partners outside of Yukon Governemnt conduct surveys, where an automated snow-weather station is paired with the course, etc.",
+            "march1_surveys: Count of surveys conducted on March 1",
+            "april1_surveys: Count of surveys conducted on April 1",
+            "may1_surveys: Count of surveys conducted on May 1",
+            "may15_surveys: Count of surveys conducted on May 15"
+          ),
+          stringsAsFactors = FALSE
+        )
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = head,
+          startCol = 1,
+          startRow = 1,
+          colNames = FALSE
+        )
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = out[[sheet_name]],
+          startCol = 1,
+          startRow = nrow(head) + 2
+        )
+      } else if (sheet_name == "stats") {
+        head <- data.frame(c(
+          "Description: Summary statistics for Yukon snow survey locations. Statistics are computed in real-time and reflect the measurements at query time.",
+          if (complete_yrs) {
+            "Only complete years are considered for statistics (i.e., if the current year is incomplete, it is excluded)."
+          } else {
+            "All years with any data are considered for statistics, including the current year."
+          },
+          paste0(
+            "Generated at : ",
+            substr(format(Sys.time(), tz = "MST"), 1, 16),
+            " MST"
+          ),
+          "",
+          "Fields information:",
+          "total_record_yrs: Total number of years with snow survey data on record",
+          "missing_yrs: Years between start and end year with no snow survey data on record",
+          "sample_months: Months in which snow surveys were conducted (abbreviated month names)",
+          "max_SWE_mm: Maximum SWE (mm) recorded on any survey",
+          "mean_max_SWE_mm: Mean of annual maximum SWE (mm) values",
+          "median_max_SWE_mm: Median of annual maximum SWE (mm) values",
+          "max_DEPTH_cm: Maximum snow depth (cm) recorded on any survey",
+          "mean_max_DEPTH_cm: Mean of annual maximum snow depth (cm) values",
+          "median_max_DEPTH_cm: Median of annual maximum snow depth (cm) values"
+        ))
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = head,
+          startCol = 1,
+          startRow = 1,
+          colNames = FALSE
+        )
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = out[[sheet_name]],
+          startCol = 1,
+          startRow = nrow(head) + 2
+        )
+      } else if (sheet_name == "trends") {
+        head <- data.frame(c(
+          "Description: Trend analysis for Yukon snow survey locations. Trends are computed in real-time and reflect the measurements at query time.",
+          if (complete_yrs) {
+            "Only complete years are considered for trend calculations (i.e., if the current year is incomplete, it is excluded)."
+          } else {
+            "All years with any data are considered for trend calculations, including the current year."
+          },
+          paste0(
+            "Generated at : ",
+            substr(format(Sys.time(), tz = "MST"), 1, 16),
+            " MST"
+          ),
+          "",
+          "Fields information:",
+          "p.value_SWE_max: P-value for Mann-Kendall trend test on annual maximum SWE (mm) values",
+          "sens.slope_SWE_max: Sen's slope estimate for trend on annual maximum SWE (mm) values",
+          "n_years_SWE: Number of years of data used in trend calculation for SWE",
+          "p.value_DEPTH_max: P-value for Mann-Kendall trend test on annual maximum snow depth (cm) values",
+          "sens.slope_DEPTH_max: Sen's slope estimate for trend on annual maximum snow depth (cm) values",
+          "n_years_DEPTH: Number of years of data used in trend calculation for snow depth",
+          "annual_prct_chg_SWE: Estimated annual percent change in maximum SWE (mm)",
+          "annual_prct_chg_DEPTH: Estimated annual percent change in maximum snow depth (cm)",
+          "note: Additional information about the trend calculations"
+        ))
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = head,
+          startCol = 1,
+          startRow = 1,
+          colNames = FALSE
+        )
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = out[[sheet_name]],
+          startCol = 1,
+          startRow = nrow(head) + 2
+        )
+      } else if (sheet_name == "territory_stats_trends") {
+        head <- data.frame(c(
+          "Description: Territory-wide summary statistics and trend analysis for Yukon snow survey locations. Statistics and trends are computed in real-time and reflect the measurements at query time.",
+          if (complete_yrs) {
+            "Only complete years are considered for statistics and trends (i.e., if the current year is incomplete, it is excluded)."
+          } else {
+            "All years with any data are considered for statistics and trends, including the current year."
+          },
+          paste0(
+            "Generated at : ",
+            substr(format(Sys.time(), tz = "MST"), 1, 16),
+            " MST"
+          ),
+          "",
+          "Fields information:",
+          "subset: Indicates whether the row corresponds to mean of annual maximum values or mean of April 1 values",
+          "inactive_locs: TRUE/FALSE indicating whether inactive locations were included in calculations",
+          "n_locs: Number of locations included in calculations",
+          "yr_start: Start year for calculations",
+          "yr_end: End year for calculations",
+          "mean_SWE_mm: Mean SWE (mm) across all locations and years",
+          "median_SWE_mm: Median SWE (mm) across all locations and years",
+          "mean_DEPTH_cm: Mean snow depth (cm) across all locations and years",
+          "median_DEPTH_cm: Median snow depth (cm) across all locations and years",
+          "p.val_SWE_mean: P-value for Mann-Kendall trend test on territory-averaged SWE (mm)",
+          "sens.slope_SWE_mean: Sen's slope estimate for trend on territory-averaged SWE (mm)",
+          "p.val_DEPTH_mean: P-value for Mann-Kendall trend test on territory-averaged snow depth (cm)",
+          "sens.slope_DEPTH_mean: Sen's slope estimate for trend on territory-averaged snow depth (cm)",
+          "annual_prct_chg_SWE: Estimated annual percent change in territory-averaged SWE (mm)",
+          "annual_prct_chg_DEPTH: Estimated annual percent change in territory-averaged snow depth (cm)",
+          "description: Additional information about the calculations"
+        ))
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = head,
+          startCol = 1,
+          startRow = 1,
+          colNames = FALSE
+        )
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = out[[sheet_name]],
+          startCol = 1,
+          startRow = nrow(head) + 2
+        )
+      } else if (sheet_name == "measurements") {
+        head <- data.frame(c(
+          "Description: Snow survey measurements for Yukon snow survey locations. Measurements are fetched in real-time and reflect the data at query time.",
+          paste0(
+            "Generated at : ",
+            substr(format(Sys.time(), tz = "MST"), 1, 16),
+            " MST"
+          ),
+          "",
+          "Fields information:",
+          "location_code: Unique code for the snow survey location, with prefix correspond to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
+          "parameter: Name of the measured parameter (snow water equivalent, snow depth)",
+          "units: Units of the measured parameter",
+          "sample_date: True date when the snow survey measurement was taken",
+          "target_date: Target date for which the snow survey measurement is intended to represent",
+          "year: Year of the target date",
+          "month: Month of the target date",
+          "result: Measured value for the parameter"
+        ))
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = head,
+          startCol = 1,
+          startRow = 1,
+          colNames = FALSE
+        )
+        openxlsx::writeData(
+          wb,
+          sheet = sheet_name,
+          x = out[[sheet_name]],
+          startCol = 1,
+          startRow = nrow(head) + 2
+        )
+      } else {
+        openxlsx::writeData(wb, sheet = sheet_name, x = out[[sheet_name]])
+      }
+    }
+
+    openxlsx::saveWorkbook(
+      wb,
+      file = paste0(save_path, "/SnowInfo_", Sys.Date(), "/snow survey.xlsx"),
+      overwrite = TRUE
     )
   }
 

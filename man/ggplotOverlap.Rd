@@ -57,7 +57,7 @@ ggplotOverlap(
 
 \item{title}{Should a title be included?}
 
-\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
+\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as such: Location 09AB004: Marsh Lake Near Whitehorse.}
 
 \item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
