@@ -691,7 +691,7 @@ ggplotOverlap <- function(
         !(lubridate::month(target_date) == 2 &
           lubridate::day(target_date) == 29)
       ) {
-        #Can't have the Feb 29 date because there is no Feb 29 ribbon
+        # Can't have the Feb 29 date because there is no Feb 29 ribbon
         row <- daily[
           daily$datetime == target_date,
           !names(daily) %in% c("value", "grade", "approval")
@@ -708,7 +708,7 @@ ggplotOverlap <- function(
         }
         lubridate::year(row$datetime) <- lubridate::year(plot_date)
         if (i == length(ribbon_seq)) {
-          row$datetime <- row$datetime - 1 #This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
+          row$datetime <- row$datetime - 1 # This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
           ribbon_start_end <- if (overlaps) {
             c(
               ribbon_start_end,
@@ -810,11 +810,12 @@ ggplotOverlap <- function(
         realtime$fake_datetime,
         tz = tzone,
         format = '%Y-%m-%d %H:%M:%S'
-      ) #Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
+      ) # Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
     }
 
-    #ES: get unique years used to calculate historic stats (just used for annotation on  plot)
-    historic_years <- sort(unique(realtime$year))
+    # ES: get unique years used to calculate historic stats (just used for annotation on  plot)
+    historic_years <- ribbon_start_end
+    # HEY FLAG
 
     # apply datum correction where necessary
     if (datum$conversion_m > 0) {
@@ -840,10 +841,10 @@ ggplotOverlap <- function(
       )
     }
     parameter_name <- titleCase(parameter)
-    #### Add this in here: ------------------
+
     dat <- continuous_data
 
-    #ES: get unique years used to calculate historic stats (just used for annotation on  plot)
+    # ES: get unique years used to calculate historic stats (just used for annotation on  plot)
     historic_years <- sort(unique(lubridate::year(dat$datetime)))
 
     # Remove Feb 29
@@ -1285,7 +1286,7 @@ ggplotOverlap <- function(
 
   current_year_label_en <- paste0("Year(s): ", paste(years, collapse = ", "))
   current_year_label_fr <- paste0(
-    "Ann\u00E9ee(s): ",
+    "Ann\u00E9e(s): ",
     paste(years, collapse = ", ")
   )
   current_year_label <- if (lang == "en") {
@@ -1309,7 +1310,7 @@ ggplotOverlap <- function(
         na.rm = T
       ) +
       ggplot2::scale_colour_manual(
-        name = if (lang == "en") "Year" else "Ann\u00E9ee",
+        name = if (lang == "en") "Year" else "Ann\u00E9e",
         labels = rev(unique(realtime$plot_year)),
         values = grDevices::colorRampPalette(c(
           "#206976",
@@ -1637,9 +1638,9 @@ ggplotOverlap <- function(
       )
     }
   }
-  #Add some information below the legend
+  # Add some information below the legend
   if (legend) {
-    spread_vert <- max - min #Used to determine where to put the text
+    spread_vert <- max - min # Used to determine where to put the text
     end_time1 <- max(realtime$fake_datetime, na.rm = TRUE)
     if (!is.infinite(minHist)) {
       if (overlaps) {
