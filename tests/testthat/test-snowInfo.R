@@ -46,7 +46,8 @@ test_that("measurements table has correct names", {
       "target_date",
       "year",
       "month",
-      "result"
+      "result",
+      "flag"
     )
   )
 })

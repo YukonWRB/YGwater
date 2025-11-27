@@ -127,7 +127,9 @@ snowInfo <- function(
   samples <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT sample_id, location_id, datetime, target_datetime FROM samples WHERE location_id IN ('",
+      "SELECT sample_id, location_id, datetime, target_datetime 
+      FROM samples 
+      WHERE location_id IN ('",
       paste(locations$location_id, collapse = "', '"),
       "') AND media_id = 7 AND collection_method = 1 ",
       "ORDER BY location_id, target_datetime;"
@@ -156,7 +158,11 @@ snowInfo <- function(
   results <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT r.sample_id, r.result, p.param_name, p.unit_default FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('",
+      "SELECT r.sample_id, r.result, p.param_name, p.unit_default, rvt.result_value_type AS flag
+      FROM results AS r 
+      JOIN parameters AS p ON p.parameter_id = r.parameter_id 
+      JOIN result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type
+      WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
       "') AND p.parameter_id IN (21, 1220) ",
       "ORDER BY r.sample_id"
@@ -693,6 +699,7 @@ snowInfo <- function(
         month = months,
         location = unique(plot_results$location),
         name = unique(plot_results$name),
+        flag = "C",
         param_name = "density"
       )
       density <- inf_to_na(density)
@@ -1002,7 +1009,8 @@ snowInfo <- function(
     "target_datetime",
     "year",
     "month",
-    "result"
+    "result",
+    "flag"
   )]
   names(results) <- c(
     "location_code",
@@ -1013,7 +1021,8 @@ snowInfo <- function(
     "target_date",
     "year",
     "month",
-    "result"
+    "result",
+    "flag"
   )
   # Round the results to 1 decimal place
   results$result <- round(results$result, 1)
@@ -1234,7 +1243,7 @@ snowInfo <- function(
           "sample_date: True date when the snow survey measurement was taken",
           "target_date: Target date for which the snow survey measurement is intended to represent",
           "year: Year of the target date",
-          "month: Month of the target date",
+          "month: Month of the target date. 2 = February, 3 = March, 4 = April, 5 = May, 5.5 = May 15",
           "result: Measured value for the parameter"
         ))
         openxlsx::writeData(
