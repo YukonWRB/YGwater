@@ -989,7 +989,8 @@ mapLocs <- function(id, language) {
         outputs$change_tab <- "discData"
         outputs$location_id <- input$clicked_dl_data_discrete
         shinyjs::runjs(sprintf(
-          "shinyjs.resetInput({name: 'map-clicked_dl_data_discrete'})"
+          "shinyjs.resetInput({name: '%s'})",
+          session$ns("clicked_dl_data_discrete")
         )) # Reset the value to NULL to prevent an endless loop
       }
     })
@@ -998,7 +999,8 @@ mapLocs <- function(id, language) {
         outputs$change_tab <- "contData"
         outputs$location_id <- input$clicked_dl_data_continuous
         shinyjs::runjs(sprintf(
-          "shinyjs.resetInput({name: 'map-clicked_dl_data_continuous'})"
+          "shinyjs.resetInput({name: '%s'})",
+          session$ns("clicked_dl_data_continuous")
         )) # Reset the value to NULL to prevent an endless loop
       }
     })
@@ -1007,7 +1009,8 @@ mapLocs <- function(id, language) {
         outputs$change_tab <- "discPlot"
         outputs$location_id <- input$clicked_view_plots_discrete
         shinyjs::runjs(sprintf(
-          "shinyjs.resetInput({name: 'map-clicked_view_plots_discrete'})"
+          "shinyjs.resetInput({name: '%s'})",
+          session$ns("clicked_view_plots_discrete")
         )) # Reset the value to NULL to prevent an endless loop
       }
     })
@@ -1016,7 +1019,8 @@ mapLocs <- function(id, language) {
         outputs$change_tab <- "contPlot"
         outputs$location_id <- input$clicked_view_plots_continuous
         shinyjs::runjs(sprintf(
-          "shinyjs.resetInput({name: 'map-clicked_view_plots_continuous'})"
+          "shinyjs.resetInput({name: '%s'})",
+          session$ns("clicked_view_plots_continuous")
         )) # Reset the value to NULL to prevent an endless loop
       }
     })
