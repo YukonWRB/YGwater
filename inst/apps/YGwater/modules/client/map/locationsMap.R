@@ -89,7 +89,7 @@ mapLocsUI <- function(id) {
       )
     ),
     # All UI elements rendered in server function to allow multi-language functionality
-    page_fluid(
+    bslib::page_fluid(
       uiOutput(ns("sidebar_page"))
     )
   )
@@ -173,12 +173,9 @@ mapLocs <- function(id, language) {
                 c("all", "discrete", "continuous"),
                 c(
                   tr("all", language$language),
-                  titleCase(
-                    c(
-                      tr("discrete", language$language),
-                      tr("continuous", language$language)
-                    ),
-                    language$abbrev
+                  c(
+                    tr("discrete", language$language),
+                    tr("continuous", language$language)
                   )
                 )
               ),
@@ -191,13 +188,10 @@ mapLocs <- function(id, language) {
                 c("all", moduleData$media_types$media_id),
                 c(
                   tr("all", language$language),
-                  titleCase(
-                    moduleData$media_types[[tr(
-                      "media_type_col",
-                      language$language
-                    )]],
-                    language$abbrev
-                  )
+                  moduleData$media_types[[tr(
+                    "media_type_col",
+                    language$language
+                  )]]
                 )
               ),
               multiple = TRUE
@@ -209,13 +203,10 @@ mapLocs <- function(id, language) {
                 c("all", moduleData$parameter_groups$group_id),
                 c(
                   tr("all", language$language),
-                  titleCase(
-                    moduleData$parameter_groups[[tr(
-                      "param_group_col",
-                      language$language
-                    )]],
-                    language$abbrev
-                  )
+                  moduleData$parameter_groups[[tr(
+                    "param_group_col",
+                    language$language
+                  )]]
                 )
               ),
               multiple = TRUE
@@ -227,13 +218,10 @@ mapLocs <- function(id, language) {
                 c("all", moduleData$parameters$parameter_id),
                 c(
                   tr("all", language$language),
-                  titleCase(
-                    moduleData$parameters[[tr(
-                      "param_name_col",
-                      language$language
-                    )]],
-                    language$abbrev
-                  )
+                  moduleData$parameters[[tr(
+                    "param_name_col",
+                    language$language
+                  )]]
                 )
               ),
               multiple = TRUE
@@ -245,13 +233,10 @@ mapLocs <- function(id, language) {
                 c("all", moduleData$projects$project_id),
                 c(
                   tr("all", language$language),
-                  titleCase(
-                    moduleData$projects[[tr(
-                      "generic_name_col",
-                      language$language
-                    )]],
-                    language$abbrev
-                  )
+                  moduleData$projects[[tr(
+                    "generic_name_col",
+                    language$language
+                  )]]
                 )
               ),
               multiple = TRUE
@@ -263,13 +248,10 @@ mapLocs <- function(id, language) {
                 c("all", moduleData$networks$network_id),
                 c(
                   tr("all", language$language),
-                  titleCase(
-                    moduleData$networks[[tr(
-                      "generic_name_col",
-                      language$language
-                    )]],
-                    language$abbrev
-                  )
+                  moduleData$networks[[tr(
+                    "generic_name_col",
+                    language$language
+                  )]]
                 )
               ),
               multiple = TRUE
@@ -314,12 +296,9 @@ mapLocs <- function(id, language) {
           c("all", "discrete", "continuous"),
           c(
             tr("all", language$language),
-            titleCase(
-              c(
-                tr("discrete", language$language),
-                tr("continuous", language$language)
-              ),
-              language$abbrev
+            c(
+              tr("discrete", language$language),
+              tr("continuous", language$language)
             )
           )
         )
@@ -331,10 +310,7 @@ mapLocs <- function(id, language) {
           c("all", moduleData$media_types$media_id),
           c(
             tr("all", language$language),
-            titleCase(
-              moduleData$media_types[[tr("media_type_col", language$language)]],
-              language$abbrev
-            )
+            moduleData$media_types[[tr("media_type_col", language$language)]]
           )
         )
       )
@@ -345,13 +321,10 @@ mapLocs <- function(id, language) {
           c("all", moduleData$parameter_groups$group_id),
           c(
             tr("all", language$language),
-            titleCase(
-              moduleData$parameter_groups[[tr(
-                "param_group_col",
-                language$language
-              )]],
-              language$abbrev
-            )
+            moduleData$parameter_groups[[tr(
+              "param_group_col",
+              language$language
+            )]]
           )
         )
       )
@@ -362,10 +335,7 @@ mapLocs <- function(id, language) {
           c("all", moduleData$parameters$parameter_id),
           c(
             tr("all", language$language),
-            titleCase(
-              moduleData$parameters[[tr("param_name_col", language$language)]],
-              language$abbrev
-            )
+            moduleData$parameters[[tr("param_name_col", language$language)]]
           )
         )
       )
@@ -376,10 +346,7 @@ mapLocs <- function(id, language) {
           c("all", moduleData$projects$project_id),
           c(
             tr("all", language$language),
-            titleCase(
-              moduleData$projects[[tr("generic_name_col", language$language)]],
-              language$abbrev
-            )
+            moduleData$projects[[tr("generic_name_col", language$language)]]
           )
         ),
       )
@@ -390,10 +357,7 @@ mapLocs <- function(id, language) {
           c("all", moduleData$networks$network_id),
           c(
             tr("all", language$language),
-            titleCase(
-              moduleData$networks[[tr("generic_name_col", language$language)]],
-              language$abbrev
-            )
+            moduleData$networks[[tr("generic_name_col", language$language)]]
           )
         )
       )
@@ -435,7 +399,7 @@ mapLocs <- function(id, language) {
             location_id,
             popup_name = get(tr("generic_name_col", language$language))
           )]
-          popup_names[, popup_name := titleCase(popup_name, language$abbrev)]
+          popup_names[, popup_name := popup_name]
           # Aggregate time range for each location
           time_range <- moduleData$timeseries[,
             .(
@@ -450,7 +414,7 @@ mapLocs <- function(id, language) {
           tmp <- moduleData$timeseries
           tmp[,
             formatted_param := paste(
-              titleCase(get(param_name_col), language$abbrev),
+              get(param_name_col),
               " (",
               format(as.Date(start_datetime), "%Y-%m-%d"),
               " ",
@@ -473,7 +437,7 @@ mapLocs <- function(id, language) {
             allow.cartesian = TRUE
           ]
           tmp[,
-            formatted_network := titleCase(get(network_col), language$abbrev)
+            formatted_network := get(network_col)
           ]
           location_networks <- tmp[,
             .(networks = paste(formatted_network, collapse = "<br/>")),
@@ -487,7 +451,7 @@ mapLocs <- function(id, language) {
             allow.cartesian = TRUE
           ]
           tmp[,
-            formatted_project := titleCase(get(projects_col), language$abbrev)
+            formatted_project := get(projects_col)
           ]
           location_projects <- tmp[,
             .(projects = paste(formatted_project, collapse = "<br/>")),
@@ -901,7 +865,7 @@ mapLocs <- function(id, language) {
         is.na(type_label) | trimws(type_label) == "",
         type_label := unknown_label
       ]
-      loc.sub[, type_label := titleCase(type_label, language$abbrev)]
+      loc.sub[, type_label := type_label]
 
       loc_types <- sort(unique(loc.sub$type_label))
 

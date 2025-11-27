@@ -3075,10 +3075,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         button1Text <- HTML(paste0(
           "<b>Trace 1</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == traces$trace1$parameter,
             tr("param_name_col", language$language)
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == traces$trace1$location_id,
@@ -3087,10 +3087,10 @@ contPlot <- function(id, language, windowDims, inputs) {
         ))
         button2Text <- HTML(paste0(
           "<b>Trace 2</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == traces$trace2$parameter,
             tr("param_name_col", language$language)
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == traces$trace2$location_id,
@@ -3124,10 +3124,10 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
         button3Text <- HTML(paste0(
           "<b>Trace 3</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == traces$trace3$parameter,
             tr("param_name_col", language$language)
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == traces$trace3$location_id,
@@ -3155,10 +3155,10 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
         button4Text <- HTML(paste0(
           "<b>Trace 4</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == traces$trace4$parameter,
             tr("param_name_col", language$language)
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == traces$trace4$location_id,
@@ -3304,10 +3304,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           "<b>Trace ",
           target_trace,
           "</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == traces[[target_trace]]$parameter,
             "param_name"
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == traces[[target_trace]]$location_id,
@@ -3319,10 +3319,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           "<b>Trace ",
           target_trace,
           "</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == traces[[target_trace]]$parameter,
             "param_name"
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == traces[[target_trace]]$location_id,
@@ -3373,11 +3373,11 @@ contPlot <- function(id, language, windowDims, inputs) {
             "<b>Trace ",
             i,
             "</b><br>",
-            titleCase(moduleData$params[
+            moduleData$params[
               moduleData$params$parameter_id ==
                 traces[[paste0("trace", i)]]$parameter,
               "param_name"
-            ]),
+            ],
             "<br>",
             moduleData$locs[
               moduleData$locs$location_id ==
@@ -3390,11 +3390,11 @@ contPlot <- function(id, language, windowDims, inputs) {
             "<b>Trace ",
             i,
             "</b><br>",
-            titleCase(moduleData$params[
+            moduleData$params[
               moduleData$params$parameter_id ==
                 traces[[paste0("trace", i)]]$parameter,
               "param_name"
-            ]),
+            ],
             "<br>",
             moduleData$locs[
               moduleData$locs$location_id ==
@@ -3420,7 +3420,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           "param",
           choices = stats::setNames(
             moduleData$params$parameter_id,
-            titleCase(moduleData$params$param_name)
+            moduleData$params$param_name
           ),
           selected = traces$trace1$parameter
         )
@@ -3513,10 +3513,10 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
         button1Text <- HTML(paste0(
           "<b>Subplot 1</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == subplots$subplot1$parameter,
             "param_name"
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == subplots$subplot1$location_id,
@@ -3525,10 +3525,10 @@ contPlot <- function(id, language, windowDims, inputs) {
         ))
         button2Text <- HTML(paste0(
           "<b>Subplot 2</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == subplots$subplot2$parameter,
             "param_name"
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == subplots$subplot2$location_id,
@@ -3559,10 +3559,10 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
         button3Text <- HTML(paste0(
           "<b>Subplot 3</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == subplots$subplot3$parameter,
             "param_name"
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == subplots$subplot3$location_id,
@@ -3587,10 +3587,10 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
         button4Text <- HTML(paste0(
           "<b>Subplot 4</b><br>",
-          titleCase(moduleData$params[
+          moduleData$params[
             moduleData$params$parameter_id == subplots$subplot4$parameter,
             "param_name"
-          ]),
+          ],
           "<br>",
           moduleData$locs[
             moduleData$locs$location_id == subplots$subplot4$location_id,
@@ -3718,11 +3718,11 @@ contPlot <- function(id, language, windowDims, inputs) {
         "<b>Subplot ",
         target_subplot,
         "</b><br>",
-        titleCase(moduleData$params[
+        moduleData$params[
           moduleData$params$parameter_id ==
             subplots[[target_subplot]]$parameter,
           "param_name"
-        ]),
+        ],
         "<br>",
         moduleData$locs[
           moduleData$locs$location_id == subplots[[target_subplot]]$location_id,
@@ -3769,11 +3769,11 @@ contPlot <- function(id, language, windowDims, inputs) {
             "<b>Subplot ",
             i,
             "</b><br>",
-            titleCase(moduleData$params[
+            moduleData$params[
               moduleData$params$parameter_id ==
                 subplots[[paste0("subplot", i)]]$parameter,
               "param_name"
-            ]),
+            ],
             "<br>",
             moduleData$locs[
               moduleData$locs$location_id ==
@@ -3786,11 +3786,11 @@ contPlot <- function(id, language, windowDims, inputs) {
             "<b>Subplot ",
             i,
             "</b><br>",
-            titleCase(moduleData$params[
+            moduleData$params[
               moduleData$params$parameter_id ==
                 subplots[[paste0("subplot", i)]]$parameter,
               "param_name"
-            ]),
+            ],
             "<br>",
             moduleData$locs[
               moduleData$locs$location_id ==
@@ -3815,7 +3815,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           "param",
           choices = stats::setNames(
             moduleData$params$parameter_id,
-            titleCase(moduleData$params$param_name)
+            moduleData$params$param_name
           ),
           selected = subplots$subplot1$parameter
         )

@@ -2,7 +2,7 @@ mapParamsUI <- function(id) {
   ns <- NS(id)
 
   # All UI elements rendered in server function to allow multi-language functionality
-  page_fluid(
+  bslib::page_fluid(
     uiOutput(ns("sidebar_page"))
   )
 } # End of mapParamsUI
@@ -110,13 +110,12 @@ mapParams <- function(id, language) {
             tr("map_primary_param", language$language)
           }
         ), # Text for primary parameter
-        p(titleCase(
+        p(
           moduleData$parameters[
             moduleData$parameters$parameter_id == map_params$param1,
             get(tr("param_name_col", language$language))
-          ],
-          language$abbrev
-        )), # Name of primary parameter
+          ]
+        ), # Name of primary parameter
         p(
           tr("map_min_yrs_selected1", language$language),
           " ",
@@ -138,13 +137,12 @@ mapParams <- function(id, language) {
       } else {
         tagList(
           h4(tr("map_second_param", language$language)), # Text for secondary parameter
-          p(titleCase(
+          p(
             moduleData$parameters[
               moduleData$parameters$parameter_id == map_params$param2,
               get(tr("param_name_col", language$language))
-            ],
-            language$abbrev
-          )), # Name of secondary parameter
+            ]
+          ), # Name of secondary parameter
           p(
             tr("map_min_yrs_selected1", language$language),
             " ",
@@ -215,10 +213,7 @@ mapParams <- function(id, language) {
           label = tr("parameter", language$language),
           choices = stats::setNames(
             tmp$parameter_id,
-            titleCase(
-              tmp[[tr("param_name_col", language$language)]],
-              language$abbrev
-            )
+            tmp[[tr("param_name_col", language$language)]]
           ),
           selected = map_params$param1,
           multiple = FALSE
@@ -265,10 +260,7 @@ mapParams <- function(id, language) {
           label = tr("parameter", language$language),
           choices = stats::setNames(
             tmp$parameter_id,
-            titleCase(
-              tmp[[tr("param_name_col", language$language)]],
-              language$abbrev
-            )
+            tmp[[tr("param_name_col", language$language)]]
           ),
           selected = map_params$param2,
           multiple = FALSE
@@ -683,9 +675,13 @@ mapParams <- function(id, language) {
         }
 
         abs_range <- range(abs_vals, na.rm = TRUE)
-        
+
         # Handle case where all values are identical or range is zero
-        if (abs_range[1] == abs_range[2] || !is.finite(abs_range[1]) || !is.finite(abs_range[2])) {
+        if (
+          abs_range[1] == abs_range[2] ||
+            !is.finite(abs_range[1]) ||
+            !is.finite(abs_range[2])
+        ) {
           # Create a small range around the single value for binning
           if (abs_range[1] == 0) {
             abs_bins <- c(-0.1, 0.1)
@@ -724,13 +720,10 @@ mapParams <- function(id, language) {
         lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
         legend_title <- sprintf(
           "%s (%s)",
-          titleCase(
-            moduleData$parameters[
-              moduleData$parameters$parameter_id == map_params$param1,
-              get(tr("param_name_col", language$language))
-            ],
-            language$abbrev
-          ),
+          moduleData$parameters[
+            moduleData$parameters$parameter_id == map_params$param1,
+            get(tr("param_name_col", language$language))
+          ],
           moduleData$parameters[
             moduleData$parameters$parameter_id == map_params$param1,
             "unit_default"
@@ -780,7 +773,7 @@ mapParams <- function(id, language) {
             "<strong>",
             get(tr("generic_name_col", language$language)),
             "</strong><br/>",
-            titleCase(param_name, language$abbrev),
+            param_name,
             "<br>",
             tr("map_actual_date", language$language),
             ": ",
