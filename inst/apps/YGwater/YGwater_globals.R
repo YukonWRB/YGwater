@@ -184,6 +184,10 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/plot/continuousPlot.R",
     package = "YGwater"
   ))
+  source(system.file(
+    "apps/YGwater/modules/client/plot/continuousTablePlot.R",
+    package = "YGwater"
+  ))
 
   # Report modules
   if (g_drive) {
