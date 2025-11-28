@@ -108,6 +108,8 @@ contPlot <- function(id, language, windowDims, inputs) {
       return(data)
     }
 
+    filteredData <- createFilteredData()
+
     # Safely calculate date ranges and avoid warnings when no dates are present
     calc_range <- function(df) {
       if (
@@ -124,7 +126,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
     }
 
-    # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
+    # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded. Will be used in the initial renderUI to set the location selectizeInput value,
     moduleInputs <- reactiveValues(
       location_id = if (!is.null(inputs$location_id)) {
         as.numeric(inputs$location_id)
@@ -132,49 +134,6 @@ contPlot <- function(id, language, windowDims, inputs) {
         NULL
       }
     )
-
-    # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
-    if (!is.null(moduleInputs$location_id)) {
-      filteredData <- createFilteredData()
-      # If the location_id is not in the filteredData$locs, return early
-      if (!moduleInputs$location_id %in% filteredData$locs$location_id) {
-        moduleInputs$location_id <- NULL
-        return()
-      }
-
-      loc_id <- moduleInputs$location_id
-      filteredData$timeseries <- filteredData$timeseries[
-        filteredData$timeseries$location_id %in% loc_id,
-      ]
-      filteredData$locs <- filteredData$locs[
-        filteredData$locs$location_id %in% loc_id,
-      ]
-      filteredData$sub_locs <- filteredData$sub_locs[
-        filteredData$sub_locs$location_id %in% loc_id,
-      ]
-      filteredData$z <- unique(filteredData$timeseries$z[
-        !is.na(filteredData$timeseries$z)
-      ])
-      filteredData$media <- filteredData$media[
-        filteredData$media$media_id %in% filteredData$timeseries$media_id,
-      ]
-      filteredData$aggregation_types <- filteredData$aggregation_types[
-        filteredData$aggregation_types$aggregation_type_id %in%
-          filteredData$timeseries$aggregation_type_id,
-      ]
-      filteredData$rates <- filteredData$rates[
-        filteredData$rates$seconds %in% filteredData$timeseries$record_rate,
-      ]
-
-      filteredData$range <- calc_range(filteredData$timeseries)
-
-      filteredData$params <- filteredData$params[
-        filteredData$params$parameter_id %in%
-          filteredData$timeseries$parameter_id,
-      ]
-    } else {
-      filteredData <- createFilteredData()
-    }
 
     values <- reactiveValues()
     # Find the parameter_ids for 'water level', 'snow water equivalent', 'snow depth' - this is used to change default plot start/end dates and to show the datum checkbox if suitable
@@ -955,210 +914,225 @@ contPlot <- function(id, language, windowDims, inputs) {
         filteredData_rate$timeseries <- filteredData$timeseries
         filteredData_rate$params <- filteredData$params
       },
-      ignoreInit = TRUE
+      priority = 999
     )
 
     ## Filter based on the sub_location ##########################
-    observeEvent(input$sub_location, {
-      req(filteredData)
+    observeEvent(
+      input$sub_location,
+      {
+        req(filteredData)
 
-      # Filter the data based on the selected sub-locations
-      if (is.null(input$sub_location) || length(input$sub_location) != 1) {
-        return()
-      }
-
-      # Find the new timeseries rows based on the selected sub-location
-      filteredData_sub_locs$timeseries <- filteredData$timeseries[
-        filteredData$timeseries$sub_location_id == input$sub_location,
-      ]
-
-      filteredData_sub_locs$z <- unique(filteredData_sub_locs$timeseries$z[
-        !is.na(filteredData_sub_locs$timeseries$z)
-      ])
-      filteredData_sub_locs$media <- filteredData$media[
-        filteredData$media$media_id %in%
-          filteredData_sub_locs$timeseries$media_id,
-      ]
-      filteredData_sub_locs$aggregation_types <- filteredData$aggregation_types[
-        filteredData$aggregation_types$aggregation_type_id %in%
-          filteredData_sub_locs$timeseries$aggregation_type_id,
-      ]
-      filteredData_sub_locs$rates <- filteredData$rates[
-        filteredData$rates$seconds %in%
-          filteredData_sub_locs$timeseries$record_rate,
-      ]
-      filteredData_sub_locs$params <- filteredData$params[
-        filteredData$params$parameter_id %in%
-          filteredData_sub_locs$timeseries$parameter_id,
-      ]
-
-      filteredData_sub_locs$range <- calc_range(
-        filteredData_sub_locs$timeseries
-      )
-
-      # Update the z selectizeInput based on the selected sub-locations
-      if (length(filteredData_sub_locs$z) > 1) {
-        if (!render_flags$z) {
-          output$z_ui <- renderUI({
-            # If there are z values for the selected location, show a selectizeInput for z
-            selectizeInput(
-              ns("z"),
-              label = tr("z", language$language),
-              choices = filteredData_sub_locs$z,
-              multiple = TRUE,
-              options = list(maxItems = 1)
-            )
-          })
-          render_flags$z <- TRUE
-        } else {
-          updateSelectizeInput(
-            session,
-            "z",
-            choices = filteredData_sub_locs$z,
-            selected = character(0)
-          )
-          shinyjs::show("z")
+        # Filter the data based on the selected sub-locations
+        if (is.null(input$sub_location) || length(input$sub_location) != 1) {
+          return()
         }
-      } else {
-        shinyjs::hide("z")
-      }
 
-      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_sub_locs.
-      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
-      tmp.choices <- stats::setNames(
-        filteredData_sub_locs$media$media_id,
-        filteredData_sub_locs$media[, tr("media_type_col", language$language)]
-      )
-      if (!is.null(input$media)) {
-        tmp.selected <- if (input$media %in% tmp.choices) {
-          input$media
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "media",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        # Find the new timeseries rows based on the selected sub-location
+        filteredData_sub_locs$timeseries <- filteredData$timeseries[
+          filteredData$timeseries$sub_location_id == input$sub_location,
+        ]
 
-      tmp.choices <- stats::setNames(
-        filteredData_sub_locs$aggregation_types$aggregation_type_id,
-        filteredData_sub_locs$aggregation_types[, tr(
-          "aggregation_type_col",
-          language$language
-        )]
-      )
-      if (!is.null(input$aggregation)) {
-        tmp.selected <- if (input$aggregation %in% tmp.choices) {
-          input$aggregation
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "aggregation",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        filteredData_sub_locs$z <- unique(filteredData_sub_locs$timeseries$z[
+          !is.na(filteredData_sub_locs$timeseries$z)
+        ])
+        filteredData_sub_locs$media <- filteredData$media[
+          filteredData$media$media_id %in%
+            filteredData_sub_locs$timeseries$media_id,
+        ]
+        filteredData_sub_locs$aggregation_types <- filteredData$aggregation_types[
+          filteredData$aggregation_types$aggregation_type_id %in%
+            filteredData_sub_locs$timeseries$aggregation_type_id,
+        ]
+        filteredData_sub_locs$rates <- filteredData$rates[
+          filteredData$rates$seconds %in%
+            filteredData_sub_locs$timeseries$record_rate,
+        ]
+        filteredData_sub_locs$params <- filteredData$params[
+          filteredData$params$parameter_id %in%
+            filteredData_sub_locs$timeseries$parameter_id,
+        ]
 
-      tmp.choices <- stats::setNames(
-        filteredData_sub_locs$rates$seconds,
-        filteredData_sub_locs$rates[, "period"]
-      )
-      if (!is.null(input$rate)) {
-        tmp.selected <- if (input$rate %in% tmp.choices) {
-          input$rate
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "rate",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        filteredData_sub_locs$range <- calc_range(
+          filteredData_sub_locs$timeseries
+        )
 
-      tmp.choices <- stats::setNames(
-        filteredData_sub_locs$params$parameter_id,
-        filteredData_sub_locs$params[, tr("param_name_col", language$language)]
-      )
-      if (!is.null(input$param)) {
-        tmp.selected <- if (input$param %in% tmp.choices) {
-          input$param
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "param",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
-
-      earliest <- filteredData_sub_locs$range$max_date - 366
-      if (earliest < filteredData_sub_locs$range$min_date) {
-        earliest <- filteredData_sub_locs$range$min_date
-      }
-
-      possible_years <- seq(
-        as.numeric(substr(filteredData_sub_locs$range$min_date, 1, 4)),
-        as.numeric(substr(filteredData_sub_locs$range$max_date, 1, 4))
-      )
-      updateSelectizeInput(
-        session,
-        "years",
-        choices = possible_years,
-        selected = max(possible_years)
-      )
-
-      if (input$plot_type == "over") {
-        if (!is.null(input$param) && length(input$param) == 1) {
-          if (input$param %in% c(values$swe, values$snow_depth)) {
-            updateDateRangeInput(
+        # Update the z selectizeInput based on the selected sub-locations
+        if (length(filteredData_sub_locs$z) > 1) {
+          if (!render_flags$z) {
+            output$z_ui <- renderUI({
+              # If there are z values for the selected location, show a selectizeInput for z
+              selectizeInput(
+                ns("z"),
+                label = tr("z", language$language),
+                choices = filteredData_sub_locs$z,
+                multiple = TRUE,
+                options = list(maxItems = 1)
+              )
+            })
+            render_flags$z <- TRUE
+          } else {
+            updateSelectizeInput(
               session,
-              "date_range",
-              min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-              max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-              start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-              end = paste0(lubridate::year(Sys.Date()), "-06-01")
+              "z",
+              choices = filteredData_sub_locs$z,
+              selected = character(0)
             )
+            shinyjs::show("z")
+          }
+        } else {
+          shinyjs::hide("z")
+        }
+
+        # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_sub_locs.
+        # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+        tmp.choices <- stats::setNames(
+          filteredData_sub_locs$media$media_id,
+          filteredData_sub_locs$media[, tr("media_type_col", language$language)]
+        )
+        if (!is.null(input$media)) {
+          tmp.selected <- if (input$media %in% tmp.choices) {
+            input$media
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "media",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
+
+        tmp.choices <- stats::setNames(
+          filteredData_sub_locs$aggregation_types$aggregation_type_id,
+          filteredData_sub_locs$aggregation_types[, tr(
+            "aggregation_type_col",
+            language$language
+          )]
+        )
+        if (!is.null(input$aggregation)) {
+          tmp.selected <- if (input$aggregation %in% tmp.choices) {
+            input$aggregation
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "aggregation",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
+
+        tmp.choices <- stats::setNames(
+          filteredData_sub_locs$rates$seconds,
+          filteredData_sub_locs$rates[, "period"]
+        )
+        if (!is.null(input$rate)) {
+          tmp.selected <- if (input$rate %in% tmp.choices) {
+            input$rate
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "rate",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
+
+        tmp.choices <- stats::setNames(
+          filteredData_sub_locs$params$parameter_id,
+          filteredData_sub_locs$params[, tr(
+            "param_name_col",
+            language$language
+          )]
+        )
+        if (!is.null(input$param)) {
+          tmp.selected <- if (input$param %in% tmp.choices) {
+            input$param
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "param",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
+
+        earliest <- filteredData_sub_locs$range$max_date - 366
+        if (earliest < filteredData_sub_locs$range$min_date) {
+          earliest <- filteredData_sub_locs$range$min_date
+        }
+
+        possible_years <- seq(
+          as.numeric(substr(filteredData_sub_locs$range$min_date, 1, 4)),
+          as.numeric(substr(filteredData_sub_locs$range$max_date, 1, 4))
+        )
+        updateSelectizeInput(
+          session,
+          "years",
+          choices = possible_years,
+          selected = max(possible_years)
+        )
+
+        if (input$plot_type == "over") {
+          if (!is.null(input$param) && length(input$param) == 1) {
+            if (input$param %in% c(values$swe, values$snow_depth)) {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-06-01")
+              )
+            } else {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-12-31")
+              )
+            }
           } else {
             updateDateRangeInput(
               session,
@@ -1169,381 +1143,389 @@ contPlot <- function(id, language, windowDims, inputs) {
               end = paste0(lubridate::year(Sys.Date()), "-12-31")
             )
           }
-        } else {
+        } else if (input$plot_type == "ts") {
           updateDateRangeInput(
             session,
             "date_range",
-            min = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-            start = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            end = paste0(lubridate::year(Sys.Date()), "-12-31")
+            start = earliest,
+            end = as.Date(filteredData_sub_locs$range$max_date),
+            min = as.Date(filteredData_sub_locs$range$min_date),
+            max = as.Date(filteredData_sub_locs$range$max_date)
           )
         }
-      } else if (input$plot_type == "ts") {
-        updateDateRangeInput(
-          session,
-          "date_range",
-          start = earliest,
-          end = as.Date(filteredData_sub_locs$range$max_date),
-          min = as.Date(filteredData_sub_locs$range$min_date),
-          max = as.Date(filteredData_sub_locs$range$max_date)
-        )
-      }
 
-      filteredData_z$timeseries <- filteredData_sub_locs$timeseries
-      filteredData_z$media <- filteredData_sub_locs$media
-      filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types
-      filteredData_z$rates <- filteredData_sub_locs$rates
-      filteredData_z$params <- filteredData_sub_locs$params
+        filteredData_z$timeseries <- filteredData_sub_locs$timeseries
+        filteredData_z$media <- filteredData_sub_locs$media
+        filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types
+        filteredData_z$rates <- filteredData_sub_locs$rates
+        filteredData_z$params <- filteredData_sub_locs$params
 
-      filteredData_media$timeseries <- filteredData_sub_locs$timeseries
-      filteredData_media$aggregation_types <- filteredData_sub_locs$aggregation_types
-      filteredData_media$rates <- filteredData_sub_locs$rates
-      filteredData_media$params <- filteredData_sub_locs$params
+        filteredData_media$timeseries <- filteredData_sub_locs$timeseries
+        filteredData_media$aggregation_types <- filteredData_sub_locs$aggregation_types
+        filteredData_media$rates <- filteredData_sub_locs$rates
+        filteredData_media$params <- filteredData_sub_locs$params
 
-      filteredData_aggregation$timeseries <- filteredData_sub_locs$timeseries
-      filteredData_aggregation$rates <- filteredData_sub_locs$rates
-      filteredData_aggregation$params <- filteredData_sub_locs$params
+        filteredData_aggregation$timeseries <- filteredData_sub_locs$timeseries
+        filteredData_aggregation$rates <- filteredData_sub_locs$rates
+        filteredData_aggregation$params <- filteredData_sub_locs$params
 
-      filteredData_rate$timeseries <- filteredData_sub_locs$timeseries
-      filteredData_rate$params <- filteredData_sub_locs$params
-    })
+        filteredData_rate$timeseries <- filteredData_sub_locs$timeseries
+        filteredData_rate$params <- filteredData_sub_locs$params
+      },
+      priority = 998
+    ) # End observeEvent for sub_location
 
     ## Filter based on the z value ##########################
-    observeEvent(input$z, {
-      # Filter the data based on the selected z values
-      if (is.null(input$z) || length(input$z) != 1) {
-        return()
-      }
-
-      # Find the new timeseries rows based on the selected z value
-      filteredData_z$timeseries <- filteredData_sub_locs$timeseries[
-        filteredData_sub_locs$timeseries$z == input$z,
-      ]
-
-      filteredData_z$media <- filteredData_sub_locs$media[
-        filteredData_sub_locs$media$media_id %in%
-          filteredData_z$timeseries$media_id,
-      ]
-      filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types[
-        filteredData_sub_locs$aggregation_types$aggregation_type_id %in%
-          filteredData_z$timeseries$aggregation_type_id,
-      ]
-      filteredData_z$rates <- filteredData_sub_locs$rates[
-        filteredData_sub_locs$rates$seconds %in%
-          filteredData_z$timeseries$record_rate,
-      ]
-      filteredData_z$params <- filteredData_sub_locs$params[
-        filteredData_sub_locs$params$parameter_id %in%
-          filteredData_z$timeseries$parameter_id,
-      ]
-      filteredData_z$range <- calc_range(filteredData_z$timeseries)
-
-      # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_z.
-      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
-      tmp.choices <- stats::setNames(
-        filteredData_z$media$media_id,
-        filteredData_z$media[, tr("media_type_col", language$language)]
-      )
-      if (!is.null(input$media)) {
-        tmp.selected <- if (input$media %in% tmp.choices) {
-          input$media
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
+    observeEvent(
+      input$z,
+      {
+        # Filter the data based on the selected z values
+        if (is.null(input$z) || length(input$z) != 1) {
+          return()
         }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "media",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
 
-      tmp.choices <- stats::setNames(
-        filteredData_z$aggregation_types$aggregation_type_id,
-        filteredData_z$aggregation_types[, tr(
-          "aggregation_type_col",
-          language$language
-        )]
-      )
-      if (!is.null(input$aggregation)) {
-        tmp.selected <- if (input$aggregation %in% tmp.choices) {
-          input$aggregation
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "aggregation",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        # Find the new timeseries rows based on the selected z value
+        filteredData_z$timeseries <- filteredData_sub_locs$timeseries[
+          filteredData_sub_locs$timeseries$z == input$z,
+        ]
 
-      tmp.choices <- stats::setNames(
-        filteredData_z$rates$seconds,
-        filteredData_z$rates[, "period"]
-      )
-      if (!is.null(input$rate)) {
-        tmp.selected <- if (input$rate %in% tmp.choices) {
-          input$rate
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "rate",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        filteredData_z$media <- filteredData_sub_locs$media[
+          filteredData_sub_locs$media$media_id %in%
+            filteredData_z$timeseries$media_id,
+        ]
+        filteredData_z$aggregation_types <- filteredData_sub_locs$aggregation_types[
+          filteredData_sub_locs$aggregation_types$aggregation_type_id %in%
+            filteredData_z$timeseries$aggregation_type_id,
+        ]
+        filteredData_z$rates <- filteredData_sub_locs$rates[
+          filteredData_sub_locs$rates$seconds %in%
+            filteredData_z$timeseries$record_rate,
+        ]
+        filteredData_z$params <- filteredData_sub_locs$params[
+          filteredData_sub_locs$params$parameter_id %in%
+            filteredData_z$timeseries$parameter_id,
+        ]
+        filteredData_z$range <- calc_range(filteredData_z$timeseries)
 
-      tmp.choices <- stats::setNames(
-        filteredData_z$params$parameter_id,
-        filteredData_z$params[, tr("param_name_col", language$language)]
-      )
-      if (!is.null(input$param)) {
-        tmp.selected <- if (input$param %in% tmp.choices) {
-          input$param
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "param",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
-
-      earliest <- filteredData_z$range$max_date - 366
-      if (earliest < filteredData_z$range$min_date) {
-        earliest <- filteredData_z$range$min_date
-      }
-
-      possible_years <- seq(
-        as.numeric(substr(filteredData_z$range$min_date, 1, 4)),
-        as.numeric(substr(filteredData_z$range$max_date, 1, 4))
-      )
-      updateSelectizeInput(
-        session,
-        "years",
-        choices = possible_years,
-        selected = max(possible_years)
-      )
-
-      if (input$plot_type == "over") {
-        if (input$param %in% c(values$swe, values$snow_depth)) {
-          updateDateRangeInput(
-            session,
-            "date_range",
-            min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-            max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-            start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-            end = paste0(lubridate::year(Sys.Date()), "-06-01")
-          )
-        } else {
-          updateDateRangeInput(
-            session,
-            "date_range",
-            min = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-            start = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            end = paste0(lubridate::year(Sys.Date()), "-12-31")
-          )
-        }
-      } else if (input$plot_type == "ts") {
-        updateDateRangeInput(
-          session,
-          "date_range",
-          start = earliest,
-          end = as.Date(filteredData_z$range$max_date),
-          min = as.Date(filteredData_z$range$min_date),
-          max = as.Date(filteredData_z$range$max_date)
+        # Update the media, aggregation, rate, and param selectizeInputs with what's left in filteredData_z.
+        # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+        tmp.choices <- stats::setNames(
+          filteredData_z$media$media_id,
+          filteredData_z$media[, tr("media_type_col", language$language)]
         )
-      }
+        if (!is.null(input$media)) {
+          tmp.selected <- if (input$media %in% tmp.choices) {
+            input$media
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "media",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
 
-      filteredData_media$timeseries <- filteredData_z$timeseries
-      filteredData_media$aggregation_types <- filteredData_z$aggregation_types
-      filteredData_media$rates <- filteredData_z$rates
-      filteredData_media$params <- filteredData_z$params
+        tmp.choices <- stats::setNames(
+          filteredData_z$aggregation_types$aggregation_type_id,
+          filteredData_z$aggregation_types[, tr(
+            "aggregation_type_col",
+            language$language
+          )]
+        )
+        if (!is.null(input$aggregation)) {
+          tmp.selected <- if (input$aggregation %in% tmp.choices) {
+            input$aggregation
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "aggregation",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
 
-      filteredData_aggregation$timeseries <- filteredData_z$timeseries
-      filteredData_aggregation$rates <- filteredData_z$rates
-      filteredData_aggregation$params <- filteredData_z$params
+        tmp.choices <- stats::setNames(
+          filteredData_z$rates$seconds,
+          filteredData_z$rates[, "period"]
+        )
+        if (!is.null(input$rate)) {
+          tmp.selected <- if (input$rate %in% tmp.choices) {
+            input$rate
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "rate",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
 
-      filteredData_rate$timeseries <- filteredData_z$timeseries
-      filteredData_rate$params <- filteredData_z$params
-    })
+        tmp.choices <- stats::setNames(
+          filteredData_z$params$parameter_id,
+          filteredData_z$params[, tr("param_name_col", language$language)]
+        )
+        if (!is.null(input$param)) {
+          tmp.selected <- if (input$param %in% tmp.choices) {
+            input$param
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "param",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
+
+        earliest <- filteredData_z$range$max_date - 366
+        if (earliest < filteredData_z$range$min_date) {
+          earliest <- filteredData_z$range$min_date
+        }
+
+        possible_years <- seq(
+          as.numeric(substr(filteredData_z$range$min_date, 1, 4)),
+          as.numeric(substr(filteredData_z$range$max_date, 1, 4))
+        )
+        updateSelectizeInput(
+          session,
+          "years",
+          choices = possible_years,
+          selected = max(possible_years)
+        )
+
+        if (input$plot_type == "over") {
+          if (input$param %in% c(values$swe, values$snow_depth)) {
+            updateDateRangeInput(
+              session,
+              "date_range",
+              min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+              max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+              start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+              end = paste0(lubridate::year(Sys.Date()), "-06-01")
+            )
+          } else {
+            updateDateRangeInput(
+              session,
+              "date_range",
+              min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+              max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+              start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+              end = paste0(lubridate::year(Sys.Date()), "-12-31")
+            )
+          }
+        } else if (input$plot_type == "ts") {
+          updateDateRangeInput(
+            session,
+            "date_range",
+            start = earliest,
+            end = as.Date(filteredData_z$range$max_date),
+            min = as.Date(filteredData_z$range$min_date),
+            max = as.Date(filteredData_z$range$max_date)
+          )
+        }
+
+        filteredData_media$timeseries <- filteredData_z$timeseries
+        filteredData_media$aggregation_types <- filteredData_z$aggregation_types
+        filteredData_media$rates <- filteredData_z$rates
+        filteredData_media$params <- filteredData_z$params
+
+        filteredData_aggregation$timeseries <- filteredData_z$timeseries
+        filteredData_aggregation$rates <- filteredData_z$rates
+        filteredData_aggregation$params <- filteredData_z$params
+
+        filteredData_rate$timeseries <- filteredData_z$timeseries
+        filteredData_rate$params <- filteredData_z$params
+      },
+      priority = 997
+    ) # End observeEvent for z
 
     ## Filter based on the media ##########################
-    observeEvent(input$media, {
-      # Filter the data based on the selected media
-      if (is.null(input$media) || length(input$media) != 1) {
-        return()
-      }
-
-      # Find the new timeseries rows based on the selected media
-      filteredData_media$timeseries <- filteredData_z$timeseries[
-        filteredData_z$timeseries$media_id == input$media,
-      ]
-
-      filteredData_media$aggregation_types <- filteredData_z$aggregation_types[
-        filteredData_z$aggregation_types$aggregation_type_id %in%
-          filteredData_media$timeseries$aggregation_type_id,
-      ]
-      filteredData_media$rates <- filteredData_z$rates[
-        filteredData_z$rates$seconds %in%
-          filteredData_media$timeseries$record_rate,
-      ]
-      filteredData_media$params <- filteredData_z$params[
-        filteredData_z$params$parameter_id %in%
-          filteredData_media$timeseries$parameter_id,
-      ]
-      filteredData_media$range <- calc_range(filteredData_media$timeseries)
-
-      # Update the aggregation, rate, and param selectizeInputs with what's left in filteredData_media.
-      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
-      tmp.choices <- stats::setNames(
-        filteredData_media$aggregation_types$aggregation_type_id,
-        filteredData_media$aggregation_types[, tr(
-          "aggregation_type_col",
-          language$language
-        )]
-      )
-      if (!is.null(input$aggregation)) {
-        tmp.selected <- if (input$aggregation %in% tmp.choices) {
-          input$aggregation
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
+    observeEvent(
+      input$media,
+      {
+        # Filter the data based on the selected media
+        if (is.null(input$media) || length(input$media) != 1) {
+          return()
         }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "aggregation",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
 
-      tmp.choices <- stats::setNames(
-        filteredData_media$rates$seconds,
-        filteredData_media$rates[, "period"]
-      )
-      if (!is.null(input$rate)) {
-        tmp.selected <- if (input$rate %in% tmp.choices) {
-          input$rate
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
-        }
-      }
-      updateSelectizeInput(
-        session,
-        "rate",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        # Find the new timeseries rows based on the selected media
+        filteredData_media$timeseries <- filteredData_z$timeseries[
+          filteredData_z$timeseries$media_id == input$media,
+        ]
 
-      tmp.choices <- stats::setNames(
-        filteredData_media$params$parameter_id,
-        filteredData_media$params[, tr("param_name_col", language$language)]
-      )
-      if (!is.null(input$param)) {
-        tmp.selected <- if (input$param %in% tmp.choices) {
-          input$param
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
+        filteredData_media$aggregation_types <- filteredData_z$aggregation_types[
+          filteredData_z$aggregation_types$aggregation_type_id %in%
+            filteredData_media$timeseries$aggregation_type_id,
+        ]
+        filteredData_media$rates <- filteredData_z$rates[
+          filteredData_z$rates$seconds %in%
+            filteredData_media$timeseries$record_rate,
+        ]
+        filteredData_media$params <- filteredData_z$params[
+          filteredData_z$params$parameter_id %in%
+            filteredData_media$timeseries$parameter_id,
+        ]
+        filteredData_media$range <- calc_range(filteredData_media$timeseries)
+
+        # Update the aggregation, rate, and param selectizeInputs with what's left in filteredData_media.
+        # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+        tmp.choices <- stats::setNames(
+          filteredData_media$aggregation_types$aggregation_type_id,
+          filteredData_media$aggregation_types[, tr(
+            "aggregation_type_col",
+            language$language
+          )]
+        )
+        if (!is.null(input$aggregation)) {
+          tmp.selected <- if (input$aggregation %in% tmp.choices) {
+            input$aggregation
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         } else {
-          character(0)
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
+        updateSelectizeInput(
+          session,
+          "aggregation",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
+
+        tmp.choices <- stats::setNames(
+          filteredData_media$rates$seconds,
+          filteredData_media$rates[, "period"]
+        )
+        if (!is.null(input$rate)) {
+          tmp.selected <- if (input$rate %in% tmp.choices) {
+            input$rate
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         } else {
-          character(0)
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         }
-      }
-      updateSelectizeInput(
-        session,
-        "param",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        updateSelectizeInput(
+          session,
+          "rate",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
 
-      earliest <- filteredData_media$range$max_date - 366
-      if (earliest < filteredData_media$range$min_date) {
-        earliest <- filteredData_media$range$min_date
-      }
+        tmp.choices <- stats::setNames(
+          filteredData_media$params$parameter_id,
+          filteredData_media$params[, tr("param_name_col", language$language)]
+        )
+        if (!is.null(input$param)) {
+          tmp.selected <- if (input$param %in% tmp.choices) {
+            input$param
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        } else {
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
+        }
+        updateSelectizeInput(
+          session,
+          "param",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
 
-      possible_years <- seq(
-        as.numeric(substr(filteredData_media$range$min_date, 1, 4)),
-        as.numeric(substr(filteredData_media$range$max_date, 1, 4))
-      )
-      updateSelectizeInput(
-        session,
-        "years",
-        choices = possible_years,
-        selected = max(possible_years)
-      )
+        earliest <- filteredData_media$range$max_date - 366
+        if (earliest < filteredData_media$range$min_date) {
+          earliest <- filteredData_media$range$min_date
+        }
 
-      if (input$plot_type == "over") {
-        if (!is.null(input$param) && length(input$param) == 1) {
-          if (input$param %in% c(values$swe, values$snow_depth)) {
-            updateDateRangeInput(
-              session,
-              "date_range",
-              min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-              max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-              start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-              end = paste0(lubridate::year(Sys.Date()), "-06-01")
-            )
+        possible_years <- seq(
+          as.numeric(substr(filteredData_media$range$min_date, 1, 4)),
+          as.numeric(substr(filteredData_media$range$max_date, 1, 4))
+        )
+        updateSelectizeInput(
+          session,
+          "years",
+          choices = possible_years,
+          selected = max(possible_years)
+        )
+
+        if (input$plot_type == "over") {
+          if (!is.null(input$param) && length(input$param) == 1) {
+            if (input$param %in% c(values$swe, values$snow_depth)) {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-06-01")
+              )
+            } else {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-12-31")
+              )
+            }
           } else {
             updateDateRangeInput(
               session,
@@ -1554,143 +1536,148 @@ contPlot <- function(id, language, windowDims, inputs) {
               end = paste0(lubridate::year(Sys.Date()), "-12-31")
             )
           }
-        } else {
+        } else if (input$plot_type == "ts") {
           updateDateRangeInput(
             session,
             "date_range",
-            min = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-            start = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            end = paste0(lubridate::year(Sys.Date()), "-12-31")
+            start = earliest,
+            end = as.Date(filteredData_media$range$max_date),
+            min = as.Date(filteredData_media$range$min_date),
+            max = as.Date(filteredData_media$range$max_date)
           )
         }
-      } else if (input$plot_type == "ts") {
-        updateDateRangeInput(
-          session,
-          "date_range",
-          start = earliest,
-          end = as.Date(filteredData_media$range$max_date),
-          min = as.Date(filteredData_media$range$min_date),
-          max = as.Date(filteredData_media$range$max_date)
-        )
-      }
 
-      filteredData_aggregation$timeseries <- filteredData_media$timeseries
-      filteredData_aggregation$rates <- filteredData_media$rates
-      filteredData_aggregation$params <- filteredData_media$params
+        filteredData_aggregation$timeseries <- filteredData_media$timeseries
+        filteredData_aggregation$rates <- filteredData_media$rates
+        filteredData_aggregation$params <- filteredData_media$params
 
-      filteredData_rate$timeseries <- filteredData_media$timeseries
-      filteredData_rate$params <- filteredData_media$params
-    })
+        filteredData_rate$timeseries <- filteredData_media$timeseries
+        filteredData_rate$params <- filteredData_media$params
+      },
+      priority = 996
+    ) # End observeEvent for media
 
     ## Filter based on the aggregation type ##########################
-    observeEvent(input$aggregation, {
-      # Filter the data based on the selected aggregation type
-      if (is.null(input$aggregation) || length(input$aggregation) != 1) {
-        return()
-      }
-
-      # Find the new timeseries rows based on the selected aggregation type
-      filteredData_aggregation$timeseries <- filteredData_media$timeseries[
-        filteredData_media$timeseries$aggregation_type_id == input$aggregation,
-      ]
-
-      filteredData_aggregation$rates <- filteredData_media$rates[
-        filteredData_media$rates$seconds %in%
-          filteredData_aggregation$timeseries$record_rate,
-      ]
-      filteredData_aggregation$params <- filteredData_media$params[
-        filteredData_media$params$parameter_id %in%
-          filteredData_aggregation$timeseries$parameter_id,
-      ]
-      filteredData_aggregation$range <- calc_range(
-        filteredData_aggregation$timeseries
-      )
-
-      # Update the rate and param selectizeInputs with what's left in filteredData_aggregation.
-      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
-      tmp.choices <- stats::setNames(
-        filteredData_aggregation$rates$seconds,
-        filteredData_aggregation$rates[, "period"]
-      )
-      if (!is.null(input$rate)) {
-        tmp.selected <- if (input$rate %in% tmp.choices) {
-          input$rate
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
+    observeEvent(
+      input$aggregation,
+      {
+        # Filter the data based on the selected aggregation type
+        if (is.null(input$aggregation) || length(input$aggregation) != 1) {
+          return()
         }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
+
+        # Find the new timeseries rows based on the selected aggregation type
+        filteredData_aggregation$timeseries <- filteredData_media$timeseries[
+          filteredData_media$timeseries$aggregation_type_id ==
+            input$aggregation,
+        ]
+
+        filteredData_aggregation$rates <- filteredData_media$rates[
+          filteredData_media$rates$seconds %in%
+            filteredData_aggregation$timeseries$record_rate,
+        ]
+        filteredData_aggregation$params <- filteredData_media$params[
+          filteredData_media$params$parameter_id %in%
+            filteredData_aggregation$timeseries$parameter_id,
+        ]
+        filteredData_aggregation$range <- calc_range(
+          filteredData_aggregation$timeseries
+        )
+
+        # Update the rate and param selectizeInputs with what's left in filteredData_aggregation.
+        # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+        tmp.choices <- stats::setNames(
+          filteredData_aggregation$rates$seconds,
+          filteredData_aggregation$rates[, "period"]
+        )
+        if (!is.null(input$rate)) {
+          tmp.selected <- if (input$rate %in% tmp.choices) {
+            input$rate
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         } else {
-          character(0)
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         }
-      }
-      updateSelectizeInput(
-        session,
-        "rate",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        updateSelectizeInput(
+          session,
+          "rate",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
 
-      tmp.choices <- stats::setNames(
-        filteredData_aggregation$params$parameter_id,
-        filteredData_aggregation$params[, tr(
-          "param_name_col",
-          language$language
-        )]
-      )
-      if (!is.null(input$param)) {
-        tmp.selected <- if (input$param %in% tmp.choices) {
-          input$param
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
+        tmp.choices <- stats::setNames(
+          filteredData_aggregation$params$parameter_id,
+          filteredData_aggregation$params[, tr(
+            "param_name_col",
+            language$language
+          )]
+        )
+        if (!is.null(input$param)) {
+          tmp.selected <- if (input$param %in% tmp.choices) {
+            input$param
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         } else {
-          character(0)
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
+        updateSelectizeInput(
+          session,
+          "param",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
+
+        earliest <- filteredData_aggregation$range$max_date - 366
+        if (earliest < filteredData_aggregation$range$min_date) {
+          earliest <- filteredData_aggregation$range$min_date
         }
-      }
-      updateSelectizeInput(
-        session,
-        "param",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
 
-      earliest <- filteredData_aggregation$range$max_date - 366
-      if (earliest < filteredData_aggregation$range$min_date) {
-        earliest <- filteredData_aggregation$range$min_date
-      }
+        possible_years <- seq(
+          as.numeric(substr(filteredData_aggregation$range$min_date, 1, 4)),
+          as.numeric(substr(filteredData_aggregation$range$max_date, 1, 4))
+        )
+        updateSelectizeInput(
+          session,
+          "years",
+          choices = possible_years,
+          selected = max(possible_years)
+        )
 
-      possible_years <- seq(
-        as.numeric(substr(filteredData_aggregation$range$min_date, 1, 4)),
-        as.numeric(substr(filteredData_aggregation$range$max_date, 1, 4))
-      )
-      updateSelectizeInput(
-        session,
-        "years",
-        choices = possible_years,
-        selected = max(possible_years)
-      )
-
-      if (input$plot_type == "over") {
-        if (!is.null(input$param) && length(input$param) == 1) {
-          if (input$param %in% c(values$swe, values$snow_depth)) {
-            updateDateRangeInput(
-              session,
-              "date_range",
-              min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-              max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-              start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-              end = paste0(lubridate::year(Sys.Date()), "-06-01")
-            )
+        if (input$plot_type == "over") {
+          if (!is.null(input$param) && length(input$param) == 1) {
+            if (input$param %in% c(values$swe, values$snow_depth)) {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-06-01")
+              )
+            } else {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-12-31")
+              )
+            }
           } else {
             updateDateRangeInput(
               session,
@@ -1701,171 +1688,179 @@ contPlot <- function(id, language, windowDims, inputs) {
               end = paste0(lubridate::year(Sys.Date()), "-12-31")
             )
           }
-        } else {
+        } else if (input$plot_type == "ts") {
           updateDateRangeInput(
             session,
             "date_range",
-            min = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-            start = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            end = paste0(lubridate::year(Sys.Date()), "-12-31")
+            start = earliest,
+            end = as.Date(filteredData_aggregation$range$max_date),
+            min = as.Date(filteredData_aggregation$range$min_date),
+            max = as.Date(filteredData_aggregation$range$max_date)
           )
         }
-      } else if (input$plot_type == "ts") {
-        updateDateRangeInput(
-          session,
-          "date_range",
-          start = earliest,
-          end = as.Date(filteredData_aggregation$range$max_date),
-          min = as.Date(filteredData_aggregation$range$min_date),
-          max = as.Date(filteredData_aggregation$range$max_date)
-        )
-      }
 
-      filteredData_rate$timeseries <- filteredData_aggregation$timeseries
-      filteredData_rate$params <- filteredData_aggregation$params
-    })
+        filteredData_rate$timeseries <- filteredData_aggregation$timeseries
+        filteredData_rate$params <- filteredData_aggregation$params
+      },
+      priority = 995
+    ) # End observeEvent for aggregation
 
     ## Filter based on the rate ##########################
-    observeEvent(input$rate, {
-      # Filter the data based on the selected rate
-      if (is.null(input$rate) || length(input$rate) != 1) {
-        return()
-      }
-
-      # Find the new timeseries rows based on the selected rate
-      filteredData_rate$timeseries <- filteredData_aggregation$timeseries[
-        filteredData_aggregation$timeseries$record_rate == input$rate,
-      ]
-
-      filteredData_rate$params <- filteredData_aggregation$params[
-        filteredData_aggregation$params$parameter_id %in%
-          filteredData_rate$timeseries$parameter_id,
-      ]
-      filteredData_rate$range <- calc_range(filteredData_rate$timeseries)
-
-      # Update the param selectizeInput with what's left in filteredData_rate.
-      # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
-      tmp.choices <- stats::setNames(
-        filteredData_rate$params$parameter_id,
-        filteredData_rate$params[, tr("param_name_col", language$language)]
-      )
-      if (!is.null(input$param)) {
-        tmp.selected <- if (input$param %in% tmp.choices) {
-          input$param
-        } else if (length(tmp.choices) == 1) {
-          tmp.choices[1]
-        } else {
-          character(0)
+    observeEvent(
+      input$rate,
+      {
+        # Filter the data based on the selected rate
+        if (is.null(input$rate) || length(input$rate) != 1) {
+          return()
         }
-      } else {
-        tmp.selected <- if (length(tmp.choices) == 1) {
-          tmp.choices[1]
+
+        # Find the new timeseries rows based on the selected rate
+        filteredData_rate$timeseries <- filteredData_aggregation$timeseries[
+          filteredData_aggregation$timeseries$record_rate == input$rate,
+        ]
+
+        filteredData_rate$params <- filteredData_aggregation$params[
+          filteredData_aggregation$params$parameter_id %in%
+            filteredData_rate$timeseries$parameter_id,
+        ]
+        filteredData_rate$range <- calc_range(filteredData_rate$timeseries)
+
+        # Update the param selectizeInput with what's left in filteredData_rate.
+        # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
+        tmp.choices <- stats::setNames(
+          filteredData_rate$params$parameter_id,
+          filteredData_rate$params[, tr("param_name_col", language$language)]
+        )
+        if (!is.null(input$param)) {
+          tmp.selected <- if (input$param %in% tmp.choices) {
+            input$param
+          } else if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         } else {
-          character(0)
+          tmp.selected <- if (length(tmp.choices) == 1) {
+            tmp.choices[1]
+          } else {
+            character(0)
+          }
         }
-      }
-      updateSelectizeInput(
-        session,
-        "param",
-        choices = tmp.choices,
-        selected = tmp.selected
-      )
+        updateSelectizeInput(
+          session,
+          "param",
+          choices = tmp.choices,
+          selected = tmp.selected
+        )
 
-      earliest <- filteredData_rate$range$max_date - 366
-      if (earliest < filteredData_rate$range$min_date) {
-        earliest <- filteredData_rate$range$min_date
-      }
+        earliest <- filteredData_rate$range$max_date - 366
+        if (earliest < filteredData_rate$range$min_date) {
+          earliest <- filteredData_rate$range$min_date
+        }
 
-      possible_years <- seq(
-        as.numeric(substr(filteredData_rate$range$min_date, 1, 4)),
-        as.numeric(substr(filteredData_rate$range$max_date, 1, 4))
-      )
-      updateSelectizeInput(
-        session,
-        "years",
-        choices = possible_years,
-        selected = max(possible_years)
-      )
+        possible_years <- seq(
+          as.numeric(substr(filteredData_rate$range$min_date, 1, 4)),
+          as.numeric(substr(filteredData_rate$range$max_date, 1, 4))
+        )
+        updateSelectizeInput(
+          session,
+          "years",
+          choices = possible_years,
+          selected = max(possible_years)
+        )
 
-      if (input$plot_type == "over") {
-        if (!is.null(input$param) && length(input$param) == 1) {
-          if (input$param %in% c(values$swe, values$snow_depth)) {
+        if (input$plot_type == "over") {
+          if (!is.null(input$param) && length(input$param) == 1) {
+            if (input$param %in% c(values$swe, values$snow_depth)) {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-06-01")
+              )
+            } else {}
+          } else {
             updateDateRangeInput(
               session,
               "date_range",
-              min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+              min = paste0(lubridate::year(Sys.Date()), "-01-01"),
               max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-              start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-              end = paste0(lubridate::year(Sys.Date()), "-06-01")
+              start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+              end = paste0(lubridate::year(Sys.Date()), "-12-31")
             )
-          } else {}
-        } else {
+          }
+        } else if (input$plot_type == "ts") {
           updateDateRangeInput(
             session,
             "date_range",
-            min = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-            start = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            end = paste0(lubridate::year(Sys.Date()), "-12-31")
+            start = earliest,
+            end = as.Date(filteredData_rate$range$max_date),
+            min = as.Date(filteredData_rate$range$min_date),
+            max = as.Date(filteredData_rate$range$max_date)
           )
         }
-      } else if (input$plot_type == "ts") {
-        updateDateRangeInput(
-          session,
-          "date_range",
-          start = earliest,
-          end = as.Date(filteredData_rate$range$max_date),
-          min = as.Date(filteredData_rate$range$min_date),
-          max = as.Date(filteredData_rate$range$max_date)
-        )
-      }
-    })
+      },
+      priority = 994
+    ) # End observeEvent for rate
 
     ## Filter based on the parameter ##########################
     # only need to update the date range and years inputs
-    observeEvent(input$param, {
-      req(filteredData_rate)
+    observeEvent(
+      input$param,
+      {
+        req(filteredData_rate)
 
-      # Filter the data based on the selected parameter
-      if (is.null(input$param) || length(input$param) != 1) {
-        return()
-      }
+        # Filter the data based on the selected parameter
+        if (is.null(input$param) || length(input$param) != 1) {
+          return()
+        }
 
-      # Find the single timeseries rows based on the selected parameter
-      tmp.timeseries <- filteredData_rate$timeseries[
-        filteredData_rate$timeseries$parameter_id == input$param,
-      ]
+        # Find the single timeseries rows based on the selected parameter
+        tmp.timeseries <- filteredData_rate$timeseries[
+          filteredData_rate$timeseries$parameter_id == input$param,
+        ]
 
-      tmp.range <- calc_range(tmp.timeseries)
+        tmp.range <- calc_range(tmp.timeseries)
 
-      earliest <- tmp.range$max_date - 366
-      if (earliest < tmp.range$min_date) {
-        earliest <- tmp.range$min_date
-      }
+        earliest <- tmp.range$max_date - 366
+        if (earliest < tmp.range$min_date) {
+          earliest <- tmp.range$min_date
+        }
 
-      possible_years <- seq(
-        as.numeric(substr(tmp.range$min_date, 1, 4)),
-        as.numeric(substr(tmp.range$max_date, 1, 4))
-      )
-      updateSelectizeInput(
-        session,
-        "years",
-        choices = possible_years,
-        selected = max(possible_years)
-      )
+        possible_years <- seq(
+          as.numeric(substr(tmp.range$min_date, 1, 4)),
+          as.numeric(substr(tmp.range$max_date, 1, 4))
+        )
+        updateSelectizeInput(
+          session,
+          "years",
+          choices = possible_years,
+          selected = max(possible_years)
+        )
 
-      if (input$plot_type == "over") {
-        if (!is.null(input$param) && length(input$param) == 1) {
-          if (input$param %in% c(values$swe, values$snow_depth)) {
-            updateDateRangeInput(
-              session,
-              "date_range",
-              min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
-              max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-              start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
-              end = paste0(lubridate::year(Sys.Date()), "-06-01")
-            )
+        if (input$plot_type == "over") {
+          if (!is.null(input$param) && length(input$param) == 1) {
+            if (input$param %in% c(values$swe, values$snow_depth)) {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()) - 1, "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()) - 1, "-09-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-06-01")
+              )
+            } else {
+              updateDateRangeInput(
+                session,
+                "date_range",
+                min = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                max = paste0(lubridate::year(Sys.Date()), "-12-31"),
+                start = paste0(lubridate::year(Sys.Date()), "-01-01"),
+                end = paste0(lubridate::year(Sys.Date()), "-12-31")
+              )
+            }
           } else {
             updateDateRangeInput(
               session,
@@ -1876,27 +1871,19 @@ contPlot <- function(id, language, windowDims, inputs) {
               end = paste0(lubridate::year(Sys.Date()), "-12-31")
             )
           }
-        } else {
+        } else if (input$plot_type == "ts") {
           updateDateRangeInput(
             session,
             "date_range",
-            min = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            max = paste0(lubridate::year(Sys.Date()), "-12-31"),
-            start = paste0(lubridate::year(Sys.Date()), "-01-01"),
-            end = paste0(lubridate::year(Sys.Date()), "-12-31")
+            start = earliest,
+            end = as.Date(tmp.range$max_date),
+            min = as.Date(tmp.range$min_date),
+            max = as.Date(tmp.range$max_date)
           )
         }
-      } else if (input$plot_type == "ts") {
-        updateDateRangeInput(
-          session,
-          "date_range",
-          start = earliest,
-          end = as.Date(tmp.range$max_date),
-          min = as.Date(tmp.range$min_date),
-          max = as.Date(tmp.range$max_date)
-        )
-      }
-    })
+      },
+      priority = 993
+    ) # End observeEvent for param
 
     # Modal dialog for extra aesthetics ########################################################################
     # Create a list with default aesthetic values
@@ -2063,11 +2050,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           ),
           multiple = TRUE,
           options = list(maxItems = 1),
-          selected = if (!is.null(moduleInputs$location_id)) {
-            moduleInputs$location_id
-          } else {
-            NULL
-          }
+          selected = input$location
         ),
         uiOutput(ns("traceNew_sub_loc_ui")), # Will be a selectizeInput for sub-locations, shows up only if needed
 
