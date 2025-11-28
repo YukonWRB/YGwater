@@ -29,6 +29,8 @@ api <- function(
   run = TRUE
 ) {
   rlang::check_installed("plumber", reason = "required to run a plumber API")
+  rlang::check_installed("memoise", reason = "required to run a plumber API")
+  rlang::check_installed("cachem", reason = "required to run a plumber API")
 
   if (!is.null(version)) {
     api_path <- system.file(
