@@ -197,6 +197,11 @@ app_ui <- function(request) {
             title = uiOutput("plotsNavContTitle"),
             value = "contPlot",
             uiOutput("plotContinuous_ui")
+          ),
+          nav_panel(
+            title = uiOutput("plotsNavContTableTitle"),
+            value = "contTablePlot",
+            uiOutput("plotContinuousTable_ui")
           )
         ),
         if (config$g_drive) {
