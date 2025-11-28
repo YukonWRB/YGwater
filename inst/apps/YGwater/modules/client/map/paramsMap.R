@@ -821,7 +821,12 @@ mapParams <- function(id, language) {
     # Create the basic map
     output$map <- leaflet::renderLeaflet({
       map <- leaflet::leaflet(
-        options = leaflet::leafletOptions(maxZoom = 15)
+        options = leaflet::leafletOptions(
+          maxZoom = 15,
+          zoomSnap = 0.5,
+          zoomDelta = 0.5,
+          zoomPxPerZoomLevel = 120
+        )
       ) %>%
         leaflet::addMapPane("basemap", zIndex = 1) %>%
         leaflet::addMapPane("overlay", zIndex = 420) %>%

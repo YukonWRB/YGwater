@@ -576,7 +576,14 @@ mapLocs <- function(id, language) {
 
     # Create the basic map ###########################################################
     output$map <- leaflet::renderLeaflet({
-      leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 15)) %>%
+      leaflet::leaflet(
+        options = leaflet::leafletOptions(
+          maxZoom = 15,
+          zoomSnap = 0.5,
+          zoomDelta = 0.5,
+          zoomPxPerZoomLevel = 120
+        )
+      ) %>%
         leaflet::addTiles() %>%
         leaflet::addProviderTiles(
           "Esri.WorldTopoMap",
