@@ -53,8 +53,12 @@ contTablePlot <- function(id, language, inputs) {
       start_val <- as.Date(moduleData$range$min_datetime)
       end_val <- as.Date(moduleData$range$max_datetime)
 
-      if (is.na(start_val)) start_val <- Sys.Date() - 365
-      if (is.na(end_val)) end_val <- Sys.Date()
+      if (is.na(start_val)) {
+        start_val <- Sys.Date() - 365
+      }
+      if (is.na(end_val)) {
+        end_val <- Sys.Date()
+      }
 
       list(start = start_val, end = end_val)
     })
@@ -62,16 +66,24 @@ contTablePlot <- function(id, language, inputs) {
     timeseries_table <- reactive({
       lang <- language$language
       loc_name_col <- if (lang == "fr") "name_fr" else "name"
-      sub_loc_col <- if (lang == "fr") "sub_location_name_fr" else "sub_location_name"
+      sub_loc_col <- if (lang == "fr") {
+        "sub_location_name_fr"
+      } else {
+        "sub_location_name"
+      }
       param_col <- if (lang == "fr") "param_name_fr" else "param_name"
       media_col <- if (lang == "fr") "media_type_fr" else "media_type"
       agg_col <- if (lang == "fr") "aggregation_type_fr" else "aggregation_type"
 
       ts <- moduleData$timeseries
-      if (!is.null(input$location_filter) && length(input$location_filter) > 0) {
+      if (
+        !is.null(input$location_filter) && length(input$location_filter) > 0
+      ) {
         ts <- ts[ts$location_id %in% as.numeric(input$location_filter), ]
       }
-      if (!is.null(input$parameter_filter) && length(input$parameter_filter) > 0) {
+      if (
+        !is.null(input$parameter_filter) && length(input$parameter_filter) > 0
+      ) {
         ts <- ts[ts$parameter_id %in% as.numeric(input$parameter_filter), ]
       }
 
@@ -80,7 +92,10 @@ contTablePlot <- function(id, language, inputs) {
         dplyr::left_join(moduleData$sub_locs, by = "sub_location_id") |>
         dplyr::left_join(moduleData$params, by = "parameter_id") |>
         dplyr::left_join(moduleData$media, by = "media_id") |>
-        dplyr::left_join(moduleData$aggregation_types, by = "aggregation_type_id") |>
+        dplyr::left_join(
+          moduleData$aggregation_types,
+          by = "aggregation_type_id"
+        ) |>
         dplyr::mutate(
           record_rate = as.character(lubridate::seconds_to_period(record_rate)),
           start_date = as.Date(start_datetime),
@@ -112,22 +127,33 @@ contTablePlot <- function(id, language, inputs) {
 
     observeEvent(input$timeseries_table_rows_selected, {
       ts <- timeseries_table()
-      if (!is.null(input$timeseries_table_rows_selected) &&
-        length(input$timeseries_table_rows_selected) == 1 &&
-        nrow(ts) >= input$timeseries_table_rows_selected) {
-        selected_timeseries(ts$timeseries_id[input$timeseries_table_rows_selected])
+      if (
+        !is.null(input$timeseries_table_rows_selected) &&
+          length(input$timeseries_table_rows_selected) == 1 &&
+          nrow(ts) >= input$timeseries_table_rows_selected
+      ) {
+        selected_timeseries(ts$timeseries_id[
+          input$timeseries_table_rows_selected
+        ])
       }
     })
 
-    observeEvent(timeseries_table(), {
-      ts <- timeseries_table()
-      if (!is.null(moduleInputs$timeseries_id) && moduleInputs$timeseries_id %in% ts$timeseries_id) {
-        selected_timeseries(moduleInputs$timeseries_id)
-        moduleInputs$timeseries_id <- NULL
-      } else if (is.null(selected_timeseries()) && nrow(ts) > 0) {
-        selected_timeseries(ts$timeseries_id[1])
-      }
-    }, ignoreNULL = FALSE)
+    observeEvent(
+      timeseries_table(),
+      {
+        ts <- timeseries_table()
+        if (
+          !is.null(moduleInputs$timeseries_id) &&
+            moduleInputs$timeseries_id %in% ts$timeseries_id
+        ) {
+          selected_timeseries(moduleInputs$timeseries_id)
+          moduleInputs$timeseries_id <- NULL
+        } else if (is.null(selected_timeseries()) && nrow(ts) > 0) {
+          selected_timeseries(ts$timeseries_id[1])
+        }
+      },
+      ignoreNULL = FALSE
+    )
 
     output$sidebar <- renderUI({
       date_range <- table_range()
@@ -136,7 +162,10 @@ contTablePlot <- function(id, language, inputs) {
         selectizeInput(
           ns("location_filter"),
           tr("loc(s)", language$language),
-          choices = stats::setNames(moduleData$locs$location_id, moduleData$locs$name),
+          choices = stats::setNames(
+            moduleData$locs$location_id,
+            moduleData$locs$name
+          ),
           selected = moduleInputs$location_id,
           multiple = TRUE,
           options = list(placeholder = tr("select_locs", language$language))
@@ -144,7 +173,10 @@ contTablePlot <- function(id, language, inputs) {
         selectizeInput(
           ns("parameter_filter"),
           tr("parameters", language$language),
-          choices = stats::setNames(moduleData$params$parameter_id, moduleData$params$param_name),
+          choices = stats::setNames(
+            moduleData$params$parameter_id,
+            moduleData$params$param_name
+          ),
           multiple = TRUE,
           options = list(placeholder = tr("select_params", language$language))
         ),
@@ -233,7 +265,10 @@ contTablePlot <- function(id, language, inputs) {
         ),
         colnames = c("timeseries_id", col_names)
       ) |>
-        DT::formatDate(columns = c("start_date", "end_date"), method = "toDateString")
+        DT::formatDate(
+          columns = c("start_date", "end_date"),
+          method = "toDateString"
+        )
     })
 
     output$timeseries_plot <- plotly::renderPlotly({
@@ -251,7 +286,7 @@ contTablePlot <- function(id, language, inputs) {
             grades = input$show_grades,
             approvals = input$show_approvals,
             qualifiers = input$show_qualifiers,
-            lang = language$language,
+            lang = language$abbrev,
             webgl = TRUE
           )
         },

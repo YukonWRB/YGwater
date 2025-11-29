@@ -481,6 +481,9 @@ app_server <- function(input, output, session) {
     output$plotsNavContTitle <- renderUI({
       tr("plots_continuous", languageSelection$language)
     })
+    output$plotsNavContTableTitle <- renderUI({
+      tr("plots_continuous_table", languageSelection$language)
+    })
 
     output$reportsNavMenuTitle <- renderUI({
       tr("reports", languageSelection$language)
@@ -1245,7 +1248,9 @@ $(document).keyup(function(event) {
     }
     if (input$navbar == "contTablePlot") {
       if (!ui_loaded$contTablePlot) {
-        output$plotContinuousTable_ui <- renderUI(contTablePlotUI("contTablePlot"))
+        output$plotContinuousTable_ui <- renderUI(contTablePlotUI(
+          "contTablePlot"
+        ))
         ui_loaded$contTablePlot <- TRUE
         contTablePlot(
           "contTablePlot",
