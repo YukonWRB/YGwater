@@ -91,68 +91,91 @@ contTablePlot <- function(id, language, inputs) {
       network_col <- if (lang == "fr") "name_fr" else "name"
       project_col <- if (lang == "fr") "name_fr" else "name"
 
-      ts <- moduleData$timeseries
+      as_dt <- function(x) data.table::as.data.table(data.table::copy(x))
+
+      ts <- as_dt(moduleData$timeseries)
       loc_filter_ids <- location_network_filter()
-      ts <- ts[ts$location_id %in% loc_filter_ids, ]
+      ts <- ts[location_id %in% loc_filter_ids]
 
-      networks <- moduleData$locations_networks |>
-        dplyr::left_join(moduleData$networks, by = "network_id") |>
-        dplyr::group_by(location_id) |>
-        dplyr::summarise(
-          networks = paste(
-            unique(stats::na.omit(.data[[network_col]])),
-            collapse = ", "
-          ),
-          .groups = "drop"
-        )
+      locs <- unique(as_dt(moduleData$locs), by = "location_id")
+      sub_locs <- unique(as_dt(moduleData$sub_locs), by = "sub_location_id")
+      params <- unique(as_dt(moduleData$params), by = "parameter_id")
+      media <- unique(as_dt(moduleData$media), by = "media_id")
+      aggregation_types <- unique(as_dt(moduleData$aggregation_types), by = "aggregation_type_id")
 
-      projects <- moduleData$locations_projects |>
-        dplyr::left_join(moduleData$projects, by = "project_id") |>
-        dplyr::group_by(location_id) |>
-        dplyr::summarise(
-          projects = paste(
-            unique(stats::na.omit(.data[[project_col]])),
-            collapse = ", "
-          ),
-          .groups = "drop"
-        )
-
-      ts |>
-        dplyr::left_join(moduleData$locs, by = "location_id") |>
-        dplyr::left_join(moduleData$sub_locs, by = "sub_location_id") |>
-        dplyr::left_join(moduleData$params, by = "parameter_id") |>
-        dplyr::left_join(moduleData$media, by = "media_id") |>
-        dplyr::left_join(
-          moduleData$aggregation_types,
-          by = "aggregation_type_id"
-        ) |>
-        dplyr::left_join(networks, by = "location_id") |>
-        dplyr::left_join(projects, by = "location_id") |>
-        dplyr::mutate(
-          record_rate = as.character(lubridate::seconds_to_period(record_rate)),
-          start_date = as.Date(start_datetime),
-          end_date = as.Date(end_datetime)
-        ) |>
-        dplyr::transmute(
-          timeseries_id,
-          location = .data[[loc_name_col]],
-          sub_location = .data[[sub_loc_col]],
-          parameter = .data[[param_col]],
-          media = .data[[media_col]],
-          aggregation = .data[[agg_col]],
-          record_rate,
-          z,
+      networks <- as_dt(moduleData$locations_networks)
+      if (nrow(networks) > 0 && nrow(moduleData$networks) > 0) {
+        networks <- merge(
           networks,
+          as_dt(moduleData$networks),
+          by = "network_id",
+          all.x = TRUE,
+          allow.cartesian = TRUE
+        )[, .(networks = paste(unique(stats::na.omit(.SD[[network_col]])), collapse = ", ")), .SDcols = network_col, by = location_id]
+      } else {
+        networks <- data.table::data.table(location_id = numeric(), networks = character())
+      }
+
+      projects <- as_dt(moduleData$locations_projects)
+      if (nrow(projects) > 0 && nrow(moduleData$projects) > 0) {
+        projects <- merge(
           projects,
-          start_date,
-          end_date
-        ) |>
-        dplyr::mutate(
-          parameter = as.factor(parameter),
-          media = as.factor(media),
-          aggregation = as.factor(aggregation)
-        ) |>
-        dplyr::arrange(location, parameter, record_rate)
+          as_dt(moduleData$projects),
+          by = "project_id",
+          all.x = TRUE,
+          allow.cartesian = TRUE
+        )[, .(projects = paste(unique(stats::na.omit(.SD[[project_col]])), collapse = ", ")), .SDcols = project_col, by = location_id]
+      } else {
+        projects <- data.table::data.table(location_id = numeric(), projects = character())
+      }
+
+      ts <- merge(ts, locs[, .(location_id, location = .SD[[loc_name_col]]), .SDcols = loc_name_col], by = "location_id", all.x = TRUE)
+      ts <- merge(ts, sub_locs[, .(sub_location_id, sub_location = .SD[[sub_loc_col]]), .SDcols = sub_loc_col], by = "sub_location_id", all.x = TRUE)
+      ts <- merge(ts, params[, .(parameter_id, parameter = .SD[[param_col]]), .SDcols = param_col], by = "parameter_id", all.x = TRUE)
+      ts <- merge(ts, media[, .(media_id, media = .SD[[media_col]]), .SDcols = media_col], by = "media_id", all.x = TRUE)
+      ts <- merge(ts, aggregation_types[, .(aggregation_type_id, aggregation = .SD[[agg_col]]), .SDcols = agg_col], by = "aggregation_type_id", all.x = TRUE)
+      ts <- merge(ts, networks, by = "location_id", all.x = TRUE)
+      ts <- merge(ts, projects, by = "location_id", all.x = TRUE)
+
+      ts[, `:=`(
+        record_rate = as.character(lubridate::seconds_to_period(record_rate)),
+        start_date = as.Date(start_datetime),
+        end_date = as.Date(end_datetime),
+        parameter = as.factor(parameter),
+        media = as.factor(media),
+        aggregation = as.factor(aggregation)
+      )]
+
+      ts <- ts[, .(
+        timeseries_id,
+        location,
+        sub_location,
+        parameter,
+        media,
+        aggregation,
+        record_rate,
+        z,
+        networks,
+        projects,
+        start_date,
+        end_date
+      )]
+
+      is_empty_col <- function(col) {
+        if (is.character(col) || is.factor(col)) {
+          all(is.na(col) | col == "")
+        } else {
+          all(is.na(col))
+        }
+      }
+
+      empty_cols <- setdiff(names(ts)[vapply(ts, is_empty_col, logical(1))], "timeseries_id")
+      if (length(empty_cols) > 0) {
+        ts[, (empty_cols) := NULL]
+      }
+
+      data.table::setorder(ts, location, parameter, record_rate)
+      ts
     })
 
     output$main <- renderUI({
@@ -311,19 +334,31 @@ contTablePlot <- function(id, language, inputs) {
         selected_row <- NULL
       }
 
-      col_names <- c(
-        tr("cont_table_col_location", language$language),
-        tr("cont_table_col_sub_location", language$language),
-        tr("cont_table_col_parameter", language$language),
-        tr("cont_table_col_media", language$language),
-        tr("cont_table_col_aggregation", language$language),
-        tr("cont_table_col_record_rate", language$language),
-        "z",
-        "Networks",
-        "Projects",
-        tr("cont_table_col_start_date", language$language),
-        tr("cont_table_col_end_date", language$language)
+      column_labels <- c(
+        timeseries_id = "timeseries_id",
+        location = tr("cont_table_col_location", language$language),
+        sub_location = tr("cont_table_col_sub_location", language$language),
+        parameter = tr("cont_table_col_parameter", language$language),
+        media = tr("cont_table_col_media", language$language),
+        aggregation = tr("cont_table_col_aggregation", language$language),
+        record_rate = tr("cont_table_col_record_rate", language$language),
+        z = "z",
+        networks = "Networks",
+        projects = "Projects",
+        start_date = tr("cont_table_col_start_date", language$language),
+        end_date = tr("cont_table_col_end_date", language$language)
       )
+
+      visible_cols <- names(ts)
+      col_names <- column_labels[visible_cols[-1]]
+
+      order_columns <- list()
+      if ("location" %in% visible_cols) {
+        order_columns[[length(order_columns) + 1]] <- list(match("location", visible_cols) - 1, "asc")
+      }
+      if ("parameter" %in% visible_cols) {
+        order_columns[[length(order_columns) + 1]] <- list(match("parameter", visible_cols) - 1, "asc")
+      }
 
       DT::datatable(
         ts,
@@ -332,7 +367,7 @@ contTablePlot <- function(id, language, inputs) {
         options = list(
           pageLength = 10,
           columnDefs = list(list(visible = FALSE, targets = 0)),
-          order = list(list(1, "asc"), list(3, "asc"))
+          order = order_columns
         ),
         colnames = c("timeseries_id", col_names),
         filter = "top"
