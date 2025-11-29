@@ -31,8 +31,8 @@ contTablePlot <- function(id, language, inputs) {
       timeseries = cached$timeseries
     )
 
-    moduleInputs <- reactiveValues(
-      timeseries_id = if (!is.null(inputs$timeseries_id)) {
+    selected_timeseries_id <- reactiveVal(
+      if (!is.null(inputs$timeseries_id)) {
         as.numeric(inputs$timeseries_id)
       } else {
         NULL
@@ -277,20 +277,31 @@ contTablePlot <- function(id, language, inputs) {
       )
     })
 
-    output$timeseries_table <- DT::renderDataTable({
+    observeEvent(timeseries_table(), {
       ts <- timeseries_table()
-      selected_id <- moduleInputs$timeseries_id
+      current <- selected_timeseries_id()
+      if (!is.null(current) && current %in% ts$timeseries_id) {
+        return()
+      }
+      if (nrow(ts) > 0) {
+        selected_timeseries_id(ts$timeseries_id[1])
+      } else {
+        selected_timeseries_id(NULL)
+      }
+    }, ignoreNULL = FALSE)
+
+    observeEvent(input$timeseries_table_rows_selected, {
+      ts <- timeseries_table()
       if (!is.null(input$timeseries_table_rows_selected) &&
         length(input$timeseries_table_rows_selected) == 1 &&
         nrow(ts) >= input$timeseries_table_rows_selected) {
-        selected_id <- ts$timeseries_id[input$timeseries_table_rows_selected]
+        selected_timeseries_id(ts$timeseries_id[input$timeseries_table_rows_selected])
       }
-      if (!is.null(selected_id) && !selected_id %in% ts$timeseries_id && nrow(ts) > 0) {
-        selected_id <- ts$timeseries_id[1]
-      }
-      if (is.null(selected_id) && nrow(ts) > 0) {
-        selected_id <- ts$timeseries_id[1]
-      }
+    })
+
+    output$timeseries_table <- DT::renderDataTable({
+      ts <- timeseries_table()
+      selected_id <- selected_timeseries_id()
       selected_row <- if (!is.null(selected_id)) {
         which(ts$timeseries_id == selected_id)
       } else {
@@ -299,7 +310,6 @@ contTablePlot <- function(id, language, inputs) {
       if (length(selected_row) == 0) {
         selected_row <- NULL
       }
-      moduleInputs$timeseries_id <- selected_id
 
       col_names <- c(
         tr("cont_table_col_location", language$language),
@@ -337,8 +347,13 @@ contTablePlot <- function(id, language, inputs) {
       ts <- timeseries_table()
       validate(need(nrow(ts) > 0, tr("no_data", language$language)))
 
-      selected_row <- input$timeseries_table_rows_selected
-      if (is.null(selected_row) || length(selected_row) == 0) {
+      selected_id <- selected_timeseries_id()
+      selected_row <- if (!is.null(selected_id)) {
+        which(ts$timeseries_id == selected_id)
+      } else {
+        NULL
+      }
+      if (length(selected_row) == 0) {
         selected_row <- 1
       }
 
