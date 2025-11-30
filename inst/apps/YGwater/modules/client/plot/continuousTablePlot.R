@@ -350,7 +350,7 @@ contTablePlot <- function(id, language, inputs) {
       )
 
       visible_cols <- names(ts)
-      col_names <- column_labels[visible_cols[-1]]
+        col_names <- unname(column_labels[visible_cols[-1]])
 
       order_columns <- list()
       if ("location" %in% visible_cols) {
@@ -360,23 +360,30 @@ contTablePlot <- function(id, language, inputs) {
         order_columns[[length(order_columns) + 1]] <- list(match("parameter", visible_cols) - 1, "asc")
       }
 
-      DT::datatable(
-        ts,
-        rownames = FALSE,
-        selection = list(mode = "single", selected = selected_row),
-        options = list(
-          pageLength = 10,
+        dt <- DT::datatable(
+          ts,
+          rownames = FALSE,
+          selection = list(mode = "single", selected = selected_row),
+          options = list(
+            pageLength = 10,
           columnDefs = list(list(visible = FALSE, targets = 0)),
           order = order_columns
-        ),
-        colnames = c("timeseries_id", col_names),
-        filter = "top"
-      ) |>
-        DT::formatDate(
-          columns = c("start_date", "end_date"),
-          method = "toDateString"
+          ),
+          colnames = c("timeseries_id", col_names),
+          filter = "top"
         )
-    })
+
+        date_cols <- intersect(c("start_date", "end_date"), names(ts))
+        if (length(date_cols) > 0) {
+          dt <- DT::formatDate(
+            dt,
+            columns = date_cols,
+            method = "toDateString"
+          )
+        }
+
+        dt
+      })
 
     plot_request <- eventReactive(input$render_plot, {
       ts <- timeseries_table()
