@@ -210,7 +210,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("loc", language$language),
           choices = stats::setNames(
             filteredData$locs$location_id,
-            filteredData$locs[, tr("generic_name_col", language$language)]
+            filteredData$locs[[tr("generic_name_col", language$language)]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1),
@@ -237,7 +237,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("media_type", language$language),
           choices = stats::setNames(
             filteredData$media$media_id,
-            filteredData$media[, tr("media_type_col", language$language)]
+            filteredData$media[[tr("media_type_col", language$language)]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1)
@@ -248,10 +248,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("aggregation_type", language$language),
           choices = stats::setNames(
             filteredData$aggregation_types$aggregation_type_id,
-            filteredData$aggregation_types[, tr(
+            filteredData$aggregation_types[[tr(
               "aggregation_type_col",
               language$language
-            )]
+            )]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1)
@@ -262,7 +262,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("nominal_rate", language$language),
           choices = stats::setNames(
             filteredData$rates$seconds,
-            filteredData$rates[, "period"]
+            filteredData$rates[["period"]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1)
@@ -272,7 +272,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("parameter", language$language),
           choices = stats::setNames(
             filteredData$params$parameter_id,
-            filteredData$params[, tr("param_name_col", language$language)]
+            filteredData$params[[tr("param_name_col", language$language)]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1)

@@ -21,6 +21,8 @@ contTablePlot <- function(id, language, inputs) {
       locs = cached$locs,
       sub_locs = cached$sub_locs,
       params = cached$params,
+      param_groups = cached$param_groups,
+      param_sub_groups = cached$param_sub_groups,
       media = cached$media,
       aggregation_types = cached$aggregation_types,
       locations_projects = cached$locations_projects,
@@ -101,7 +103,10 @@ contTablePlot <- function(id, language, inputs) {
       sub_locs <- unique(as_dt(moduleData$sub_locs), by = "sub_location_id")
       params <- unique(as_dt(moduleData$params), by = "parameter_id")
       media <- unique(as_dt(moduleData$media), by = "media_id")
-      aggregation_types <- unique(as_dt(moduleData$aggregation_types), by = "aggregation_type_id")
+      aggregation_types <- unique(
+        as_dt(moduleData$aggregation_types),
+        by = "aggregation_type_id"
+      )
 
       networks <- as_dt(moduleData$locations_networks)
       if (nrow(networks) > 0 && nrow(moduleData$networks) > 0) {
@@ -111,9 +116,21 @@ contTablePlot <- function(id, language, inputs) {
           by = "network_id",
           all.x = TRUE,
           allow.cartesian = TRUE
-        )[, .(networks = paste(unique(stats::na.omit(.SD[[network_col]])), collapse = ", ")), .SDcols = network_col, by = location_id]
+        )[,
+          .(
+            networks = paste(
+              unique(stats::na.omit(.SD[[network_col]])),
+              collapse = ", "
+            )
+          ),
+          .SDcols = network_col,
+          by = location_id
+        ]
       } else {
-        networks <- data.table::data.table(location_id = numeric(), networks = character())
+        networks <- data.table::data.table(
+          location_id = numeric(),
+          networks = character()
+        )
       }
 
       projects <- as_dt(moduleData$locations_projects)
@@ -124,16 +141,65 @@ contTablePlot <- function(id, language, inputs) {
           by = "project_id",
           all.x = TRUE,
           allow.cartesian = TRUE
-        )[, .(projects = paste(unique(stats::na.omit(.SD[[project_col]])), collapse = ", ")), .SDcols = project_col, by = location_id]
+        )[,
+          .(
+            projects = paste(
+              unique(stats::na.omit(.SD[[project_col]])),
+              collapse = ", "
+            )
+          ),
+          .SDcols = project_col,
+          by = location_id
+        ]
       } else {
-        projects <- data.table::data.table(location_id = numeric(), projects = character())
+        projects <- data.table::data.table(
+          location_id = numeric(),
+          projects = character()
+        )
       }
 
-      ts <- merge(ts, locs[, .(location_id, location = .SD[[loc_name_col]]), .SDcols = loc_name_col], by = "location_id", all.x = TRUE)
-      ts <- merge(ts, sub_locs[, .(sub_location_id, sub_location = .SD[[sub_loc_col]]), .SDcols = sub_loc_col], by = "sub_location_id", all.x = TRUE)
-      ts <- merge(ts, params[, .(parameter_id, parameter = .SD[[param_col]]), .SDcols = param_col], by = "parameter_id", all.x = TRUE)
-      ts <- merge(ts, media[, .(media_id, media = .SD[[media_col]]), .SDcols = media_col], by = "media_id", all.x = TRUE)
-      ts <- merge(ts, aggregation_types[, .(aggregation_type_id, aggregation = .SD[[agg_col]]), .SDcols = agg_col], by = "aggregation_type_id", all.x = TRUE)
+      ts <- merge(
+        ts,
+        locs[,
+          .(location_id, location = .SD[[loc_name_col]]),
+          .SDcols = loc_name_col
+        ],
+        by = "location_id",
+        all.x = TRUE
+      )
+      ts <- merge(
+        ts,
+        sub_locs[,
+          .(sub_location_id, sub_location = .SD[[sub_loc_col]]),
+          .SDcols = sub_loc_col
+        ],
+        by = "sub_location_id",
+        all.x = TRUE
+      )
+      ts <- merge(
+        ts,
+        params[,
+          .(parameter_id, parameter = .SD[[param_col]]),
+          .SDcols = param_col
+        ],
+        by = "parameter_id",
+        all.x = TRUE
+      )
+      ts <- merge(
+        ts,
+        media[, .(media_id, media = .SD[[media_col]]), .SDcols = media_col],
+        by = "media_id",
+        all.x = TRUE
+      )
+      ts <- merge(
+        ts,
+        aggregation_types[,
+          .(aggregation_type_id, aggregation = .SD[[agg_col]]),
+          .SDcols = agg_col
+        ],
+        by = "aggregation_type_id",
+        all.x = TRUE
+      )
       ts <- merge(ts, networks, by = "location_id", all.x = TRUE)
       ts <- merge(ts, projects, by = "location_id", all.x = TRUE)
 
@@ -169,7 +235,10 @@ contTablePlot <- function(id, language, inputs) {
         }
       }
 
-      empty_cols <- setdiff(names(ts)[vapply(ts, is_empty_col, logical(1))], "timeseries_id")
+      empty_cols <- setdiff(
+        names(ts)[vapply(ts, is_empty_col, logical(1))],
+        "timeseries_id"
+      )
       if (length(empty_cols) > 0) {
         ts[, (empty_cols) := NULL]
       }
@@ -180,10 +249,12 @@ contTablePlot <- function(id, language, inputs) {
 
     output$main <- renderUI({
       date_range <- table_range()
-      network_col <- if (language$language == "fr") "name_fr" else "name"
-      project_col <- if (language$language == "fr") "name_fr" else "name"
+      network_col <- tr("generic_name_col", language$language)
+      project_col <- tr("generic_name_col", language$language)
+      param_grp_col <- tr("param_group_col", language$language)
       network_choices <- if (
-        nrow(moduleData$networks) > 0 && network_col %in% names(moduleData$networks)
+        nrow(moduleData$networks) > 0 &&
+          network_col %in% names(moduleData$networks)
       ) {
         stats::setNames(
           moduleData$networks$network_id,
@@ -193,7 +264,8 @@ contTablePlot <- function(id, language, inputs) {
         NULL
       }
       project_choices <- if (
-        nrow(moduleData$projects) > 0 && project_col %in% names(moduleData$projects)
+        nrow(moduleData$projects) > 0 &&
+          project_col %in% names(moduleData$projects)
       ) {
         stats::setNames(
           moduleData$projects$project_id,
@@ -202,47 +274,73 @@ contTablePlot <- function(id, language, inputs) {
       } else {
         NULL
       }
-
+      param_grp_choices <- if (
+        nrow(moduleData$param_groups) > 0 &&
+          param_grp_col %in% names(moduleData$param_groups)
+      ) {
+        stats::setNames(
+          moduleData$param_groups$param_group_id,
+          moduleData$param_groups$param_group_name
+        )
+      } else {
+        NULL
+      }
       tagList(
-        h4(tr("cont_table_heading", language$language)),
         bslib::accordion(
-          id = ns("filters"),
+          id = ns("accordion_1"),
+          open = c(ns("filters_panel"), ns("table_panel")),
           bslib::accordion_panel(
-            "Filters",
+            title = tr("filters", language$language),
+            value = ns("filters_panel"),
             fluidRow(
               column(
-                width = 6,
+                width = 4,
                 selectizeInput(
                   ns("network_filter"),
-                  label = "Networks",
+                  label = tr("networks", language$language),
                   choices = network_choices,
                   multiple = TRUE,
-                  options = list(placeholder = "Select network(s)")
+                  options = list(
+                    placeholder = tr("select_network", language$language)
+                  )
                 )
               ),
               column(
-                width = 6,
+                width = 4,
                 selectizeInput(
                   ns("project_filter"),
-                  label = "Projects",
+                  label = tr("projects", language$language),
                   choices = project_choices,
                   multiple = TRUE,
-                  options = list(placeholder = "Select project(s)")
+                  options = list(
+                    placeholder = tr("select_project", language$language)
+                  )
+                )
+              ),
+              column(
+                width = 4,
+                selectizeInput(
+                  ns("param_grp_filter"),
+                  label = tr("param_groups", language$language),
+                  choices = param_grp_choices,
+                  multiple = TRUE,
+                  options = list(
+                    placeholder = tr("select_param_group", language$language)
+                  )
                 )
               )
             )
           ),
           bslib::accordion_panel(
-            "Database",
+            title = tr("cont_table_heading", language$language),
+            value = ns("table_panel"),
             div(
-              class = "mb-3",
               DT::dataTableOutput(ns("timeseries_table"))
             )
           )
         ),
         h4(tr("cont_table_plot_heading", language$language)),
         bslib::card(
-          class = "mb-3",
           bslib::card_body(
             fluidRow(
               column(
@@ -300,25 +398,33 @@ contTablePlot <- function(id, language, inputs) {
       )
     })
 
-    observeEvent(timeseries_table(), {
-      ts <- timeseries_table()
-      current <- selected_timeseries_id()
-      if (!is.null(current) && current %in% ts$timeseries_id) {
-        return()
-      }
-      if (nrow(ts) > 0) {
-        selected_timeseries_id(ts$timeseries_id[1])
-      } else {
-        selected_timeseries_id(NULL)
-      }
-    }, ignoreNULL = FALSE)
+    observeEvent(
+      timeseries_table(),
+      {
+        ts <- timeseries_table()
+        current <- selected_timeseries_id()
+        if (!is.null(current) && current %in% ts$timeseries_id) {
+          return()
+        }
+        if (nrow(ts) > 0) {
+          selected_timeseries_id(ts$timeseries_id[1])
+        } else {
+          selected_timeseries_id(NULL)
+        }
+      },
+      ignoreNULL = FALSE
+    )
 
     observeEvent(input$timeseries_table_rows_selected, {
       ts <- timeseries_table()
-      if (!is.null(input$timeseries_table_rows_selected) &&
-        length(input$timeseries_table_rows_selected) == 1 &&
-        nrow(ts) >= input$timeseries_table_rows_selected) {
-        selected_timeseries_id(ts$timeseries_id[input$timeseries_table_rows_selected])
+      if (
+        !is.null(input$timeseries_table_rows_selected) &&
+          length(input$timeseries_table_rows_selected) == 1 &&
+          nrow(ts) >= input$timeseries_table_rows_selected
+      ) {
+        selected_timeseries_id(ts$timeseries_id[
+          input$timeseries_table_rows_selected
+        ])
       }
     })
 
@@ -350,44 +456,74 @@ contTablePlot <- function(id, language, inputs) {
       )
 
       visible_cols <- names(ts)
-        col_names <- unname(column_labels[visible_cols[-1]])
+      col_names <- unname(column_labels[visible_cols[-1]])
 
       order_columns <- list()
       if ("location" %in% visible_cols) {
-        order_columns[[length(order_columns) + 1]] <- list(match("location", visible_cols) - 1, "asc")
+        order_columns[[length(order_columns) + 1]] <- list(
+          match("location", visible_cols) - 1,
+          "asc"
+        )
       }
       if ("parameter" %in% visible_cols) {
-        order_columns[[length(order_columns) + 1]] <- list(match("parameter", visible_cols) - 1, "asc")
+        order_columns[[length(order_columns) + 1]] <- list(
+          match("parameter", visible_cols) - 1,
+          "asc"
+        )
       }
 
-        dt <- DT::datatable(
-          ts,
-          rownames = FALSE,
-          selection = list(mode = "single", selected = selected_row),
-          options = list(
-            pageLength = 10,
-          columnDefs = list(list(visible = FALSE, targets = 0)),
-          order = order_columns
+      dt <- DT::datatable(
+        ts,
+        rownames = FALSE,
+        selection = list(mode = "single", selected = selected_row),
+        options = list(
+          pageLength = 10,
+          columnDefs = list(list(visible = FALSE, targets = 0)), # Hide timeseries_id
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {",
+            "$(this.api().table().header()).css({",
+            "  'background-color': '#079',",
+            "  'color': '#fff',",
+            "  'font-size': '90%',",
+            # "  'font-family': 'montserrat'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
+            "});",
+            "$(this.api().table().body()).css({",
+            "  'font-size': '80%',",
+            # "  'font-family': 'nunito-sans'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
+            "});",
+            "}"
           ),
-          colnames = c("timeseries_id", col_names),
-          filter = "top"
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          ),
+          order = order_columns
+        ),
+        colnames = c("timeseries_id", col_names),
+        filter = "top"
+      )
+
+      date_cols <- intersect(c("start_date", "end_date"), names(ts))
+      if (length(date_cols) > 0) {
+        dt <- DT::formatDate(
+          dt,
+          columns = date_cols,
+          method = "toDateString"
         )
+      }
 
-        date_cols <- intersect(c("start_date", "end_date"), names(ts))
-        if (length(date_cols) > 0) {
-          dt <- DT::formatDate(
-            dt,
-            columns = date_cols,
-            method = "toDateString"
-          )
-        }
-
-        dt
-      })
+      dt
+    })
 
     plot_request <- eventReactive(input$render_plot, {
       ts <- timeseries_table()
-      validate(need(nrow(ts) > 0, tr("no_data", language$language)))
+      validate(need(nrow(ts) > 0, tr("error", language$language)))
 
       selected_id <- selected_timeseries_id()
       selected_row <- if (!is.null(selected_id)) {
