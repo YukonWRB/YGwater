@@ -4,7 +4,7 @@
 \alias{create_continuous_plot_popup}
 \title{Create base64-encoded ggplotOverlap plot for continuous stations}
 \usage{
-create_continuous_plot_popup(timeseries, year, con, station_name = NULL)
+create_continuous_plot_popup(timeseries, year, con, station_name)
 }
 \arguments{
 \item{timeseries}{data.frame with 'datetime' and station value columns}

@@ -81,16 +81,21 @@ mapSnowbullUI <- function(id) {
               ns("value_type"),
               label = NULL,
               choices = list(
-                "% of Normal" = "relative_data",
-                "Absolute (mm)" = "swe",
-                "Percentile" = "percentile"
+                "Relative to Historical Median (%)" = "relative_to_med",
+                "Snow Water Equivalent (mm)" = "absolute",
+                "Percentile of Historical Range (%)" = "percentile"
               ),
-              selected = "relative_data",
+              selected = "relative_to_med",
               inline = FALSE
             )
+          ),
+          # Collapsible text output
+          tags$details(
+            tags$summary("Show details"),
+            shiny::uiOutput(ns("selected_date"))
           )
         ),
-        width = 3
+        width = 2
       ),
       shiny::mainPanel(
         leaflet::leafletOutput(ns("map"), height = "100vh"),
@@ -148,80 +153,68 @@ mapSnowbull <- function(id, language) {
     ns <- session$ns
 
     con <- session$userData$AquaCache
-
     base_data <- load_bulletin_data(con)
 
-    viz_params <- initialize_visualization_parameters()
+    static_style_elements <- get_static_style_elements()
+    dynamic_style_elements <- get_dynamic_style_elements()
 
-    # Render UI elements ####
-    # (placeholder for now)
-    # ---- End color palette functions ----
-    # Reactive expression for selected date display
-    output$selected_date <- shiny::renderText({
+    # --- Reactive for processed data ---
+    processed_data <- shiny::reactive({
       shiny::req(input$year, input$month)
-      # Convert DOY from character to numeric
-      date_obj <- get_datetime(input$year, input$month)
-      format(date_obj, "%B %d, %Y")
-    })
-
-    # Reactive data processing based on user inputs
-
-    # Generic function to get processed data for a given year/month
-
-    processed_data <- reactive({
-      shiny::req(input$year, input$month)
-
-      result <- get_processed_data(
+      get_processed_data(
         year = input$year,
         month = input$month,
         base_data = base_data,
         shiny = TRUE
       )
-
-      return(result)
     })
 
-    output$map <- leaflet::renderLeaflet({
-      # Use Yukon boundary if available, otherwise fallback
-      if (!is.null(base_data$shapefiles$yukon)) {
-        bbox <- sf::st_bbox(base_data$shapefiles$yukon)
-      } else {
-        bbox <- c(xmin = -141, ymin = 60, xmax = -123, ymax = 69.6)
-      }
-      initial_data <- get_processed_data(
-        2025,
-        3,
-        base_data = base_data,
-        shiny = TRUE
+    # --- Reactive for map output ---
+    map_output <- shiny::reactive({
+      data <- processed_data()
+      value_col <- switch(
+        input$value_type,
+        "relative_to_med" = "relative_to_med",
+        "swe" = "data",
+        "percentile" = "percentile",
+        "relative_to_med"
+      )
+      data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_col]]
+      data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_col]]
+      data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
+      pal_domain <- c(
+        data$swe_at_basins$value_to_show,
+        data$swe_at_surveys$value_to_show,
+        data$swe_at_pillows$value_to_show
       )
 
-      value_col <- "relative_data"
-      initial_data$swe_at_basins$value_to_show <- initial_data$swe_at_basins[[
-        value_col
-      ]]
-      initial_data$swe_at_surveys$value_to_show <- initial_data$swe_at_surveys[[
-        value_col
-      ]]
-      initial_data$swe_at_pillows$value_to_show <- initial_data$swe_at_pillows[[
-        value_col
-      ]]
-      pal_domain <- c(
-        initial_data$swe_at_basins$value_to_show,
-        initial_data$swe_at_surveys$value_to_show,
-        initial_data$swe_at_pillows$value_to_show
+      legend_title <- paste0(
+        "<b>Snow Water Equivalent:</b><br>",
+        switch(
+          input$value_type,
+          "relative_to_med" = "Percent of Historical Median",
+          "swe" = "SWE (mm)",
+          "percentile" = "Percentile of Historical Range}",
+          ""
+        ),
+        "<br>",
+        month.name[as.integer(input$month)],
+        " ",
+        input$year
       )
-      swe_pal <- leaflet::colorBin(
-        palette = viz_params$basins$fillColor,
-        bins = viz_params$basins$bins,
-        domain = pal_domain,
-        na.color = "gray"
-      )
+
+      bbox <- if (!is.null(base_data$shapefiles$yukon)) {
+        sf::st_bbox(base_data$shapefiles$yukon)
+      } else {
+        c(xmin = -141, ymin = 60, xmax = -123, ymax = 69.6)
+      }
 
       leaflet::leaflet(
         options = leaflet::leafletOptions(
-          zoomDelta = viz_params$zoomDelta %||% 0.5,
-          zoomSnap = viz_params$zoomSnap %||% 0.25,
-          wheelPxPerZoomLevel = viz_params$wheelPxPerZoomLevel %||% 120
+          zoomDelta = static_style_elements$leaflet$zoomDelta %||% 0.5,
+          zoomSnap = static_style_elements$leaflet$zoomSnap %||% 0.25,
+          wheelPxPerZoomLevel = static_style_elements$leaflet$wheelPxPerZoomLevel %||%
+            120
         )
       ) %>%
         leaflet::addProviderTiles(
@@ -235,284 +228,67 @@ mapSnowbull <- function(id, language) {
           as.numeric(bbox["ymax"])
         ) %>%
         leaflet::addPolygons(
-          data = initial_data$swe_at_basins,
-          fillColor = ~ swe_pal(value_to_show),
-          color = viz_params$basins$color,
-          weight = viz_params$basins$weight,
-          opacity = viz_params$basins$opacity,
-          fillOpacity = viz_params$basins$fillOpacity,
-          label = ~ lapply(annotation, htmltools::HTML),
-          popup = ~ lapply(popup_content, htmltools::HTML),
-          popupOptions = do.call(
-            leaflet::popupOptions,
-            viz_params$basins$popupOptions
-          ),
-          group = "Basins averages"
-        ) %>%
-        leaflet::addLabelOnlyMarkers(
-          data = initial_data$swe_at_basins,
-          lng = initial_data$swe_at_basins$x_adjusted,
-          lat = initial_data$swe_at_basins$y_adjusted,
-          label = ~ lapply(
-            initial_data$swe_at_basins$annotation,
-            htmltools::HTML
-          ),
-          labelOptions = leaflet::labelOptions(
-            noHide = viz_params$basins$labelOptions$noHide %||% TRUE,
-            direction = viz_params$basins$labelOptions$direction %||% "center",
-            textOnly = viz_params$basins$labelOptions$textOnly %||% TRUE,
-            style = viz_params$basins$label
-          ),
-          group = "Basins averages"
-        ) %>%
-        {
-          if (!is.null(base_data$shapefiles$roads)) {
-            leaflet::addPolylines(
-              .,
-              data = base_data$shapefiles$roads,
-              color = viz_params$roads$color,
-              weight = viz_params$roads$weight,
-              opacity = viz_params$roads$opacity,
-              group = "Roads",
-              label = ~ lapply(as.character(feature_name), htmltools::HTML)
-            )
-          } else {
-            .
-          }
-        } %>%
-        {
-          if (!is.null(base_data$shapefiles$yukon)) {
-            leaflet::addPolygons(
-              .,
-              data = base_data$shapefiles$yukon,
-              color = viz_params$boundary$color,
-              weight = viz_params$boundary$weight,
-              fill = viz_params$boundary$fill,
-              group = "Boundary"
-            )
-          } else {
-            .
-          }
-        } %>%
-        leaflet::addCircleMarkers(
-          data = initial_data$swe_at_surveys,
-          radius = viz_params$surveys$radius,
-          color = viz_params$surveys$color,
-          fillColor = ~ swe_pal(value_to_show),
-          weight = viz_params$surveys$weight,
-          opacity = viz_params$surveys$opacity,
-          fillOpacity = viz_params$surveys$fillOpacity,
-          label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
-          popup = ~ lapply(popup_content, htmltools::HTML),
-          popupOptions = do.call(
-            leaflet::popupOptions,
-            viz_params$basins$popupOptions
-          ),
-          group = "Snow surveys (discrete)"
-        ) %>%
-        leaflet::addCircleMarkers(
-          data = initial_data$swe_at_pillows,
-          radius = viz_params$pillows$radius,
-          color = viz_params$pillows$color,
-          fillColor = ~ swe_pal(value_to_show),
-          weight = viz_params$pillows$weight,
-          opacity = viz_params$pillows$opacity,
-          fillOpacity = viz_params$pillows$fillOpacity,
-          label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
-          popup = ~ lapply(popup_content, htmltools::HTML),
-          popupOptions = do.call(
-            leaflet::popupOptions,
-            viz_params$basins$popupOptions
-          ),
-          group = "Snow pillows (continuous)"
-        ) %>%
-        {
-          if (!is.null(base_data$shapefiles$communities)) {
-            comm <- base_data$shapefiles$communities
-            . <- leaflet::addMarkers(
-              .,
-              data = comm,
-              icon = leaflet::icons(
-                iconUrl = viz_params$communities$icon,
-                iconWidth = viz_params$communities$iconWidth,
-                iconHeight = viz_params$communities$iconHeight
-              ),
-              label = ~ lapply(annotation, htmltools::HTML),
-              popup = ~ lapply(popup, htmltools::HTML),
-              popupOptions = do.call(
-                leaflet::popupOptions,
-                viz_params$basins$popupOptions
-              ),
-              group = "Communities"
-            )
-            . <- leaflet::addLabelOnlyMarkers(
-              .,
-              data = comm,
-              lng = comm$x,
-              lat = comm$y,
-              label = ~ lapply(comm$annotation, htmltools::HTML),
-              labelOptions = leaflet::labelOptions(
-                noHide = viz_params$communities$labelOptions$noHide,
-                direction = viz_params$communities$labelOptions$direction,
-                textOnly = viz_params$communities$labelOptions$textOnly,
-                style = viz_params$communities$label
-              ),
-              group = "Communities"
-            )
-            .
-          } else {
-            .
-          }
-        } %>%
-        leaflet::addLayersControl(
-          baseGroups = "Topographic",
-          overlayGroups = c(
-            "Boundary",
-            "Roads",
-            "Communities",
-            "Basins averages",
-            "Snow surveys (discrete)",
-            "Snow pillows (continuous)"
-          ),
-          options = leaflet::layersControlOptions(collapsed = FALSE)
-        ) %>%
-        leaflet::addLegend(
-          position = "bottomright",
-          pal = swe_pal,
-          values = pal_domain,
-          title = "% of Normal",
-          labFormat = leaflet::labelFormat(suffix = "%"),
-          opacity = 1
-        )
-    })
-
-    # Helper: add SWE layers (basins, surveys, pillows)
-    update_swe_layers <- function() {
-      # Use default values if input$year or input$month are NULL (initial load)
-      year <- if (!is.null(input$year)) input$year else "2025"
-      month <- if (!is.null(input$month)) input$month else "3"
-      value_type <- if (!is.null(input$value_type)) {
-        input$value_type
-      } else {
-        "relative_data"
-      }
-
-      data <- processed_data()
-      data <<- data
-
-      print(data$swe_at_pillows$percentile)
-      print(viz_params$percentile_colors)
-      print(viz_params$percentile_bins)
-      print(value_type)
-      # Select value column based on input$value_type
-      value_col <- switch(
-        value_type,
-        "relative_data" = "relative_data",
-        "swe" = "data",
-        "percentile" = "percentile",
-        "relative_data"
-      )
-
-      # Precompute a unified column so leaflet formulas can access it
-      data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_col]]
-      data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_col]]
-      data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
-
-      # Build palette domain from all layers' values
-      pal_domain <- c(
-        data$swe_at_basins$value_to_show,
-        data$swe_at_surveys$value_to_show,
-        data$swe_at_pillows$value_to_show
-      )
-
-      # Create appropriate color palette based on value type
-      swe_pal <- switch(
-        value_type,
-        "relative_data" = leaflet::colorBin(
-          palette = viz_params$relative_colors,
-          bins = viz_params$relative_bins,
-          domain = pal_domain,
-          na.color = "gray"
-        ),
-        "swe" = leaflet::colorBin(
-          palette = viz_params$absolute_colors,
-          bins = viz_params$absolute_bins,
-          domain = pal_domain,
-          na.color = "gray"
-        ),
-        "percentile" = leaflet::colorBin(
-          palette = viz_params$percentile_colors,
-          bins = viz_params$percentile_bins,
-          domain = pal_domain,
-          na.color = "gray"
-        )
-      )
-      legend_title <- switch(
-        value_type,
-        "relative_data" = "% of Normal",
-        "swe" = "SWE (mm)",
-        "percentile" = "Percentile",
-        "% of Normal"
-      )
-      legend_labFormat <- switch(
-        value_type,
-        "relative_data" = leaflet::labelFormat(suffix = "%"),
-        "swe" = leaflet::labelFormat(suffix = " mm"),
-        "percentile" = leaflet::labelFormat(suffix = "th"),
-        leaflet::labelFormat(suffix = "%")
-      )
-
-      # Add SWE layers first (so they are underneath)
-      leaflet::leafletProxy("map", session = session) %>%
-        leaflet::clearGroup("Basins averages") %>%
-        leaflet::clearGroup("Snow surveys (discrete)") %>%
-        leaflet::clearGroup("Snow pillows (continuous)") %>%
-        leaflet::clearGroup("Roads") %>%
-        leaflet::clearGroup("Boundary") %>%
-        leaflet::clearGroup("Communities") %>%
-        leaflet::addPolygons(
           data = data$swe_at_basins,
-          fillColor = ~ swe_pal(value_to_show),
-          color = viz_params$basins$color,
-          weight = viz_params$basins$weight,
-          opacity = viz_params$basins$opacity,
-          fillOpacity = viz_params$basins$fillOpacity,
+          fillColor = ~ get_state_style_elements(
+            value_to_show,
+            dynamic_style_elements[[input$value_type]]
+          ),
+          color = static_style_elements$basins$color,
+          weight = 2 * static_style_elements$basins$weight,
+          opacity = static_style_elements$basins$opacity,
+          fillOpacity = static_style_elements$basins$fillOpacity,
           label = ~ lapply(annotation, htmltools::HTML),
           popup = ~ lapply(popup_content, htmltools::HTML),
           popupOptions = leaflet::popupOptions(
-            maxWidth = viz_params$basins$popupOptions$maxWidth,
-            closeButton = viz_params$basins$popupOptions$closeButton,
-            autoPan = viz_params$basins$popupOptions$autoPan
+            maxWidth = static_style_elements$basins$popupOptions$maxWidth,
+            closeButton = static_style_elements$basins$popupOptions$closeButton,
+            autoPan = static_style_elements$basins$popupOptions$autoPan
           ),
+          group = "Basins averages"
+        ) %>%
+        leaflet::addPolygons(
+          data = data$swe_at_basins,
+          fill = FALSE,
+          color = "black",
+          weight = 0.5 * static_style_elements$basins$weight,
+          opacity = static_style_elements$basins$opacity,
+          fillOpacity = 0,
+          label = NULL,
+          popup = NULL,
           group = "Basins averages"
         ) %>%
         leaflet::addLabelOnlyMarkers(
           data = data$swe_at_basins,
           lng = data$swe_at_basins$x_adjusted,
           lat = data$swe_at_basins$y_adjusted,
-          label = ~ lapply(data$swe_at_basins$annotation, htmltools::HTML),
+          label = lapply(data$swe_at_basins$annotation, htmltools::HTML),
           labelOptions = leaflet::labelOptions(
-            noHide = viz_params$basins$labelOptions$noHide %||% TRUE,
-            direction = viz_params$basins$labelOptions$direction %||% "center",
-            textOnly = viz_params$basins$labelOptions$textOnly %||% TRUE,
-            style = viz_params$basins$label
+            noHide = static_style_elements$basins$labelOptions$noHide %||% TRUE,
+            direction = static_style_elements$basins$labelOptions$direction %||%
+              "center",
+            textOnly = static_style_elements$basins$labelOptions$textOnly %||%
+              TRUE,
+            style = static_style_elements$basins$label
           ),
           group = "Basins averages"
         ) %>%
         leaflet::addCircleMarkers(
           data = data$swe_at_surveys,
-          radius = viz_params$surveys$radius,
-          color = viz_params$surveys$color,
-          fillColor = ~ swe_pal(value_to_show),
-          weight = viz_params$surveys$weight,
-          opacity = viz_params$surveys$opacity,
-          fillOpacity = viz_params$surveys$fillOpacity,
+          radius = static_style_elements$surveys$radius,
+          color = static_style_elements$surveys$color,
+          fillColor = ~ get_state_style_elements(
+            value_to_show,
+            dynamic_style_elements[[input$value_type]]
+          ),
+          weight = static_style_elements$surveys$weight,
+          opacity = static_style_elements$surveys$opacity,
+          fillOpacity = static_style_elements$surveys$fillOpacity,
           label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
           popup = ~ lapply(popup_content, htmltools::HTML),
           popupOptions = leaflet::popupOptions(
-            maxWidth = viz_params$basins$popupOptions$maxWidth,
-            closeButton = viz_params$basins$popupOptions$closeButton,
-            autoPan = viz_params$basins$popupOptions$autoPan
+            maxWidth = static_style_elements$basins$popupOptions$maxWidth,
+            closeButton = static_style_elements$basins$popupOptions$closeButton,
+            autoPan = static_style_elements$basins$popupOptions$autoPan
           ),
           group = "Snow surveys (discrete)"
         ) %>%
@@ -521,29 +297,47 @@ mapSnowbull <- function(id, language) {
             leaflet::addPolylines(
               .,
               data = base_data$shapefiles$roads,
-              color = viz_params$roads$color,
-              weight = viz_params$roads$weight,
-              opacity = viz_params$roads$opacity,
+              color = static_style_elements$roads$color,
+              weight = static_style_elements$roads$weight,
+              opacity = static_style_elements$roads$opacity,
               group = "Roads"
             )
           } else {
             .
           }
         } %>%
+        leaflet::addMarkers(
+          data = data$swe_at_pillows,
+          icon = leaflet::icons(
+            iconUrl = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect x='2' y='2' width='12' height='12' fill='none' stroke='black' stroke-width='2'/></svg>",
+            iconWidth = 2.7 * static_style_elements$pillows$radius,
+            iconHeight = 2.7 * static_style_elements$pillows$radius
+          ),
+          label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
+          popup = ~ lapply(popup_content, htmltools::HTML),
+          popupOptions = do.call(
+            leaflet::popupOptions,
+            static_style_elements$basins$popupOptions
+          ),
+          group = "Snow pillows (continuous)"
+        ) %>%
         leaflet::addCircleMarkers(
           data = data$swe_at_pillows,
-          radius = viz_params$pillows$radius,
-          color = viz_params$pillows$color,
-          fillColor = ~ swe_pal(value_to_show),
-          weight = viz_params$pillows$weight,
-          opacity = viz_params$pillows$opacity,
-          fillOpacity = viz_params$pillows$fillOpacity,
+          radius = static_style_elements$pillows$radius,
+          color = static_style_elements$pillows$color,
+          fillColor = ~ get_state_style_elements(
+            value_to_show,
+            dynamic_style_elements[[input$value_type]]
+          ),
+          weight = static_style_elements$pillows$weight,
+          opacity = static_style_elements$pillows$opacity,
+          fillOpacity = static_style_elements$pillows$fillOpacity,
           label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
           popup = ~ lapply(popup_content, htmltools::HTML),
           popupOptions = leaflet::popupOptions(
-            maxWidth = viz_params$basins$popupOptions$maxWidth,
-            closeButton = viz_params$basins$popupOptions$closeButton,
-            autoPan = viz_params$basins$popupOptions$autoPan
+            maxWidth = static_style_elements$basins$popupOptions$maxWidth,
+            closeButton = static_style_elements$basins$popupOptions$closeButton,
+            autoPan = static_style_elements$basins$popupOptions$autoPan
           ),
           group = "Snow pillows (continuous)"
         ) %>%
@@ -552,9 +346,9 @@ mapSnowbull <- function(id, language) {
             leaflet::addPolygons(
               .,
               data = base_data$shapefiles$yukon,
-              color = viz_params$boundary$color,
-              weight = viz_params$boundary$weight,
-              fill = viz_params$boundary$fill,
+              color = static_style_elements$boundary$color,
+              weight = static_style_elements$boundary$weight,
+              fill = static_style_elements$boundary$fill,
               group = "Boundary"
             )
           } else {
@@ -562,93 +356,169 @@ mapSnowbull <- function(id, language) {
           }
         } %>%
         {
-          if (!is.null(base_data$shapefiles$communities)) {
-            . <- leaflet::addMarkers(
-              .,
-              data = base_data$shapefiles$communities,
-              icon = leaflet::icons(
-                iconUrl = viz_params$communities$icon,
-                iconWidth = viz_params$communities$iconWidth,
-                iconHeight = viz_params$communities$iconHeight
-              ),
-              group = "Communities"
-            )
-            . <- leaflet::addLabelOnlyMarkers(
-              .,
-              data = base_data$shapefiles$communities,
-              lng = base_data$shapefiles$communities$x,
-              lat = base_data$shapefiles$communities$y,
-              label = ~ lapply(annotation, htmltools::HTML),
-              labelOptions = leaflet::labelOptions(
-                noHide = viz_params$communities$labelOptions$noHide,
-                direction = viz_params$communities$labelOptions$direction,
-                textOnly = viz_params$communities$labelOptions$textOnly,
-                style = viz_params$communities$label
-              ),
-              group = "Communities"
-            )
-            .
-          } else {
-            .
-          }
+          communities_split <- split_communities(
+            base_data$shapefiles$communities
+          )
+
+          . <- leaflet::addMarkers(
+            .,
+            data = communities_split$large,
+            icon = static_style_elements$communities$icon,
+            label = ~ lapply(annotation, htmltools::HTML),
+            popup = ~ lapply(popup, htmltools::HTML),
+            popupOptions = do.call(
+              leaflet::popupOptions,
+              static_style_elements$basins$popupOptions
+            ),
+            group = c("Communities_large")
+          )
+          . <- leaflet::addLabelOnlyMarkers(
+            .,
+            data = communities_split$large,
+            lng = communities_split$large$x,
+            lat = communities_split$large$y,
+            label = ~ lapply(
+              communities_split$large$annotation,
+              htmltools::HTML
+            ),
+            labelOptions = static_style_elements$communities$labelOptions,
+            group = c("Communities_large")
+          )
+          . <- leaflet::addMarkers(
+            .,
+            data = communities_split$small,
+            icon = static_style_elements$communities$icon,
+            label = ~ lapply(annotation, htmltools::HTML),
+            popup = ~ lapply(popup, htmltools::HTML),
+            popupOptions = do.call(
+              leaflet::popupOptions,
+              static_style_elements$basins$popupOptions
+            ),
+            group = c("Communities_small")
+          )
+          . <- leaflet::addLabelOnlyMarkers(
+            .,
+            data = communities_split$small,
+            lng = communities_split$small$x,
+            lat = communities_split$small$y,
+            label = ~ lapply(
+              communities_split$small$annotation,
+              htmltools::HTML
+            ),
+            labelOptions = static_style_elements$communities$labelOptions,
+            group = c("Communities_small")
+          )
+          .
         } %>%
-        leaflet::clearControls() %>%
+        leaflet::groupOptions(
+          "Communities_large",
+          zoomLevels = seq(7, 18, 0.25)
+        ) %>%
+        leaflet::groupOptions(
+          "Communities_small",
+          zoomLevels = seq(8, 18, 0.25)
+        ) %>%
+        leaflet::addControl(
+          # here we specify a dummy HTML legend since it's much easier than the alternative.
+          # we grab some style elements from the static styles to keep it consistent, but this isn't possible for all cases
+          html = paste0(
+            "<div style='padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4; min-width: 140px;'>",
+            "<b>Locations</b><br>",
+            "<svg width='18' height='18' style='vertical-align:middle;'><circle cx='9' cy='9' r='7' fill='none' stroke='black' stroke-width='2'/></svg> ",
+            "Snow course (survey)<br>",
+            "<svg width='18' height='18' style='vertical-align:middle;'><rect x='3' y='3' width='12' height='12' fill='none' stroke='black' stroke-width='2'/><circle cx='9' cy='9' r='5' fill='none' stroke='black' stroke-width='2'/></svg> ",
+            "Snow pillow (continuous)<br>",
+            sprintf(
+              "<svg width='18' height='18' style='vertical-align:middle;'><line x1='2' y1='16' x2='16' y2='2' style='stroke:%s;stroke-width:%d'/></svg> ",
+              static_style_elements$roads$color,
+              static_style_elements$roads$weight
+            ),
+            "Roads<br>",
+            "<svg width='18' height='18' style='vertical-align:middle;'><polygon points='9,2 16,9 9,16 2,9' fill='black' stroke='white' stroke-width='2'/></svg> ",
+            "Community<br>",
+            "</div>"
+          ),
+          position = "bottomright"
+        ) %>%
         leaflet::addLegend(
           position = "bottomright",
-          pal = swe_pal,
-          values = pal_domain,
+          colors = dynamic_style_elements[[input$value_type]]$colors,
           title = legend_title,
-          labFormat = legend_labFormat,
+          labels = dynamic_style_elements[[input$value_type]]$labels,
           opacity = 1
         )
-    }
+    })
 
-    # Update map when data changes
-    observe(
-      update_swe_layers()
-    )
+    # --- Render map using reactive output ---
+    output$map <- leaflet::renderLeaflet({
+      map_output()
+    })
 
-    # Add observer for plot generation requests
-    observeEvent(input$generate_plot, {
+    # --- Observer: plot generation requests ---
+    shiny::observeEvent(input$generate_plot, {
       req(
         input$generate_plot$type,
         input$generate_plot$station_id,
         input$generate_plot$station_name
       )
-
-      plot_html <- if (input$generate_plot$type == "pillow") {
-        create_continuous_plot_popup(
-          timeseries = base_data$pillows$timeseries$data[
-            base_data$pillows$timeseries$data$datetime <=
-              as.Date(paste0(input$year, "-12-31")),
-            c("datetime", as.character(input$generate_plot$station_id))
-          ],
-          year = as.integer(input$year),
-          con = con
-        )
-      } else if (input$generate_plot$type == "survey") {
-        create_discrete_plot_popup(
-          timeseries = base_data$surveys$timeseries$data[
-            base_data$surveys$timeseries$data$datetime <=
-              as.Date(paste0(input$year, "-12-31")),
-            c("datetime", as.character(input$generate_plot$station_id))
-          ]
-        )
-      } else if (input$generate_plot$type == "basin") {
-        create_discrete_plot_popup(
-          timeseries = base_data$basins$timeseries$data[
-            base_data$basins$timeseries$data$datetime <=
-              as.Date(paste0(input$year, "-12-31")),
-            c(
-              "datetime",
-              input$generate_plot$station_id
-            )
-          ]
-        )
-      }
-
-      # Send the plot HTML back to update the popup
+      plot_html <-
+        if (input$generate_plot$type == "pillow") {
+          create_continuous_plot_popup(
+            timeseries = base_data$pillows$timeseries$data[
+              base_data$pillows$timeseries$data$datetime <=
+                as.Date(paste0(input$year, "-12-31")),
+              c("datetime", as.character(input$generate_plot$station_id))
+            ],
+            year = as.integer(input$year),
+            con = con,
+            station_name = input$generate_plot$station_name
+          )
+        } else if (input$generate_plot$type == "survey") {
+          create_discrete_plot_popup(
+            timeseries = base_data$surveys$timeseries$data[
+              base_data$surveys$timeseries$data$datetime <=
+                as.Date(paste0(input$year, "-12-31")),
+              c("datetime", as.character(input$generate_plot$station_id))
+            ],
+            station_name = input$generate_plot$station_name
+          )
+        } else if (input$generate_plot$type == "basin") {
+          create_discrete_plot_popup(
+            timeseries = base_data$basins$timeseries$data[
+              base_data$basins$timeseries$data$datetime <=
+                as.Date(paste0(input$year, "-12-31")),
+              c(
+                "datetime",
+                input$generate_plot$station_id
+              )
+            ],
+            station_name = input$generate_plot$station_name
+          )
+        }
       session$sendCustomMessage("updatePopup", list(html = plot_html))
     })
-  }) # End of moduleServer
-} # End of mapLocs function
+
+    # --- Render selected date text with details ---
+    output$selected_date <- shiny::renderText({
+      shiny::req(input$year, input$month)
+      date_obj <- get_datetime(input$year, input$month)
+      shiny::HTML(paste(
+        "<b>Snow Bulletin Date: </b>",
+        format(date_obj, "%B %d, %Y"),
+        "<br>",
+        "<b>Normals period:</b> 1991–2020<br>",
+        "<b>Data source:</b> AquaCache database<br>",
+        "<b>Basemap:</b> Esri World Imagery<br>",
+        "<br>",
+        "<i>Disclaimer:</i> Basin average estimates may differ slightly from archived bulletins.<br>",
+        "<br>",
+        "<b>Map generated on: </b>",
+        format(Sys.time(), "%B %d, %Y at %H:%M %Z"),
+        "<br>",
+        "<b>App version:</b>",
+        as.character(utils::packageVersion("YGwater")),
+        sep = ""
+      ))
+    })
+  })
+}

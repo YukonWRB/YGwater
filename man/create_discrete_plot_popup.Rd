@@ -4,10 +4,12 @@
 \alias{create_discrete_plot_popup}
 \title{Create base64-encoded plot for discrete stations}
 \usage{
-create_discrete_plot_popup(timeseries)
+create_discrete_plot_popup(timeseries, station_name)
 }
 \arguments{
 \item{timeseries}{data.frame with timeseries data formatted for plotting}
+
+\item{station_name}{Character string for station name in plot title}
 }
 \value{
 Character string containing HTML with embedded base64 image
