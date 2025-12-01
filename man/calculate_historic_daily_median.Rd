@@ -24,7 +24,7 @@ calculate_historic_daily_median(
 A list with two elements:
 \describe{
 \item{historic_median}{data.frame with historic median values for each date/station}
-\item{relative_data}{data.frame with current values as percentage of historic median}
+\item{relative_to_med}{data.frame with current values as percentage of historic median}
 }
 }
 \description{

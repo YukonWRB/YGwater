@@ -1,3 +1,10 @@
+# ============================================================================
+#
+# SWE bulletin utilities for loading data and setting up map visualizations
+# Date created: Nov 2025
+# Author: esniede
+# ===========================================================================
+
 #' Initialize visualization parameters
 #'
 #' @description
@@ -11,9 +18,141 @@
 #'
 #' @noRd
 
-initialize_visualization_parameters <- function() {
+get_static_style_elements <- function() {
+    # SVG icon for communities
+    communities_icon_svg <- "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polygon points='8,0 16,8 8,16 0,8' fill='black' stroke='white' stroke-width='2'/></svg>"
+    pillows_icon_svg <- "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polygon points='8,2 14,8 8,14 2,8' fill='blue' stroke='white' stroke-width='2'/></svg>"
+
+    static_style_elements <- list(
+        basins = list(
+            type = "polygon",
+            fillColor = "blue",
+            color = "white",
+            weight = 3,
+            opacity = 1,
+            fillOpacity = 0.7,
+            label = list(
+                color = "#222",
+                fontSize = "14px",
+                fontWeight = "bold",
+                textShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
+            ),
+            popupOptions = list(
+                maxWidth = 320,
+                closeButton = TRUE,
+                autoPan = TRUE
+            ),
+            highlightOptions = list(
+                color = "#FF6600",
+                weight = 4,
+                opacity = 1,
+                bringToFront = TRUE,
+                sendToBack = FALSE
+            )
+        ),
+        pillows = list(
+            type = "point",
+            color = "black",
+            icon = pillows_icon_svg,
+            iconWidth = 16,
+            iconHeight = 16,
+            radius = 8,
+            weight = 2,
+            opacity = 1,
+            fillOpacity = 1,
+            highlightOptions = list(
+                color = "#00FFFF",
+                weight = 5,
+                opacity = 1,
+                bringToFront = TRUE,
+                sendToBack = FALSE
+            )
+        ),
+        surveys = list(
+            type = "point",
+            color = "black",
+            radius = 8,
+            weight = 2,
+            opacity = 1,
+            fillOpacity = 1,
+            highlightOptions = list(
+                color = "#00FFFF",
+                weight = 5,
+                opacity = 1,
+                bringToFront = TRUE,
+                sendToBack = FALSE
+            )
+        ),
+        roads = list(
+            type = "line",
+            color = "#8B0000",
+            weight = 2,
+            opacity = 0.8,
+            label = list(
+                color = "#8B0000"
+            )
+        ),
+        boundary = list(
+            type = "polygon",
+            color = "#222222",
+            weight = 3,
+            fill = FALSE
+        ),
+        communities = list(
+            type = "point",
+            iconUrl = communities_icon_svg,
+            iconWidth = 16,
+            iconHeight = 16,
+            labelColor = "#222",
+            labelFontSize = "13px",
+            labelFontWeight = "bold",
+            labelFontStyle = "italic",
+            labelTextShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
+        ),
+
+        leaflet = list(),
+        zoomDelta = 0.5,
+        zoomSnap = 0.25,
+        wheelPxPerZoomLevel = 120
+    )
+
+    # create leaflet style elements to minimize redundancy
+    static_style_elements$communities$icon <- leaflet::icons(
+        iconUrl = static_style_elements$communities$iconUrl,
+        iconWidth = static_style_elements$communities$iconWidth,
+        iconHeight = static_style_elements$communities$iconHeight
+    )
+
+    static_style_elements$communities$labelOptions = leaflet::labelOptions(
+        noHide = TRUE,
+        direction = "top",
+        textOnly = TRUE,
+        style = list(
+            color = static_style_elements$communities$labelColor,
+            fontSize = static_style_elements$communities$labelFontSize,
+            fontWeight = static_style_elements$communities$labelFontWeight,
+            fontStyle = static_style_elements$communities$labelFontStyle,
+            textShadow = static_style_elements$communities$labelTextShadow
+        )
+    )
+
+    return(static_style_elements)
+}
+
+
+get_dynamic_style_elements <- function() {
+    # VALUE_COL_CHOICES = c("relative_to_med", "absolute", "percentile")
+    # if (!(value_col %in% VALUE_COL_CHOICES)) {
+    #     stop(
+    #         paste0(
+    #             "Invalid value_col specified; must be one of ",
+    #             paste(VALUE_COL_CHOICES, collapse = ", ")
+    #         )
+    #     )
+    # }
+
     # Color scheme and visualization parameters
-    # Bins represent percentage of normal SWE (relative_data values)
+    # Bins represent percentage of normal SWE (relative_to_med values)
     relative_bins <- c(-2, -1, 0, 50, 70, 90, 110, 130, 150, Inf)
     relative_colors <- c(
         "#27A62C", # Green (much below normal)
@@ -40,9 +179,6 @@ initialize_visualization_parameters <- function() {
         "#2d004b" # Very dark purple
     )
 
-    # SVG icon for communities
-    communities_icon_svg <- "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polygon points='8,0 16,8 8,16 0,8' fill='black' stroke='white' stroke-width='2'/></svg>"
-
     # Percentile bins and colors (Spectral palette, 0-100)
     percentile_bins <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
     percentile_colors <- c(
@@ -58,104 +194,91 @@ initialize_visualization_parameters <- function() {
         "#5e4fa2" # Very high (90-100)
     )
 
-    list(
-        basins = list(
-            fillColor = relative_colors,
-            bins = relative_bins,
-            color = "white",
-            weight = 3,
-            opacity = 1,
-            fillOpacity = 0.7,
-            label = list(
-                color = "#222",
-                fontSize = "14px",
-                fontWeight = "bold",
-                textShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
-            ),
-            popupOptions = list(
-                maxWidth = 320,
-                closeButton = TRUE,
-                autoPan = TRUE
-            ),
-            highlightOptions = list(
-                color = "#FF6600",
-                weight = 4,
-                opacity = 1,
-                bringToFront = TRUE,
-                sendToBack = FALSE
-            )
-        ),
-        pillows = list(
-            color = "blue",
-            radius = 8,
-            weight = 2,
-            opacity = 1,
-            fillOpacity = 1,
-            highlightOptions = list(
-                color = "#00FFFF",
-                weight = 5,
-                opacity = 1,
-                bringToFront = TRUE,
-                sendToBack = FALSE
-            )
-        ),
-        surveys = list(
-            color = "black",
-            radius = 8,
-            weight = 2,
-            opacity = 1,
-            fillOpacity = 1,
-            highlightOptions = list(
-                color = "#00FFFF",
-                weight = 5,
-                opacity = 1,
-                bringToFront = TRUE,
-                sendToBack = FALSE
-            )
-        ),
-        roads = list(
-            color = "#8B0000",
-            weight = 2,
-            opacity = 0.8,
-            label = list(
-                color = "#8B0000"
-            )
-        ),
-        boundary = list(
-            color = "#222222",
-            weight = 3,
-            fill = FALSE
-        ),
-        communities = list(
-            icon = communities_icon_svg,
-            iconWidth = 16,
-            iconHeight = 16,
-            label = list(
-                color = "#222",
-                fontSize = "13px",
-                fontWeight = "bold",
-                fontStyle = "italic",
-                textShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
-            ),
-            labelOptions = list(
-                noHide = TRUE,
-                direction = "top",
-                textOnly = TRUE
-            )
-        ),
+    # Custom legend labels for each value type
+    relative_labels = c(
+        "No snow (no record)", #"No snow present where<br>historical median is zero",
+        "Snow present (no record)", #"Snow present where<br>historical median is zero",
+        "< 50%",
+        "50 - 69%",
+        "70 - 89%",
+        "90 - 109%",
+        "110 - 129%",
+        "130 - 149%",
+        ">= 150%"
+    )
+    absolute_labels = c(
+        "0-50 mm",
+        "50-100 mm",
+        "100-150 mm",
+        "150-200 mm",
+        "200-250 mm",
+        "250-300 mm",
+        "300-400 mm",
+        "400-500 mm",
+        ">500 mm"
+    )
+    percentile_labels = c(
+        "0-10th",
+        "10-20th",
+        "20-30th",
+        "30-40th",
+        "40-50th",
+        "50-60th",
+        "60-70th",
+        "70-80th",
+        "80-90th",
+        "90-100th"
+    )
 
-        relative_bins = relative_bins,
-        relative_colors = relative_colors,
-        absolute_bins = absolute_bins,
-        absolute_colors = absolute_colors,
-        percentile_bins = percentile_bins,
-        percentile_colors = percentile_colors
+    list(
+        relative_to_med = list(
+            bins = relative_bins,
+            colors = relative_colors,
+            labels = relative_labels
+        ),
+        absolute = list(
+            bins = absolute_bins,
+            colors = absolute_colors,
+            labels = absolute_labels
+        ),
+        percentile = list(
+            bins = percentile_bins,
+            colors = percentile_colors,
+            labels = percentile_labels
+        )
     )
 }
 
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
+
+#' Create color mapping for SWE values
+#'
+#' @description
+#' Creates a color mapping for SWE values based on predefined bins and colors.
+#'
+#' @param values Numeric vector of SWE values
+#' @return Character vector of color hex codes
+#' @noRd
+
+# --- Helper function for color mapping ---
+get_state_style_elements <- function(values, style_elements) {
+    # style_elements must be a *list*, not a reactive expression
+    # If passed as a reactive, call it: style_elements <- style_elements()
+    if (is.function(style_elements)) {
+        style_elements <- style_elements()
+    }
+    cut_values <- cut(
+        values,
+        breaks = style_elements$bins,
+        include.lowest = TRUE,
+        right = FALSE
+    )
+    colors <- style_elements$colors[as.numeric(cut_values)]
+    colors[is.na(colors)] <- "gray"
+    return(colors)
+}
+
+
+# HEADING 1 ####
 
 #' Get the most recent non-missing value from a timeseries
 #'
@@ -1092,7 +1215,7 @@ load_snowcourse_factors <- function(
 #' @return A list with two elements:
 #' \describe{
 #'   \item{historic_median}{data.frame with historic median values for each date/station}
-#'   \item{relative_data}{data.frame with current values as percentage of historic median}
+#'   \item{relative_to_med}{data.frame with current values as percentage of historic median}
 #' }
 #'
 #' @description
@@ -1138,6 +1261,7 @@ calculate_historic_daily_median <- function(
         warning(
             "lookback_end not provided when using lookback_start. Defaulting to most recent historical value (current year - 1)."
         )
+        lookback_end <- as.integer(format(Sys.Date(), "%Y")) - 1
     }
 
     if (!"datetime" %in% names(ts)) {
@@ -1151,15 +1275,17 @@ calculate_historic_daily_median <- function(
         stop("lookback_start must be less than lookback_end.")
     }
 
-    if (
-        lookback_start < 1800 ||
-            lookback_end < 1800 ||
-            lookback_start > as.integer(format(Sys.Date(), "%Y")) ||
-            lookback_end > as.integer(format(Sys.Date(), "%Y"))
-    ) {
-        stop(
-            "lookback_start and lookback_end must be valid years (>= 1800 and <= current year)."
-        )
+    if (!is.null(lookback_start) && !is.null(lookback_end)) {
+        if (
+            lookback_start < 1800 ||
+                lookback_end < 1800 ||
+                lookback_start > as.integer(format(Sys.Date(), "%Y")) ||
+                lookback_end > as.integer(format(Sys.Date(), "%Y"))
+        ) {
+            stop(
+                "lookback_start and lookback_end must be valid years (>= 1800 and <= current year)."
+            )
+        }
     }
 
     # For each unique year/month, if no value exists exactly on the 1st, grab the nearest value within 5 days
@@ -1260,15 +1386,16 @@ calculate_historic_daily_median <- function(
                     if (!is.null(lookback_start)) {
                         historical_indices <- group_indices[which(
                             group_years < group_years[current_idx] &
-                                group_years >= lookback_start
+                                group_years >= lookback_start &
+                                group_years <= lookback_end
                         )]
 
-                        # if lookback_end is provided, apply that
-                        if (!is.null(lookback_end)) {
-                            historical_indices <- historical_indices[which(
-                                group_years[historical_indices] <= lookback_end
-                            )]
-                        }
+                        # # if lookback_end is provided, apply that
+                        # if (!is.null(lookback_end)) {
+                        #     historical_indices <- historical_indices[which(
+                        #         group_years[historical_indices] <= lookback_end
+                        #     )]
+                        # }
 
                         # if lookback_length is provided, apply that. Note, this is secondary to lookback_start
                     } else {
@@ -1361,7 +1488,7 @@ calculate_historic_daily_median <- function(
 
         return(list(
             historic_median = hist_df,
-            relative_data = rel_df,
+            relative_to_med = rel_df,
             percentile = perc_df
         ))
     }
@@ -1369,6 +1496,16 @@ calculate_historic_daily_median <- function(
     stop(
         "Input timeseries must contain a 'datetime' column (and either 'value' for single-station or station columns for wide format)."
     )
+}
+
+split_communities <- function(communities) {
+    # Assume input is a comma-separated string of community names
+    large_types <- c("City", "Town")
+    small_types <- c("Settlement", "Village")
+    large <- communities[communities$description %in% large_types, ]
+    small <- communities[communities$description %in% small_types, ]
+
+    list(large = large, small = small)
 }
 
 #' Extract SWE data at specific points for a given year and month
@@ -1380,7 +1517,7 @@ calculate_historic_daily_median <- function(
 #' @return data.frame subset of metadata with additional SWE value columns:
 #' \describe{
 #'   \item{swe}{Absolute SWE value in mm}
-#'   \item{relative_data}{SWE as percentage of historic median}
+#'   \item{relative_to_med}{SWE as percentage of historic median}
 #'   \item{historic_median}{Historic median SWE value for this date}
 #' }
 #'
@@ -1418,7 +1555,7 @@ get_swe_state <- function(
     stopifnot("timeseries" %in% names(data))
     stopifnot("metadata" %in% names(data))
     stopifnot(all(
-        c("data", "historic_median", "relative_data") %in%
+        c("data", "historic_median", "relative_to_med") %in%
             names(data$timeseries)
     ))
     point_source_data <- data$metadata
@@ -1446,13 +1583,13 @@ get_swe_state <- function(
         vals
     }
 
-    point_source_data$swe <- extract_at_date(
+    point_source_data$data <- extract_at_date(
         data$timeseries$data,
         key,
         target_date
     )
-    point_source_data$relative_data <- extract_at_date(
-        data$timeseries$relative_data,
+    point_source_data$relative_to_med <- extract_at_date(
+        data$timeseries$relative_to_med,
         key,
         target_date
     )
@@ -1510,15 +1647,11 @@ create_continuous_plot_popup <- function(
     timeseries,
     year,
     con,
-    station_name = NULL
+    station_name
 ) {
     # Validate timeseries structure
     if (!is.data.frame(timeseries) || ncol(timeseries) < 2) {
-        stop("Timeseries must have columns datetime and value")
-    }
-
-    if (is.null(station_name)) {
-        station_name <- names(timeseries)[2]
+        stop("Timeseries must have columns datetime and data")
     }
 
     names(timeseries) <- c("datetime", "value")
@@ -1555,11 +1688,15 @@ create_continuous_plot_popup <- function(
         }
     )
 
-    # Save the ggplotOverlap plot as a PNG tempfile with smaller dimensions
-    plot_file <- file.path(tempdir(), "plot.png")
-    #grDevices::png(plot_file, width = 800, height = 600, res = 120)
-    #print(plot)
-    #grDevices::dev.off()
+    # Save the plot as a PNG tempfile with smaller dimensions
+    plot_file <- tempfile(fileext = ".png")
+
+    # Suppress warnings during PNG creation to avoid the geom_line warning
+    suppressWarnings({
+        grDevices::png(plot_file, width = 800, height = 600, res = 120)
+        print(plot)
+        grDevices::dev.off()
+    })
 
     # Encode PNG to base64
     plot_data <- readBin(plot_file, "raw", file.info(plot_file)$size)
@@ -1582,12 +1719,13 @@ create_continuous_plot_popup <- function(
         plot_base64,
         plot_base64
     )
-    popup_html
+    return(popup_html)
 }
 
 #' Create base64-encoded plot for discrete stations
 #'
 #' @param timeseries data.frame with timeseries data formatted for plotting
+#' @param station_name Character string for station name in plot title
 #' @return Character string containing HTML with embedded base64 image
 #'
 #' @description
@@ -1608,9 +1746,8 @@ create_continuous_plot_popup <- function(
 #' popup_html <- create_discrete_plot_popup(station_ts)
 #' }
 
-create_discrete_plot_popup <- function(timeseries) {
+create_discrete_plot_popup <- function(timeseries, station_name) {
     # Clean and validate the data before plotting
-    station_name <- names(timeseries)[2]
     names(timeseries) <- c("datetime", "value")
 
     timeseries$month <- as.integer(format(timeseries$datetime, "%m"))
@@ -1639,9 +1776,9 @@ create_discrete_plot_popup <- function(timeseries) {
 
     # Suppress warnings during PNG creation to avoid the geom_line warning
     suppressWarnings({
-        #png(plot_file, width = 800, height = 600, res = 120)
-        #print(plot)
-        #dev.off()
+        grDevices::png(plot_file, width = 800, height = 600, res = 120)
+        print(plot)
+        grDevices::dev.off()
     })
 
     # Encode PNG to base64
@@ -1752,7 +1889,7 @@ load_bulletin_data <- function(
             lookback_end = 2020
         )
         continuous_data$timeseries$historic_median <- ret$historic_median
-        continuous_data$timeseries$relative_data <- ret$relative_data
+        continuous_data$timeseries$relative_to_med <- ret$relative_to_med
         continuous_data$timeseries$percentile <- ret$percentile
         base_data$pillows <- continuous_data
 
@@ -1765,7 +1902,7 @@ load_bulletin_data <- function(
         )
 
         discrete_data$timeseries$historic_median <- ret$historic_median
-        discrete_data$timeseries$relative_data <- ret$relative_data
+        discrete_data$timeseries$relative_to_med <- ret$relative_to_med
         discrete_data$timeseries$percentile <- ret$percentile
         base_data$surveys <- discrete_data
 
@@ -1845,13 +1982,14 @@ load_bulletin_data <- function(
         # Compute historic median and relative change for basins (wide format)
         ret <- calculate_historic_daily_median(
             basin_timeseries,
-            lookback_start = 1980
+            lookback_start = 1980,
+            lookback_end = 2020
         )
 
         base_data$basins$timeseries <- list(
             data = basin_timeseries,
             historic_median = ret$historic_median,
-            relative_data = ret$relative_data,
+            relative_to_med = ret$relative_to_med,
             percentile = ret$percentile
         )
     } # end load_swe
@@ -1875,7 +2013,7 @@ load_bulletin_data <- function(
         )
 
         precip_data$timeseries$historic_median <- ret$historic_median
-        precip_data$timeseries$relative_precipitation <- ret$relative_data
+        precip_data$timeseries$relative_precipitation <- ret$relative_to_med
         precip_data$timeseries$percentile <- ret$percentile
 
         base_data$precipitation <- precip_data
@@ -2087,7 +2225,9 @@ load_bulletin_data <- function(
     basin_adjustments[["Alsek"]] <- list(x = 0, y = -80)
 
     # Get basin centroids and apply adjustments
-    basin_centroids <- sf::st_centroid(base_data$basins$metadata)
+    basin_centroids <- suppressWarnings(sf::st_centroid(
+        base_data$basins$metadata
+    ))
     basin_coords <- sf::st_coordinates(basin_centroids)
     base_data$basins$metadata$x <- basin_coords[, 1]
     base_data$basins$metadata$y <- basin_coords[, 2]
@@ -2156,32 +2296,32 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
     )
 
     # Ensure all swe_at_* columns are numeric (especially percentiles)
-    swe_at_basins$swe <- as.numeric(swe_at_basins$swe)
-    swe_at_basins$relative_data <- as.numeric(swe_at_basins$relative_data)
+    swe_at_basins$data <- as.numeric(swe_at_basins$data)
+    swe_at_basins$relative_to_med <- as.numeric(swe_at_basins$relative_to_med)
     swe_at_basins$historic_median <- as.numeric(swe_at_basins$historic_median)
     swe_at_basins$percentile <- as.numeric(swe_at_basins$percentile)
 
-    swe_at_surveys$swe <- as.numeric(swe_at_surveys$swe)
-    swe_at_surveys$relative_data <- as.numeric(swe_at_surveys$relative_data)
+    swe_at_surveys$data <- as.numeric(swe_at_surveys$data)
+    swe_at_surveys$relative_to_med <- as.numeric(swe_at_surveys$relative_to_med)
     swe_at_surveys$historic_median <- as.numeric(swe_at_surveys$historic_median)
     swe_at_surveys$percentile <- as.numeric(swe_at_surveys$percentile)
 
-    swe_at_pillows$swe <- as.numeric(swe_at_pillows$swe)
-    swe_at_pillows$relative_data <- as.numeric(swe_at_pillows$relative_data)
+    swe_at_pillows$data <- as.numeric(swe_at_pillows$data)
+    swe_at_pillows$relative_to_med <- as.numeric(swe_at_pillows$relative_to_med)
     swe_at_pillows$historic_median <- as.numeric(swe_at_pillows$historic_median)
     swe_at_pillows$percentile <- as.numeric(swe_at_pillows$percentile)
 
     swe_at_basins$annotation <- paste0(
         swe_at_basins$annotation,
         "<br>(",
-        round(swe_at_basins$relative_data, 1),
+        round(swe_at_basins$relative_to_med, 0),
         "%)"
     )
 
     generate_popup_content <- function(
         type,
         swe,
-        relative_data,
+        relative_to_med,
         historic_median,
         name,
         location = NULL,
@@ -2294,8 +2434,8 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             if (!is.na(swe)) paste0(round(swe, 1), " mm") else "No data",
             "<br>",
             "<b>Percent of Median:</b> ",
-            if (!is.na(relative_data)) {
-                paste0(round(relative_data, 1), "% of normal")
+            if (!is.na(relative_to_med)) {
+                paste0(round(relative_to_med, 1), "% of normal")
             } else {
                 "No data"
             },
@@ -2321,11 +2461,11 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 
     # Fix mapply argument mismatch for popup_content
     swe_at_basins$popup_content <- mapply(
-        function(swe, relative_data, historic_median, percentile, name) {
+        function(data, relative_to_med, historic_median, percentile, name) {
             generate_popup_content(
                 "basin",
-                swe,
-                relative_data,
+                data,
+                relative_to_med,
                 historic_median,
                 name,
                 location = NULL,
@@ -2333,8 +2473,8 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
                 percentile = percentile
             )
         },
-        swe_at_basins$swe,
-        swe_at_basins$relative_data,
+        swe_at_basins$data,
+        swe_at_basins$relative_to_med,
         swe_at_basins$historic_median,
         swe_at_basins$percentile,
         swe_at_basins$name,
@@ -2343,7 +2483,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
     swe_at_surveys$popup_content <- mapply(
         function(
             swe,
-            relative_data,
+            relative_to_med,
             historic_median,
             percentile,
             name,
@@ -2353,7 +2493,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             generate_popup_content(
                 "survey",
                 swe,
-                relative_data,
+                relative_to_med,
                 historic_median,
                 name,
                 location,
@@ -2361,8 +2501,8 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
                 percentile
             )
         },
-        swe_at_surveys$swe,
-        swe_at_surveys$relative_data,
+        swe_at_surveys$data,
+        swe_at_surveys$relative_to_med,
         swe_at_surveys$historic_median,
         swe_at_surveys$percentile,
         swe_at_surveys$name,
@@ -2373,7 +2513,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
     swe_at_pillows$popup_content <- mapply(
         function(
             swe,
-            relative_data,
+            relative_to_med,
             historic_median,
             percentile,
             name,
@@ -2383,7 +2523,7 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
             generate_popup_content(
                 "pillow",
                 swe,
-                relative_data,
+                relative_to_med,
                 historic_median,
                 name,
                 location,
@@ -2391,8 +2531,8 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
                 percentile
             )
         },
-        swe_at_pillows$swe,
-        swe_at_pillows$relative_data,
+        swe_at_pillows$data,
+        swe_at_pillows$relative_to_med,
         swe_at_pillows$historic_median,
         swe_at_pillows$percentile,
         swe_at_pillows$name,
@@ -2470,16 +2610,19 @@ get_processed_data <- function(year, month, base_data, shiny = TRUE) {
 leaflet_snow_bulletin_map <- function(
     year,
     month,
-    base_data = NULL,
-    filename = NULL
+    filename = NULL,
+    base_data = NULL
 ) {
     # Load required packages
     requireNamespace("leaflet")
     requireNamespace("sf")
     requireNamespace("htmltools")
 
+    value_col <- "relative_to_med"
+
     # Define color palettes and bins
-    viz_params <- initialize_visualization_parameters()
+    static_style_elements <- get_static_style_elements()
+    dynamic_style_elements <- get_dynamic_style_elements()[[value_col]]
 
     # Load base_data if not provided
 
@@ -2501,21 +2644,23 @@ leaflet_snow_bulletin_map <- function(
         shiny = FALSE
     )
 
-    value_col <- "relative_data"
     data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_col]]
     data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_col]]
     data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
-    pal_domain <- c(
-        data$swe_at_basins$value_to_show,
-        data$swe_at_surveys$value_to_show,
-        data$swe_at_pillows$value_to_show
-    )
 
-    swe_pal <- leaflet::colorBin(
-        palette = viz_params$basins$fillColor,
-        bins = viz_params$basins$bins,
-        domain = pal_domain,
-        na.color = "gray"
+    legend_title <- paste0(
+        "<b>Snow Water Equivalent:</b><br>",
+        switch(
+            value_col,
+            "relative_to_med" = "Percent of Historical Median",
+            "swe" = "SWE (mm)",
+            "percentile" = "Percentile of Historical Range}",
+            ""
+        ),
+        "<br>",
+        month.name[as.integer(month)],
+        " ",
+        year
     )
 
     # Set default bounds to Yukon if available, otherwise use fallback
@@ -2531,13 +2676,7 @@ leaflet_snow_bulletin_map <- function(
         bbox <- c(xmin = -141, ymin = 60, xmax = -123, ymax = 69.6)
     }
 
-    m <- leaflet::leaflet(
-        options = leaflet::leafletOptions(
-            zoomDelta = 0.5,
-            zoomSnap = 0.25,
-            wheelPxPerZoomLevel = 120
-        )
-    ) %>%
+    m <- leaflet::leaflet() %>%
         leaflet::addProviderTiles(
             leaflet::providers$Esri.WorldImagery,
             group = "Topographic"
@@ -2550,16 +2689,19 @@ leaflet_snow_bulletin_map <- function(
         ) %>%
         leaflet::addPolygons(
             data = data$swe_at_basins,
-            fillColor = ~ swe_pal(value_to_show),
-            color = viz_params$basins$color,
-            weight = viz_params$basins$weight * 2,
-            opacity = viz_params$basins$opacity,
-            fillOpacity = viz_params$basins$fillOpacity,
+            fillColor = ~ get_state_style_elements(
+                value_to_show,
+                dynamic_style_elements
+            ),
+            color = static_style_elements$basins$color,
+            weight = static_style_elements$basins$weight * 2,
+            opacity = static_style_elements$basins$opacity,
+            fillOpacity = static_style_elements$basins$fillOpacity,
             label = ~ lapply(annotation, htmltools::HTML),
             popup = ~ lapply(popup_content, htmltools::HTML),
             popupOptions = do.call(
                 leaflet::popupOptions,
-                viz_params$basins$popupOptions
+                static_style_elements$basins$popupOptions
             ),
             group = "Basins averages"
         ) %>%
@@ -2567,7 +2709,7 @@ leaflet_snow_bulletin_map <- function(
             data = data$swe_at_basins,
             fillColor = "transparent",
             color = "black",
-            weight = viz_params$basins$weight * 0.5,
+            weight = static_style_elements$basins$weight * 0.5,
             opacity = 1,
             fillOpacity = 0,
             group = "Basins averages"
@@ -2576,12 +2718,12 @@ leaflet_snow_bulletin_map <- function(
             data = data$swe_at_basins,
             lng = data$swe_at_basins$x_adjusted,
             lat = data$swe_at_basins$y_adjusted,
-            label = ~ lapply(data$swe_at_basins$annotation, htmltools::HTML),
+            label = lapply(data$swe_at_basins$annotation, htmltools::HTML),
             labelOptions = leaflet::labelOptions(
                 noHide = TRUE,
                 direction = "center",
                 textOnly = TRUE,
-                style = viz_params$basins$label
+                style = static_style_elements$basins$label
             ),
             group = "Basins averages"
         ) %>%
@@ -2590,9 +2732,9 @@ leaflet_snow_bulletin_map <- function(
                 leaflet::addPolylines(
                     .,
                     data = base_data$shapefiles$roads,
-                    color = viz_params$roads$color,
-                    weight = viz_params$roads$weight,
-                    opacity = viz_params$roads$opacity,
+                    color = static_style_elements$roads$color,
+                    weight = static_style_elements$roads$weight,
+                    opacity = static_style_elements$roads$opacity,
                     group = "Roads",
                     label = ~ lapply(
                         as.character(feature_name),
@@ -2608,9 +2750,9 @@ leaflet_snow_bulletin_map <- function(
                 leaflet::addPolygons(
                     .,
                     data = base_data$shapefiles$yukon,
-                    color = viz_params$boundary$color,
-                    weight = viz_params$boundary$weight,
-                    fill = viz_params$boundary$fill,
+                    color = static_style_elements$boundary$color,
+                    weight = static_style_elements$boundary$weight,
+                    fill = static_style_elements$boundary$fill,
                     group = "Boundary"
                 )
             } else {
@@ -2619,98 +2761,157 @@ leaflet_snow_bulletin_map <- function(
         } %>%
         leaflet::addCircleMarkers(
             data = data$swe_at_surveys,
-            radius = viz_params$surveys$radius,
-            color = viz_params$surveys$color,
-            fillColor = ~ swe_pal(value_to_show),
-            weight = viz_params$surveys$weight,
-            opacity = viz_params$surveys$opacity,
-            fillOpacity = viz_params$surveys$fillOpacity,
+            radius = static_style_elements$surveys$radius,
+            color = static_style_elements$surveys$color,
+            fillColor = ~ get_state_style_elements(
+                value_to_show,
+                dynamic_style_elements
+            ),
+            weight = static_style_elements$surveys$weight,
+            opacity = static_style_elements$surveys$opacity,
+            fillOpacity = static_style_elements$surveys$fillOpacity,
             label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
             popup = ~ lapply(popup_content, htmltools::HTML),
             popupOptions = do.call(
                 leaflet::popupOptions,
-                viz_params$basins$popupOptions
+                static_style_elements$basins$popupOptions
             ),
             group = "Snow surveys (discrete)"
         ) %>%
-        leaflet::addCircleMarkers(
+        leaflet::addMarkers(
             data = data$swe_at_pillows,
-            radius = viz_params$pillows$radius,
-            color = viz_params$pillows$color,
-            fillColor = ~ swe_pal(value_to_show),
-            weight = viz_params$pillows$weight,
-            opacity = viz_params$pillows$opacity,
-            fillOpacity = viz_params$pillows$fillOpacity,
+            icon = leaflet::icons(
+                iconUrl = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect x='2' y='2' width='12' height='12' fill='none' stroke='black' stroke-width='2'/></svg>",
+                iconWidth = 2.7 * static_style_elements$pillows$radius,
+                iconHeight = 2.7 * static_style_elements$pillows$radius
+            ),
             label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
             popup = ~ lapply(popup_content, htmltools::HTML),
             popupOptions = do.call(
                 leaflet::popupOptions,
-                viz_params$basins$popupOptions
+                static_style_elements$basins$popupOptions
+            ),
+            group = "Snow pillows (continuous)"
+        ) %>%
+        leaflet::addCircleMarkers(
+            data = data$swe_at_pillows,
+            radius = static_style_elements$pillows$radius,
+            color = static_style_elements$pillows$color,
+            fillColor = ~ get_state_style_elements(
+                value_to_show,
+                dynamic_style_elements
+            ),
+            weight = static_style_elements$pillows$weight,
+            opacity = static_style_elements$pillows$opacity,
+            fillOpacity = static_style_elements$pillows$fillOpacity,
+            label = ~ lapply(paste0(name, "<br>", location), htmltools::HTML),
+            popup = ~ lapply(popup_content, htmltools::HTML),
+            popupOptions = do.call(
+                leaflet::popupOptions,
+                static_style_elements$basins$popupOptions
             ),
             group = "Snow pillows (continuous)"
         ) %>%
         {
-            if (!is.null(base_data$shapefiles$communities)) {
-                comm <- base_data$shapefiles$communities
-                . <- leaflet::addMarkers(
-                    .,
-                    data = comm,
-                    icon = leaflet::icons(
-                        iconUrl = viz_params$communities$icon,
-                        iconWidth = viz_params$communities$iconWidth,
-                        iconHeight = viz_params$communities$iconHeight
-                    ),
-                    label = ~ lapply(annotation, htmltools::HTML),
-                    popup = ~ lapply(popup, htmltools::HTML),
-                    popupOptions = do.call(
-                        leaflet::popupOptions,
-                        viz_params$basins$popupOptions
-                    ),
-                    group = "Communities"
-                )
-                . <- leaflet::addLabelOnlyMarkers(
-                    .,
-                    data = comm,
-                    lng = comm$x,
-                    lat = comm$y,
-                    label = ~ lapply(comm$annotation, htmltools::HTML),
-                    labelOptions = leaflet::labelOptions(
-                        noHide = viz_params$communities$labelOptions$noHide,
-                        direction = viz_params$communities$labelOptions$direction,
-                        textOnly = viz_params$communities$labelOptions$textOnly,
-                        style = list(
-                            color = viz_params$communities$label$color,
-                            fontSize = viz_params$communities$label$fontSize,
-                            fontWeight = viz_params$communities$label$fontWeight,
-                            fontStyle = viz_params$communities$label$fontStyle,
-                            textShadow = viz_params$communities$label$textShadow
-                        )
-                    ),
-                    group = "Communities"
-                )
-                .
-            } else {
-                .
-            }
+            communities_split <- split_communities(
+                base_data$shapefiles$communities
+            )
+
+            . <- leaflet::addMarkers(
+                .,
+                data = communities_split$large,
+                icon = static_style_elements$communities$icon,
+                label = ~ lapply(annotation, htmltools::HTML),
+                popup = ~ lapply(popup, htmltools::HTML),
+                popupOptions = do.call(
+                    leaflet::popupOptions,
+                    static_style_elements$basins$popupOptions
+                ),
+                group = c("Communities_large")
+            )
+            . <- leaflet::addLabelOnlyMarkers(
+                .,
+                data = communities_split$large,
+                lng = communities_split$large$x,
+                lat = communities_split$large$y,
+                label = ~ lapply(
+                    communities_split$large$annotation,
+                    htmltools::HTML
+                ),
+                labelOptions = static_style_elements$communities$labelOptions,
+                group = c("Communities_large")
+            )
+            . <- leaflet::addMarkers(
+                .,
+                data = communities_split$small,
+                icon = static_style_elements$communities$icon,
+                label = ~ lapply(annotation, htmltools::HTML),
+                popup = ~ lapply(popup, htmltools::HTML),
+                popupOptions = do.call(
+                    leaflet::popupOptions,
+                    static_style_elements$basins$popupOptions
+                ),
+                group = c("Communities_small")
+            )
+            . <- leaflet::addLabelOnlyMarkers(
+                .,
+                data = communities_split$small,
+                lng = communities_split$small$x,
+                lat = communities_split$small$y,
+                label = ~ lapply(
+                    communities_split$small$annotation,
+                    htmltools::HTML
+                ),
+                labelOptions = static_style_elements$communities$labelOptions,
+                group = c("Communities_small")
+            )
+            .
         } %>%
         leaflet::addLayersControl(
             baseGroups = "Topographic",
             overlayGroups = c(
-                "Boundary",
-                "Roads",
-                "Communities",
-                "Basins averages",
-                "Snow surveys (discrete)",
+                "Basins average (estimate)",
+                "Snow surveys (surveys)",
                 "Snow pillows (continuous)"
             ),
             options = leaflet::layersControlOptions(collapsed = FALSE)
         ) %>%
+        leaflet::groupOptions(
+            "Communities_large",
+            zoomLevels = 7:20
+        ) %>%
+        leaflet::groupOptions(
+            "Communities_small",
+            zoomLevels = 8:20
+        ) %>%
+        leaflet::addControl(
+            # here we specify a dummy HTML legend since it's much easier than the alternative.
+            # we grab some style elements from the static styles to keep it consistent, but this isn't possible for all cases
+            html = paste0(
+                "<div style='padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4; min-width: 140px;'>",
+                "<b>Locations</b><br>",
+                "<svg width='18' height='18' style='vertical-align:middle;'><circle cx='9' cy='9' r='7' fill='none' stroke='black' stroke-width='2'/></svg> ",
+                "Snow course (survey)<br>",
+                "<svg width='18' height='18' style='vertical-align:middle;'><rect x='3' y='3' width='12' height='12' fill='none' stroke='black' stroke-width='2'/><circle cx='9' cy='9' r='5' fill='none' stroke='black' stroke-width='2'/></svg> ",
+                "Snow pillow (continuous)<br>",
+                sprintf(
+                    "<svg width='18' height='18' style='vertical-align:middle;'><line x1='2' y1='16' x2='16' y2='2' style='stroke:%s;stroke-width:%d'/></svg> ",
+                    static_style_elements$roads$color,
+                    static_style_elements$roads$weight
+                ),
+                "Roads<br>",
+                "<svg width='18' height='18' style='vertical-align:middle;'><polygon points='9,2 16,9 9,16 2,9' fill='black' stroke='white' stroke-width='2'/></svg> ",
+                "Community<br>",
+                "</div>"
+            ),
+            position = "bottomright"
+        ) %>%
+        # Add legend for SWE colors (basin polygons)
         leaflet::addLegend(
             position = "bottomright",
-            pal = swe_pal,
-            values = pal_domain,
-            title = "% of Normal",
-            labFormat = leaflet::labelFormat(suffix = "%"),
+            colors = dynamic_style_elements$colors,
+            labels = dynamic_style_elements$labels,
+            title = legend_title,
             opacity = 1
         )
 
@@ -2730,30 +2931,6 @@ leaflet_snow_bulletin_map <- function(
         )
     }
     return(m)
-}
-
-#' Create color mapping for SWE values
-#'
-#' @description
-#' Creates a color mapping for SWE values based on predefined bins and colors.
-#'
-#' @param values Numeric vector of SWE values
-#' @return Character vector of color hex codes
-#' @noRd
-
-create_color_mapping <- function(values) {
-    viz_params <- initialize_visualization_parameters()
-    cut_values <- cut(
-        values,
-        breaks = viz_params$basins$bins,
-        include.lowest = TRUE,
-        right = FALSE
-    )
-    colors <- viz_params$basins$fggplot_snow_bulletin_mapillColor[as.numeric(
-        cut_values
-    )]
-    colors[is.na(colors)] <- "gray"
-    return(colors)
 }
 
 #' Create a static ggplot2 map for SWE basins and stations
@@ -2793,13 +2970,13 @@ create_color_mapping <- function(values) {
 ggplot_snow_bulletin_map <- function(
     year,
     month,
+    filename = NULL,
     base_data = NULL,
     width = 12,
     height = 8,
-    filename = NULL,
     dpi = 300,
     parameter_name = "swe",
-    type = "relative"
+    type = "relative_to_med"
 ) {
     # Load required packages
     requireNamespace("ggplot2")
@@ -2808,9 +2985,13 @@ ggplot_snow_bulletin_map <- function(
     requireNamespace("stats")
 
     parameter_name <- standardize_parameter_name(parameter_name)
-    type <- match.arg(type, choices = c("absolute", "relative", "percentile"))
+    type <- match.arg(
+        type,
+        choices = c("absolute", "relative_to_med", "percentile")
+    )
 
-    viz_params <- initialize_visualization_parameters()
+    dynamic_style_elements <- get_dynamic_style_elements()[[type]]
+    static_style_elements <- get_static_style_elements()
 
     # Load base_data if not provided
     if (is.null(base_data)) {
@@ -2830,31 +3011,33 @@ ggplot_snow_bulletin_map <- function(
         shiny = FALSE
     )
 
-    value_col <- "relative_data"
+    value_col <- "relative_to_med"
     data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_col]]
     data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_col]]
     ### data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
 
     # Apply colors to data
-    data$swe_at_basins$fill_color <- create_color_mapping(
-        data$swe_at_basins$value_to_show
+    data$swe_at_basins$fill_color <- get_state_style_elements(
+        data$swe_at_basins$value_to_show,
+        style_elements = dynamic_style_elements
     )
-    data$swe_at_surveys$fill_color <- create_color_mapping(
-        data$swe_at_surveys$value_to_show
+    data$swe_at_surveys$fill_color <- get_state_style_elements(
+        data$swe_at_surveys$value_to_show,
+        style_elements = dynamic_style_elements
     )
     # commenting out pillows on PNG
-    ##data$swe_at_pillows$fill_color <- create_color_mapping(
-    ##    data$swe_at_pillows$value_to_show
-    ##)
+    #data$swe_at_pillows$fill_color <- create_color_mapping(
+    #    data$swe_at_pillows$value_to_show
+    #)
 
     # Get coordinates for stations
     surveys_coords <- sf::st_coordinates(data$swe_at_surveys)
     data$swe_at_surveys$x <- surveys_coords[, 1]
     data$swe_at_surveys$y <- surveys_coords[, 2]
 
-    pillows_coords <- sf::st_coordinates(data$swe_at_pillows)
-    ##data$swe_at_pillows$x <- pillows_coords[, 1]
-    ##data$swe_at_pillows$y <- pillows_coords[, 2]
+    #pillows_coords <- sf::st_coordinates(data$swe_at_pillows)
+    #data$swe_at_pillows$x <- pillows_coords[, 1]
+    #data$swe_at_pillows$y <- pillows_coords[, 2]
 
     # Create the base plot
     p <- ggplot2::ggplot() +
@@ -2876,7 +3059,7 @@ ggplot_snow_bulletin_map <- function(
                 data = base_data$shapefiles$yukon,
                 fill = "#F5F5DC", # Beige terrain-like color
                 color = "black",
-                size = viz_params$boundary$weight * 0.25,
+                size = static_style_elements$boundary$weight * 0.25,
                 alpha = 0.5 # 50% transparent background
             )
     }
@@ -2885,10 +3068,10 @@ ggplot_snow_bulletin_map <- function(
     p <- p +
         ggplot2::geom_sf(
             data = data$swe_at_basins,
-            ggplot2::aes(fill = I(data$swe_at_basins$fill_color)),
-            color = viz_params$basins$color,
-            size = viz_params$basins$weight * 0.25,
-            alpha = viz_params$basins$fillOpacity
+            fill = data$swe_at_basins$fill_color,
+            color = static_style_elements$basins$color,
+            size = static_style_elements$basins$weight * 0.25,
+            alpha = static_style_elements$basins$fillOpacity
         )
 
     # Add Yukon boundary background (underneath everything except basins)
@@ -2896,8 +3079,8 @@ ggplot_snow_bulletin_map <- function(
         p <- p +
             ggplot2::geom_sf(
                 data = base_data$shapefiles$yukon,
-                color = viz_params$boundary$color,
-                size = viz_params$boundary$weight * 0.25
+                color = static_style_elements$boundary$color,
+                size = static_style_elements$boundary$weight * 0.25
             )
     }
 
@@ -2906,9 +3089,9 @@ ggplot_snow_bulletin_map <- function(
         p <- p +
             ggplot2::geom_sf(
                 data = base_data$shapefiles$roads,
-                color = viz_params$roads$color,
-                size = viz_params$roads$weight * 0.15,
-                alpha = viz_params$roads$opacity
+                color = static_style_elements$roads$color,
+                size = static_style_elements$roads$weight * 0.15,
+                alpha = static_style_elements$roads$opacity
             )
     }
 
@@ -2918,14 +3101,14 @@ ggplot_snow_bulletin_map <- function(
             ggplot2::geom_point(
                 data = data$swe_at_surveys,
                 ggplot2::aes(
-                    x = data$swe_at_surveys$x,
-                    y = data$swe_at_surveys$y
+                    x = .data$x,
+                    y = .data$y
                 ),
                 fill = data$swe_at_surveys$fill_color,
-                color = viz_params$surveys$color,
-                size = viz_params$surveys$radius / 2.5,
+                color = static_style_elements$surveys$color,
+                size = static_style_elements$surveys$radius / 2.5,
                 shape = 21,
-                stroke = viz_params$surveys$weight * 0.5
+                stroke = static_style_elements$surveys$weight * 0.5
             )
     }
 
@@ -2935,8 +3118,8 @@ ggplot_snow_bulletin_map <- function(
     #         ggplot2::geom_point(
     #             data = data$swe_at_pillows,
     #             ggplot2::aes(
-    #                 x = data$swe_at_pillows$x,
-    #                 y = data$swe_at_pillows$y
+    #                 x = .data$x,
+    #                 y = .data$y
     #             ),
     #             fill = data$swe_at_pillows$fill_color,
     #             color = viz_params$pillows$color,
@@ -2965,28 +3148,28 @@ ggplot_snow_bulletin_map <- function(
         p <- p +
             ggplot2::geom_point(
                 data = communities_df,
-                ggplot2::aes(x = communities_df$x, y = communities_df$y),
+                ggplot2::aes(x = .data$x, y = .data$y),
                 fill = "black",
-                size = viz_params$communities$iconWidth / 8,
+                size = static_style_elements$communities$iconWidth / 8,
                 shape = 18
             ) +
             ggplot2::geom_text(
                 data = communities_df,
                 ggplot2::aes(
-                    x = communities_df$x_adjust,
-                    y = communities_df$y_adjust,
-                    label = communities_df$annotation
+                    x = .data$x_adjust,
+                    y = .data$y_adjust,
+                    label = .data$annotation
                 ),
                 size = 2,
                 fontface = "bold.italic",
-                color = viz_params$communities$label$color,
+                color = static_style_elements$communities$labelColor,
                 vjust = -0.5,
                 hjust = 0.5,
                 family = "serif"
             )
     }
 
-    # Add basin labels using pre-calculated adjusted coordinates
+    # Add basin labels using adjusted coordinates
     basin_labels_df <- data.frame(
         x = data$swe_at_basins$x_adjusted,
         y = data$swe_at_basins$y_adjusted,
@@ -2998,14 +3181,12 @@ ggplot_snow_bulletin_map <- function(
     p <- p +
         shadowtext::geom_shadowtext(
             data = basin_labels_df,
-            ggplot2::aes(
-                x = basin_labels_df$x,
-                y = basin_labels_df$y,
-                label = basin_labels_df$annotation
-            ),
+            x = basin_labels_df$x,
+            y = basin_labels_df$y,
+            label = basin_labels_df$annotation,
             size = 2.25,
             fontface = "bold",
-            color = viz_params$basins$label$color,
+            color = static_style_elements$basins$label$color,
             bg.color = "white",
             bg.r = 0.2
         )
@@ -3027,9 +3208,11 @@ ggplot_snow_bulletin_map <- function(
         "December"
     )[as.numeric(month) + 1]
 
-    # Add colormap legend for SWE (relative_data)
+    # Add colormap legend for SWE (relative_to_med)
     # Create legend data dynamically based on actual data bins
-    bin_ranges <- viz_params$relative_bins[-length(viz_params$relative_bins)]
+    bin_ranges <- static_style_elements$relative_bins[
+        -length(static_style_elements$relative_bins)
+    ]
     bin_labels <- character(length(bin_ranges))
 
     for (i in seq_along(bin_ranges)) {
@@ -3046,12 +3229,12 @@ ggplot_snow_bulletin_map <- function(
         }
     }
 
-    swe_legend_df <- data.frame(
-        bin = seq_along(bin_ranges),
-        color = viz_params$relative_colors,
-        label = bin_labels,
-        stringsAsFactors = FALSE
-    )
+    # swe_legend_df <- data.frame(
+    #     bin = seq_along(bin_ranges),
+    #     color = static_style_elements$relative_colors,
+    #     label = bin_labels,
+    #     stringsAsFactors = FALSE
+    # )
 
     p <- p +
         ggplot2::labs(
@@ -3063,12 +3246,12 @@ ggplot_snow_bulletin_map <- function(
             subtitle = "SWE as % of Normal | Basins (polygons) | Discrete stations (black) | Continuous stations (blue)"
         ) +
         ggplot2::scale_fill_manual(
-            values = viz_params$basins$fillColor,
+            values = dynamic_style_elements$colors,
             guide = ggplot2::guide_legend(
                 title = "% of Normal",
                 override.aes = list(
-                    fill = viz_params$basins$fillColor,
-                    color = viz_params$basins$fillColor
+                    fill = dynamic_style_elements$colors,
+                    color = dynamic_style_elements$colors
                 ),
                 label.theme = ggplot2::element_text(size = 8)
             )
@@ -3101,10 +3284,6 @@ ggplot_snow_bulletin_map <- function(
         )
 
     if (!is.null(filename)) {
-        if (!grepl("\\.png$", filename, ignore.case = TRUE)) {
-            filename <- paste0(filename, ".png")
-        }
-
         cat(sprintf("Saving ggplot map to to file: %s\n", filename))
 
         ggplot2::ggsave(
@@ -3117,47 +3296,4 @@ ggplot_snow_bulletin_map <- function(
         )
     }
     return(p)
-}
-
-#' Create demo maps for snow bulletin visualization
-#'
-#' @param con DBI database connection object (optional)
-#' @return list containing both leaflet and ggplot map objects
-#' @details Demonstrates the snow bulletin mapping functionality by creating both interactive (leaflet) and static (ggplot2) maps for April and May 2025.
-#' @noRd
-
-demo_snow_bulletin_maps <- function(con = NULL) {
-    # Create database connection if not provided
-    if (is.null(con)) {
-        con <- AquaCache::AquaConnect(
-            name = "aquacache",
-            host = "10.250.12.154",
-            port = 5432,
-            user = "public_reader",
-            password = "aquacache"
-        )
-        on.exit(DBI::dbDisconnect(con))
-    }
-
-    base_data <- load_bulletin_data(con)
-
-    leaflet_map <- leaflet_snow_bulletin_map(
-        year = 2025,
-        month = 4,
-        base_data = base_data,
-        filename = "snowbul.html"
-    )
-
-    ggplot_map <- ggplot_snow_bulletin_map(
-        year = 2025,
-        month = 5,
-        base_data = base_data,
-        filename = "snowbul.png"
-    )
-
-    return(list(
-        leaflet_map = leaflet_map,
-        ggplot_map = ggplot_map,
-        base_data = base_data
-    ))
 }

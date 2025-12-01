@@ -7,13 +7,13 @@
 ggplot_snow_bulletin_map(
   year,
   month,
+  filename = NULL,
   base_data = NULL,
   width = 12,
   height = 8,
-  filename = NULL,
   dpi = 300,
   parameter_name = "swe",
-  type = "relative"
+  type = "relative_to_med"
 )
 }
 \arguments{
@@ -21,13 +21,13 @@ ggplot_snow_bulletin_map(
 
 \item{month}{Integer month (e.g., 3 for March)}
 
+\item{filename}{Optional character string for PNG output file path}
+
 \item{base_data}{Optional preloaded base_data from \code{load_bulletin_data()}, otherwise loads from default connection}
 
 \item{width}{Numeric width of the plot in inches (default: 12)}
 
 \item{height}{Numeric height of the plot in inches (default: 8)}
-
-\item{filename}{Optional character string for PNG output file path}
 
 \item{dpi}{Numeric resolution in dots per inch (default: 300)}
 
