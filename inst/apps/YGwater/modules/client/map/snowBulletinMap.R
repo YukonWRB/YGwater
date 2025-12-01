@@ -34,67 +34,7 @@ mapSnowbullUI <- function(id) {
     # Sidebar + main contentexpandLimits
     shiny::sidebarLayout(
       shiny::sidebarPanel(
-        # Controls section
-        div(
-          id = ns("controls_panel"),
-          # Year select (dropdown)
-          div(
-            style = "margin-bottom: 15px;",
-            tags$label(
-              "Year:",
-              style = "display: block; margin-bottom: 5px;"
-            ),
-            selectInput(
-              ns("year"),
-              label = NULL,
-              choices = as.character(2025:2000), # 2025 at top, down to 2000
-              selected = "2025",
-              width = "100%"
-            )
-          ),
-          # Month select
-          div(
-            style = "margin-bottom: 15px;",
-            tags$label(
-              "Month:",
-              style = "display: block; margin-bottom: 5px;"
-            ),
-            selectInput(
-              ns("month"),
-              label = NULL,
-              choices = setNames(
-                as.character(c(2, 3, 4, 5)),
-                c("February", "March", "April", "May")
-              ),
-              selected = "3",
-              width = "100%"
-            )
-          ),
-          # Value type radio
-          div(
-            style = "margin-bottom: 10px;",
-            tags$label(
-              "Values:",
-              style = "display: block; margin-bottom: 5px;"
-            ),
-            radioButtons(
-              ns("value_type"),
-              label = NULL,
-              choices = list(
-                "Relative to Historical Median (%)" = "relative_to_med",
-                "Snow Water Equivalent (mm)" = "absolute",
-                "Percentile of Historical Range (%)" = "percentile"
-              ),
-              selected = "relative_to_med",
-              inline = FALSE
-            )
-          ),
-          # Collapsible text output
-          tags$details(
-            tags$summary("Show details"),
-            shiny::uiOutput(ns("selected_date"))
-          )
-        ),
+        shiny::uiOutput(ns('sidebar_page')),
         width = 2
       ),
       shiny::mainPanel(
@@ -169,6 +109,74 @@ mapSnowbull <- function(id, language) {
       )
     })
 
+    # --- Server-side sidebar UI ---
+    output$sidebar_page <- shiny::renderUI({
+      div(
+        id = ns("controls_panel"),
+        div(
+          style = "margin-bottom: 15px;",
+          tags$label(
+            tr("Year", language$language),
+            style = "display: block; margin-bottom: 5px;"
+          ),
+          selectInput(
+            ns("year"),
+            label = NULL,
+            choices = as.character(2025:2000),
+            selected = "2025",
+            width = "100%"
+          )
+        ),
+        div(
+          style = "margin-bottom: 15px;",
+          tags$label(
+            tr("Month", language$language),
+            style = "display: block; margin-bottom: 5px;"
+          ),
+          selectInput(
+            ns("month"),
+            label = NULL,
+            choices = setNames(
+              as.character(c(2, 3, 4, 5)),
+              c(
+                tr("February", language$language),
+                tr("March", language$language),
+                tr("April", language$language),
+                tr("May", language$language)
+              )
+            ),
+            selected = "3",
+            width = "100%"
+          )
+        ),
+        div(
+          style = "margin-bottom: 10px;",
+          tags$label(
+            tr("Values:", language$language),
+            style = "display: block; margin-bottom: 5px;"
+          ),
+          radioButtons(
+            ns("value_type"),
+            label = NULL,
+            choices = setNames(
+              c("relative_to_med", "swe", "percentile"),
+              c(
+                tr("Relative to Historical Median (%)", language$language),
+                tr("Snow Water Equivalent (mm)", language$language),
+                tr("Percentile of Historical Range (%)", language$language)
+              )
+            ),
+            selected = "relative_to_med",
+            inline = FALSE
+          )
+        ),
+        tags$details(
+          tags$summary(tr("Show details", language$language)),
+          shiny::uiOutput(ns("selected_date"))
+        )
+      )
+    })
+
     # --- Reactive for map output ---
     map_output <- shiny::reactive({
       data <- processed_data()
@@ -179,14 +187,10 @@ mapSnowbull <- function(id, language) {
         "percentile" = "percentile",
         "relative_to_med"
       )
+
       data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_col]]
       data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_col]]
       data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_col]]
-      pal_domain <- c(
-        data$swe_at_basins$value_to_show,
-        data$swe_at_surveys$value_to_show,
-        data$swe_at_pillows$value_to_show
-      )
 
       legend_title <- paste0(
         "<b>Snow Water Equivalent:</b><br>",
