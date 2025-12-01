@@ -54,13 +54,10 @@ mapRaster <- function(id, language) {
               label = tr("parameter", language$language),
               choices = stats::setNames(
                 moduleData$parameters$parameter_id,
-                titleCase(
-                  moduleData$parameters[[tr(
-                    "param_name_col",
-                    language$language
-                  )]],
-                  language$abbrev
-                )
+                moduleData$parameters[[tr(
+                  "param_name_col",
+                  language$language
+                )]]
               ),
               selected = map_params$point_id,
               multiple = FALSE
@@ -136,13 +133,12 @@ mapRaster <- function(id, language) {
             tr("map_primary_param", language$language)
           }
         ), # Text for primary parameter
-        p(titleCase(
+        p(
           moduleData$parameters[
             moduleData$parameters$parameter_id == map_params$point_id,
             get(tr("param_name_col", language$language))
-          ],
-          language$abbrev
-        )), # Name of primary parameter
+          ]
+        ), # Name of primary parameter
         p(
           tr("map_min_yrs_selected1", language$language),
           " ",
@@ -576,7 +572,7 @@ mapRaster <- function(id, language) {
       lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
       legend_title <- sprintf(
         "%s (%s)",
-        titleCase(map_params$point_name, language$abbrev),
+        map_params$point_name,
         map_params$point_units
       )
 
@@ -597,7 +593,7 @@ mapRaster <- function(id, language) {
             "<strong>",
             get(tr("generic_name_col", language$language)),
             "</strong><br/>",
-            titleCase(param_name, language$abbrev),
+            param_name,
             "<br>",
             tr("map_actual_date", language$language),
             ": ",

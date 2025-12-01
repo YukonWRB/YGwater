@@ -299,6 +299,7 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
+    ui_loaded$contTablePlot <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -479,6 +480,9 @@ app_server <- function(input, output, session) {
     })
     output$plotsNavContTitle <- renderUI({
       tr("plots_continuous", languageSelection$language)
+    })
+    output$plotsNavContTableTitle <- renderUI({
+      tr("plots_continuous_table", languageSelection$language)
     })
 
     output$reportsNavMenuTitle <- renderUI({
@@ -1229,12 +1233,30 @@ $(document).keyup(function(event) {
       if (!ui_loaded$contPlot) {
         output$plotContinuous_ui <- renderUI(contPlotUI("contPlot"))
         ui_loaded$contPlot <- TRUE
+        # Call the server
         contPlot(
           "contPlot",
           language = languageSelection,
           windowDims,
           inputs = moduleOutputs$mapLocs
-        ) # Call the server
+        )
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
+      }
+    }
+    if (input$navbar == "contTablePlot") {
+      if (!ui_loaded$contTablePlot) {
+        output$plotContinuousTable_ui <- renderUI(contTablePlotUI(
+          "contTablePlot"
+        ))
+        ui_loaded$contTablePlot <- TRUE
+        contTablePlot(
+          "contTablePlot",
+          language = languageSelection,
+          inputs = moduleOutputs$mapLocs
+        )
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
@@ -1248,10 +1270,11 @@ $(document).keyup(function(event) {
       if (!ui_loaded$monitoringLocationsMap) {
         output$mapLocs_ui <- renderUI(mapLocsUI("mapLocs"))
         ui_loaded$monitoringLocationsMap <- TRUE
+        # Call the server
         moduleOutputs$mapLocs <- mapLocs(
           "mapLocs",
           language = languageSelection
-        ) # Call the server
+        )
       }
       observe({
         if (!is.null(moduleOutputs$mapLocs$change_tab)) {
@@ -1268,6 +1291,9 @@ $(document).keyup(function(event) {
           if (target == "contPlot") {
             ui_loaded$contPlot <- FALSE
           }
+          if (target == "contTablePlot") {
+            ui_loaded$contTablePlot <- FALSE
+          }
           nav_select(session = session, "navbar", selected = target) # Change tabs
           moduleOutputs$mapLocs$change_tab <- NULL
         }
@@ -1277,7 +1303,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$paramValuesMap) {
         output$mapParams_ui <- renderUI(mapParamsUI("mapParams"))
         ui_loaded$paramValuesMap <- TRUE
-        mapParams("mapParams", language = languageSelection) # Call the server
+        #  Call the server
+        mapParams("mapParams", language = languageSelection)
       }
     }
     if (input$navbar == "rasterValuesMap") {
@@ -1291,7 +1318,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$snowBulletinMap) {
         output$mapSnowbull_ui <- renderUI(mapSnowbullUI("mapSnowbull"))
         ui_loaded$snowBulletinMap <- TRUE
-        mapSnowbull("mapSnowbull", language = languageSelection) # Call the server
+        # Call the server
+        mapSnowbull("mapSnowbull", language = languageSelection)
       }
     }
 
@@ -1300,7 +1328,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$FOD) {
         output$fod_ui <- renderUI(FODUI("FOD"))
         ui_loaded$FOD <- TRUE
-        FOD("FOD") # Call the server
+        # Call the server
+        FOD("FOD")
       }
     }
     ### Image nav_menu ##########################
@@ -1308,14 +1337,16 @@ $(document).keyup(function(event) {
       if (!ui_loaded$imgTableView) {
         output$imgTableView_ui <- renderUI(imgTableViewUI("imgTableView"))
         ui_loaded$imgTableView <- TRUE
-        imgTableView("imgTableView", language = languageSelection) # Call the server
+        # Call the server
+        imgTableView("imgTableView", language = languageSelection)
       }
     }
     if (input$navbar == "imgMapView") {
       if (!ui_loaded$imgMapView) {
         output$imgMapView_ui <- renderUI(imgMapViewUI("imgMapView"))
         ui_loaded$imgMapView <- TRUE
-        imgMapView("imgMapView", language = languageSelection) # Call the server
+        # Call the server
+        imgMapView("imgMapView", language = languageSelection)
       }
     }
 
@@ -1324,14 +1355,16 @@ $(document).keyup(function(event) {
       if (!ui_loaded$snowInfo) {
         output$snowInfo_ui <- renderUI(snowInfoUIMod("snowInfo"))
         ui_loaded$snowInfo <- TRUE
-        snowInfoMod("snowInfo", language = languageSelection) # Call the server
+        # Call the server
+        snowInfoMod("snowInfo", language = languageSelection)
       }
     }
     if (input$navbar == "waterInfo") {
       if (!ui_loaded$waterInfo) {
         output$waterInfo_ui <- renderUI(waterInfoUIMod("waterInfo"))
         ui_loaded$waterInfo <- TRUE
-        waterInfoMod("waterInfo", language = languageSelection) # Call the server
+        # Call the server
+        waterInfoMod("waterInfo", language = languageSelection)
       }
     }
     if (input$navbar == "WQReport") {
@@ -1349,7 +1382,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$snowBulletin) {
         output$snowBulletin_ui <- renderUI(snowBulletinUIMod("snowBulletin"))
         ui_loaded$snowBulletin <- TRUE
-        snowBulletinMod("snowBulletin", language = languageSelection) # Call the server
+        # Call the server
+        snowBulletinMod("snowBulletin", language = languageSelection)
       }
     }
 

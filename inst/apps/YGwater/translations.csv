@@ -11,6 +11,7 @@ maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
 plots,plotsNavMenuTitle,Plots ,Graphiques
 plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
 plots_continuous,plotsNavContTitle,Continuous,Continues
+plots_continuous_table,plotsNavContTableTitle,Continuous (table),Continues (tableau)
 plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
 reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
@@ -147,6 +148,17 @@ plot_show_unusable,,Show unusable data?,Montrer les données inutilisables?
 plot_show_grades,,Show grades?,Montrer les cotes?
 plot_show_approvals,,Show approval levels?,Montrer les niveaux d'approbations?
 plot_show_qualifiers,,Show qualifiers?,Montrer les qualificatifs?
+cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
+cont_table_heading,,Available timeseries,Séries chronologiques disponibles
+cont_table_plot_heading,,Plot,Graphique
+cont_table_col_location,,Location,Emplacement
+cont_table_col_sub_location,,Sub-location,Sous-emplacement
+cont_table_col_parameter,,Parameter,Paramètre
+cont_table_col_media,,Media,Média
+cont_table_col_aggregation,,Aggregation,Agrégation
+cont_table_col_record_rate,,Record rate,Fréquence d'enregistrement
+cont_table_col_start_date,,Start date,Date de début
+cont_table_col_end_date,,End date,Date de fin
 facet_on,,Split plots by,Diviser les graphiques par
 facet_on_tooltip,,"Creates multiple plots, each showing one location or one parameter. The other variable appears as separate lines or points.","Crée plusieurs graphiques, chacun montrant un seul emplacement ou un seul paramètre. L’autre variable apparaît sous forme de lignes ou de points distincts."
 use_log_scale,,Use logarithmic scale,Utiliser une échelle logarithmique
@@ -310,9 +322,11 @@ select_params,,Select parameters,Sélectionnez des paramètres
 project,direct translation,Project,Projet
 projects,direct translation,Projects,Projets
 project(s),direct translation,Project(s),Projet(s)
+select_project,,Select project(s),S�lectionez un/des projets
 network,direct translation,Network,Réseau
 networks,direct translation,Networks,Réseaux
 network(s),direct translation,Network(s),Réseau(x)
+select_network,,Select network(s),S�lectionez un/des r�seaux
 units,direct translation,Units,Unités
 period,direct translation,Period,Période
 category,direct translation,Category,Catégorie
