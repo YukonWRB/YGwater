@@ -309,7 +309,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$locs$location_id),
             c(
               tr("all", language$language),
-              filteredData$locs[, tr("generic_name_col", language$language)]
+              filteredData$locs[[tr("generic_name_col", language$language)]]
             )
           ),
           multiple = TRUE,
@@ -334,7 +334,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$sub_locs$sub_location_id),
             c(
               tr("all", language$language),
-              filteredData$sub_locs[, tr("sub_location_col", language$language)]
+              filteredData$sub_locs[[tr("sub_location_col", language$language)]]
             )
           ),
           multiple = TRUE,
@@ -359,7 +359,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$media$media_id),
             c(
               tr("all", language$language),
-              filteredData$media[, tr("media_type_col", language$language)]
+              filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
           multiple = TRUE,
@@ -373,10 +373,10 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
               tr("all", language$language),
-              filteredData$aggregation_types[, tr(
+              filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
-              )]
+              )]]
             )
           ),
           multiple = TRUE,
@@ -388,7 +388,7 @@ contData <- function(id, language, inputs) {
           label = tr("nominal_rate", language$language),
           choices = stats::setNames(
             c("all", filteredData$rates$seconds),
-            c(tr("all", language$language), filteredData$rates[, "period"])
+            c(tr("all", language$language), filteredData$rates[["period"]])
           ),
           multiple = TRUE,
           selected = "all"
@@ -400,7 +400,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$params$parameter_id),
             c(
               tr("all", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
+              filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
           multiple = TRUE,
