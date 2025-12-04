@@ -200,9 +200,9 @@ app_ui <- function(request) {
           ),
           if (!config$public) {
             nav_panel(
-              title = uiOutput("plotsNavContTableTitle"),
-              value = "contTablePlot",
-              uiOutput("plotContinuousTable_ui")
+              title = uiOutput("plotsNavContOldTitle"),
+              value = "contPlotOld",
+              uiOutput("plotContinuousOld_ui")
             )
           }
         ),

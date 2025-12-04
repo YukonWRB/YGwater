@@ -11,7 +11,7 @@ maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
 plots,plotsNavMenuTitle,Plots ,Graphiques
 plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
 plots_continuous,plotsNavContTitle,Continuous,Continues
-plots_continuous_table,plotsNavContTableTitle,Continuous (table),Continues (tableau)
+plots_continuous_old,plotsNavContOldTitle,Continuous (old version),Continues (ancienne version)
 plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
 reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
