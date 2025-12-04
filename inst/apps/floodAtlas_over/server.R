@@ -247,12 +247,21 @@ app_server <- function(input, output, session) {
           loc_name <- paste0(substr(loc_name, 1, 25), "...")
         }
 
+        # If parameter is SWE or snow depth, startDay should be Aug 1 (day 213)
+        if (param %in% c(21, 1220)) {
+          start_day <- 213
+          end_day <- 212
+        } else {
+          start_day <- 1
+          end_day <- 365
+        }
+
         p <- plotOverlap(
           location = loc,
           sub_location = NULL,
           parameter = param,
-          startDay = 1,
-          endDay = 365,
+          startDay = start_day,
+          endDay = end_day,
           years = yrs,
           resolution = "day",
           datum = TRUE,
@@ -284,12 +293,12 @@ app_server <- function(input, output, session) {
 
   observeEvent(params$render, {
     plot_output$invoke(
-      params$loc_code,
-      params$param_code,
-      params$yrs,
-      params$lang,
-      session$userData$use_webgl,
-      config
+      loc = params$loc_code,
+      param = params$param_code,
+      yrs = params$yrs,
+      lang = params$lang,
+      webgl = session$userData$use_webgl,
+      config = config
     )
   })
 
